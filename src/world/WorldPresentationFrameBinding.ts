@@ -347,7 +347,7 @@ export class WorldPresentationFrameBinding {
   }
   private syncSunlight():void {
     this.sunlightOwner?.setActivityMoonlight(this.input.getActivityMoonlight?.() ?? null);
-    this.sunlightOwner?.update(this.input.lighting.getTimeOfDayMinutes(),this.presentationTimeMs);
+    this.sunlightOwner?.update(this.input.lighting.getTimeOfDayMinutes(),this.presentationTimeMs,this.input.getSynchronizedNow());
   }
   private fogBinding: WorldGroundFogBinding | null = null;
   private ownershipMarkers: ConstructionOwnershipGpuSystem | null = null;

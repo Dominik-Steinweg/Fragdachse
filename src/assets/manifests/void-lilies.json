@@ -1,0 +1,640 @@
+{
+  "version": 1,
+  "source": "tools/source-art/pond-ecology-v8/void",
+  "recipe": "scripts/export-void-flora.mjs",
+  "alpha": "authored alpha; emissive = white RGB with alpha from the congruent mask; transparent 4px padding",
+  "atlas": {
+    "file": "void-lilies-atlas.png",
+    "width": 1024,
+    "height": 1024,
+    "rgbaBytes": 4194304,
+    "downloadBytes": 655436,
+    "sha256": "05d1221e5f0a5078838b184c38addc1c92373788190b313e50a468e1bf7cb813",
+    "frames": {
+      "void-lily-group-01": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-group-02": {
+        "frame": {
+          "x": 256,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-group-03": {
+        "frame": {
+          "x": 512,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-group-04": {
+        "frame": {
+          "x": 768,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-group-05": {
+        "frame": {
+          "x": 0,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-group-06": {
+        "frame": {
+          "x": 256,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-02": {
+        "frame": {
+          "x": 512,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-04": {
+        "frame": {
+          "x": 768,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-05": {
+        "frame": {
+          "x": 0,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-06": {
+        "frame": {
+          "x": 256,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-07": {
+        "frame": {
+          "x": 512,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-08": {
+        "frame": {
+          "x": 768,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      }
+    }
+  },
+  "emissiveAtlas": {
+    "file": "void-lilies-emissive-atlas.png",
+    "width": 1024,
+    "height": 1024,
+    "rgbaBytes": 4194304,
+    "downloadBytes": 89617,
+    "sha256": "2c7a1be08b8826ff6e6ec886f6cd409593e236ab9db95bf90a0ce22595b802d3",
+    "frames": {
+      "void-lily-group-01": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-group-02": {
+        "frame": {
+          "x": 256,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-group-03": {
+        "frame": {
+          "x": 512,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-group-04": {
+        "frame": {
+          "x": 768,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-group-05": {
+        "frame": {
+          "x": 0,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-group-06": {
+        "frame": {
+          "x": 256,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-02": {
+        "frame": {
+          "x": 512,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-04": {
+        "frame": {
+          "x": 768,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-05": {
+        "frame": {
+          "x": 0,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-06": {
+        "frame": {
+          "x": 256,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-07": {
+        "frame": {
+          "x": 512,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lily-pad-08": {
+        "frame": {
+          "x": 768,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      }
+    }
+  },
+  "assets": [
+    {
+      "name": "void-lily-group-01",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-group-01.png",
+      "sourceSha256": "87533554f9b2be5e6e1156122280eb8d9d9280f9f04a59c901231a48542c33d9",
+      "emissiveSource": "void-lily-group-01-emissive.png",
+      "emissiveSourceSha256": "b3c18c91b77a9f48c13e0fc000460ecfbe66c54c991aac50cbd67cab28c3e867",
+      "pixelSha256": "5afa72ecb79caaf190400318aae131f26ab93d878663ad289d429d6d3587d4e5",
+      "emissivePixelSha256": "71a6abb25016edf7d7a07586d56ce41e3728e345d26a6c08cd5936a5fbe5cf8a"
+    },
+    {
+      "name": "void-lily-group-02",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-group-02.png",
+      "sourceSha256": "63a95d8092fc43eb5f66164c3914f4ea3fe7b976d4f6a8c1059aa82cdd2fd548",
+      "emissiveSource": "void-lily-group-02-emissive.png",
+      "emissiveSourceSha256": "bc4241fa296e7827992587c0f687b980e56659d121e2754cd58b82d8016b9b4a",
+      "pixelSha256": "89bf6d59056e0bedc0373da17b0f3d23153495d6c8e5c22ed9ed8d34f9b8c527",
+      "emissivePixelSha256": "a8751a62ccf349724874c06984fa4a4ced2efee0c36cb28628c037dcb59aabdb"
+    },
+    {
+      "name": "void-lily-group-03",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-group-03.png",
+      "sourceSha256": "dd59400520f16ae28f1dd0e9440759932a5a6230be3c45e6fc5e7c78acb95234",
+      "emissiveSource": "void-lily-group-03-emissive.png",
+      "emissiveSourceSha256": "ca6150bf398f391b2500cf1664f74fe52442956a4bdff6e052197da2c5996e42",
+      "pixelSha256": "99a0b964574c5f7d9e39e4e215c9f881cc6e0e07139ae1b626650cbe332fb925",
+      "emissivePixelSha256": "4f4cc82635c5dff4e8f4c1979c3878c6a61442433a3bf275e85fb526eecfa074"
+    },
+    {
+      "name": "void-lily-group-04",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-group-04.png",
+      "sourceSha256": "edbeff0b20029dd8846a6fadac328d160051163c52eb363c20cdc92b407393b0",
+      "emissiveSource": "void-lily-group-04-emissive.png",
+      "emissiveSourceSha256": "a9a8f0d11722cbc481db778eb758f509f7fb58cd0d742d2f1ca24b5baf8d35b8",
+      "pixelSha256": "6d6f830bfcdc960df936e09267530678f4e37b76ae0593971535ca3f66f335e3",
+      "emissivePixelSha256": "85852b909c026393dff75efba84a779a75a88c3a8ecdd6a9b158897abf024a6e"
+    },
+    {
+      "name": "void-lily-group-05",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-group-05.png",
+      "sourceSha256": "634796358229b4893a5290c9a33ce8cc593dc16ad0cd89494b451dfd3243f974",
+      "emissiveSource": "void-lily-group-05-emissive.png",
+      "emissiveSourceSha256": "7ec9aea442c5052e7893171d0d81d66e2f358f7fad136941e2312eee5a7ec917",
+      "pixelSha256": "f9444a860ed30f403f291824434b8a2feee5ca42c7da8a6723e11b6c2f596494",
+      "emissivePixelSha256": "98ff1d6d2918ee3401326e91ad8360d60efea508a2a681e4ace822c3b4d77e71"
+    },
+    {
+      "name": "void-lily-group-06",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-group-06.png",
+      "sourceSha256": "14397ff58d909da04430778f85619d3b9ebea7f70539a65c0b9e97a509e4fa82",
+      "emissiveSource": "void-lily-group-06-emissive.png",
+      "emissiveSourceSha256": "5298116b4949df94f44a6cd646a40956ebc75c551a7ced1040795c2821cf76bb",
+      "pixelSha256": "855603a5987424e54f13dca80b75047379fd532ec060a08f0db6aab76e2eded2",
+      "emissivePixelSha256": "86564ffc808342dcbab3fe9d0b171cdef9416d064b1115fe49139c6913cfc677"
+    },
+    {
+      "name": "void-lily-pad-02",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-pad-02.png",
+      "sourceSha256": "61d182c31173214e041e705f98091242d0778a811cec3c56c55e976d17ae4ef6",
+      "emissiveSource": "void-lily-pad-02-emissive.png",
+      "emissiveSourceSha256": "639ddf2234b44721bff43cbc62dd8914b2614993b94d1055b71dbf0c758c1769",
+      "pixelSha256": "50bd94861b311d7c6ce72ecabff45e6df782c43ba8b806f71758552117c2d34c",
+      "emissivePixelSha256": "674ad55ed808460d2869b4c821496839728b72edbc8e6f9777c89005dbd2b2ad"
+    },
+    {
+      "name": "void-lily-pad-04",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-pad-04.png",
+      "sourceSha256": "29ddddfb7fe8d1345e7f5cf884735095c482cb1ef77e97210c7bdc383fa9f18a",
+      "emissiveSource": "void-lily-pad-04-emissive.png",
+      "emissiveSourceSha256": "a8da6c113857654b413a089507851f23b396cc8d3cb75281585535740169c03b",
+      "pixelSha256": "bb99bea6acd43f019b7851e447fa7ff278caf9213edb27974ab5f2ce66f496a5",
+      "emissivePixelSha256": "de1d7f2fa0df331e5ba0cde67e692d3cca9d6de56532d19543dbabdfd37d71ef"
+    },
+    {
+      "name": "void-lily-pad-05",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-pad-05.png",
+      "sourceSha256": "21b1ab862cfe30ad6b71afa7e6bb39ef679b9857f0559a4e6324a73ab551426f",
+      "emissiveSource": "void-lily-pad-05-emissive.png",
+      "emissiveSourceSha256": "fc5d91ab111c91ff2a08646ae7a9690170c46d6e89f052e2d369e781c4e1b37d",
+      "pixelSha256": "6156cbce4373cda472bee8ae31eb4c4eb5c46e4b7a2cbfd1cc25ec7077fc5205",
+      "emissivePixelSha256": "253104eaec8d57e96f23a01f1cd715ad243e70bd87b71f4db9d2b4ad600b4ec8"
+    },
+    {
+      "name": "void-lily-pad-06",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-pad-06.png",
+      "sourceSha256": "7e6b30a2f3fa0c68982d8a04c1decb573e145472126b0050c6895f6ab6bbd866",
+      "emissiveSource": "void-lily-pad-06-emissive.png",
+      "emissiveSourceSha256": "946881a77e2f63a38120e9d28943b28f3ac5ec9c1c8cfdc8599b82e1f5ebae3c",
+      "pixelSha256": "15b15ce34b07485e9451b370893c9f181a87c8203bd69ae78cfa559d68b890a9",
+      "emissivePixelSha256": "b703290d9e24aa4a2890c7ff3c5d32a9ce24e26dde9584bf33ff6fd0e570913f"
+    },
+    {
+      "name": "void-lily-pad-07",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-pad-07.png",
+      "sourceSha256": "14f53f9612196888c9c2eacd871d3cdc1dd3073602dd1f6fd9b8e4c069d1d695",
+      "emissiveSource": "void-lily-pad-07-emissive.png",
+      "emissiveSourceSha256": "6be8543d0e6e56a2c059fbb7f448f0e815dee6602590a657acc4706438bbcb63",
+      "pixelSha256": "540eb9de3404246b292de30ade21835adf7b978d20beea9627eceb7e45e1998a",
+      "emissivePixelSha256": "929c617c230bb8f7651d20e428117f03805a69477e54b774c5f4ef4f803b4416"
+    },
+    {
+      "name": "void-lily-pad-08",
+      "width": 256,
+      "height": 256,
+      "source": "void-lily-pad-08.png",
+      "sourceSha256": "70eecdc01a8de8555b17c88c6d3c1fdb4ef5f3bdeacb299dcecd2f2128876ed7",
+      "emissiveSource": "void-lily-pad-08-emissive.png",
+      "emissiveSourceSha256": "dcdb2a4710235b0109806475779f9e048707780df1729b17b3c6c66e4ef452ba",
+      "pixelSha256": "e986221ccd521aaf1d1ac1a01925943184392a59885297954c32601e89561016",
+      "emissivePixelSha256": "dcaccadc3220b38e3cdcdd39edb3d106a4aebfdbbfb8bbb1875d6295bd6ee112"
+    }
+  ]
+}

@@ -131,6 +131,40 @@ export function projectRectShadowQuads(
 }
 
 /**
+ * Projiziert den Schatten hinter den *abgewandten* freiliegenden Kanten einer Zelle.
+ *
+ * Gegenstück zu {@link projectRectShadowQuads} für Lampen, die eine Felsfront tiefer
+ * ausleuchten (Nachtsicht N-4): Der Kernschatten der zugewandten Kante beginnt dann erst
+ * nach der Eindringtiefe. Damit hinter einem schmalen Fels kein Licht auf den Boden fällt,
+ * beginnt hinter jeder abgewandten Außenkante sofort Vollschatten. Ein Strahl erreicht eine
+ * abgewandte Kante nur durch das Innere des Hindernisses – alles dahinter liegt also
+ * tatsächlich im Schatten. Die Vereinigung ergibt außerhalb des Hindernisses dieselbe
+ * Schattenfläche wie die Projektion der zugewandten Kanten.
+ */
+export function projectRectBackShadowQuads(
+  out: ShadowQuadBuffer,
+  lightX: number, lightY: number,
+  left: number, top: number, right: number, bottom: number,
+  startOffsetPx: number,
+  extendPx: number,
+  exposedEdges: number = ALL_EDGES_EXPOSED,
+): void {
+  if (lightX > left && lightX < right && lightY > top && lightY < bottom) return;
+  if ((exposedEdges & EDGE_TOP) !== 0 && lightY > top) {
+    pushProjectedEdge(out, lightX, lightY, left, top, right, top, startOffsetPx, extendPx);
+  }
+  if ((exposedEdges & EDGE_BOTTOM) !== 0 && lightY < bottom) {
+    pushProjectedEdge(out, lightX, lightY, right, bottom, left, bottom, startOffsetPx, extendPx);
+  }
+  if ((exposedEdges & EDGE_LEFT) !== 0 && lightX > left) {
+    pushProjectedEdge(out, lightX, lightY, left, bottom, left, top, startOffsetPx, extendPx);
+  }
+  if ((exposedEdges & EDGE_RIGHT) !== 0 && lightX < right) {
+    pushProjectedEdge(out, lightX, lightY, right, top, right, bottom, startOffsetPx, extendPx);
+  }
+}
+
+/**
  * Projiziert den Schatten eines Kreises über seine beiden Tangentenpunkte.
  * Liegt das Licht im Kreis, entsteht kein Quad (die Quelle steckt im Hindernis).
  */

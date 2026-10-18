@@ -18,7 +18,7 @@ it('keeps the ordinary material sampler contract and applies lighting before the
 });
 it('declares every uniform and sampler that a fog or water fragment reads',()=>{
  for(const source of [FOG_K_MATERIAL_FRAGMENT,FOG_MATERIAL_FRAGMENT,FOG_DISPLAY_FRAGMENT,WATER_SUN_FRAGMENT]){
-  const declared=new Set([...source.matchAll(/uniform\s+\w+\s+([^;]+);/g)].flatMap(m=>m[1].split(',').map(s=>s.trim())));
+  const declared=new Set([...source.matchAll(/uniform\s+\w+\s+([^;]+);/g)].flatMap(m=>m[1].split(',').map(s=>s.trim().replace(/\[\w+\]$/,''))));
   const read=new Set([...source.replace(/\/\/[^\n]*/g,'').matchAll(/\bu[A-Z]\w*/g)].map(m=>m[0]));
   for(const sampler of read)expect(declared,`missing sampler ${sampler}`).toContain(sampler);
  }

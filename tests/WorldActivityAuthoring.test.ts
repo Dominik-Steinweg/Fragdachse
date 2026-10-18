@@ -137,6 +137,28 @@ const ALL_MAP_CONFIGS = [
   getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID),
 ];
 
+it('validates the authored night look and preserves it through the World roundtrip', () => {
+  const map = JSON.parse(readFileSync(resolve(process.cwd(), 'src/config/coopDefenseMaps/weapon-balance-lab.internal.json'), 'utf8'));
+  const night = { moonlight: { strength: .6, cover: .1 }, voidFlora: { level: .4, hotspots: false,
+    foci: [{ gridX: 2, gridY: 3, radiusCells: 5, strength: .7 }] } };
+  const normalized = normalizeCoopDefenseMapConfig({ ...map, ...night });
+  const scenario = toAuthoredScenario(normalized);
+  expect(scenario.world.moonlight).toEqual(night.moonlight);
+  expect(scenario.world.voidFlora).toEqual(night.voidFlora);
+  expect(toCoopDefenseMapConfig(scenario).voidFlora).toEqual(night.voidFlora);
+  expect(toWorldGenerationConfig(scenario.world).moonlight).toEqual(night.moonlight);
+  for (const bad of [{ moonlight: { strength: 2 } }, { moonlight: { glow: 1 } }, { voidFlora: { level: 1.5 } },
+    { voidFlora: { level: .5, foci: [{ gridX: 9999, gridY: 0, radiusCells: 4, strength: .5 }] } },
+    { voidFlora: { level: .5, foci: [{ gridX: 1, gridY: 1, radiusCells: 4, strength: 0 }] } }]) {
+    expect(() => normalizeCoopDefenseMapConfig({ ...map, ...bad })).toThrow(/moonlight|voidFlora/);
+  }
+  // Every campaign map states its own share of void botany.
+  for (const mapId of Array.from({ length: 20 }, (_, i) => String(i + 1))) {
+    const level = getCoopDefenseMapConfig(mapId).voidFlora?.level;
+    expect(level, `map ${mapId}`).toBeTypeOf('number');
+  }
+});
+
 it('normalizes fog strength once and preserves it through the World roundtrip', () => {
   const map = JSON.parse(readFileSync(resolve(process.cwd(), 'src/config/coopDefenseMaps/weapon-balance-lab.internal.json'), 'utf8'));
   expect(normalizeCoopDefenseMapConfig({ ...map, fogStrength: undefined }).fogStrength).toBe(1);
@@ -232,7 +254,7 @@ describe('World-/Activity-Authoring – Partition', () => {
         expect(serialized.includes(`"${missionField}"`), `${world.id} leaks ${missionField}`).toBe(false);
       }
       expect(Object.keys(world).sort()).toEqual([
-        'actionPolicy', 'bases', 'fogStrength', 'id', 'initialTimeOfDay', 'krakenHabitat', 'metrics', 'persistentBaseSite', 'sourceMapId', 'terrain', 'tracks',
+        'actionPolicy', 'bases', 'fogStrength', 'id', 'initialTimeOfDay', 'krakenHabitat', 'metrics', 'moonlight', 'persistentBaseSite', 'sourceMapId', 'terrain', 'tracks', 'voidFlora',
       ]);
       for (const base of world.bases) {
         expect(Object.keys(base).sort(), `${world.id}/${base.id}`).toEqual([

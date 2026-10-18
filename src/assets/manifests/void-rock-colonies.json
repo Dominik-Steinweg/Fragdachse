@@ -1,0 +1,705 @@
+{
+  "version": 1,
+  "source": "tools/source-art/rock-ecology-v8/void",
+  "recipe": "scripts/export-void-flora.mjs",
+  "alpha": "authored alpha; emissive = white RGB with alpha from the congruent mask; transparent 4px padding",
+  "atlas": {
+    "file": "void-rock-colonies-atlas.png",
+    "width": 1024,
+    "height": 1024,
+    "rgbaBytes": 4194304,
+    "downloadBytes": 565853,
+    "sha256": "151095a4402f856dd4c6c44281fab805c812edfd565e20e46d6d28ce08b1a0a8",
+    "frames": {
+      "void-edge-overhang-01": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 120
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 120
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 120
+        }
+      },
+      "void-edge-overhang-02": {
+        "frame": {
+          "x": 256,
+          "y": 0,
+          "w": 256,
+          "h": 108
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 108
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 108
+        }
+      },
+      "void-edge-overhang-03": {
+        "frame": {
+          "x": 512,
+          "y": 0,
+          "w": 256,
+          "h": 131
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 131
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 131
+        }
+      },
+      "void-lichen-02": {
+        "frame": {
+          "x": 768,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lichen-03": {
+        "frame": {
+          "x": 0,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lichen-04": {
+        "frame": {
+          "x": 256,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-moss-nest-01": {
+        "frame": {
+          "x": 512,
+          "y": 256,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "void-moss-nest-02": {
+        "frame": {
+          "x": 768,
+          "y": 256,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "void-moss-nest-03": {
+        "frame": {
+          "x": 0,
+          "y": 512,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "void-moss-nest-04": {
+        "frame": {
+          "x": 256,
+          "y": 512,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "void-moss-strip-01": {
+        "frame": {
+          "x": 512,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-moss-strip-02": {
+        "frame": {
+          "x": 768,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-moss-strip-03": {
+        "frame": {
+          "x": 0,
+          "y": 768,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      }
+    }
+  },
+  "emissiveAtlas": {
+    "file": "void-rock-colonies-emissive-atlas.png",
+    "width": 1024,
+    "height": 1024,
+    "rgbaBytes": 4194304,
+    "downloadBytes": 92211,
+    "sha256": "9d7d6bb546309b3d6ad886f89c251239c9c03f9dc3c05706cc01a80b4ef6e532",
+    "frames": {
+      "void-edge-overhang-01": {
+        "frame": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 120
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 120
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 120
+        }
+      },
+      "void-edge-overhang-02": {
+        "frame": {
+          "x": 256,
+          "y": 0,
+          "w": 256,
+          "h": 108
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 108
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 108
+        }
+      },
+      "void-edge-overhang-03": {
+        "frame": {
+          "x": 512,
+          "y": 0,
+          "w": 256,
+          "h": 131
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 131
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 131
+        }
+      },
+      "void-lichen-02": {
+        "frame": {
+          "x": 768,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lichen-03": {
+        "frame": {
+          "x": 0,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-lichen-04": {
+        "frame": {
+          "x": 256,
+          "y": 256,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-moss-nest-01": {
+        "frame": {
+          "x": 512,
+          "y": 256,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "void-moss-nest-02": {
+        "frame": {
+          "x": 768,
+          "y": 256,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "void-moss-nest-03": {
+        "frame": {
+          "x": 0,
+          "y": 512,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "void-moss-nest-04": {
+        "frame": {
+          "x": 256,
+          "y": 512,
+          "w": 256,
+          "h": 171
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 171
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 171
+        }
+      },
+      "void-moss-strip-01": {
+        "frame": {
+          "x": 512,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-moss-strip-02": {
+        "frame": {
+          "x": 768,
+          "y": 512,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      },
+      "void-moss-strip-03": {
+        "frame": {
+          "x": 0,
+          "y": 768,
+          "w": 256,
+          "h": 256
+        },
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 256
+        },
+        "sourceSize": {
+          "w": 256,
+          "h": 256
+        }
+      }
+    }
+  },
+  "assets": [
+    {
+      "name": "void-edge-overhang-01",
+      "width": 256,
+      "height": 120,
+      "minWorld": 80,
+      "maxWorld": 120,
+      "source": "void-edge-overhang-01.png",
+      "sourceSha256": "bc5529de6ff16c4908a1739f453b33e863606465476c0aa0aba1d054b4743eee",
+      "emissiveSource": "void-edge-overhang-01-emissive.png",
+      "emissiveSourceSha256": "843c940c61e4a0eda302a8958afc7446c17d866a6b4bb6892cef072cff283609",
+      "pixelSha256": "250eeb823a138438406e7f8d29b570139791c57d287144fab8a97cc44df0fa8c",
+      "emissivePixelSha256": "ab49e07868de457a0e3f5ac1722a7ab20ecd3efb27f22e22e6923b37ed11725c"
+    },
+    {
+      "name": "void-edge-overhang-02",
+      "width": 256,
+      "height": 108,
+      "minWorld": 80,
+      "maxWorld": 120,
+      "source": "void-edge-overhang-02.png",
+      "sourceSha256": "6b43b672c2efdaad0986b57ae640f4a7811daf2d2ace57884751b23d45e611e3",
+      "emissiveSource": "void-edge-overhang-02-emissive.png",
+      "emissiveSourceSha256": "ece939667658eeb87af2e059d322d63c303e20ff17f76e2f9161f51164002c81",
+      "pixelSha256": "1bb08692b99491dc9fc157d4a9e67ad0c1aec8312091f64c3aa459d884f0d3ae",
+      "emissivePixelSha256": "18098927f4edf9b10c60c9858f00edd0f81b302033ccaed8d16462e2e45269fa"
+    },
+    {
+      "name": "void-edge-overhang-03",
+      "width": 256,
+      "height": 131,
+      "minWorld": 80,
+      "maxWorld": 120,
+      "source": "void-edge-overhang-03.png",
+      "sourceSha256": "3ff0d30e40aedd6a27e58d9d4e04e0900d5066955b5729617c5af49512a6566b",
+      "emissiveSource": "void-edge-overhang-03-emissive.png",
+      "emissiveSourceSha256": "e1165a3592e91b2b316f874cdd750a4810200005b542f483c3247eecd10ff5e5",
+      "pixelSha256": "7f17963e15cda9848363db188ec7a85da8f0ccc1e2b9c96b373f60c6cf1661e9",
+      "emissivePixelSha256": "0d12cd2cc16e577c6fad439eb17fa04192baf731025dc9144c0c565311e13647"
+    },
+    {
+      "name": "void-lichen-02",
+      "width": 256,
+      "height": 256,
+      "source": "void-lichen-02.png",
+      "sourceSha256": "011b805ee65686df5a9d2d8dcf30eece8d0daf3a885d5b77fbb740b4f983e87f",
+      "emissiveSource": "void-lichen-02-emissive.png",
+      "emissiveSourceSha256": "b324773ed72b18df86bcb2f146ed9494c01d7c8a736e92545499fd2fc1e4e075",
+      "pixelSha256": "3c8260c647737e2e7a29d0681d6729804fc270709d3d59c68d59049fab467cb8",
+      "emissivePixelSha256": "13e7319c12b425fa033a366e21e2f3157ad806005ab672f402359ff755c72b3a"
+    },
+    {
+      "name": "void-lichen-03",
+      "width": 256,
+      "height": 256,
+      "source": "void-lichen-03.png",
+      "sourceSha256": "2b7310578e11a659a28f63336a7192decfa2c45db51bb1e234ab5bc5c8006ba9",
+      "emissiveSource": "void-lichen-03-emissive.png",
+      "emissiveSourceSha256": "9dd4109b5d3cb8f5f7b3c4fafa2d431225fde77a2ba1372a6361330a480de507",
+      "pixelSha256": "aa1790fff1c3df636eef56fa8eee9ce90752a99fee9a62adc05ea0b7d9fe09a0",
+      "emissivePixelSha256": "3268759747a4f8089a6cc949d58c5f77b8444ecd557c786b25f37bfb10d434c3"
+    },
+    {
+      "name": "void-lichen-04",
+      "width": 256,
+      "height": 256,
+      "source": "void-lichen-04.png",
+      "sourceSha256": "2ae6fcc38a5d0dc244b9c27af9f5f41bc8a25c949e471da6c7768de507cafbde",
+      "emissiveSource": "void-lichen-04-emissive.png",
+      "emissiveSourceSha256": "d3fee2de5fd99a2f8f49edae4648df23e0ae061f162f4328aa960465d2e738ce",
+      "pixelSha256": "fce49764b022070c6c192e92e4b24b86da5812035238ece46201bb4e6880f5e6",
+      "emissivePixelSha256": "518e0eb5863cb7bfc1162fee499ac4a426d77583c73f39f4b64f7f5ed8d48e35"
+    },
+    {
+      "name": "void-moss-nest-01",
+      "width": 256,
+      "height": 171,
+      "minWorld": 28,
+      "maxWorld": 64,
+      "source": "void-moss-nest-01.png",
+      "sourceSha256": "7b6e8ecf6a2ee841a9e524d518e87983e0392618b40ae2c91b8cae8342621744",
+      "emissiveSource": "void-moss-nest-01-emissive.png",
+      "emissiveSourceSha256": "3481d23594d03d7e801326c707e6d95e545e0aa70aecbe0439ee9f698a27a2c8",
+      "pixelSha256": "b832b7b204ab57151b4b4a891d3d8a8346c3c814416e2c3e20cfad532d852b66",
+      "emissivePixelSha256": "9683b406a53ea07be6d7e425596cb0288abff39259af4378bd55f3c0f70ea75f"
+    },
+    {
+      "name": "void-moss-nest-02",
+      "width": 256,
+      "height": 171,
+      "minWorld": 28,
+      "maxWorld": 64,
+      "source": "void-moss-nest-02.png",
+      "sourceSha256": "df64c2d2aac2041363b54bcc374e6c2732c2a67d04911f5d55c2c22e90efb672",
+      "emissiveSource": "void-moss-nest-02-emissive.png",
+      "emissiveSourceSha256": "d02edbf6b0bb6a3a4d9c6f918cd6daea2d42d1924c55c0588535715e000d1121",
+      "pixelSha256": "cf631aa3afc5ea7baae8b38333c84deb6b303c8348b51a480108a6920bdc59ac",
+      "emissivePixelSha256": "acb97151f5b9528ff0b44195cb09d6f110bf2caece0452659a9413a33622da63"
+    },
+    {
+      "name": "void-moss-nest-03",
+      "width": 256,
+      "height": 171,
+      "minWorld": 28,
+      "maxWorld": 64,
+      "source": "void-moss-nest-03.png",
+      "sourceSha256": "d0b17f6f64e4f010b5c9eaf9c7277e0c6b06e29f8b7d7eb45db8dc480d08d5ef",
+      "emissiveSource": "void-moss-nest-03-emissive.png",
+      "emissiveSourceSha256": "035c1546607f36eb635fddff6616d80e1a8c38d587aa17d94876103e9707a0d3",
+      "pixelSha256": "cf45487765a413bfcd844ced7e2bd5f51a9a40392a6a634e126a4e469a66d0b4",
+      "emissivePixelSha256": "5a5e757607a69a87efcec8e12c926980627c7de7cc98a18db805fe77861da363"
+    },
+    {
+      "name": "void-moss-nest-04",
+      "width": 256,
+      "height": 171,
+      "minWorld": 28,
+      "maxWorld": 64,
+      "source": "void-moss-nest-04.png",
+      "sourceSha256": "60cf9bcb11dfdcf12a61ddfee2c00ed5dc7251f69c2f7ac253fb4e127e1ce837",
+      "emissiveSource": "void-moss-nest-04-emissive.png",
+      "emissiveSourceSha256": "180b5150e989cd01f22d26aa938fc194d9daef177e90efa65978d30de73ac741",
+      "pixelSha256": "805ffa9b5108fbc21c586213effc03fc87835a4c717f9db6f282a9da67c22ce6",
+      "emissivePixelSha256": "7a8492fa8e9a31b40e9d8174e9ef437894549b510fd03c654aa124b677880edb"
+    },
+    {
+      "name": "void-moss-strip-01",
+      "width": 256,
+      "height": 256,
+      "source": "void-moss-strip-01.png",
+      "sourceSha256": "386f1af8394279f14601e75cc1a2ca2b48576f2d5b6a5b77242fc2d19170f2c3",
+      "emissiveSource": "void-moss-strip-01-emissive.png",
+      "emissiveSourceSha256": "f64d4f87b3c0aab70accb6014a23c7d5cb1520eac39322bc3466ecbdc3dcdf29",
+      "pixelSha256": "3ce5847d7944f78123f9a86a10d43735a32ed81dacefe796db6ee10ff6b1bdbd",
+      "emissivePixelSha256": "2d322fcb468abeb3891a214a90e0be0434b3125abc638a5fb76651bac10fcf1d"
+    },
+    {
+      "name": "void-moss-strip-02",
+      "width": 256,
+      "height": 256,
+      "source": "void-moss-strip-02.png",
+      "sourceSha256": "3f8c058248b29c0b9106e7a63b846632fab6a9dd09497e35482aebc2dce42b3c",
+      "emissiveSource": "void-moss-strip-02-emissive.png",
+      "emissiveSourceSha256": "b2ed1e2e4e066d49c23897fe732733eb4a0e22c340ec7938c6a9686a1d086e9b",
+      "pixelSha256": "b5d0430c60bd7b90e5b578ab486e73aa90681429e10e1d5f237d5c340beb580d",
+      "emissivePixelSha256": "c1fb371e30d3613631964ce10d7f8c2029055d018e8aded43d935a4f9a9fc45b"
+    },
+    {
+      "name": "void-moss-strip-03",
+      "width": 256,
+      "height": 256,
+      "source": "void-moss-strip-03.png",
+      "sourceSha256": "4e4d05d3f2d50b8b5d7cd90046015e267433d3945dc619a724730ad133deb494",
+      "emissiveSource": "void-moss-strip-03-emissive.png",
+      "emissiveSourceSha256": "ae88f5bab360612b1b22e2d9c26c6b8d54043291993062373f54c14a0fbfed74",
+      "pixelSha256": "d455be2032308214e3581768f2c7e81a73de67292b4749bad06a9389c797df7e",
+      "emissivePixelSha256": "ed1c114efe215410bd59f169dd068030d392657dbd2f604211325211def9edc5"
+    }
+  ]
+}

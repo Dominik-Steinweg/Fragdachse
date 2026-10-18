@@ -4,6 +4,7 @@
   "arenaWidthCells": 260,
   "arenaHeightCells": 33,
   "timeOfDay": "08:00",
+  "voidFlora": { "level": 0.03 },
   "tutorialShowControls": true,
   "tutorialPersistent": true,
   "tutorialAnchor": {

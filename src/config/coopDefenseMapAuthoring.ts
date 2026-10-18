@@ -1,6 +1,7 @@
 import { resolveEnemyLifecycleTotals } from './coopDefenseEnemyLifecycle';
 import { isBossIntroPresetId, type BossIntroPresetId } from './bossIntros';
 import { normalizeFogStrength } from './groundFog';
+import { normalizeWorldMoonlight, normalizeWorldVoidFlora, type WorldMoonlightConfig, type WorldVoidFloraConfig } from './nightWorld';
 import { normalizeCoopDefenseWater } from './coopDefenseWater';
 import { normalizeKrakenHabitat, type KrakenHabitatConfig } from './krakenHabitat';
 import { turretAimConfig, validateTurretAimConfig, type TurretAimConfig } from './turretAim';
@@ -944,6 +945,10 @@ export interface CoopDefenseMapConfig {
    */
   readonly timeOfDay?: string;
   readonly fogStrength?: number;
+  /** Moon islands of this World at night; omitted = production moon (Nachtsicht N-1). */
+  readonly moonlight?: WorldMoonlightConfig;
+  /** Share of void-taken flora and its foci; omitted = medium default (Nachtsicht N-7). */
+  readonly voidFlora?: WorldVoidFloraConfig;
   /** Optionale kontinuierliche bzw. gescriptete Laufzeitsteuerung; ohne Angabe bleibt die Map statisch. */
   readonly dynamicTimeOfDay?: CoopDefenseDynamicTimeOfDayConfig;
   /** Echte Rundendauer; nur fuer `survive` gesetzt und siegrelevant. */
@@ -1402,6 +1407,9 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     mapEvents,
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
     fogStrength: normalizeFogStrength(mapConfig.fogStrength),
+    ...(mapConfig.moonlight === undefined ? {} : { moonlight: normalizeWorldMoonlight(`coopDefenseMaps ${mapConfig.mapId}`, mapConfig.moonlight) }),
+    ...(mapConfig.voidFlora === undefined ? {} : { voidFlora: normalizeWorldVoidFlora(`coopDefenseMaps ${mapConfig.mapId}`,
+      mapConfig.voidFlora, arenaWidthCells, arenaHeightCells) }),
     dynamicTimeOfDay: normalizeDynamicTimeOfDayConfig(mapConfig.mapId, mapConfig.dynamicTimeOfDay, boss),
     surviveDurationSec,
     balanceReferenceDurationSec,

@@ -21,9 +21,16 @@ import {
   OCCLUDER_SCRATCH_SIZE,
   OCCLUDER_SHADE_FALLOFF_PX,
   SHADOW_EXTEND_FACTOR,
+  DEFAULT_LIGHT_FALLOFF_EXPONENT,
+  resolveSurfaceReachPx,
   type LightPreset,
   type LightPresetKey,
 } from './LightingConfig';
+import { MAX_SURFACE_LIGHTS, type SurfaceLightFrame } from './SurfaceLocalLights';
+import { OCCLUDER_GROUP_ROCK } from './LightOccluderIndex';
+import { ROCK_PENETRATION_FRAGMENT, ROCK_PENETRATION_SHADER_NAME } from './RockPenetrationShader';
+import { ownSunShader } from './sunlight/SunRenderTarget';
+import type { FormationCoverageBinding } from '../arena/rocks/RockFormationLighting';
 import {
   DEFAULT_TIME_OF_DAY_MINUTES,
   NEUTRAL_AMBIENT_COLOR,
@@ -40,6 +47,7 @@ import {
   ShadowQuadBuffer,
   SHADOW_QUAD_STRIDE,
   projectCircleShadowQuad,
+  projectRectBackShadowQuads,
   projectRectShadowQuads,
 } from './lightShadowGeometry';
 import {
@@ -54,12 +62,17 @@ const CONE_TEX_HEIGHT = 512;
 const LIGHT_BLEED_FRAGMENT = `
 precision highp float;
 uniform sampler2D uLightMap;
+uniform sampler2D uAmbientLayer;
 uniform vec3 uAmbient;
 uniform float uBleedFactor;
+uniform float uAmbientLayerOn;
+uniform float uAmbientLayerWeight;
 varying vec2 outTexCoord;
 void main() {
-  // The shared map already includes light color, falloff, budgets and occlusion.
-  vec3 excess = max(texture2D(uLightMap, outTexCoord).rgb - uAmbient, vec3(0.0));
+  // The shared map already includes light color, falloff, budgets and occlusion. A world-anchored
+  // ambient layer (moon islands) belongs to the night itself: only lamps above it may bleed.
+  vec3 floorLight = uAmbient + (uAmbientLayerOn > 0.5 ? texture2D(uAmbientLayer, outTexCoord).rgb * uAmbientLayerWeight : vec3(0.0));
+  vec3 excess = max(texture2D(uLightMap, outTexCoord).rgb - floorLight, vec3(0.0));
   float peak = max(excess.r, max(excess.g, excess.b));
   // A shared shoulder preserves the residual hue instead of whitening each channel.
   float shoulder = (1.0 - exp(-2.0 * peak)) / max(peak, 0.00001);
@@ -84,6 +97,14 @@ const LIGHTMAP_OVERSCAN_ALIGNMENT_PX = 8;
 const LIGHTMAP_VIEWPORT_GROWTH_STEP_PX = 256;
 /** Subpixel-Toleranz gegen Gleitkommarauschen der Kamera-Scrollposition. */
 const LIGHTMAP_VIEWPORT_EPSILON_PX = 0.5;
+
+/** Anteil der Felsfront-Eindringtiefe, der voll beleuchtet bleibt; danach läuft der Verlauf. */
+const SURFACE_REACH_LIT_SHARE = 0.35;
+/** Soft start of the projected shadow behind a rock's back edges when the rock front is organic. */
+const BACK_EDGE_SOFT_PX = 14;
+const SCRATCH_SIZE_UNIFORM = new Float32Array([OCCLUDER_SCRATCH_SIZE, OCCLUDER_SCRATCH_SIZE]);
+/** Shader quads drawn into a render texture see their texture coordinates upside down. */
+const ROCK_PENETRATION_FLIP_Y = 1;
 
 /** Ausblendzeit, wenn ein Dauerlicht freigegeben wird – verhindert hartes Poppen. */
 const RELEASE_FADE_MS = 140;
@@ -126,6 +147,15 @@ export interface LightMapAmbientLayer {
   /** Visible world rectangle of the light map and its pixel size; null draws nothing this frame. */
   update(worldX: number, worldY: number, worldWidth: number, worldHeight: number, width: number, height: number):
     Phaser.GameObjects.GameObject | null;
+  /** Light the layer adds at a world point (RGB 0..1), for receivers above the map such as canopies. */
+  sampleAt?(x: number, y: number, out: number[]): number[];
+  /**
+   * The layer's added light in light-map space for the current frame. The bleed treats it as
+   * ambient, so world-anchored night light never glows on its own.
+   */
+  readonly lightTexture?: Phaser.Textures.Texture | null;
+  /** Share of `lightTexture` the bleed treats as ambient, 0..1; omitted means all of it. */
+  readonly bleedWeight?: number;
 }
 
 /** Ausgeliehener Frame kleiner farbiger Bodenleuchten (siehe {@link LightingSystem.setGroundGlowLights}). */
@@ -147,6 +177,9 @@ interface OccluderSlot {
   readonly renderTexture: Phaser.GameObjects.RenderTexture;
   readonly image: Phaser.GameObjects.Image;
   readonly graphics: Phaser.GameObjects.Graphics;
+  /** Organic rock penetration of this slot's lamp; own uniforms, the erase runs at render time. */
+  penetration?: { readonly shader: Phaser.GameObjects.Shader; readonly lamp: Float32Array; readonly reach: Float32Array;
+    readonly frame: Float32Array; binding: FormationCoverageBinding | null };
 }
 
 interface OcclusionCache {
@@ -258,6 +291,7 @@ export class LightingSystem {
   private essenceBatch: EnemyEyeBatch | null = null;
   /** Kleine farbige Bodenleuchten (z. B. leuchtende Fußspuren), gesammelt in einem Draw. */
   private readonly groundGlowFrames = new Map<object, GroundGlowLightFrame>();
+  private readonly decorativeGlowOwners = new Set<object>();
   private groundGlowBatch: EnemyEyeBatch | null = null;
   private renderedGroundGlowLights = 0;
   private renderedEssenceLights = 0;
@@ -338,6 +372,15 @@ export class LightingSystem {
   }
 
   /** Bewegliche Occluder bleiben ausserhalb des statischen Arena-Indexes. */
+  /**
+   * Resident V7 rock coverage for organic lamp penetration (Nachtsicht N-4). Without coverage the
+   * rock front keeps the cell-aligned inset band.
+   */
+  setRockCoverage(provider: (() => FormationCoverageBinding | null) | null): void {
+    this.rockCoverage = provider;
+  }
+  private rockCoverage: (() => FormationCoverageBinding | null) | null = null;
+
   setDynamicOccluderSource(source: DynamicLightOccluderSource | null): void {
     this.dynamicOccluders = source;
   }
@@ -419,6 +462,49 @@ export class LightingSystem {
   }
 
   /**
+   * Bounded, borrowed presentation port for materials below the light map (Nachtsicht N-4):
+   * the strongest relief lamps of this frame whose reach meets the world rectangle. The
+   * material bends only its relative form; irradiance, budget and shadows stay in the map.
+   */
+  sampleSurfaceLights(x: number, y: number, width: number, height: number, out: SurfaceLightFrame,
+    maxLights = MAX_SURFACE_LIGHTS): SurfaceLightFrame {
+    out.count = 0;
+    out.ambient = colorLuminance(this.getAmbientColor());
+    if (!this.enabled) return out;
+    const limit = Math.max(0, Math.min(MAX_SURFACE_LIGHTS, maxLights));
+    const strengths = this.surfaceLightStrengths;
+    for (const light of this.renderQueue) {
+      if (light.effectiveIntensity <= 0 || !(LIGHT_PRESETS[light.presetKey] as LightPreset).surfaceRelief) continue;
+      const r = light.radiusPx;
+      if (light.x + r < x || light.x - r > x + width || light.y + r < y || light.y - r > y + height) continue;
+      const strength = light.effectiveIntensity * colorLuminance(light.color);
+      let slot = out.count;
+      if (slot >= limit) {
+        if (limit === 0) break;
+        slot = 0;
+        for (let i = 1; i < limit; i += 1) if (strengths[i] < strengths[slot]) slot = i;
+        if (strengths[slot] >= strength) continue;
+      } else {
+        out.count += 1;
+      }
+      strengths[slot] = strength;
+      const p = slot * 4;
+      out.position[p] = light.x; out.position[p + 1] = light.y;
+      out.position[p + 2] = r; out.position[p + 3] = strength;
+      if (light.shape === 'cone') {
+        const half = light.coneAngle * 0.5;
+        out.cone[p] = Math.cos(light.angle); out.cone[p + 1] = Math.sin(light.angle);
+        out.cone[p + 2] = half; out.cone[p + 3] = half * 0.7;
+      } else {
+        out.cone[p] = 1; out.cone[p + 1] = 0; out.cone[p + 2] = 0; out.cone[p + 3] = 0;
+      }
+      out.profile[p] = lightFalloffExponent(light);
+    }
+    return out;
+  }
+  private readonly surfaceLightStrengths = new Float64Array(MAX_SURFACE_LIGHTS);
+
+  /**
    * Stärke der künstlichen Lichter (Taschenlampen, Zugbeleuchtung). 0 heißt: gar nicht
    * erst anmelden – tagsüber existieren sie wie bisher überhaupt nicht.
    */
@@ -494,11 +580,26 @@ export class LightingSystem {
     // Der Kurzschluss bei leerer Lichtliste spart zugleich `sampleLightAmount()`, das
     // pro Krone über alle aktiven Lichter läuft.
     const factor = this.sky.canopyLightFactor;
-    if (factor <= 0 || (this.lights.length === 0 && this.essenceFrames.size === 0)) return this.getAmbientColor();
+    const base = this.resolveCanopyBase(x, y);
+    if (factor <= 0 || (this.lights.length === 0 && this.essenceFrames.size === 0)) return base;
 
     const lit = Phaser.Math.Clamp(this.sampleLightAmount(x, y) * factor, 0, 1);
-    return mixChannels(this.getAmbientColor(), 0xffffff, lit);
+    return mixChannels(base, 0xffffff, lit);
   }
+
+  /** Ambient plus the world-anchored ambient layer (moon islands) at a canopy position. */
+  private resolveCanopyBase(x: number, y: number): number {
+    const ambient = this.getAmbientColor();
+    const sample = this.ambientLayer?.sampleAt?.(x, y, this.canopyLayerSample);
+    if (!sample || (sample[0] <= 0 && sample[1] <= 0 && sample[2] <= 0)) return ambient;
+    let color = 0;
+    for (let channel = 0; channel < 3; channel++) {
+      const shift = 16 - channel * 8;
+      color |= Math.min(255, ((ambient >> shift) & 0xff) + Math.round(sample[channel] * 255)) << shift;
+    }
+    return color;
+  }
+  private readonly canopyLayerSample = [0, 0, 0];
 
   /**
    * Summierte Lichtmenge an einer Weltposition (0…1), ohne Verdeckung.
@@ -516,7 +617,8 @@ export class LightingSystem {
       const distance = Math.hypot(dx, dy);
       if (distance >= light.radiusPx) continue;
 
-      let contribution = (1 - distance / light.radiusPx) ** 2 * light.effectiveIntensity;
+      let contribution = (1 - distance / light.radiusPx) ** lightFalloffExponent(light)
+        * light.effectiveIntensity;
       if (light.shape === 'cone' && distance > 0.0001) {
         const halfAngle = light.coneAngle * 0.5;
         const delta = Math.abs(Phaser.Math.Angle.Wrap(Math.atan2(dy, dx) - light.angle));
@@ -546,6 +648,7 @@ export class LightingSystem {
     this.essenceBatch?.begin(0);
     this.renderedEssenceLights = 0;
     this.groundGlowFrames.clear();
+    this.decorativeGlowOwners.clear();
     this.groundGlowBatch?.begin(0);
     this.renderedGroundGlowLights = 0;
     for (const light of this.lights) {
@@ -586,6 +689,7 @@ export class LightingSystem {
     if (this.lightBleed) {
       this.lightBleed.destroy();
       this.lightBleed = null;
+      this.bleedLayerTexture = null;
     }
     this.lightMap?.destroy();
     this.lightMap = null;
@@ -595,6 +699,7 @@ export class LightingSystem {
       slot.renderTexture.destroy();
       slot.image.destroy();
       slot.graphics.destroy();
+      slot.penetration?.shader.destroy();
     }
     this.slots.length = 0;
   }
@@ -615,9 +720,12 @@ export class LightingSystem {
    * Viele kleine farbige Bodenleuchten außerhalb des Lichtbudgets, z. B. leuchtende
    * Fußspuren. Ausgeliehene Frames; die Besitzeridentität trennt mehrere Quellen.
    */
-  setGroundGlowLights(owner: object, frame: GroundGlowLightFrame | null): void {
+  setGroundGlowLights(owner: object, frame: GroundGlowLightFrame | null, options?: { decorative?: boolean }): void {
     if (frame && frame.lightCount > 0) this.groundGlowFrames.set(owner, frame);
     else this.groundGlowFrames.delete(owner);
+    // Decorative glow (void flora) fills the shared batch last and never displaces gameplay lights.
+    if (frame && frame.lightCount > 0 && options?.decorative) this.decorativeGlowOwners.add(owner);
+    else this.decorativeGlowOwners.delete(owner);
     if (this.groundGlowFrames.size === 0) {
       this.groundGlowBatch?.begin(0);
       this.renderedGroundGlowLights = 0;
@@ -644,7 +752,8 @@ export class LightingSystem {
     }
     this.groundGlowBatch.begin(Math.min(count, 256));
     const scale = this.quality.lightMapScale;
-    for (const frame of this.groundGlowFrames.values()) {
+    for (let pass = 0; pass < 2; pass++) for (const [owner, frame] of this.groundGlowFrames) {
+      if (this.decorativeGlowOwners.has(owner) !== (pass === 1)) continue;
       for (let index = 0; index < frame.lightCount && this.renderedGroundGlowLights < 256; index++) {
         const light = frame.lights[index], x = light.x - scrollX, y = light.y - scrollY, r = light.radiusPx;
         if (x + r < -overscanX || y + r < -overscanY
@@ -861,9 +970,9 @@ export class LightingSystem {
     const ambientColor = this.getAmbientColor();
     const ambientIsNeutral = ambientColor === NEUTRAL_AMBIENT_COLOR;
     // A world-anchored ambient layer drifts with the camera and the clouds: never reuse last frame's map.
-    const queueEmpty = this.renderQueue.length === 0 && eyeLights === 0 && essenceLights === 0 && groundGlowLights === 0
-      && this.ambientLayer === null;
-    this.syncLightBleed(overlay, !queueEmpty);
+    const noLights = this.renderQueue.length === 0 && eyeLights === 0 && essenceLights === 0 && groundGlowLights === 0;
+    const queueEmpty = noLights && this.ambientLayer === null;
+    this.syncLightBleed(overlay, !noLights);
 
     // Reihenfolge ist tragend: erst Sichtbarkeit entscheiden, dann erst Befehle erzeugen.
     // `setRenderMode('all')` leert den Command-Buffer am Platz des Objekts in der
@@ -1441,7 +1550,7 @@ export class LightingSystem {
   ): void {
     const radiusLm = light.radiusPx * this.quality.lightMapScale;
     if (light.shape === 'cone') {
-      target.stamp(this.ensureConeTexture(light.coneAngle), undefined, x, y, {
+      target.stamp(this.ensureConeTexture(light.coneAngle, lightFalloffExponent(light)), undefined, x, y, {
         alpha,
         tint,
         rotation: light.angle,
@@ -1481,12 +1590,16 @@ export class LightingSystem {
     slot.renderTexture.clear();
     this.stampLight(slot.renderTexture, light, center, center);
 
+    const preset = LIGHT_PRESETS[light.presetKey] as LightPreset;
+    const coverage = preset.surfaceReachNearPx !== undefined && preset.surfaceReachFarPx !== undefined
+      ? this.rockCoverage?.() ?? null : null;
     const geometryStartedAt = collectMetrics ? performance.now() : 0;
-    this.buildShadowGraphics(light, slot.graphics, center, collectCounts);
+    this.buildShadowGraphics(light, slot.graphics, center, collectCounts, coverage !== null);
     const durationMs = collectMetrics ? performance.now() - geometryStartedAt : 0;
     const shadowQuads = collectCounts ? this.shadowQuads.length : 0;
     const falloffQuads = collectCounts ? this.falloffQuads.length : 0;
     slot.renderTexture.erase([slot.graphics]);
+    if (coverage) slot.renderTexture.erase([this.preparePenetration(slot, light, preset, coverage, center)]);
     this.frameOcclusionRefreshes += 1;
 
     slot.image.setPosition(
@@ -1523,13 +1636,14 @@ export class LightingSystem {
     graphics: Phaser.GameObjects.Graphics,
     center: number,
     collectCounts: boolean,
+    organicRocks = false,
   ): void {
     graphics.clear();
     const core = this.shadowQuads;
     const falloff = this.falloffQuads;
     core.reset();
     falloff.reset();
-    this.projectStaticShadowGeometry(light, core, falloff);
+    this.projectStaticShadowGeometry(light, core, falloff, organicRocks);
     this.projectDynamicShadowGeometry(light, core, falloff, collectCounts);
 
     if (core.length === 0 && falloff.length === 0) return;
@@ -1543,16 +1657,39 @@ export class LightingSystem {
     light: ActiveLight,
     core: ShadowQuadBuffer,
     falloff: ShadowQuadBuffer,
+    organicRocks = false,
   ): void {
     const extendPx = light.radiusPx * SHADOW_EXTEND_FACTOR;
     const falloffPx = OCCLUDER_SHADE_FALLOFF_PX;
+    const preset = LIGHT_PRESETS[light.presetKey] as LightPreset;
+    const reaches = preset.surfaceReachNearPx !== undefined && preset.surfaceReachFarPx !== undefined;
     const projectRect = (
       left: number,
       top: number,
       right: number,
       bottom: number,
       exposedEdges: number,
+      group?: number,
     ): void => {
+      if (reaches && group === OCCLUDER_GROUP_ROCK) {
+        // Nachtsicht N-4: Die Lampe leuchtet die Felsfront bis zur Eindringtiefe aus, die
+        // abgewandten Kanten schließen den Schatten hinter dem Fels sofort.
+        // With resident coverage the penetration pass shapes the rock front along its real
+        // contour; only the exact shadow behind the back edges stays polygonal.
+        if (organicRocks) {
+          // A soft start keeps grazing back edges from drawing hard hairlines into the beam.
+          projectRectBackShadowQuads(falloff, light.x, light.y, left, top, right, bottom, 0, BACK_EDGE_SOFT_PX, exposedEdges);
+          projectRectBackShadowQuads(core, light.x, light.y, left, top, right, bottom, BACK_EDGE_SOFT_PX, extendPx, exposedEdges);
+          return;
+        }
+        const distance = Math.hypot((left + right) * 0.5 - light.x, (top + bottom) * 0.5 - light.y);
+        const reach = Math.max(falloffPx, resolveSurfaceReachPx(preset, distance, light.radiusPx));
+        projectRectShadowQuads(falloff, light.x, light.y, left, top, right, bottom,
+          reach * SURFACE_REACH_LIT_SHARE, reach * (1 - SURFACE_REACH_LIT_SHARE), exposedEdges);
+        projectRectShadowQuads(core, light.x, light.y, left, top, right, bottom, reach, extendPx, exposedEdges);
+        projectRectBackShadowQuads(core, light.x, light.y, left, top, right, bottom, 0, extendPx, exposedEdges);
+        return;
+      }
       projectRectShadowQuads(
         falloff,
         light.x,
@@ -1762,10 +1899,13 @@ export class LightingSystem {
         name: 'LightBleed', shaderName: 'LightBleed', fragmentSource: LIGHT_BLEED_FRAGMENT,
         setupUniforms: (set: (name: string, value: unknown) => void) => {
           set('uLightMap', 0);
+          set('uAmbientLayer', 1);
+          set('uAmbientLayerOn', this.bleedLayerTexture ? 1 : 0);
+          set('uAmbientLayerWeight', Math.max(0, Math.min(1, this.ambientLayer?.bleedWeight ?? 1)));
           set('uAmbient', this.bleedAmbient);
           set('uBleedFactor', this.sky.bleedFactor);
         },
-      }, lightMap.x, lightMap.y, lightMap.displayWidth, lightMap.displayHeight, [lightMap.texture]);
+      }, lightMap.x, lightMap.y, lightMap.displayWidth, lightMap.displayHeight, [lightMap.texture, lightMap.texture]);
       // Capture before Shader.preDestroy clears renderNode, including DisplayList shutdown.
       const node = quad.renderNode;
       quad.once('destroy', () => {
@@ -1784,8 +1924,14 @@ export class LightingSystem {
         .setBlendMode(Phaser.BlendModes.SCREEN);
       this.lightBleed = this.scene.add.existing(quad);
     }
+    const layerTexture = this.ambientLayer?.lightTexture ?? null;
+    if (layerTexture !== this.bleedLayerTexture) {
+      this.bleedLayerTexture = layerTexture;
+      this.lightBleed.setTextures([lightMap.texture, layerTexture ?? lightMap.texture]);
+    }
     this.lightBleed.setVisible(true);
   }
+  private bleedLayerTexture: Phaser.Textures.Texture | null = null;
 
   private ensureLightMap(): Phaser.GameObjects.RenderTexture {
     if (this.lightMap) return this.lightMap;
@@ -1849,6 +1995,37 @@ export class LightingSystem {
   private getLightMapOverscanPx(viewportSize: number): number {
     void viewportSize;
     return LIGHTMAP_OVERSCAN_ALIGNMENT_PX;
+  }
+
+  /** Uniforms of a slot's penetration quad for this lamp; the quad itself is reused per slot. */
+  private preparePenetration(slot: OccluderSlot, light: ActiveLight, preset: LightPreset,
+    coverage: FormationCoverageBinding, center: number): Phaser.GameObjects.Shader {
+    if (!slot.penetration) {
+      const lamp = new Float32Array(4), reach = new Float32Array(4), frame = new Float32Array(4);
+      const shader = new Phaser.GameObjects.Shader(this.scene, {
+        name: ROCK_PENETRATION_SHADER_NAME, shaderName: ROCK_PENETRATION_SHADER_NAME, fragmentSource: ROCK_PENETRATION_FRAGMENT,
+        setupUniforms: (set: (name: string, value: unknown) => void) => {
+          set('uRockField', 0); set('uRockLookup', 1);
+          set('uLamp', lamp); set('uReach', reach); set('uRockFrame', frame);
+          set('uScratchSize', SCRATCH_SIZE_UNIFORM); set('uFlipY', ROCK_PENETRATION_FLIP_Y);
+        },
+      }, 0, 0, OCCLUDER_SCRATCH_SIZE, OCCLUDER_SCRATCH_SIZE, [coverage.field, coverage.lookup]);
+      // Private VAO and buffer die with the slot; the program stays shared like other fixed keys.
+      ownSunShader(shader, ROCK_PENETRATION_SHADER_NAME, true);
+      shader.setOrigin(0, 0);
+      slot.penetration = { shader, lamp, reach, frame, binding: coverage };
+    }
+    const penetration = slot.penetration;
+    if (penetration.binding !== coverage) {
+      penetration.shader.setTextures([coverage.field, coverage.lookup]);
+      penetration.binding = coverage;
+    }
+    penetration.lamp[0] = light.x; penetration.lamp[1] = light.y;
+    penetration.lamp[2] = center; penetration.lamp[3] = 1 / this.quality.lightMapScale;
+    penetration.reach[0] = preset.surfaceReachNearPx!; penetration.reach[1] = preset.surfaceReachFarPx!;
+    penetration.reach[2] = light.radiusPx; penetration.reach[3] = SURFACE_REACH_LIT_SHARE;
+    for (let i = 0; i < 4; i++) penetration.frame[i] = coverage.frame[i];
+    return penetration.shader;
   }
 
   private createOccluderSlot(slotIndex: number): OccluderSlot {
@@ -1949,12 +2126,15 @@ export class LightingSystem {
    * Spielerlinie hart abbrechen. Dafür gibt es das omnidirektionale Preset
    * `flashlightSpill`.
    */
-  private ensureConeTexture(coneAngle: number): string {
-    const angleKey = Math.round(coneAngle * 1000);
+  private ensureConeTexture(coneAngle: number, exponent = DEFAULT_LIGHT_FALLOFF_EXPONENT): string {
+    const angleKey = Math.round(coneAngle * 1000) * 1000 + Math.round(exponent * 100);
     const existing = this.coneTextureKeys.get(angleKey);
     if (existing) return existing;
 
-    const key = `__light_cone_${angleKey}`;
+    // The default curve keeps its historical key; flatter beams get their own texture.
+    const key = exponent === DEFAULT_LIGHT_FALLOFF_EXPONENT
+      ? `__light_cone_${Math.round(coneAngle * 1000)}`
+      : `__light_cone_${Math.round(coneAngle * 1000)}_${Math.round(exponent * 100)}`;
     const halfAngle = coneAngle * 0.5;
     const apexY = CONE_TEX_HEIGHT * 0.5;
     const range = CONE_TEX_WIDTH;
@@ -1962,13 +2142,20 @@ export class LightingSystem {
     const edgeSteps = 12;
 
     ensureCanvasTexture(this.scene.textures, key, CONE_TEX_WIDTH, CONE_TEX_HEIGHT, (ctx) => {
-      // Gleiche Abstandskurve wie die runde Lichttextur: (1 - d/r)².
+      // Abstandskurve (1 - d/r)^n; n = 2 entspricht der runden Lichttextur.
       const beam = ctx.createRadialGradient(0, apexY, 0, 0, apexY, range);
-      beam.addColorStop(0, 'rgba(255,255,255,1)');
-      beam.addColorStop(0.25, 'rgba(255,255,255,0.5625)');
-      beam.addColorStop(0.5, 'rgba(255,255,255,0.25)');
-      beam.addColorStop(0.75, 'rgba(255,255,255,0.0625)');
-      beam.addColorStop(1, 'rgba(255,255,255,0)');
+      if (exponent === DEFAULT_LIGHT_FALLOFF_EXPONENT) {
+        beam.addColorStop(0, 'rgba(255,255,255,1)');
+        beam.addColorStop(0.25, 'rgba(255,255,255,0.5625)');
+        beam.addColorStop(0.5, 'rgba(255,255,255,0.25)');
+        beam.addColorStop(0.75, 'rgba(255,255,255,0.0625)');
+        beam.addColorStop(1, 'rgba(255,255,255,0)');
+      } else {
+        for (let stop = 0; stop <= 16; stop += 1) {
+          const t = stop / 16;
+          beam.addColorStop(t, `rgba(255,255,255,${((1 - t) ** exponent).toFixed(4)})`);
+        }
+      }
 
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = beam;
@@ -1996,6 +2183,16 @@ function compareLightImportance(left: ActiveLight, right: ActiveLight): number {
   if (left.occludes !== right.occludes) return left.occludes ? -1 : 1;
   if (left.priority !== right.priority) return right.priority - left.priority;
   return right.effectiveIntensity - left.effectiveIntensity;
+}
+
+/** Abstandskurve eines Lichts: Kegel dürfen sie abflachen, alles andere bleibt (1 - d/r)². */
+function lightFalloffExponent(light: ActiveLight): number {
+  if (light.shape !== 'cone') return DEFAULT_LIGHT_FALLOFF_EXPONENT;
+  return (LIGHT_PRESETS[light.presetKey] as LightPreset).falloffExponent ?? DEFAULT_LIGHT_FALLOFF_EXPONENT;
+}
+
+function colorLuminance(color: number): number {
+  return (((color >> 16) & 0xff) * 0.2126 + ((color >> 8) & 0xff) * 0.7152 + (color & 0xff) * 0.0722) / 255;
 }
 
 /** Kanalweise Mischung zweier Farben; `amount` 0 liefert `from`, 1 liefert `to`. */

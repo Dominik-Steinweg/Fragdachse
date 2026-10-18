@@ -1,0 +1,148 @@
+{
+  "void-lily-pad-02": {
+    "accepted": true,
+    "family": "pad",
+    "raw": "void_lily_pad_02_1792323171893.jpg",
+    "rawSha256": "004f78e7750299351ab55456b1ae20f382a2c8e2c9eddc2b4a173725132c5233",
+    "reason": "Fast vollständig befallen, feines radiales Adernetz, schmale Kerbe; ruhig und klar bei 32–96 px.",
+    "emissive": "void-lily-pad-02-emissive.png"
+  },
+  "void-lily-pad-04": {
+    "accepted": true,
+    "family": "pad",
+    "raw": "void_lily_pad_04_1792323218664.jpg",
+    "rawSha256": "3181caebcc1dfa73915140434464d233c4aa442f5f1c9202f1533d5dd8be0360",
+    "reason": "Frühbefall mit dunklem Grün-Teal, Sporenpunkte gestreut; schlitzartige Kerbe als Formvariante.",
+    "emissive": "void-lily-pad-04-emissive.png"
+  },
+  "void-lily-pad-05": {
+    "accepted": true,
+    "family": "pad",
+    "raw": "void_lily_pad_05_1792323244041.jpg",
+    "rawSha256": "10b273a04911aae13df8b328b8e539ae70711fc66c798ef9f12da83cb5070334",
+    "reason": "Altes zerfressenes Blatt mit Löchern, bräunlicher; liefert Zerfallsvariante.",
+    "emissive": "void-lily-pad-05-emissive.png"
+  },
+  "void-lily-pad-06": {
+    "accepted": true,
+    "family": "pad",
+    "raw": "void_lily_pad_06_1792323268578.jpg",
+    "rawSha256": "5f0c3df7e96229feca4b45d8b29364c28303b5937d0c6263b2556e4d5ded6120",
+    "reason": "Ungleiches Zweierpaar mit Luft dazwischen; Ersatz für das natürliche lily-pad-03.",
+    "emissive": "void-lily-pad-06-emissive.png"
+  },
+  "void-lily-pad-07": {
+    "accepted": true,
+    "family": "pad",
+    "raw": "void_lily_pad_07_1792323347847.jpg",
+    "rawSha256": "4b5874d01ffe4d1c2a766070c6fd35feafaed36415c178fdb79f1ccbf0a58f3d",
+    "reason": "Dunkelstes Blatt, Sporen nur an der Kerbe, Fraßstelle am Rand; leiseste Maske.",
+    "emissive": "void-lily-pad-07-emissive.png"
+  },
+  "void-lily-pad-08": {
+    "accepted": true,
+    "family": "pad",
+    "raw": "void_lily_pad_08_1792323372269.jpg",
+    "rawSha256": "fca149677cf079b26efe1231d2bfe7a2f1780c700f9c4f698b419a76bf42fce5",
+    "reason": "Großes Blatt mit Plum-/Teal-Bänderung und dünnen Adern; ruhige Mittelstufe.",
+    "emissive": "void-lily-pad-08-emissive.png"
+  },
+  "void-lily-pad-01": {
+    "accepted": false,
+    "family": "pad",
+    "raw": "void_lily_pad_01_1792322376753.jpg",
+    "rawSha256": "a44ced04d180645063ef4112ad4427ace495b9c8827f301e67d8243f07ec3158",
+    "reason": "Pilot: breite Tortenstück-Kerbe und illustrativer Look; durch Serie ersetzt."
+  },
+  "void-lily-pad-03": {
+    "accepted": false,
+    "family": "pad",
+    "raw": "void_lily_pad_03_1792323194471.jpg",
+    "rawSha256": "0fba38140be3878fb32f3fd5d335d40a7d1a9253bdf563ecc87b112c2f4e860e",
+    "reason": "Harte, gerade Halbteilung grün/violett wirkt künstlich."
+  },
+  "void-lily-group-01": {
+    "accepted": true,
+    "family": "group",
+    "raw": "void_lily_group_01_1792322396837.jpg",
+    "rawSha256": "bab5b16510d876e3e7bcb7ce2451561cf2ba6d1fb50de768a3c04c2fa8532145",
+    "reason": "Pilot, behalten: deutlicher Befallsgradient über vier Blätter plus violette Knospe.",
+    "emissive": "void-lily-group-01-emissive.png"
+  },
+  "void-lily-group-02": {
+    "accepted": true,
+    "family": "group",
+    "raw": "void_lily_group_02_1792323399103.jpg",
+    "rawSha256": "8de7c0dce9bca4ffe4fc6102922bdf7bc647727356bfb78bee11c95478a2117c",
+    "reason": "Vier dicht gelagerte, teilbefallene Blätter; kompakte Gruppenform.",
+    "emissive": "void-lily-group-02-emissive.png"
+  },
+  "void-lily-group-03": {
+    "accepted": true,
+    "family": "group",
+    "raw": "void_lily_group_03_1792323428954.jpg",
+    "rawSha256": "3f9f8ee99e2ca3588ce14d53e74abf7c99c0313c935703bc65cc47af8fd038bc",
+    "reason": "Zentrales voll befallenes Blatt, Ausbreitung zu den Nachbarn, zwei dunkle Knospen.",
+    "emissive": "void-lily-group-03-emissive.png"
+  },
+  "void-lily-group-04": {
+    "accepted": true,
+    "family": "group",
+    "raw": "void-lily-group-04_qwen_s948949609.png",
+    "rawSha256": "809edfd7e2098dcfe1f4b47cf441aa889360c4db40e907d0f8f890cab1afff10",
+    "generator": "ComfyUI qwen seed 948949609, 25 steps",
+    "colourMatch": [
+      "void-lily-group-01.png",
+      "void-lily-group-02.png",
+      "void-lily-group-03.png",
+      "void-lily-pad-02.png",
+      "void-lily-pad-04.png",
+      "void-lily-pad-05.png",
+      "void-lily-pad-06.png",
+      "void-lily-pad-07.png",
+      "void-lily-pad-08.png"
+    ],
+    "reason": "ComfyUI: eigenes Layout (nicht Gruppe 03), Befallsgradient mit Teal-Blättern am einen Ende; Frühbefall-Stufe.",
+    "emissive": "void-lily-group-04-emissive.png"
+  },
+  "void-lily-group-05": {
+    "accepted": true,
+    "family": "group",
+    "raw": "void-lily-group-05_qwen_s1080568060.png",
+    "rawSha256": "dc4d534eb722a37dfa38dc049acb4726a28a24ff238a1b3944e940e4fd35a1b3",
+    "generator": "ComfyUI qwen seed 1080568060, 25 steps",
+    "colourMatch": [
+      "void-lily-group-01.png",
+      "void-lily-group-02.png",
+      "void-lily-group-03.png",
+      "void-lily-pad-02.png",
+      "void-lily-pad-04.png",
+      "void-lily-pad-05.png",
+      "void-lily-pad-06.png",
+      "void-lily-pad-07.png",
+      "void-lily-pad-08.png"
+    ],
+    "reason": "ComfyUI: eigenes Layout aus natürlichen Blättern (Bogen aus zwei großen, zwei kleinen Blättern), halb geöffnete dunkle Void-Blüte in der Lücke.",
+    "emissive": "void-lily-group-05-emissive.png"
+  },
+  "void-lily-group-06": {
+    "accepted": true,
+    "family": "group",
+    "raw": "void-lily-group-06_qwen_s767626547.png",
+    "rawSha256": "84d237096040086d01ec8d7a5ad2be74b9e8df8f2324146e849be9951f2693a4",
+    "generator": "ComfyUI qwen seed 767626547, 25 steps",
+    "colourMatch": [
+      "void-lily-group-01.png",
+      "void-lily-group-02.png",
+      "void-lily-group-03.png",
+      "void-lily-pad-02.png",
+      "void-lily-pad-04.png",
+      "void-lily-pad-05.png",
+      "void-lily-pad-06.png",
+      "void-lily-pad-07.png",
+      "void-lily-pad-08.png"
+    ],
+    "reason": "ComfyUI: Void-Fassung der natürlichen Dreiergruppe lily-group-02, weitgehend umgewandelt, Sporenpunkte an den Blattmitten, Teal-Reste.",
+    "emissive": "void-lily-group-06-emissive.png"
+  }
+}

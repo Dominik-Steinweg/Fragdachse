@@ -21,6 +21,50 @@ export interface EcologyPlacement {
   kind:'litter'|'pond'|'shore'; frame:string; x:number;y:number;size:number;rotation:number;alpha:number;
   /** Stable density thinning; changing density doesn't reshuffle or upload textures. */
   rank:number;floating:boolean;pond?:number;colony?:number;stand?:number;
+  /** Shows a void overlay (presentation only); never changes position, rank or frame choice. */
+  void?:boolean;
+  /** Infestation 0..1 of this plant; drives its glow, veins and spores. */
+  voidAmount?:number;
+  /** Approved void art drawn instead of the natural frame (same size, rotation and motion). */
+  voidFrame?:string;
+}
+
+/** What the lily marking needs from the void field. */
+export interface VoidFloraAmounts {
+  intensityAt(x:number,y:number):number;
+  amountOf(intensity:number,x:number,y:number,weight?:number):number;
+}
+/** How strongly a pond pulls its plants towards its average: whole ponds tend to turn together. */
+const POND_COHERENCE=.9;
+/** Same threshold as `VOID_ART_FROM`, duplicated to keep this placement module free of asset imports. */
+const VOID_ART_THRESHOLD=.3;
+
+/**
+ * Marks void infestation of lily plants. A pond's plants share most of its average intensity, so
+ * neighbours look alike; the rim of an infested area passes through partly taken plants instead of
+ * single violet colonies among green ones. Returns the number of colonies that show any void.
+ */
+export function markVoidPondColonies(placements:EcologyPlacement[],field:VoidFloraAmounts|null,
+  artFrame?:(natural:string,amount:number,roll:number)=>string|null):number {
+  const ponds=new Map<number,{sum:number;n:number}>(),leads=new Set<number>(),colonies=new Set<number>();
+  if(field)for(const p of placements) {
+    if(p.kind!=='pond'||p.pond===undefined||p.colony===undefined||leads.has(p.colony))continue;
+    leads.add(p.colony);
+    const pond=ponds.get(p.pond)??{sum:0,n:0};pond.sum+=field.intensityAt(p.x,p.y);pond.n++;ponds.set(p.pond,pond);
+  }
+  for(const p of placements) {
+    const pond=field&&p.kind==='pond'&&p.pond!==undefined?ponds.get(p.pond):undefined;
+    p.voidFrame=undefined;
+    if(!field||!pond){p.void=false;p.voidAmount=0;continue;}
+    const mean=pond.sum/pond.n,own=field.intensityAt(p.x,p.y);
+    const amount=field.amountOf(mean+(own-mean)*(1-POND_COHERENCE),p.x,p.y);
+    p.voidAmount=amount;p.void=amount>.02;
+    // Above a per-plant threshold near the rim the art replaces the plant; early or full by amount.
+    if(artFrame&&amount>=VOID_ART_THRESHOLD+.2*ecologyHash(p.x,p.y,0x51a7))
+      p.voidFrame=artFrame(p.frame,amount,ecologyHash(p.x,p.y,0x51a8))??undefined;
+    if(p.void&&p.colony!==undefined)colonies.add(p.colony);
+  }
+  return colonies.size;
 }
 /** Uses the rendered mask, including propagated shore distance and soft bank expansion. */
 export class EcologyWaterField {

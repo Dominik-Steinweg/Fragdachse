@@ -23,6 +23,15 @@ describe('Map editor authoring documents', () => {
     draft.fogStrength = 2.1; expect(validateDocument(draft).issues.some(i => i.severity === 'error')).toBe(true);
     delete draft.fogStrength; expect(validateDocument(draft).issues.filter(i => i.severity === 'error')).toEqual([]);
   });
+  it('edits the night look (moon islands, void botany) and validates it through the shared normalizer', () => {
+    const loaded = load(), draft = clone(loaded.document);
+    draft.moonlight = { strength: .6, cover: .1 };
+    draft.voidFlora = { level: .4, foci: [{ gridX: 5, gridY: 5, radiusCells: 6, strength: .8 }] };
+    expect(() => assertSupportedMapEdit(loaded.document, draft)).not.toThrow();
+    expect(validateDocument(draft).issues.filter(i => i.severity === 'error')).toEqual([]);
+    draft.voidFlora = { level: 1.4 }; expect(validateDocument(draft).issues.some(i => i.severity === 'error')).toBe(true);
+    draft.voidFlora = { level: .4, glow: 1 }; expect(() => assertSupportedMapEdit(loaded.document, draft)).toThrow();
+  });
   it('edits only fire-front geometry and timing while retaining event identity, behavior and extensions', () => {
     const loaded = load('14-brandschneise.json');
     const event = object(at(loaded.document, ['mapEvents', 0]));

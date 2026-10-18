@@ -3,6 +3,7 @@
   "arenaWidthCells": 105,
   "arenaHeightCells": 42,
   "timeOfDay": "18:45",
+  "voidFlora": { "level": 0.14 },
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.4,
   "mapEvents": [],

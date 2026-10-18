@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../src/config';
-import { LightOccluderIndex } from '../src/effects/LightOccluderIndex';
+import { LightOccluderIndex, OCCLUDER_GROUP_ROCK } from '../src/effects/LightOccluderIndex';
 import { EDGE_BOTTOM, EDGE_LEFT, EDGE_RIGHT, EDGE_TOP } from '../src/effects/lightShadowGeometry';
 
 /**
@@ -230,6 +230,22 @@ describe('LightOccluderIndex', () => {
     // Unterschiedliche Verbünde: die Berührungskante bleibt eine Silhouette.
     expect(rockCell.edges & EDGE_RIGHT).toBe(EDGE_RIGHT);
     expect(baseCell.edges & EDGE_LEFT).toBe(EDGE_LEFT);
+  });
+
+  it('nennt Lampen den Verbund, damit nur Felsfronten ausgeleuchtet werden', () => {
+    const rock = worldPosition(10, 10);
+    const base = worldPosition(12, 10);
+    const index = new LightOccluderIndex({
+      rocks: () => [new FakeBox(rock.x, rock.y) as AnyBox],
+      trunks: () => null,
+      baseCells: () => [new FakeBox(base.x, base.y) as AnyBox],
+      baseGeneration: () => 0,
+    });
+    const groups: Array<{ left: number; group?: number }> = [];
+    index.queryCircle(rock.x, rock.y, 200, (left, _t, _r, _b, _edges, group) => { groups.push({ left, group }); }, () => {});
+    groups.sort((a, b) => a.left - b.left);
+    expect(groups[0].group).toBe(OCCLUDER_GROUP_ROCK);
+    expect(groups[1].group).not.toBe(OCCLUDER_GROUP_ROCK);
   });
 
   it('verschmilzt benachbarte Basiszellen untereinander', () => {

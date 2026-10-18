@@ -22,7 +22,8 @@ export async function colourSources() {
   const root = 'public/assets/environment/woodland';
   const files = ['rock/mineral-colour.png', 'rock/mineral-colour-2x.png', 'canopy/albedo.png',
     'ecology/rock-colonies-atlas.png', 'ecology/ground-litter-atlas.png', 'ecology/lilies-atlas.png',
-    'ecology/shore-stones-atlas.png'].map(f => `${root}/${f}`);
+    'ecology/shore-stones-atlas.png', 'ecology/void-lilies-atlas.png', 'ecology/void-lilies-emissive-atlas.png',
+    'ecology/void-rock-colonies-atlas.png', 'ecology/void-rock-colonies-emissive-atlas.png'].map(f => `${root}/${f}`);
   files.push(...materials.map(f => `public/assets/sprites/${f}.png`));
   files.push('public/assets/player/death-a01-r03/death-sheet.png');
   // Existing sprite/atlas keys and frame layouts survive publication unchanged.

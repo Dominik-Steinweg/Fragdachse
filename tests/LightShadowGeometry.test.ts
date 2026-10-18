@@ -8,6 +8,7 @@ import {
   ShadowQuadBuffer,
   SHADOW_QUAD_STRIDE,
   projectCircleShadowQuad,
+  projectRectBackShadowQuads,
   projectRectShadowQuads,
 } from '../src/effects/lightShadowGeometry';
 
@@ -192,5 +193,48 @@ describe('projectCircleShadowQuad', () => {
 describe('Kantenmasken', () => {
   it('deckt alle vier Richtungen ab', () => {
     expect(EDGE_TOP | EDGE_BOTTOM | EDGE_LEFT | EDGE_RIGHT).toBe(ALL_EDGES_EXPOSED);
+  });
+});
+
+describe('Felsfront-Eindringtiefe (Nachtsicht N-4)', () => {
+  const CELL = { left: 0, top: 0, right: 32, bottom: 32 };
+  const REACH = 40;
+  const lights = [-1, 0, 1].flatMap(dx => [-1, 0, 1].map(dy => [dx, dy]))
+    .filter(([dx, dy]) => dx !== 0 || dy !== 0)
+    .map(([dx, dy]) => ({ x: 16 + dx * 150, y: 16 + dy * 150 }));
+  const inside = (x: number, y: number): boolean => x >= CELL.left && x <= CELL.right && y >= CELL.top && y <= CELL.bottom;
+
+  function project(light: { x: number; y: number }) {
+    const legacy = new ShadowQuadBuffer(), core = new ShadowQuadBuffer();
+    projectRectShadowQuads(legacy, light.x, light.y, CELL.left, CELL.top, CELL.right, CELL.bottom, 0, 600);
+    projectRectShadowQuads(core, light.x, light.y, CELL.left, CELL.top, CELL.right, CELL.bottom, REACH, 600);
+    projectRectBackShadowQuads(core, light.x, light.y, CELL.left, CELL.top, CELL.right, CELL.bottom, 0, 600);
+    return { legacy, core };
+  }
+
+  it('lässt hinter einem einzelligen Fels aus keiner Richtung Licht durch', () => {
+    for (const light of lights) {
+      const { legacy, core } = project(light);
+      for (let x = -120; x <= 152; x += 4) for (let y = -120; y <= 152; y += 4) {
+        if (inside(x, y) || Math.hypot(x - light.x, y - light.y) > 400) continue;
+        // Außerhalb des Hindernisses bleibt der Schlagschatten exakt der bisherige.
+        expect(isInsideAnyQuad(core, x, y), `${light.x},${light.y} @ ${x},${y}`).toBe(isInsideAnyQuad(legacy, x, y));
+      }
+    }
+  });
+
+  it('hält die Felsfront innerhalb der Eindringtiefe frei vom Kernschatten', () => {
+    // Licht links: die Front liegt bei x = 0, der Kern beginnt erst nach REACH.
+    const { core } = project({ x: -150, y: 16 });
+    expect(isInsideAnyQuad(core, 4, 16)).toBe(false);
+    expect(isInsideAnyQuad(core, 28, 16)).toBe(false);
+    // Hinter der abgewandten Kante beginnt der Schatten sofort.
+    expect(isInsideAnyQuad(core, 36, 16)).toBe(true);
+  });
+
+  it('wirft hinter verdeckten Innenkanten eines Verbunds keinen Schatten', () => {
+    const buffer = new ShadowQuadBuffer();
+    projectRectBackShadowQuads(buffer, -150, 16, CELL.left, CELL.top, CELL.right, CELL.bottom, 0, 600, EDGE_LEFT);
+    expect(buffer.length).toBe(0);
   });
 });

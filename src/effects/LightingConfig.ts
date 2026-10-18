@@ -104,6 +104,43 @@ export interface LightPreset {
   readonly flickerHz: number;
   /** Voller Öffnungswinkel des Kegels in Radiant; nur für `shape: 'cone'`. */
   readonly coneAngle?: number;
+  /**
+   * Exponent der Abstandskurve `(1 - d/r)^n` eines Kegels; Standard 2. Kleinere Werte tragen
+   * das Licht weiter in den Strahl, statt es direkt vor der Lampe zu bündeln.
+   */
+  readonly falloffExponent?: number;
+  /**
+   * Die Lampe gibt Materialien unter der Lightmap relative Form (Fels-Relief, Nachtsicht N-4).
+   * Die Helligkeit selbst bleibt allein in der Lightmap.
+   */
+  readonly surfaceRelief?: boolean;
+  /**
+   * Eindringtiefe in ein Felsdach, bevor der Kernschatten beginnt: nah an der Lampe tiefer,
+   * am Strahlende flacher. Fehlt sie, bleibt der schmale Saum `OCCLUDER_SHADE_FALLOFF_PX`.
+   */
+  readonly surfaceReachNearPx?: number;
+  readonly surfaceReachFarPx?: number;
+}
+
+/** Ab diesem Abstand Lampe–Fels flacht die Eindringtiefe von nah nach fern ab … */
+export const SURFACE_REACH_DISTANCE_START_PX = 48;
+/** … bis zu diesem Anteil des Lampenradius. */
+export const SURFACE_REACH_DISTANCE_SHARE = 0.7;
+
+/** Abstandskurve aller Lichttexturen; der Kegel kann sie über `falloffExponent` abflachen. */
+export const DEFAULT_LIGHT_FALLOFF_EXPONENT = 2;
+
+/**
+ * Eindringtiefe eines Lampenstrahls in ein Felsdach in Abhängigkeit vom Abstand der Lampe
+ * zum Fels. Ohne Reichweitenangabe bleibt der bisherige Saum.
+ */
+export function resolveSurfaceReachPx(preset: Pick<LightPreset, 'surfaceReachNearPx' | 'surfaceReachFarPx'>,
+  distancePx: number, radiusPx: number): number {
+  const near = preset.surfaceReachNearPx, far = preset.surfaceReachFarPx;
+  if (near === undefined || far === undefined || !(radiusPx > 0)) return OCCLUDER_SHADE_FALLOFF_PX;
+  const t = Math.max(0, Math.min(1, (distancePx - SURFACE_REACH_DISTANCE_START_PX)
+    / Math.max(1, radiusPx * SURFACE_REACH_DISTANCE_SHARE - SURFACE_REACH_DISTANCE_START_PX)));
+  return near + (far - near) * t * t * (3 - 2 * t);
 }
 
 /**
@@ -225,6 +262,12 @@ export const LIGHT_PRESETS = {
     // des Strahls nicht mehr als Kegel, sondern als flächiger Schein über die halbe
     // Bildhöhe – bei 75° deckt der Rand allein schon ±326 px ab.
     coneAngle: Math.PI * 0.24,
+    // Nachtsicht N-4: Der Strahl trägt weiter (bei halber Reichweite 38 % statt 25 %),
+    // trifft die Felsfront nahe der Lampe tief und am Strahlende flach.
+    falloffExponent: 1.4,
+    surfaceRelief: true,
+    surfaceReachNearPx: 72,
+    surfaceReachFarPx: 22,
   },
   /**
    * Kleines Streulicht um den Lampenträger. Der Kegel beginnt zwangsläufig hart an der
@@ -244,6 +287,7 @@ export const LIGHT_PRESETS = {
     priority: 7,
     flickerAmount: 0,
     flickerHz: 0,
+    surfaceRelief: true,
   },
   /**
    * Scheinwerfer an der Front der Lokomotive, strahlt in Fahrtrichtung. Die Lok trägt
@@ -267,6 +311,9 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0,
     flickerHz: 0,
     coneAngle: Math.PI * 0.15,
+    surfaceRelief: true,
+    surfaceReachNearPx: 56,
+    surfaceReachFarPx: 20,
   },
   /**
    * Fensterlicht an der Seite eines Waggons: klein, ungerichtet, warm. Bewusst ohne

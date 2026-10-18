@@ -7,7 +7,7 @@ vi.mock('phaser',()=>({Textures:{FilterMode:{LINEAR:1}},BlendModes:{NORMAL:0},Ga
 }}}));
 import {WaterSurfaceRenderer} from '../src/arena/WaterSurfaceRenderer';
 import {WATER_FRAGMENT} from '../src/arena/waterSurfaceShader';
-import {setWaterSunUniforms} from '../src/arena/WaterSunlight';
+import {setWaterNightUniforms,setWaterSunUniforms,WATER_SUN_FRAGMENT} from '../src/arena/WaterSunlight';
 import {createSunTuning} from '../src/effects/sunlight/SunAtmosphere';
 it('changes only the program on sunlight binding changes, shares paused water time and restores the unbound material exactly',()=>{
   state.configs.length=0;state.objects.length=0;
@@ -30,4 +30,12 @@ it('keeps water sun/glint uniforms neutral without sunlight and at night',()=>{
   const u:Record<string,unknown>={},set=(k:string,v:unknown)=>u[k]=v;
   setWaterSunUniforms(set);expect(u.uWaterGlint).toBe(0);expect(u.uCloudStrength).toBe(0);expect(u.uWaterGlintDensity).toBe(0);expect(u.uWaterGlintSpeed).toBe(0);
   setWaterSunUniforms(set,{timeSec:10,strength:0,tuning:createSunTuning()});expect(u.uCloudStrength).toBe(0);
+});
+it('adds the night material only on top of the finished water and stays neutral without night input',()=>{
+  // The shoreline, film and wavelets (everything before the final write) stay byte-identical.
+  const start=WATER_FRAGMENT.indexOf('vec2 uv=outTexCoord;'),end=WATER_FRAGMENT.lastIndexOf('gl_FragColor=vec4(color*alpha,alpha);');
+  expect(WATER_SUN_FRAGMENT).toContain(WATER_FRAGMENT.slice(start,end));
+  expect(WATER_SUN_FRAGMENT.split('gl_FragColor=').length).toBe(WATER_FRAGMENT.split('gl_FragColor=').length);
+  const u:Record<string,unknown>={},set=(k:string,v:unknown)=>u[k]=v;
+  setWaterNightUniforms(set,null,null);expect(u.uWaterNight).toBe(0);expect(u.uSurfaceLightCount).toBe(0);
 });

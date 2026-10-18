@@ -61,6 +61,54 @@
       "visiblePixelSha256": "0bc25aebf9eceb5884fdf463f86b2077e8cced8abb9317e82c8aaa764ba0fae7",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/environment/woodland/ecology/void-lilies-atlas.png": {
+      "file": "assets/environment/woodland/ecology/void-lilies-atlas.webp",
+      "source": "assets/environment/woodland/ecology/void-lilies-atlas.png",
+      "width": 1024,
+      "height": 1024,
+      "sourceBytes": 655436,
+      "downloadBytes": 417872,
+      "sourceSha256": "05d1221e5f0a5078838b184c38addc1c92373788190b313e50a468e1bf7cb813",
+      "sha256": "cb59c6d8a4dc4fc65e20313e6942792afc8e2fe673acec70f8fcde7c6ed6bb6a",
+      "visiblePixelSha256": "67857feab8f98d8aedf223608411fc0f8c43d2b4a064bf1a878be54b8ab2ed7b",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/environment/woodland/ecology/void-lilies-emissive-atlas.png": {
+      "file": "assets/environment/woodland/ecology/void-lilies-emissive-atlas.webp",
+      "source": "assets/environment/woodland/ecology/void-lilies-emissive-atlas.png",
+      "width": 1024,
+      "height": 1024,
+      "sourceBytes": 89617,
+      "downloadBytes": 48558,
+      "sourceSha256": "2c7a1be08b8826ff6e6ec886f6cd409593e236ab9db95bf90a0ce22595b802d3",
+      "sha256": "c6780a575b70408c08e0de9ca32f412a03fa02bd9861de45457d9c34e8b3fcc9",
+      "visiblePixelSha256": "9d9a62830072ab61866c502fa122ef6b363d9040a8e22a344067d8effd496b0e",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/environment/woodland/ecology/void-rock-colonies-atlas.png": {
+      "file": "assets/environment/woodland/ecology/void-rock-colonies-atlas.webp",
+      "source": "assets/environment/woodland/ecology/void-rock-colonies-atlas.png",
+      "width": 1024,
+      "height": 1024,
+      "sourceBytes": 565853,
+      "downloadBytes": 336096,
+      "sourceSha256": "151095a4402f856dd4c6c44281fab805c812edfd565e20e46d6d28ce08b1a0a8",
+      "sha256": "47786d5c417e2d69814331c1f7098955c228075cbe15e2419a62f62fda9bf55c",
+      "visiblePixelSha256": "a14ad4dab05ac63040fb4aa0f52325d6e0fe228824c0c90468748e0cf36f7d59",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/environment/woodland/ecology/void-rock-colonies-emissive-atlas.png": {
+      "file": "assets/environment/woodland/ecology/void-rock-colonies-emissive-atlas.webp",
+      "source": "assets/environment/woodland/ecology/void-rock-colonies-emissive-atlas.png",
+      "width": 1024,
+      "height": 1024,
+      "sourceBytes": 92211,
+      "downloadBytes": 55246,
+      "sourceSha256": "9d7d6bb546309b3d6ad886f89c251239c9c03f9dc3c05706cc01a80b4ef6e532",
+      "sha256": "26dbf7485309f39a6ac4816a77ef240e586e5513a25c94e01c59f0c7b8d81a86",
+      "visiblePixelSha256": "973e608f109d7d494071549560cd27baf7c661583dc585d3503ad7a0fa43b29b",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/environment/woodland/rock/mineral-colour-2x.png": {
       "file": "assets/environment/woodland/rock/mineral-colour-2x.webp",
       "source": "assets/environment/woodland/rock/mineral-colour-2x.png",

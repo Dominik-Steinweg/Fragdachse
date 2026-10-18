@@ -7,7 +7,8 @@ import { ARENA_RENDER_CHUNK_SIZE, ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX, ARENA_RE
   type ChunkWorldFrame, type ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { WaterSurfaceModel, WATER_MASK_HALO, type WaterMask, type WaterMaskView } from './WaterSurfaceModel';
 import { WATER_FRAGMENT, WATER_SHADER_NAME } from './waterSurfaceShader';
-import { WATER_SUN_FRAGMENT, setWaterSunUniforms } from './WaterSunlight';
+import { WATER_SUN_FRAGMENT, setWaterNightUniforms, setWaterSunUniforms, type WaterNightLight } from './WaterSunlight';
+import { createSurfaceLightFrame } from '../effects/SurfaceLocalLights';
 import type { SunCloudState } from '../effects/sunlight/cloudShadow';
 import { WaterDisturbanceField } from './WaterDisturbanceField';
 
@@ -43,6 +44,9 @@ export class WaterSurfaceRenderer {
   private destroyed = false;
   private readonly chunks = new Map<string, WaterChunk>();
   private sunlight: SunCloudState | undefined;
+  private nightLight: WaterNightLight | null = null;
+  /** Reused per draw: each chunk pulls the lamps meeting its own rectangle. */
+  private readonly nightLamps = createSurfaceLightFrame();
   private readonly worldOffset: Float32Array;
   /** Surface disturbance field over the water's bounds, allocated when something first disturbs the water. */
   private disturbance: WaterDisturbanceField | null = null;
@@ -120,6 +124,9 @@ export class WaterSurfaceRenderer {
     }
   }
 
+  /** Night material input of the sunlight owner; only the sunlit program reads it. Null releases it. */
+  setNightLight(night: WaterNightLight | null): void { this.nightLight = night; }
+
   /** Borrow the immutable CPU masks. The presentation owner retains their lifetime. */
   *getPreparedMasks(): Generator<{ readonly x: number; readonly y: number; readonly mask: WaterMaskView }> {
     if (!this.isPrepared()) throw new Error('[WaterSurfaceRenderer] Masks are not prepared');
@@ -177,7 +184,11 @@ export class WaterSurfaceRenderer {
           set('uDisturb', 1); set('uDisturbOn', Number(!!this.disturbance?.active));
           set('uDisturbRect', this.disturbRect); set('uDisturbTexel', this.disturbTexel);
           set('uVoid', this.voidBloom); set('uVoidPulse', this.voidPulse);
-          if(sun) { set('uWorldOffset',this.worldOffset);setWaterSunUniforms(set,this.sunlight); }
+          if(sun) {
+            set('uWorldOffset',this.worldOffset);setWaterSunUniforms(set,this.sunlight);
+            const night=this.nightLight&&this.nightLight.night>0?this.nightLight:null;
+            setWaterNightUniforms(set,night,night?night.lights(x,y,size,size,this.nightLamps):null);
+          }
         },
       }, x + size / 2, y + size / 2, size, size, [key, this.disturbance?.textureKey ?? '__DEFAULT']);
       const node = quad.renderNode;

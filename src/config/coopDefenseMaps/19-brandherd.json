@@ -3,6 +3,7 @@
   "arenaWidthCells": 88,
   "arenaHeightCells": 40,
   "timeOfDay": "19:15",
+  "voidFlora": { "level": 0.32 },
   "tutorialAnchor": {
     "gridX": 44,
     "gridY": 2

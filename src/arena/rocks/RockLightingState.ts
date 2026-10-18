@@ -1,4 +1,7 @@
 import type { SunCloudState } from '../../effects/sunlight/cloudShadow';
+import type { SurfaceLightFrame } from '../../effects/SurfaceLocalLights';
+/** Pulls the relief lamps meeting a world rectangle at draw time (Nachtsicht N-4). */
+export type SurfaceLightSource = (x: number, y: number, width: number, height: number, out: SurfaceLightFrame) => SurfaceLightFrame;
 import { normalizeTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
 import { resolveDaylightStrength } from '../../effects/sunlight/SunSky';
 /** Shared mineral material state; the world owner supplies time and sunlight. */
@@ -6,6 +9,10 @@ export interface RockLightingState {
  enabled: boolean; normals: boolean; strength: number; sun: [number,number,number];
  material?: 'original' | 'mineral'; colourTextureKey?: string; mineralResponse?: boolean;
  clouds?: SunCloudState; selfShadow?: boolean; softShadow?: boolean; castShadow?: boolean;
+ /** Night relief: moon direction xyz plus relief strength; absent or zero strength is neutral. */
+ moon?: Float32Array;
+ /** Relief lamps for the rock surface; the light map keeps their irradiance. */
+ surfaceLights?: SurfaceLightSource | null;
 }
 export function updateRockLightingSun(state: Pick<RockLightingState, 'strength' | 'sun' | 'clouds'>, minutes: number): void {
   const time = normalizeTimeOfDay(minutes);

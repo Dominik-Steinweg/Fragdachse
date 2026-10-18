@@ -18,6 +18,9 @@ const fireFront: ResolvedRule = {
 const policy: Rule = {
   arenaWidthCells: true, arenaHeightCells: true, rockFillRatio: true, treeCount: true,
   trackMode: true, trackPosition: true, fogStrength: true,
+  moonlight: { strength: true, cover: true },
+  voidFlora: { level: true, hotspots: true,
+    foci: { $items: { gridX: true, gridY: true, radiusCells: true, strength: true }, $mutable: true } },
   balanceReferenceDurationSec: true,
   mapEvents: { $items: value => isEditableFireFront(value) ? fireFront : undefined, $mutable: false, $id: 'id' },
   persistentSpawns: { $items: { id: true, enemyKind: true, intervalMs: true, countPerTick: true, startAtMs: true,

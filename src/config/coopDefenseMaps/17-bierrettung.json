@@ -3,6 +3,7 @@
   "arenaWidthCells": 112,
   "arenaHeightCells": 43,
   "timeOfDay": "18:30",
+  "voidFlora": { "level": 0.35 },
   "trackMode": "void-fire",
   "mapEvents": [
     {

@@ -1,6 +1,7 @@
 import { DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS, DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS, DEFAULT_TREE_COUNT, ROCK_FILL_RATIO, MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS, MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS } from '../../../../src/config';
 import { collectCoopDefenseMapReferences } from '../../../../src/config/coopDefenseMapReferences';
 import { DEFAULT_FOG_STRENGTH, MAX_FOG_STRENGTH } from '../../../../src/config/groundFog';
+import { DEFAULT_WORLD_VOID_FLORA, WORLD_MOONLIGHT_LIMITS } from '../../../../src/config/nightWorld';
 import { MAX_ROCK_FILL_RATIO, MIN_CORRIDOR_RADIUS_CELLS, type CoopDefenseMapAuthoringConfig } from '../../../../src/config/coopDefenseMapAuthoring';
 import { array, at, clone, object, set, uniqueId, type JsonObject, type Path } from '../../shared/json';
 import { button, confirmEdit, element, heading, numberField, propertySelect, type EditorEnvironment } from '../ui';
@@ -61,6 +62,12 @@ export class MapView {
   private terrainProperties(): HTMLElement {
     const { env } = this, draft = env.session.draft, box = element('div'); box.append(heading('Map & Gelände', 'Defaults werden erst durch eine Änderung explizit gespeichert.'));
     box.append(numberField(env, 'Bodennebel (0 = aus)', ['fogStrength'], { fallback: DEFAULT_FOG_STRENGTH, min: 0, max: MAX_FOG_STRENGTH, step: .05, optional: true }));
+    box.append(heading('Nacht', 'Mondinseln und Void-Botanik; rein optisch, ohne Einfluss auf das Layout.'),
+      numberField(env, 'Mondlicht (0 = keine Inseln)', ['moonlight', 'strength'], { fallback: 1, min: WORLD_MOONLIGHT_LIMITS.strength[0], max: WORLD_MOONLIGHT_LIMITS.strength[1], step: .05, optional: true }),
+      numberField(env, 'Wolkendecke (+ = weniger Inseln)', ['moonlight', 'cover'], { fallback: 0, min: WORLD_MOONLIGHT_LIMITS.cover[0], max: WORLD_MOONLIGHT_LIMITS.cover[1], step: .02, optional: true }),
+      numberField(env, 'Void-Befall (Flächenanteil)', ['voidFlora', 'level'], { fallback: DEFAULT_WORLD_VOID_FLORA.level, min: 0, max: 1, step: .01, optional: true }));
+    if (array(object(draft.voidFlora).foci).length) box.append(element('p', 'muted',
+      `${array(object(draft.voidFlora).foci).length} Void-Fokuszone(n) im JSON; feindliche Basen und der Kraken-Teich wirken automatisch als Hotspots.`));
     box.append(numberField(env, 'Breite (Zellen)', ['arenaWidthCells'], { fallback: DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS, min: DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS, max: MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS, optional: true }),
       numberField(env, 'Höhe (Zellen)', ['arenaHeightCells'], { fallback: DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS, min: DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS, max: MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS, optional: true }));
     const field = object(draft.rockField), solid = draft.rockField !== undefined && (field.fillMode ?? 'solid') === 'solid';

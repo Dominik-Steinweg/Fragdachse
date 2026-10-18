@@ -4,6 +4,7 @@
   "arenaWidthCells": 70,
   "arenaHeightCells": 39,
   "timeOfDay": "05:00",
+  "voidFlora": { "level": 0.03 },
   "tutorialPersistent": true,
   "tutorialAnchor": { "gridX": 35, "gridY": 3 },
   "rockFillRatio": 0.18,

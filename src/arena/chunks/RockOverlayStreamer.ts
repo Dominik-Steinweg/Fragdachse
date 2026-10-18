@@ -1,6 +1,11 @@
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { WOODLAND_ROCK_HEIGHT_KEY } from '../../assets/WoodlandAssetManifest';
-import { generateRockEcology, ROCK_ECOLOGY_DEFAULTS, type EcologyColony, type RockEcologyTuning } from '../rocks/RockEcologyField';
+import { generateRockEcology, ROCK_ECOLOGY_DEFAULTS, VOID_ROCK_KIND_WEIGHT,
+  type EcologyColony, type RockEcologyTuning } from '../rocks/RockEcologyField';
+import { ensureVoidDraftTexture } from '../VoidFloraDraftTextures';
+import { VOID_ART_FROM, VOID_ROCK_ATLAS, voidRockFrame } from '../VoidFloraAssets';
+import { ecologyHash } from '../ecologyHash';
+import type { VoidFloraField } from '../VoidFloraField';
 import { rockColonyTint, stampRockColonyContact, ROCK_COLONY_CONTACT_REACH } from '../rocks/RockColonySurface';
 
 import * as Phaser from 'phaser';
@@ -128,12 +133,17 @@ export class RockOverlayStreamer {
   private readonly rockDecalCandidateIds: number[] = [];
   private readonly mossCandidates: RockMossPlacement[] = [];
   private ecology: EcologyColony[] = [];
+  private voidFlora: VoidFloraField | null = null;
+  /** Rock id of each ecology anchor cell, for the live "does it still stand" question. */
+  private readonly anchorRockIds = new Map<number, number>();
   private readonly ecologyIndex: ArenaPointBucketIndex<EcologyColony>;
   private readonly ecologyTuning = { ...ROCK_ECOLOGY_DEFAULTS };
   private readonly ecologyByAnchor = new Map<number, EcologyColony[]>();
   private ecologyRadius = 0;
   private ecologyHeight: ((x: number, y: number) => number) | undefined;
   private readonly vegetationCandidates: RockVegetationPlacement[] = [];
+  private readonly contactCandidates: RockVegetationPlacement[] = [];
+  private readonly replacedContactCandidates: RockVegetationPlacement[] = [];
   private readonly rockDecalCandidates: DecalCell[] = [];
   private readonly sourceCells: RockCell[] = [];
   private readonly decalCutoutCells: RockCell[] = [];
@@ -274,6 +284,7 @@ export class RockOverlayStreamer {
     }
     this.ecology=generateRockEcology({rocks:[...this.ecologyCells.values()],frame:this.frame,seed:this.layout.seed,
       tuning:this.ecologyTuning,water:this.layout.water,trees:this.layout.trees,moss:this.mossPlacements,height:this.ecologyHeight});
+    this.ecology.push(...this.voidOverlays(this.ecology));
     this.ecologyIndex.clear();this.ecologyIndex.sync(this.ecology);
     this.ecologyRadius=maxVegetationRadius(this.ecology)+ROCK_COLONY_CONTACT_REACH;
     loadingTimeline.end('ecology/rock-placement', measuredAt);
@@ -282,6 +293,81 @@ export class RockOverlayStreamer {
       const group=this.ecologyByAnchor.get(colony.anchorKey);
       if(group)group.push(colony);else this.ecologyByAnchor.set(colony.anchorKey,[colony]);
     }
+    this.anchorRockIds.clear();
+    for (const [id, cell] of this.ecologyCells) this.anchorRockIds.set(rockCellKey(cell), id);
+  }
+
+  /**
+   * Void overlays: one infestation per anchor cell from the coherent field, so neighbouring rocks
+   * turn together and the rim of an infested area is only partly taken. The natural colony stays
+   * underneath; the overlay repeats its placement with the void atlas and the infested share of
+   * its alpha. Natural placements, sizes and frames are never changed.
+   */
+  private voidOverlays(natural: readonly EcologyColony[]): EcologyColony[] {
+    const field = this.voidFlora;
+    if (!field) return [];
+    const amounts = new Map<number, number>(), out: EcologyColony[] = [];
+    for (const colony of natural) {
+      let amount = amounts.get(colony.anchorKey);
+      if (amount === undefined) {
+        amount = field.amountAt(colony.worldX, colony.worldY, VOID_ROCK_KIND_WEIGHT[colony.kind] ?? .8);
+        amounts.set(colony.anchorKey, amount);
+      }
+      if (amount <= .02) continue;
+      // Approved art replaces the natural colony once the takeover is established; the rim and
+      // kinds without art keep a recoloured copy at the infested share of the colony's alpha.
+      const roll = ecologyHash(colony.worldX, colony.worldY, 0x51a7);
+      const art = amount >= VOID_ART_FROM + .2 * roll && this.scene.textures.exists(VOID_ROCK_ATLAS.key)
+        ? voidRockFrame(colony.kind, ecologyHash(colony.worldX, colony.worldY, 0x51a8)) : null;
+      if (art) {
+        colony.voidReplaced = true;
+        out.push({ ...colony, textureKey: VOID_ROCK_ATLAS.key, frame: art.name, naturalTextureKey: colony.textureKey,
+          bandPx: colony.lengthPx * art.height / art.width, void: true, voidArt: true, voidAmount: amount, voidReplaced: false });
+        continue;
+      }
+      const key = ensureVoidDraftTexture(this.scene.textures, colony.textureKey);
+      if (!key) continue;
+      out.push({ ...colony, textureKey: key, naturalTextureKey: colony.textureKey, alpha: colony.alpha * amount,
+        void: true, voidAmount: amount });
+    }
+    return out;
+  }
+
+  /** Void botany of this World; a different field re-selects and rebakes once. Null clears it. */
+  setVoidFlora(field: VoidFloraField | null): void {
+    if ((this.voidFlora?.signature ?? null) === (field?.signature ?? null)) return;
+    this.voidFlora = field;
+    this.rebuildEcology();
+    this.refreshAll();
+  }
+
+  /** Void colonies on standing rocks, for their self-lit veins and spores. */
+  collectVoidColonies(out: EcologyColony[]): number {
+    out.length = 0;
+    if (!this.voidFlora) return 0;
+    for (const [anchor, group] of this.ecologyByAnchor) {
+      const id = this.anchorRockIds.get(anchor);
+      if (id === undefined || this.rockVisualStates[id]?.active !== true) continue;
+      for (const colony of group) if (colony.void) out.push(colony);
+    }
+    return out.length;
+  }
+
+  /**
+   * Glow anchors of void colonies on standing rocks: flat world x/y/amount triples, one per anchor
+   * cell. Destroyed rocks drop out with their overlays; nothing is rerolled.
+   */
+  collectVoidGlowPoints(out: number[]): number {
+    out.length = 0;
+    if (!this.voidFlora) return 0;
+    for (const [anchor, group] of this.ecologyByAnchor) {
+      const id = this.anchorRockIds.get(anchor);
+      if (id === undefined || this.rockVisualStates[id]?.active !== true) continue;
+      let x = 0, y = 0, n = 0, amount = 0;
+      for (const colony of group) if (colony.void) { x += colony.worldX; y += colony.worldY; amount = colony.voidAmount ?? 1; n++; }
+      if (n) out.push(x / n, y / n, amount);
+    }
+    return out.length / 3;
   }
 
   setFormationReceiver(provider: FormationReceiverProvider | null): void {
@@ -652,11 +738,19 @@ export class RockOverlayStreamer {
     );
     candidateIds.sort(compareNumbers);
     this.vegetationCandidates.length = 0;
+    this.replacedContactCandidates.length = 0;
     for (const id of candidateIds) {
       const colony=this.ecology[id];
       const placement = colony;
       if (!placement || !this.activeNaturalCellKeys.has(colony.anchorKey)) continue;
       const radius = getRockVegetationPlacementRadiusPx(placement)+ROCK_COLONY_CONTACT_REACH;
+      if (colony.voidReplaced) {
+        // Its void art is stamped instead; the natural silhouette keeps casting contact.
+        const lx = placement.worldX - this.frame.offsetX, ly = placement.worldY - this.frame.offsetY;
+        if (lx + radius > region.localX && lx - radius < maxX && ly + radius > region.localY && ly - radius < maxY)
+          this.replacedContactCandidates.push(placement);
+        continue;
+      }
       const localX = placement.worldX - this.frame.offsetX;
       const localY = placement.worldY - this.frame.offsetY;
       if (localX + radius > region.localX && localX - radius < maxX
@@ -682,7 +776,11 @@ export class RockOverlayStreamer {
     {
       const surface=this.scratch.get('ecologySurface',size);
       surface.clear();
-      stampRockColonyContact(this.scene,surface,this.vegetationCandidates,-region.worldX,-region.worldY,
+      // Void overlays repeat a natural colony; its contact is already stamped once.
+      this.contactCandidates.length=0;
+      for(const placement of this.vegetationCandidates)if(!(placement as EcologyColony).void)this.contactCandidates.push(placement);
+      this.contactCandidates.push(...this.replacedContactCandidates);
+      stampRockColonyContact(this.scene,surface,this.contactCandidates,-region.worldX,-region.worldY,
         this.ecologyTuning.rockFloraContact??.24,this.ecologyHeight);
       surface.render();
       // Only contact belongs below the mineral response. Keep every colony in

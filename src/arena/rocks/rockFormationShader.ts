@@ -2,6 +2,7 @@ import { CLOUD_SHADOW_GLSL } from '../../effects/sunlight/cloudShadow';
 import { HORIZON_BLEND_GLSL } from './FormationHorizonTransition';
 import { FORMATION, FORMATION_SIDE } from './RockFormationField';
 import type { RockLightingState } from './RockLightingState';
+import { SURFACE_LIGHT_GLSL } from '../../effects/SurfaceLocalLights';
 
 // Shared parameters keep CPU debris lighting and the surface/foliage shaders aligned.
 // Slightly cooler relative fill keeps sheltered mineral faces from inheriting
@@ -131,6 +132,7 @@ const vec2 ATLAS = vec2(${FORMATION.atlasColumns}.0, ${FORMATION.atlasRows}.0);
 ${FORMATION_RESPONSE_GLSL}
 ${HORIZON_BLEND_GLSL}
 ${CLOUD_SHADOW_GLSL}
+${SURFACE_LIGHT_GLSL}
 // Geometric cavity at a two-world-pixel radius, independent of colour. This
 // only enhances small V7 depressions; macro contour and broad gaps stay intact.
 ${MINERAL_CAVITY_GLSL}
@@ -154,6 +156,9 @@ void main() {
   if(uFineMineral>.5 && uGround<.5 && uOptions.z>.5) {
     factor*=mineralCavity(local);
   }
+  // Night form: lamps and moon bend tilted faces against the flat response (N-4). The
+  // light map keeps all irradiance; a flat face, or one without a dominant lamp, stays 1.
+  if(uGround<.5) factor*=surfaceNightResponse(normal,world);
   if(uGround>.5&&uCastShadow<.5)factor=vec3(1.0);
   // Ambient foot beneath the mineral contour, before fog. Preserve contact
   // under partial mineral coverage so antialiased edges cannot expose a bright

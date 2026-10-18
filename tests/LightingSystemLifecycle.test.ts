@@ -63,6 +63,7 @@ import { resolveSkyState } from '../src/effects/TimeOfDay';
 import * as TimeOfDay from '../src/effects/TimeOfDay';
 import { GraphicsQualityController, type GraphicsQuality } from '../src/graphics/GraphicsQuality';
 import { ADRENALINE_ESSENCE_LIGHTING as ESSENCE_CONFIG } from '../src/effects/LightingConfig';
+import { createSurfaceLightFrame } from '../src/effects/SurfaceLocalLights';
 
 function fixture(quality: GraphicsQuality = 'high') {
   const stamps = vi.fn();
@@ -227,7 +228,8 @@ describe('light bleed lifecycle', () => {
     expect(targets).toHaveLength(targetCount);
     const shader = shaders[0];
     const map = targets[targets.length - 1];
-    expect(shader.textures).toEqual([map.texture]);
+    // The bleed reads the shared map; without an ambient layer its second sampler repeats it.
+    expect(shader.textures).toEqual([map.texture, map.texture]);
     expect(shader.depth).toBeGreaterThan(map.depth);
     expect(shader.visible).toBe(true);
     const uniforms = new Map<string, unknown>();
@@ -272,7 +274,7 @@ describe('light bleed lifecycle', () => {
     expect(node.renderer.deleteBuffer).toHaveBeenCalledWith(node.vertexBufferLayout.buffer);
     expect(shaders).toHaveLength(1);
     qualityController.setLevel('medium'); lighting.update();
-    expect(shaders[1].textures).toEqual([targets[targets.length - 1].texture]);
+    expect(shaders[1].textures[0]).toBe(targets[targets.length - 1].texture);
     lighting.setActive(false);
     expect(shaders[1].visible).toBe(false);
     lighting.destroy();
@@ -314,6 +316,58 @@ describe('keyed light lifecycle', () => {
     for (const [x, y] of [[0, 100], [200, 100], [100, 0], [100, 200], [175, 175], [300, 300]]) {
       expect(lighting.resolveCanopyTint(x, y)).toBe(ambient);
     }
+    lighting.destroy();
+  });
+
+  it('lifts canopies by a world-anchored ambient layer only where it adds light', () => {
+    const { lighting } = fixture();
+    const ambient = lighting.resolveCanopyTint(100, 100);
+    lighting.setAmbientLayer({
+      update: () => null,
+      sampleAt: (x: number, _y: number, out: number[]) => { out[0] = out[1] = out[2] = x < 500 ? .2 : 0; return out; },
+    });
+    expect(lighting.resolveCanopyTint(100, 100)).not.toBe(ambient);
+    expect(lighting.resolveCanopyTint(900, 100)).toBe(ambient);
+    lighting.setAmbientLayer(null);
+    expect(lighting.resolveCanopyTint(100, 100)).toBe(ambient);
+    lighting.destroy();
+  });
+
+  it('fills decorative ground glow last so it never displaces gameplay glow at the shared cap', () => {
+    const { lighting, draws } = fixture();
+    const glow = (count: number, intensity: number) => ({
+      lights: Array.from({ length: count }, (_, i) => ({ x: 100 + (i % 20) * 10, y: 100 + Math.floor(i / 20) * 10, radiusPx: 20, intensity, color: 0x8844ff })),
+      lightCount: count,
+    });
+    const decorative = {}, gameplay = {};
+    lighting.setGroundGlowLights(decorative, glow(300, .25), { decorative: true });
+    lighting.setGroundGlowLights(gameplay, glow(12, .75));
+    lighting.update();
+    const members = draws.mock.calls.map(call => call[0]).find(layer => layer.members?.length)?.members as { alpha: number }[];
+    expect(members.slice(0, 256).filter(m => m.alpha === .75)).toHaveLength(12);
+    lighting.setGroundGlowLights(decorative, null);
+    lighting.setGroundGlowLights(gameplay, null);
+    lighting.destroy();
+  });
+
+  it('lends materials a bounded set of the strongest relief lamps meeting a rectangle', () => {
+    const { lighting } = fixture();
+    for (let i = 0; i < 6; i++) lighting.setLight(`lamp${i}`, 'flashlight', 100 + i * 10, 100, { angle: 0, intensity: .4 + i * .1 });
+    lighting.setLight('pearl', 'adrenalineEssence', 120, 120);
+    lighting.setLight('far', 'flashlight', 5000, 5000, { angle: 0 });
+    lighting.update();
+    const frame = createSurfaceLightFrame();
+    lighting.sampleSurfaceLights(0, 0, 400, 400, frame);
+    expect(frame.count).toBe(4);
+    const xs = Array.from({ length: frame.count }, (_, i) => frame.position[i * 4]).sort((a, b) => a - b);
+    expect(xs).toEqual([120, 130, 140, 150]);
+    expect(frame.ambient).toBeGreaterThan(0);
+    lighting.sampleSurfaceLights(0, 0, 400, 400, frame, 1);
+    expect(frame.count).toBe(1);
+    expect(frame.position[0]).toBe(150);
+    lighting.setActive(false);
+    lighting.sampleSurfaceLights(0, 0, 400, 400, frame);
+    expect(frame.count).toBe(0);
     lighting.destroy();
   });
 

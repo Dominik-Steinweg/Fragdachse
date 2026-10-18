@@ -55,6 +55,8 @@ export type DawnArenaTemplateWorld = Pick<CoopDefenseMapAuthoringConfig,
   | 'trackPosition'
   | 'timeOfDay'
   | 'fogStrength'
+  | 'moonlight'
+  | 'voidFlora'
 > & { readonly persistentBase: CoopDefenseMapPersistentBaseConfig };
 
 /** Authored Ankerzelle einer moeglichen Bergungsstelle. */

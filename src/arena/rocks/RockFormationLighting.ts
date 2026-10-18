@@ -5,6 +5,7 @@ import { quantizeSunAzimuth, SUN_PATH } from '../../effects/sunlight/SunPath';
 import type { RockRimGeometry } from './RockRimGeometry';
 import { packHorizonSupport } from './FormationHorizonTransition';
 import { setCloudUniforms } from '../../effects/sunlight/cloudShadow';
+import { createSurfaceLightFrame, setSurfaceLightUniforms } from '../../effects/SurfaceLocalLights';
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../../config';
 import type { RockWorldFrame } from '../ArenaBuilder';
@@ -118,6 +119,7 @@ export class RockFormationLighting {
   private readonly viewUniform = new Float32Array(4);
   private readonly frameUniform: Float32Array;
   private readonly optionsUniform = new Float32Array(4);
+  private readonly surfaceLights = createSurfaceLightFrame();
   private busy = false;
   private buildCursor = 0;
   private pending: FormationWorkerResult | null = null;
@@ -237,6 +239,10 @@ export class RockFormationLighting {
         this.optionsUniform[0]=this.state.enabled?(this.state.clouds?.strength??this.state.strength):0;
         this.optionsUniform[1]=Number(this.state.normals);this.optionsUniform[2]=Number(this.state.selfShadow!==false&&this.state.clouds?.quality?.horizons!==false);
         this.optionsUniform[3]=Number(this.state.softShadow!==false);set('uOptions',this.optionsUniform);
+        // Lamps meeting the drawn rectangle at draw time; the ground pass ignores them.
+        const lights=!ground&&this.state.surfaceLights
+          ?this.state.surfaceLights(this.view.x,this.view.y,this.view.width,this.view.height,this.surfaceLights):null;
+        setSurfaceLightUniforms(set,lights,ground?null:this.state.moon??null,this.state.clouds?.quality?.surfaceLights);
       },
     },0,0,1,1,[this.field.texture,this.lookup.texture,this.occlusion.texture,this.scene.textures.get(WOODLAND_TRANSMISSION_KEY),this.scene.textures.get(this.heightTextureKey),this.field.texture]);
     // Mineral, moss and decals share surface lighting. Overhanging foliage receives

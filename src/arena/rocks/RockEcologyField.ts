@@ -8,7 +8,22 @@ import { ROCK_ECOLOGY_ASSETS } from './RockEcologyAssets';
 
 export interface RockEcologyTuning {rockEdgeFlora:number;rockCreviceFlora:number;rockFootFlora:number;rockFloraContact?:number;rockFloraBlend?:number}
 export const ROCK_ECOLOGY_DEFAULTS:RockEcologyTuning={rockEdgeFlora:1,rockCreviceFlora:1,rockFootFlora:1,rockFloraContact:.24,rockFloraBlend:.5};
-export interface EcologyColony extends RockVegetationPlacement {anchorKey:number;kind:string;edgeRun?:number}
+export interface EcologyColony extends RockVegetationPlacement {anchorKey:number;kind:string;edgeRun?:number;
+  /** A void overlay of a natural colony (presentation only): same placement, void atlas. */
+  void?:boolean;
+  /** Infestation 0..1; the overlay is stamped with this share of the colony's alpha. */
+  voidAmount?:number;
+  /** Atlas of the natural colony underneath a void overlay. */
+  naturalTextureKey?:string;
+  /** The overlay is approved void art that replaces its natural colony (not a recoloured copy). */
+  voidArt?:boolean;
+  /** Natural colony replaced by void art: still casts contact, no longer stamped itself. */
+  voidReplaced?:boolean}
+/** Void takes moss and lichen first; foot plants and herbs only where it is strong (N-6). */
+export const VOID_ROCK_KIND_WEIGHT:Readonly<Record<string,number>>={
+  'moss-nest':1.25,'moss-strip':1.25,lichen:1.15,'edge-overhang':1,'corner-tuft':.9,'crevice-herb':.7,'foot-cluster':.6,
+};
+
 export interface EcologyEdge {x:number;y:number;nx:number;ny:number;tx:number;ty:number;length:number;startConcave:boolean;endConcave:boolean}
 const hash=(x:number,y:number,salt:number):number=>{let n=Math.imul(x,73856093)^Math.imul(y,19349663)^salt;n=Math.imul(n^(n>>>16),2246822507);return(n>>>0)/4294967296;};
 const types=['edge-overhang','corner-tuft','foot-cluster','crevice-herb','moss-nest','moss-strip','lichen'] as const;

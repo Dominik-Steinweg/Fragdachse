@@ -3,6 +3,7 @@
   "arenaWidthCells": 264,
   "arenaHeightCells": 150,
   "timeOfDay": "07:00",
+  "voidFlora": { "level": 0.25 },
   "dynamicTimeOfDay": {
     "transitions": [
       {

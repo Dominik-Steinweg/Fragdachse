@@ -19,7 +19,8 @@ const BUCKET_SIZE = 128;
  * zu einem Block – Felsen und Basen sehen unterschiedlich aus und sollen an ihrer
  * Berührungskante weiterhin eine Silhouette werfen.
  */
-const GROUP_ROCK = 1;
+export const OCCLUDER_GROUP_ROCK = 1;
+const GROUP_ROCK = OCCLUDER_GROUP_ROCK;
 const GROUP_BASE = 2;
 const GROUP_BARRIER = 3;
 
@@ -44,6 +45,8 @@ export type RectOccluderVisitor = (
   left: number, top: number, right: number, bottom: number,
   /** Bitmaske der freiliegenden Kanten (siehe `EDGE_*` in `lightShadowGeometry`). */
   exposedEdges: number,
+  /** Verbund des Occluders, etwa {@link OCCLUDER_GROUP_ROCK}; bewegliche Quellen lassen ihn weg. */
+  group?: number,
 ) => void;
 
 export type CircleOccluderVisitor = (
@@ -169,6 +172,7 @@ export class LightOccluderIndex {
               this.rectData[offset + 2],
               this.rectData[offset + 3],
               this.rectExposedEdges[entry],
+              this.rectGroup[entry],
             );
           } else {
             const offset = (entry - this.rectCount) * 3;

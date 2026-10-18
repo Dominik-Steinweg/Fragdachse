@@ -68,6 +68,10 @@ export interface WorldDefinition {
   readonly initialTimeOfDay: string;
   /** Cosmetic local ground fog; omitted = 1, zero disables it. */
   readonly fogStrength?: number;
+  /** Cosmetic moon islands at night; omitted = production moon. */
+  readonly moonlight?: import('../nightWorld').WorldMoonlightConfig;
+  /** Cosmetic void botany; omitted = the medium default. */
+  readonly voidFlora?: import('../nightWorld').WorldVoidFloraConfig;
 }
 
 /** Bevorzugte Startzelle einer World. */

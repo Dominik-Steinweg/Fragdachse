@@ -1,0 +1,161 @@
+{
+  "void-moss-nest-01": {
+    "accepted": true,
+    "family": "nest",
+    "raw": "void_moss_nest_01_1792322419937.jpg",
+    "rawSha256": "3b0e1b3a236578c6bdb34fee61d99faf75eda0c98a54be433a39874b66d61e58",
+    "reason": "Pilot, behalten: echtes dunkles Polstermoos, violette Fäden und Sporenkapseln, flach eingebettet.",
+    "emissive": "void-moss-nest-01-emissive.png"
+  },
+  "void-lichen-01": {
+    "accepted": false,
+    "family": "lichen",
+    "raw": "void_lichen_01_1792322440623.jpg",
+    "rawSha256": "53810356950dd6477f4d92cb9dfd8954b2da6dc85540c833ce2b20ef970a2b6c",
+    "reason": "Pilot: Konturlinien und große Kreisscheiben wirken illustrativ und zu laut."
+  },
+  "void-moss-nest-02": {
+    "accepted": true,
+    "family": "nest",
+    "raw": "void-moss-nest-02_qwen_s1931278135.png",
+    "rawSha256": "9af7df074f84cefd1851ee92e9f9fc6557eb2df98da8a5748e73f03c296c9865",
+    "generator": "ComfyUI qwen seed 1931278135, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: Silhouette von moss-nest-02, fast schwarzes Polster, Fäden und Sporen sparsam, grüne Reste.",
+    "emissive": "void-moss-nest-02-emissive.png"
+  },
+  "void-moss-nest-03": {
+    "accepted": true,
+    "family": "nest",
+    "raw": "void-moss-nest-03_qwen_s1159297371.png",
+    "rawSha256": "ff70f185a7d56d2f976d315e5d14ee0c2b494d5ebc721db09210836842293ee7",
+    "generator": "ComfyUI qwen seed 1159297371, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: S-Bogen von moss-nest-04, dunkel mit Rosetten und toten Halmen, Fäden nur stellenweise.",
+    "emissive": "void-moss-nest-03-emissive.png"
+  },
+  "void-moss-nest-04": {
+    "accepted": true,
+    "family": "nest",
+    "raw": "void-moss-nest-04_qwen_s2007293757.png",
+    "rawSha256": "da732ab4954eaef1707eab17323d572c31638423a27f7efc87f27ab995ac61a9",
+    "generator": "ComfyUI qwen seed 2007293757, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: Form von moss-nest-05, deutliches Fadennetz und einzelne Sporenkapseln auf dunklem Polster.",
+    "emissive": "void-moss-nest-04-emissive.png"
+  },
+  "void-moss-strip-01": {
+    "accepted": true,
+    "family": "strip",
+    "raw": "void-moss-strip-01_qwen_s426986769.png",
+    "rawSha256": "194c3353b23e8d96d3a55c48212a3a2824d1b47fda540dbbe4c19ecdbdc51f1d",
+    "generator": "ComfyUI qwen seed 426986769, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: Silhouette von moss-strip-01, dunkler Filz mit Fadennetz entlang des Streifens, wenige Sporen.",
+    "emissive": "void-moss-strip-01-emissive.png"
+  },
+  "void-moss-strip-02": {
+    "accepted": true,
+    "family": "strip",
+    "raw": "void-moss-strip-02_qwen_s1123633429.png",
+    "rawSha256": "efef42494e1f8f0a8390610482546953f83b212370b0f4f9707a7146ae765d56",
+    "generator": "ComfyUI qwen seed 1123633429, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: Silhouette von moss-strip-02, Befall am breiten Ende dicht mit Sporen, zum schmalen Ende hin auslaufend.",
+    "emissive": "void-moss-strip-02-emissive.png"
+  },
+  "void-moss-strip-03": {
+    "accepted": true,
+    "family": "strip",
+    "raw": "void-moss-strip-03_qwen_s909241547.png",
+    "rawSha256": "c33dbb0b29629b8ead929f84507b19cf0ad17496d3377898aa3735f15087eb14",
+    "generator": "ComfyUI qwen seed 909241547, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: gespiegelte Silhouette von moss-strip-01, gleichmäßig dunkles Fadennetz, ruhigster Streifen.",
+    "emissive": "void-moss-strip-03-emissive.png"
+  },
+  "void-lichen-02": {
+    "accepted": true,
+    "family": "lichen",
+    "raw": "void-lichen-02_qwen_s431749674.png",
+    "rawSha256": "736d6672a2e96581e6b0c909b140a1127f355c12c36b58aa5eb417ea7f082ce9",
+    "generator": "ComfyUI qwen seed 431749674, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: Lappenstruktur von lichen-06, dunkel mit grünen Resten, feine Fäden; ruhigste Flechte.",
+    "emissive": "void-lichen-02-emissive.png"
+  },
+  "void-lichen-03": {
+    "accepted": true,
+    "family": "lichen",
+    "raw": "void-lichen-03_qwen_s2129927924.png",
+    "rawSha256": "3eb90e1dbf9c23dc14d94fd0c0578d28f6ed4a5ecd1f8b5e67d95044ca65b2cc",
+    "generator": "ComfyUI qwen seed 2129927924, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: Doppelfleck von lichen-07, Fadennetz konzentriert im linken Fleck.",
+    "emissive": "void-lichen-03-emissive.png"
+  },
+  "void-lichen-04": {
+    "accepted": true,
+    "family": "lichen",
+    "raw": "void-lichen-04_qwen_s1980445857.png",
+    "rawSha256": "ba1b7ea122796eb44e8237db9541ea8f6336815f93b717cf475c50477111d777",
+    "generator": "ComfyUI qwen seed 1980445857, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: gedrehte Silhouette von lichen-06, dunkle Kruste mit Zerfallsflecken und dünnen Fäden.",
+    "emissive": "void-lichen-04-emissive.png"
+  },
+  "void-edge-overhang-01": {
+    "accepted": true,
+    "family": "overhang",
+    "raw": "void-edge-overhang-01_qwen_s1235105966.png",
+    "rawSha256": "84c66c2df429e7b783f495fc7133477e4b6543169fb823e8403dc447b3017a7b",
+    "generator": "ComfyUI qwen seed 1235105966, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: Silhouette von edge-overhang-02, dunkler Efeu mit violetten Blattadern, Ranken mit Lücken.",
+    "emissive": "void-edge-overhang-01-emissive.png"
+  },
+  "void-edge-overhang-02": {
+    "accepted": true,
+    "family": "overhang",
+    "raw": "void-edge-overhang-02_qwen_s542704325.png",
+    "rawSha256": "8eee614c7a61fc57bed14b1c3a9ff0c2d060cbcec043a7d1482027c9c30ffd05",
+    "generator": "ComfyUI qwen seed 542704325, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: Silhouette von edge-overhang-04, dichter Moosanker mit Fäden, Efeu dunkel mit grünen Resten.",
+    "emissive": "void-edge-overhang-02-emissive.png"
+  },
+  "void-edge-overhang-03": {
+    "accepted": true,
+    "family": "overhang",
+    "raw": "void-edge-overhang-03_qwen_s979465355.png",
+    "rawSha256": "20a88e8090c599b642a81b8c6991f0435e7d5f84729e8e243a3ab9cea17fd88f",
+    "generator": "ComfyUI qwen seed 979465355, 25 steps",
+    "colourMatch": [
+      "void-moss-nest-01.png"
+    ],
+    "reason": "ComfyUI: Silhouette von edge-overhang-05, Moosfilz mit Fäden und Sporen, Efeusaum mit tiefer Lücke.",
+    "emissive": "void-edge-overhang-03-emissive.png"
+  }
+}

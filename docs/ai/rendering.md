@@ -377,6 +377,45 @@ keine Blattkonturen; ihre Kompensation verwendet exakt den Composite-Faktor, dam
 zweimal beleuchtet wird. Der gemeinsame Owner und die pausierbare Präsentationszeit gelten auch
 für den analytischen Fallback ohne Wolkentextur.
 
+### Nacht: Mondinseln, Lampen an Material und Void-Botanik
+
+**Mondinseln.** [WorldSunlightPresentation](../../src/effects/sunlight/WorldSunlightPresentation.ts) bleibt der einzige
+Ambient-Writer; der Mond ist kein zweiter. Er zeichnet weltverankerte Inseln als Ambient-Schicht in die Lichtkarte.
+[MoonSky](../../src/effects/sunlight/MoonSky.ts) löst die Inseln aus der Uhrzeit, dem World-Wert `moonlight` und einem
+optionalen Activity-Override auf (der Dawn-Blutmond ist ein solcher Override desselben Mondes).
+
+- Abweichend vom Wolkenvertrag driften die Inseln mit der synchronisierten Spieluhr, nicht mit der pausierbaren
+  Präsentationszeit, damit alle Peers dieselben Inseln sehen. Replizierter Zustand entsteht dadurch nicht.
+- Der Bleed behandelt das Mondlicht der Nacht als Ambient, damit die Nacht selbst nicht glüht. Nur ein Override behält
+  seinen Schein.
+- Kronen über der Lichtkarte lesen dieselben Inseln über `LightMapAmbientLayer.sampleAt`.
+
+**Lampen an Materialien unter der Lichtkarte.** `LightingSystem.sampleSurfaceLights` leiht Materialien die stärksten
+Lampen mit `surfaceRelief`. Das Material gibt damit nur relative Form, die Bestrahlung bleibt in der Lichtkarte: Eine
+flache Fläche oder ein Pixel ohne dominante Lampe behält exakt den Faktor 1
+([SurfaceLocalLights](../../src/effects/SurfaceLocalLights.ts), Vertrag
+[SurfaceLocalLights.test.ts](../../tests/SurfaceLocalLights.test.ts)).
+
+**Lampen in Felsen.** Lampen mit `surfaceReach*` leuchten eine Felsfront entlang der echten V7-Kontur aus
+([RockPenetrationShader](../../src/effects/RockPenetrationShader.ts)). Hinter den abgewandten Kanten bleibt der exakte
+Schlagschatten; außerhalb des Felsens ist er identisch zur zugewandten Projektion
+([LightShadowGeometry.test.ts](../../tests/LightShadowGeometry.test.ts)).
+
+**Wasser nachts.** Der Nachtteil des Wassermaterials setzt erst nach der fertigen Uferlinie an; der Shader-Teil davor
+bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
+
+**Void-Botanik** ist reine Präsentation.
+
+- Der Befall ergibt sich aus dem World-Wert `voidFlora`, dem World-Seed und World-Hotspots: feindliche Basen und
+  Kraken-Habitat. Er verbraucht nie Zufall des Layouts, die Map-Fingerprints bleiben unverändert.
+- Der Befall ist zusammenhängend ([VoidFloraField](../../src/arena/VoidFloraField.ts)). Es gibt keinen Wurf je Pflanze,
+  der einzelne befallene Pflanzen neben unberührte setzt.
+- Void-Frames tragen zwingend das Präfix `void-` und liegen in eigenen Atlanten mit deckungsgleichem Emissive-Atlas.
+  Natürliche Familienfilter (`startsWith('lily-pad')` …) und ihre Auswahl bleiben so unberührt.
+- Ihr Leuchten läuft als dekoratives Bodenlicht durch die Lichtkarte. Es wird zuletzt gefüllt und verdrängt nie
+  Spiellicht.
+- Adern und Sporen liegen knapp über der Lichtkarte unter den Kronen (Band E).
+
 ### Atmosphäre und fachliche Grade-Komposition
 
 [CameraPostFxController](../../src/effects/postfx/CameraPostFxController.ts) hält `WorldGradeInputs`

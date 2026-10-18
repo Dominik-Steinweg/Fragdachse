@@ -10,16 +10,24 @@ import type { LightingSystem } from '../LightingSystem';
 import type { GroundFogSystem } from '../groundFog/GroundFogSystem';
 import type { CameraPostFxController } from '../postfx/CameraPostFxController';
 import { CanopyLighting } from '../../arena/trees/CanopyLighting';
-import { buildWoodlandEcology, EcologyWaterField } from '../../arena/WoodlandEcologyField';
+import { buildWoodlandEcology, EcologyWaterField, markVoidPondColonies } from '../../arena/WoodlandEcologyField';
+import { VoidFloraField, resolveVoidFloraHotspots } from '../../arena/VoidFloraField';
+import { VoidFloraGlow } from './VoidFloraGlow';
+import { VoidFloraEmission } from './VoidFloraEmission';
+import { voidLilyFrame } from '../../arena/VoidFloraAssets';
+import type { EcologyColony } from '../../arena/rocks/RockEcologyField';
 import { WoodlandEcologyRenderer } from '../../arena/WoodlandEcologyRenderer';
 import { WorldSunComposite } from './WorldSunComposite';
 import { createSunTuning, resolveSunAtmosphere, SunAtmosphereClock } from './SunAtmosphere';
 import { resolveMoonlitAmbient, resolveSunAmbient } from './SunSky';
 import { resolveSkyState } from '../TimeOfDay';
-import { MoonOpeningLight } from './MoonOpeningLight';
+import { MoonSkyLight } from './MoonSkyLight';
+import { createMoonSky, resolveMoonSky, writeMoonDirection, type WorldMoonlight } from './MoonSky';
+import { MOON_TUNING } from '../../config/sunlight';
 import { validateSunTuning, sunAtmosphereGrade, type SunTuning } from './SunTuning';
 import { createSunPath, resolveSunPath } from './SunPath';
 import type { SunCloudState } from './cloudShadow';
+import type { SurfaceLightFrame } from '../SurfaceLocalLights';
 import type { FogWoodlandLight } from '../groundFog/FogWoodlandLight';
 import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
 import { type RockLightingState } from '../../arena/rocks/RockLightingState';
@@ -39,9 +47,11 @@ export interface WorldSunlightTargets {
  postFx: CameraPostFxController;
  layout: ArenaLayout;
  worldContext: WorldRuntimeContext;
+ /** Authored World moon (map JSON); absent means the production moon. */
+ moonlight?: WorldMoonlight | null;
 }
 type Targets = WorldSunlightTargets;
-/** Activity moonlight (Dawn blood moon): ambient hue and optional light through cloud openings. */
+/** Activity moonlight (Dawn blood moon): ambient hue and an optional override of the moon islands. */
 export interface ActivityMoonlight {
  readonly tint:readonly number[];
  readonly gain:number;
@@ -49,6 +59,8 @@ export interface ActivityMoonlight {
 }
 /** A blood moon rises over a few seconds instead of switching the night colour. */
 const MOONLIGHT_FADE_MS=4000;
+/** The island clock wraps once per real day; shader precision stays well below a pixel. */
+const MOON_DAY_MS=86_400_000;
 /** Active render resources belong to one displayed World, never its transferable terrain cache. */
 export class WorldSunlightPresentation {
  private disposed=false;
@@ -98,6 +110,19 @@ export class WorldSunlightPresentation {
   this.canopyLighting=new CanopyLighting(scene,targets.canopies);
   this.sunComposite=new WorldSunComposite(scene,this.sunTuning,this.sunState,this.clouds,targets.canopies);
   targets.rocks?.setFormationOptions(true,true,this.clouds);
+  targets.rocks?.setSurfaceLights((x,y,width,height,out)=>targets.lighting.sampleSurfaceLights(x,y,width,height,out));
+  targets.water?.setNightLight(this.waterNight);
+  // Lamps shape the rock front along the resident V7 contour (N-4).
+  {const rocks=targets.rocks;targets.lighting.setRockCoverage(rocks?()=>rocks.getFormationCoverage():null);}
+  {
+    const world=targets.worldContext,definition=world.definition;
+    this.voidField=new VoidFloraField(definition?.voidFlora,targets.layout.seed,resolveVoidFloraHotspots({
+      config:definition?.voidFlora,offsetX:world.metrics.offsetX,offsetY:world.metrics.offsetY,
+      bases:world.bases,krakenHabitat:definition?.krakenHabitat}));
+    targets.rockOverlays?.setVoidFlora(this.voidField);
+    this.voidGlow=new VoidFloraGlow(targets.lighting);
+    this.voidEmission=new VoidFloraEmission(this.scene);
+  }
   targets.rockOverlays?.setFormationReceiver(targets.rocks?.getFormationReceiver??null);
   targets.shadow.setFormationShadows(this.landscape);
   targets.shadow.setCanopyShadows(targets.canopies,true);
@@ -111,14 +136,33 @@ export class WorldSunlightPresentation {
   this.moonTarget=moon?1:0;
  }
  private moon:ActivityMoonlight|null=null;
- private moonOpenings:MoonOpeningLight|null=null;
- /** Own cloud state of the moon openings: same field and drift as the day clouds, night cover. */
+ private moonLight:MoonSkyLight|null=null;
+ private readonly moonSky=createMoonSky();
+ private readonly moonDirection=[0,0,1];
+ /** Own cloud state of the moon islands: day field shape, night cover and drift. */
  private readonly moonClouds:SunCloudState={tuning:createSunTuning(),timeSec:0,strength:1};
  private moonTarget=0;
  private moonWeight=0;
- update(minutes:number,presentationTimeMs:number):void {
+ private voidField:VoidFloraField|null=null;
+ private voidGlow:VoidFloraGlow|null=null;
+ private voidEmission:VoidFloraEmission|null=null;
+ private readonly voidRockColonies:EcologyColony[]=[];
+ /** Flat x/y pairs of void lily colonies of the current woodland layout. */
+ private readonly voidPondPoints:number[]=[];
+ private readonly voidRockPoints:number[]=[];
+ /** Water night input: weight follows the lamps' own dusk curve, lamps are pulled per chunk. */
+ private readonly waterNight={night:0,lights:(x:number,y:number,width:number,height:number,out:SurfaceLightFrame)=>
+  this.targets.lighting.sampleSurfaceLights(x,y,width,height,out,getGraphicsQualityProfile(this.scene).sunlight.surfaceLights)};
+ private moonTimeSec=0;
+ /**
+  * `synchronizedNowMs` drives the moon islands so every peer sees the same openings (N-3);
+  * without it (standalone editors) the pausable presentation time is used.
+  */
+ update(minutes:number,presentationTimeMs:number,synchronizedNowMs?:number):void {
   if(this.disposed)return;
   const time=Number.isFinite(presentationTimeMs)?presentationTimeMs:0;
+  this.moonTimeSec=synchronizedNowMs!==undefined&&Number.isFinite(synchronizedNowMs)
+   ?(((synchronizedNowMs%MOON_DAY_MS)+MOON_DAY_MS)%MOON_DAY_MS)/1000:time/1000;
   const step=Math.max(0,time-this.lastSceneTime)/MOONLIGHT_FADE_MS;
   this.moonWeight=this.moonTarget>this.moonWeight?Math.min(this.moonTarget,this.moonWeight+step):Math.max(this.moonTarget,this.moonWeight-step);
   this.lastSceneTime=time;
@@ -153,7 +197,6 @@ export class WorldSunlightPresentation {
       ?resolveMoonlitAmbient(sun??resolveSkyState(minute).ambientColor,this.moon,this.moonWeight):sun);
     this.ambientMinute=minute;this.ambientMoonWeight=this.moonWeight;
   }
-  this.syncMoonOpenings(targets);
   if(minute!==this.sunMinute||this.azimuthOverride!==this.sunTuning.sunAzimuthOverride){
     this.clouds.sunPath=resolveSunPath(minute,this.sunTuning.sunAzimuthOverride,this.sunPath);
     if(this.reviewSun){
@@ -168,12 +211,23 @@ export class WorldSunlightPresentation {
     targets.rocks?.setSunTime(minute);this.sunMinute=minute;this.azimuthOverride=this.sunTuning.sunAzimuthOverride;
   }
   targets.shadow.setSunPath(this.sunPath,targets.enemyShadows);
+  this.syncMoonSky(targets,minute);
+  // From the lamps' own dusk curve: sunset and dusk keep their water untouched.
+  this.waterNight.night=Math.max(0,Math.min(1,(targets.lighting.getArtificialLightFactor()-.3)/.6));
   targets.shadow.setCharacterSunlight(this.clouds);
   this.clouds.timeSec=this.lastSceneTime/1000;this.clouds.strength=this.sunState.strength;
   this.canopyLighting!.update(this.sunState);
   targets.ground?.setVegetationLight(this.clouds);
   targets.water?.setSunlight(this.clouds);targets.wildlife?.setSunlight(this.clouds);
   this.syncWoodland(targets);
+  targets.rockOverlays?.collectVoidGlowPoints(this.voidRockPoints);
+  this.voidGlow?.update(this.scene.cameras.main,this.voidPondPoints,this.voidRockPoints,this.lastSceneTime/1000);
+  if(this.voidEmission){
+    if(targets.rockOverlays){targets.rockOverlays.collectVoidColonies(this.voidRockColonies);this.voidEmission.setRockColonies(this.voidRockColonies);}
+    // Veins and spores appear with the lamps' own dusk curve, fully at night.
+    const artificial=targets.lighting.getArtificialLightFactor();
+    this.voidEmission.update(Math.max(0,Math.min(1,(artificial-.1)/.6)),targets.water?.getPresentationTime()??this.lastSceneTime/1000);
+  }
   this.sunComposite!.setEnabled(true);
   const m=targets.worldContext.metrics;
   this.sunComposite!.prepareClouds(m.offsetX,m.offsetY,m.widthPx,m.heightPx);
@@ -183,19 +237,17 @@ export class WorldSunlightPresentation {
   targets.fog?.setWoodlandLight(this.sunFog);
   if(changed||!this.gradeBound){targets.postFx.setSunGrade(sunAtmosphereGrade(this.sunTuning,this.gradeUniforms),this.sunTuning.gradeOlive);this.gradeBound=true;}
  }
- private syncMoonOpenings(targets:Targets):void {
-  const openings=this.moonWeight>0?this.moon?.openings:undefined;
-  if(!openings){
-    if(this.moonOpenings){targets.lighting.setAmbientLayer(null);this.moonOpenings.destroy();this.moonOpenings=null;}
-    return;
-  }
+ private syncMoonSky(targets:Targets,minute:number):void {
+  const sky=resolveMoonSky(minute,targets.moonlight,this.moonWeight>0?this.moon:null,this.moonWeight,this.moonSky);
+  targets.rocks?.setMoonLight(writeMoonDirection(this.sunPath.castAzimuth,this.moonDirection),sky.relief);
+  // The layer lives as long as this presentation: dusk and dawn only switch it, never rebuild it.
+  if(!sky.active){targets.lighting.setAmbientLayer(null);return;}
   const tuning=this.moonClouds.tuning;
-  for(const key of ['cloudSpeed','cloudScale','cloudEvolution','cloudGust','cloudWarp','cloudSoftness'] as const)tuning[key]=this.sunTuning[key];
-  tuning.cloudCover=openings.cover;tuning.cloudSpotAmount=0;
-  this.moonClouds.timeSec=this.lastSceneTime/1000;
-  this.moonOpenings??=new MoonOpeningLight(this.scene,this.moonClouds);
-  this.moonOpenings.setLight(openings.light,this.moonWeight);
-  targets.lighting.setAmbientLayer(this.moonOpenings);
+  for(const key of ['cloudScale','cloudEvolution','cloudGust','cloudWarp','cloudSoftness'] as const)tuning[key]=this.sunTuning[key];
+  tuning.cloudSpeed=MOON_TUNING.cloudSpeed;tuning.cloudCover=sky.cover;tuning.cloudSpotAmount=0;
+  this.moonClouds.timeSec=this.moonTimeSec;
+  this.moonLight??=new MoonSkyLight(this.scene,this.moonClouds,this.moonSky);
+  targets.lighting.setAmbientLayer(this.moonLight);
  }
  private gradeBound=false;
  private ambientMinute=NaN;
@@ -215,6 +267,14 @@ export class WorldSunlightPresentation {
         conifer:CANOPY_ASSETS[canopyVariant(c.worldX,c.worldY)].conifer}));
       const water=new EcologyWaterField(targets.water?.getPreparedMasks()??[]);
       const placements=buildWoodlandEcology(layout,frame,crowns,water,targets.worldContext!.bases.flatMap(b=>b.cells));
+      markVoidPondColonies(placements,this.voidField,voidLilyFrame);
+      this.voidPondPoints.length=0;
+      // One glow per colony at its first plant, with the colony's mean infestation.
+      const colonies=new Map<number,{x:number;y:number;sum:number;n:number}>();
+      for(const p of placements)if(p.void&&p.colony!==undefined){
+        const c=colonies.get(p.colony)??{x:p.x,y:p.y,sum:0,n:0};c.sum+=p.voidAmount??1;c.n++;colonies.set(p.colony,c);}
+      for(const c of colonies.values())this.voidPondPoints.push(c.x,c.y,c.sum/c.n);
+      this.voidEmission?.setPondPlacements(placements);
       this.woodland=new WoodlandEcologyRenderer(this.scene,placements);this.woodlandLayout=layout;
       loadingTimeline.end('ecology/woodland',measuredAt);
     }
@@ -228,16 +288,20 @@ export class WorldSunlightPresentation {
   this.releasePlayerGlow?.();this.releasePlayerGlow=null;
   const t=this.targets;
   // Unbind receivers before destroying fields; the terrain may be handed to another World.
-  t.ground?.setVegetationLight(undefined);t.water?.setSunlight(undefined);t.wildlife?.setSunlight(undefined);
+  t.ground?.setVegetationLight(undefined);t.water?.setSunlight(undefined);t.water?.setNightLight(null);t.wildlife?.setSunlight(undefined);
   t.fog?.setWoodlandLight(null);
   if(t.fog&&this.fogBase)Object.assign(t.fog.tuning,this.fogBase);
   t.rockOverlays?.setFormationReceiver(null);
-  t.rocks?.setFormationOptions(true,true);
+  t.rocks?.setFormationOptions(true,true);t.rocks?.setSurfaceLights(null);
+  t.rockOverlays?.setVoidFlora(null);this.voidGlow?.destroy();this.voidGlow=null;
+  this.voidEmission?.destroy();this.voidEmission=null;
+  t.lighting.setRockCoverage(null);
   t.shadow.setCharacterSunlight(null);
   t.shadow.setSunPath(null);t.shadow.setCanopyShadows(null);t.shadow.setFormationShadows(null);
   this.canopyLighting?.destroy();this.canopyLighting=null;this.woodland?.destroy();this.woodland=null;
   this.sunComposite?.destroy();this.sunComposite=null;this.clouds.cache=undefined;this.clouds.sunPath=undefined;
   t.lighting.setSunAmbient(null);t.postFx.setSunGrade(null);
-  if(this.moonOpenings){t.lighting.setAmbientLayer(null);this.moonOpenings.destroy();this.moonOpenings=null;}
+  t.rocks?.setMoonLight(this.moonDirection,0);
+  if(this.moonLight){t.lighting.setAmbientLayer(null);this.moonLight.destroy();this.moonLight=null;}
  }
 }

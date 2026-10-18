@@ -7,7 +7,7 @@ import { PersistentGpuWorldSystem } from './PersistentGpuWorldSystem';
 import type { PersistentGpuWorldDiagnostics } from './PersistentGpuWorldSystem';
 import type { RockGpuPageSize, RockRendererMode } from './RockRendererSettings';
 import { RockVisualStateStore, resolveRockCornerTints, resolveRockTexture } from './RockVisualState';
-import { updateRockLightingSun, type RockLightingState } from './RockLightingState';
+import { updateRockLightingSun, type RockLightingState, type SurfaceLightSource } from './RockLightingState';
 import { WOODLAND_ROCK_HEIGHT_KEY, WOODLAND_ROCK_COLOUR_KEY } from '../../assets/WoodlandAssetManifest';
 import { RockFormationLighting } from './RockFormationLighting';
 
@@ -93,6 +93,14 @@ export class RockVisualSystem {
   }
 
   setSunTime(minutes: number): void { updateRockLightingSun(this.relief, minutes); }
+  /** Night relief of the moon (direction xyz, strength); strength 0 is neutral. */
+  setMoonLight(direction: ArrayLike<number>, strength: number): void {
+    const moon = this.relief.moon ??= new Float32Array(4);
+    moon[0] = direction[0]; moon[1] = direction[1]; moon[2] = direction[2];
+    moon[3] = Number.isFinite(strength) ? Math.max(0, strength) : 0;
+  }
+  /** Relief lamps for the rock surface; null releases the borrowed source. */
+  setSurfaceLights(source: SurfaceLightSource | null): void { this.relief.surfaceLights = source; }
   setFormationOptions(softShadow: boolean, castShadow: boolean, clouds?: RockLightingState['clouds']): void {
     this.relief.softShadow=softShadow;this.relief.castShadow=castShadow;
     this.relief.mineralResponse=true;this.relief.clouds=clouds;

@@ -291,6 +291,7 @@ export function materializeWorldComposition(
       canopies:arena.canopyObjects,water:arena.waterSurface,wildlife:arena.wildlife,
       fog:presentation.groundFog,lighting:input.lighting,shadow:sunlight.shadow,postFx:sunlight.postFx,
       get enemyShadows(){return sunlight.enemyShadows;},layout,worldContext:world,
+      moonlight:world.definition?.moonlight??null,
     }));
   }
   return {

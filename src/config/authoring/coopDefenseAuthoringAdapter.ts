@@ -46,6 +46,8 @@ export const WORLD_SOURCE_FIELDS = [
   'trackPosition',
   'timeOfDay',
   'fogStrength',
+  'moonlight',
+  'voidFlora',
   'persistentBase',
   'siteClearings',
 ] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
@@ -163,6 +165,8 @@ export function toWorldDefinition(
     persistentBaseSite: mapConfig.persistentBase,
     initialTimeOfDay: resolved.timeOfDay,
     fogStrength: mapConfig.fogStrength,
+    moonlight: mapConfig.moonlight,
+    voidFlora: mapConfig.voidFlora,
   };
 }
 
@@ -190,6 +194,8 @@ export function toWorldGenerationConfig(world: WorldDefinition): ArenaGeneration
     persistentBase: world.persistentBaseSite,
     bases: world.bases.map((base) => toCoopBaseConfig(base, undefined)),
     fogStrength: world.fogStrength,
+    ...(world.moonlight === undefined ? {} : { moonlight: world.moonlight }),
+    ...(world.voidFlora === undefined ? {} : { voidFlora: world.voidFlora }),
     powerUps: [],
   };
 }
@@ -286,6 +292,8 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     // Nur hier setzt sich eine Basis wieder aus Bauwerk und Missionsanteil zusammen.
     timeOfDay: world.initialTimeOfDay,
     fogStrength: world.fogStrength,
+    ...(world.moonlight === undefined ? {} : { moonlight: world.moonlight }),
+    ...(world.voidFlora === undefined ? {} : { voidFlora: world.voidFlora }),
     dynamicTimeOfDay: activity.dynamicTimeOfDay,
     surviveDurationSec: activity.surviveDurationSec,
     balanceReferenceDurationSec: activity.balanceReferenceDurationSec,

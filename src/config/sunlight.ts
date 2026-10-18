@@ -118,4 +118,32 @@ export const SUN_SKY_KEYFRAMES = [
 ] as const;
 
 export const EVENING_SUN = [[1050,1],[1095,.95],[1155,.75],[1185,.25],[1215,0]] as const;
+
+/**
+ * Moon islands (GDD Nachtsicht N-1): world-anchored openings in a night cloud deck add cool light
+ * to the light map. The night ambient itself stays the TimeOfDay sky. `weight` fades the moon in
+ * after dusk and out before dawn; deep night carries more cover, i.e. fewer and smaller islands.
+ */
+export const MOON_KEYFRAMES = [
+  { minute: 0, weight: 1, cover: .76 },
+  { minute: 180, weight: 1, cover: .76 },
+  { minute: 240, weight: 1, cover: .62 },
+  { minute: 300, weight: 1, cover: .62 },
+  { minute: 345, weight: 0, cover: .62 },
+  { minute: 1245, weight: 0, cover: .62 },
+  { minute: 1290, weight: 1, cover: .62 },
+  { minute: 1350, weight: 1, cover: .62 },
+  { minute: 1410, weight: 1, cover: .76 },
+] as const;
+export const MOON_TUNING = {
+  /** Light added in a full island, linear RGB in light-map units. */
+  light: [.27, .31, .40] as readonly number[],
+  /** Opening values mapped to light: below nothing, above a full island. */
+  islandEdge: [.45, .8] as readonly number[],
+  /** The night deck drifts slower than daytime clouds. */
+  cloudSpeed: 9,
+  /** Directional moon relief on rock tops; the light map decides how bright it shows. */
+  relief: .5,
+  elevationDegrees: 36,
+} as const;
 export const SUN_PATH = { sunrise: 360, noon: 720, sunset: 1215, stepDegrees: 6 } as const;

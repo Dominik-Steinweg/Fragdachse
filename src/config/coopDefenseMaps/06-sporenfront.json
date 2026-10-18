@@ -3,6 +3,7 @@
   "arenaWidthCells": 100,
   "arenaHeightCells": 46,
   "timeOfDay": "08:00",
+  "voidFlora": { "level": 0.05 },
   "rockFillRatio": 0.1,
   "trackPosition": {
     "kind": "grid",

@@ -55,6 +55,8 @@ describe('reduced sunlight resources',()=>{
     expect(high.horizonStep).toBeLessThan(medium.horizonStep);
     expect(low.horizons).toBe(false);
     expect(low.ecologyDensity).toBeLessThan(high.ecologyDensity);
+    expect(low.surfaceLights).toBeLessThan(medium.surfaceLights);
+    expect(medium.surfaceLights).toBeLessThan(high.surfaceLights);
   });
   it('retains world coordinates across zoom, backing scale and offset viewports',()=>{
     const f=fixture();f.owner.setEnabled(true);

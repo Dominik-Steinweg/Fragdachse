@@ -3,6 +3,7 @@
   "arenaWidthCells": 110,
   "arenaHeightCells": 52,
   "timeOfDay": "20:45",
+  "voidFlora": { "level": 0.1 },
   "rockFillRatio": 0.18,
   "trackMode": "none",
   "mapEvents": [],

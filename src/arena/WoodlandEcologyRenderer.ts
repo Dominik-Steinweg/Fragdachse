@@ -6,9 +6,10 @@ import { configureGpuLayerCameraTransform } from '../graphics/GpuLayerCameraTran
 import type { SunTuning } from '../effects/sunlight/SunTuning';
 import type { WaterSurfaceRenderer } from './WaterSurfaceRenderer';
 import { WOODLAND_ATLASES, type EcologyPlacement } from './WoodlandEcologyField';
+import { VOID_LILY_ATLAS } from './VoidFloraAssets';
+import { floatingMotion } from './FloatingBob';
 
 type EcologyKind=EcologyPlacement['kind'];
-type MemberValue=Phaser.Types.GameObjects.SpriteGPULayer.Member['x'];
 interface EcologyPage {
   readonly kind:EcologyKind;
   readonly layer:Phaser.GameObjects.SpriteGPULayer;
@@ -16,6 +17,8 @@ interface EcologyPage {
   readonly floating:boolean;
   readonly left:number;readonly top:number;readonly right:number;readonly bottom:number;
   threshold:number;members:number;
+  /** Void art page: members draw their `voidFrame`. */
+  readonly overlay:boolean;
 }
 
 /** World pages, large enough for few layers and small enough to cull most of a large map. */
@@ -23,14 +26,10 @@ const PAGE_PX=2048;
 /** Water time wraps here before it reaches float precision limits inside the shader. */
 const TIME_WRAP_MS=3_600_000;
 const SHORE_TINT=0xc5c6b8;
+/** Void lilies stay in the value range of the natural pads: sunlight must not push plum into pink. */
+const VOID_LILY_SHADE=0xa496a8;
 
-/** A bounded sine bob `centre + amplitude * sin(omega * t + phase)` as a GPU member animation.
- * A looping yoyo Sine.easeInOut is exactly a cosine wave; its delay supplies the phase. */
-function bob(centre:number,amplitude:number,omega:number,phase:number):MemberValue {
-  const duration=Math.PI/omega*1000;
-  const periods=((-(phase+Math.PI/2)/Math.PI)%2+2)%2;
-  return {base:centre-amplitude,amplitude:amplitude*2,ease:'Sine.easeInOut',duration,delay:periods*duration,yoyo:true,loop:true};
-}
+
 
 /** World-owned atlas quads in static GPU layers: placement, thinning, culling and the floating
  * bob cost no per-sprite CPU work per frame. Same texture/depth per family keeps the former
@@ -42,17 +41,20 @@ export class WoodlandEcologyRenderer {
   constructor(private readonly scene:Phaser.Scene, placements:readonly EcologyPlacement[]) {
     this.placementCount=placements.length;
     const groups=new Map<string,EcologyPlacement[]>();
+    const add=(key:string,p:EcologyPlacement):void=>{let group=groups.get(key);if(!group)groups.set(key,group=[]);group.push(p);};
     for(const p of placements) {
-      const key=`${p.kind}:${Math.floor(p.x/PAGE_PX)}:${Math.floor(p.y/PAGE_PX)}`;
-      let group=groups.get(key);if(!group)groups.set(key,group=[]);
-      group.push(p);
+      const page=`${Math.floor(p.x/PAGE_PX)}:${Math.floor(p.y/PAGE_PX)}`;
+      // Void art replaces the natural plant on its own atlas page (same size, rotation and bob).
+      add(p.kind==='pond'&&p.voidFrame?`${p.kind}:void:${page}`:`${p.kind}::${page}`,p);
     }
-    for(const group of groups.values()) {
-      const kind=group[0].kind,atlas=WOODLAND_ATLASES[kind==='litter'?0:kind==='pond'?1:2].key;
+    for(const [groupKey,group] of groups) {
+      const kind=group[0].kind,natural=WOODLAND_ATLASES[kind==='litter'?0:kind==='pond'?1:2].key;
+      const overlay=groupKey.includes(':void:');
+      const atlas=overlay?VOID_LILY_ATLAS.key:natural;
       const layer=scene.add.spriteGPULayer(scene.textures.get(atlas),group.length)
         // Embedded shore material shares the ground macro shade; ground cover can
         // overgrow its dry edge and water still covers the submerged stone faces.
-        .setDepth(kind==='litter'?DEPTH.GROUND_MACRO+.05:kind==='shore'?DEPTH.DIRT+.03:DEPTH.WATER+.05)
+        .setDepth(kind==='litter'?DEPTH.GROUND_MACRO+.05:kind==='shore'?DEPTH.DIRT+.03:DEPTH.WATER+(overlay?.051:.05))
         .setVisible(false);
       configureGpuLayerCameraTransform(layer);
       // The bob follows the water's presentation clock, which may freeze; never Phaser's own.
@@ -63,7 +65,7 @@ export class WoodlandEcologyRenderer {
         left=Math.min(left,p.x-p.size);top=Math.min(top,p.y-p.size);
         right=Math.max(right,p.x+p.size);bottom=Math.max(bottom,p.y+p.size);
       }
-      this.pages.push({kind,layer,placements:group,floating:group.some(p=>p.floating),left,top,right,bottom,threshold:NaN,members:0});
+      this.pages.push({kind,layer,placements:group,floating:group.some(p=>p.floating),left,top,right,bottom,threshold:NaN,members:0,overlay});
     }
   }
   update(tuning:SunTuning, water:WaterSurfaceRenderer|null, litter:boolean, pond:boolean,density=1):void {
@@ -87,14 +89,14 @@ export class WoodlandEcologyRenderer {
     layer.memberCount=0;
     for(const p of page.placements) {
       if(!(p.rank<threshold))continue;
-      const frame=frames.get(p.frame),scaleX=p.size/frame.realWidth,scaleY=p.size/frame.realHeight;
-      const phase=p.x*.005+p.y*.007;
-      layer.addMember({frame:p.frame,scaleX,scaleY,alpha:p.alpha,creationTime:0,
-        x:p.floating?bob(p.x,.7,.21,phase):p.x,
-        y:p.floating?bob(p.y,.5,.17,phase+Math.PI/2):p.y,
-        rotation:p.floating?bob(p.rotation,.025,.18,phase):p.rotation,
+      const name=page.overlay?p.voidFrame!:p.frame;
+      const frame=frames.get(name),scaleX=p.size/frame.realWidth,scaleY=p.size/frame.realHeight;
+      layer.addMember({frame:name,scaleX,scaleY,alpha:p.alpha,creationTime:0,
+        ...(p.floating?floatingMotion(p):{x:p.x,y:p.y,rotation:p.rotation}),
         ...(page.kind==='shore'?{tintBlend:1,tintTopLeft:SHORE_TINT,tintTopRight:SHORE_TINT,
-          tintBottomLeft:SHORE_TINT,tintBottomRight:SHORE_TINT}:{})});
+          tintBottomLeft:SHORE_TINT,tintBottomRight:SHORE_TINT}:{}),
+        ...(page.overlay?{tintBlend:1,tintTopLeft:VOID_LILY_SHADE,tintTopRight:VOID_LILY_SHADE,
+          tintBottomLeft:VOID_LILY_SHADE,tintBottomRight:VOID_LILY_SHADE}:{})});
     }
     page.members=layer.memberCount;
   }

@@ -63,6 +63,7 @@ gesetzt.
 | Dokument | Stand |
 |---|---|
 | [Bodennebel-Konzept v1](Fragdachse_Bodennebel_Konzept_v1.md) | umgesetzt ([Lab](../ground-fog-lab.md)) |
+| [Nachtsicht, Mondlicht und Void-Botanik V1](Fragdachse_GDD_Nachtsicht_Void_Botanik_V1.md) | in Umsetzung (Branch `night-visibility`): Mondinseln, Lampe an Felsen, Nachtwasser, Void-Botanik mit vollständigem Asset-Satz (Argon und ComfyUI); offen: Spieltest, Merge |
 | [Hindernisklassen und Schusslinien](FRAGDACHSE_GDD_Hindernisklassen_und_Schusslinien.md) und [Umsetzung](FRAGDACHSE_Hindernisklassen_Umsetzung.md) | umgesetzt |
 | [HP-Balken-Trefferfeedback](HP_Bar_Feedback_Implementation.md) | umgesetzt |
 | [KI- und Navigationskonzept](Fragdachse_KI_Navigation_Implementierungskonzept.md) | umgesetzt ([Status](../navigation-implementation-status.md)) |
