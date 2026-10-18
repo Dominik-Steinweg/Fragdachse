@@ -223,7 +223,7 @@ describe('Baeume – Runtime und Darstellung getrennt', () => {
   it('trennt Koerper und sichtbare Staemme im Aufbau', () => {
     const builder = read('src/arena/ArenaBuilder.ts');
     expect(builder).toContain('trunkBodies: TreePhysicsProxy[];');
-    expect(builder).toContain('trunkVisuals: Phaser.GameObjects.Arc[];');
+    expect(builder).toContain('trunkVisuals: Phaser.GameObjects.Image[];');
     expect(builder).toContain('const trunk = createTreePhysicsProxy(this.scene, worldX, worldY);');
     // Stamm und Krone entstehen nur mit Darstellung.
     expect(builder).toContain('if (presentation) {');

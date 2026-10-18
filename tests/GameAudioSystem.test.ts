@@ -53,7 +53,39 @@ describe('GameAudioSystem one-shot feedback', () => {
     expect(voices.every(voice => voice.pendingRemove)).toBe(true);
   });
 
-  it('bounds retained voices while preserving every admitted overlapping sound and the HTML5 fallback', () => {
+  it('bounds the audible overlap of one remote key by restarting its oldest copy or dropping attack-phase overflow', () => {
+    const { audio, available, sound, scene, voices } = fixture();
+    available.add('sfx_player_death');
+    scene.time.now = 1000;
+    for (let i = 0; i < 200; i++) audio.playSound('sfx_player_death', 50, 0, 'remote');
+    const bounded = sound.play.mock.calls.length;
+    expect(bounded).toBeGreaterThan(0);
+    expect(bounded).toBeLessThanOrEqual(8);
+    expect(voices.length).toBe(bounded);
+    scene.time.now += 100;
+    audio.playSound('sfx_player_death', 50, 0, 'remote');
+    // The oldest copy restarts: no new voice and no overflow instance.
+    expect(sound.play).toHaveBeenCalledTimes(bounded + 1);
+    expect(voices.length).toBe(bounded);
+    audio.playSound('sfx_player_death', 50, 0, 'local');
+    expect(sound.play).toHaveBeenCalledTimes(bounded + 2);
+    audio.cleanup();
+  });
+
+  it('frees finished voices of other keys when retention is full', () => {
+    const { audio, available, sound, voices } = fixture();
+    const keys = Object.keys(AUDIO_ASSETS).filter(key => !key.startsWith('music')).slice(0, 12);
+    for (const key of keys) available.add(key);
+    for (const key of keys.slice(0, 8)) for (let i = 0; i < 8; i++) audio.playSound(key as never, 50, 0, 'remote');
+    for (const voice of voices) voice.isPlaying = false;
+    const before = sound.play.mock.calls.length;
+    audio.playSound(keys[10] as never, 50, 0, 'remote');
+    expect(sound.play).toHaveBeenCalledTimes(before + 1);
+    expect(voices.filter(voice => !voice.pendingRemove).length).toBeLessThanOrEqual(64);
+    audio.cleanup();
+  });
+
+  it('bounds retained voices while preserving every personal overlapping sound and the HTML5 fallback', () => {
     const { audio, available, sound, voices, add } = fixture();
     available.add('sfx_player_death');
     for (let i = 0; i < 200; i++) audio.playLocalSound('sfx_player_death');

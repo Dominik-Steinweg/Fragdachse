@@ -3,6 +3,7 @@ import * as Phaser from 'phaser';
 import { installPhaserAlphaZero } from './graphics/PhaserAlphaZero';
 import { installPhaserFramebufferBindings } from './graphics/PhaserFramebufferBindings';
 import { installPhaserGpuLayerTextures } from './graphics/PhaserGpuLayerTextures';
+import { installPhaserUniformRequests } from './graphics/PhaserUniformRequests';
 import { beginPerformanceBoot, labMarker, failPerformanceLab } from './debug/performanceLab/boot';
 import { bridge }         from './network/bridge';
 import { NetworkBridge }  from './network/NetworkBridge';
@@ -108,6 +109,7 @@ async function boot(): Promise<void> {
   installPhaserAlphaZero(Phaser.Renderer.WebGL.ProgramManager.prototype);
   installPhaserFramebufferBindings(Phaser.Renderer.WebGL.Wrappers.WebGLFramebufferWrapper.prototype);
   installPhaserGpuLayerTextures(Phaser.GameObjects.SpriteGPULayer.prototype);
+  installPhaserUniformRequests(Phaser.Renderer.WebGL.Wrappers.WebGLProgramWrapper.prototype);
   if (__PERFORMANCE_LAB__) beginPerformanceBoot();
   if (__PERFORMANCE_LAB__ && new URLSearchParams(location.search).has('network-probe')) {
     (await import('./debug/performanceLab/networkProbe')).prepareNetworkProbe();
@@ -166,7 +168,9 @@ async function boot(): Promise<void> {
     smoothPixelArt: startupContext.rendererType === 'webgl1',
     physics: {
       default: 'arcade',
-      arcade:  { gravity: { x: 0, y: 0 }, debug: false, fps: 120 },
+      // Every collider targets a static group and overlap queries read only static bodies.
+      // The dynamic RTree would be rebuilt on each 120 Hz step without ever being searched.
+      arcade:  { gravity: { x: 0, y: 0 }, debug: false, fps: 120, useTree: false },
     },
     scene: [ArenaScene],   // Einzige Szene – Lobby läuft als Overlay
     scale: {

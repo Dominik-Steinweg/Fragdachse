@@ -1,0 +1,37 @@
+{
+  "owner": "scenes/arena/TurretRangePreviewVisual.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:scenes/arena/TurretRangePreviewVisual.ts:module/image/setDepth/0",
+      "owner": "scenes/arena/TurretRangePreviewVisual.ts",
+      "component": "module/image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "module/image/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

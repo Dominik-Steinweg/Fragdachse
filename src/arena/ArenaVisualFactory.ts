@@ -21,7 +21,7 @@ import { ROCK_MOSS_MASK_TEXTURE_KEY } from './RockMossConfig';
 import { ROCK_BASE_TEXTURE_KEY } from './RockBaseConfig';
 import { ROCK_VEGETATION_MASK_FRAME_SIZE, ROCK_VEGETATION_MASK_TEXTURE_KEY } from './RockVegetationConfig';
 import type { BlobSurfaceCornerTints } from './BlobSurfaceShading';
-import { registerGraphicsObject } from '../effects/EffectUtils';
+import { ensureCanvasTexture, registerGraphicsObject } from '../effects/EffectUtils';
 
 /** Eigener Salt gegen die uebrigen zellbasierten Felder; siehe {@link ./CellHash}. */
 const ROCK_DECAL_ROTATION_SALT = 0x2c91;
@@ -44,8 +44,11 @@ export interface RockMaskSource {
   readonly autotileFrame: number;
 }
 
+/** Flat trunk disc, baked once at twice its display size for a smooth edge. */
+const TRUNK_TEXTURE_KEY = '__tree_trunk_disc';
+
 export interface ArenaTreeVisual {
-  trunk: Phaser.GameObjects.Arc;
+  trunk: Phaser.GameObjects.Image;
   canopy: Phaser.GameObjects.Image;
   worldX: number;
   worldY: number;
@@ -162,8 +165,13 @@ export class ArenaVisualFactory {
     return masks;
   }
 
-  static createTrunk(scene: Phaser.Scene, worldX: number, worldY: number): Phaser.GameObjects.Arc {
-    const trunk = scene.add.circle(worldX, worldY, TRUNK_RADIUS, COLORS.BROWN_4);
+  /** One textured quad: an Arc shape re-submitted its whole circle fan as a path every frame. */
+  static createTrunk(scene: Phaser.Scene, worldX: number, worldY: number): Phaser.GameObjects.Image {
+    ensureCanvasTexture(scene.textures, TRUNK_TEXTURE_KEY, TRUNK_RADIUS * 4, TRUNK_RADIUS * 4, (ctx) => {
+      ctx.fillStyle = `#${COLORS.BROWN_4.toString(16).padStart(6, '0')}`;
+      ctx.beginPath(); ctx.arc(TRUNK_RADIUS * 2, TRUNK_RADIUS * 2, TRUNK_RADIUS * 2, 0, Math.PI * 2); ctx.fill();
+    });
+    const trunk = scene.add.image(worldX, worldY, TRUNK_TEXTURE_KEY).setDisplaySize(TRUNK_RADIUS * 2, TRUNK_RADIUS * 2);
     registerGraphicsObject(scene, 'treeTrunks', trunk);
     trunk.setDepth(DEPTH.ROCKS);
     return trunk;

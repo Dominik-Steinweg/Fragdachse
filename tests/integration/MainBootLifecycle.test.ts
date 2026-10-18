@@ -29,7 +29,7 @@ describe('boot owns the admitted network session', () => {
     const game = { events: new EventEmitter(), destroy: vi.fn() };
     const failure = new Error('required startup resource unavailable');
     vi.doMock('phaser', () => ({
-      Renderer: { WebGL: { ProgramManager: class {}, Wrappers: { WebGLFramebufferWrapper: class {} } } },
+      Renderer: { WebGL: { ProgramManager: class {}, Wrappers: { WebGLFramebufferWrapper: class {}, WebGLProgramWrapper: class {} } } },
       GameObjects: { SpriteGPULayer: class {} },
       Core: { Events: { READY: 'ready' } }, Scale: { FIT: 1, CENTER_BOTH: 1 }, WEBGL: 2,
       Game: class { constructor() { if (stage === 'constructor failure') throw failure; return game; } },
@@ -40,6 +40,7 @@ describe('boot owns the admitted network session', () => {
     vi.doMock('../../src/graphics/PhaserAlphaZero', () => ({ installPhaserAlphaZero() {} }));
     vi.doMock('../../src/graphics/PhaserFramebufferBindings', () => ({ installPhaserFramebufferBindings() {} }));
     vi.doMock('../../src/graphics/PhaserGpuLayerTextures', () => ({ installPhaserGpuLayerTextures() {} }));
+    vi.doMock('../../src/graphics/PhaserUniformRequests', () => ({ installPhaserUniformRequests() {} }));
     vi.doMock('../../src/graphics/RenderResolution', () => ({ initialRenderSize: () => ({ width: 800, height: 600 }), installRenderResolution() {} }));
     vi.doMock('../../src/ui/fullscreen', () => ({ FULLSCREEN_TARGET_ID: 'game-container', installFullscreenSupport() {} }));
     vi.doMock('../../src/ui/uiFonts', () => ({ loadUiFonts: async () => {} }));

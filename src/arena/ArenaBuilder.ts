@@ -91,7 +91,7 @@ export interface ArenaPresentationResult {
   /** Umschaltbarer Classic-/SpriteGPU-Consumer der Visual States. */
   rockVisualSystem: RockVisualSystem | null;
   /** Sichtbare Staemme; reine Darstellung ueber der Runtime und ohne sie entbehrlich. */
-  trunkVisuals: Phaser.GameObjects.Arc[];
+  trunkVisuals: Phaser.GameObjects.Image[];
   /** Baumkronen-Sprites für Transparenz-Update; ebenfalls reine Darstellung. */
   canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }>;
   /** Gleis-TileSprites (eine pro Gleis-Spalte, nur visuell, keine Kollision) */
@@ -252,7 +252,7 @@ export class ArenaBuilder {
     const rockPhysicsProxies: (RockPhysicsProxy | null)[] = [];
     const rockVisualStates = new RockVisualStateStore();
     const trunkBodies: TreePhysicsProxy[] = [];
-    const trunkVisuals: Phaser.GameObjects.Arc[] = [];
+    const trunkVisuals: Phaser.GameObjects.Image[] = [];
     const canopyObjects: Array<{ gfx: Phaser.GameObjects.Image; worldX: number; worldY: number }> = [];
 
     // Spatial Index für Autotiling
@@ -886,11 +886,8 @@ export class ArenaBuilder {
 
   // ── Private Factory-Methoden ───────────────────────────────────────────────
 
-  /**
-   * Erstellt den Baumstumpf-Sprite (aktuell: Arc/Kreis).
-   * Kann später durch `this.scene.add.image(...)` ersetzt werden.
-   */
-  private createTrunkVisual(worldX: number, worldY: number): Phaser.GameObjects.Arc {
+  /** Erstellt den Baumstumpf als einfarbige Kreis-Textur (ein Quad statt Arc-Pfad). */
+  private createTrunkVisual(worldX: number, worldY: number): Phaser.GameObjects.Image {
     return ArenaVisualFactory.createTrunk(this.scene, worldX, worldY);
   }
 

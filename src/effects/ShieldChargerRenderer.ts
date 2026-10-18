@@ -93,6 +93,8 @@ export class ShieldChargerRenderer {
     const lanes: { lane: ShieldChargeLane; allied: boolean; seed: number; id: string }[] = [];
     const streaks: ShieldChargerGpuItem[] = [];
     for (const enemy of this.enemies()) {
+      // Kind gate before the snapshot: only chargers own this state.
+      if (!getCoopDefenseEnemyConfig(enemy.kind).shieldCharger) continue;
       const state = enemy.getNetSnapshot().shieldCharge;
       if (!state || !enemy.sprite.active) continue;
       live.add(enemy.id);

@@ -921,7 +921,7 @@
       "lighting": "material",
       "camera": "world",
       "depths": [
-        9.95
+        9.84
       ],
       "blends": [
         "NORMAL"

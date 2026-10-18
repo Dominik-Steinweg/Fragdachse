@@ -2155,8 +2155,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       }
       if (expiresAt > now) statusSystem.applyVulnerability(target, expiresAt - now, now);
     };
+    // Without a live vulnerability field no footprint can apply anything; skip the per-target
+    // bounds (one rotated getBounds per enemy and frame). Base flags below still refresh.
+    const fieldsLive = matrixSystem.getActiveMatrices()
+      .some((field) => field.vulnerabilityBonus > 0 && now < field.expiresAt);
 
-    for (const player of this.ctx.playerManager.getAllPlayers()) {
+    if (fieldsLive) for (const player of this.ctx.playerManager.getAllPlayers()) {
       if (!this.ctx.getWorldCombatCore()!.isAlive(player.id)) continue;
       const bounds = player.getBounds();
       applyFromFootprint(
@@ -2166,7 +2170,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       );
     }
 
-    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+    if (fieldsLive) for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
       const bounds = enemy.sprite.getBounds();
       applyFromFootprint(
@@ -2175,7 +2179,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       );
     }
 
-    for (const base of this.baseManager?.getBasesByFaction('hostile') ?? []) {
+    if (fieldsLive) for (const base of this.baseManager?.getBasesByFaction('hostile') ?? []) {
       if (base.isInert?.() === true || base.getHp() <= 0) continue;
       const footprint = this.getBaseFootprint(base);
       if (footprint) applyFromFootprint({ targetType: 'base', targetId: base.id }, footprint);
@@ -2185,7 +2189,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       base.setVulnerable(statusSystem.isVulnerable({ targetType: 'base', targetId: base.id }, now));
     }
 
-    for (const rock of this.placementSystem?.getAllRuntimeRocks() ?? []) {
+    if (fieldsLive) for (const rock of this.placementSystem?.getAllRuntimeRocks() ?? []) {
       if (!rock.constructionId) continue;
       const world = this.rockVisualHelper.gridToWorld(rock.gridX, rock.gridY);
       const overlapping = matrixSystem.getOverlappingMatrices(

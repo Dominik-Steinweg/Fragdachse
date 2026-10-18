@@ -311,7 +311,48 @@ export interface BloodStainSpawnConfig {
   stainDelayMs: number;
 }
 
-export function spawnBloodStain(scene: Phaser.Scene, config: BloodStainSpawnConfig): Phaser.GameObjects.Image {
+function sceneBloodStainBatch(scene: Phaser.Scene): BloodStainBatch | null {
+  if (scene.sys.renderer.type !== Phaser.WEBGL) return null;
+  let batch = bloodStainBatches.get(scene);
+  if (!batch) {
+    batch = new BloodStainBatch(scene, TEX_BLOOD_STAIN, BLOOD_HIT_VFX.maxActiveStains, () => bloodStainBatches.delete(scene));
+    bloodStainBatches.set(scene, batch);
+  }
+  return batch;
+}
+
+/**
+ * Spawns a stain after `delayMs`. WebGL queues it in the scene's stain batch, which a world clear
+ * drops together with its decals; the returned cancel only matters for the Canvas timer path.
+ */
+export function scheduleBloodStain(scene: Phaser.Scene, delayMs: number, config: BloodStainSpawnConfig,
+  onTimerSettled?: (cancel: () => void) => void): (() => void) | null {
+  const batch = sceneBloodStainBatch(scene);
+  if (batch) {
+    batch.schedule(scene.time.now + Math.max(0, delayMs), () => { spawnBloodStain(scene, config); });
+    return null;
+  }
+  // A removed timer's callback may still be delivered (stale queue); it must never spawn.
+  let cancelled = false;
+  const cancel = () => { cancelled = true; timer.remove(false); };
+  const timer = scene.time.delayedCall(Math.max(0, delayMs), () => {
+    if (cancelled) return;
+    onTimerSettled?.(cancel);
+    spawnBloodStain(scene, config);
+  });
+  return cancel;
+}
+
+export function spawnBloodStain(scene: Phaser.Scene, config: BloodStainSpawnConfig): void {
+  const batch = sceneBloodStainBatch(scene);
+  if (batch) {
+    // WebGL decals are data in the scene's stain batch: no Image, tween or display-list entry.
+    batch.add(config.depth, { x: config.x, y: config.y, rotation: config.rotation, tint: config.tint,
+      animation: { bornAt: scene.time.now, alpha: config.alpha, scale: config.scale,
+        holdMs: config.stainDelayMs, fadeMs: config.fadeMs } });
+    return;
+  }
+
   pruneDestroyedBloodStains();
   while (activeBloodStains.length >= BLOOD_HIT_VFX.maxActiveStains) {
     const oldest = activeBloodStains.shift();
@@ -327,14 +368,6 @@ export function spawnBloodStain(scene: Phaser.Scene, config: BloodStainSpawnConf
 
   activeBloodStains.push(stain);
   stain.once(Phaser.GameObjects.Events.DESTROY, () => unregisterBloodStain(stain));
-  if (scene.sys.renderer.type === Phaser.WEBGL) {
-    let batch = bloodStainBatches.get(scene);
-    if (!batch) {
-      batch = new BloodStainBatch(scene, TEX_BLOOD_STAIN, () => bloodStainBatches.delete(scene));
-      bloodStainBatches.set(scene, batch);
-    }
-    batch.add(stain);
-  }
 
   scene.tweens.add({
     targets: stain,
@@ -355,6 +388,4 @@ export function spawnBloodStain(scene: Phaser.Scene, config: BloodStainSpawnConf
       if (activeBloodStains.includes(stain)) stain.destroy();
     },
   });
-
-  return stain;
 }

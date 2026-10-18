@@ -17,7 +17,8 @@ const DEPTH_RAGE_AURA_OUTER = DEPTH.PLAYERS + 0.05;
 const DEPTH_RAGE_AURA_CORE = DEPTH.PLAYERS + 0.07;
 const DEPTH_RAGE_BLOOD = DEPTH.PLAYERS + 0.11;
 const DEPTH_RAGE_SPLASH = DEPTH.PLAYERS + 0.15;
-const DEPTH_RAGE_STAIN = DEPTH.PLAYERS - 0.05;
+// Same ground decal band as hit stains (EffectSystem): beneath figures and their shadows.
+const DEPTH_RAGE_STAIN = DEPTH.PLAYERS - 0.16;
 const OUTER_AURA_TEXTURE_RADIUS = 88;
 const CORE_AURA_TEXTURE_RADIUS = 56;
 const RING_AURA_TEXTURE_RADIUS = 74;

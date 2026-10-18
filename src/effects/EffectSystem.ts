@@ -16,7 +16,7 @@ import {
   TEX_BLOOD_EDGE_TOP,
   ensureBloodEdgeTextures,
   ensureBloodHitTextures,
-  spawnBloodStain,
+  scheduleBloodStain as scheduleSharedBloodStain,
   clearBloodStains as clearSceneBloodStains,
 } from './BloodEffectShared';
 import { circleZone, edgeZone, ensureCanvasTexture, makeAdditive, mixColors, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
@@ -94,7 +94,8 @@ const MAX_HITSCAN_LIGHTS = 4;
 
 const TEX_BURROW_DIRT = '__burrow_dirt';
 const TEX_BURROW_DUST = '__burrow_dust';
-const DEPTH_BLOOD_STAIN = DEPTH.PLAYERS - 0.05;
+// Ground decal beneath every figure, its shadow and claw telegraphs; never drawn over a body.
+const DEPTH_BLOOD_STAIN = DEPTH.PLAYERS - 0.16;
 const DEPTH_DAMAGE_VIGNETTE = DEPTH.OVERLAY - 1;
 
 interface BurrowEmitterVisual {
@@ -154,7 +155,8 @@ export class EffectSystem implements EnemyVisualSink {
   private readonly burrowEffectTimers = new Set<Phaser.Time.TimerEvent>();
   private readonly mobilityEffects = new Set<Phaser.GameObjects.GameObject>();
   private readonly mobilityEffectTimers = new Set<Phaser.Time.TimerEvent>();
-  private readonly bloodStainTimers = new Set<Phaser.Time.TimerEvent>();
+  /** Canvas-only timer cancels; WebGL arrivals live in the scene's stain batch. */
+  private readonly bloodStainCancels = new Set<() => void>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
   private plasmaBurnerRenderer: PlasmaBurnerRenderer | null = null;
@@ -222,7 +224,7 @@ export class EffectSystem implements EnemyVisualSink {
   private combatGoreGpuRenderer: CombatGoreGpuRenderer | null = null;
   private playerDeathResolver: ((targetId: string) => boolean) | null = null;
   private readonly scheduleBloodStainSink: BloodStainSink = (...args) => {
-    this.scheduleBloodStain(...args);
+    this.spawnBloodStain(...args);
   };
   private texturesGenerated = false;
   private damageVignetteTop:    Phaser.GameObjects.Image | null = null;
@@ -1810,30 +1812,11 @@ export class EffectSystem implements EnemyVisualSink {
     );
   }
 
+  /**
+   * Spawnt den Fleck, sobald sein GPU-Flug landet. Die dauerhafte Decal-Lifecycle bleibt
+   * CPU-seitig im Stain-Batch der Szene; nur Canvas hält dafür noch einen Timer.
+   */
   private spawnBloodStain(
-    x: number,
-    y: number,
-    scale: number,
-    alpha: number,
-    fadeMs: number,
-    tint: number,
-    rotation: number,
-  ): void {
-    spawnBloodStain(this.scene, {
-      x,
-      y,
-      scale,
-      alpha,
-      fadeMs,
-      tint,
-      rotation,
-      depth: DEPTH_BLOOD_STAIN,
-      stainDelayMs: BLOOD_HIT_VFX.stainDelayMs,
-    });
-  }
-
-  /** Die dauerhafte Decal-Lifecycle bleibt CPU-seitig; nur ihr Eintreffen wird vom GPU-Flug terminiert. */
-  private scheduleBloodStain(
     x: number,
     y: number,
     scale: number,
@@ -1843,16 +1826,20 @@ export class EffectSystem implements EnemyVisualSink {
     rotation: number,
     flightDelayMs: number,
   ): void {
-    const timer = this.scene.time.delayedCall(Math.max(0, flightDelayMs), () => {
-      if (!this.bloodStainTimers.delete(timer)) return;
-      this.spawnBloodStain(x, y, scale, alpha, fadeMs, tint, rotation);
-    });
-    this.bloodStainTimers.add(timer);
+    this.trackBloodStainCancel(scheduleSharedBloodStain(this.scene, flightDelayMs, {
+      x, y, scale, alpha, fadeMs, tint, rotation,
+      depth: DEPTH_BLOOD_STAIN,
+      stainDelayMs: BLOOD_HIT_VFX.stainDelayMs,
+    }, settled => this.bloodStainCancels.delete(settled)));
+  }
+
+  private trackBloodStainCancel(cancel: (() => void) | null): void {
+    if (cancel) this.bloodStainCancels.add(cancel);
   }
 
   clearBloodStains(): void {
-    for (const timer of this.bloodStainTimers) timer.remove(false);
-    this.bloodStainTimers.clear();
+    for (const cancel of this.bloodStainCancels) cancel();
+    this.bloodStainCancels.clear();
     clearSceneBloodStains(this.scene);
   }
 

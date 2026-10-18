@@ -128,10 +128,11 @@ export class FirestarterRenderer {
     const live = new Set<string>();
     for (const enemy of this.enemies()) {
       if (!enemy.sprite.active) continue;
+      // Kind gate before the snapshot: only firestarters cast the lance.
+      const config = getCoopDefenseEnemyConfig(enemy.kind).firestarter;
+      if (!config) continue;
       const snapshot = enemy.getNetSnapshot();
       if (snapshot.specialAction !== 'fire-lance-charge') continue;
-      const config = getCoopDefenseEnemyConfig(snapshot.kind).firestarter;
-      if (!config) continue;
       live.add(enemy.id);
       // Snapshots arrive at network rate; advance between them at the authored charge speed.
       const sample = sampleFirestarterCharge(this.charges.get(enemy.id), snapshot.gaussChargeProgress, now);

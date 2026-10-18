@@ -3173,6 +3173,7 @@ export class NetworkBridge {
       : this.getLatestGameState()?.bomberSquadron ?? EMPTY_BOMBER_SQUADRON_SNAPSHOT;
   }
 
+  private lastPublishedPlayers: { readonly worldRevision: number; readonly players: Record<string, PlayerNetState> } | null = null;
   private krakenScope = '';
   private krakenPublishSequence = 0;
   private publishedKraken: KrakenSnapshotPacket | undefined;
@@ -3211,6 +3212,16 @@ export class NetworkBridge {
       sequence: ++this.krakenPublishSequence, kraken });
     this.publishedKraken = packet;
     setState('kraken', packet, true);
+  }
+
+  /**
+   * Loopback events (host) and replicated ones (client) are accepted against the receiver, so it
+   * must follow the packet on both roles. Previously a per-frame full game-state read happened to
+   * keep the host's receiver current.
+   */
+  private refreshKrakenReceiver(): void {
+    this.syncKrakenScope();
+    this.krakenReceiver.applySnapshot(getState('kraken'));
   }
 
   /** Bind KrakenStateReadPort.getState here. No simulation or retrospective effects run on receipt. */
@@ -3287,6 +3298,7 @@ export class NetworkBridge {
     if (worldRevision === undefined) return;
     if (state.worldRevision !== undefined && state.worldRevision !== worldRevision) return;
     this.syncKrakenScope();
+    this.lastPublishedPlayers = { worldRevision, players: state.players };
     if (state.kraken !== undefined) this.publishKrakenState(state.kraken);
     if (fullSnapshot) {
       this.publishFullGameState(state, worldRevision);
@@ -3474,6 +3486,18 @@ export class NetworkBridge {
     // Bootstrap für neue Teilnehmer und bleibt bis zum nächsten Full-Resync erhalten.
     setState(KEY_GAME_STATE, payload, false);
     setState(KEY_GAME_STATE_INITIAL, payload, true);
+  }
+
+  /**
+   * Replicated player states for presentation that needs nothing else. The host returns what it
+   * published last instead of decoding its own full snapshot: that loopback decode cost more than
+   * a millisecond per frame in large fights and only fed per-frame warning overlays.
+   */
+  getLatestPlayerStates(): Readonly<Record<string, PlayerNetState>> | undefined {
+    if (!isHost()) return this.getLatestGameState()?.players;
+    const worldRevision = this.getWorldDescriptor()?.worldRevision;
+    const published = this.lastPublishedPlayers;
+    return published && published.worldRevision === worldRevision ? published.players : undefined;
   }
 
   getLatestGameState(): GameState | undefined {
@@ -4535,7 +4559,7 @@ export class NetworkBridge {
 
   subscribeKrakenPartHit(handler: (receipt: CombatPartHitReceipt) => void): () => void {
     const listener = (raw: unknown) => {
-      this.getKrakenState();
+      this.refreshKrakenReceiver();
       const receipt = readKrakenPartHit(raw);
       if (receipt && this.krakenReceiver.acceptPartHit(receipt)) handler(receipt);
     };
@@ -4583,7 +4607,7 @@ export class NetworkBridge {
       const areaRaw = (data as { ac?: unknown })?.ac;
       const areaClaw = areaRaw === undefined ? undefined : readAreaClawImpact(areaRaw);
       if (areaRaw !== undefined) {
-        this.getKrakenState();
+        this.refreshKrakenReceiver();
         if (!areaClaw || !this.krakenReceiver.acceptImpact(areaClaw)) return undefined;
       }
       if ((data as { ca?: string })?.ca && (!this.acceptsWorldRpc(data)

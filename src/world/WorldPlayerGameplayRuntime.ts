@@ -723,7 +723,7 @@ export class WorldPlayerGameplayRuntime implements
       options.combatSystem,
       options.placementSystem,
       (playerId) => (
-        (playerModifier.getCommittedProfile(playerId)?.upgrades[COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID]?.level ?? 0) > 0
+        playerModifier.getCommittedUpgradeLevel(playerId, COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID) > 0
       ),
     );
     const slimeTrail = new SlimeTrailSystem(

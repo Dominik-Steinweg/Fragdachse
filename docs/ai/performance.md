@@ -20,11 +20,12 @@ Die Verträge dafür liegen bei [ChunkedRenderSurface.ts](../../src/arena/chunks
 
 ## Verifizierte Phaser-Fallen
 
-Für Phaser 4.2.1 gelten bei großen World-Darstellungen besonders diese drei Grenzen:
+Für Phaser 4.2.1 gelten bei großen World-Darstellungen besonders diese vier Grenzen:
 
 - Ein `Layer` ist eine eigene Display-Liste, deren Renderer seine Kinder selbst durchläuft. Die Camera-Culling-Stufe filtert die Scene-Liste; sie macht die verschachtelten Layer-Kinder nicht automatisch zu einer viewport-indexierten Liste.
 - Scene- und Layer-Listen bleiben listenförmige Renderarbeit: Kamera-Prüfung, `willRender` und bei Bedarf Depth-Sort laufen über die enthaltenen Einträge. Viele dauerhaft versteckte Objekte kosten daher weiterhin Arbeit, auch wenn nur wenige sichtbar sind.
 - `Graphics` hält Zeichenbefehle und zerlegt komplexe Pfade bei der WebGL-Darstellung in Geometrie. Ein eigenes `dirty`-Flag spart höchstens unnötigen Command-Aufbau im Anwendungscode; es ersetzt weder das Caching stabiler Geometrie noch das Baken statischer Formen in eine Textur. Häufig wechselnde Geometrie sollte dagegen nicht in jedem Frame neue Texturen erzeugen.
+- `SpriteGPULayer`-Eases klemmen auch bei `loop: false` nicht am Ende: der Vertex-Shader rechnet mit `mod(t, 1)` weiter und addiert `floor(amplitude) * amplitude` (Ausgleich: [`gpuVfxEasedBase`](../../src/effects/gpu/GpuVfxMember.ts)). Ein Member mit abgelaufener nichtlinearer Kurve beginnt sie neu und muss deshalb aktiv stillgelegt werden, wie es [`GpuVfxPool`](../../src/effects/gpu/GpuVfxPool.ts) tut. Mehrphasige Zeitachsen (Einblenden, Halten, Ausblenden) werden auf der CPU ausgewertet. Geloopte Wellen dürfen auf die GPU, etwa ein Yoyo-`Sine.easeInOut` als exakte Kosinuswelle mit `delay` als Phase.
 
 ## Hotpaths und Allokationen
 

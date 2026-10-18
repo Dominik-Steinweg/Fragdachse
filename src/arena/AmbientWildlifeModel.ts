@@ -36,40 +36,51 @@ export interface WildlifeAnimal {
 }
 interface PlayerMotion { x: number; y: number; movingUntil: number; seen: number }
 const TAU = Math.PI * 2;
-const key = (x: number, y: number): string => `${x},${y}`;
+// Static cell flags. Probes run per animal and frame; string keys allocated thousands of times.
+const WATER = 1, DEEP_WATER = 2, ROCK = 4, DIRT = 8;
+/** Trunk lookups may step one cell outside the frame; offset keeps the key non-negative. */
+const trunkKey = (x: number, y: number): number => (x + 32768) * 65536 + (y + 32768);
 const angleDelta = (from: number, to: number): number => Math.atan2(Math.sin(to - from), Math.cos(to - from));
 
 /** Local presentation state only. Owns no entities, physics, timers, global RNG or wire state. */
 export class AmbientWildlifeModel {
   readonly animals: WildlifeAnimal[] = [];
-  private readonly water = new Set<string>();
-  private readonly deepWater = new Set<string>();
-  private readonly rocks = new Set<string>();
-  private readonly dirt = new Set<string>();
+  private readonly cols: number;
+  private readonly rows: number;
+  private readonly cells: Uint8Array;
   private readonly tracks = new Set<number>();
   private readonly trees: { x: number; y: number }[];
-  private readonly trunks = new Map<string, { x: number; y: number }>();
+  private readonly trunks = new Map<number, { x: number; y: number }>();
   private readonly players = new Map<string, PlayerMotion>();
   private time = 0;
   private frameId = 0;
   private daylightInitialized = false;
 
   constructor(layout: ArenaLayout, private readonly frame: ChunkWorldFrame) {
-    for (const c of layout.water ?? []) this.water.add(key(c.gridX, c.gridY));
-    for (const c of layout.rocks) this.rocks.add(key(c.gridX, c.gridY));
-    for (const c of layout.dirt) this.dirt.add(key(c.gridX, c.gridY));
+    this.cols = Math.max(0, Math.ceil(frame.width / CELL_SIZE));
+    this.rows = Math.max(0, Math.ceil(frame.height / CELL_SIZE));
+    this.cells = new Uint8Array(this.cols * this.rows);
+    const mark = (gx: number, gy: number, flag: number): void => {
+      if (gx >= 0 && gy >= 0 && gx < this.cols && gy < this.rows) this.cells[gy * this.cols + gx] |= flag;
+    };
+    for (const c of layout.water ?? []) mark(c.gridX, c.gridY, WATER);
+    for (const c of layout.rocks) mark(c.gridX, c.gridY, ROCK);
+    for (const c of layout.dirt) mark(c.gridX, c.gridY, DIRT);
     for (const c of layout.tracks) this.tracks.add(c.gridX);
     this.trees = layout.trees.map(c => ({
       x: frame.offsetX + (c.gridX + .5) * CELL_SIZE, y: frame.offsetY + (c.gridY + .5) * CELL_SIZE,
     }));
-    layout.trees.forEach((c, i) => this.trunks.set(key(c.gridX, c.gridY), this.trees[i]));
+    layout.trees.forEach((c, i) => this.trunks.set(trunkKey(c.gridX, c.gridY), this.trees[i]));
     // Erode the water topology by a full cell. A school's complete footprint must
     // fit this interior, so individual fish cannot reach the shallow bank or land.
+    const deepCells: number[][] = [];
     for (const c of layout.water ?? []) {
       let interior = true;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
-        if (!this.water.has(key(c.gridX + dx, c.gridY + dy))) interior = false;
-      if (interior) this.deepWater.add(key(c.gridX, c.gridY));
+        if (!(this.flagsAt(c.gridX + dx, c.gridY + dy) & WATER)) interior = false;
+      if (interior && !(this.flagsAt(c.gridX, c.gridY) & DEEP_WATER)) {
+        mark(c.gridX, c.gridY, DEEP_WATER); deepCells.push([c.gridX, c.gridY]);
+      }
     }
     const random = (x: number, y: number, salt: number): number => hashSeededCell01(layout.seed, x, y, salt);
     const appearanceAt = (kind: WildlifeKind, x: number, y: number, groupRoll = random(x, y, 813)): WildlifeAppearance =>
@@ -149,7 +160,6 @@ export class AmbientWildlifeModel {
     }
     const schoolHomes: { x: number; y: number }[] = [];
     const fishStart = this.animals.length;
-    const deepCells = [...this.deepWater].map(cell => cell.split(',').map(Number));
     deepCells.sort((a, b) => random(a[0], a[1], 880) - random(b[0], b[1], 880));
     for (const [gx, gy] of deepCells) {
       if (schoolHomes.length >= Math.round(TUNING.fish.maxCount / TUNING.fish.density)) break;
@@ -173,35 +183,43 @@ export class AmbientWildlifeModel {
     if (firstFish) { firstFish.fishPhase = 'swimming'; firstFish.opacity = 1; }
   }
 
-  private footprint(x: number, y: number, radius: number, test: (cell: string, gx: number) => boolean): boolean {
+  private flagsAt(gx: number, gy: number): number {
+    return gx >= 0 && gy >= 0 && gx < this.cols && gy < this.rows ? this.cells[gy * this.cols + gx] : 0;
+  }
+
+  /** Every covered cell inside the frame must hold all `required` and none of the `forbidden` flags. */
+  private footprint(x: number, y: number, radius: number, required: number, forbidden: number, trackFree = false): boolean {
     if (x - radius < this.frame.offsetX || y - radius < this.frame.offsetY
       || x + radius >= this.frame.offsetX + this.frame.width || y + radius >= this.frame.offsetY + this.frame.height) return false;
     const left = Math.floor((x - radius - this.frame.offsetX) / CELL_SIZE);
     const right = Math.floor((x + radius - this.frame.offsetX) / CELL_SIZE);
     const top = Math.floor((y - radius - this.frame.offsetY) / CELL_SIZE);
     const bottom = Math.floor((y + radius - this.frame.offsetY) / CELL_SIZE);
-    for (let gy = top; gy <= bottom; gy++) for (let gx = left; gx <= right; gx++)
-      if (!test(key(gx, gy), gx)) return false;
+    for (let gy = top; gy <= bottom; gy++) for (let gx = left; gx <= right; gx++) {
+      const flags = this.flagsAt(gx, gy);
+      if ((flags & required) !== required || (flags & forbidden) !== 0) return false;
+      if (trackFree && this.tracks.has(gx)) return false;
+    }
     return true;
   }
 
   private isLand(x: number, y: number, radius: number): boolean {
-    if (!this.footprint(x, y, radius, cell => !this.water.has(cell) && !this.rocks.has(cell))) return false;
+    if (!this.footprint(x, y, radius, 0, WATER | ROCK)) return false;
     const gx = Math.floor((x - this.frame.offsetX) / CELL_SIZE), gy = Math.floor((y - this.frame.offsetY) / CELL_SIZE);
     const reach = Math.ceil((TRUNK_RADIUS + radius) / CELL_SIZE);
     for (let dy = -reach; dy <= reach; dy++) for (let dx = -reach; dx <= reach; dx++) {
-      const t = this.trunks.get(key(gx + dx, gy + dy));
+      const t = this.trunks.get(trunkKey(gx + dx, gy + dy));
       if (t && Math.hypot(x - t.x, y - t.y) < TRUNK_RADIUS + radius) return false;
     }
     return true;
   }
 
   private isGrass(x: number, y: number): boolean {
-    return this.isLand(x, y, 6) && this.footprint(x, y, 6, (cell, gx) => !this.dirt.has(cell) && !this.tracks.has(gx));
+    return this.isLand(x, y, 6) && this.footprint(x, y, 6, 0, DIRT, true);
   }
 
   isDeepWater(x: number, y: number, radius: number): boolean {
-    return this.footprint(x, y, radius, cell => this.deepWater.has(cell));
+    return this.footprint(x, y, radius, DEEP_WATER, 0);
   }
 
   contains(animal: WildlifeAnimal, x: number, y: number): boolean {

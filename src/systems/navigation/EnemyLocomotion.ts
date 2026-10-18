@@ -7,6 +7,10 @@ const RECOVERY_ANGLES = [...ANGLES, Math.PI * 0.75, -Math.PI * 0.75, Math.PI];
 const SPEED_SCALES = [1, 0.45];
 const STEERING_SWITCH_MARGIN = 0.04;
 const CELL = 96;
+/** Crowd level of detail: from this many bodies, each ordinary mover re-solves on alternate frames. */
+const CROWD_SLICE_BODIES = 96;
+/** Reuse stays inside the capsule the previous solve proved free (horizon >= 0.12 s) for two frames. */
+const CROWD_SLICE_MAX_DT = 0.05;
 interface Conflict { dx: number; dy: number; vx: number; vy: number; separation: number;
   separationSq: number; existingOverlap: number; weight: number }
 interface SteeringChoice { angle: number; scale: number; heading: number; vx: number; vy: number; frame: number }
@@ -29,6 +33,8 @@ export class EnemyLocomotion {
   private maxNeighborSpeed = 0;
   private geometry: NavigationGeometry | null = null;
   private deltaSeconds = 0;
+  private sliced = false;
+  private readonly slicePhases = new Map<string, number>();
   private readonly nearby: Neighbor[] = [];
   private readonly conflicts: Conflict[] = [];
   private readonly movementObstacles: NavigationObstacle[] = [];
@@ -62,6 +68,21 @@ export class EnemyLocomotion {
       bucket.push(neighbor);
     }
     for (const id of this.previous.keys()) if (!this.neighborsById.has(id)) this.previous.delete(id);
+    this.sliced = neighbors.length >= CROWD_SLICE_BODIES;
+    if (this.slicePhases.size > neighbors.length * 2) {
+      for (const id of this.slicePhases.keys()) if (!this.neighborsById.has(id)) this.slicePhases.delete(id);
+    }
+  }
+
+  /** Stable 0/1 per unit, so a horde splits evenly across alternate frames. */
+  private slicePhase(id: string): number {
+    let phase = this.slicePhases.get(id);
+    if (phase === undefined) {
+      let hash = 0;
+      for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+      this.slicePhases.set(id, phase = hash & 1);
+    }
+    return phase;
   }
 
   solve(request: LocomotionRequest): MovementFeedback {
@@ -86,6 +107,19 @@ export class EnemyLocomotion {
     if (distance < 1e-3) return result(0, 0, 'arrival', progress);
     const dt = this.deltaSeconds;
     if (dt <= 0 || speed <= 0) return result(0, 0, 'arrival', progress);
+    // Crowd LOD: between its solves a unit keeps last frame's committed steering, as long as
+    // nothing invalidated it (same waypoint and geometry, no recovery stall, no foreign velocity
+    // change). The stall bound matches the solver's own continuity rule; stall time keeps
+    // accumulating above, so recovery headings still start on time. Two short frames stay
+    // inside the swept capsule that choice was verified against.
+    const kept = prior?.steering;
+    if (this.sliced && kept && kept.frame === this.frame - 1 && sameTarget && stalled <= 0.8 && dt <= CROWD_SLICE_MAX_DT
+      && prior.geometry === geometry && ((this.frame + this.slicePhase(request.id)) & 1) === 1
+      && Math.abs(request.previousVx - kept.vx) < 1e-3 && Math.abs(request.previousVy - kept.vy) < 1e-3
+      && distance > Math.hypot(kept.vx, kept.vy) * Math.max(dt, 0.12) * 2) {
+      history.steering = { ...kept, frame: this.frame };
+      return result(kept.vx, kept.vy, 'none', progress);
+    }
     const horizon = Math.max(dt, 0.12);
     const blend = 1 - Math.exp(-dt * 14);
     // Every smoothed candidate lies inside this envelope, including previous dash/impulse
@@ -254,6 +288,7 @@ export class EnemyLocomotion {
     this.previous.clear(); this.buckets.clear(); this.neighborsById.clear(); this.pool.length = 0; this.geometry = null;
     this.activeBuckets.length = 0; this.rowPool.length = 0;
     this.frame = 0; this.elapsedMs = 0; this.neighborsExamined = 0; this.waitingNeighborsObserved = 0;
+    this.sliced = false; this.slicePhases.clear();
     this.nearby.length = 0; this.conflicts.length = 0; this.movementObstacles.length = 0;
     this.neighborObstacles.length = 0;
   }

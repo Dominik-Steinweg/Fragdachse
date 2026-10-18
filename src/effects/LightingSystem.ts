@@ -7,7 +7,7 @@ import {
   GAME_WIDTH,
 } from '../config';
 import { ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
-import { getVisibleWorldView } from '../graphics/CameraWorldView';
+import { createVisibleWorldView, getVisibleWorldView } from '../graphics/CameraWorldView';
 import { EnemyEyeBatch } from './EnemyEyeBatch';
 import type { EnemyEyeLightFrame } from './EnemyEyeGlowModel';
 import type { EssenceLightFrame } from '../adrenalineEssence/AdrenalineEssenceLighting';
@@ -82,6 +82,8 @@ void main() {
 const LIGHTMAP_OVERSCAN_ALIGNMENT_PX = 8;
 /** Wachstumsraster der Lightmap beim Herauszoomen: grob genug, dass ein Zoomverlauf selten neu anlegt. */
 const LIGHTMAP_VIEWPORT_GROWTH_STEP_PX = 256;
+/** Subpixel-Toleranz gegen Gleitkommarauschen der Kamera-Scrollposition. */
+const LIGHTMAP_VIEWPORT_EPSILON_PX = 0.5;
 
 /** Ausblendzeit, wenn ein Dauerlicht freigegeben wird – verhindert hartes Poppen. */
 const RELEASE_FADE_MS = 140;
@@ -308,6 +310,7 @@ export class LightingSystem {
    * wenn die Kamera weiter herauszoomt, als dieser abdeckt; sonst bliebe rechts und unten unbeleuchtete Welt.
    */
   private viewport: { width: number; height: number };
+  private readonly cameraViewScratch = createVisibleWorldView();
 
   constructor(private readonly scene: Phaser.Scene,
     private readonly baseViewport: { readonly width: number; readonly height: number } = { width: GAME_WIDTH, height: GAME_HEIGHT }) {
@@ -1821,15 +1824,23 @@ export class LightingSystem {
    * Die Lightmap liegt bildschirmfest ab der Kamera-Scrollposition und skaliert mit dem Kamera-Zoom
    * (Ursprung oben links). Zeigt die Kamera mehr Welt als der Basis-Viewport, wächst die Fläche in
    * groben Schritten mit; die Render-Targets werden nur bei einer Größenänderung neu angelegt.
+   * `view.right - scrollX` trägt Gleitkommarauschen der Scrollposition: bei Zoom 1 liegt es oft
+   * knapp über der Basisbreite. Ohne Toleranz und Hysterese pendelte die Fläche deshalb fast jeden
+   * Frame zwischen zwei Stufen und baute Lightmap und Occluder-Slots neu auf. Wachsen geschieht
+   * sofort, Schrumpfen erst ab einer vollen Stufe Abstand.
    */
   private syncViewportToCamera(): void {
     const camera = this.scene.cameras?.main;
     if (!camera) return;
-    const view = getVisibleWorldView(camera);
-    const cover = (base: number, extent: number) => !(extent > base) ? base
-      : Math.ceil(extent / LIGHTMAP_VIEWPORT_GROWTH_STEP_PX) * LIGHTMAP_VIEWPORT_GROWTH_STEP_PX;
-    const width = cover(this.baseViewport.width, view.right - camera.scrollX);
-    const height = cover(this.baseViewport.height, view.bottom - camera.scrollY);
+    const view = getVisibleWorldView(camera, this.cameraViewScratch);
+    const step = LIGHTMAP_VIEWPORT_GROWTH_STEP_PX;
+    const cover = (base: number, current: number, extent: number) => {
+      const needed = extent <= base + LIGHTMAP_VIEWPORT_EPSILON_PX ? base
+        : Math.ceil((extent - LIGHTMAP_VIEWPORT_EPSILON_PX) / step) * step;
+      return needed > current || needed <= current - step ? needed : current;
+    };
+    const width = cover(this.baseViewport.width, this.viewport.width, view.right - camera.scrollX);
+    const height = cover(this.baseViewport.height, this.viewport.height, view.bottom - camera.scrollY);
     if (width === this.viewport.width && height === this.viewport.height) return;
     this.viewport = { width, height };
     this.destroyRenderTargets();

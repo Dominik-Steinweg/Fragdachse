@@ -12,7 +12,7 @@
         ]
       },
       {
-        "key": "module/this.turretRangeGraphics/setDepth/0",
+        "key": "module/this.turretRange/TurretRangePreviewVisual/0",
         "expression": "DEPTH.ROCKS - 0.2",
         "blends": [
           "NORMAL"
@@ -122,9 +122,9 @@
       }
     },
     {
-      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:module/this.turretRangeGraphics/setDepth/0",
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:module/this.turretRange/TurretRangePreviewVisual/0",
       "owner": "scenes/arena/PlacementPreviewRenderer.ts",
-      "component": "module/this.turretRangeGraphics/setDepth/0",
+      "component": "module/this.turretRange/TurretRangePreviewVisual/0",
       "height": "body",
       "lighting": "emissive",
       "camera": "world",
@@ -139,7 +139,7 @@
       ],
       "role": "ui",
       "source": {
-        "selector": "module/this.turretRangeGraphics/setDepth/0",
+        "selector": "module/this.turretRange/TurretRangePreviewVisual/0",
         "expression": "DEPTH.ROCKS - 0.2"
       }
     },

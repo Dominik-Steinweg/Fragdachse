@@ -26,6 +26,8 @@ const HIT_FEEDBACK_MERGE_WINDOW_MS = 30;
 const ROCKET_EXPLOSION_MERGE_WINDOW_MS = 50;
 const ONE_SHOT_VOICES_PER_KEY = 8;
 const ONE_SHOT_VOICES_TOTAL = 64;
+/** A busy key restarts its oldest copy only after this age; younger overflow is dropped. */
+const ONE_SHOT_STEAL_MIN_AGE_MS = 45;
 // These sources previously shared the rocket recording and its overlap limiter.
 const ROCKET_EXPLOSION_KEYS = new Set([
   'sfx_explosion_rocket', 'sfx_explosion_rocket_aftershock', 'sfx_explosion_turret_rocket',
@@ -69,6 +71,7 @@ export class GameAudioSystem {
   private readonly activeLoops = new Map<string, ActiveLoop>();
   private readonly oneShotVoices = new Map<string, Phaser.Sound.BaseSound[]>();
   private oneShotVoiceCount = 0;
+  private readonly oneShotStartedAt = new WeakMap<Phaser.Sound.BaseSound, number>();
   private currentMusic: Phaser.Sound.BaseSound | null = null;
   private currentMusicKey: MusicAssetKey | null = null;
   private requestedMusicKey: MusicAssetKey | null = null;
@@ -175,7 +178,7 @@ export class GameAudioSystem {
     this.playOneShot(soundKey, {
       volume: Phaser.Math.Clamp(finalVolume, 0, 1),
       pan: Phaser.Math.Clamp(pan, -1, 1),
-    });
+    }, isLocal);
   }
 
   // ── One-Shot SFX (lokal, kein Panning) ────────────────────────────────────
@@ -195,7 +198,7 @@ export class GameAudioSystem {
     this.playOneShot(soundKey, {
       volume: Phaser.Math.Clamp(finalVolume, 0, 1),
       pan: 0,
-    });
+    }, true);
   }
 
   queueHitFeedback(totalDamage: number): void {
@@ -385,10 +388,15 @@ export class GameAudioSystem {
 
   // ── Spatial Audio ─────────────────────────────────────────────────────────
 
-  private playOneShot(key: string, config: Phaser.Types.Sound.SoundConfig): void {
-    // Reuse WebAudio gain/pan nodes, while each play still creates its own buffer source.
-    // HTML5 retains Phaser's instance/unlock handling. Capacity limits retained voices,
-    // never audible overlap: overflow uses the normal auto-destroying one-shot path.
+  /**
+   * Reuses WebAudio gain/pan nodes, while each play still creates its own buffer source.
+   * HTML5 retains Phaser's instance/unlock handling. Audible overlap of one key is bounded:
+   * a horde firing the same weapon would otherwise start hundreds of voices whose node setup
+   * and mixing cost more than a whole frame. A busy key restarts its oldest copy, or drops the
+   * new one while that copy is still in its attack. Personal feedback (local player, UI) always
+   * plays: it steals regardless of age and keeps the auto-destroying overflow path.
+   */
+  private playOneShot(key: string, config: Phaser.Types.Sound.SoundConfig, personal: boolean): void {
     const manager = this.scene.sound as Phaser.Sound.WebAudioSoundManager;
     if (!manager.context) { this.scene.sound.play(key, config); return; }
     let voices = this.oneShotVoices.get(key);
@@ -397,17 +405,40 @@ export class GameAudioSystem {
       if (voices[i].pendingRemove) { voices.splice(i, 1); this.oneShotVoiceCount--; }
     }
     let voice = voices.find(candidate => !candidate.isPlaying && !candidate.isPaused);
-    if (!voice && voices.length < ONE_SHOT_VOICES_PER_KEY && this.oneShotVoiceCount < ONE_SHOT_VOICES_TOTAL) {
+    if (!voice && voices.length < ONE_SHOT_VOICES_PER_KEY
+      && (this.oneShotVoiceCount < ONE_SHOT_VOICES_TOTAL || this.evictIdleOneShotVoice())) {
       voice = this.scene.sound.add(key);
       voices.push(voice);
       this.oneShotVoiceCount++;
     }
-    if (voice) {
-      // BaseSound.play resets seek/delay and applies this call's volume and pan.
-      if (!voice.play(config)) voice.destroy();
-    } else {
-      this.scene.sound.play(key, config);
+    if (!voice) {
+      const now = this.scene.time.now;
+      let oldest: Phaser.Sound.BaseSound | undefined, oldestAt = Infinity;
+      for (const candidate of voices) {
+        if (candidate.isPaused) continue;
+        const at = this.oneShotStartedAt.get(candidate) ?? -Infinity;
+        if (at < oldestAt) { oldest = candidate; oldestAt = at; }
+      }
+      if (oldest && (personal || now - oldestAt >= ONE_SHOT_STEAL_MIN_AGE_MS)) voice = oldest;
+      else if (personal) { this.scene.sound.play(key, config); return; }
+      else return;
     }
+    // BaseSound.play restarts a playing voice and applies this call's volume and pan.
+    this.oneShotStartedAt.set(voice, this.scene.time.now);
+    if (!voice.play(config)) voice.destroy();
+  }
+
+  /** Frees a finished voice of any key so retention never locks out keys heard later. */
+  private evictIdleOneShotVoice(): boolean {
+    for (const voices of this.oneShotVoices.values()) {
+      const index = voices.findIndex(candidate => !candidate.isPlaying && !candidate.isPaused);
+      if (index < 0) continue;
+      voices[index].destroy();
+      voices.splice(index, 1);
+      this.oneShotVoiceCount--;
+      return true;
+    }
+    return false;
   }
 
   private admitOneShot(key: string | undefined): boolean {

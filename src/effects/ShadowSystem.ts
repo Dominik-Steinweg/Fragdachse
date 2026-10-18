@@ -36,6 +36,7 @@ import {
 } from '../graphics/GraphicsQuality';
 import { resolveSkyState } from './TimeOfDay';
 import { registerGraphicsObject } from './EffectUtils';
+import { ShadowTrunkStamp, type TrunkShadowLayer } from './ShadowTrunkStamp';
 import { ChunkScratchPool, ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
 import { createColorRenderTexture } from '../graphics/createColorRenderTexture';
 import type { ChunkedRenderSurfaceStats, ChunkedRenderWorkingSet } from '../arena/chunks/ChunkedRenderSurface';
@@ -344,6 +345,7 @@ export class ShadowSystem {
   /** Inputs of the last continuous drawing; `continuousDirty` forces the next one. */
   private readonly continuousDrawn = { x: 0, y: 0, length: 0, softness: 0, opacity: 0, viewX: 0, viewY: 0, viewW: 0, viewH: 0 };
   private continuousDirty = true;
+  private trunkStamp: ShadowTrunkStamp | null = null;
   private canopyBakesPending = false;
   private readonly canopyShapeScratch: CanopyShadowShape = { distance: 0, softness: 0, scale: 1, opacity: 0 };
 
@@ -380,10 +382,21 @@ export class ShadowSystem {
         && y + reach + margin >= view.y && y - reach - margin <= view.y + view.height;
       const trunk = SHADOW_CASTERS.trunk, trunkReach = getStaticShadowReachPx(trunk, profile, direction);
       const trunks = this.getLayer(trunk.layerDepth, 'trees').continuousGraphics;
+      // All trunks share one shape: a baked stamp replaces their per-frame tessellated polygons.
+      // SpriteGPULayer is WebGL-only; Canvas and over-long evening shadows keep the polygons.
+      const shape = this.trunkStampShape(trunk, profile, direction);
+      const stamp = (this.scene.sys?.renderer as { gl?: unknown } | undefined)?.gl
+        ? this.trunkStamp ??= new ShadowTrunkStamp(this.scene, trunk.layerDepth) : null;
+      const stamped = !!stamp?.prepare(shape.layers, shape.dx, shape.dy, WORLD_SHADOW_CONFIG.color);
+      if (stamped) stamp!.begin(layout.trees.length); else stamp?.hide();
       for (const tree of layout.trees) {
         const x = offsetX + tree.gridX * CELL_SIZE + CELL_SIZE / 2, y = offsetY + tree.gridY * CELL_SIZE + CELL_SIZE / 2;
-        if (inView(x, y, trunkReach)) primitives += this.drawFootprint(trunks, x, y, trunk, undefined, undefined, profile, direction);
+        if (!inView(x, y, trunkReach)) continue;
+        if (!stamped) { primitives += this.drawFootprint(trunks, x, y, trunk, undefined, undefined, profile, direction); continue; }
+        if (!this.isVisibleInArena(x, y, shape.maxExtent)) continue;
+        stamp!.write(x, y); primitives += shape.layers.length;
       }
+      if (stamped) stamp!.end();
       const tower = SHADOW_CASTERS.watchtower, towerReach = getStaticShadowReachPx(tower, profile, direction);
       const towers = this.getLayer(tower.layerDepth, 'rocks').continuousGraphics;
       const rockVisible = options.rockVisibilityPredicate ?? (() => true);
@@ -733,6 +746,7 @@ export class ShadowSystem {
   private hideContinuousStaticShadows(): void {
     this.continuousDirty = true;
     for (const bucket of this.layers.values()) bucket.continuousGraphics.clear();
+    this.trunkStamp?.hide();
     for (const mask of this.canopyMasks.values()) mask.target.setVisible(false);
     this.continuousCanopyShown = 0;
   }
@@ -1288,6 +1302,8 @@ export class ShadowSystem {
       bucket.continuousGraphics.destroy();
     }
     this.layers.clear();
+    this.trunkStamp?.destroy();
+    this.trunkStamp = null;
     this.staticContinuous = false;
     this.syncCanopyMasks();
     this.continuousCanopyShown = 0;
@@ -1427,6 +1443,23 @@ export class ShadowSystem {
       }
     }
     return steps;
+  }
+
+  /** The layers {@link drawFootprint} would draw for a grounded circular caster, outermost first. */
+  private trunkStampShape(preset: ShadowCasterConfig, profile: ShadowProfile, direction: { x: number; y: number }):
+    { layers: TrunkShadowLayer[]; dx: number; dy: number; maxExtent: number } {
+    const castLength = preset.castHeightPx * preset.stretch * profile.lengthMult;
+    const softnessPx = preset.softnessPx * profile.softnessMult;
+    const width = preset.footprintWidthPx, height = preset.footprintHeightPx, airborne = preset.airborneHeightPx ?? 0;
+    const steps = Math.max(1, Math.round(preset.blurLayers * this.quality.shadowLayerFactor));
+    const denominator = Math.max(1, steps - 1), layers: TrunkShadowLayer[] = [];
+    for (let step = steps - 1; step >= 0; step -= 1) {
+      const t = step / denominator, inflate = preset.inflatePx + softnessPx * t;
+      layers.push({ radius: Math.max(Math.max(1, width + inflate * 2), Math.max(1, height + inflate * 2)) * 0.5,
+        alpha: preset.opacity * profile.opacityMult * (1 - t * 0.88) / steps });
+    }
+    return { layers, dx: direction.x * (airborne + castLength), dy: direction.y * (airborne + castLength),
+      maxExtent: Math.max(width, height) * 0.5 + airborne + castLength + softnessPx + 16 };
   }
 
   // Draws the convex hull of two circles as a single closed polygon (stadium).

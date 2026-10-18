@@ -98,10 +98,16 @@ describe('fire control placement preview rendering', () => {
       objects.push(object);
       return object;
     };
+    // Images (turret footprint quads) are not part of the Graphics order below.
+    const makeImage = () => {
+      const image: Record<string, ReturnType<typeof vi.fn>> = {};
+      for (const method of ['setDepth', 'setVisible', 'setName', 'setTexture', 'setPosition', 'setAlpha', 'destroy']) image[method] = vi.fn(() => image);
+      return image;
+    };
     const scene = { add: { graphics: vi.fn(makeObject), text: vi.fn(makeObject), rectangle: vi.fn(makeObject),
-      container: vi.fn(makeObject), image: vi.fn() }, time: { now: 0 } };
+      container: vi.fn(makeObject), image: vi.fn(makeImage) }, time: { now: 0 } };
     const renderer = new PlacementPreviewRenderer(scene as never, {} as never);
-    const [range, , invalid] = objects;
+    const [range, invalid] = objects;
     vi.clearAllMocks();
     return { renderer, range, invalid, objects };
   };

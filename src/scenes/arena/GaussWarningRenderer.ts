@@ -4,6 +4,7 @@ import { dequantizeAngle }   from '../../utils/angle';
 import { DEPTH, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, getTopDownMuzzleOrigin } from '../../config';
 import { VOID_PALETTE } from '../../config';
 import type { EnemyVisualSource } from '../../entities/EnemyVisualSource';
+import { getCoopDefenseEnemyConfig } from '../../config/coopDefenseEnemies';
 import { registerGraphicsObject } from '../../effects/EffectUtils';
 
 /**
@@ -27,13 +28,13 @@ export class GaussWarningRenderer {
     this.gfx.clear();
     if (!inArena) return;
 
-    const state = bridge.getLatestGameState();
-    if (!state) return;
+    const players = bridge.getLatestPlayerStates();
+    if (!players) return;
 
     const localId = bridge.getLocalPlayerId();
     const time    = (this.gfx.scene as Phaser.Scene).time.now;
 
-    for (const [playerId, playerState] of Object.entries(state.players)) {
+    for (const [playerId, playerState] of Object.entries(players)) {
       if (playerId === localId || !playerState.alive || !playerState.isChargingUltimate) continue;
       const range          = Math.max(0, playerState.ultimateChargeRange ?? 0);
       const chargeFraction = Phaser.Math.Clamp(playerState.ultimateChargeFraction ?? 0, 0, 1);
@@ -76,8 +77,10 @@ export class GaussWarningRenderer {
     }
 
     for (const enemy of this.getEnemies()) {
+      // Kind gate before the snapshot: only void hunters charge the gauss beam.
+      if (!enemy.sprite.active || !getCoopDefenseEnemyConfig(enemy.kind).voidHunterBoss) continue;
       const snapshot = enemy.getNetSnapshot();
-      if (!enemy.sprite.active || snapshot.specialAction !== 'gauss-charge') continue;
+      if (snapshot.specialAction !== 'gauss-charge') continue;
       const chargeFraction = Phaser.Math.Clamp(snapshot.gaussChargeProgress, 0, 1);
       const aimAngle = snapshot.gaussAimAngle;
       const muzzle = getTopDownMuzzleOrigin(enemy.sprite.x, enemy.sprite.y, aimAngle);

@@ -143,11 +143,15 @@ export class EnemyMeshShadowRenderer {
       return;
     }
   }
+  private readonly typesScratch = new Set<string>();
+  private readonly liveScratch = new Set<EnemyEntity>();
   sync(enemies: readonly EnemyEntity[], visible: boolean): void {
     if (this.destroyed) return;
     const start = performance.now(); this.active.clear(); this.count = this.draws = this.triangles = 0;
     this.display.setVisible(false); for (const group of this.groups.values()) group.count = 0;
-    const types = new Set(enemies.filter(e => e.getHp() > 0).map(meshIdOf));
+    // Scratch collections: this runs per frame for every enemy in large hordes.
+    const types = this.typesScratch; types.clear();
+    for (const enemy of enemies) if (enemy.getHp() > 0) types.add(meshIdOf(enemy));
     this.assets.prefetch(types); this.assets.pump(this.scene.game.loop.frame);
     if (!this.preparePrograms()) { this.releaseUnseen(); return; }
     this.prepare(types);
@@ -157,16 +161,18 @@ export class EnemyMeshShadowRenderer {
     this.strength = meshShadowOpacity(path?.strength ?? 0, path?.elevation ?? 0);
     const view = getVisibleWorldView(this.scene.cameras.main, this.view, 0);
     // Release dead, burrowed and departed entities before admitting replacements in a full atlas.
-    const live = new Set(enemies);
+    const live = this.liveScratch; live.clear();
+    for (const enemy of enemies) live.add(enemy);
     for (const [enemy, slot] of this.assignments) if (!live.has(enemy) || !this.eligible(enemy)) {
       this.assignments.delete(enemy); this.free.push(slot);
     }
+    live.clear();
     for (const enemy of enemies) {
       if (!this.eligible(enemy)) continue;
-      const meshId = meshIdOf(enemy);
+      const asset = getPipelineAssetForTexture(enemy.getImageKey()), meshId = asset?.id ?? enemy.kind;
       const mesh = this.assets.ready.get(meshId); if (!mesh || this.prepared.get(meshId) !== mesh.asset.poses.length) continue;
       // A mesh belongs to the sheet revision it was baked from; a newer sheet (draft) keeps the ellipse.
-      if (getPipelineAssetForTexture(enemy.getImageKey())?.revision !== mesh.asset.revision) continue;
+      if (asset?.revision !== mesh.asset.revision) continue;
       const s = enemy.sprite, pose = enemyMeshPose(s.frame.name, mesh); if (pose < 0) continue;
       enemyMeshMatrix(s, mesh.asset.coordinates.canvasWorldPx, this.matrix, enemy.getHopLiftScale());
       enemyShadowBounds(mesh, this.matrix, this.sun, this.tileSize, this.bounds);
@@ -200,17 +206,23 @@ export class EnemyMeshShadowRenderer {
   private writeInstance(mesh: EnemyMeshData, pose: number, slot: number, alpha: number): void {
     const group = this.groups.get(`${mesh.asset.id}:${pose}`)!, m = this.matrix, b = this.bounds;
     const tx = slot % COLUMNS, ty = Math.floor(slot / COLUMNS), offset = group.count++ * MASK_WORDS;
-    group.data.set([m[0], m[1], m[4], m[5], m[12], m[13], m[10], ...b, tx, ty], offset);
+    const data = group.data, display = this.displayData;
+    data[offset] = m[0]; data[offset + 1] = m[1]; data[offset + 2] = m[4]; data[offset + 3] = m[5];
+    data[offset + 4] = m[12]; data[offset + 5] = m[13]; data[offset + 6] = m[10];
+    data[offset + 7] = b[0]; data[offset + 8] = b[1]; data[offset + 9] = b[2]; data[offset + 10] = b[3];
+    data[offset + 11] = tx; data[offset + 12] = ty;
     const d = this.count++ * DISPLAY_WORDS;
     // Same world-space penumbra as the player, independent of tile size or projected bounds.
     const softness = meshShadowSoftness(m[10], this.sun[2]);
-    this.displayData.set([...b, tx, ty, alpha, softness], d);
+    display[d] = b[0]; display[d + 1] = b[1]; display[d + 2] = b[2]; display[d + 3] = b[3];
+    display[d + 4] = tx; display[d + 5] = ty; display[d + 6] = alpha; display[d + 7] = softness;
     // A pooled tile may switch from a quadruped to a biped; clear unused contacts.
-    this.displayData.fill(0, d + 8, d + 24);
-    for (const [i, foot] of mesh.asset.contacts[pose].feet.entries()) {
-      const p = foot.position;
-      this.displayData.set([m[0] * p[0] + m[4] * p[1] + m[12], m[1] * p[0] + m[5] * p[1] + m[13],
-        2.5 * m[10], foot.groundWeight], d + 8 + i * 4);
+    display.fill(0, d + 8, d + 24);
+    const feet = mesh.asset.contacts[pose].feet;
+    for (let i = 0; i < feet.length; i++) {
+      const foot = feet[i], p = foot.position, f = d + 8 + i * 4;
+      display[f] = m[0] * p[0] + m[4] * p[1] + m[12]; display[f + 1] = m[1] * p[0] + m[5] * p[1] + m[13];
+      display[f + 2] = 2.5 * m[10]; display[f + 3] = foot.groundWeight;
     }
   }
   private drawComposite(context: Phaser.Renderer.WebGL.DrawingContext): void {

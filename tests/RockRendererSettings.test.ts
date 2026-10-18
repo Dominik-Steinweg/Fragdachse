@@ -7,9 +7,9 @@ import {
 } from '../src/arena/rocks/RockRendererSettings';
 
 describe('RockRendererSettings', () => {
-  it('defaults to spriteGpu with 512 px pages and keeps manual mode switching', () => {
+  it('defaults to spriteGpu with large pages and keeps manual mode switching', () => {
     expect(getRockRendererMode()).toBe('spriteGpu');
-    expect(getRockGpuPageSize()).toBe(512);
+    expect(getRockGpuPageSize()).toBe(2048);
 
     setRockRendererMode('classic');
     expect(getRockRendererMode()).toBe('classic');

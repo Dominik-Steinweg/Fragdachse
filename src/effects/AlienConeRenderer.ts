@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { VOID_PALETTE } from '../config';
 import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
+import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
@@ -103,6 +104,8 @@ export class AlienConeRenderer {
     const live = new Set<string>();
     const sunkNow = new Set<string>();
     for (const enemy of this.enemies()) {
+      // A full snapshot per enemy and frame dominated large hordes; only cone casters own this state.
+      if (!getCoopDefenseEnemyConfig(enemy.kind).energyCone) continue;
       const state = enemy.getNetSnapshot().energyCone;
       if (!state || !enemy.sprite.active) continue;
       live.add(enemy.id);

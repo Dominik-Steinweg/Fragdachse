@@ -16,6 +16,7 @@ import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turr
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG } from '../../powerups/PowerUpConfig';
 import { t } from '../../i18n';
 import { registerGraphicsObject } from '../../effects/EffectUtils';
+import { TurretRangePreviewVisual } from './TurretRangePreviewVisual';
 
 interface TunnelPreviewVisualState {
   keyBase: string;
@@ -43,7 +44,7 @@ export class PlacementPreviewRenderer {
   private readonly remoteTunnelPreviews = new Map<string, TunnelPreviewVisualState>();
 
   private readonly rangeGraphics:   Phaser.GameObjects.Graphics;
-  private readonly turretRangeGraphics: Phaser.GameObjects.Graphics;
+  private readonly turretRange: TurretRangePreviewVisual;
   private readonly invalidGraphics: Phaser.GameObjects.Graphics;
   private readonly remoteMissionPedestalPreviewGraphics: Phaser.GameObjects.Graphics;
   private readonly errorText:       Phaser.GameObjects.Text;
@@ -58,11 +59,10 @@ export class PlacementPreviewRenderer {
     private readonly ctx: ArenaContext,
   ) {
     this.rangeGraphics   = scene.add.graphics().setDepth(DEPTH.OVERLAY - 2);
-    this.turretRangeGraphics = scene.add.graphics().setDepth(DEPTH.ROCKS - 0.2);
+    this.turretRange = new TurretRangePreviewVisual(scene, DEPTH.ROCKS - 0.2);
     this.invalidGraphics = scene.add.graphics().setDepth(DEPTH.OVERLAY - 1);
     this.remoteMissionPedestalPreviewGraphics = scene.add.graphics().setDepth(DEPTH.OVERLAY - 3);
     registerGraphicsObject(scene, 'placementPreview', this.rangeGraphics);
-    registerGraphicsObject(scene, 'placementPreview', this.turretRangeGraphics);
     registerGraphicsObject(scene, 'placementPreview', this.invalidGraphics);
     registerGraphicsObject(scene, 'placementPreview', this.remoteMissionPedestalPreviewGraphics);
     this.localTunnelPreview = this.createTunnelPreviewState('local');
@@ -88,7 +88,7 @@ export class PlacementPreviewRenderer {
 
   renderPlacementPreview(inArena: boolean, preview: LocalPlacementPreview | undefined, localPlayerAlive: boolean, localPlayerBurrowed: boolean): void {
     this.rangeGraphics.clear();
-    this.turretRangeGraphics.clear();
+    this.turretRange.hide();
     this.invalidGraphics.clear();
     this.localTunnelPreview.line.clear();
 
@@ -212,35 +212,9 @@ export class PlacementPreviewRenderer {
   private drawTurretRange(preview: UtilityPlacementPreviewState, ownerColor: number): void {
     const radius = preview.targetRange;
     if (radius === undefined || !Number.isFinite(radius) || radius <= 0) return;
-    const graphics = this.turretRangeGraphics;
-    const { targetX: x, targetY: y } = preview;
-    const color = preview.isValid ? ownerColor : COLORS.RED_2;
-    const opacity = preview.isValid ? 1 : 0.55;
     const breathe = 0.92 + Math.sin(this.scene.time.now / 700) * 0.08;
-    const diameter = radius * 2;
-
-    // A quiet coverage wash and soft edge keep terrain and combat silhouettes readable.
-    graphics.fillStyle(color, 0.035 * opacity);
-    graphics.fillEllipse(x, y, diameter, diameter, 160);
-    for (const [width, alpha] of [[10, 0.035], [6, 0.07], [3, 0.16]] as const) {
-      graphics.lineStyle(width, color, alpha * opacity * breathe);
-      graphics.strokeEllipse(x, y, diameter - width, diameter - width, 160);
-    }
-    graphics.lineStyle(1.5, color, 0.8 * opacity);
-    graphics.strokeEllipse(x, y, diameter, diameter, 160);
-
-    // Inward ticks and four pale cardinal accents give the footprint a surveyed, precise edge.
-    for (let index = 0; index < 48; index++) {
-      const angle = index * Math.PI * 2 / 48;
-      const cardinal = index % 12 === 0;
-      const length = Math.min(radius * 0.12, cardinal ? 12 : 4);
-      const nx = Math.cos(angle);
-      const ny = Math.sin(angle);
-      graphics.lineStyle(cardinal ? 2 : 1, cardinal ? 0xe5f8ff : color,
-        (cardinal ? 0.85 : 0.35) * opacity);
-      graphics.lineBetween(x + nx * (radius - length), y + ny * (radius - length),
-        x + nx * radius, y + ny * radius);
-    }
+    this.turretRange.show(preview.targetX, preview.targetY, radius,
+      preview.isValid ? ownerColor : COLORS.RED_2, preview.isValid, breathe);
   }
 
   /** Eckenrahmen um die anvisierte Zelle: gruen = eigenes Konstrukt, rot = nichts abbaubar. */
@@ -428,7 +402,7 @@ export class PlacementPreviewRenderer {
 
   clearForTeardown(): void {
     this.rangeGraphics.clear();
-    this.turretRangeGraphics.clear();
+    this.turretRange.hide();
     this.invalidGraphics.clear();
     this.remoteMissionPedestalPreviewGraphics.clear();
     this.localPlacementPreviewImage?.setVisible(false);

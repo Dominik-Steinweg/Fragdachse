@@ -750,12 +750,13 @@ export class TurretSystem {
       if (candidate.isValid?.() === false) return false;
       const distance = Phaser.Math.Distance.Between(turretX, turretY, candidate.x, candidate.y);
       if (distance > range) return false;
-      if (exit ? !this.hasExitLineOfFire(exit.deploymentId, turretX, turretY, candidate.x, candidate.y)
-        : !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return false;
       const score = this.targetScore?.(turret, kind, id, now) ?? 0;
       const key = kind + ':' + id;
       if (priority > bestPriority || (priority === bestPriority && (score < bestScore
         || (score === bestScore && (distance > bestDistance || (distance === bestDistance && key >= bestKey)))))) return false;
+      // Only a candidate that would win pays for the sight-line raycast; the selection is unchanged.
+      if (exit ? !this.hasExitLineOfFire(exit.deploymentId, turretX, turretY, candidate.x, candidate.y)
+        : !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return false;
       bestPriority = priority;
       bestScore = score;
       bestKey = key;
@@ -780,8 +781,12 @@ export class TurretSystem {
       );
     }
 
+    const rangeSq = range * range;
     if (turret.targetMode !== 'players') for (const enemy of this.enemyTargetProvider?.() ?? []) {
       if (excluded && enemy.x === excluded.x && enemy.y === excluded.y) continue;
+      // Cheap range rejection before the combat queries; `consider` keeps the exact check.
+      const dx = enemy.x - turretX, dy = enemy.y - turretY;
+      if (dx * dx + dy * dy > rangeSq * 1.0001 + 1) continue;
       if (!this.combatSystem.isAlive(enemy.id)) continue;
       if (!this.combatSystem.canDamageTarget(turret.ownerId, enemy.id)) continue;
 

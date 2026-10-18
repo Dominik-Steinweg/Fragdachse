@@ -115,8 +115,12 @@ describe('R0 observed depth contract (diagnostics, never rendering inputs)', () 
     const ground = CPU_LAYER_CONTRACTS.find(c => c.owner === 'effects/StinkCloudSystem.ts' && c.component.includes('groundGlow'))!;
     expect(ground.height).toBe('ground'); expect(ground.depths.every(depth => depth < 9.92)).toBe(true);
     expect(DEPTH_LAYER_EXCEPTIONS.some(e => e.id === ground.id)).toBe(false);
-    // Explicitly deferred: stain ordering and composite/canopy ties remain debt.
-    for (const finding of ['D04', 'D07', 'D08']) expect(DEPTH_LAYER_EXCEPTIONS.some(e => e.finding === finding)).toBe(true);
+    // Blood stains own a ground band beneath figures and their shadows; stain ordering (D04) is resolved.
+    const stain = CPU_LAYER_CONTRACTS.find(c => c.owner === 'effects/EffectSystem.ts' && c.component === 'spawnBloodStain/depth/depth/0')!;
+    expect(stain.height).toBe('ground'); expect(stain.depths.every(depth => depth < 9.9)).toBe(true);
+    expect(DEPTH_LAYER_EXCEPTIONS.some(e => e.finding === 'D04' || e.id === stain.id)).toBe(false);
+    // Explicitly deferred: composite/canopy ties remain debt.
+    for (const finding of ['D07', 'D08']) expect(DEPTH_LAYER_EXCEPTIONS.some(e => e.finding === finding)).toBe(true);
   });
 
 });

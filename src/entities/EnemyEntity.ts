@@ -64,6 +64,10 @@ import {
 } from '../animations/BadgerAnimations';
 
 const TEX_ENEMY_GLOW = '_enemy_glow';
+/** Halo-Atmen: volle Periode (früher 900 ms Yoyo), Größen- und Dimmhub. */
+const GLOW_BREATH_PERIOD_MS = 1800;
+const GLOW_BREATH_SCALE = 0.12;
+const GLOW_BREATH_DIM = 0.28;
 /**
  * Restabstand der Client-Interpolation, ab dem ein Gegner als laufend gilt. Clients erhalten
  * keine Bewegungsflagge; der offene Weg zur Zielposition ist ihr einziges Bewegungssignal. Bei
@@ -154,6 +158,7 @@ export class EnemyEntity {
   private healthBars: WorldHealthBarRenderer | null = null;
   private healthBar: HealthBarHandle | null = null;
   private glowHalo: Phaser.GameObjects.Image | null = null;
+  private glowBreathOrigin = 0;
   private voidMolotovWindupRing: Phaser.GameObjects.Arc | null = null;
   private maxHp = 1;
   private currentHp = 0;
@@ -1060,28 +1065,23 @@ export class EnemyEntity {
   }
 
   getNetSnapshot(): SyncedEnemyState {
-    return {
+    // Conditional assignment instead of object spreads: built per enemy and net tick, and read
+    // per frame by a few presentation owners.
+    const snapshot: { -readonly [K in keyof SyncedEnemyState]: SyncedEnemyState[K] } = {
       claw: this.clawState,
-      ...(this.shieldCharge.revision > 0 ? { shieldCharge: this.shieldCharge } : {}),
-      ...(this.hopState.revision > 0 ? { hop: this.hopState } : {}),
-      ...(this.kaboomtulaState.revision > 0 ? { kaboomtula: this.kaboomtulaState } : {}),
-      ...(this.energyCone.revision > 0 ? { energyCone: this.energyCone } : {}),
       positionRevision: this.movementRevision,
       id: this.id,
       kind: this.kind,
-      ...(this.eliteAffixId ? { eliteAffixId: this.eliteAffixId } : {}),
       x: this.sprite.x,
       y: this.sprite.y,
       rot: this.currentAimAngle,
       hp: this.currentHp,
       maxHp: this.getMaxHp(),
       burnStacks: Math.min(this.burnStacks, MAX_VISUAL_BURN_STACKS),
-      ...(this.areaClaw.revision > 0 ? { areaClaw: this.areaClaw } : {}),
       burnVisualStyle: this.burnVisualStyle,
       plasmaChargeStacks: this.plasmaChargeStacks > 0 ? this.plasmaChargeStacks : undefined,
       faction: this.faction,
       burrowed: this.burrowed,
-      ...(this.submerged ? { submerged: true } : {}),
       dashPhase: this.dashPhase,
       specialAction: this.specialAction,
       specialActionEndsAt: this.specialActionEndsAt,
@@ -1090,6 +1090,14 @@ export class EnemyEntity {
       ownerId: this.ownerId,
       ownerColor: this.ownerColor,
     };
+    if (this.shieldCharge.revision > 0) snapshot.shieldCharge = this.shieldCharge;
+    if (this.hopState.revision > 0) snapshot.hop = this.hopState;
+    if (this.kaboomtulaState.revision > 0) snapshot.kaboomtula = this.kaboomtulaState;
+    if (this.energyCone.revision > 0) snapshot.energyCone = this.energyCone;
+    if (this.eliteAffixId) snapshot.eliteAffixId = this.eliteAffixId;
+    if (this.areaClaw.revision > 0) snapshot.areaClaw = this.areaClaw;
+    if (this.submerged) snapshot.submerged = true;
+    return snapshot;
   }
 
   destroy(): void {
@@ -1168,20 +1176,15 @@ export class EnemyEntity {
     this.glowHalo.setTint(glow.color);
     this.glowHalo.setAlpha(emissiveAlpha(glow.alpha));
 
-    // Die Kabummtula wird phasengebunden pro Frame gepulst; ein paralleler Endlos-Tween wuerde
-    // das Anschwellen beim Drohen und das hektische Pulsieren im Sturmlauf ueberschreiben.
-    if (this.config.kaboomtula) return;
-    // Leichtes Atmen, damit der Halo nicht als aufgeklebte Scheibe liest.
-    scene.tweens.add({
-      targets:  this.glowHalo,
-      scaleX:   this.glowHalo.scaleX * 1.12,
-      scaleY:   this.glowHalo.scaleY * 1.12,
-      alpha:    emissiveAlpha(glow.alpha * 0.72),
-      duration: 900,
-      yoyo:     true,
-      repeat:   -1,
-      ease:     'Sine.easeInOut',
-    });
+    // Leichtes Atmen (siehe syncGlow), damit der Halo nicht als aufgeklebte Scheibe liest. Es wird
+    // pro Frame aus der Uhr berechnet: ein Endlos-Tween je Gegner kostete bei Horden spürbar CPU.
+    this.glowBreathOrigin = scene.time.now;
+  }
+
+  /** 0..1..0 über GLOW_BREATH_PERIOD_MS, wie der frühere Sine.easeInOut-Yoyo-Tween. */
+  private glowBreath(): number {
+    const elapsed = (this.sprite.scene?.time.now ?? 0) - this.glowBreathOrigin;
+    return 0.5 - 0.5 * Math.cos(elapsed / GLOW_BREATH_PERIOD_MS * Math.PI * 2);
   }
 
   /** Folgt dem Sprite und meldet die zugehörige Lichtquelle für dieses Frame an. */
@@ -1193,15 +1196,15 @@ export class EnemyEntity {
 
     const visible = !this.burrowed && this.currentHp > 0;
     const spider = this.config.kaboomtula ? this.kaboomtulaGlow(glow.alpha) : null;
+    // Die Kabummtula wird phasengebunden gepulst; das Atmen würde Drohen und Sturmlauf überlagern.
+    const breath = spider || phaseTwo ? 0 : this.glowBreath();
     const sizeMultiplier = spider?.size ?? 1;
+    const haloSize = this.config.size * glow.sizeFactor * sizeMultiplier * (1 + GLOW_BREATH_SCALE * breath);
     this.glowHalo?.setVisible(visible);
     this.glowHalo?.setPosition(this.sprite.x, this.sprite.y);
-    this.glowHalo?.setDisplaySize(
-      this.config.size * glow.sizeFactor * sizeMultiplier,
-      this.config.size * glow.sizeFactor * sizeMultiplier,
-    );
+    this.glowHalo?.setDisplaySize(haloSize, haloSize);
     this.glowHalo?.setTint(glow.color);
-    if (phaseTwo || spider) this.glowHalo?.setAlpha(emissiveAlpha(spider?.alpha ?? glow.alpha));
+    this.glowHalo?.setAlpha(emissiveAlpha(spider?.alpha ?? glow.alpha * (1 - GLOW_BREATH_DIM * breath)));
     if (spider) this.syncKaboomtulaAura(glow.color, spider.aura, visible && this.sprite.visible);
 
     if (!this.lighting) return;

@@ -63,6 +63,8 @@ export class CoopDefensePlayerModifierSystem {
   private readonly committedProfiles = new Map<string, CoopDefenseUpgradeProfile>();
   private readonly runtimeModifiers = new Map<string, CoopDefensePlayerRuntimeModifiers>();
   private readonly sourceSignatures = new Map<string, string>();
+  /** The bridge caches committed snapshots by identity; an unchanged object needs no serialization. */
+  private readonly sourceSnapshots = new Map<string, object | null>();
 
   syncPlayers(entries: Iterable<readonly [string, Pick<LoadoutCommitSnapshot, 'coopDefenseClassId' | 'coopDefenseProfile' | 'equippedItems'> | null]>): readonly string[] {
     const nextPlayerIds = new Set<string>();
@@ -82,6 +84,7 @@ export class CoopDefensePlayerModifierSystem {
     for (const playerId of [...this.sourceSignatures.keys()]) {
       if (!nextPlayerIds.has(playerId)) {
         this.sourceSignatures.delete(playerId);
+        this.sourceSnapshots.delete(playerId);
         changedPlayerIds.add(playerId);
       }
     }
@@ -92,6 +95,8 @@ export class CoopDefensePlayerModifierSystem {
     playerId: string,
     snapshot: Pick<LoadoutCommitSnapshot, 'coopDefenseClassId' | 'coopDefenseProfile' | 'equippedItems'> | null,
   ): boolean {
+    if (snapshot && this.sourceSnapshots.get(playerId) === snapshot && this.sourceSignatures.has(playerId)) return false;
+    this.sourceSnapshots.set(playerId, snapshot);
     const signature = JSON.stringify(snapshot ?? null);
     const changed = this.sourceSignatures.get(playerId) !== signature;
     this.sourceSignatures.set(playerId, signature);
@@ -118,6 +123,11 @@ export class CoopDefensePlayerModifierSystem {
     }
     this.runtimeModifiers.set(playerId, this.resolveRuntimeModifiers(profile, classId, items));
     return changed;
+  }
+
+  /** Committed level without cloning the profile; per-frame owners read only this. */
+  getCommittedUpgradeLevel(playerId: string, upgradeId: string): number {
+    return this.committedProfiles.get(playerId)?.upgrades[upgradeId]?.level ?? 0;
   }
 
   getCommittedProfile(playerId: string): CoopDefenseUpgradeProfile | null {

@@ -152,6 +152,20 @@ describe('light bleed lifecycle', () => {
     expect(lightMap()).toMatchObject({ displayWidth: base.width, displayHeight: base.height });
   });
 
+  it('keeps its lightmap while a following camera scrolls by fractional pixels at base zoom', () => {
+    const { scene, lighting, targets } = fixture();
+    const camera = scene.cameras.main as Record<string, number>;
+    Object.assign(camera, { width: 1920, height: 1080, originX: 0.5, originY: 0.5, zoom: 1, zoomX: 1, zoomY: 1 });
+    lighting.update();
+    const count = targets.length;
+    // Float sums of these scroll positions land a hair above the base extent.
+    for (let i = 0; i < 64; i++) {
+      Object.assign(camera, { scrollX: 1234.567 + i * 0.37, scrollY: 987.123 + i * 0.29 });
+      lighting.update();
+    }
+    expect(targets).toHaveLength(count);
+  });
+
   it('rebuilds restored explosion caches before reusing them at unchanged simulation time', () => {
     const { lighting, targets, renderer } = fixture();
     lighting.setOccluderIndex(new LightOccluderIndex({

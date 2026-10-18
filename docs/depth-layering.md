@@ -58,10 +58,10 @@ Die Allowlist beschreibt bekannte Abweichungen; der aktuelle Umfang folgt aus
 
 | ID | Befund aus Kapitel 7 | Einträge |
 |---|---|---:|
-| D01 | nach P1 nur noch Bodenstain-Zuordnung (nachgelagert) | 1 |
+| D01 | durch P1 und die Bodentiefe der Blutflecken behoben | 0 |
 | D02 | gewöhnliche Explosionskörper/-rauch über Kronen | 32 |
 | D03 | Boden-/Körpermotiv im Vordergrund | 74 |
-| D04 | Blutstain auf Gegnerdepth | 1 |
+| D04 | Blutstain auf Gegnerdepth: behoben, Flecken liegen bei 9,84 unter Figuren, Schatten und Klauen-Telegraphen | 0 |
 | D05 | Stink-Bodenanteil: durch P1 behoben | 0 |
 | D06 | Material-/Projektilfamilie außerhalb Sonnenpass | 103 |
 | D07 | Gleichstand Sonnenpass 14,5 | 1 |
@@ -139,7 +139,7 @@ GPU-Layer sowie deren reservierte Memberpuffer. Die alten Großeffektbudgets ble
 klassifiziert, auch mit NORMAL-Blend. R0 zählt verbleibende Abweichungen weiterhin für sämtliche
 Legacy-Varianten. P1 ist deshalb kein pauschales Schließen aller Einträge der Befundfamilie D02.
 
-**Nachgelagert, ausdrücklich unverändert:** Blutstain 9,95 (D04 und verbleibender D01-Eintrag),
+**Nachgelagert, ausdrücklich unverändert:**
 sonstige Boden-/Nahkampf-/Portalvordergründe (D03), Projektile (D06), Gleichstände 14,5/20 (D07/D08),
 Gefahren-Kronenöffnung (D09), allgemeine Emissionsbalance (D10), Welt-UI (D11), Schattenempfänger
 (D12), Lichtantwort hoher/spezieller Effekte (D13/D14). `DEPTH_FX`, Sonnen-/Lightmap-Pässe,
