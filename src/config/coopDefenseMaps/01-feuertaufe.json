@@ -3,6 +3,14 @@
   "persistentBaseRewardsOnVictory": ["base_rage_pedestal"],
   "arenaWidthCells": 260,
   "arenaHeightCells": 33,
+  "spawnZones": [
+    { "id": "cp1-first-contact", "gridX": 47, "gridY": 14, "widthCells": 18, "heightCells": 12, "keepClear": false },
+    { "id": "cp4-pressure-a", "gridX": 132, "gridY": 8, "widthCells": 20, "heightCells": 16, "keepClear": false },
+    { "id": "cp4-pressure-b", "gridX": 132, "gridY": 5, "widthCells": 20, "heightCells": 24, "keepClear": false },
+    { "id": "cp5-wave-1", "gridX": 192, "gridY": 10, "widthCells": 25, "heightCells": 9, "keepClear": false },
+    { "id": "cp5-wave-2-a", "gridX": 172, "gridY": 10, "widthCells": 25, "heightCells": 9, "keepClear": false },
+    { "id": "cp5-wave-2-b", "gridX": 172, "gridY": 14, "widthCells": 25, "heightCells": 9, "keepClear": false }
+  ],
   "timeOfDay": "08:00",
   "voidFlora": { "level": 0.03 },
   "tutorialShowControls": true,
@@ -1747,7 +1755,7 @@
           "enemyKind": "zombie-badger",
           "count": 4,
           "spawnStaggerMs": 1600,
-          "spawnArea": {"gridX": 47, "gridY": 14, "widthCells": 18, "heightCells": 12}
+          "spawnZoneId": "cp1-first-contact"
         }
       ]
     },
@@ -1759,14 +1767,14 @@
           "enemyKind": "zombie-badger",
           "count": 3,
           "spawnStaggerMs": 1600,
-          "spawnArea": {"gridX": 132, "gridY": 8, "widthCells": 20, "heightCells": 16}
+          "spawnZoneId": "cp4-pressure-a"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 24,
           "delayMs": 4500,
           "spawnStaggerMs": 2600,
-          "spawnArea": {"gridX": 132, "gridY": 5, "widthCells": 20, "heightCells": 24}
+          "spawnZoneId": "cp4-pressure-b"
         }
       ]
     },
@@ -1778,7 +1786,7 @@
           "enemyKind": "zombie-badger",
           "count": 6,
           "spawnStaggerMs": 1800,
-          "spawnArea": {"gridX": 192, "gridY": 10, "widthCells": 25, "heightCells": 9}
+          "spawnZoneId": "cp5-wave-1"
         }
       ]
     },
@@ -1791,14 +1799,14 @@
           "count": 8,
           "delayMs": 500,
           "spawnStaggerMs": 1800,
-          "spawnArea": {"gridX": 172, "gridY": 10, "widthCells": 25, "heightCells": 9}
+          "spawnZoneId": "cp5-wave-2-a"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 4,
           "delayMs": 1500,
           "spawnStaggerMs": 1800,
-          "spawnArea": {"gridX": 172, "gridY": 14, "widthCells": 25, "heightCells": 9}
+          "spawnZoneId": "cp5-wave-2-b"
         }
       ]
     }

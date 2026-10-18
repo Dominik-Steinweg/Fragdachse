@@ -98,6 +98,13 @@
   ],
   "arenaWidthCells": 400,
   "arenaHeightCells": 80,
+  "spawnZones": [
+    { "id": "alien-cone-gate-1", "gridX": 30, "gridY": 46, "widthCells": 4, "heightCells": 4, "keepClear": false },
+    { "id": "plague-toad-gate-1-a", "gridX": 34, "gridY": 40, "widthCells": 4, "heightCells": 4, "keepClear": false },
+    { "id": "plague-toad-gate-1-b", "gridX": 30, "gridY": 46, "widthCells": 2, "heightCells": 2, "keepClear": false },
+    { "id": "firestarter-gate-1", "gridX": 40, "gridY": 30, "widthCells": 4, "heightCells": 6, "keepClear": false },
+    { "id": "mortar-gate-1", "gridX": 34, "gridY": 30, "widthCells": 4, "heightCells": 6, "keepClear": false }
+  ],
   "timeOfDay": "12:00",
   "dynamicTimeOfDay": {
     "minutesPerSecond": 24
@@ -428,41 +435,41 @@
       "id": "alien-cone-gate-1",
       "start": { "type": "time", "atMs": 12000 },
       "groups": [{ "enemyKind": "alien-badger", "count": 1,
-        "spawnArea": { "gridX": 30, "gridY": 46, "widthCells": 4, "heightCells": 4 } }]
+        "spawnZoneId": "alien-cone-gate-1" }]
     },
     {
       "id": "shield-charger-gate-1",
       "start": { "type": "time", "atMs": 9000 },
       "groups": [{ "enemyKind": "shield-charger-badger", "count": 1,
-        "spawnArea": { "gridX": 30, "gridY": 46, "widthCells": 4, "heightCells": 4 } }]
+        "spawnZoneId": "alien-cone-gate-1" }]
     },
     {
       "id": "kaboomtula-gate-1",
       "start": { "type": "time", "atMs": 14000 },
       "groups": [{ "enemyKind": "kaboomtula", "count": 3, "spawnStaggerMs": 2500,
-        "spawnArea": { "gridX": 30, "gridY": 46, "widthCells": 4, "heightCells": 4 } }]
+        "spawnZoneId": "alien-cone-gate-1" }]
     },
     {
       "id": "plague-toad-gate-1",
       "start": { "type": "time", "atMs": 8000 },
       "groups": [
         { "enemyKind": "zombie-badger", "count": 6, "spawnStaggerMs": 200,
-          "spawnArea": { "gridX": 34, "gridY": 40, "widthCells": 4, "heightCells": 4 } },
+          "spawnZoneId": "plague-toad-gate-1-a" },
         { "enemyKind": "plague-medic", "count": 1,
-          "spawnArea": { "gridX": 30, "gridY": 46, "widthCells": 2, "heightCells": 2 } }
+          "spawnZoneId": "plague-toad-gate-1-b" }
       ]
     },
     {
       "id": "firestarter-gate-1",
       "start": { "type": "time", "atMs": 6000 },
       "groups": [{ "enemyKind": "firestarter-badger", "count": 2, "spawnStaggerMs": 1000,
-        "spawnArea": { "gridX": 40, "gridY": 30, "widthCells": 4, "heightCells": 6 } }]
+        "spawnZoneId": "firestarter-gate-1" }]
     },
     {
       "id": "mortar-gate-1",
       "start": { "type": "time", "atMs": 3000 },
       "groups": [{ "enemyKind": "mortar-badger", "count": 2, "spawnStaggerMs": 1500,
-        "spawnArea": { "gridX": 34, "gridY": 30, "widthCells": 4, "heightCells": 6 } }]
+        "spawnZoneId": "mortar-gate-1" }]
     }
   ],
   "persistentSpawns": [],

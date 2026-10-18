@@ -4,6 +4,7 @@ import { normalizeFogStrength } from './groundFog';
 import { normalizeWorldMoonlight, normalizeWorldVoidFlora, type WorldMoonlightConfig, type WorldVoidFloraConfig } from './nightWorld';
 import { normalizeCoopDefenseWater } from './coopDefenseWater';
 import { normalizeKrakenHabitat, type KrakenHabitatConfig } from './krakenHabitat';
+import { normalizeWorldSpawnZones, spawnZoneArea, type WorldSpawnZone } from './spawnZones';
 import { turretAimConfig, validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import {
   getCoopDefenseEnemyConfig,
@@ -142,7 +143,9 @@ export interface CoopBaseConfig {
 
 export type CoopDefenseMapPersistentSpawnSource =
   | { readonly type: 'map' }
-  | { readonly type: 'base'; readonly baseId: string };
+  | { readonly type: 'base'; readonly baseId: string }
+  /** Feste World-Spawnzone; die Quelle erscheint in deren Bereich. */
+  | { readonly type: 'zone'; readonly zoneId: string };
 
 export interface CoopDefenseMapPersistentSpawnConfig {
   readonly id: string;
@@ -162,6 +165,8 @@ export interface ResolvedCoopDefenseMapPersistentSpawnConfig {
   readonly startAtMs: number;
   readonly source: CoopDefenseMapPersistentSpawnSource;
   readonly front?: SpawnFront;
+  /** Bereich einer Zonen-Quelle, aufgeloest aus der World-Spawnzone. */
+  readonly spawnArea?: CoopDefenseMapSpawnAreaConfig;
 }
 
 /**
@@ -192,7 +197,12 @@ export interface CoopDefenseMapEncounterGroupConfig {
   /** Maximales Zeitfenster fuer zufaellig versetzte Einzelspawns; Standard 1,5 Sekunden. */
   readonly spawnStaggerMs?: number;
   readonly front?: SpawnFront;
-  /** Ersetzt das Frontband durch einen authored Bereich; schliesst `front` aus. */
+  /** Feste World-Spawnzone; schliesst `front` aus. Standard fuer authored Karten. */
+  readonly spawnZoneId?: string;
+  /**
+   * Bereich statt Frontband; schliesst `front` aus. Fuer Zonengruppen leitet die Normalisierung ihn
+   * aus der Zone ab, authored wird er nur noch von generierten Activities (Dawn-Staetten).
+   */
   readonly spawnArea?: CoopDefenseMapSpawnAreaConfig;
 }
 
@@ -231,6 +241,7 @@ export interface ResolvedCoopDefenseMapEncounterGroupConfig {
   /** Effektives Einzelspawn-Fenster; fehlt nur bei Legacy-Aufrufern ausserhalb der Map-Aufloesung. */
   readonly spawnStaggerMs?: number;
   readonly front?: SpawnFront;
+  readonly spawnZoneId?: string;
   readonly spawnArea?: CoopDefenseMapSpawnAreaConfig;
 }
 
@@ -463,6 +474,8 @@ export interface CoopDefenseMapBossConfig {
   readonly intro?: { readonly preset: BossIntroPresetId };
   /** Boss (bzw. sein Intro) startet erst, wenn dieser Encounter geraeumt ist – zusaetzlich zu `spawnAtMs`. */
   readonly startAfterEncounterId?: string;
+  /** Feste World-Spawnzone des Bosses; ohne sie bleibt das westliche Randband. Nicht fuer den Kraken. */
+  readonly spawnZoneId?: string;
 }
 
 export type CoopDefenseTimeOfDayTransitionStart =
@@ -871,6 +884,8 @@ export interface CoopDefenseMapTreeGrovesConfig {
 
 export interface CoopDefenseMapConfig {
   readonly krakenHabitat?: KrakenHabitatConfig;
+  /** Feste, benannte Spawnorte der World; Encounter, Dauerquellen und Boss referenzieren sie per ID. */
+  readonly spawnZones?: readonly WorldSpawnZone[];
   readonly water?: readonly import('../types').WaterCell[];
   readonly mapId: string;
   /**
@@ -1106,8 +1121,23 @@ export function resolveCoopDefenseMapPersistentSpawnConfigs(
       ...(spawnConfig.source.type === 'map'
         ? { front: normalizeSpawnFront(mapConfig.mapId, spawnConfig.id, spawnConfig.front) }
         : {}),
+      ...(spawnConfig.source.type === 'zone'
+        ? { spawnArea: resolveZoneArea(mapConfig, spawnConfig.source.zoneId) }
+        : {}),
     };
   });
+}
+
+function resolveZoneArea(mapConfig: CoopDefenseMapConfig, zoneId: string): CoopDefenseMapSpawnAreaConfig {
+  const zone = mapConfig.spawnZones?.find(({ id }) => id === zoneId);
+  if (!zone) throw new Error(`[coopDefenseMaps] Map ${mapConfig.mapId} references unknown spawn zone ${zoneId}`);
+  return spawnZoneArea(zone);
+}
+
+/** Bereich der Boss-Spawnzone, falls die Karte eine authored; sonst null (westliches Randband). */
+export function resolveCoopDefenseMapBossSpawnArea(mapConfig: CoopDefenseMapConfig): CoopDefenseMapSpawnAreaConfig | null {
+  const zoneId = mapConfig.boss?.spawnZoneId;
+  return zoneId ? resolveZoneArea(mapConfig, zoneId) : null;
 }
 
 /** Loest Encounter-Gruppenzahlen ueber denselben zentralen Enemy-Spawn-Resolver auf. */
@@ -1132,6 +1162,7 @@ export function resolveCoopDefenseMapEncounterConfigs(
         delayMs: Math.max(0, Math.floor(group.delayMs ?? 0)),
         spawnStaggerMs: group.spawnStaggerMs ?? DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
         front: group.front ?? DEFAULT_SPAWN_FRONT,
+        ...(group.spawnZoneId ? { spawnZoneId: group.spawnZoneId } : {}),
         ...(group.spawnArea ? { spawnArea: { ...group.spawnArea } } : {}),
       };
     }),
@@ -1284,12 +1315,16 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
   );
   const siteClearings = normalizeSiteClearings(mapConfig.mapId, mapConfig.siteClearings, arenaWidthCells, arenaHeightCells);
   const siteIds = new Set((siteClearings ?? []).map(({ id }) => id));
+  const spawnZones = normalizeWorldSpawnZones(`coopDefenseMaps ${mapConfig.mapId}`, mapConfig.spawnZones,
+    arenaWidthCells, arenaHeightCells);
+  const zonesById = new Map((spawnZones ?? []).map((zone) => [zone.id, zone]));
   const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, {
     bases,
     boss,
     arenaWidthCells,
     arenaHeightCells,
     siteIds,
+    spawnZones: zonesById,
   });
   const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'none' ? 'none' : mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
   const trackPosition = normalizeTrackPosition(
@@ -1370,6 +1405,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
   });
   if (boss?.habitatId && boss.habitatId !== krakenHabitat?.id) throw new Error('[coopDefenseMaps] Unknown boss habitat');
   validateWaterSpawnAreas(mapConfig.mapId, encounters, water);
+  const normalizedPersistentSpawns = normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases, zonesById);
+  validateSpawnZoneUse(mapConfig.mapId, spawnZones, encounters, normalizedPersistentSpawns, boss, water);
   const tutorialSteps = normalizeTutorialSteps(
     mapConfig.mapId,
     mapConfig.tutorialSteps,
@@ -1415,7 +1452,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     balanceReferenceDurationSec,
     bases,
     powerUps: mapConfig.powerUps.map((powerUpConfig) => normalizePowerUpConfig(mapConfig.mapId, powerUpConfig, arenaWidthCells, arenaHeightCells)),
-    persistentSpawns: normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases),
+    ...(spawnZones === undefined ? {} : { spawnZones }),
+    persistentSpawns: normalizedPersistentSpawns,
     encounters,
     secondaryObjectives,
     persistentBaseRewardsOnVictory,
@@ -2494,6 +2532,8 @@ interface EncounterTriggerNormalizationContext {
   readonly checkpointIds?: ReadonlySet<string>;
   /** Bekannte Salvage-Sites (aus `siteClearings`) fuer `site-activated`. */
   readonly siteIds?: ReadonlySet<string>;
+  /** Feste World-Spawnzonen der Karte. */
+  readonly spawnZones?: ReadonlyMap<string, WorldSpawnZone>;
 }
 
 function normalizeEncounterStart(
@@ -2625,6 +2665,24 @@ function normalizeEncounterGroup(
     );
   }
 
+  const common = {
+    enemyKind: group.enemyKind,
+    count: Math.floor(group.count),
+    delayMs: normalizeNonNegativeMilliseconds(group.delayMs),
+    spawnStaggerMs: normalizeNonNegativeMilliseconds(
+      group.spawnStaggerMs ?? DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
+    ),
+  };
+  if (group.spawnZoneId !== undefined) {
+    // A zone group has no front of its own; its area is derived from the World zone on every pass,
+    // so normalizing an already normalized config stays stable.
+    if (group.front !== undefined) {
+      throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} must not combine front and spawnZoneId`);
+    }
+    const zone = context.spawnZones?.get(group.spawnZoneId);
+    if (!zone) throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} references unknown spawn zone ${group.spawnZoneId}`);
+    return { ...common, spawnZoneId: zone.id, spawnArea: spawnZoneArea(zone) };
+  }
   if (group.spawnArea !== undefined && group.front !== undefined) {
     throw new Error(
       `[coopDefenseMaps] Encounter ${mapId}:${encounterId} must not combine front and spawnArea`,
@@ -2633,12 +2691,7 @@ function normalizeEncounterGroup(
   const spawnArea = normalizeSpawnArea(mapId, encounterId, group.spawnArea, context);
 
   return {
-    enemyKind: group.enemyKind,
-    count: Math.floor(group.count),
-    delayMs: normalizeNonNegativeMilliseconds(group.delayMs),
-    spawnStaggerMs: normalizeNonNegativeMilliseconds(
-      group.spawnStaggerMs ?? DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
-    ),
+    ...common,
     front: normalizeSpawnFront(mapId, encounterId, group.front),
     ...(spawnArea ? { spawnArea } : {}),
   };
@@ -2691,6 +2744,42 @@ function validateWaterSpawnAreas(mapId: string, encounters: readonly CoopDefense
       for (let x = area.gridX; x < area.gridX + area.widthCells && !found; x++) found = wet.has(`${x},${y}`);
     }
     if (!found) throw new Error(`[coopDefenseMaps] ${mapId}:${encounter.id} has a water spawnArea without water`);
+  }
+}
+
+/**
+ * Spawn zones are places enemies come from: every zone is used by a group, a persistent source or
+ * the boss; a water zone holds water; the boss never spawns from water and the kraken keeps its
+ * habitat instead of a zone.
+ */
+function validateSpawnZoneUse(
+  mapId: string,
+  zones: readonly WorldSpawnZone[] | undefined,
+  encounters: readonly ResolvedCoopDefenseMapEncounterConfig[] | undefined,
+  persistentSpawns: readonly CoopDefenseMapPersistentSpawnConfig[],
+  boss: CoopDefenseMapBossConfig | undefined,
+  water: readonly { gridX: number; gridY: number }[] | undefined,
+): void {
+  const byId = new Map((zones ?? []).map((zone) => [zone.id, zone]));
+  if (boss?.spawnZoneId !== undefined) {
+    const zone = byId.get(boss.spawnZoneId);
+    if (!zone) throw new Error(`[coopDefenseMaps] Boss on map ${mapId} references unknown spawn zone ${boss.spawnZoneId}`);
+    if (boss.habitatId !== undefined) throw new Error(`[coopDefenseMaps] Habitat boss on map ${mapId} must not use a spawn zone`);
+    if (zone.medium === 'water') throw new Error(`[coopDefenseMaps] Boss on map ${mapId} cannot spawn from a water zone`);
+  }
+  const used = new Set<string>();
+  for (const encounter of encounters ?? []) for (const group of encounter.groups) if (group.spawnZoneId) used.add(group.spawnZoneId);
+  for (const source of persistentSpawns) if (source.source.type === 'zone') used.add(source.source.zoneId);
+  if (boss?.spawnZoneId) used.add(boss.spawnZoneId);
+  const wet = new Set((water ?? []).map((cell) => `${cell.gridX},${cell.gridY}`));
+  for (const zone of zones ?? []) {
+    if (!used.has(zone.id)) throw new Error(`[coopDefenseMaps] Spawn zone ${mapId}:${zone.id} is never used`);
+    if (zone.medium !== 'water') continue;
+    let found = false;
+    for (let y = zone.gridY; y < zone.gridY + zone.heightCells && !found; y++) {
+      for (let x = zone.gridX; x < zone.gridX + zone.widthCells && !found; x++) found = wet.has(`${x},${y}`);
+    }
+    if (!found) throw new Error(`[coopDefenseMaps] Water spawn zone ${mapId}:${zone.id} holds no water`);
   }
 }
 
@@ -4083,6 +4172,7 @@ function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBos
     ...(mapConfig.boss.habitatId ? { habitatId: mapConfig.boss.habitatId } : {}),
     ...(intro ? { intro: { preset: intro.preset } } : {}),
     ...(startAfterEncounterId ? { startAfterEncounterId } : {}),
+    ...(typeof mapConfig.boss.spawnZoneId === 'string' ? { spawnZoneId: mapConfig.boss.spawnZoneId } : {}),
   };
 }
 
@@ -4294,6 +4384,7 @@ function normalizePersistentSpawnConfigs(
   mapId: string,
   persistentSpawns: readonly CoopDefenseMapPersistentSpawnConfig[],
   bases: readonly CoopBaseConfig[],
+  spawnZones: ReadonlyMap<string, WorldSpawnZone> = new Map(),
 ): readonly CoopDefenseMapPersistentSpawnConfig[] {
   const uniqueIds = new Set<string>();
   return persistentSpawns.map((spawnConfig) => {
@@ -4317,9 +4408,13 @@ function normalizePersistentSpawnConfigs(
       throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${id} needs a positive countPerTick`);
     }
 
-    const source = normalizePersistentSpawnSource(mapId, id, spawnConfig.source, bases);
-    if (source.type === 'base' && spawnConfig.front !== undefined) {
-      throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${id} is structure-bound and cannot declare a front`);
+    const source = normalizePersistentSpawnSource(mapId, id, spawnConfig.source, bases, spawnZones);
+    if (source.type !== 'map' && spawnConfig.front !== undefined) {
+      throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${id} is bound to a place and cannot declare a front`);
+    }
+    if (source.type === 'zone' && spawnZones.get(source.zoneId)?.medium === 'water'
+      && !getCoopDefenseEnemyConfig(spawnConfig.enemyKind).amphibious) {
+      throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${id} spawns non-amphibious ${spawnConfig.enemyKind} from water`);
     }
     return {
       id,
@@ -4340,8 +4435,15 @@ function normalizePersistentSpawnSource(
   spawnId: string,
   source: CoopDefenseMapPersistentSpawnSource,
   bases: readonly CoopBaseConfig[],
+  spawnZones: ReadonlyMap<string, WorldSpawnZone>,
 ): CoopDefenseMapPersistentSpawnSource {
   if (source?.type === 'map') return { type: 'map' };
+  if (source?.type === 'zone') {
+    if (typeof source.zoneId !== 'string' || !spawnZones.has(source.zoneId)) {
+      throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${spawnId} references unknown spawn zone: ${String(source.zoneId)}`);
+    }
+    return { type: 'zone', zoneId: source.zoneId };
+  }
   if (source?.type !== 'base' || typeof source.baseId !== 'string' || source.baseId.trim().length === 0) {
     throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${spawnId} needs a map or base source`);
   }

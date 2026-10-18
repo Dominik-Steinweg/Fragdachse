@@ -2,6 +2,10 @@
   "mapId": "20",
   "arenaWidthCells": 92,
   "arenaHeightCells": 52,
+  "spawnZones": [
+    { "id": "abyss-opening", "gridX": 40, "gridY": 17, "widthCells": 7, "heightCells": 10, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "abyss-tide-3", "gridX": 24, "gridY": 17, "widthCells": 7, "heightCells": 10, "medium": "water", "cluster": true, "keepClear": false }
+  ],
   "timeOfDay": "18:30",
   "voidFlora": { "level": 0.5 },
   "tutorialAnchor": {
@@ -1964,14 +1968,7 @@
           "enemyKind": "mini-kraken",
           "count": 3,
           "delayMs": 900,
-          "spawnArea": {
-            "gridX": 40,
-            "gridY": 17,
-            "widthCells": 7,
-            "heightCells": 10,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "abyss-opening"
         }
       ]
     },
@@ -1991,14 +1988,7 @@
           "enemyKind": "mini-kraken",
           "count": 3,
           "delayMs": 1200,
-          "spawnArea": {
-            "gridX": 40,
-            "gridY": 17,
-            "widthCells": 7,
-            "heightCells": 10,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "abyss-opening"
         }
       ]
     },
@@ -2032,14 +2022,7 @@
         {
           "enemyKind": "mini-kraken",
           "count": 4,
-          "spawnArea": {
-            "gridX": 24,
-            "gridY": 17,
-            "widthCells": 7,
-            "heightCells": 10,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "abyss-tide-3"
         },
         {
           "enemyKind": "demon-badger",

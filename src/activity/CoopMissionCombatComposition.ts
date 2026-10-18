@@ -17,6 +17,7 @@ import type {
   ResolvedCoopDefenseMapPersistentSpawnConfig,
 } from '../config/coopDefenseMaps';
 import {
+  resolveCoopDefenseMapBossSpawnArea,
   resolveCoopDefenseMapEncounterConfigs,
   resolveCoopDefenseMapPersistentSpawnConfigs,
 } from '../config/coopDefenseMaps';
@@ -248,6 +249,7 @@ export class CoopMissionCombatComposition {
       navigation.player,
       navigation.strategic,
       runtime.kraken?.habitat,
+      resolveCoopDefenseMapBossSpawnArea(this.options.activity.mapConfig),
     );
     const persistentPressure = persistentSpawnConfigs.length > 0
       ? new CoopDefensePersistentPressureSystem(

@@ -6,7 +6,7 @@ import { getEnemyName } from '../../../../src/i18n/contentPresentation';
 import { DEFAULT_SPAWN_FRONT, SPAWN_FRONTS } from '../../../../src/utils/spawnFront';
 import { array, clone, object, uniqueId, type JsonObject, type Path } from '../../shared/json';
 import { validateDocument } from '../../shared/validation';
-import { FRONT_LABELS, setGroupSpawn, spawnsAtEdge } from '../../shared/spawns';
+import { FRONT_LABELS, listZones, setGroupSpawn, spawnsAtEdge, zoneMode } from '../../shared/spawns';
 import { persistentSpawnXp } from '../../shared/persistentSpawnXp';
 import { persistentSpawnEditor } from './PersistentSpawnEditor';
 import { button, confirmEdit, element, heading, numberField, selectField, type EditorEnvironment } from '../ui';
@@ -183,14 +183,15 @@ export class EncounterView {
     }), numberField(env, 'Menge', [...path, 'count'], { min: 1 }),
       numberField(env, 'Delay (s)', [...path, 'delayMs'], { fallback: 0, min: 0, scale: 1000, step: 0.001, optional: true }),
       numberField(env, 'Spawnfenster (s)', [...path, 'spawnStaggerMs'], { fallback: DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS, min: 0, scale: 1000, step: 0.001, optional: true }),
-      selectField('Front / Spawn-Area', group.spawnArea ? 'area' : String(group.front ?? DEFAULT_SPAWN_FRONT), [
-        { value: 'area', label: 'Spawn-Area (Rechteck)' },
-        ...SPAWN_FRONTS.map(value => ({ value, label: `${FRONT_LABELS[value]}${group.front === undefined && value === DEFAULT_SPAWN_FRONT ? ' (Standard)' : ''}` })),
+      selectField('Spawnzone / Front', group.spawnZoneId ? zoneMode(String(group.spawnZoneId)) : group.spawnArea ? 'area' : String(group.front ?? DEFAULT_SPAWN_FRONT), [
+        ...listZones(env.session.draft).map(zone => ({ value: zoneMode(zone.id), label: `Zone · ${zone.id}` })),
+        ...(group.spawnArea && !group.spawnZoneId ? [{ value: 'area', label: 'Inline-Rechteck (veraltet)' }] : []),
+        ...SPAWN_FRONTS.map(value => ({ value, label: `Front · ${FRONT_LABELS[value]}${group.front === undefined && !group.spawnZoneId && !group.spawnArea && value === DEFAULT_SPAWN_FRONT ? ' (Standard)' : ''}` })),
       ], value => {
         env.session.transact('Spawnvorgabe ändern', draft => setGroupSpawn(draft, path, value)); env.changed();
       }));
     row.append(fields);
-    if (group.spawnArea) {
+    if (group.spawnArea && !group.spawnZoneId) {
       const area = element('div', 'group-fields spawn-area-fields');
       for (const [key, label] of [['gridX', 'Spawn-Area X'], ['gridY', 'Spawn-Area Y'], ['widthCells', 'Spawn-Area Breite'], ['heightCells', 'Spawn-Area Höhe']]) {
         area.append(numberField(env, label, [...path, 'spawnArea', key], { min: key === 'gridX' || key === 'gridY' ? 0 : 1 }));
@@ -199,7 +200,9 @@ export class EncounterView {
       if (spawnsAtEdge(group)) row.append(element('p', 'muted', 'Dieser Gegnertyp taucht innerhalb der Spawn-Area eingegraben aus dem Boden auf. Ohne Spawn-Area gräbt er sich von seiner Front aus ein.'));
     }
     const actions = element('div', 'group-actions');
-    actions.append(button(group.spawnArea ? 'Spawn-Area auf Karte bearbeiten' : 'Front auf Karte zeigen', () => env.openMap([...path, group.spawnArea ? 'spawnArea' : 'front'])),
+    const zone = group.spawnZoneId ? listZones(env.session.draft).find(entry => entry.id === group.spawnZoneId) : undefined;
+    actions.append(button(zone ? 'Spawnzone auf Karte bearbeiten' : group.spawnArea ? 'Spawn-Area auf Karte bearbeiten' : 'Front auf Karte zeigen',
+      () => env.openMap(zone ? ['spawnZones', zone.index] : [...path, group.spawnArea ? 'spawnArea' : 'front'])),
       button('Gruppe duplizieren', () => { env.session.splice(['encounters', encounter, 'groups'], index + 1, 0, [clone(group)]); env.changed(); }),
       button('Gruppe löschen', () => { env.session.splice(['encounters', encounter, 'groups'], index, 1); env.changed(); }, 'danger'));
     row.append(actions); return row;

@@ -5,7 +5,7 @@ type Rule = ResolvedRule | ((value: unknown) => ResolvedRule | undefined);
 const point: Rule = { gridX: true, gridY: true };
 const rect: Rule = { ...point as object, widthCells: true, heightCells: true };
 const trigger: Rule = { type: true, atMs: true, encounterId: true, checkpointId: true, defenseId: true, eventId: true, phase: true, baseId: true };
-const group: Rule = { enemyKind: true, count: true, delayMs: true, spawnStaggerMs: true, front: true, spawnArea: rect };
+const group: Rule = { enemyKind: true, count: true, delayMs: true, spawnStaggerMs: true, front: true, spawnZoneId: true, spawnArea: rect };
 export function isEditableFireFront(value: unknown): boolean {
   const event = object(value);
   return event.type === 'ground-hazard' && object(event.area).type === 'rectangle' && event.spread !== undefined;
@@ -24,7 +24,8 @@ const policy: Rule = {
   balanceReferenceDurationSec: true,
   mapEvents: { $items: value => isEditableFireFront(value) ? fireFront : undefined, $mutable: false, $id: 'id' },
   persistentSpawns: { $items: { id: true, enemyKind: true, intervalMs: true, countPerTick: true, startAtMs: true,
-    source: { type: true, baseId: true }, front: true }, $mutable: true, $id: 'id' },
+    source: { type: true, baseId: true, zoneId: true }, front: true }, $mutable: true, $id: 'id' },
+  spawnZones: { $items: { ...rect as object, id: true }, $mutable: true },
   powerUps: { $items: { defId: true, anchor: point, region: true, respawnMs: true, spawnOnArenaStart: true }, $mutable: true },
   rockField: { fillMode: true, corridorRadiusCells: true, corridorRadiusVarianceCells: true, corridorWanderCells: true,
     waypointJitterCells: true, rockDensityScale: true,
@@ -39,7 +40,7 @@ const policy: Rule = {
     checkpoints: { $items: { ...point as object, radiusCells: true }, $mutable: false, $id: 'id' } },
   secondaryObjectives: { $items: { carry: { spawnZone: rect, deliveryZone: rect } }, $mutable: false, $id: 'id' },
   encounters: { $items: { id: true, start: trigger, restAfterMs: true, groups: { $items: group, $mutable: true } }, $mutable: true, $id: 'id' },
-  boss: { enemyKind: true, spawnAtMs: true },
+  boss: { enemyKind: true, spawnAtMs: true, spawnZoneId: true },
 };
 
 /** Whether a scalar belongs to the editor's supported authoring surface. */

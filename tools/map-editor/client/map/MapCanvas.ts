@@ -6,7 +6,7 @@ import { getSpawnFrontInwardVector } from '../../../../src/utils/spawnFront';
 import { FRONT_LABELS } from '../../shared/spawns';
 import { pickMapObject } from './selection';
 
-export type DrawTool = 'select' | 'pan' | 'waterArea' | 'rockWall' | 'corridor' | 'waterPaint' | 'waterErase' | 'selected';
+export type DrawTool = 'select' | 'pan' | 'waterArea' | 'rockWall' | 'corridor' | 'spawnZone' | 'waterPaint' | 'waterErase' | 'selected';
 export interface Rect { gridX: number; gridY: number; widthCells: number; heightCells: number }
 interface Drag { start: { x: number; y: number }; screen: { x: number; y: number }; version: number; mode: DrawTool;
   item?: MapObject; vertex: number; corner: number; before: JsonObject; temporary: JsonObject; moved: boolean; panX: number; panY: number }

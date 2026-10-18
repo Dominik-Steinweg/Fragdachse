@@ -98,8 +98,11 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft, g
   array(draft.secondaryObjectives).forEach((s, i) => {
     if (s.carry) for (const key of ['spawnZone', 'deliveryZone']) rect(`carry:${s.id}:${key}`, `${s.id} · ${key === 'spawnZone' ? 'Flaschen-Start' : 'Abgabezone'}`, ['secondaryObjectives', i, 'carry', key], 'mission');
   });
+  array(draft.spawnZones).forEach((zone, i) => {
+    rect(`zone:${zone.id}`, `Spawnzone · ${zone.id}${zone.medium === 'water' ? ' (Wasser)' : ''}`, ['spawnZones', i], 'spawns');
+  });
   array(draft.encounters).forEach((e, i) => array(e.groups).forEach((g, j) => {
-    if (g.spawnArea) rect(`spawn:${e.id}:${session.key(['encounters', i, 'groups'], j)}`, `${e.id} · ${g.enemyKind} · Gruppe ${j + 1}`, ['encounters', i, 'groups', j, 'spawnArea'], 'spawns');
+    if (g.spawnArea && !g.spawnZoneId) rect(`spawn:${e.id}:${session.key(['encounters', i, 'groups'], j)}`, `${e.id} · ${g.enemyKind} · Gruppe ${j + 1}`, ['encounters', i, 'groups', j, 'spawnArea'], 'spawns');
   }));
   array(draft.mapEvents).forEach((e, i) => {
     if (object(e.area).widthCells === undefined) return;

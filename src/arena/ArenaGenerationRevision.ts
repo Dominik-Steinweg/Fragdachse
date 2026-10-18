@@ -10,9 +10,10 @@ export function projectArenaGenerationRevision(map: ArenaGenerationMapConfig): u
     tutorialAnchor: map.tutorialAnchor, tutorialShowControls: map.tutorialShowControls,
     tutorialSteps: map.tutorialSteps?.map(s => ({ anchor: s.anchor })),
     missionProgress: map.missionProgress,
-    encounters: map.encounters?.map(e => e.groups.map(g => ({ front: g.front, spawnArea: g.spawnArea }))),
+    encounters: map.encounters?.map(e => e.groups.map(g => ({ front: g.front, spawnArea: g.spawnArea, spawnZoneId: g.spawnZoneId }))),
     persistentSpawns: map.persistentSpawns?.map(s => ({ source: s.source, front: s.front })),
-    boss: Boolean(map.boss), powerUps: map.powerUps,
+    spawnZones: map.spawnZones,
+    boss: map.boss ? map.boss.spawnZoneId ?? true : false, powerUps: map.powerUps,
     mapEvents: map.mapEvents?.filter(e => e.type === 'ground-hazard'),
   };
 }

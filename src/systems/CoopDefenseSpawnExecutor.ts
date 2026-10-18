@@ -47,6 +47,8 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     private readonly playerFlowFieldService?: EnemyFlowFieldService | null,
     private readonly strategicFlowFieldService?: EnemyFlowFieldService | null,
     private readonly krakenHabitat?: KrakenHabitatPort,
+    /** Authored boss spawn zone; without it the boss keeps the western edge band. */
+    private readonly bossSpawnArea: CoopDefenseMapSpawnAreaConfig | null = null,
   ) {}
 
   hostReserveBossHabitat(kind: CoopDefenseEnemyKind, habitatId: string): KrakenHabitatResult<KrakenHabitatReservation> {
@@ -82,8 +84,10 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     kind: CoopDefenseEnemyKind,
     count: number,
     front: SpawnFront = DEFAULT_SPAWN_FRONT,
+    spawnArea?: CoopDefenseMapSpawnAreaConfig,
   ): readonly string[] {
-    return this.spawnArenaGroup(kind, count, { spawnFront: front }, front, this.resolveSpawnFlowField(kind)).enemyIds;
+    return this.spawnArenaGroup(kind, count, spawnArea ? {} : { spawnFront: front }, front,
+      this.resolveSpawnFlowField(kind), spawnArea).enemyIds;
   }
 
   /** Strukturgebundene Quelle mit unveraendertem Spawnzentrum und Burrow-Sonderbehandlung. */
@@ -100,7 +104,7 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     }
   }
 
-  /** Einmaliger Boss-Spawn; der bestehende Boss-Pfad bleibt auf der Westfront. */
+  /** Einmaliger Boss-Spawn in der Boss-Zone, ohne sie auf der Westfront. */
   hostSpawnBoss(kind: CoopDefenseEnemyKind): boolean {
     const point = this.hostResolveBossSpawnPoint(kind);
     return point ? this.hostSpawnBossAt(kind, point.x, point.y) : false;
@@ -160,6 +164,7 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
       kind,
       DEFAULT_SPAWN_FRONT,
       this.bossFlowFieldService ?? this.flowFieldService,
+      this.bossSpawnArea ?? undefined,
     );
     if (candidates.length === 0) this.warnExhausted();
     return candidates;

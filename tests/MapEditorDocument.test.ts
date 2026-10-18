@@ -7,7 +7,7 @@ import { assertSupportedMapEdit } from '../tools/map-editor/shared/editPolicy';
 import { updateJsonText } from '../tools/map-editor/server/jsonText';
 import { collectCoopDefenseMapReferences } from '../src/config/coopDefenseMapReferences';
 import { at, clone, object, set, type JsonObject } from '../tools/map-editor/shared/json';
-import { activeSpawnFronts, setGroupSpawn, setPersistentSpawnSource } from '../tools/map-editor/shared/spawns';
+import { activeSpawnFronts, addZone, deleteZone, renameZone, setGroupSpawn, setPersistentSpawnSource, zoneMode } from '../tools/map-editor/shared/spawns';
 
 function load(file = sources.maps[0].file): LoadedMap {
   const text = readFileSync(new URL(`../src/config/coopDefenseMaps/${file}`, import.meta.url), 'utf8');
@@ -127,6 +127,28 @@ describe('Map editor authoring documents', () => {
     session.change([...path, 'delayMs'], 2500); session.change([...path, 'spawnArea', 'gridX'], 7);
     expect(groups()[0].delayMs).toBe(1000); expect(groups()[1].delayMs).toBe(2500);
     expect(groups()[1].spawnArea).toEqual({ ...area, gridX: 7 });
+    expect(() => assertSupportedMapEdit(loaded.document, session.draft)).not.toThrow();
+  });
+  it('edits World spawn zones by id: groups pick them, renaming follows every reference, used zones stay', () => {
+    const loaded = load();
+    loaded.document.encounters = [{ id: 'nest', groups: [{ enemyKind: 'zombie-badger', count: 2, front: 'north' }] }];
+    loaded.document.persistentSpawns = [];
+    const session = new MapDocumentSession(loaded.sourceKey, loaded), path = ['encounters', 0, 'groups', 0];
+    const group = () => ((session.draft.encounters as JsonObject[])[0].groups as JsonObject[])[0];
+    let id = '';
+    session.transact('zone', draft => { id = addZone(draft, { gridX: 2, gridY: 3, widthCells: 6, heightCells: 4 }); });
+    session.transact('pick', draft => setGroupSpawn(draft, path, zoneMode(id)));
+    expect(group()).toEqual({ enemyKind: 'zombie-badger', count: 2, spawnZoneId: id });
+    expect(activeSpawnFronts(session.draft)).toEqual([]);
+    session.transact('source', draft => {
+      draft.persistentSpawns = [{ id: 'p', enemyKind: 'zombie-badger', countPerTick: 1, intervalMs: 1000, source: { type: 'map' }, front: 'east' }];
+      setPersistentSpawnSource(draft, 0, 'zone', id);
+    });
+    session.transact('rename', draft => renameZone(draft, id, 'hollow'));
+    expect(group().spawnZoneId).toBe('hollow');
+    expect((session.draft.persistentSpawns as JsonObject[])[0]).toMatchObject({ source: { type: 'zone', zoneId: 'hollow' } });
+    expect((session.draft.persistentSpawns as JsonObject[])[0].front).toBeUndefined();
+    expect(() => deleteZone(clone(session.draft), 'hollow')).toThrow(/verwendet/);
     expect(() => assertSupportedMapEdit(loaded.document, session.draft)).not.toThrow();
   });
   it('accepts all existing registered authoring documents without materializing defaults', () => {

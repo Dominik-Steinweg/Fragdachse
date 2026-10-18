@@ -28,6 +28,8 @@ import type {
  */
 export interface WorldDefinition {
   readonly krakenHabitat?: import('../krakenHabitat').KrakenHabitatConfig;
+  /** Feste Spawnorte; Activities referenzieren sie per ID, die Praesentation markiert sie als Gefahr. */
+  readonly spawnZones?: readonly import('../spawnZones').WorldSpawnZone[];
   /** Stabile World-Identitaet, z. B. `world:coop-defense:7`. */
   readonly id: string;
   /**

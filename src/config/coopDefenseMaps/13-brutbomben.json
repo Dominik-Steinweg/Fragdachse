@@ -2,6 +2,9 @@
   "mapId": "13",
   "arenaWidthCells": 105,
   "arenaHeightCells": 42,
+  "spawnZones": [
+    { "id": "kraken-heralds-1", "gridX": 56, "gridY": 35, "widthCells": 12, "heightCells": 6, "medium": "water", "cluster": true, "keepClear": false }
+  ],
   "timeOfDay": "18:45",
   "voidFlora": { "level": 0.14 },
   "objective": "destroy-hostile-bases",
@@ -571,14 +574,7 @@
           "enemyKind": "mini-kraken",
           "count": 4,
           "spawnStaggerMs": 700,
-          "spawnArea": {
-            "gridX": 56,
-            "gridY": 35,
-            "widthCells": 12,
-            "heightCells": 6,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "kraken-heralds-1"
         }
       ]
     },
@@ -593,14 +589,7 @@
           "enemyKind": "mini-kraken",
           "count": 4,
           "spawnStaggerMs": 700,
-          "spawnArea": {
-            "gridX": 56,
-            "gridY": 35,
-            "widthCells": 12,
-            "heightCells": 6,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "kraken-heralds-1"
         }
       ]
     },
@@ -615,14 +604,7 @@
           "enemyKind": "mini-kraken",
           "count": 5,
           "spawnStaggerMs": 700,
-          "spawnArea": {
-            "gridX": 56,
-            "gridY": 35,
-            "widthCells": 12,
-            "heightCells": 6,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "kraken-heralds-1"
         }
       ]
     }

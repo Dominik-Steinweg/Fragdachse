@@ -9,6 +9,7 @@ import { LAYERS, mapObjects, type MapObject } from './objects';
 import { MapCanvas, type DrawTool, type Rect } from './MapCanvas';
 import { addPowerUpControls, powerUpControls, trackControls } from './ContentControls';
 import { fireFrontControls } from './FireFrontControls';
+import { addZone, deleteZone, isZoneReferenced, renameZone } from '../../shared/spawns';
 
 export class MapView {
   readonly canvas: MapCanvas;
@@ -32,7 +33,7 @@ export class MapView {
   }
   private renderTools(): void {
     this.toolbar.replaceChildren();
-    const tools: [DrawTool, string][] = [['select', 'Auswählen'], ['pan', 'Verschieben'], ['waterArea', '+ Wasserfläche'], ['rockWall', '+ Felswand'], ['corridor', '+ Korridor'], ['waterPaint', 'Wasserzellen +'], ['waterErase', 'Wasserzellen −']];
+    const tools: [DrawTool, string][] = [['select', 'Auswählen'], ['pan', 'Verschieben'], ['waterArea', '+ Wasserfläche'], ['rockWall', '+ Felswand'], ['corridor', '+ Korridor'], ['spawnZone', '+ Spawnzone'], ['waterPaint', 'Wasserzellen +'], ['waterErase', 'Wasserzellen −']];
     for (const [tool, text] of tools) this.toolbar.append(button(text, () => { this.canvas.tool = tool; this.renderTools(); }, this.canvas.tool === tool ? 'active' : ''));
     this.toolbar.append(button('Einpassen', () => this.canvas.fit()), button(this.canvas.snap ? 'Raster: an' : 'Raster: aus', () => { this.canvas.snap = !this.canvas.snap; this.renderTools(); this.canvas.paint(); }));
   }
@@ -124,6 +125,7 @@ export class MapView {
       }
     }
     if (item.layer === 'hazards') box.append(fireFrontControls(env, item));
+    if (item.path[0] === 'spawnZones') box.append(...this.zoneControls(String(value.id)));
     if (['waterAreas', 'rockWalls', 'rockField'].includes(String(item.path[0]))) {
       box.append(button('Duplizieren', () => this.duplicate(item)), button('Löschen', () => this.remove(item), 'danger'));
     }
@@ -137,6 +139,10 @@ export class MapView {
     } else if (tool === 'waterArea') env.session.splice(['waterAreas'], array(env.session.draft.waterAreas).length, 0, [{ ...rect }]);
     else if (tool === 'rockWall') {
       const list = array(env.session.draft.rockWalls); env.session.splice(['rockWalls'], list.length, 0, [{ id: uniqueId(list, 'wall'), ...rect }]);
+    } else if (tool === 'spawnZone') {
+      let id = '';
+      env.session.transact('Spawnzone anlegen', draft => { id = addZone(draft, rect); });
+      env.session.selection = `zone:${id}`;
     } else if (tool === 'corridor') {
       const list = array(object(env.session.draft.rockField).corridors);
       const c = { id: uniqueId(list, 'corridor'), points: [{ gridX: start.x, gridY: start.y }, { gridX: end.x, gridY: end.y }] };
@@ -147,6 +153,23 @@ export class MapView {
     }
     if (tool !== 'waterArea') this.canvas.tool = 'select';
     env.changed();
+  }
+  /** Zone identity: rename rewrites every reference; delete only while unused. */
+  private zoneControls(id: string): HTMLElement[] {
+    const { env } = this, used = isZoneReferenced(env.session.draft, id);
+    const note = element('p', 'muted', used
+      ? 'Spawnzone der World; Gruppen, Dauerquellen oder Boss verweisen per ID darauf. Im Spiel trägt sie Sporendunst als Gefahrenmarker.'
+      : 'Noch nicht verwendet: eine Gruppe in „Encounter & XP“ auf diese Zone stellen, sonst lehnt die Validierung die Karte ab.');
+    const rename = button('Umbenennen', () => {
+      const next = window.prompt('Neue Zonen-ID (kebab-case)', id);
+      if (!next || next === id) return;
+      try { env.session.transact('Spawnzone umbenennen', draft => renameZone(draft, id, next)); env.session.selection = `zone:${next}`; env.changed(); }
+      catch (error) { env.message(String((error as Error).message)); }
+    });
+    const remove = button('Löschen', () => {
+      env.session.transact('Spawnzone löschen', draft => deleteZone(draft, id)); env.session.selection = null; env.changed();
+    }, 'danger', used);
+    return [note, rename, remove];
   }
   private duplicate(item: MapObject): void {
     const { env } = this, parent = item.path.slice(0, -1), index = Number(item.path.at(-1)), list = array(at(env.session.draft, parent));

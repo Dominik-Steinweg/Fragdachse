@@ -2,6 +2,12 @@
   "mapId": "7",
   "arenaWidthCells": 312,
   "arenaHeightCells": 56,
+  "spawnZones": [
+    { "id": "medic-1", "gridX": 40, "gridY": 39, "widthCells": 16, "heightCells": 10, "keepClear": false },
+    { "id": "medic-2", "gridX": 117, "gridY": 5, "widthCells": 16, "heightCells": 10, "keepClear": false },
+    { "id": "medic-3", "gridX": 181, "gridY": 41, "widthCells": 16, "heightCells": 10, "keepClear": false },
+    { "id": "medic-4", "gridX": 237, "gridY": 6, "widthCells": 16, "heightCells": 10, "keepClear": false }
+  ],
   "timeOfDay": "17:00",
   "voidFlora": { "level": 0.05 },
   "tutorialPersistent": true,
@@ -170,35 +176,20 @@
           "count": 1,
           "delayMs": 0,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 40,
-            "gridY": 39,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-1"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 22,
           "spawnStaggerMs": 160,
-          "spawnArea": {
-            "gridX": 40,
-            "gridY": 39,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-1"
         },
         {
           "enemyKind": "demon-badger",
           "count": 6,
           "delayMs": 1200,
           "spawnStaggerMs": 160,
-          "spawnArea": {
-            "gridX": 40,
-            "gridY": 39,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-1"
         }
       ]
     },
@@ -214,46 +205,26 @@
           "count": 1,
           "delayMs": 0,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 117,
-            "gridY": 5,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-2"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 32,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 117,
-            "gridY": 5,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-2"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 2,
           "delayMs": 1200,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 117,
-            "gridY": 5,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-2"
         },
         {
           "enemyKind": "spore-warden",
           "count": 1,
           "spawnStaggerMs": 1200,
-          "spawnArea": {
-            "gridX": 117,
-            "gridY": 5,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-2"
         }
       ]
     },
@@ -268,47 +239,27 @@
           "enemyKind": "plague-medic",
           "count": 1,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 117,
-            "gridY": 5,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-2"
         },
         {
           "enemyKind": "demon-badger",
           "count": 8,
           "delayMs": 1200,          
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 117,
-            "gridY": 5,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-2"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 8,
           "delayMs": 1200,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 117,
-            "gridY": 5,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-2"
         },
         {
           "enemyKind": "spore-warden",
           "count": 2,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 117,
-            "gridY": 5,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-2"
         }
       ]
     },
@@ -324,23 +275,13 @@
           "count": 1,
           "delayMs": 0,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 181,
-            "gridY": 41,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-3"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 76,
           "spawnStaggerMs": 560,
-          "spawnArea": {
-            "gridX": 181,
-            "gridY": 41,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-3"
         }
       ]
     },
@@ -355,23 +296,13 @@
           "enemyKind": "plague-medic",
           "count": 1,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 181,
-            "gridY": 41,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-3"
         },
         {
           "enemyKind": "spore-warden",
           "count": 8,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 181,
-            "gridY": 41,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-3"
         }
       ]
     },
@@ -387,59 +318,34 @@
           "count": 1,
           "delayMs": 0,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 12,
           "delayMs": 200,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         },
         {
           "enemyKind": "demon-badger",
           "count": 6,
           "delayMs": 1200,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 4,
           "delayMs": 1200,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         },
         {
           "enemyKind": "spore-warden",
           "count": 1,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         }
       ]
     },
@@ -454,35 +360,20 @@
           "enemyKind": "plague-medic",
           "count": 1,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 48,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         },
         {
           "enemyKind": "demon-badger",
           "count": 4,
           "delayMs": 1200,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         }
       ]
     },
@@ -498,58 +389,33 @@
           "count": 2,
           "delayMs": 1200,
           "spawnStaggerMs": 600,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 48,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         },
         {
           "enemyKind": "demon-badger",
           "count": 4,
           "delayMs": 1200,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 4,
           "delayMs": 1200,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         },
         {
           "enemyKind": "spore-warden",
           "count": 2,
           "spawnStaggerMs": 60,
-          "spawnArea": {
-            "gridX": 237,
-            "gridY": 6,
-            "widthCells": 16,
-            "heightCells": 10
-          }
+          "spawnZoneId": "medic-4"
         }
       ]
     }

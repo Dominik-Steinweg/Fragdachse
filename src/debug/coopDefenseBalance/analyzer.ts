@@ -305,7 +305,7 @@ export function buildCoopDefenseBalanceMapSnapshot(mapConfig: CoopDefenseMapConf
       id: spawn.id,
       enemyKind: spawn.enemyKind,
       source: spawn.source.type,
-      ...(spawn.source.type === 'base' ? { sourceId: spawn.source.baseId } : {}),
+      ...(spawn.source.type === 'base' ? { sourceId: spawn.source.baseId } : spawn.source.type === 'zone' ? { sourceId: spawn.source.zoneId } : {}),
       referenceEnemyCount: totals.count,
       referenceHp: totals.hp,
       referenceXp: totals.xp,

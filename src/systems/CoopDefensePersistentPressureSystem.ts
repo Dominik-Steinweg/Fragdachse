@@ -1,10 +1,11 @@
 import type { BaseSpec } from '../arena/BaseRegistry';
-import type { ResolvedCoopDefenseMapPersistentSpawnConfig } from '../config/coopDefenseMaps';
+import type { CoopDefenseMapSpawnAreaConfig, ResolvedCoopDefenseMapPersistentSpawnConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseEnemyKind } from '../config/coopDefenseEnemies';
 import type { SpawnFront } from '../types';
 
 interface PersistentPressureSpawnExecutor {
-  hostSpawnPersistentMapGroup(kind: CoopDefenseEnemyKind, count: number, front?: SpawnFront): readonly string[];
+  hostSpawnPersistentMapGroup(kind: CoopDefenseEnemyKind, count: number, front?: SpawnFront,
+    spawnArea?: CoopDefenseMapSpawnAreaConfig): readonly string[];
   hostSpawnPersistentStructureGroup(source: BaseSpec, kind: CoopDefenseEnemyKind, count: number): void;
 }
 
@@ -62,13 +63,17 @@ export class CoopDefensePersistentPressureSystem {
   }
 
   private isSourceActive(source: ResolvedCoopDefenseMapPersistentSpawnConfig): boolean {
-    return source.source.type === 'map'
+    return source.source.type !== 'base'
       || this.getActiveBaseIds().has(source.source.baseId);
   }
 
   private spawnSource(source: ResolvedCoopDefenseMapPersistentSpawnConfig): void {
     if (source.source.type === 'map') {
       this.spawnExecutor.hostSpawnPersistentMapGroup(source.enemyKind, source.countPerTick, source.front);
+      return;
+    }
+    if (source.source.type === 'zone') {
+      if (source.spawnArea) this.spawnExecutor.hostSpawnPersistentMapGroup(source.enemyKind, source.countPerTick, undefined, source.spawnArea);
       return;
     }
 

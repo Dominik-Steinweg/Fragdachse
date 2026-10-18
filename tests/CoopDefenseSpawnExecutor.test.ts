@@ -176,6 +176,16 @@ describe('Spawn coordinates across World and navigation grids', () => {
     expect(world.spawned[0]).toMatchObject({ x: 176, y: 176, options: { spawnBurrowed: true } });
     world.destroy();
   });
+  it('spawns the boss and zone-bound persistent sources inside their authored zone', () => {
+    const world = setup();
+    const zone = { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 };
+    const executor = new CoopDefenseSpawnExecutor(world.manager, world.field, world.metrics, world.field, world.field,
+      null, undefined, zone);
+    expect(executor.hostResolveBossSpawnPoint('zombie-badger')).toEqual({ x: 176, y: 176 });
+    expect(world.executor.hostSpawnPersistentMapGroup('zombie-badger', 1, undefined, zone)).toHaveLength(1);
+    expect(world.spawned.at(-1)).toMatchObject({ x: 176, y: 176 });
+    world.destroy();
+  });
 });
 
 interface SpawnRecord {

@@ -1,4 +1,5 @@
 import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS, COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS, COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, getArenaActivityValuesForMode, getArenaModeFlags, getCaptureTheBeerBaseRegion, getCaptureTheBeerMiddleThirdRegion, isGridCellInArenaRegion } from '../config';
+import { spawnZoneArea, type WorldSpawnZone } from '../config/spawnZones';
 import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isCoopDefenseBaseCell, isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseReservationCell, resolveCoopDefenseActivityBases, resolveCoopDefenseBases } from './BaseRegistry';
 import type { BaseSpec } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
@@ -118,6 +119,19 @@ const NARROW_PASSAGE_WALL_PROBE_CELLS = 3;
 /** Garantiert freie Kreisflaeche: Missions-Checkpoint oder Salvage-Site-Lichtung. */
 type ProtectedClearing = Pick<CoopDefenseMapMissionCheckpointConfig, 'gridX' | 'gridY' | 'radiusCells'>;
 
+/**
+ * Ground spawn zones keep a round core free of rock and trees, so enemies can always appear there.
+ * Water zones and zones authored with `keepClear: false` (e.g. lairs inside authored rock) stay as
+ * they are.
+ */
+function spawnZoneCores(zones: readonly WorldSpawnZone[] | undefined): ProtectedClearing[] {
+  return (zones ?? []).filter((zone) => zone.medium !== 'water' && zone.keepClear !== false).map((zone) => ({
+    gridX: Math.floor(zone.gridX + zone.widthCells / 2),
+    gridY: Math.floor(zone.gridY + zone.heightCells / 2),
+    radiusCells: Math.max(1.5, Math.min(4, Math.min(zone.widthCells, zone.heightCells) * .4)),
+  }));
+}
+
 /** Immutable inputs that previously leaked in through mutable config module variables. */
 export interface ArenaGenerationInput {
   readonly metrics: WorldMetrics;
@@ -222,6 +236,7 @@ export class ArenaGenerator {
     const protectedClearings = [
       ...(coopMapConfig?.missionProgress?.checkpoints ?? []),
       ...(coopMapConfig?.siteClearings ?? []),
+      ...spawnZoneCores(coopMapConfig?.spawnZones),
     ];
     const missionCheckpointCells = this.collectMissionCheckpointCells(protectedClearings);
     // Authored Felsbaender sind reguläre Felsen, aber keine Generatoreingabe: Sie werden erst
@@ -845,15 +860,26 @@ export class ArenaGenerator {
         else fronts.add(group.front ?? DEFAULT_SPAWN_FRONT);
       }
     }
+    const zoneArea = (zoneId: string) => {
+      const zone = mapConfig.spawnZones?.find(({ id }) => id === zoneId);
+      return zone ? spawnZoneArea(zone) : null;
+    };
     for (const spawn of mapConfig.persistentSpawns ?? []) {
       const sourceConfig = spawn.source;
       if (sourceConfig.type === 'map') fronts.add(spawn.front ?? DEFAULT_SPAWN_FRONT);
-      else {
+      else if (sourceConfig.type === 'zone') {
+        const area = zoneArea(sourceConfig.zoneId);
+        if (area) sourceGroups.push(this.getSpawnAreaCells(area, blocked, baseCells, bases));
+      } else {
         const source = bases.find((base) => base.id === sourceConfig.baseId);
         if (source?.spawnCenter) sourceGroups.push([source.spawnCenter]);
       }
     }
-    if (mapConfig.boss) fronts.add(DEFAULT_SPAWN_FRONT);
+    if (mapConfig.boss) {
+      const area = mapConfig.boss.spawnZoneId ? zoneArea(mapConfig.boss.spawnZoneId) : null;
+      if (area) sourceGroups.push(this.getSpawnAreaCells(area, blocked, baseCells, bases));
+      else fronts.add(DEFAULT_SPAWN_FRONT);
+    }
     for (const front of fronts) {
       sourceGroups.push(this.getSpawnFrontCells(front, blocked, baseCells, bases));
     }

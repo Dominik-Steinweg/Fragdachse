@@ -66,14 +66,15 @@ describe('Mini-Kraken content', () => {
     expect(map.abyssCameo!.atMs + map.abyssCameo!.durationMs).toBeLessThanOrEqual(firstHerald);
   });
 
-  it('rejects water spawns of land enemies and water areas without water', () => {
+  it('rejects water spawns of land enemies and water zones without water', () => {
     const raw = structuredClone(map13) as unknown as Record<string, unknown>;
-    const encounters = raw.encounters as { groups: { enemyKind: string; spawnArea?: Record<string, unknown> }[] }[];
+    const encounters = raw.encounters as { groups: { enemyKind: string }[] }[];
     encounters[0]!.groups[0]!.enemyKind = 'zombie-badger';
     expect(() => normalizeCoopDefenseMapConfig(raw as never)).toThrow(/non-amphibious/);
     encounters[0]!.groups[0]!.enemyKind = 'mini-kraken';
-    encounters[0]!.groups[0]!.spawnArea = { gridX: 90, gridY: 2, widthCells: 3, heightCells: 3, medium: 'water' };
-    expect(() => normalizeCoopDefenseMapConfig(raw as never)).toThrow(/without water/);
+    const zones = raw.spawnZones as Record<string, unknown>[];
+    zones[0] = { ...zones[0], gridX: 90, gridY: 2, widthCells: 3, heightCells: 3 };
+    expect(() => normalizeCoopDefenseMapConfig(raw as never)).toThrow(/without water|holds no water/);
   });
 });
 

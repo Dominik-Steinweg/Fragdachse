@@ -2,6 +2,53 @@
   "mapId": "16",
   "arenaWidthCells": 264,
   "arenaHeightCells": 150,
+  "spawnZones": [
+    { "id": "first-bite-a", "gridX": 92, "gridY": 108, "widthCells": 4, "heightCells": 4, "keepClear": false },
+    { "id": "first-bite-b", "gridX": 35, "gridY": 123, "widthCells": 6, "heightCells": 6, "keepClear": false },
+    { "id": "first-bite-c", "gridX": 38, "gridY": 102, "widthCells": 4, "heightCells": 4, "keepClear": false },
+    { "id": "first-bite-d", "gridX": 64, "gridY": 128, "widthCells": 5, "heightCells": 4, "keepClear": false },
+    { "id": "first-bite-e", "gridX": 90, "gridY": 122, "widthCells": 8, "heightCells": 4, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "brood-ford-a", "gridX": 5, "gridY": 81, "widthCells": 10, "heightCells": 4, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "brood-ford-b", "gridX": 66, "gridY": 76, "widthCells": 8, "heightCells": 4, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "brood-ford-c", "gridX": 11, "gridY": 103, "widthCells": 6, "heightCells": 6, "keepClear": false },
+    { "id": "cliff-pincer-a", "gridX": 50, "gridY": 26, "widthCells": 5, "heightCells": 4, "keepClear": false },
+    { "id": "cliff-pincer-b", "gridX": 5, "gridY": 68, "widthCells": 6, "heightCells": 4, "keepClear": false },
+    { "id": "cliff-pincer-c", "gridX": 4, "gridY": 40, "widthCells": 4, "heightCells": 4, "keepClear": false },
+    { "id": "cliff-pincer-d", "gridX": 48, "gridY": 24, "widthCells": 4, "heightCells": 4, "keepClear": false },
+    { "id": "cliff-pincer-e", "gridX": 58, "gridY": 59, "widthCells": 8, "heightCells": 4, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "web-grove-1", "gridX": 6, "gridY": 9, "widthCells": 5, "heightCells": 7, "keepClear": false },
+    { "id": "web-grove-2", "gridX": 64, "gridY": 27, "widthCells": 5, "heightCells": 6, "keepClear": false },
+    { "id": "web-grove-3-a", "gridX": 60, "gridY": 2, "widthCells": 5, "heightCells": 3, "keepClear": false },
+    { "id": "web-grove-3-b", "gridX": 6, "gridY": 34, "widthCells": 4, "heightCells": 4, "keepClear": false },
+    { "id": "web-grove-3-c", "gridX": 12, "gridY": 2, "widthCells": 5, "heightCells": 3, "keepClear": false },
+    { "id": "web-grove-3-d", "gridX": 40, "gridY": 45, "widthCells": 5, "heightCells": 3, "keepClear": false },
+    { "id": "marsh-shore-a", "gridX": 121, "gridY": 2, "widthCells": 6, "heightCells": 4, "keepClear": false },
+    { "id": "marsh-shore-b", "gridX": 100, "gridY": 42, "widthCells": 8, "heightCells": 5, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "marsh-shore-c", "gridX": 122, "gridY": 31, "widthCells": 4, "heightCells": 3, "keepClear": false },
+    { "id": "lake-fork-a", "gridX": 135, "gridY": 31, "widthCells": 6, "heightCells": 3, "keepClear": false },
+    { "id": "lake-fork-b", "gridX": 135, "gridY": 3, "widthCells": 6, "heightCells": 4, "keepClear": false },
+    { "id": "lake-fork-c", "gridX": 147, "gridY": 40, "widthCells": 6, "heightCells": 3, "keepClear": false },
+    { "id": "lake-fork-d", "gridX": 133, "gridY": 17, "widthCells": 10, "heightCells": 4, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "bomber-ridge-a", "gridX": 223, "gridY": 38, "widthCells": 6, "heightCells": 5, "keepClear": false },
+    { "id": "bomber-ridge-b", "gridX": 235, "gridY": 32, "widthCells": 6, "heightCells": 4, "keepClear": false },
+    { "id": "bomber-ridge-c", "gridX": 242, "gridY": 4, "widthCells": 5, "heightCells": 5, "keepClear": false },
+    { "id": "burn-clearing-a", "gridX": 210, "gridY": 30, "widthCells": 5, "heightCells": 5, "keepClear": false },
+    { "id": "burn-clearing-b", "gridX": 242, "gridY": 30, "widthCells": 4, "heightCells": 4, "keepClear": false },
+    { "id": "burn-clearing-c", "gridX": 198, "gridY": 54, "widthCells": 8, "heightCells": 5, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "burn-clearing-d", "gridX": 251, "gridY": 71, "widthCells": 6, "heightCells": 3, "keepClear": false },
+    { "id": "brood-pit-1-a", "gridX": 182, "gridY": 98, "widthCells": 5, "heightCells": 5, "keepClear": false },
+    { "id": "brood-pit-1-b", "gridX": 224, "gridY": 132, "widthCells": 5, "heightCells": 5, "keepClear": false },
+    { "id": "brood-pit-1-c", "gridX": 207, "gridY": 93, "widthCells": 6, "heightCells": 4, "keepClear": false },
+    { "id": "brood-pit-2-a", "gridX": 174, "gridY": 102, "widthCells": 5, "heightCells": 4, "keepClear": false },
+    { "id": "brood-pit-2-b", "gridX": 155, "gridY": 126, "widthCells": 10, "heightCells": 5, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "brood-pit-2-c", "gridX": 224, "gridY": 102, "widthCells": 4, "heightCells": 4, "keepClear": false },
+    { "id": "brood-pit-3-a", "gridX": 184, "gridY": 143, "widthCells": 5, "heightCells": 5, "keepClear": false },
+    { "id": "brood-pit-3-b", "gridX": 162, "gridY": 120, "widthCells": 8, "heightCells": 4, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "brood-pit-3-c", "gridX": 226, "gridY": 116, "widthCells": 5, "heightCells": 5, "keepClear": false },
+    { "id": "brood-pit-3-d", "gridX": 202, "gridY": 146, "widthCells": 5, "heightCells": 3, "keepClear": false },
+    { "id": "brood-pit-3-e", "gridX": 212, "gridY": 94, "widthCells": 5, "heightCells": 4, "keepClear": false },
+    { "id": "brood-pit-3-f", "gridX": 224, "gridY": 140, "widthCells": 5, "heightCells": 4, "keepClear": false }
+  ],
   "timeOfDay": "07:00",
   "voidFlora": { "level": 0.25 },
   "dynamicTimeOfDay": {
@@ -1269,62 +1316,35 @@
           "enemyKind": "kaboomtula",
           "count": 1,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 92,
-            "gridY": 108,
-            "widthCells": 4,
-            "heightCells": 4
-          }
+          "spawnZoneId": "first-bite-a"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 10,
           "delayMs": 2500,
           "spawnStaggerMs": 350,
-          "spawnArea": {
-            "gridX": 35,
-            "gridY": 123,
-            "widthCells": 6,
-            "heightCells": 6
-          }
+          "spawnZoneId": "first-bite-b"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 2,
           "delayMs": 6000,
           "spawnStaggerMs": 1800,
-          "spawnArea": {
-            "gridX": 38,
-            "gridY": 102,
-            "widthCells": 4,
-            "heightCells": 4
-          }
+          "spawnZoneId": "first-bite-c"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 3,
           "delayMs": 12000,
           "spawnStaggerMs": 1500,
-          "spawnArea": {
-            "gridX": 64,
-            "gridY": 128,
-            "widthCells": 5,
-            "heightCells": 4
-          }
+          "spawnZoneId": "first-bite-d"
         },
         {
           "enemyKind": "mini-kraken",
           "count": 3,
           "delayMs": 17000,
           "spawnStaggerMs": 900,
-          "spawnArea": {
-            "gridX": 90,
-            "gridY": 122,
-            "widthCells": 8,
-            "heightCells": 4,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "first-bite-e"
         }
       ]
     },
@@ -1339,40 +1359,21 @@
           "enemyKind": "mini-kraken",
           "count": 5,
           "spawnStaggerMs": 700,
-          "spawnArea": {
-            "gridX": 5,
-            "gridY": 81,
-            "widthCells": 10,
-            "heightCells": 4,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "brood-ford-a"
         },
         {
           "enemyKind": "mini-kraken",
           "count": 5,
           "delayMs": 2500,
           "spawnStaggerMs": 700,
-          "spawnArea": {
-            "gridX": 66,
-            "gridY": 76,
-            "widthCells": 8,
-            "heightCells": 4,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "brood-ford-b"
         },
         {
           "enemyKind": "demon-badger",
           "count": 10,
           "delayMs": 4500,
           "spawnStaggerMs": 250,
-          "spawnArea": {
-            "gridX": 11,
-            "gridY": 103,
-            "widthCells": 6,
-            "heightCells": 6
-          }
+          "spawnZoneId": "brood-ford-c"
         }
       ]
     },
@@ -1387,62 +1388,35 @@
           "enemyKind": "shield-charger-badger",
           "count": 3,
           "spawnStaggerMs": 1400,
-          "spawnArea": {
-            "gridX": 50,
-            "gridY": 26,
-            "widthCells": 5,
-            "heightCells": 4
-          }
+          "spawnZoneId": "cliff-pincer-a"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 14,
           "delayMs": 2500,
           "spawnStaggerMs": 220,
-          "spawnArea": {
-            "gridX": 5,
-            "gridY": 68,
-            "widthCells": 6,
-            "heightCells": 4
-          }
+          "spawnZoneId": "cliff-pincer-b"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 2,
           "delayMs": 6000,
           "spawnStaggerMs": 1600,
-          "spawnArea": {
-            "gridX": 4,
-            "gridY": 40,
-            "widthCells": 4,
-            "heightCells": 4
-          }
+          "spawnZoneId": "cliff-pincer-c"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 1,
           "delayMs": 7500,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 48,
-            "gridY": 24,
-            "widthCells": 4,
-            "heightCells": 4
-          }
+          "spawnZoneId": "cliff-pincer-d"
         },
         {
           "enemyKind": "mini-kraken",
           "count": 5,
           "delayMs": 4000,
           "spawnStaggerMs": 600,
-          "spawnArea": {
-            "gridX": 58,
-            "gridY": 59,
-            "widthCells": 8,
-            "heightCells": 4,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "cliff-pincer-e"
         }
       ]
     },
@@ -1457,12 +1431,7 @@
           "enemyKind": "kaboomtula",
           "count": 5,
           "spawnStaggerMs": 900,
-          "spawnArea": {
-            "gridX": 6,
-            "gridY": 9,
-            "widthCells": 5,
-            "heightCells": 7
-          }
+          "spawnZoneId": "web-grove-1"
         }
       ]
     },
@@ -1478,12 +1447,7 @@
           "enemyKind": "kaboomtula",
           "count": 6,
           "spawnStaggerMs": 800,
-          "spawnArea": {
-            "gridX": 64,
-            "gridY": 27,
-            "widthCells": 5,
-            "heightCells": 6
-          }
+          "spawnZoneId": "web-grove-2"
         }
       ]
     },
@@ -1499,48 +1463,28 @@
           "enemyKind": "kaboomtula",
           "count": 2,
           "spawnStaggerMs": 500,
-          "spawnArea": {
-            "gridX": 60,
-            "gridY": 2,
-            "widthCells": 5,
-            "heightCells": 3
-          }
+          "spawnZoneId": "web-grove-3-a"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 2,
           "delayMs": 400,
           "spawnStaggerMs": 500,
-          "spawnArea": {
-            "gridX": 6,
-            "gridY": 34,
-            "widthCells": 4,
-            "heightCells": 4
-          }
+          "spawnZoneId": "web-grove-3-b"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 2,
           "delayMs": 800,
           "spawnStaggerMs": 500,
-          "spawnArea": {
-            "gridX": 12,
-            "gridY": 2,
-            "widthCells": 5,
-            "heightCells": 3
-          }
+          "spawnZoneId": "web-grove-3-c"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 2,
           "delayMs": 1200,
           "spawnStaggerMs": 500,
-          "spawnArea": {
-            "gridX": 40,
-            "gridY": 45,
-            "widthCells": 5,
-            "heightCells": 3
-          }
+          "spawnZoneId": "web-grove-3-d"
         }
       ]
     },
@@ -1555,38 +1499,21 @@
           "enemyKind": "stink-broodmother",
           "count": 2,
           "spawnStaggerMs": 2500,
-          "spawnArea": {
-            "gridX": 121,
-            "gridY": 2,
-            "widthCells": 6,
-            "heightCells": 4
-          }
+          "spawnZoneId": "marsh-shore-a"
         },
         {
           "enemyKind": "mini-kraken",
           "count": 8,
           "delayMs": 2000,
           "spawnStaggerMs": 600,
-          "spawnArea": {
-            "gridX": 100,
-            "gridY": 42,
-            "widthCells": 8,
-            "heightCells": 5,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "marsh-shore-b"
         },
         {
           "enemyKind": "plague-medic",
           "count": 2,
           "delayMs": 3500,
           "spawnStaggerMs": 3000,
-          "spawnArea": {
-            "gridX": 122,
-            "gridY": 31,
-            "widthCells": 4,
-            "heightCells": 3
-          }
+          "spawnZoneId": "marsh-shore-c"
         }
       ]
     },
@@ -1601,49 +1528,27 @@
           "enemyKind": "alien-badger",
           "count": 2,
           "spawnStaggerMs": 2000,
-          "spawnArea": {
-            "gridX": 135,
-            "gridY": 31,
-            "widthCells": 6,
-            "heightCells": 3
-          }
+          "spawnZoneId": "lake-fork-a"
         },
         {
           "enemyKind": "void-stalker",
           "count": 2,
           "spawnStaggerMs": 1500,
-          "spawnArea": {
-            "gridX": 135,
-            "gridY": 3,
-            "widthCells": 6,
-            "heightCells": 4
-          }
+          "spawnZoneId": "lake-fork-b"
         },
         {
           "enemyKind": "demon-badger",
           "count": 8,
           "delayMs": 3500,
           "spawnStaggerMs": 250,
-          "spawnArea": {
-            "gridX": 147,
-            "gridY": 40,
-            "widthCells": 6,
-            "heightCells": 3
-          }
+          "spawnZoneId": "lake-fork-c"
         },
         {
           "enemyKind": "mini-kraken",
           "count": 4,
           "delayMs": 1500,
           "spawnStaggerMs": 700,
-          "spawnArea": {
-            "gridX": 133,
-            "gridY": 17,
-            "widthCells": 10,
-            "heightCells": 4,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "lake-fork-d"
         }
       ]
     },
@@ -1659,36 +1564,21 @@
           "count": 4,
           "delayMs": 3000,
           "spawnStaggerMs": 1500,
-          "spawnArea": {
-            "gridX": 223,
-            "gridY": 38,
-            "widthCells": 6,
-            "heightCells": 5
-          }
+          "spawnZoneId": "bomber-ridge-a"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 10,
           "delayMs": 4000,
           "spawnStaggerMs": 300,
-          "spawnArea": {
-            "gridX": 235,
-            "gridY": 32,
-            "widthCells": 6,
-            "heightCells": 4
-          }
+          "spawnZoneId": "bomber-ridge-b"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 4,
           "delayMs": 10000,
           "spawnStaggerMs": 1100,
-          "spawnArea": {
-            "gridX": 242,
-            "gridY": 4,
-            "widthCells": 5,
-            "heightCells": 5
-          }
+          "spawnZoneId": "bomber-ridge-c"
         }
       ]
     },
@@ -1704,50 +1594,28 @@
           "count": 2,
           "delayMs": 2000,
           "spawnStaggerMs": 2500,
-          "spawnArea": {
-            "gridX": 210,
-            "gridY": 30,
-            "widthCells": 5,
-            "heightCells": 5
-          }
+          "spawnZoneId": "burn-clearing-a"
         },
         {
           "enemyKind": "thrower-badger",
           "count": 1,
           "delayMs": 3000,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 242,
-            "gridY": 30,
-            "widthCells": 4,
-            "heightCells": 4
-          }
+          "spawnZoneId": "burn-clearing-b"
         },
         {
           "enemyKind": "mini-kraken",
           "count": 5,
           "delayMs": 4000,
           "spawnStaggerMs": 600,
-          "spawnArea": {
-            "gridX": 198,
-            "gridY": 54,
-            "widthCells": 8,
-            "heightCells": 5,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "burn-clearing-c"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 5,
           "delayMs": 6000,
           "spawnStaggerMs": 900,
-          "spawnArea": {
-            "gridX": 251,
-            "gridY": 71,
-            "widthCells": 6,
-            "heightCells": 3
-          }
+          "spawnZoneId": "burn-clearing-d"
         }
       ]
     },
@@ -1762,36 +1630,21 @@
           "enemyKind": "kaboomtula",
           "count": 4,
           "spawnStaggerMs": 900,
-          "spawnArea": {
-            "gridX": 182,
-            "gridY": 98,
-            "widthCells": 5,
-            "heightCells": 5
-          }
+          "spawnZoneId": "brood-pit-1-a"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 4,
           "delayMs": 500,
           "spawnStaggerMs": 900,
-          "spawnArea": {
-            "gridX": 224,
-            "gridY": 132,
-            "widthCells": 5,
-            "heightCells": 5
-          }
+          "spawnZoneId": "brood-pit-1-b"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 8,
           "delayMs": 2500,
           "spawnStaggerMs": 250,
-          "spawnArea": {
-            "gridX": 207,
-            "gridY": 93,
-            "widthCells": 6,
-            "heightCells": 4
-          }
+          "spawnZoneId": "brood-pit-1-c"
         }
       ]
     },
@@ -1807,38 +1660,21 @@
           "enemyKind": "shield-charger-badger",
           "count": 3,
           "spawnStaggerMs": 1200,
-          "spawnArea": {
-            "gridX": 174,
-            "gridY": 102,
-            "widthCells": 5,
-            "heightCells": 4
-          }
+          "spawnZoneId": "brood-pit-2-a"
         },
         {
           "enemyKind": "mini-kraken",
           "count": 8,
           "delayMs": 1500,
           "spawnStaggerMs": 500,
-          "spawnArea": {
-            "gridX": 155,
-            "gridY": 126,
-            "widthCells": 10,
-            "heightCells": 5,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "brood-pit-2-b"
         },
         {
           "enemyKind": "alien-badger",
           "count": 1,
           "delayMs": 3000,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 224,
-            "gridY": 102,
-            "widthCells": 4,
-            "heightCells": 4
-          }
+          "spawnZoneId": "brood-pit-2-c"
         }
       ]
     },
@@ -1854,74 +1690,42 @@
           "enemyKind": "kaboomtula",
           "count": 3,
           "spawnStaggerMs": 700,
-          "spawnArea": {
-            "gridX": 184,
-            "gridY": 143,
-            "widthCells": 5,
-            "heightCells": 5
-          }
+          "spawnZoneId": "brood-pit-3-a"
         },
         {
           "enemyKind": "mini-kraken",
           "count": 4,
           "delayMs": 800,
           "spawnStaggerMs": 600,
-          "spawnArea": {
-            "gridX": 162,
-            "gridY": 120,
-            "widthCells": 8,
-            "heightCells": 4,
-            "medium": "water",
-            "cluster": true
-          }
+          "spawnZoneId": "brood-pit-3-b"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 3,
           "delayMs": 300,
           "spawnStaggerMs": 700,
-          "spawnArea": {
-            "gridX": 226,
-            "gridY": 116,
-            "widthCells": 5,
-            "heightCells": 5
-          }
+          "spawnZoneId": "brood-pit-3-c"
         },
         {
           "enemyKind": "kaboomtula",
           "count": 2,
           "delayMs": 600,
           "spawnStaggerMs": 700,
-          "spawnArea": {
-            "gridX": 202,
-            "gridY": 146,
-            "widthCells": 5,
-            "heightCells": 3
-          }
+          "spawnZoneId": "brood-pit-3-d"
         },
         {
           "enemyKind": "void-stalker",
           "count": 2,
           "delayMs": 1500,
           "spawnStaggerMs": 1500,
-          "spawnArea": {
-            "gridX": 212,
-            "gridY": 94,
-            "widthCells": 5,
-            "heightCells": 4
-          }
+          "spawnZoneId": "brood-pit-3-e"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
           "delayMs": 2500,
           "spawnStaggerMs": 0,
-          "spawnArea": {
-            "gridX": 224,
-            "gridY": 140,
-            "widthCells": 5,
-            "heightCells": 4
-          }
+          "spawnZoneId": "brood-pit-3-f"
         }
       ]
     }

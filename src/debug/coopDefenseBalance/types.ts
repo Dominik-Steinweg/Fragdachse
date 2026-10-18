@@ -33,7 +33,7 @@ export interface BalanceStrongestEncounter {
 export interface BalancePersistentSource {
   readonly id: string;
   readonly enemyKind: string;
-  readonly source: 'map' | 'base';
+  readonly source: 'map' | 'base' | 'zone';
   readonly sourceId?: string;
   readonly referenceEnemyCount: number;
   readonly referenceHp: number;

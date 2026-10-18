@@ -30,8 +30,8 @@ verbessert zusätzlich die Optik und markiert ab Map 12 das Feindesland.
 | N-3 | Die Mondinseln driften mit der synchronisierten World-Uhr, damit alle Peers dieselben Inseln sehen. Es entsteht kein neuer replizierter Zustand. |
 | N-4 | Die Lampe beleuchtet die ihr zugewandte Felsfront bis zu einer abstandsabhängigen Eindringtiefe mit Relief. Der Rest des Felsdachs bleibt dunkel, der geworfene Schatten hinter dem Fels bleibt unverändert. |
 | N-5 | Wasser bekommt nachts einen eigenen Materialteil: kühlere, sattere Körperfarbe, Mondreflex in den Inseln und Glanz unter der Lampe. Die Uferlinie bleibt unverändert. |
-| N-6 | Void-Botanik: Seerosen und Felsmoos werden vom Feind übernommen. Tagsüber wirken sie violett verfärbt, ab der Dämmerung leuchten sie über die Lichtkarte und erhellen Wasser und Felskanten. |
-| N-7 | Verteilung: Maps 1–11 haben vereinzelte Befallsstellen, ab Map 12 steigt der Befall deutlich bis Map 20. Dazu kommen automatische Hotspots (feindliche Basen, Void-Feuer, Kraken-Teich) und setzbare Fokuszonen. PvP, Lobby und Dawn nutzen einen mittleren Standardwert. |
+| N-6 | *Ersetzt durch [Void-Gefahrenzonen V1](Fragdachse_GDD_Void_Gefahrenzonen_V1.md).* Void-Botanik: Seerosen und Felsmoos werden vom Feind übernommen. Tagsüber wirken sie violett verfärbt, ab der Dämmerung leuchten sie über die Lichtkarte und erhellen Wasser und Felskanten. |
+| N-7 | *Ersetzt durch [Void-Gefahrenzonen V1](Fragdachse_GDD_Void_Gefahrenzonen_V1.md).* Verteilung: Maps 1–11 haben vereinzelte Befallsstellen, ab Map 12 steigt der Befall deutlich bis Map 20. Dazu kommen automatische Hotspots (feindliche Basen, Void-Feuer, Kraken-Teich) und setzbare Fokuszonen. PvP, Lobby und Dawn nutzen einen mittleren Standardwert. |
 | N-8 | Neue Assets mit Leuchtmasken entstehen über Argon oder lokal über ComfyUI. Vorher kommt ein Entwurf mit eingefärbten Bestands-Assets. |
 | N-9 | Kein additiver Glow über Figuren und kein bildschirmweiter Farbfilter. Eine skotopische Nachtgewichtung im Grade gibt es nur als A/B-Versuch nach Freigabe. |
 

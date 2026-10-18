@@ -2,6 +2,11 @@
   "mapId": "6",
   "arenaWidthCells": 100,
   "arenaHeightCells": 46,
+  "spawnZones": [
+    { "id": "spore-front-opening-a", "gridX": 15, "gridY": 19, "widthCells": 4, "heightCells": 6, "keepClear": false },
+    { "id": "spore-front-opening-b", "gridX": 79, "gridY": 19, "widthCells": 4, "heightCells": 6, "keepClear": false },
+    { "id": "spore-front-finale", "gridX": 27, "gridY": 9, "widthCells": 4, "heightCells": 4, "keepClear": false }
+  ],
   "timeOfDay": "08:00",
   "voidFlora": { "level": 0.05 },
   "rockFillRatio": 0.1,
@@ -125,13 +130,13 @@
         {
           "enemyKind": "zombie-badger",
           "count": 10,
-          "spawnArea": {"gridX": 15, "gridY": 19, "widthCells": 4, "heightCells": 6}
+          "spawnZoneId": "spore-front-opening-a"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 8,
           "delayMs": 700,
-          "spawnArea": {"gridX": 79, "gridY": 19, "widthCells": 4, "heightCells": 6}
+          "spawnZoneId": "spore-front-opening-b"
         }
       ]
     },
@@ -238,18 +243,18 @@
         {
           "enemyKind": "spore-warden",
           "count": 4,
-          "spawnArea": {"gridX": 79, "gridY": 19, "widthCells": 4, "heightCells": 6}
+          "spawnZoneId": "spore-front-opening-b"
         },
         {
           "enemyKind": "spore-warden",
           "count": 4,
-          "spawnArea": {"gridX": 15, "gridY": 19, "widthCells": 4, "heightCells": 6}
+          "spawnZoneId": "spore-front-opening-a"
         },
         {
           "enemyKind": "demon-badger",
           "count": 8,
           "delayMs": 900,
-          "spawnArea": {"gridX": 27, "gridY": 9, "widthCells": 4, "heightCells": 4}
+          "spawnZoneId": "spore-front-finale"
         },
         {"enemyKind": "rabid-badger", "count": 6, "delayMs": 1300, "front": "south"}
       ]
