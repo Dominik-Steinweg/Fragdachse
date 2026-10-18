@@ -242,6 +242,7 @@ export class WorldSunlightPresentation {
   this.syncVoidField(targets);
   this.syncWoodland(targets);
   this.syncVoidPresence();
+  this.voidCreep?.setAlerts(this.activityDanger?.alerts??[]);
   targets.rockOverlays?.collectVoidGlowPoints(this.voidRockPoints);
   this.voidGlow?.update(this.scene.cameras.main,this.voidPondPoints,this.voidRockPoints,this.lastSceneTime/1000);
   {

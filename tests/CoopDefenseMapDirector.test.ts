@@ -77,9 +77,10 @@ describe('CoopDefenseMapDirector', () => {
     const director = new CoopDefenseMapDirector([
       announcedEncounter('silent', 0, false), announcedEncounter('wave', 2000),
     ], (_kind, _count, id) => [id!], { isEnemyActive: () => false });
-    director.hostUpdate(1000, false);
+    // Die Randwarnung öffnet 1 s vor dem Spawn der Welle bei 2 s.
+    director.hostUpdate(900, false);
     expect(director.getPresentationState()).toBeNull();
-    director.hostUpdate(100, false);
+    director.hostUpdate(200, false);
     expect(director.getPresentationState()).toMatchObject({ encounterId: 'wave', sequenceIndex: 1, sequenceCount: 1, phase: 'incoming' });
     director.hostUpdate(1700, false);
     director.hostUpdate(800, false);
@@ -376,6 +377,38 @@ describe('CoopDefenseMapDirector', () => {
 
     director.hostUpdate(900, false);
     expect(director.getPresentationState()?.fronts).toEqual(['west', 'north']);
+  });
+
+  it('names spawn zones instead of a West front and warns each zone two seconds ahead (Void-Gefahrenzonen V1)', () => {
+    let nextId = 0;
+    const area = { gridX: 1, gridY: 1, widthCells: 4, heightCells: 4 };
+    const director = new CoopDefenseMapDirector([{
+      id: 'nests', start: { type: 'time', atMs: 3_000 }, restAfterMs: 0,
+      groups: [
+        { enemyKind: 'zombie-badger', count: 2, delayMs: 0, spawnZoneId: 'nest-a', spawnArea: area },
+        { enemyKind: 'demon-badger', count: 1, delayMs: 4_000, spawnZoneId: 'nest-b', spawnArea: area },
+        { enemyKind: 'demon-badger', count: 1, delayMs: 4_000, front: 'north' },
+      ],
+    }], (_kind, count) => Array.from({ length: count }, () => `e${nextId++}`), { isEnemyActive: () => true });
+
+    // Before the start: the predictable encounter's haze is announced to rise two seconds ahead.
+    director.hostUpdate(1_300, false);
+    expect(director.getSpawnZoneAlerts()).toContainEqual({ zoneId: 'nest-a', fromMs: 1_000, atMs: 3_000, endMs: 3_000 });
+
+    director.hostUpdate(1_700, false);
+    const state = director.getPresentationState()!;
+    expect(state.encounterFronts).toEqual(['north']);
+    expect(state.encounterZones).toEqual(['nest-a', 'nest-b']);
+    expect(state.zones).toEqual(['nest-a']);
+    expect(state.fronts).toEqual([]);
+    director.hostUpdate(16, false);
+    const alerts = director.getSpawnZoneAlerts();
+    // Done groups end when their last member came out; pending ones stay open.
+    expect(alerts.find(alert => alert.zoneId === 'nest-a')).toMatchObject({ fromMs: 1_000, atMs: 3_000, endMs: expect.any(Number) });
+    expect(alerts).toContainEqual({ zoneId: 'nest-b', fromMs: 5_000, atMs: 7_000, endMs: null });
+    director.hostUpdate(3_984, false);
+    expect(director.getPresentationState()!.zones).toEqual(['nest-a', 'nest-b']);
+    expect(director.getPresentationState()!.fronts).toEqual(['north']);
   });
 
   it('shows event-triggered encounters active immediately or incoming only for an authored delay', () => {

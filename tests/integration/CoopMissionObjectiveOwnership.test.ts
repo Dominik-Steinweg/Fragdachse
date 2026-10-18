@@ -44,6 +44,7 @@ function emptyHostUpdatePort(): CoopMissionHostUpdatePort {
     publishEncounterPresentation: () => { /* noop */ },
     publishMapEventPresentation: () => { /* noop */ },
     publishSecondaryObjectivePresentation: () => { /* noop */ },
+    publishSpawnZoneAlerts: () => { /* noop */ },
   };
 }
 

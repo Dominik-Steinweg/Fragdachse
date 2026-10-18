@@ -4,6 +4,7 @@ import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode'
 import { createVisibleWorldView, getVisibleWorldView } from '../../graphics/CameraWorldView';
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
 import type { VoidCreepField, VoidCreepTexelRect } from '../../arena/VoidCreepField';
+import { MAX_VOID_DANGER_ALERTS, type VoidDangerAlert } from '../../arena/VoidDangerField';
 import type { LightMapAmbientLayer } from '../LightingSystem';
 import type { FogVoidHaze } from '../groundFog/FogVoidHaze';
 import type { FogAirBinding } from '../groundFog/FogAirBinding';
@@ -41,10 +42,12 @@ class VoidCreepGlow implements LightMapAmbientLayer {
   private width = 0;
   private height = 0;
 
-  constructor(scene: Phaser.Scene, texture: string, private readonly creep: { frame: Float32Array; time: number }) {
+  constructor(scene: Phaser.Scene, texture: string,
+    private readonly creep: { frame: Float32Array; time: number; alerts: Float32Array; alertLevels: Float32Array }) {
     this.renderer = scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     this.target = new SunRenderTarget(scene, 'VoidCreepGlow', VOID_CREEP_GLOW_FRAGMENT, set => {
       set('uCreep', 0); set('uCreepFrame', this.creep.frame); set('uCreepTime', this.creep.time);
+      set('uVoidAlert[0]', this.creep.alerts); set('uVoidAlertLevel[0]', this.creep.alertLevels);
       set('uWorld', this.world); set('uGlow', this.glow);
     }, [texture], VOID_CREEP_GLOW_SHADER_NAME);
     this.image = new Phaser.GameObjects.Image(scene, 0, 0, this.target.shader.texture!.key)
@@ -83,7 +86,8 @@ export class VoidCreepPresentation {
   private fades: HazeFade[] = [];
   private lastTime = NaN;
   private sinceUpload = 0;
-  private readonly creep = { frame: new Float32Array(4), time: 0 };
+  private readonly creep = { frame: new Float32Array(4), time: 0,
+    alerts: new Float32Array(MAX_VOID_DANGER_ALERTS * 4), alertLevels: new Float32Array(MAX_VOID_DANGER_ALERTS) };
   /** World px per screen pixel; the surface shaders fade detail finer than that. */
   private pixelWorld = 1;
   private readonly view = new Float32Array(4);
@@ -95,7 +99,7 @@ export class VoidCreepPresentation {
   private glow: VoidCreepGlow | null = null;
   private motes: VoidSporeMotes | null = null;
   /** The airborne half of the haze, lent to the World's ground fog; null without creep. */
-  private fogHaze: { texture: Phaser.Textures.Texture; frame: Float32Array; time: number; strength: number } | null = null;
+  private fogHaze: (Omit<FogVoidHaze, 'time'> & { time: number }) | null = null;
   /** 1 while the fog carries the airborne haze; the ground layer then keeps to settled dust. */
   private airborne = 0;
 
@@ -116,9 +120,20 @@ export class VoidCreepPresentation {
     this.texture = texture; this.pixels = pixels; this.field = creep; this.haze = creep.haze.slice();
     texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.creep.frame.set([creep.offsetX, creep.offsetY, creep.width * creep.texelPx, creep.height * creep.texelPx]);
-    this.fogHaze = { texture, frame: this.creep.frame, time: 0, strength: AIR_STRENGTH };
+    this.fogHaze = { texture, frame: this.creep.frame, time: 0, strength: AIR_STRENGTH,
+      alerts: this.creep.alerts, alertLevels: this.creep.alertLevels };
     this.ground = this.makeQuad(VOID_CREEP_GROUND_SHADER_NAME, VOID_CREEP_GROUND_FRAGMENT, DEPTH.VOID_CREEP, [key], () => {});
     this.motes = new VoidSporeMotes(this.scene, key, this.creep, this.view, () => this.pixelWorld);
+  }
+
+  /** Spawn zone warnings of this frame, strongest first; every void layer thickens its haze there. */
+  setAlerts(alerts: readonly VoidDangerAlert[]): void {
+    const { alerts: rects, alertLevels: levels } = this.creep;
+    levels.fill(0);
+    alerts.slice(0, MAX_VOID_DANGER_ALERTS).forEach((alert, i) => {
+      rects[i * 4] = alert.x; rects[i * 4 + 1] = alert.y; rects[i * 4 + 2] = alert.width; rects[i * 4 + 3] = alert.height;
+      levels[i] = Math.max(0, Math.min(1, alert.level));
+    });
   }
 
   /** The fog's air after its step this frame, lent to the motes; null without simulating fog. */
@@ -221,6 +236,7 @@ export class VoidCreepPresentation {
       name, shaderName: name, fragmentSource,
       setupUniforms: (set: Set) => {
         set('uCreep', 0); set('uCreepFrame', this.creep.frame); set('uCreepTime', this.creep.time); set('uView', this.view);
+        set('uVoidAlert[0]', this.creep.alerts); set('uVoidAlertLevel[0]', this.creep.alertLevels);
         set('uPixelWorld', this.pixelWorld); set('uAirborne', this.airborne);
         extra(set);
       },

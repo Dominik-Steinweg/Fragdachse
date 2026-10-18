@@ -17,6 +17,9 @@ export const VOID_CREEP_GLSL = `
 uniform sampler2D uCreep;
 uniform vec4 uCreepFrame;
 uniform float uCreepTime;
+// Spawn zone warnings (Void-Gefahrenzonen V1): world rectangle and build-up per zone.
+uniform vec4 uVoidAlert[8];
+uniform float uVoidAlertLevel[8];
 float creepHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 // Gradient noise on a triangular lattice: no square plateaus, no shared grid direction.
 float creepNoise(vec2 p) {
@@ -29,12 +32,29 @@ float creepNoise(vec2 p) {
   weight*=weight; weight*=weight;
   return .5+35.0*dot(weight,cos(angle)*vec3(v0.x,v1.x,v2.x)+sin(angle)*vec3(v0.y,v1.y,v2.y));
 }
+// How strongly announced spawn zones thicken the haze here: each zone's rectangle with a broken,
+// feathered rim, so a warning swells out of the resting haze rather than drawing a box.
+float creepAlert(vec2 world) {
+  float clear=1.0;
+  for(int i=0;i<8;i++) {
+    float level=uVoidAlertLevel[i];
+    if(level<=0.0) continue;
+    vec4 zone=uVoidAlert[i];
+    vec2 q=abs(world-zone.xy-zone.zw*.5)-zone.zw*.5;
+    float d=length(max(q,0.0))+min(max(q.x,q.y),0.0);
+    float rim=(creepNoise(world*.009+float(i)*3.7)-.5)*70.0;
+    clear*=1.0-level*(1.0-smoothstep(-24.0,84.0,d+rim));
+  }
+  return 1.0-clear;
+}
 // Soaked ground (r, a scar that stays), land share (g) and spore haze (b, follows the danger's
-// presence) at a world point.
+// presence and thickens over announced spawn zones) at a world point.
 vec3 creepTexel(vec2 world) {
   vec2 uv=(world-uCreepFrame.xy)/uCreepFrame.zw;
   if(any(lessThan(uv,vec2(0.0)))||any(greaterThan(uv,vec2(1.0)))) return vec3(0.0);
-  return texture2D(uCreep,vec2(uv.x,1.0-uv.y)).rgb;
+  vec3 texel=texture2D(uCreep,vec2(uv.x,1.0-uv.y)).rgb;
+  texel.b=1.0-(1.0-texel.b)*(1.0-.9*creepAlert(world));
+  return texel;
 }
 // Spore haze: x thickness 0..1, y the thick body of the clouds (where light gathers), from two
 // drifting layers. Clearings stay open even where the creep is complete.

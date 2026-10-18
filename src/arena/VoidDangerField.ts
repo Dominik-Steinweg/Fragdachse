@@ -334,4 +334,18 @@ export interface ActivityVoidDanger {
   readonly sources: readonly VoidDangerSource[];
   /** Presence 0..1 of a source id; unknown ids are present. */
   presenceOf(id: string): number;
+  /** Spawn zones about to release enemies, strongest first; the haze over them thickens. */
+  readonly alerts?: readonly VoidDangerAlert[];
 }
+
+/** A spawn zone warning for the shaders: world rectangle and build-up 0..1 (E4/E8). */
+export interface VoidDangerAlert {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly level: number;
+}
+
+/** Warnings the void shaders evaluate at once; further ones wait for a free slot. */
+export const MAX_VOID_DANGER_ALERTS = 8;

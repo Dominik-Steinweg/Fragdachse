@@ -9,8 +9,10 @@ import type {
   CoopDefenseEncounterPresentationPhase,
   CoopDefenseEncounterPresentationState,
   SpawnFront,
+  SyncedSpawnZoneAlert,
 } from '../types';
 import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
+import { SPAWN_ZONE_ALERT_LEAD_MS } from './CoopDefenseSpawnZoneAlerts';
 import type { CoopDefenseSpawnResult } from './CoopDefenseSpawnExecutor';
 
 /** Ausfuehrungsschnitt des Directors zur bestehenden normalen Spawnlogik. */
@@ -22,11 +24,19 @@ export type CoopDefenseEncounterSpawnHandler = (
   spawnArea?: CoopDefenseMapSpawnAreaConfig,
 ) => readonly string[] | CoopDefenseSpawnResult | void;
 
+/** Fronts and World spawn zones a set of groups comes from, in authored order. */
+interface SpawnPlaces { fronts: SpawnFront[]; zones: string[] }
+const addSpawnPlace = (places: SpawnPlaces, group: { readonly front?: SpawnFront; readonly spawnZoneId?: string }): void => {
+  if (group.spawnZoneId) { if (!places.zones.includes(group.spawnZoneId)) places.zones.push(group.spawnZoneId); return; }
+  const front = group.front ?? DEFAULT_SPAWN_FRONT;
+  if (!places.fronts.includes(front)) places.fronts.push(front);
+};
+
 const DEFAULT_SPAWN_BACKSTOP_MS = 30_000;
 const SPAWN_RETRY_INTERVAL_MS = 150;
 const DEFAULT_TECHNICAL_STUCK_BACKSTOP_MS = 60_000;
 /** Reine Präsentationszeit; sie verschiebt weder Trigger noch Spawn-Zeitpunkte. */
-const ENCOUNTER_INCOMING_TELEGRAPH_MS = 900;
+const ENCOUNTER_INCOMING_TELEGRAPH_MS = 1000;
 const ENCOUNTER_CLEARED_HOLD_MS = 800;
 
 export type CoopDefenseMapDirectorMode = 'scheduled' | 'repel-assault';
@@ -185,6 +195,7 @@ export class CoopDefenseMapDirector {
   }
 
   reset(): void {
+    this.zoneGroupDoneAtMs.clear();
     this.announcedWaveStarts.clear();
     this.elapsedMs = 0;
     this.repelEncounterIndex = 0;
@@ -362,9 +373,10 @@ export class CoopDefenseMapDirector {
       phase,
       phaseStartedAtMs: Math.max(0, phaseStartedAtMs),
       phaseEndsAtMs,
-      encounterFronts: [...new Set(wave.indices.flatMap((index) => this.getEncounterFronts(index)))],
-      fronts: [...new Set((relevantIndices.length ? relevantIndices : wave.indices)
-        .flatMap((index) => this.getPresentationFronts(index)))],
+      ...this.spawnPlaces(
+        wave.indices.map((index) => this.getEncounterSpawns(index)),
+        (relevantIndices.length ? relevantIndices : wave.indices).map((index) => this.getPresentationSpawns(index)),
+      ),
       ...(phase === 'active' || phase === 'incoming' ? {
         spawnComplete: states.every((state) => this.isEncounterSpawnCompleteState(state)),
       } : {}),
@@ -738,8 +750,7 @@ export class CoopDefenseMapDirector {
       phase,
       phaseStartedAtMs: Math.max(0, phaseStartedAtMs),
       phaseEndsAtMs: phaseEndsAtMs === null ? null : Math.max(0, phaseEndsAtMs),
-      encounterFronts: this.getEncounterFronts(index),
-      fronts: this.getPresentationFronts(index, encounterStartAtMs),
+      ...this.spawnPlaces([this.getEncounterSpawns(index)], [this.getPresentationSpawns(index, encounterStartAtMs)]),
       ...(spawnComplete === undefined ? {} : { spawnComplete }),
       ...(enemyProgress === null
         ? {}
@@ -748,44 +759,100 @@ export class CoopDefenseMapDirector {
   }
 
   /**
-   * Stable identity of an encounter: every authored group contributes its front immediately,
-   * regardless of delayMs or the live telegraph window. The authored group order is preserved.
+   * Front and zone lists of the presentation state. Zone groups name their World spawn zone, never
+   * a front (GDD Void-Gefahrenzonen V1); an encounter without zones keeps the West fallback.
    */
-  private getEncounterFronts(index: number): SpawnFront[] {
-    const encounter = this.encounters[index];
-    if (!encounter) return [DEFAULT_SPAWN_FRONT];
-
-    const fronts: SpawnFront[] = [];
-    for (const group of encounter.groups) {
-      const front = group.front ?? DEFAULT_SPAWN_FRONT;
-      if (!fronts.includes(front)) fronts.push(front);
-    }
-    return fronts.length > 0 ? fronts : [DEFAULT_SPAWN_FRONT];
+  private spawnPlaces(encounter: readonly SpawnPlaces[], live: readonly SpawnPlaces[]): Pick<CoopDefenseEncounterPresentationState,
+    'encounterFronts' | 'fronts' | 'encounterZones' | 'zones'> {
+    const unique = <T>(lists: readonly (readonly T[])[]): T[] => [...new Set(lists.flat())];
+    const encounterZones = unique(encounter.map((entry) => entry.zones));
+    return {
+      encounterFronts: unique(encounter.map((entry) => entry.fronts)),
+      fronts: unique(live.map((entry) => entry.fronts)),
+      ...(encounterZones.length ? { encounterZones, zones: unique(live.map((entry) => entry.zones)) } : {}),
+    };
   }
 
   /**
-   * Returns only fronts that have spawned or are close enough to their authored group arrival to
-   * be useful as a telegraph. This keeps a delayed south group from being advertised together
-   * with an opening west group for the entire encounter.
+   * Stable identity of an encounter: every authored group contributes its front or zone
+   * immediately, regardless of delayMs or the live telegraph window. The authored group order is
+   * preserved.
    */
-  private getPresentationFronts(index: number, encounterStartAtMs?: number): SpawnFront[] {
+  private getEncounterSpawns(index: number): SpawnPlaces {
     const encounter = this.encounters[index];
-    if (!encounter) return [DEFAULT_SPAWN_FRONT];
+    if (!encounter) return { fronts: [DEFAULT_SPAWN_FRONT], zones: [] };
+    const places: SpawnPlaces = { fronts: [], zones: [] };
+    for (const group of encounter.groups) addSpawnPlace(places, group);
+    if (places.fronts.length === 0 && places.zones.length === 0) places.fronts.push(DEFAULT_SPAWN_FRONT);
+    return places;
+  }
+
+  /**
+   * Returns only fronts and zones that have spawned or are close enough to their authored group
+   * arrival to be useful as a telegraph. This keeps a delayed south group from being advertised
+   * together with an opening west group for the entire encounter.
+   */
+  private getPresentationSpawns(index: number, encounterStartAtMs?: number): SpawnPlaces {
+    const encounter = this.encounters[index];
+    if (!encounter) return { fronts: [DEFAULT_SPAWN_FRONT], zones: [] };
     const state = this.executionStates[index];
     const startAtMs = encounterStartAtMs
       ?? (state?.started ? state.startedAtMs : this.elapsedMs);
-    const fronts: SpawnFront[] = [];
+    const places: SpawnPlaces = { fronts: [], zones: [] };
     for (let groupIndex = 0; groupIndex < encounter.groups.length; groupIndex += 1) {
       const group = encounter.groups[groupIndex];
       const groupStartAtMs = startAtMs + Math.max(0, Math.floor(group.delayMs ?? 0));
       const groupHasSpawned = state?.groupSpawnedCounts[groupIndex] > 0;
       if (!groupHasSpawned && groupStartAtMs > this.elapsedMs + ENCOUNTER_INCOMING_TELEGRAPH_MS) continue;
-      const front = group.front ?? DEFAULT_SPAWN_FRONT;
-      if (!fronts.includes(front)) fronts.push(front);
+      addSpawnPlace(places, group);
     }
-    if (fronts.length > 0) return fronts;
-    const firstFront = encounter.groups[0]?.front ?? DEFAULT_SPAWN_FRONT;
-    return [firstFront];
+    if (places.fronts.length === 0 && places.zones.length === 0) {
+      const first = encounter.groups[0];
+      if (first?.spawnZoneId) places.zones.push(first.spawnZoneId);
+      else places.fronts.push(first?.front ?? DEFAULT_SPAWN_FRONT);
+    }
+    return places;
+  }
+
+  /**
+   * Spawn zones about to release enemies, for the void haze warning (GDD Void-Gefahrenzonen V1,
+   * E4/E8). Every unfinished zone group of a started encounter is announced from
+   * SPAWN_ZONE_ALERT_LEAD_MS before its first scheduled spawn until it is done; the groups of the
+   * next predictable encounter are announced ahead of their start. A trigger without a predictable
+   * time (event, checkpoint, base) announces its groups only once it fires.
+   */
+  getSpawnZoneAlerts(out: SyncedSpawnZoneAlert[] = []): SyncedSpawnZoneAlert[] {
+    for (let index = 0; index < this.encounters.length; index += 1) {
+      const state = this.executionStates[index];
+      if (!state.started || state.cleared) continue;
+      this.encounters[index].groups.forEach((group, groupIndex) => {
+        if (!group.spawnZoneId) return;
+        const times = state.groupSpawnAtMs[groupIndex];
+        const firstAtMs = times[0] ?? state.startedAtMs + Math.max(0, Math.floor(group.delayMs ?? 0));
+        const key = `${index}:${groupIndex}`;
+        // The end is when the last member actually came out, not when it was scheduled.
+        const doneAtMs = state.groupsExecuted[groupIndex]
+          ? this.zoneGroupDoneAtMs.get(key) ?? this.rememberZoneGroupDone(key, Math.max(times[times.length - 1] ?? firstAtMs, this.elapsedMs))
+          : null;
+        out.push({ zoneId: group.spawnZoneId, fromMs: firstAtMs - SPAWN_ZONE_ALERT_LEAD_MS, atMs: firstAtMs, endMs: doneAtMs });
+      });
+    }
+    const pending = this.findPredictablePendingEncounter();
+    if (pending && pending.startAtMs - SPAWN_ZONE_ALERT_LEAD_MS <= this.elapsedMs + SPAWN_ZONE_ALERT_LEAD_MS) {
+      for (const group of this.encounters[pending.index].groups) {
+        if (!group.spawnZoneId) continue;
+        const atMs = pending.startAtMs + Math.max(0, Math.floor(group.delayMs ?? 0));
+        out.push({ zoneId: group.spawnZoneId, fromMs: atMs - SPAWN_ZONE_ALERT_LEAD_MS, atMs,
+          endMs: atMs + Math.max(0, Math.floor(group.spawnStaggerMs ?? 0)) });
+      }
+    }
+    return out;
+  }
+
+  private readonly zoneGroupDoneAtMs = new Map<string, number>();
+  private rememberZoneGroupDone(key: string, atMs: number): number {
+    this.zoneGroupDoneAtMs.set(key, atMs);
+    return atMs;
   }
 
   /**

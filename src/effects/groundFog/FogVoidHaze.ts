@@ -15,4 +15,7 @@ export interface FogVoidHaze {
   readonly time: number;
   /** 0..1 strength of the airborne layer. */
   readonly strength: number;
+  /** Spawn zone warnings (`uVoidAlert[0]`: x, y, width, height per zone; `uVoidAlertLevel[0]`). */
+  readonly alerts: Float32Array;
+  readonly alertLevels: Float32Array;
 }

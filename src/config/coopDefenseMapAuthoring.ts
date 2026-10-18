@@ -1176,7 +1176,8 @@ export function resolveCoopDefenseMapEncounterConfigs(
         count: resolvedGroup.countPerTick,
         delayMs: Math.max(0, Math.floor(group.delayMs ?? 0)),
         spawnStaggerMs: group.spawnStaggerMs ?? DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS,
-        front: group.front ?? DEFAULT_SPAWN_FRONT,
+        // A zone group has a place, not a front; only front groups keep the West fallback.
+        ...(group.spawnZoneId ? {} : { front: group.front ?? DEFAULT_SPAWN_FRONT }),
         ...(group.spawnZoneId ? { spawnZoneId: group.spawnZoneId } : {}),
         ...(group.spawnArea ? { spawnArea: { ...group.spawnArea } } : {}),
       };

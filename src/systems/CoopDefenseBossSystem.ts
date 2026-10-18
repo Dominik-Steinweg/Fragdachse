@@ -5,6 +5,8 @@ import { getBossIntroPreset, type BossIntroState } from '../config/bossIntros';
 import type { KrakenBossSpawnPort, KrakenHabitatReservation, KrakenHabitatResult } from './KrakenState';
 import type { BossTargetRef } from '../combat/CombatPartContact';
 import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
+import type { SyncedSpawnZoneAlert } from '../types';
+import { SPAWN_ZONE_ALERT_LEAD_MS } from './CoopDefenseSpawnZoneAlerts';
 
 interface BossSpawnExecutor {
   hostReserveBossHabitat?(kind: CoopDefenseEnemyKind, habitatId: string): KrakenHabitatResult<KrakenHabitatReservation>;
@@ -17,7 +19,7 @@ interface BossSpawnExecutor {
 
 type BossPhase =
   | { readonly type: 'waiting' }
-  | { readonly type: 'intro'; readonly state: BossIntroState; readonly emergeAtElapsedMs: number; readonly reservation?: KrakenHabitatReservation }
+  | { readonly type: 'intro'; readonly state: BossIntroState; readonly startedAtElapsedMs: number; readonly emergeAtElapsedMs: number; readonly reservation?: KrakenHabitatReservation }
   | { readonly type: 'spawned'; readonly spawnedAtElapsedMs: number };
 
 /**
@@ -105,6 +107,21 @@ export class CoopDefenseBossSystem {
       && (!(this.bossConfig.habitatId || this.bossConfig.intro?.preset === 'kraken-rise') || this.defeatCompletion?.() === true);
   }
 
+  /**
+   * The boss's spawn zone from the start of its intro until it has emerged (GDD
+   * Void-Gefahrenzonen V1); null without a zone or before the intro.
+   */
+  getSpawnZoneAlert(): SyncedSpawnZoneAlert | null {
+    const zoneId = this.bossConfig.spawnZoneId;
+    if (!zoneId) return null;
+    if (this.phase.type === 'intro') return { zoneId, fromMs: this.phase.startedAtElapsedMs, atMs: this.phase.emergeAtElapsedMs, endMs: null };
+    if (this.phase.type === 'spawned') {
+      const at = this.phase.spawnedAtElapsedMs;
+      return { zoneId, fromMs: at - SPAWN_ZONE_ALERT_LEAD_MS, atMs: at, endMs: at };
+    }
+    return null;
+  }
+
   private tryStartIntro(synchronizedNowMs: number): BossPhase | null {
     const introConfig = this.bossConfig.intro;
     if (introConfig?.preset === 'kraken-rise') {
@@ -115,7 +132,7 @@ export class CoopDefenseBossSystem {
       const state: BossIntroState = { preset: 'kraken-rise', habitatId: r.habitatId, waterAnchorId: r.waterAnchorId,
         x: r.x, y: r.y, startedAtMs: synchronizedNowMs, seed: Math.floor(this.random() * 0xffffffff) >>> 0 };
       this.onBossIntroStarted?.(state);
-      return { type: 'intro', state, reservation: r, emergeAtElapsedMs: this.elapsedMs + getBossIntroPreset('kraken-rise').emergeAtMs };
+      return { type: 'intro', state, reservation: r, startedAtElapsedMs: this.elapsedMs, emergeAtElapsedMs: this.elapsedMs + getBossIntroPreset('kraken-rise').emergeAtMs };
     }
     if (this.bossConfig.habitatId) return null;
     if (!introConfig || !this.spawnExecutor.hostResolveBossSpawnPoint || !this.spawnExecutor.hostSpawnBossAt) return null;
@@ -134,6 +151,7 @@ export class CoopDefenseBossSystem {
     return {
       type: 'intro',
       state,
+      startedAtElapsedMs: this.elapsedMs,
       emergeAtElapsedMs: this.elapsedMs + preset.emergeAtMs,
     };
   }

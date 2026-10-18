@@ -394,6 +394,7 @@ export class FogGpuField {
         this.voidHazeUniform[0]=haze?1:0;this.voidHazeUniform[1]=haze?.strength??0;
         set('uVoidHaze',this.voidHazeUniform);set('uCreep',3);set('uFogVelocity',4);set('uFogLookup',5);set('uFogState',6);
         set('uCreepFrame',haze?.frame??this.view4);set('uCreepTime',haze?.time??0);
+        if(haze){set('uVoidAlert[0]',haze.alerts);set('uVoidAlertLevel[0]',haze.alertLevels);}
         this.fogOrigin[0]=this.terrain.frame.offsetX;this.fogOrigin[1]=this.terrain.frame.offsetY;
         set('uFogOrigin',this.fogOrigin);set('uFogWorldSize',[this.terrain.frame.width,this.terrain.frame.height]);
         set('uFogLookupSize',[this.lookup.width,this.lookup.height]);

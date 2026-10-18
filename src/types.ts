@@ -48,6 +48,18 @@ export interface CoopDefenseRespawnBudgetState {
   players: Record<string, CoopDefenseRespawnBudgetPlayerState>;
 }
 
+/**
+ * Host-announced release of enemies from one World spawn zone (GDD Void-Gefahrenzonen V1, E4/E8):
+ * the haze over the zone thickens from `fromMs` to `atMs`, holds until `endMs` (null = open) and
+ * settles afterwards. Host mission time, like the encounter phases.
+ */
+export interface SyncedSpawnZoneAlert {
+  zoneId: string;
+  fromMs: number;
+  atMs: number;
+  endMs: number | null;
+}
+
 /** Host-autoritärer, zuverlässiger Präsentationszustand eines endlichen Coop-Encounter. */
 export type CoopDefenseEncounterPresentationPhase =
   | 'incoming'
@@ -73,6 +85,13 @@ export interface CoopDefenseEncounterPresentationState {
   encounterFronts: readonly SpawnFront[];
   /** Fronts currently arriving or still relevant for the live world telegraph. */
   fronts: readonly SpawnFront[];
+  /**
+   * All World spawn zones (ids) of this encounter, like `encounterFronts` (GDD Void-Gefahrenzonen
+   * V1). Absent without zone groups; with zones the front lists may be empty.
+   */
+  encounterZones?: readonly string[];
+  /** Spawn zones currently arriving or still relevant for the live world telegraph. */
+  zones?: readonly string[];
   /** True, sobald alle Gruppen dieses Encounters autoritativ ausgespielt wurden. */
   spawnComplete?: boolean;
   /**

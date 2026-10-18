@@ -398,7 +398,7 @@ describe('Lobby exit gates local Arena work', () => {
     const f = fixture(true); f.net.phase = 'LOBBY';
     for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
       'hostPublishDawnRoundScrap',
-      'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
+      'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseSpawnZoneAlerts', 'publishCoopDefenseMapEventPresentationState',
       'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
       'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'publishRoundState'] as const) {
       vi.spyOn(bridge, method).mockImplementation(() => {});

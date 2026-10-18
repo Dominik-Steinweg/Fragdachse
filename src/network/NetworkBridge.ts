@@ -75,7 +75,7 @@ import {
   type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkFlight, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedMortarStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkFlight, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedMortarStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedSpawnZoneAlert, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import {
   clonePersistentPlayerBaseContribution,
@@ -256,6 +256,12 @@ const KEY_COOP_ENCOUNTER_PRESENTATION = 'cep'; // global reliable: CoopDefenseEn
 const KEY_COOP_MAP_EVENT_PRESENTATION = 'cme'; // global reliable: CoopDefenseMapEventPresentationState | null
 const KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION = 'cso'; // global reliable: Objective-Presentationseinträge | null
 const KEY_COOP_MISSION_PROGRESS_PRESENTATION = 'cmp'; // global reliable: route/checkpoint snapshot | null
+const KEY_COOP_SPAWN_ZONE_ALERTS = 'csz'; // global reliable: SyncedSpawnZoneAlert[] | null
+const MAX_COOP_SPAWN_ZONE_ALERTS = 16;
+const MAX_COOP_ENCOUNTER_ZONES = 64;
+const SPAWN_ZONE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const isSpawnZoneId = (value: unknown): value is string => typeof value === 'string' && value.length <= 64 && SPAWN_ZONE_ID.test(value);
+const NO_SPAWN_ZONE_ALERTS: readonly SyncedSpawnZoneAlert[] = [];
 const MAX_COOP_MAP_EVENT_PRESENTATION_ENTRIES = 64;
 const MAX_COOP_SECONDARY_OBJECTIVE_PRESENTATION_ENTRIES = 32;
 // KEY_HITSCAN_TRACES und KEY_MELEE_SWINGS entfernt – werden jetzt per RPC gesendet
@@ -864,6 +870,7 @@ export class NetworkBridge {
    * Zustand wird pro Frame mehrfach gelesen – HUD, Weltmarkierung und das Dormanz-Gate jeder
    * noch schlafenden Basis –, ändert sich aber nur bei einem echten Host-Update.
    */
+  private spawnZoneAlertCache: { raw: unknown; value: readonly SyncedSpawnZoneAlert[] } | null = null;
   private secondaryObjectivePresentationCache: {
     raw: unknown;
     value: CoopDefenseSecondaryObjectivePresentationState | null;
@@ -2350,6 +2357,22 @@ export class NetworkBridge {
     };
   }
 
+  /** Host-only: Spawnzonen, die gleich Gegner freigeben (GDD Void-Gefahrenzonen V1). */
+  publishCoopDefenseSpawnZoneAlerts(alerts: readonly SyncedSpawnZoneAlert[] | null): void {
+    if (!isHost()) return;
+    setState(KEY_COOP_SPAWN_ZONE_ALERTS, alerts && alerts.length ? alerts : null, true);
+  }
+
+  /** Angekündigte Spawnzonen; fail-closed: ein ungültiger Eintrag verwirft die ganze Liste. */
+  getCoopDefenseSpawnZoneAlerts(): readonly SyncedSpawnZoneAlert[] {
+    const raw = getState(KEY_COOP_SPAWN_ZONE_ALERTS) as unknown;
+    const cached = this.spawnZoneAlertCache;
+    if (cached && cached.raw === raw) return cached.value;
+    const value = sanitizeSpawnZoneAlerts(raw);
+    this.spawnZoneAlertCache = { raw, value };
+    return value;
+  }
+
   /** Host-only: publiziert ausschließlich den aktuellen, kleinen Encounter-Präsentationszustand. */
   publishCoopDefenseEncounterPresentationState(state: CoopDefenseEncounterPresentationState | null): void {
     if (!isHost()) return;
@@ -2376,22 +2399,36 @@ export class NetworkBridge {
         || phaseEndsAtMs < phaseStartedAtMs)) return null;
     const spawnComplete = raw.spawnComplete;
     if (spawnComplete !== undefined && typeof spawnComplete !== 'boolean') return null;
+    // Spawn zones (Void-Gefahrenzonen V1): with zones the front lists may be empty; only an
+    // encounter without either falls back to West.
+    const readZones = (value: unknown): string[] | null => {
+      if (value === undefined) return [];
+      if (!Array.isArray(value) || value.length > MAX_COOP_ENCOUNTER_ZONES) return null;
+      const zones: string[] = [];
+      for (const zone of value) {
+        if (!isSpawnZoneId(zone) || zones.includes(zone)) return null;
+        zones.push(zone);
+      }
+      return zones;
+    };
+    const encounterZones = readZones(raw.encounterZones), zones = readZones(raw.zones);
+    if (!encounterZones || !zones) return null;
     const rawEncounterFronts = raw.encounterFronts ?? raw.fronts;
     const rawFronts = raw.fronts;
     if (rawEncounterFronts !== undefined && !Array.isArray(rawEncounterFronts)) return null;
     if (rawFronts !== undefined && !Array.isArray(rawFronts)) return null;
     const encounterFronts: SpawnFront[] = [];
-    for (const front of rawEncounterFronts ?? [DEFAULT_SPAWN_FRONT]) {
+    for (const front of rawEncounterFronts ?? (encounterZones.length ? [] : [DEFAULT_SPAWN_FRONT])) {
       if (!isSpawnFront(front) || encounterFronts.includes(front)) return null;
       encounterFronts.push(front);
     }
-    if (encounterFronts.length === 0) encounterFronts.push(DEFAULT_SPAWN_FRONT);
+    if (encounterFronts.length === 0 && encounterZones.length === 0) encounterFronts.push(DEFAULT_SPAWN_FRONT);
     const fronts: SpawnFront[] = [];
-    for (const front of rawFronts ?? [DEFAULT_SPAWN_FRONT]) {
+    for (const front of rawFronts ?? (zones.length ? [] : [DEFAULT_SPAWN_FRONT])) {
       if (!isSpawnFront(front) || fronts.includes(front)) return null;
       fronts.push(front);
     }
-    if (fronts.length === 0) fronts.push(DEFAULT_SPAWN_FRONT);
+    if (fronts.length === 0 && zones.length === 0) fronts.push(DEFAULT_SPAWN_FRONT);
     // Die Gegnerzahlen sind optional und rein darstellend: Ein unplausibles Paar wird
     // verworfen, nicht repariert – das Panel fällt dann auf die Phasenanzeige zurück.
     const enemiesTotal = raw.enemiesTotal;
@@ -2409,6 +2446,7 @@ export class NetworkBridge {
       phaseEndsAtMs,
       encounterFronts,
       fronts,
+      ...(encounterZones.length ? { encounterZones, zones } : {}),
       ...(spawnComplete === undefined ? {} : { spawnComplete }),
       ...(hasEnemyProgress ? { enemiesDefeated, enemiesTotal } : {}),
     } as CoopDefenseEncounterPresentationState;
@@ -3285,6 +3323,7 @@ export class NetworkBridge {
     this.projectileStaticCache.clear();
     this.mapEventPresentationCache = null;
     this.secondaryObjectivePresentationCache = null;
+    this.spawnZoneAlertCache = null;
   }
 
   /**
@@ -5877,4 +5916,18 @@ export class NetworkBridge {
       && Number.isSafeInteger(worldRevision)
       && isCurrentWorldRevision(world.worldRevision, worldRevision);
   }
+}
+
+function sanitizeSpawnZoneAlerts(raw: unknown): readonly SyncedSpawnZoneAlert[] {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_COOP_SPAWN_ZONE_ALERTS) return NO_SPAWN_ZONE_ALERTS;
+  const alerts: SyncedSpawnZoneAlert[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') return NO_SPAWN_ZONE_ALERTS;
+    const { zoneId, fromMs, atMs, endMs } = entry as Partial<SyncedSpawnZoneAlert>;
+    const time = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+    if (!isSpawnZoneId(zoneId) || alerts.some(alert => alert.zoneId === zoneId) || !time(fromMs) || !time(atMs) || fromMs > atMs
+      || (endMs !== null && (!time(endMs) || endMs < fromMs))) return NO_SPAWN_ZONE_ALERTS;
+    alerts.push({ zoneId, fromMs, atMs, endMs: endMs ?? null });
+  }
+  return alerts;
 }

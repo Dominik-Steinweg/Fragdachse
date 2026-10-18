@@ -396,6 +396,12 @@ export class ArenaLifecycleCoordinator {
     getOffset: () => this.worldRuntime?.context.metrics ?? null,
     getBase: (id) => this.worldRuntime?.materialization?.bases?.getBase(id),
     getObjectives: () => bridge.getCoopDefenseSecondaryObjectivePresentationState(),
+    getSpawnZoneAlerts: () => bridge.getCoopDefenseSpawnZoneAlerts(),
+    getMissionElapsedMs: () => {
+      const start = bridge.getArenaStartTime();
+      return start > 0 && this.coopMissionRuntime
+        ? this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow()) - start : null;
+    },
   });
   /**
    * Die Fragen der Coop-Mission an World, Scene und Netz.
@@ -1851,6 +1857,7 @@ export class ArenaLifecycleCoordinator {
     // geleert. So kann ein Client beim naechsten Phasenwechsel keine veraltete Auswertung zeigen.
     bridge.publishRoundResults([]);
     bridge.publishCoopDefenseEncounterPresentationState(null);
+    bridge.publishCoopDefenseSpawnZoneAlerts(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
@@ -2230,6 +2237,7 @@ export class ArenaLifecycleCoordinator {
   /** Entfernt ausschliesslich die replizierte Darstellung der beendeten Coop-Activity. */
   private clearCoopMissionPresentationState(): void {
     bridge.publishCoopDefenseEncounterPresentationState(null);
+    bridge.publishCoopDefenseSpawnZoneAlerts(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
@@ -2339,6 +2347,7 @@ export class ArenaLifecycleCoordinator {
     if (!isDiagnosticMapId(this.resolveConfiguredCoopDefenseMapConfig().mapId) && !isDevScenarioMode()) return;
     this.persistentBase.rollbackPersistentBaseMissionIfActive();
     bridge.publishCoopDefenseEncounterPresentationState(null);
+    bridge.publishCoopDefenseSpawnZoneAlerts(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);

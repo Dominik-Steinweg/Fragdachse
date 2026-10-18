@@ -5,10 +5,12 @@ import type { FireSystem } from '../effects/FireSystem';
 import type { SmokePerceptionPort } from '../systems/SmokeRules';
 import type {
   CoopDefenseEncounterPresentationState,
+  SyncedSpawnZoneAlert,
   CoopDefenseMapEventPresentationState,
   CoopDefenseSecondaryObjectivePresentationState,
 } from '../types';
 import type { CoopMissionRuntime } from './CoopMissionRuntime';
+import { mergeSpawnZoneAlerts, spawnZoneAlertSignature } from '../systems/CoopDefenseSpawnZoneAlerts';
 
 /** Eine Figur der laufenden World, so weit die Coop-Mission sie liest. */
 export interface CoopMissionPlayerView {
@@ -80,6 +82,8 @@ export interface CoopMissionHostUpdatePort {
   readonly publishSecondaryObjectivePresentation: (
     state: CoopDefenseSecondaryObjectivePresentationState | null,
   ) => void;
+  /** Spawn zones about to release enemies (GDD Void-Gefahrenzonen V1). */
+  readonly publishSpawnZoneAlerts: (alerts: readonly SyncedSpawnZoneAlert[]) => void;
 }
 
 /** Optionaler Messpunkt der Navigation; ohne Diagnose bleibt er ungenutzt. */
@@ -110,6 +114,7 @@ export class CoopMissionHostUpdate {
     | null
     | undefined;
   private lastSecondaryObjectivePresentationSignature: string | null = null;
+  private lastSpawnZoneAlertSignature: string | null = null;
 
   constructor(
     private readonly runtime: CoopMissionRuntime,
@@ -196,6 +201,7 @@ export class CoopMissionHostUpdate {
     // Read active structure sources after the objective transition so pressure starts in the same
     // host frame in which its linked dormant base becomes active.
     this.runtime.coopDefensePersistentPressureSystem?.hostUpdate(deltaMs, countdownActive);
+    this.publishSpawnZoneAlerts();
   }
 
   /** Gegner-Navigation, Bewegung und Kampf. */
@@ -291,6 +297,19 @@ export class CoopMissionHostUpdate {
     if (state === this.lastMapEventPresentationState) return;
     this.lastMapEventPresentationState = state;
     this.port.publishMapEventPresentation(state);
+  }
+
+  /** Director groups, persistent zone sources and the boss, merged per zone; published on change. */
+  private publishSpawnZoneAlerts(): void {
+    const alerts: SyncedSpawnZoneAlert[] = [];
+    this.runtime.coopDefenseMapDirector?.getSpawnZoneAlerts(alerts);
+    this.runtime.coopDefensePersistentPressureSystem?.getSpawnZoneAlerts(alerts);
+    const boss = this.runtime.coopDefenseBossSystem?.getSpawnZoneAlert();
+    if (boss) alerts.push(boss);
+    const merged = mergeSpawnZoneAlerts(alerts), signature = spawnZoneAlertSignature(merged);
+    if (signature === this.lastSpawnZoneAlertSignature) return;
+    this.lastSpawnZoneAlertSignature = signature;
+    this.port.publishSpawnZoneAlerts(merged);
   }
 
   private publishSecondaryObjectivePresentation(): void {

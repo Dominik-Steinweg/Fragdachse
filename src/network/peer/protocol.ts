@@ -30,7 +30,9 @@
 // Quacksalber toad: appended hop snapshot field (jump timeline and heal links); the healing aura weapon is gone.
 // Kabummtula: kind 12 renamed timebomb-badger -> kaboomtula, appended spider snapshot field (phase window,
 // target ref, locked leap), required tw slice (turret web shots and webs); timebomb special actions retired.
-export const PEER_PROTOCOL_VERSION = 39;
+// Void danger zones: encounter state names World spawn zones (fronts may be empty) and the
+// required csz key announces spawn zones about to release enemies.
+export const PEER_PROTOCOL_VERSION = 40;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

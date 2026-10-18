@@ -28,12 +28,14 @@ export class VoidSporeMotes {
   private glow = DAY_GLOW;
   private quality: VoidMoteQuality = { layers: 2, gradient: true };
 
-  constructor(scene: Phaser.Scene, private readonly creepKey: string, creep: { frame: Float32Array; time: number },
+  constructor(scene: Phaser.Scene, private readonly creepKey: string,
+    creep: { frame: Float32Array; time: number; alerts: Float32Array; alertLevels: Float32Array },
     view: Float32Array, pixelWorld: () => number) {
     this.quad = new Phaser.GameObjects.Shader(scene, {
       name: VOID_SPORE_MOTES_SHADER_NAME, shaderName: VOID_SPORE_MOTES_SHADER_NAME, fragmentSource: VOID_SPORE_MOTES_FRAGMENT,
       setupUniforms: (set: (name: string, value: unknown) => void) => {
         set('uCreep', 0); set('uCreepFrame', creep.frame); set('uCreepTime', creep.time); set('uView', view);
+        set('uVoidAlert[0]', creep.alerts); set('uVoidAlertLevel[0]', creep.alertLevels);
         set('uPixelWorld', pixelWorld()); set('uGlow', this.glow);
         set('uLayers', this.quality.layers); set('uGradient', this.quality.gradient ? 1 : 0);
         set('uMoteDeep', this.deep); set('uMoteBright', this.bright);

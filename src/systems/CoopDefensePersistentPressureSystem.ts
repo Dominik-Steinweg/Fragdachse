@@ -1,7 +1,8 @@
 import type { BaseSpec } from '../arena/BaseRegistry';
 import type { CoopDefenseMapSpawnAreaConfig, ResolvedCoopDefenseMapPersistentSpawnConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseEnemyKind } from '../config/coopDefenseEnemies';
-import type { SpawnFront } from '../types';
+import type { SpawnFront, SyncedSpawnZoneAlert } from '../types';
+import { SPAWN_ZONE_ALERT_LEAD_MS } from './CoopDefenseSpawnZoneAlerts';
 
 interface PersistentPressureSpawnExecutor {
   hostSpawnPersistentMapGroup(kind: CoopDefenseEnemyKind, count: number, front?: SpawnFront,
@@ -60,6 +61,19 @@ export class CoopDefensePersistentPressureSystem {
 
   getElapsedMs(): number {
     return this.elapsedMs;
+  }
+
+  /**
+   * The next release of every active zone source, announced SPAWN_ZONE_ALERT_LEAD_MS ahead so
+   * its haze thickens before each tick (GDD Void-Gefahrenzonen V1, E4).
+   */
+  getSpawnZoneAlerts(out: SyncedSpawnZoneAlert[] = []): SyncedSpawnZoneAlert[] {
+    for (const [index, source] of this.sources.entries()) {
+      if (source.source.type !== 'zone' || !this.isSourceActive(source)) continue;
+      const atMs = this.startedSources[index] ? this.elapsedMs + source.intervalMs - this.accumulators[index] : source.startAtMs;
+      out.push({ zoneId: source.source.zoneId, fromMs: atMs - SPAWN_ZONE_ALERT_LEAD_MS, atMs, endMs: atMs });
+    }
+    return out;
   }
 
   private isSourceActive(source: ResolvedCoopDefenseMapPersistentSpawnConfig): boolean {

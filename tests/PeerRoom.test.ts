@@ -80,6 +80,34 @@ describe('PeerRoom handshake and roster', () => {
       hostBridge.publishCoopDefenseEncounterPresentationState(null);
       use(client);
       expect(clientBridge.getCoopDefenseEncounterPresentationState()).toBeNull();
+      // Spawn zones (Void-Gefahrenzonen V1): zone encounters need no front; West only without either.
+      const zoned = { ...state, encounterFronts: [], fronts: [], encounterZones: ['nest-a', 'nest-b'], zones: ['nest-a'] };
+      use(host);
+      hostBridge.publishCoopDefenseEncounterPresentationState(zoned);
+      use(client);
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toEqual(zoned);
+      use(host);
+      host.room.setGlobal('cep', { ...zoned, zones: ['Nest A'] }, true);
+      use(client);
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toBeNull();
+      use(host);
+      host.room.setGlobal('cep', { ...zoned, encounterZones: undefined, zones: undefined }, true);
+      use(client);
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()?.fronts).toEqual(['west']);
+      const alerts = [{ zoneId: 'nest-a', fromMs: 1000, atMs: 3000, endMs: null }];
+      use(host);
+      hostBridge.publishCoopDefenseSpawnZoneAlerts(alerts);
+      use(client);
+      expect(clientBridge.getCoopDefenseSpawnZoneAlerts()).toEqual(alerts);
+      expect(clientBridge.getCoopDefenseSpawnZoneAlerts()).toBe(clientBridge.getCoopDefenseSpawnZoneAlerts());
+      use(host);
+      host.room.setGlobal('csz', [...alerts, { zoneId: 'nest-b', fromMs: 5, atMs: 4, endMs: null }], true);
+      use(client);
+      expect(clientBridge.getCoopDefenseSpawnZoneAlerts()).toEqual([]);
+      use(host);
+      hostBridge.publishCoopDefenseSpawnZoneAlerts(null);
+      use(client);
+      expect(clientBridge.getCoopDefenseSpawnZoneAlerts()).toEqual([]);
     } finally { clearActiveSession(); client?.room.destroy(); host.room.destroy(); }
   });
 

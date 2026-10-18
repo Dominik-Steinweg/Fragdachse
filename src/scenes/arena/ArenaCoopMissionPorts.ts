@@ -180,6 +180,9 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
       publishSecondaryObjectivePresentation: (state) => {
         bridge.publishCoopDefenseSecondaryObjectivePresentationState(state);
       },
+      publishSpawnZoneAlerts: (alerts) => {
+        bridge.publishCoopDefenseSpawnZoneAlerts(alerts);
+      },
     },
     clientPresentation: {
       getMissionProgressPresentationState: () => bridge.getCoopDefenseMissionProgressPresentationState(),
