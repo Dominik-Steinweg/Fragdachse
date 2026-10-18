@@ -52,3 +52,4 @@ verbessert zusätzlich die Optik und markiert ab Map 12 das Feindesland.
 - 2026-10-18: Befall ist zusammenhängend. Benachbarte Pflanzen und ganze Teiche kippen gemeinsam, Ränder zeigen teilweisen Befall; einzelne violette Pflanzen neben grünen gibt es nicht.
 - 2026-10-18: Die Farbe bleibt einheitlich (kein zweites, natürliches Leuchten). Wirkt Violett am Ende nicht, entsteht eine neue Variante, in der alles in einer gemeinsamen Farbe leuchtet.
 - 2026-10-18: Die restlichen 15 Bilder (Seerosengruppen 04–06, Moos-Set) entstehen lokal über ComfyUI statt über Argon, damit nicht auf das Antigravity-Kontingent gewartet wird. Felsteile übernehmen die Silhouette ihrer natürlichen Familie.
+- 2026-10-18 (Spieltest): Void-Seerosen wirkten aufgesetzt. Ihr Wasser trägt jetzt die Tinte des Befalls: dicht unter den Blättern, nach außen in Schlieren auslaufend, langsam treibend.

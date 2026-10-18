@@ -11,6 +11,7 @@ import type { GroundFogSystem } from '../groundFog/GroundFogSystem';
 import type { CameraPostFxController } from '../postfx/CameraPostFxController';
 import { CanopyLighting } from '../../arena/trees/CanopyLighting';
 import { buildWoodlandEcology, EcologyWaterField, markVoidPondColonies } from '../../arena/WoodlandEcologyField';
+import { buildVoidWaterStain } from '../../arena/VoidWaterStain';
 import { VoidFloraField, resolveVoidFloraHotspots } from '../../arena/VoidFloraField';
 import { VoidFloraGlow } from './VoidFloraGlow';
 import { VoidFloraEmission } from './VoidFloraEmission';
@@ -268,6 +269,8 @@ export class WorldSunlightPresentation {
       const water=new EcologyWaterField(targets.water?.getPreparedMasks()??[]);
       const placements=buildWoodlandEcology(layout,frame,crowns,water,targets.worldContext!.bases.flatMap(b=>b.cells));
       markVoidPondColonies(placements,this.voidField,voidLilyFrame);
+      // The ink of infested pads seeps into their water; the water renderer owns the texture.
+      targets.water?.setVoidStain(buildVoidWaterStain(placements,frame));
       this.voidPondPoints.length=0;
       // One glow per colony at its first plant, with the colony's mean infestation.
       const colonies=new Map<number,{x:number;y:number;sum:number;n:number}>();
@@ -288,7 +291,7 @@ export class WorldSunlightPresentation {
   this.releasePlayerGlow?.();this.releasePlayerGlow=null;
   const t=this.targets;
   // Unbind receivers before destroying fields; the terrain may be handed to another World.
-  t.ground?.setVegetationLight(undefined);t.water?.setSunlight(undefined);t.water?.setNightLight(null);t.wildlife?.setSunlight(undefined);
+  t.ground?.setVegetationLight(undefined);t.water?.setSunlight(undefined);t.water?.setNightLight(null);t.water?.setVoidStain(null);t.wildlife?.setSunlight(undefined);
   t.fog?.setWoodlandLight(null);
   if(t.fog&&this.fogBase)Object.assign(t.fog.tuning,this.fogBase);
   t.rockOverlays?.setFormationReceiver(null);

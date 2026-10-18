@@ -33,7 +33,7 @@ function fixture(){
  let vegetation:unknown;const ground={setVegetationLight:vi.fn((s:any)=>{vegetation=s?.quality?.vegetationForm?s:undefined;})};
  const targets={ground,rocks:{setFormationOptions:vi.fn(),setSunTime:vi.fn(),getFormationReceiver:()=>null,setSurfaceLights:vi.fn(),setMoonLight:vi.fn()},
   rockOverlays:{setFormationReceiver:vi.fn(),setEcologyTuning:vi.fn(),setVoidFlora:vi.fn(),collectVoidGlowPoints:vi.fn((out:number[])=>{out.length=0;return 0;}),collectVoidColonies:vi.fn((out:unknown[])=>{out.length=0;return 0;})},canopies:[],
-  water:{isPrepared:()=>true,getPreparedMasks:()=>[],setSunlight:vi.fn(),setNightLight:vi.fn(),getPresentationTime:()=>0},wildlife:{setSunlight:vi.fn(),clearLights:vi.fn()},
+  water:{isPrepared:()=>true,getPreparedMasks:()=>[],setSunlight:vi.fn(),setNightLight:vi.fn(),setVoidStain:vi.fn(),getPresentationTime:()=>0},wildlife:{setSunlight:vi.fn(),clearLights:vi.fn()},
   lighting,shadow,postFx:{setSunGrade:vi.fn()},fog:{tuning:{opacity:.5,detail:.65},setWoodlandLight:vi.fn()},
   layout:{seed:12345,rocks:[],trees:[],dirt:[],water:[],tracks:[],decals:[],powerUpPedestals:[]},
   worldContext:{metrics:{offsetX:0,offsetY:0,widthPx:1024,heightPx:768},bases:[]}};
@@ -71,6 +71,7 @@ describe('Sonnenwald production World lifetime',()=>{
    expect(f.targets.rockOverlays.setFormationReceiver).toHaveBeenLastCalledWith(null);
    // Night receivers (water night, rock lamps, void flora) are released with the sun owner.
    expect(f.targets.water.setNightLight).toHaveBeenLastCalledWith(null);
+   expect(f.targets.water.setVoidStain).toHaveBeenLastCalledWith(null);
    expect(f.targets.rocks.setSurfaceLights).toHaveBeenLastCalledWith(null);
    expect(f.targets.rockOverlays.setVoidFlora).toHaveBeenLastCalledWith(null);
    expect(f.targets.fog.tuning).toEqual({opacity:.5,detail:.65});

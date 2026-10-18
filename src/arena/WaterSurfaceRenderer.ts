@@ -7,7 +7,9 @@ import { ARENA_RENDER_CHUNK_SIZE, ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX, ARENA_RE
   type ChunkWorldFrame, type ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { WaterSurfaceModel, WATER_MASK_HALO, type WaterMask, type WaterMaskView } from './WaterSurfaceModel';
 import { WATER_FRAGMENT, WATER_SHADER_NAME } from './waterSurfaceShader';
-import { WATER_SUN_FRAGMENT, setWaterNightUniforms, setWaterSunUniforms, type WaterNightLight } from './WaterSunlight';
+import { WATER_SUN_FRAGMENT, setWaterNightUniforms, setWaterSunUniforms, setWaterVoidStainUniforms, type WaterNightLight,
+  type WaterVoidStainUniforms } from './WaterSunlight';
+import type { VoidWaterStain } from './VoidWaterStain';
 import { createSurfaceLightFrame } from '../effects/SurfaceLocalLights';
 import type { SunCloudState } from '../effects/sunlight/cloudShadow';
 import { WaterDisturbanceField } from './WaterDisturbanceField';
@@ -45,6 +47,8 @@ export class WaterSurfaceRenderer {
   private readonly chunks = new Map<string, WaterChunk>();
   private sunlight: SunCloudState | undefined;
   private nightLight: WaterNightLight | null = null;
+  /** Void stain texture of the sunlight owner's lily pads; this renderer owns the texture. */
+  private voidStain: (WaterVoidStainUniforms & { readonly key: string }) | null = null;
   /** Reused per draw: each chunk pulls the lamps meeting its own rectangle. */
   private readonly nightLamps = createSurfaceLightFrame();
   private readonly worldOffset: Float32Array;
@@ -127,6 +131,31 @@ export class WaterSurfaceRenderer {
   /** Night material input of the sunlight owner; only the sunlit program reads it. Null releases it. */
   setNightLight(night: WaterNightLight | null): void { this.nightLight = night; }
 
+  /**
+   * Void stain around infested lily pads (GDD Nachtsicht N-6); only the sunlit program reads it.
+   * Uploaded once per World; null releases the texture. Resident chunks rebind their samplers.
+   */
+  setVoidStain(stain: VoidWaterStain | null): void {
+    if (this.destroyed || (!stain && !this.voidStain)) return;
+    // Quads borrow the texture: drop them before the old texture, rebuild after the new one.
+    for (const chunk of this.chunks.values()) chunk.quad.destroy();
+    if (this.voidStain) { this.scene.textures.remove(this.voidStain.key); this.voidStain = null; }
+    if (stain) {
+      const key = `__water_void_stain_${this.id}`;
+      const texture = this.scene.textures.createCanvas(key, stain.width, stain.height);
+      if (!texture) throw new Error('[WaterSurfaceRenderer] Cannot allocate void stain');
+      const pixels = texture.context.createImageData(stain.width, stain.height);
+      for (let i = 0; i < stain.data.length; i++) {
+        pixels.data[i * 4] = pixels.data[i * 4 + 1] = pixels.data[i * 4 + 2] = stain.data[i]; pixels.data[i * 4 + 3] = 255;
+      }
+      texture.context.putImageData(pixels, 0, 0); texture.refresh();
+      texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+      this.voidStain = { key, origin: new Float32Array([stain.offsetX - this.frame.offsetX, stain.offsetY - this.frame.offsetY]),
+        size: new Float32Array([stain.width * stain.texelPx, stain.height * stain.texelPx]) };
+    }
+    for (const chunk of this.chunks.values()) chunk.quad = this.createQuad(chunk.x, chunk.y, chunk.key);
+  }
+
   /** Borrow the immutable CPU masks. The presentation owner retains their lifetime. */
   *getPreparedMasks(): Generator<{ readonly x: number; readonly y: number; readonly mask: WaterMaskView }> {
     if (!this.isPrepared()) throw new Error('[WaterSurfaceRenderer] Masks are not prepared');
@@ -188,9 +217,13 @@ export class WaterSurfaceRenderer {
             set('uWorldOffset',this.worldOffset);setWaterSunUniforms(set,this.sunlight);
             const night=this.nightLight&&this.nightLight.night>0?this.nightLight:null;
             setWaterNightUniforms(set,night,night?night.lights(x,y,size,size,this.nightLamps):null);
+            setWaterVoidStainUniforms(set,this.voidStain);
           }
         },
-      }, x + size / 2, y + size / 2, size, size, [key, this.disturbance?.textureKey ?? '__DEFAULT']);
+      }, x + size / 2, y + size / 2, size, size,
+      // The stain rides as a third sampler on both programs, so the variants keep one sampler list.
+      this.voidStain ? [key, this.disturbance?.textureKey ?? '__DEFAULT', this.voidStain.key]
+        : [key, this.disturbance?.textureKey ?? '__DEFAULT']);
       const node = quad.renderNode;
       if (node) quad.once('destroy', () => disposeShaderWarmupNode(node));
       quad.setDepth(DEPTH.WATER).setBlendMode(Phaser.BlendModes.NORMAL);
@@ -216,5 +249,6 @@ export class WaterSurfaceRenderer {
     this.masks.clear();
     for (const chunk of this.chunks.values()) { chunk.quad.destroy(); this.scene.textures.remove(chunk.key); }
     this.chunks.clear();
+    if (this.voidStain) { this.scene.textures.remove(this.voidStain.key); this.voidStain = null; }
   }
 }

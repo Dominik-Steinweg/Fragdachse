@@ -9,6 +9,10 @@ uniform vec2 uWorldOffset;
 uniform float uWaterGlint,uWaterGlintDensity,uWaterGlintSpeed;
 uniform vec3 uWaterSun;
 uniform float uWaterNight;
+// Void stain around infested lily pads: frame-local origin and covered size, see VoidWaterStain.
+uniform sampler2D uVoidStain;
+uniform vec2 uVoidStainOrigin, uVoidStainSize;
+uniform float uVoidStainOn;
 ${CLOUD_SHADOW_GLSL}
 ${SUN_VISIBILITY_GLSL}
 ${SURFACE_LIGHT_GLSL}
@@ -71,7 +75,44 @@ void main() {`).replace('gl_FragColor=vec4(color*alpha,alpha);', `
     // A broad gloss where the surface leans towards the lamp, from the slow reflection field.
     color+=vec3(.035,.050,.058)*sheen*(.55+.45*reflectedSky)*surfaceMotion*uWaterNight;
   }
+  // Void stain (GDD Nachtsicht N-6): the ink of infested lily pads seeps into their water, by day
+  // and by night. Only the body takes it; film, wavelets and alpha stay, so the shore is untouched.
+  if(uVoidStainOn>.5) {
+    vec2 stainLocal=p-uVoidStainOrigin;
+    float nearStain=texture2D(uVoidStain,vec2(stainLocal.x/uVoidStainSize.x,1.0-stainLocal.y/uVoidStainSize.y)).r;
+    if(nearStain>.004) {
+      // Slow drift pushes the stain into creeping lobes; fine strands fray its rim like ink in water.
+      vec2 drift=vec2(pondNoise(p*.011+vec2(t*.021,-t*.017)+uSeed),pondNoise(p*.011+vec2(-t*.019,t*.023)+uSeed+23.0))-.5;
+      vec2 warped=stainLocal+drift*24.0;
+      float stain=texture2D(uVoidStain,vec2(warped.x/uVoidStainSize.x,1.0-warped.y/uVoidStainSize.y)).r;
+      float strand=1.0-abs(pondField(p*.024+drift*1.6+vec2(t*.016,-t*.012))*2.0-1.0);
+      float fibre=1.0-abs(pondNoise(p*.065+drift*2.2+vec2(-t*.03,t*.025))*2.0-1.0);
+      // Thin water at the rim breaks into strands and fibres; the core stays closed.
+      float frayed=stain*(.50+.70*strand)+(fibre-.6)*.22*(1.0-stain);
+      float stainBody=smoothstep(6.0,28.0,shore);
+      float ink=smoothstep(.06,.78,frayed)*stainBody;
+      // Translucent plum ink, marbled where it mixes with the water and deepest in the basin. The
+      // water's own ripple and reflection detail stays on top, measured against its body at this hour.
+      vec3 inkDayBody=mix(shallow,deep,colorDepth)*(.90+broad*.18);
+      vec3 inkNightBody=mix(vec3(.055,.13,.29),vec3(.022,.06,.175),colorDepth)*(.90+broad*.2);
+      vec3 inkBase=mix(inkDayBody,inkNightBody,stainBody*uWaterNight*.9);
+      float marble=.80+.40*pondField(p*.031+drift*1.2+vec2(t*.011,t*.008)+5.0);
+      vec3 inkBody=mix(vec3(.19,.075,.25),vec3(.075,.026,.105),colorDepth)*marble;
+      color=mix(color,inkBody+(color-inkBase)*.6,ink*.68);
+      color+=vec3(.085,.030,.13)*reflectedSky*surfaceMotion*ink*.55;
+    }
+  }
   gl_FragColor=vec4(color*alpha,alpha);`);
+
+/** Frame-local placement of a bound void stain texture (texture unit 2). */
+export interface WaterVoidStainUniforms { readonly origin: Float32Array; readonly size: Float32Array }
+
+/** Void stain inputs; without a stain the block stays off and samples nothing. */
+export function setWaterVoidStainUniforms(set: (name: string, value: unknown) => void, stain: WaterVoidStainUniforms | null): void {
+  set('uVoidStain', 2); set('uVoidStainOn', stain ? 1 : 0);
+  set('uVoidStainOrigin', stain?.origin ?? NO_STAIN); set('uVoidStainSize', stain?.size ?? UNIT_STAIN);
+}
+const NO_STAIN = new Float32Array(2), UNIT_STAIN = new Float32Array([1, 1]);
 
 /** Night inputs of the water material: night weight and the lamps meeting a chunk. */
 export interface WaterNightLight {

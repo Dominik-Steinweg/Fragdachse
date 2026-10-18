@@ -419,6 +419,9 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
 - Ihr Leuchten läuft als dekoratives Bodenlicht durch die Lichtkarte. Es wird zuletzt gefüllt und verdrängt nie
   Spiellicht.
 - Adern und Sporen liegen knapp über der Lichtkarte unter den Kronen (Band E).
+- Befallene Seerosen färben ihr Wasser: Ein Fleckenfeld aus den Platzierungen ([VoidWaterStain](../../src/arena/VoidWaterStain.ts))
+  färbt im Sonnenwasser-Programm nach dem Nachtteil nur den Wasserkörper. Uferfilm, Wellen und Alpha bleiben,
+  um gesunde Pflanzen bleibt das Wasser natürlich ([VoidWaterStain.test.ts](../../tests/VoidWaterStain.test.ts)).
 
 ### Atmosphäre und fachliche Grade-Komposition
 
