@@ -1,6 +1,6 @@
 # Nachtsicht, Mondlicht und Void-Botanik (V1)
 
-Status: in Umsetzung seit 2026-10-18 im Branch `night-visibility`. Gates G0–G3 siehe unten. G0 und G1 sind umgesetzt.
+Status: umgesetzt auf `main` seit 2026-10-18 (`870a777f`). Gates G0–G3 siehe unten; offen sind der Spieltest und die Referenzbilder des Nachttests.
 G2 ist umgesetzt: 12 Seerosen- und 13 Fels-Frames mit Leuchtmasken. Argon lieferte den ersten Satz, ComfyUI die übrigen
 15 Teile. Ein Spieltest steht noch aus.
 
