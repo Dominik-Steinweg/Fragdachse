@@ -55,8 +55,8 @@ class VoidCreepGlow implements LightMapAmbientLayer {
 }
 
 /**
- * Void creep of one World (GDD Nachtsicht N-6): ink soaking ground and rock tops where the void
- * has taken the flora, and its night glow through the light map. Material layers draw by day and
+ * Void creep of one World (GDD Nachtsicht N-6): a fine spore haze over ground and rock tops where
+ * the void has taken the flora, and its night glow through the light map. Material layers draw by day and
  * night; the glow only from dusk. Owned by the World's sunlight presentation, which also hands the
  * creep field to the water stain and the spores.
  */

@@ -16,7 +16,7 @@ const TIME_WRAP_MS = 3_600_000;
 /** Spores per colony: lily colonies drift over open water, moss sheds fewer, closer motes. */
 const POND_SPORES = 3;
 const ROCK_SPORES = 1;
-const MAX_SPORES = 900;
+const MAX_SPORES = 1400;
 
 type Member = Phaser.Types.GameObjects.SpriteGPULayer.Member;
 const hash = (x: number, y: number, salt: number): number => {
@@ -161,9 +161,9 @@ export class VoidFloraEmission {
       const count = Math.round(ROCK_SPORES * smoothAmount(c.voidAmount));
       if (count > 0) anchors.push({ x: c.worldX, y: c.worldY, spread: 22, count });
     }
-    // Over the land creep single motes hang low and close, one per point.
+    // Over the land creep fine motes hang low in small loose swarms.
     for (let i = 0; i + 2 < this.groundSpores.length; i += 3) {
-      if (smoothAmount(this.groundSpores[i + 2]) > 0) anchors.push({ x: this.groundSpores[i], y: this.groundSpores[i + 1], spread: 10, count: 1 });
+      if (smoothAmount(this.groundSpores[i + 2]) > 0) anchors.push({ x: this.groundSpores[i], y: this.groundSpores[i + 1], spread: 26, count: 3 });
     }
     if (!anchors.length) return;
     const key = ensureVoidSporeTexture(this.scene.textures);
@@ -178,13 +178,14 @@ export class VoidFloraEmission {
       // Slow hovering drift: each axis is its own looping sine, never a straight path.
       const driftX = 5 + h(3) * 10, driftY = 8 + h(4) * 14, periodX = 5200 + h(5) * 5200, periodY = 4300 + h(6) * 4700;
       const tint = SPORE_TINTS[Math.floor(h(7) * SPORE_TINTS.length)];
-      const size = (7 + h(8) * 5) / 32;
+      // Fine motes, a few pixels across: dust in the air, not bubbles.
+      const size = (3 + h(8) * 3) / 32;
       layer.addMember({ frame: '__BASE',
         x: { base: x - driftX, amplitude: driftX * 2, ease: 'Sine.easeInOut', duration: periodX / 2, delay: h(9) * periodX, yoyo: true, loop: true },
         y: { base: y - driftY, amplitude: driftY * 2, ease: 'Sine.easeInOut', duration: periodY / 2, delay: h(10) * periodY, yoyo: true, loop: true },
         scaleX: size, scaleY: size,
         tintBlend: 1, tintTopLeft: tint, tintTopRight: tint, tintBottomLeft: tint, tintBottomRight: tint,
-        alpha: pulse(0, .5, 4200 + h(11) * 3800, h(12)), creationTime: 0 });
+        alpha: pulse(0, .45, 4200 + h(11) * 3800, h(12)), creationTime: 0 });
     }
   }
 

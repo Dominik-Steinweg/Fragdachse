@@ -19,7 +19,7 @@ const SPORE_CELL_PX = 72, SPORE_FROM = 0.45, MAX_GROUND_SPORES = 260;
  */
 export interface VoidCreepField {
   readonly data: Uint8Array;
-  /** Land share per texel in [0, 255]: strands, glow and spores belong to land, ink to water too. */
+  /** Land share per texel in [0, 255]: glints and airborne spores belong to land, ink to water too. */
   readonly land: Uint8Array;
   readonly width: number;
   readonly height: number;

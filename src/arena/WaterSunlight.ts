@@ -81,25 +81,27 @@ void main() {`).replace('gl_FragColor=vec4(color*alpha,alpha);', `
     vec2 stainLocal=p-uVoidStainOrigin;
     float nearStain=texture2D(uVoidStain,vec2(stainLocal.x/uVoidStainSize.x,1.0-stainLocal.y/uVoidStainSize.y)).r;
     if(nearStain>.004) {
-      // Slow drift pushes the stain into creeping lobes; fine strands fray its rim like ink in water.
-      vec2 drift=vec2(pondNoise(p*.011+vec2(t*.021,-t*.017)+uSeed),pondNoise(p*.011+vec2(-t*.019,t*.023)+uSeed+23.0))-.5;
-      vec2 warped=stainLocal+drift*24.0;
+      // Slow drift lets the stain breathe; it stays a soft cloud that thins out, never a streak.
+      vec2 drift=vec2(pondNoise(p*.009+vec2(t*.018,-t*.014)+uSeed),pondNoise(p*.009+vec2(-t*.016,t*.02)+uSeed+23.0))-.5;
+      vec2 warped=stainLocal+drift*20.0;
       float stain=texture2D(uVoidStain,vec2(warped.x/uVoidStainSize.x,1.0-warped.y/uVoidStainSize.y)).r;
-      float strand=1.0-abs(pondField(p*.024+drift*1.6+vec2(t*.016,-t*.012))*2.0-1.0);
-      float fibre=1.0-abs(pondNoise(p*.065+drift*2.2+vec2(-t*.03,t*.025))*2.0-1.0);
-      // Thin water at the rim breaks into strands and fibres; the core stays closed.
-      float frayed=stain*(.50+.70*strand)+(fibre-.6)*.22*(1.0-stain);
+      float cloud=pondField(p*.013+drift*.8+vec2(t*.007,-t*.006)+5.0);
       float stainBody=smoothstep(6.0,28.0,shore);
-      float ink=smoothstep(.06,.78,frayed)*stainBody;
-      // Translucent plum ink, marbled where it mixes with the water and deepest in the basin. The
-      // water's own ripple and reflection detail stays on top, measured against its body at this hour.
+      float ink=smoothstep(.0,.85,stain*(.62+.55*cloud))*stainBody;
+      // Translucent plum ink, deepest in the basin. The water's own ripple and reflection detail
+      // stays on top, measured against its body at this hour.
       vec3 inkDayBody=mix(shallow,deep,colorDepth)*(.90+broad*.18);
       vec3 inkNightBody=mix(vec3(.055,.13,.29),vec3(.022,.06,.175),colorDepth)*(.90+broad*.2);
       vec3 inkBase=mix(inkDayBody,inkNightBody,stainBody*uWaterNight*.9);
-      float marble=.80+.40*pondField(p*.031+drift*1.2+vec2(t*.011,t*.008)+5.0);
-      vec3 inkBody=mix(vec3(.19,.075,.25),vec3(.075,.026,.105),colorDepth)*marble;
-      color=mix(color,inkBody+(color-inkBase)*.6,ink*.68);
+      vec3 inkBody=mix(vec3(.19,.075,.25),vec3(.075,.026,.105),colorDepth)*(.84+.32*cloud);
+      color=mix(color,inkBody+(color-inkBase)*.6,ink*.66);
       color+=vec3(.085,.030,.13)*reflectedSky*surfaceMotion*ink*.55;
+      // Spores afloat: a fine powder film drifting with the surface, thick where the ink is, gone
+      // where it thins; a slow cloud gathers it, a fine grain makes it read as dust.
+      vec2 flow=p+drift*26.0+vec2(t*2.1,t*1.3);
+      float film=smoothstep(.30,.85,pondField(flow*.021+uSeed))*smoothstep(.25,.80,stain);
+      float grain=smoothstep(.52,.88,pondNoise(flow*.45+3.1)*.62+pondNoise(flow*.97+8.3)*.38);
+      color=mix(color,vec3(.40,.34,.45),(film*.14+grain*film*.30)*stainBody);
     }
   }
   gl_FragColor=vec4(color*alpha,alpha);`);
