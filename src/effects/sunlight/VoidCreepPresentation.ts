@@ -64,6 +64,8 @@ export class VoidCreepPresentation {
   private readonly id = nextCreepId++;
   private key: string | null = null;
   private readonly creep = { frame: new Float32Array(4), time: 0 };
+  /** World px per screen pixel; the surface shaders fade detail finer than that. */
+  private pixelWorld = 1;
   private readonly view = new Float32Array(4);
   private readonly visible = createVisibleWorldView();
   private readonly rockFrame = new Float32Array(4);
@@ -102,6 +104,7 @@ export class VoidCreepPresentation {
     // The arena camera uses origin (0, 0); Phaser's cached worldView assumes 0.5.
     const view = getVisibleWorldView(camera, this.visible, VIEW_MARGIN_PX);
     this.view[0] = view.x; this.view[1] = view.y; this.view[2] = view.width; this.view[3] = view.height;
+    this.pixelWorld = (view.width - VIEW_MARGIN_PX * 2) / Math.max(1, camera.width);
     this.place(this.ground);
     this.syncRock(options.rocks ? coverage : null);
     if (!options.glow || night <= .01) return null;
@@ -140,6 +143,7 @@ export class VoidCreepPresentation {
       name, shaderName: name, fragmentSource,
       setupUniforms: (set: Set) => {
         set('uCreep', 0); set('uCreepFrame', this.creep.frame); set('uCreepTime', this.creep.time); set('uView', this.view);
+        set('uPixelWorld', this.pixelWorld);
         extra(set);
       },
     }, 0, 0, 1, 1, textures);

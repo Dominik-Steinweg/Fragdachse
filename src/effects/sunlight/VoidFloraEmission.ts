@@ -185,7 +185,8 @@ export class VoidFloraEmission {
         y: { base: y - driftY, amplitude: driftY * 2, ease: 'Sine.easeInOut', duration: periodY / 2, delay: h(10) * periodY, yoyo: true, loop: true },
         scaleX: size, scaleY: size,
         tintBlend: 1, tintTopLeft: tint, tintTopRight: tint, tintBottomLeft: tint, tintBottomRight: tint,
-        alpha: pulse(0, .45, 4200 + h(11) * 3800, h(12)), creationTime: 0 });
+        // Slow, gentle breathing; a mote never blinks out.
+        alpha: pulse(.12, .26, 7000 + h(11) * 6000, h(12)), creationTime: 0 });
     }
   }
 

@@ -96,12 +96,12 @@ void main() {`).replace('gl_FragColor=vec4(color*alpha,alpha);', `
       vec3 inkBody=mix(vec3(.19,.075,.25),vec3(.075,.026,.105),colorDepth)*(.84+.32*cloud);
       color=mix(color,inkBody+(color-inkBase)*.6,ink*.66);
       color+=vec3(.085,.030,.13)*reflectedSky*surfaceMotion*ink*.55;
-      // Spores afloat: a fine powder film drifting with the surface, thick where the ink is, gone
-      // where it thins; a slow cloud gathers it, a fine grain makes it read as dust.
-      vec2 flow=p+drift*26.0+vec2(t*2.1,t*1.3);
-      float film=smoothstep(.30,.85,pondField(flow*.021+uSeed))*smoothstep(.25,.80,stain);
-      float grain=smoothstep(.52,.88,pondNoise(flow*.45+3.1)*.62+pondNoise(flow*.97+8.3)*.38);
-      color=mix(color,vec3(.40,.34,.45),(film*.14+grain*film*.30)*stainBody);
+      // Spores afloat: a soft powder film drifting slowly with the surface, thick where the ink
+      // is; its grain stays several pixels wide so the moving film never shimmers.
+      vec2 flow=p+drift*26.0+vec2(t*1.1,t*.7);
+      float film=smoothstep(.28,.80,pondField(flow*.018+uSeed))*smoothstep(.20,.75,stain);
+      float grain=pondNoise(flow*.16+3.1)*.65+pondNoise(flow*.33+8.3)*.35;
+      color=mix(color,vec3(.38,.31,.44),film*(.16+.16*grain)*stainBody);
     }
   }
   gl_FragColor=vec4(color*alpha,alpha);`);

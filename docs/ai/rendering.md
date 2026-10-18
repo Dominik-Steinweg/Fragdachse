@@ -426,9 +426,11 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
   ([VoidCreepField](../../src/arena/VoidCreepField.ts)). Owner ist die World-Sonnenlicht-Darstellung, die Tinte liegt am
   Boden unter Gleisen, Basen und Decals (`DEPTH.VOID_CREEP`) und auf Felsen innerhalb der V7-Kontur
   (`DEPTH.ROCK_VOID_CREEP`). Ihr Nachtleuchten ist eine Glow-Schicht der Lichtkarte (`setGlowLayer`). Anders als die
-  Mondschicht zählt sie als Licht über der Nacht und darf deshalb bluten. Das Geflecht erscheint als feiner Sporendunst
-  ohne eigene Kanten: Jeder Anteil blendet aus dem Nichts ein. Glitzerpunkte und schwebende Sporen gehören zum Land, im
-  Wasser wirkt es als Tinte mit treibendem Sporenfilm ([VoidCreepField.test.ts](../../tests/VoidCreepField.test.ts)).
+  Mondschicht zählt sie als Licht über der Nacht und darf deshalb bluten. Das Geflecht erscheint als Sporendunst ohne
+  eigene Kanten: Jeder Anteil blendet aus dem Nichts ein. Schwebende Sporen gehören zum Land, im Wasser wirkt es als
+  Tinte mit treibendem Sporenfilm ([VoidCreepField.test.ts](../../tests/VoidCreepField.test.ts)).
+- Weltverankertes Detail feiner als ein Bildschirmpixel flimmert bei Kamerabewegung. Materialien blenden solche
+  Oktaven über die Pixelgröße der Kamera aus. Die Lichtkarte ist gröber als der Bildschirm und trägt nur weiches Licht.
 - Weltflächen, die der Kamera folgen, leiten ihr Rechteck aus `getVisibleWorldView` ab. Die Arena-Kamera hat Origin
   (0, 0), Phasers gecachtes `camera.worldView` setzt 0,5 voraus und verschiebt solche Flächen.
 
