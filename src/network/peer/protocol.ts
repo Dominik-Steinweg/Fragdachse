@@ -32,7 +32,8 @@
 // target ref, locked leap), required tw slice (turret web shots and webs); timebomb special actions retired.
 // Void danger zones: encounter state names World spawn zones (fronts may be empty) and the
 // required csz key announces spawn zones about to release enemies.
-export const PEER_PROTOCOL_VERSION = 40;
+// Spawn places: the required csp key names spawn zones in use or still to come and lapsed dormant objectives.
+export const PEER_PROTOCOL_VERSION = 41;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

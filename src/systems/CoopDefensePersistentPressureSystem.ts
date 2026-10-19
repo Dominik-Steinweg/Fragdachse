@@ -63,6 +63,14 @@ export class CoopDefensePersistentPressureSystem {
     return this.elapsedMs;
   }
 
+  /** Zone sources release enemies from their start until the mission ends: upcoming, then active. */
+  collectSpawnZoneUse(active: Set<string>, upcoming: Set<string>): void {
+    for (const source of this.sources) {
+      if (source.source.type !== 'zone') continue;
+      (this.elapsedMs >= source.startAtMs ? active : upcoming).add(source.source.zoneId);
+    }
+  }
+
   /**
    * The next release of every active zone source, announced SPAWN_ZONE_ALERT_LEAD_MS ahead so
    * its haze thickens before each tick (GDD Void-Gefahrenzonen V1, E4).

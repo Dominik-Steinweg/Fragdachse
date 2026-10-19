@@ -84,7 +84,10 @@ offenes Randgelände.
 
 Der Host kündigt Zonen an, die gleich Gegner freigeben (`SyncedSpawnZoneAlert`, Key `csz`): Director-Gruppen ab
 `SPAWN_ZONE_ALERT_LEAD_MS` vor dem ersten geplanten Spawn, jeder Takt einer Dauerquelle und die Boss-Zone ab dem
-Intro. Die Ankündigung ist reine Darstellung, das Void-Gefahrenfeld verdichtet damit den Dunst.
+Intro. Die Ankündigung ist reine Darstellung, das Void-Gefahrenfeld verdichtet damit den Dunst. Daneben
+veröffentlicht der Host den Zustand der Spawnorte (`SyncedSpawnPlaceState`, Key `csp`): Zonen in Benutzung, Zonen,
+die ein späterer Encounter, eine spätere Quelle oder der Boss noch nutzt, und verfallene schlafende Ziele. Eine
+World-Zone, die in keiner Liste steht, gibt nie mehr Gegner frei.
 
 Der Map-Editor legt Zonen an, benennt sie um (alle Referenzen ziehen mit) und löscht nur unbenutzte Zonen
 ([MapEditorDocument.test.ts](../../tests/MapEditorDocument.test.ts)).

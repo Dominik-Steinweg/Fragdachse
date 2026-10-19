@@ -111,6 +111,13 @@ export class CoopDefenseBossSystem {
    * The boss's spawn zone from the start of its intro until it has emerged (GDD
    * Void-Gefahrenzonen V1); null without a zone or before the intro.
    */
+  /** The boss zone waits for the boss, is active during its intro and spent once it emerged. */
+  collectSpawnZoneUse(active: Set<string>, upcoming: Set<string>): void {
+    const zoneId = this.bossConfig.spawnZoneId;
+    if (!zoneId || this.phase.type === 'spawned') return;
+    (this.phase.type === 'intro' ? active : upcoming).add(zoneId);
+  }
+
   getSpawnZoneAlert(): SyncedSpawnZoneAlert | null {
     const zoneId = this.bossConfig.spawnZoneId;
     if (!zoneId) return null;

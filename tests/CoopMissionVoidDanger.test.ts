@@ -32,12 +32,12 @@ describe('Coop mission void danger (GDD Void-Gefahrenzonen V1)', () => {
       getMapConfig: () => COOP_DEFENSE_MAP_CONFIGS[0] as CoopDefenseMapConfig,
       getLayout: () => layoutWith([]),
       getOffset: () => ({ offsetX: 0, offsetY: 0 }),
-      getBase: id => { const base = bases.get(id); return base && { isDestroyed: () => base.destroyed, getSpec: () => base.spec }; },
-      getObjectives: () => objectives,
+      getBase: id => { const base = bases.get(id); return base && { isDestroyed: () => base.destroyed, isDormant: () => false, getSpec: () => base.spec }; },
+      getObjectives: () => objectives, getSpawnPlaces: () => null,
     });
     expect(danger.read()).toBe(danger);
     expect(danger.presenceOf('base:hive')).toBe(1);
-    expect(danger.presenceOf('zone:nest-1')).toBe(1);
+    expect(danger.presenceOf('mystery:nest-1')).toBe(1);
     expect(danger.presenceOf('base:unknown')).toBe(1);
     bases.get('hive')!.destroyed = true;
     expect(danger.presenceOf('base:hive')).toBe(0);
@@ -52,7 +52,7 @@ describe('Coop mission void danger (GDD Void-Gefahrenzonen V1)', () => {
 
   it('answers nothing while no mission World is laid out', () => {
     const danger = new CoopMissionVoidDanger({
-      getMapConfig: () => null, getLayout: () => null, getOffset: () => null, getBase: () => undefined, getObjectives: () => null,
+      getMapConfig: () => null, getLayout: () => null, getOffset: () => null, getBase: () => undefined, getObjectives: () => null, getSpawnPlaces: () => null,
     });
     expect(danger.read()).toBeNull();
     expect(danger.sources).toEqual([]);

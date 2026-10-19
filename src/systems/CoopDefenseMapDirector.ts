@@ -849,6 +849,23 @@ export class CoopDefenseMapDirector {
     return out;
   }
 
+  /**
+   * Which spawn zones this director still uses (GDD Void-Gefahrenzonen V1): a zone is active while
+   * a running encounter still has a group due there, and upcoming while an encounter that has not
+   * started has one.
+   */
+  collectSpawnZoneUse(active: Set<string>, upcoming: Set<string>): void {
+    this.encounters.forEach((encounter, index) => {
+      const state = this.executionStates[index];
+      if (state.cleared) return;
+      encounter.groups.forEach((group, groupIndex) => {
+        if (!group.spawnZoneId) return;
+        if (!state.started) upcoming.add(group.spawnZoneId);
+        else if (!state.groupsExecuted[groupIndex]) active.add(group.spawnZoneId);
+      });
+    });
+  }
+
   private readonly zoneGroupDoneAtMs = new Map<string, number>();
   private rememberZoneGroupDone(key: string, atMs: number): number {
     this.zoneGroupDoneAtMs.set(key, atMs);

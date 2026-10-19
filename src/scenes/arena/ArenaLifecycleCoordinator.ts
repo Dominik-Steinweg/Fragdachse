@@ -396,6 +396,7 @@ export class ArenaLifecycleCoordinator {
     getOffset: () => this.worldRuntime?.context.metrics ?? null,
     getBase: (id) => this.worldRuntime?.materialization?.bases?.getBase(id),
     getObjectives: () => bridge.getCoopDefenseSecondaryObjectivePresentationState(),
+    getSpawnPlaces: () => bridge.getCoopDefenseSpawnPlaceState(),
     getSpawnZoneAlerts: () => bridge.getCoopDefenseSpawnZoneAlerts(),
     getMissionElapsedMs: () => {
       const start = bridge.getArenaStartTime();
@@ -1867,6 +1868,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishRoundResults([]);
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseSpawnZoneAlerts(null);
+    bridge.publishCoopDefenseSpawnPlaceState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
@@ -2247,6 +2249,7 @@ export class ArenaLifecycleCoordinator {
   private clearCoopMissionPresentationState(): void {
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseSpawnZoneAlerts(null);
+    bridge.publishCoopDefenseSpawnPlaceState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
@@ -2357,6 +2360,7 @@ export class ArenaLifecycleCoordinator {
     this.persistentBase.rollbackPersistentBaseMissionIfActive();
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseSpawnZoneAlerts(null);
+    bridge.publishCoopDefenseSpawnPlaceState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);

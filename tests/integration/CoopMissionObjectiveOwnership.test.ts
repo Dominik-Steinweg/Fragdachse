@@ -45,6 +45,7 @@ function emptyHostUpdatePort(): CoopMissionHostUpdatePort {
     publishMapEventPresentation: () => { /* noop */ },
     publishSecondaryObjectivePresentation: () => { /* noop */ },
     publishSpawnZoneAlerts: () => { /* noop */ },
+    publishSpawnPlaceState: () => { /* noop */ },
   };
 }
 
@@ -186,6 +187,7 @@ describe('CoopMissionRuntime – Missionsschritte des Frames', () => {
       secondaryObjectives: {
         hostUpdate: () => { order.push('objectives'); },
         getPresentationState: () => null,
+        getLapsedDormantObjectiveIds: () => [],
         reset: () => { /* noop */ },
       },
       repair: {

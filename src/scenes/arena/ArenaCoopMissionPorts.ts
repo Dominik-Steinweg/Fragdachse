@@ -189,6 +189,9 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
       publishSpawnZoneAlerts: (alerts) => {
         bridge.publishCoopDefenseSpawnZoneAlerts(alerts);
       },
+      publishSpawnPlaceState: (state) => {
+        bridge.publishCoopDefenseSpawnPlaceState(state);
+      },
     },
     clientPresentation: {
       getMissionProgressPresentationState: () => bridge.getCoopDefenseMissionProgressPresentationState(),

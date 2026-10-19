@@ -2,7 +2,7 @@ import { isPermanentVoidGroundHazard, type CoopDefenseMapConfig } from '../confi
 import { CELL_SIZE } from '../config';
 import { MAX_VOID_DANGER_ALERTS, voidHazardSource, type ActivityVoidDanger, type VoidDangerAlert, type VoidDangerSource } from '../arena/VoidDangerField';
 import { spawnZoneAlertLevel } from '../systems/CoopDefenseSpawnZoneAlerts';
-import type { ArenaLayout, CoopDefenseSecondaryObjectivePresentationState, SyncedSpawnZoneAlert } from '../types';
+import type { ArenaLayout, CoopDefenseSecondaryObjectivePresentationState, SyncedSpawnPlaceState, SyncedSpawnZoneAlert } from '../types';
 
 /** What the projection reads; every answer may be null while the Activity is not running. */
 export interface CoopMissionVoidDangerPorts {
@@ -10,8 +10,10 @@ export interface CoopMissionVoidDangerPorts {
   getLayout(): ArenaLayout | null;
   /** World top-left of arena cell (0, 0). */
   getOffset(): { readonly offsetX: number; readonly offsetY: number } | null;
-  getBase(id: string): { isDestroyed(): boolean; getSpec(): { readonly dormantObjectiveId?: string } } | undefined;
+  getBase(id: string): { isDestroyed(): boolean; isDormant(): boolean; getSpec(): { readonly dormantObjectiveId?: string } } | undefined;
   getObjectives(): CoopDefenseSecondaryObjectivePresentationState | null;
+  /** Host view of the spawn zones in use or still to come and of lapsed dormant objectives. */
+  getSpawnPlaces(): SyncedSpawnPlaceState | null;
   /** Host-announced spawn zones and the mission time they refer to; null outside a round. */
   getSpawnZoneAlerts(): readonly SyncedSpawnZoneAlert[];
   getMissionElapsedMs(): number | null;
@@ -21,6 +23,12 @@ export interface CoopMissionVoidDangerPorts {
 const ALERT_SETTLE_MS = 2500;
 
 const BASE_PREFIX = 'base:';
+const ZONE_PREFIX = 'zone:';
+/**
+ * Haze of a spawn place that is not releasing enemies yet: a zone a later encounter will use, a
+ * dormant spawn point. A place that never will again carries none (user 2026-10-19).
+ */
+export const IDLE_SPAWN_PLACE_PRESENCE = .45;
 
 /**
  * The Coop mission's share of the void danger (GDD Void-Gefahrenzonen V1), a pure read of
@@ -28,8 +36,10 @@ const BASE_PREFIX = 'base:';
  *
  * - permanent void ground hazards from the start (`isPermanentVoidGroundHazard`) over their
  *   generated cells;
- * - presence: a destroyed base, or one whose site objective is done or failed (a Dawn site closed
- *   at dusk), lets its haze lift.
+ * - presence of hostile bases: full while active, thinner while dormant, none once destroyed or
+ *   once their site objective is done, failed or lapsed (a Dawn site closed or never entered);
+ * - presence of spawn zones: full while in use, thinner while a later encounter, source or boss
+ *   will still use them, none once nothing will.
  */
 export class CoopMissionVoidDanger implements ActivityVoidDanger {
   private cache: { mapConfig: CoopDefenseMapConfig; layout: ArenaLayout; offsetX: number; offsetY: number; sources: readonly VoidDangerSource[] } | null = null;
@@ -87,12 +97,30 @@ export class CoopMissionVoidDanger implements ActivityVoidDanger {
   }
 
   presenceOf(id: string): number {
+    if (id.startsWith(ZONE_PREFIX)) {
+      const places = this.places();
+      // Until the host has spoken every zone counts as still to come.
+      if (!places) return IDLE_SPAWN_PLACE_PRESENCE;
+      const zoneId = id.slice(ZONE_PREFIX.length);
+      return places.active.has(zoneId) ? 1 : places.upcoming.has(zoneId) ? IDLE_SPAWN_PLACE_PRESENCE : 0;
+    }
     if (!id.startsWith(BASE_PREFIX)) return 1;
     const base = this.ports.getBase(id.slice(BASE_PREFIX.length));
     if (!base) return 1;
     if (base.isDestroyed()) return 0;
     const objectiveId = base.getSpec().dormantObjectiveId;
-    return objectiveId !== undefined && this.closedObjectives().has(objectiveId) ? 0 : 1;
+    if (objectiveId !== undefined && (this.closedObjectives().has(objectiveId) || this.places()?.lapsed.has(objectiveId))) return 0;
+    return base.isDormant() ? IDLE_SPAWN_PLACE_PRESENCE : 1;
+  }
+
+  private placeCache: { raw: SyncedSpawnPlaceState | null; value: { active: ReadonlySet<string>; upcoming: ReadonlySet<string>; lapsed: ReadonlySet<string> } | null } = { raw: null, value: null };
+
+  private places(): { active: ReadonlySet<string>; upcoming: ReadonlySet<string>; lapsed: ReadonlySet<string> } | null {
+    const raw = this.ports.getSpawnPlaces();
+    if (raw !== this.placeCache.raw) {
+      this.placeCache = { raw, value: raw && { active: new Set(raw.activeZones), upcoming: new Set(raw.upcomingZones), lapsed: new Set(raw.lapsedObjectives) } };
+    }
+    return this.placeCache.value;
   }
 
   private closedObjectives(): ReadonlySet<string> {

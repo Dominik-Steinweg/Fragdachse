@@ -60,6 +60,18 @@ export interface SyncedSpawnZoneAlert {
   endMs: number | null;
 }
 
+/**
+ * Which spawn places still matter (GDD Void-Gefahrenzonen V1): zones in use now, zones a later
+ * encounter, source or boss will still use, and dormant objectives that can no longer start (a
+ * Dawn site nobody entered before dusk). A World zone in neither list will never release
+ * enemies again.
+ */
+export interface SyncedSpawnPlaceState {
+  activeZones: string[];
+  upcomingZones: string[];
+  lapsedObjectives: string[];
+}
+
 /** Host-autoritärer, zuverlässiger Präsentationszustand eines endlichen Coop-Encounter. */
 export type CoopDefenseEncounterPresentationPhase =
   | 'incoming'

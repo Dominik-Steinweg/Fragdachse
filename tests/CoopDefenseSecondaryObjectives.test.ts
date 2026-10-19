@@ -1047,6 +1047,20 @@ describe('Coop defense secondary objectives', () => {
     expect(byId('site-b')).toMatchObject({ state: 'completed' });
   });
 
+  it('reports dormant objectives that can no longer start once their expiry has come', () => {
+    const system = new CoopDefenseSecondaryObjectiveSystem([
+      resolvedObjective({ id: 'focused', start: { type: 'time', atMs: 0 } }),
+      resolvedObjective({
+        id: 'site-a', concurrent: true, targets: ['wreck-a'], targetGoal: 1,
+        start: { type: 'site-activated', siteId: 'a' }, expiresAt: { type: 'time', atMs: 1_000 },
+      }),
+    ], { isExternalTriggerSatisfied: () => false });
+    system.hostUpdate(0, false);
+    expect(system.getLapsedDormantObjectiveIds()).toEqual([]);
+    system.hostUpdate(1_000, false);
+    expect(system.getLapsedDormantObjectiveIds()).toEqual(['site-a']);
+  });
+
   it.each(['relative', 'authored'] as const)('orders %s hold completion and expiry within a tick', endKind => {
     for (const holdEndsAt of [209_995, 210_000, 210_005]) {
       const completed = vi.fn(), holdCompleted = vi.fn(), failed = vi.fn();

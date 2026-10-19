@@ -5,6 +5,7 @@ import type { FireSystem } from '../effects/FireSystem';
 import type { SmokePerceptionPort } from '../systems/SmokeRules';
 import type {
   CoopDefenseEncounterPresentationState,
+  SyncedSpawnPlaceState,
   SyncedSpawnZoneAlert,
   CoopDefenseMapEventPresentationState,
   CoopDefenseSecondaryObjectivePresentationState,
@@ -84,6 +85,8 @@ export interface CoopMissionHostUpdatePort {
   ) => void;
   /** Spawn zones about to release enemies (GDD Void-Gefahrenzonen V1). */
   readonly publishSpawnZoneAlerts: (alerts: readonly SyncedSpawnZoneAlert[]) => void;
+  /** Spawn zones in use or still to come, and lapsed dormant objectives (GDD Void-Gefahrenzonen V1). */
+  readonly publishSpawnPlaceState: (state: SyncedSpawnPlaceState) => void;
 }
 
 /** Optionaler Messpunkt der Navigation; ohne Diagnose bleibt er ungenutzt. */
@@ -115,6 +118,7 @@ export class CoopMissionHostUpdate {
     | undefined;
   private lastSecondaryObjectivePresentationSignature: string | null = null;
   private lastSpawnZoneAlertSignature: string | null = null;
+  private lastSpawnPlaceSignature: string | null = null;
 
   constructor(
     private readonly runtime: CoopMissionRuntime,
@@ -307,9 +311,28 @@ export class CoopMissionHostUpdate {
     const boss = this.runtime.coopDefenseBossSystem?.getSpawnZoneAlert();
     if (boss) alerts.push(boss);
     const merged = mergeSpawnZoneAlerts(alerts), signature = spawnZoneAlertSignature(merged);
-    if (signature === this.lastSpawnZoneAlertSignature) return;
-    this.lastSpawnZoneAlertSignature = signature;
-    this.port.publishSpawnZoneAlerts(merged);
+    if (signature !== this.lastSpawnZoneAlertSignature) {
+      this.lastSpawnZoneAlertSignature = signature;
+      this.port.publishSpawnZoneAlerts(merged);
+    }
+    this.publishSpawnPlaceState();
+  }
+
+  /** Which spawn places still matter; the void haze over idle ones thins and over spent ones lifts. */
+  private publishSpawnPlaceState(): void {
+    const active = new Set<string>(), upcoming = new Set<string>();
+    this.runtime.coopDefenseMapDirector?.collectSpawnZoneUse(active, upcoming);
+    this.runtime.coopDefensePersistentPressureSystem?.collectSpawnZoneUse(active, upcoming);
+    this.runtime.coopDefenseBossSystem?.collectSpawnZoneUse(active, upcoming);
+    const state: SyncedSpawnPlaceState = {
+      activeZones: [...active].sort(),
+      upcomingZones: [...upcoming].filter((zoneId) => !active.has(zoneId)).sort(),
+      lapsedObjectives: (this.runtime.coopDefenseSecondaryObjectiveSystem?.getLapsedDormantObjectiveIds() ?? []).sort(),
+    };
+    const signature = `${state.activeZones.join(',')}|${state.upcomingZones.join(',')}|${state.lapsedObjectives.join(',')}`;
+    if (signature === this.lastSpawnPlaceSignature) return;
+    this.lastSpawnPlaceSignature = signature;
+    this.port.publishSpawnPlaceState(state);
   }
 
   private publishSecondaryObjectivePresentation(): void {

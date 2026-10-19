@@ -108,6 +108,15 @@ describe('PeerRoom handshake and roster', () => {
       hostBridge.publishCoopDefenseSpawnZoneAlerts(null);
       use(client);
       expect(clientBridge.getCoopDefenseSpawnZoneAlerts()).toEqual([]);
+      const places = { activeZones: ['nest-a'], upcomingZones: ['nest-b'], lapsedObjectives: ['salvage-site'] };
+      use(host);
+      hostBridge.publishCoopDefenseSpawnPlaceState(places);
+      use(client);
+      expect(clientBridge.getCoopDefenseSpawnPlaceState()).toEqual(places);
+      use(host);
+      host.room.setGlobal('csp', { ...places, upcomingZones: ['nest-a'] }, true);
+      use(client);
+      expect(clientBridge.getCoopDefenseSpawnPlaceState()).toBeNull();
     } finally { clearActiveSession(); client?.room.destroy(); host.room.destroy(); }
   });
 

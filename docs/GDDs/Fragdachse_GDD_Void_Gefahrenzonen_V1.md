@@ -22,6 +22,7 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 | E6 | Bezugspunkt für Randwarnung und HUD-Richtung ist die Mitte des sichtbaren Bereichs. |
 | E7 | Nach Zerstörung oder Schließung verfliegen Dunst und Sporen. Die Pflanzen bleiben als Narbe. |
 | E8 | Vorwarnzeit: Der Dunst setzt 2 s vor dem Spawn ein, die Randwarnung 1 s vorher. |
+| E10 | (Nachtrag) Ein Spawnort, der noch nicht aktiv ist, trägt schwächeren Dunst. Gemeint sind eine Zone, die erst ein späterer Encounter, eine spätere Quelle oder der Boss nutzt, und ein schlafender Spawnpunkt. Ein Spawnort, der nie mehr aktiv wird, verliert den Dunst ganz, die Pflanzen bleiben als Narbe. |
 | E9 | Die Sporen werden feiner, weniger weiß und dezenter, leuchten aber weiter. Wie der Dunst reagieren sie auf Explosionen und Bewegung. |
 
 ## 3. Modell
@@ -67,4 +68,5 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 - 2026-10-19: Der Nebel verleiht seine Luft erst nach seinem Schritt im Frame (`GroundFogSystem.getAirBinding`). Er tauscht seine Texturen pro Schritt und kann sie freigeben.
 - 2026-10-19: Warnungen kommen aus drei Quellen: Director-Gruppen (Vorlauf 2 s vor dem ersten geplanten Spawn, offen bis zum letzten), Dauerquellen auf Zonen (jeder Takt 2 s vorher) und Boss-Zone (ab Intro). Sie werden pro Zone zusammengeführt (`csz`) und nur bei Änderung veröffentlicht. Der Client glättet die Stärke, damit ein ersetzter Takt abklingt statt abzureißen. Im Shader verdichten bis zu 8 Zonen den Dunst-Kanal.
 - 2026-10-19: Die Front-Karten wurden per Codemod (`scripts/map-tools/migrate-front-zones.py`) umgestellt. Die Zonen liegen im alten Randband. Gruppen einer Front wechseln Encounter für Encounter durch deren Zonen. Gruppen über 15 Gegner werden mit gleicher Gesamtzahl auf die Zonen ihrer Front verteilt. Map 08: `dimension-north/south` kommen aus Nord- und Süd-Zonen. Map 06: Die Süd-Zone liegt östlich, weil die Mitte des Südrands in der Reservierung der persistenten Basis liegt. Neue Zonen halten ihren Kern frei, deshalb ändern sich die Fingerprints (E1).
+- 2026-10-19 (E10): Der Host veröffentlicht, welche Zonen gerade genutzt werden oder noch kommen und welche schlafenden Ziele verfallen sind (`csp`, Protokoll 41). Eine Zone ist aktiv, solange ein laufender Encounter dort noch eine fällige Gruppe hat, eine Dauerquelle läuft oder das Boss-Intro läuft. Sie ist kommend, solange ein nicht gestarteter Encounter, eine spätere Quelle oder der wartende Boss sie nutzt. Sonst ist sie verbraucht. Präsenz: aktiv 1, kommend oder schlafend 0,45, verbraucht oder verfallen 0.
 - 2026-10-19: Die Dawn-Angriffswellen behalten ihr intern erzeugtes Inline-Rechteck. Sie sind eine generierte Activity ohne authored Ort. Der Dunst über Dawn-Stätten kommt aus den feindlichen Stätten-Basen.

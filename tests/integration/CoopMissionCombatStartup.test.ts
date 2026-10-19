@@ -171,7 +171,7 @@ describe('Dawn composition ownership', () => {
     const host = new CoopMissionHostUpdate(runtime, {
       getPlayers: () => inside ? [player] : [], canUseMissionActions: () => true, isPlayerAlive: () => true,
       syncDormantBaseStates: vi.fn(), publishEncounterPresentation: vi.fn(),
-      publishMapEventPresentation: vi.fn(), publishSecondaryObjectivePresentation: vi.fn(), publishSpawnZoneAlerts: vi.fn(),
+      publishMapEventPresentation: vi.fn(), publishSecondaryObjectivePresentation: vi.fn(), publishSpawnZoneAlerts: vi.fn(), publishSpawnPlaceState: vi.fn(),
     } as unknown as CoopMissionHostUpdatePort);
     try {
       host.run(10_000, 10_000, true, false);

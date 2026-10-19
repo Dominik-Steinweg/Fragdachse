@@ -129,6 +129,16 @@ export class CoopDefenseSecondaryObjectiveSystem {
     }
   }
 
+  /** Dormant objectives whose expiry has come: they will never start (a Dawn site nobody entered by dusk). */
+  getLapsedDormantObjectiveIds(out: string[] = []): string[] {
+    for (const state of this.objectiveStates) {
+      if (state.state === 'dormant' && state.config.expiresAt !== undefined && this.isTriggerSatisfied(state.config.expiresAt)) {
+        out.push(state.config.id);
+      }
+    }
+    return out;
+  }
+
   /** Ein noch aktives Ziel mit erfuelltem `expiresAt` scheitert ohne Belohnung. */
   private expireObjectives(): void {
     for (const state of this.objectiveStates) {
