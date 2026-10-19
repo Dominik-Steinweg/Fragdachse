@@ -13,6 +13,9 @@ export const VOID_CREEP_GLOW_SHADER_NAME = 'VoidCreepGlow';
  * than a screen pixel is faded out by the camera's pixel size instead of shimmering. Ground, rock
  * and the night glow evaluate the same haze, so the glow sits on the drawn dust.
  */
+/** Share of the haze that stays over open water (Map 20: the kraken must stay visible in its pond). */
+export const OPEN_WATER_HAZE = .2;
+
 export const VOID_CREEP_GLSL = `
 uniform sampler2D uCreep;
 uniform vec4 uCreepFrame;
@@ -48,12 +51,14 @@ float creepAlert(vec2 world) {
   return 1.0-clear;
 }
 // Soaked ground (r, a scar that stays), land share (g) and spore haze (b, follows the danger's
-// presence and thickens over announced spawn zones) at a world point.
+// presence and thickens over announced spawn zones) at a world point. The haze clings to land and
+// banks: over open water only a thin film stays, so what lives in the water stays readable; the
+// ink in the water carries the void there. A warning still shows over water, a little softer.
 vec3 creepTexel(vec2 world) {
   vec2 uv=(world-uCreepFrame.xy)/uCreepFrame.zw;
   if(any(lessThan(uv,vec2(0.0)))||any(greaterThan(uv,vec2(1.0)))) return vec3(0.0);
   vec3 texel=texture2D(uCreep,vec2(uv.x,1.0-uv.y)).rgb;
-  texel.b=1.0-(1.0-texel.b)*(1.0-.9*creepAlert(world));
+  texel.b=1.0-(1.0-texel.b*mix(${OPEN_WATER_HAZE.toFixed(2)},1.0,texel.g))*(1.0-.9*creepAlert(world)*mix(.6,1.0,texel.g));
   return texel;
 }
 // Spore haze: x thickness 0..1, y the thick body of the clouds (where light gathers), from two

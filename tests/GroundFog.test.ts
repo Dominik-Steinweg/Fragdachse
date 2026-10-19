@@ -251,6 +251,24 @@ describe('ground fog bounded world state', () => {
     expect(fog.getDiagnostics().bytes).toBe(0); expect(fog.impulses.size).toBe(0);
     fog.destroy(); fog.destroy(); expect(renderer.off).toHaveBeenCalledTimes(1);
   });
+  it('lets a boss-sized body hold the air open around itself at rest, but not a small enemy', () => {
+    const fog = new GroundFogSystem({ sys: { renderer: { on: vi.fn(), off: vi.fn() } } } as never, frame, 1, []);
+    const body = (size: number) => {
+      const sample = { ...createMovementVisualSample(), x: 300, y: 200, visible: true, size };
+      return { readMovementVisualSample: (out: typeof sample) => Object.assign(out, sample) };
+    };
+    const kraken = body(128), badger = body(28);
+    for (let i = 0; i < 3; i++) fog.captureMotion(33, [], [badger], view);
+    expect(fog.impulses.size).toBe(0);
+    fog.captureMotion(33, [], [kraken], view);
+    const [held] = fog.impulses.drain('high', view);
+    expect(held).toMatchObject({ x: 300, y: 200, endX: 300, endY: 200, kind: 'motion' });
+    expect(held.radius).toBeGreaterThan(64);
+    // Still at rest a frame later: the opening is held, not a one-off wake.
+    fog.captureMotion(33, [], [kraken], view);
+    expect(fog.impulses.size).toBe(1);
+    fog.destroy();
+  });
   it('keeps the daily curve continuous at midnight and denser over water', () => {
     expect(fogDensityAt(0)).toEqual(fogDensityAt(1440));
     for (let t = 0; t < 1440; t += 10) { const [land, water] = fogDensityAt(t); expect(water).toBeGreaterThanOrEqual(land); }

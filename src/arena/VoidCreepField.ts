@@ -19,7 +19,10 @@ const WARP_SCALE = 260, WARP_PX = 150;
 export interface VoidCreepField {
   /** Soaked ground: a scar that stays when the danger is gone. */
   readonly data: Uint8Array;
-  /** Land share per texel in [0, 255]: glints and airborne spores belong to land, ink to water too. */
+  /**
+   * Land share per texel in [0, 255]: 1 on land and along the banks, fading to 0 over open water.
+   * The haze clings to land; over open water only a thin film stays and the ink carries the void.
+   */
   readonly land: Uint8Array;
   /** Spore haze thickness; follows the presence of its places and may be rewritten in regions. */
   readonly haze: Uint8Array;

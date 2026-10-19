@@ -16,6 +16,7 @@ import { buildVoidCreepField, buildVoidCreepHaze, voidCreepTexelRect, type VoidC
 import { VoidCreepPresentation } from './VoidCreepPresentation';
 import { VoidDangerField, resolveVoidDangerSources, type ActivityVoidDanger, type VoidDangerSource } from '../../arena/VoidDangerField';
 import { VoidHazeResidue } from '../../arena/VoidHazeResidue';
+import { WATER_SHORE_DISTANCE } from '../../arena/WaterSurfaceModel';
 import { VoidFloraGlow } from './VoidFloraGlow';
 import { VoidFloraEmission } from './VoidFloraEmission';
 import { voidLilyFrame } from '../../arena/VoidFloraAssets';
@@ -352,9 +353,12 @@ export class WorldSunlightPresentation {
       this.refreshResidue();
       this.voidPresence.clear();
       for(const source of danger?.sources??[])if(source.haze>0)this.voidPresence.set(source.id,this.readPresence(source.id));
+      // The haze clings to land and banks; over open water the ink carries the void (G channel).
       const creep=danger?buildVoidCreepField(this.voidHazeSource,frame,this.voidPondPoints,(x,y)=>{
         const depth=water.distance(x-frame.offsetX,y-frame.offsetY);
-        return depth<0?1:Math.max(0,1-depth/10);
+        if(depth<0)return 1;
+        const t=Math.min(1,depth/WATER_SHORE_DISTANCE);
+        return 1-t*t*(3-2*t);
       }):null;
       this.voidCreepField=creep;
       // The airborne half rides in the ground fog: wakes cut it, stirred air blows it apart. The

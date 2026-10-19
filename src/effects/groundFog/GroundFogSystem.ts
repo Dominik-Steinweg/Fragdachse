@@ -31,6 +31,11 @@ export interface FogDiagnostics {
 }
 
 /** One local World's cosmetic state. No global clock, gameplay writes, or network messages. */
+/** Bodies from this size (px, the smallest boss) hold the air open around themselves at rest. */
+const LARGE_BODY_PX = 56;
+/** The held opening reaches this many body sizes from the centre, with this much hold. */
+const LARGE_BODY_REACH = .85, LARGE_BODY_HOLD = .5;
+
 export class GroundFogSystem {
   readonly terrain: FogTerrainModel;
   readonly impulses = new FogImpulses();
@@ -153,6 +158,12 @@ export class GroundFogSystem {
         this.impulses.add({ x: before.x, y: before.y, endX: s.x, endY: s.y, radius: Math.max(14, s.size * (dash ? .70 : .68)),
           strength: Math.min(dash ? .68 : .62, distance / Math.max(24, s.size) * (.1 + speed / 1700) * (dash ? FOG.dashGain : FOG.motionGain)),
           kind: 'motion', priority: player ? 90 : 40 + Math.min(30, s.size / 4) });
+      }
+      // A body as large as a boss holds the air open around itself even at rest: fog and the void
+      // haze inside it part around the kraken or a titan, so the boss stays readable.
+      if (!player && s.size >= LARGE_BODY_PX) {
+        this.impulses.add({ x: s.x, y: s.y, endX: s.x, endY: s.y, radius: s.size * LARGE_BODY_REACH,
+          strength: LARGE_BODY_HOLD, kind: 'motion', priority: 70 });
       }
       if (before) { before.id = s.id; before.x = s.x; before.y = s.y; before.revision = s.revision; before.frame = this.motionFrame; }
       else this.tracks.set(source, { id: s.id, x: s.x, y: s.y, revision: s.revision, frame: this.motionFrame });

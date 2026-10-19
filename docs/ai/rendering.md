@@ -449,6 +449,13 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
   geliehen). Im Display-Pass schneiden die Waffenspuren den Dunst wie den Nebel, die Hemmung im Dichtefeld des Nebels
   (Explosionen, Bewegung) öffnet ihn, die Nebelluft trägt ihn mit. Ohne aktiven Nebel bleibt nur der Bodenschleier.
   Der Nebel gibt die geliehenen Sampler beim Lösen sofort frei ([FogWoodlandLight.test.ts](../../tests/FogWoodlandLight.test.ts)).
+- Der Nebel-Composite liegt über den Figuren (`GROUND_FOG_COMPOSITE` über `PLAYERS`). Was er trägt, verschleiert Figuren.
+  Deshalb gilt:
+  - Der Void-Dunst haftet an Land und Ufern. Über offenem Wasser bleibt nur ein dünner Film (`OPEN_WATER_HAZE`), dort
+    trägt die Tinte das Void. Was im Wasser lebt (Kraken, Mini-Kraken), bleibt lesbar.
+  - Körper ab Bossgröße halten die Luft um sich offen, auch in Ruhe (`GroundFogSystem.captureMotion`). Normaler Nebel und
+    der Dunst darin weichen um Kraken oder Titan zurück
+    ([GroundFog.test.ts](../../tests/GroundFog.test.ts)).
 - Umgekehrt verleiht der Nebel seine Luft (`GroundFogSystem.getAirBinding`, [FogAirBinding](../../src/effects/groundFog/FogAirBinding.ts))
   lesend an die Partikel. Er tauscht seine Texturen pro Simulationsschritt und kann sie freigeben. Ein Leihender fragt
   deshalb jeden Frame erst nach dem Nebelschritt und behält die Bindung nie länger.
