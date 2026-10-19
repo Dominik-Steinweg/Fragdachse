@@ -9,6 +9,7 @@ import {
 } from '../src/utils/spawnDirection';
 import {
   resolveEncounterDirections,
+  resolveEncounterSpawnZoneRects,
   resolveEncounterTelegraphIncoming,
 } from '../src/activity/coopMissionEncounterDirections';
 import type { CoopDefenseEncounterPresentationState } from '../src/types';
@@ -162,5 +163,25 @@ describe('encounter directions', () => {
     const around = { id: 'ambush', x: 900, y: 400, width: 300, height: 300 };
     expect(resolveEncounterDirections(encounter(), { encounter: [around], live: [around] }, { x: 1000, y: 500 }))
       .toEqual([]);
+  });
+});
+
+describe('replicated spawn zones as world rectangles (Void-Gefahrenzonen V1)', () => {
+  const world = { offsetX: 100, offsetY: 50, cellSize: 32, zones: [
+    { id: 'west-upper', gridX: 0, gridY: 2, widthCells: 8, heightCells: 10 },
+    { id: 'east-mid', gridX: 60, gridY: 10, widthCells: 8, heightCells: 10 },
+  ] };
+  const state = { encounterId: 'wave', sequenceIndex: 1, sequenceCount: 1, phase: 'incoming' as const, phaseStartedAtMs: 0,
+    phaseEndsAtMs: 1000, encounterFronts: [], fronts: [], encounterZones: ['west-upper', 'east-mid', 'gone'], zones: ['east-mid'] };
+
+  it('maps encounter and live zones through the World and drops unknown ids', () => {
+    const rects = resolveEncounterSpawnZoneRects(state, world)!;
+    expect(rects.encounter.map(({ id }) => id)).toEqual(['west-upper', 'east-mid']);
+    expect(rects.live).toEqual([{ id: 'east-mid', x: 100 + 60 * 32, y: 50 + 10 * 32, width: 256, height: 320 }]);
+  });
+
+  it('leaves front encounters and worlds without zones to the fronts', () => {
+    expect(resolveEncounterSpawnZoneRects({ ...state, encounterZones: undefined, zones: undefined }, world)).toBeNull();
+    expect(resolveEncounterSpawnZoneRects(state, null)).toBeNull();
   });
 });

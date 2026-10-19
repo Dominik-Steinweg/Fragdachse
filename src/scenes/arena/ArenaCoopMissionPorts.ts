@@ -9,6 +9,7 @@ import type {
 } from '../../activity/CoopMissionHostUpdate';
 import type { CoopMissionRuntimePorts } from '../../activity/CoopMissionRuntime';
 import type { CoopMissionPresentationReadPort } from '../../activity/CoopMissionPresentationBinding';
+import { resolveEncounterSpawnZoneRects, type WorldSpawnZoneFrame } from '../../activity/coopMissionEncounterDirections';
 import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import { resolveCoopDefenseCarryPresentationSnapshot } from './CoopDefenseCarryPresentation';
 import type { BaseManager } from '../../entities/BaseManager';
@@ -34,6 +35,8 @@ export function createArenaCoopMissionPresentationPort(
     readonly getCoopMissionRuntime: () => CoopMissionRuntime | null;
     readonly getEnemyVulnerability: (enemyId: string, now: number) => boolean;
     readonly getVisibleWorldCentre: () => { readonly x: number; readonly y: number };
+    /** The World's spawn zones; null without a World or zones (Dawn, fallback fronts). */
+    readonly getWorldSpawnZones: () => WorldSpawnZoneFrame | null;
   },
 ): CoopMissionPresentationReadPort {
   return {
@@ -53,6 +56,7 @@ export function createArenaCoopMissionPresentationPort(
     },
     getEnemyVulnerability: (enemyId, now) => input.getEnemyVulnerability(enemyId, now),
     getVisibleWorldCentre: () => input.getVisibleWorldCentre(),
+    getEncounterSpawnZones: (state) => resolveEncounterSpawnZoneRects(state, input.getWorldSpawnZones()),
     getCarryPresentationItems: () => resolveCoopDefenseCarryPresentationSnapshot(
       bridge.isHost(),
       input.getCoopMissionRuntime()?.coopDefenseCarrySystem ?? null,

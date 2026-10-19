@@ -1,5 +1,5 @@
 import { ENEMY_BURST_PRESETS } from '../../config/enemyBurstPresets';
-import { VOID_PALETTE } from '../../config';
+import { CELL_SIZE, VOID_PALETTE } from '../../config';
 import { warmupKrakenShaders } from '../../effects/kraken/KrakenShaderWarmup';
 import { restrictStructureOccupant } from '../../world/PlayerCapabilities';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
@@ -818,6 +818,11 @@ export class ArenaLifecycleCoordinator {
       getVisibleWorldCentre: () => {
         const view = getVisibleWorldView(this.scene.cameras.main);
         return { x: view.centerX, y: view.centerY };
+      },
+      getWorldSpawnZones: () => {
+        const world = this.worldRuntime?.context, zones = world?.definition?.spawnZones;
+        return world && zones?.length
+          ? { zones, offsetX: world.metrics.offsetX, offsetY: world.metrics.offsetY, cellSize: CELL_SIZE } : null;
       },
     });
     this.coopMissionComposition = new CoopMissionComposition({
