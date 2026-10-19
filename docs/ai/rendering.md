@@ -417,13 +417,21 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
     ([CoopMissionVoidDanger](../../src/activity/CoopMissionVoidDanger.ts)).
 - Pflanzen und Dunst sind getrennt. Fehlt die Präsenz einer Quelle (Basis zerstört, Stätte geschlossen), verfliegt nur ihr
   Dunst. Pflanzen und getränkter Boden bleiben als Narbe.
+- Die Geflecht-Textur trägt getränkten Boden (R), Landanteil (G) und Dunst (B). Ein Präsenzwechsel schreibt nur B im
+  Begrenzungsrahmen der Quelle neu und blendet über Teil-Uploads über. Daten im Alpha einer Canvas-Textur würden
+  vormultipliziert, und ein weiterer Sampler passt nicht in den Nebel-Pass.
+- Angekündigte Spawnzonen verdichten B im Shader (`uVoidAlert[8]`, `uVoidAlertLevel[8]` in `VOID_CREEP_GLSL`). Boden,
+  Fels, Glow, Nebelluft und Partikel lesen denselben Wert. Der Client glättet die Stärke, damit ein ersetzter Takt
+  abklingt statt abzureißen ([CoopDefenseSpawnZoneAlerts.test.ts](../../tests/CoopDefenseSpawnZoneAlerts.test.ts)).
 - Das Feld verbraucht nie Zufall des Layouts, die Map-Fingerprints bleiben unverändert. Der Befall ist zusammenhängend:
   Es gibt keinen Wurf je Pflanze, der einzelne befallene Pflanzen neben unberührte setzt.
 - Void-Frames tragen zwingend das Präfix `void-` und liegen in eigenen Atlanten mit deckungsgleichem Emissive-Atlas.
   Natürliche Familienfilter (`startsWith('lily-pad')` …) und ihre Auswahl bleiben so unberührt.
 - Ihr Leuchten läuft als dekoratives Bodenlicht durch die Lichtkarte. Es wird zuletzt gefüllt und verdrängt nie
   Spiellicht.
-- Adern und Sporen liegen knapp über der Lichtkarte unter den Kronen (Band E).
+- Adern und Sporen-Partikel liegen knapp über der Lichtkarte unter den Kronen (Band E). Die Partikel gehören zum Dunst,
+  nicht zu den Pflanzen: ein kameragebundener GPU-Pass ([VoidSporeMotes](../../src/effects/sunlight/VoidSporeMotes.ts)).
+  Feiner als ein Bildschirmpixel verlieren sie Helligkeit statt zu wachsen.
 - Befallene Seerosen färben ihr Wasser: Ein Fleckenfeld aus den Platzierungen ([VoidWaterStain](../../src/arena/VoidWaterStain.ts))
   färbt im Sonnenwasser-Programm nach dem Nachtteil nur den Wasserkörper. Uferfilm, Wellen und Alpha bleiben,
   um gesunde Pflanzen bleibt das Wasser natürlich ([VoidWaterStain.test.ts](../../tests/VoidWaterStain.test.ts)).
@@ -438,6 +446,9 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
   geliehen). Im Display-Pass schneiden die Waffenspuren den Dunst wie den Nebel, die Hemmung im Dichtefeld des Nebels
   (Explosionen, Bewegung) öffnet ihn, die Nebelluft trägt ihn mit. Ohne aktiven Nebel bleibt nur der Bodenschleier.
   Der Nebel gibt die geliehenen Sampler beim Lösen sofort frei ([FogWoodlandLight.test.ts](../../tests/FogWoodlandLight.test.ts)).
+- Umgekehrt verleiht der Nebel seine Luft (`GroundFogSystem.getAirBinding`, [FogAirBinding](../../src/effects/groundFog/FogAirBinding.ts))
+  lesend an die Partikel. Er tauscht seine Texturen pro Simulationsschritt und kann sie freigeben. Ein Leihender fragt
+  deshalb jeden Frame erst nach dem Nebelschritt und behält die Bindung nie länger.
 - Weltverankertes Detail feiner als ein Bildschirmpixel flimmert bei Kamerabewegung. Materialien blenden solche
   Oktaven über die Pixelgröße der Kamera aus. Die Lichtkarte ist gröber als der Bildschirm und trägt nur weiches Licht.
 - Weltflächen, die der Kamera folgen, leiten ihr Rechteck aus `getVisibleWorldView` ab. Die Arena-Kamera hat Origin

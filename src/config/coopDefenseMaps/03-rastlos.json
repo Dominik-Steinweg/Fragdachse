@@ -3,6 +3,12 @@
   "persistentBaseRewardsOnVictory": ["base_plasma_turret_2"],
   "arenaWidthCells": 76,
   "arenaHeightCells": 37,
+  "spawnZones": [
+    { "id": "west-upper", "gridX": 0, "gridY": 6, "widthCells": 8, "heightCells": 10 },
+    { "id": "west-lower", "gridX": 0, "gridY": 21, "widthCells": 8, "heightCells": 10 },
+    { "id": "east-upper", "gridX": 68, "gridY": 6, "widthCells": 8, "heightCells": 10 },
+    { "id": "east-lower", "gridX": 68, "gridY": 21, "widthCells": 8, "heightCells": 10 }
+  ],
   "timeOfDay": "17:00",
   "tutorialPersistent": true,
   "tutorialAnchor": { "gridX": 41, "gridY": 2 },
@@ -34,7 +40,7 @@
       "start": {"type": "time", "atMs": 0},
       "restAfterMs": 5000,
       "groups": [
-        {"enemyKind": "zombie-badger", "count": 14, "front": "west"}
+        {"enemyKind": "zombie-badger", "count": 14, "spawnZoneId": "west-upper"}
       ]
     },
     {
@@ -42,7 +48,7 @@
       "start": {"type": "after-previous"},
       "restAfterMs": 4500,
       "groups": [
-        {"enemyKind": "rabid-badger", "count": 5, "spawnStaggerMs": 500, "front": "east"}
+        {"enemyKind": "rabid-badger", "count": 5, "spawnStaggerMs": 500, "spawnZoneId": "east-lower"}
       ]
     },
     {
@@ -50,16 +56,16 @@
       "start": {"type": "after-previous"},
       "restAfterMs": 3000,
       "groups": [
-        {"enemyKind": "zombie-badger", "count": 12, "front": "west"},
-        {"enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "front": "east"}
+        {"enemyKind": "zombie-badger", "count": 12, "spawnZoneId": "west-upper"},
+        {"enemyKind": "rabid-badger", "count": 5, "delayMs": 900, "spawnZoneId": "east-upper"}
       ]
     },
     {
       "id": "rabid-breakthrough",
       "start": {"type": "after-previous"},
       "groups": [
-        {"enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "front": "west"},
-        {"enemyKind": "zombie-badger", "count": 12, "delayMs": 1800, "front": "east"}
+        {"enemyKind": "rabid-badger", "count": 8, "delayMs": 1200, "spawnZoneId": "west-lower"},
+        {"enemyKind": "zombie-badger", "count": 12, "delayMs": 1800, "spawnZoneId": "east-lower"}
       ],
       "restAfterMs": 3000
     },
@@ -67,10 +73,10 @@
       "id": "restless-mix2",
       "start": {"type": "after-previous"},
       "groups": [
-        {"enemyKind": "demon-badger", "count": 3, "front": "west"},
-        {"enemyKind": "rabid-badger", "count": 3, "delayMs": 400, "front": "west"},
-        {"enemyKind": "rabid-badger", "count": 3, "delayMs": 800, "front": "east"},
-        {"enemyKind": "zombie-badger", "count": 12, "delayMs": 1200, "front": "east"}
+        {"enemyKind": "demon-badger", "count": 3, "spawnZoneId": "west-upper"},
+        {"enemyKind": "rabid-badger", "count": 3, "delayMs": 400, "spawnZoneId": "west-lower"},
+        {"enemyKind": "rabid-badger", "count": 3, "delayMs": 800, "spawnZoneId": "east-upper"},
+        {"enemyKind": "zombie-badger", "count": 12, "delayMs": 1200, "spawnZoneId": "east-lower"}
       ],
       "restAfterMs": 3000
     },
@@ -78,10 +84,10 @@
       "id": "restless-mix3",
       "start": {"type": "after-previous"},
       "groups": [
-        {"enemyKind": "zombie-badger", "count": 12, "front": "west"},
-        {"enemyKind": "rabid-badger", "count": 4, "delayMs": 400, "front": "west"},
-        {"enemyKind": "rabid-badger", "count": 4, "delayMs": 800, "front": "east"},
-        {"enemyKind": "zombie-badger", "count": 12, "delayMs": 1200, "front": "east"}
+        {"enemyKind": "zombie-badger", "count": 12, "spawnZoneId": "west-lower"},
+        {"enemyKind": "rabid-badger", "count": 4, "delayMs": 400, "spawnZoneId": "west-upper"},
+        {"enemyKind": "rabid-badger", "count": 4, "delayMs": 800, "spawnZoneId": "east-lower"},
+        {"enemyKind": "zombie-badger", "count": 12, "delayMs": 1200, "spawnZoneId": "east-upper"}
       ],
       "restAfterMs": 3000
     },
@@ -89,8 +95,8 @@
       "id": "final-rabid",
       "start": {"type": "after-previous"},
       "groups": [
-        {"enemyKind": "rabid-badger", "count": 9, "front": "west"},
-        {"enemyKind": "rabid-badger", "count": 9, "delayMs": 800, "front": "east"}
+        {"enemyKind": "rabid-badger", "count": 9, "spawnZoneId": "west-upper"},
+        {"enemyKind": "rabid-badger", "count": 9, "delayMs": 800, "spawnZoneId": "east-upper"}
       ]
     }              
   ],

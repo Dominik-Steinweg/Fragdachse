@@ -1,6 +1,6 @@
 # Void-Gefahrenzonen und feste Spawnzonen (V1)
 
-Status: in Umsetzung seit 2026-10-19 im Branch `void-danger`. Ersetzt N-6 und N-7 aus
+Status: umgesetzt im Branch `void-danger` (2026-10-19), noch nicht auf `main`. Ersetzt N-6 und N-7 aus
 [Nachtsicht, Mondlicht und Void-Botanik V1](Fragdachse_GDD_Nachtsicht_Void_Botanik_V1.md). Die übrigen
 Nachtsicht-Entscheidungen gelten weiter: Mondinseln, Lampe am Fels und blaues Nachtwasser.
 
@@ -55,9 +55,9 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 | 2 | Gefahrenfeld ersetzt das ambiente Void | fertig (Branch) |
 | 3 | GPU-Sporen; der Nebel leiht seine Luft | fertig (Branch) |
 | 4 | Host-Warnungen und Drahtformat (Protokoll +1) | fertig (Branch); Anschluss der Randwarnung an Zonen folgt mit Phase 5 |
-| 5 | Gerichtete Randwarnung und HUD-Richtung | eigene Sitzung |
-| 6 | Umbau der Front-Karten | offen |
-| 7 | Doku und Release | offen |
+| 5 | Gerichtete Randwarnung und HUD-Richtung | fertig im eigenen Branch `claude/objective-darwin-f3f889`; Zusammenführung offen |
+| 6 | Umbau der Front-Karten (02–06, 08–15, 17–20) auf feste Spawnzonen | fertig (Branch); Void-Vorschau im Map-Editor offen |
+| 7 | Doku und Release | Doku fertig; Release-Prüfung nach der Zusammenführung |
 
 ## 5. Entscheidungslog
 
@@ -66,4 +66,5 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 - 2026-10-19: Die Sporen-Partikel sind ein GPU-Pass über dem Dunst (`VoidSporeMotes`) und ersetzen die Sprite-Sporen über Pflanzen. Sie gehören zum Dunst: Über einer Narbe ohne Präsenz gibt es keine.
 - 2026-10-19: Der Nebel verleiht seine Luft erst nach seinem Schritt im Frame (`GroundFogSystem.getAirBinding`). Er tauscht seine Texturen pro Schritt und kann sie freigeben.
 - 2026-10-19: Warnungen kommen aus drei Quellen: Director-Gruppen (Vorlauf 2 s vor dem ersten geplanten Spawn, offen bis zum letzten), Dauerquellen auf Zonen (jeder Takt 2 s vorher) und Boss-Zone (ab Intro). Sie werden pro Zone zusammengeführt (`csz`) und nur bei Änderung veröffentlicht. Der Client glättet die Stärke, damit ein ersetzter Takt abklingt statt abzureißen. Im Shader verdichten bis zu 8 Zonen den Dunst-Kanal.
+- 2026-10-19: Die Front-Karten wurden per Codemod (`scripts/map-tools/migrate-front-zones.py`) umgestellt. Die Zonen liegen im alten Randband. Gruppen einer Front wechseln Encounter für Encounter durch deren Zonen. Gruppen über 15 Gegner werden mit gleicher Gesamtzahl auf die Zonen ihrer Front verteilt. Map 08: `dimension-north/south` kommen aus Nord- und Süd-Zonen. Map 06: Die Süd-Zone liegt östlich, weil die Mitte des Südrands in der Reservierung der persistenten Basis liegt. Neue Zonen halten ihren Kern frei, deshalb ändern sich die Fingerprints (E1).
 - 2026-10-19: Die Dawn-Angriffswellen behalten ihr intern erzeugtes Inline-Rechteck. Sie sind eine generierte Activity ohne authored Ort. Der Dunst über Dawn-Stätten kommt aus den feindlichen Stätten-Basen.

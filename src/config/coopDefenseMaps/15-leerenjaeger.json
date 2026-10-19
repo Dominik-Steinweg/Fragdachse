@@ -2,6 +2,12 @@
   "mapId": "15",
   "arenaWidthCells": 100,
   "arenaHeightCells": 44,
+  "spawnZones": [
+    { "id": "west-mid", "gridX": 0, "gridY": 16, "widthCells": 8, "heightCells": 12 },
+    { "id": "east-mid", "gridX": 92, "gridY": 16, "widthCells": 8, "heightCells": 12 },
+    { "id": "north-mid", "gridX": 42, "gridY": 0, "widthCells": 16, "heightCells": 6 },
+    { "id": "south-mid", "gridX": 42, "gridY": 38, "widthCells": 16, "heightCells": 6 }
+  ],
   "timeOfDay": "20:45",
   "dynamicTimeOfDay": {
     "transitions": [
@@ -100,24 +106,24 @@
         {
           "enemyKind": "zombie-badger",
           "count": 3,
-          "front": "west"
+          "spawnZoneId": "west-mid"
         },
         {
           "enemyKind": "demon-badger",
           "count": 1,
           "delayMs": 900,
-          "front": "west"
+          "spawnZoneId": "west-mid"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 3,
-          "front": "east"
+          "spawnZoneId": "east-mid"
         },
         {
           "enemyKind": "demon-badger",
           "count": 1,
           "delayMs": 900,
-          "front": "east"
+          "spawnZoneId": "east-mid"
         }
       ]
     },
@@ -132,46 +138,46 @@
        {
           "enemyKind": "demon-badger",
           "count": 10,
-          "front": "west"
-        },
+          "spawnZoneId": "west-mid"
+       },
         {
           "enemyKind": "demon-badger",
           "count": 10,
-          "front": "east"
+          "spawnZoneId": "east-mid"
         },
         {
           "enemyKind": "alien-badger",
           "count": 1,
-          "front": "north"
+          "spawnZoneId": "north-mid"
         },
         {
           "enemyKind": "thrower-badger",
           "count": 1,
           "delayMs": 800,
-          "front": "north"
+          "spawnZoneId": "north-mid"
         },
         {
           "enemyKind": "void-stalker",
           "count": 1,
           "delayMs": 1600,
-          "front": "north"
+          "spawnZoneId": "north-mid"
         },
         {
           "enemyKind": "alien-badger",
           "count": 1,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "thrower-badger",
           "count": 1,
           "delayMs": 800,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "void-stalker",
           "count": 1,
           "delayMs": 1600,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         }
       ]
     },
@@ -185,52 +191,53 @@
         {
           "enemyKind": "zombie-badger",
           "count": 2,
-          "front": "west"
+          "spawnZoneId": "west-mid"
         },
         {
           "enemyKind": "demon-badger",
           "count": 1,
           "delayMs": 700,
-          "front": "west"
+          "spawnZoneId": "west-mid"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 2,
-          "front": "north"
+          "spawnZoneId": "north-mid"
         },
         {
           "enemyKind": "demon-badger",
           "count": 1,
           "delayMs": 700,
-          "front": "north"
+          "spawnZoneId": "north-mid"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 2,
-          "front": "east"
+          "spawnZoneId": "east-mid"
         },
         {
           "enemyKind": "demon-badger",
           "count": 1,
           "delayMs": 700,
-          "front": "east"
+          "spawnZoneId": "east-mid"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 2,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "demon-badger",
           "count": 1,
           "delayMs": 700,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         }
       ]
     }
   ],
   "boss": {
     "enemyKind": "void-hunter",
+    "spawnZoneId": "west-mid",
     "spawnAtMs": 0,
     "startAfterEncounterId": "void-hunter-opening-support",
     "intro": { "preset": "void-sparks" }

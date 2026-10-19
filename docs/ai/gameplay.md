@@ -75,7 +75,7 @@ als Hindernis führt und Wasser nach dem Schwimmtempo gewichtet; ihre Angriffspl
 Getaucht gelten sie über `EnemyEntity.isBurrowed()` als nicht treffbar und nicht angriffsfähig. Neue
 Ziel-, Treffer- und Angriffsprüfungen verwenden deshalb `isBurrowed()` und nie das Feld `burrowed`
 direkt. Der Zustand wird als `submerged` repliziert und erzeugt keine Grabeffekte. Ein Wasser-Spawn
-(`spawnArea.medium: 'water'`) ist nur für amphibische Arten zulässig. Dies sichern
+(Spawnzone mit `medium: 'water'`) ist nur für amphibische Arten zulässig. Dies sichern
 [MiniKraken.test.ts](../../tests/MiniKraken.test.ts) und
 [EnemyIntentAndBreach.test.ts](../../tests/EnemyIntentAndBreach.test.ts).
 

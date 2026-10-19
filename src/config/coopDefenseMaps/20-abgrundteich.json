@@ -4,7 +4,9 @@
   "arenaHeightCells": 52,
   "spawnZones": [
     { "id": "abyss-opening", "gridX": 40, "gridY": 17, "widthCells": 7, "heightCells": 10, "medium": "water", "cluster": true, "keepClear": false },
-    { "id": "abyss-tide-3", "gridX": 24, "gridY": 17, "widthCells": 7, "heightCells": 10, "medium": "water", "cluster": true, "keepClear": false }
+    { "id": "abyss-tide-3", "gridX": 24, "gridY": 17, "widthCells": 7, "heightCells": 10, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "west-mid", "gridX": 0, "gridY": 19, "widthCells": 8, "heightCells": 14 },
+    { "id": "east-mid", "gridX": 84, "gridY": 19, "widthCells": 8, "heightCells": 14 }
   ],
   "timeOfDay": "18:30",
   "tutorialAnchor": {
@@ -1961,7 +1963,7 @@
         {
           "enemyKind": "zombie-badger",
           "count": 6,
-          "front": "west"
+          "spawnZoneId": "west-mid"
         },
         {
           "enemyKind": "mini-kraken",
@@ -1981,7 +1983,7 @@
         {
           "enemyKind": "zombie-badger",
           "count": 6,
-          "front": "west"
+          "spawnZoneId": "west-mid"
         },
         {
           "enemyKind": "mini-kraken",
@@ -2001,13 +2003,13 @@
         {
           "enemyKind": "demon-badger",
           "count": 2,
-          "front": "east"
+          "spawnZoneId": "east-mid"
         },
         {
           "enemyKind": "zombie-badger",
           "count": 6,
           "delayMs": 1000,
-          "front": "west"
+          "spawnZoneId": "west-mid"
         }
       ]
     },
@@ -2027,7 +2029,7 @@
           "enemyKind": "demon-badger",
           "count": 2,
           "delayMs": 1200,
-          "front": "east"
+          "spawnZoneId": "east-mid"
         }
       ]
     }

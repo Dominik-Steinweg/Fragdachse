@@ -17,7 +17,7 @@ Eine Activity referenziert ihre World über worldDefinitionId und liefert keine 
 
 Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und beschreibt nur die Stelle des Basiskerns: baseId, Anker und Ausrichtung. Sie authoriert keine Build Area; diese wird ausschließlich aus der host-autoritativ eingefrorenen `PersistentBaseAreaStage` über `resolvePersistentBaseBuildAreaForStage()` abgeleitet. Die Kernform ist Code-Definition; die Map-Normalisierung erzeugt daraus den `bases`-Eintrag und prüft die räumliche Reservierung. Eine Map, die dieselbe baseId zusätzlich selbst in `bases` beschreibt, wird abgelehnt: Zwei Beschreibungen derselben Basis könnten über Maps hinweg auseinanderlaufen.
 
-**Bereits normalisierte Coop-Configs nicht erneut normalisieren.** `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Der erste Lauf materialisiert zum Beispiel den Default für `front`; zusammen mit einer authored `spawnArea` kann ein zweiter Lauf an der gegenseitigen Ausschließlichkeit scheitern. Adapter erhalten daher bereits normalisierte Configs.
+**Bereits normalisierte Coop-Configs nicht erneut normalisieren.** `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Der erste Lauf materialisiert zum Beispiel die persistente Basis und für Gruppen mit generierter Inline-`spawnArea` (Dawn) den Default für `front`; ein zweiter Lauf kann dann an der gegenseitigen Ausschließlichkeit scheitern. Adapter erhalten daher bereits normalisierte Configs.
 
 ## Wasser-Authoring
 
@@ -53,6 +53,41 @@ Eine Basis ist zunächst World-Geometrie und World-Identität: Position, Form, F
 Ob Basen Ziel der Gegner sind, ist Activity-Inhalt (`enemyTargeting`). Die Politik wirkt ausschließlich über die Zielquellen der Navigation ([`applyEnemyTargetingToBaseDescriptors`](../../src/systems/flowfield/FlowFieldSources.ts)): Ohne Basisziel fallen Belagerer, Basis-Präferenzen und Spawn-Felder gemeinsam auf die Spielerjagd zurück. Einzelne Gegnersysteme bekommen dafür keine eigenen Sonderfälle.
 
 Die dauerhafte Base-Konfiguration ist nicht mit dem laufenden HP- oder Cooldown-Zustand gleichzusetzen. Solche Laufzeitwerte gehören zur Activity-Simulation oder zur Replikation, nicht zum authored PersistentBase-Zustand.
+
+## Spawnzonen
+
+Feste Spawnorte gehören zur World ([`src/config/spawnZones.ts`](../../src/config/spawnZones.ts), `WorldDefinition.spawnZones`).
+Eine Spawnzone ist ein benanntes Rechteck in Arenazellen mit kebab-case-ID. Optional sind:
+
+- `medium: 'water'` für eine Wasserhöhle (nur amphibische Arten);
+- `cluster` für einen Rudel-Spawn;
+- `keepClear: false`: Der Generator hält dann keinen Kern frei.
+
+Die Activity referenziert Zonen nur per ID:
+
+- Encounter-Gruppen über `spawnZoneId`;
+- Dauerquellen über `source: { type: 'zone', zoneId }`;
+- der Boss über `spawnZoneId`, außer bei einem Kraken-Habitat.
+
+`front` und `spawnZoneId` schließen sich aus. Die Normalisierung leitet die `spawnArea` der Gruppe bei jedem Lauf aus
+der Zone ab. Jede Zone muss benutzt werden, und eine Wasserzone muss Wasser enthalten.
+
+Kampagnenkarten spawnen ausschließlich aus Zonen ([CoopDefenseSpawnZones.test.ts](../../tests/CoopDefenseSpawnZones.test.ts)).
+Fronten bleiben technischer Rückfall und Dawn vorbehalten. Dawn-Angriffswellen behalten ihre generierte Inline-Fläche.
+
+Eine Zonengruppe ist nie eine West-Front. Der Encounter-Zustand nennt Zonen (`encounterZones`, `zones`); die Frontlisten
+dürfen dann leer sein, und der West-Rückfall gilt nur ohne beides.
+
+Der Generator behandelt Zonen als Quellen der Spawn-zu-Basis-Routenprüfung. Eine Zone, deren Zellen in der
+Reservierung der persistenten Basis liegen, lässt jeden Generierungsversuch scheitern. Zonen gehören deshalb in
+offenes Randgelände.
+
+Der Host kündigt Zonen an, die gleich Gegner freigeben (`SyncedSpawnZoneAlert`, Key `csz`): Director-Gruppen ab
+`SPAWN_ZONE_ALERT_LEAD_MS` vor dem ersten geplanten Spawn, jeder Takt einer Dauerquelle und die Boss-Zone ab dem
+Intro. Die Ankündigung ist reine Darstellung, das Void-Gefahrenfeld verdichtet damit den Dunst.
+
+Der Map-Editor legt Zonen an, benennt sie um (alle Referenzen ziehen mit) und löscht nur unbenutzte Zonen
+([MapEditorDocument.test.ts](../../tests/MapEditorDocument.test.ts)).
 
 ## Mission und Zeit
 

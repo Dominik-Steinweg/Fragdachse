@@ -25,6 +25,17 @@ describe('World spawn zones', () => {
     }
   });
 
+  it('lets every campaign map spawn from zones only: no front groups, edge sources or front bosses (E1)', () => {
+    for (const mapId of Array.from({ length: 20 }, (_, i) => String(i + 1))) {
+      const map = getCoopDefenseMapConfig(mapId);
+      for (const encounter of map.encounters ?? []) for (const group of encounter.groups) {
+        expect(group.spawnZoneId, `${mapId}:${encounter.id}`).toBeDefined();
+      }
+      for (const spawn of map.persistentSpawns ?? []) expect(spawn.source.type, `${mapId}:${spawn.id}`).not.toBe('map');
+      if (map.boss && !map.boss.habitatId) expect(map.boss.spawnZoneId, mapId).toBeDefined();
+    }
+  });
+
   it('normalizes idempotently and lands unchanged in the WorldDefinition', () => {
     // Persistent-base maps re-derive their base, so the spawn data is compared field by field.
     for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ spawnZones, persistentBase }) => spawnZones && !persistentBase)) {

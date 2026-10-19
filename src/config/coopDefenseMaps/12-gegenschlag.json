@@ -2,6 +2,10 @@
   "mapId": "12",
   "arenaWidthCells": 112,
   "arenaHeightCells": 41,
+  "spawnZones": [
+    { "id": "hive-north", "gridX": 0, "gridY": 3, "widthCells": 8, "heightCells": 11 },
+    { "id": "hive-south", "gridX": 0, "gridY": 27, "widthCells": 8, "heightCells": 11 }
+  ],
   "timeOfDay": "19:30",
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.3,
@@ -220,7 +224,7 @@
       "start": { "type": "time", "atMs": 0 },
       "restAfterMs": 5000,
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 2 }
+        { "enemyKind": "zombie-badger", "count": 2, "spawnZoneId": "hive-north" }
       ]
     },
     {
@@ -228,14 +232,14 @@
       "start": { "type": "after-previous" },
       "restAfterMs": 5000,
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 3 }
+        { "enemyKind": "zombie-badger", "count": 3, "spawnZoneId": "hive-south" }
       ]
     },
     {
       "id": "closing",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 3 }
+        { "enemyKind": "zombie-badger", "count": 3, "spawnZoneId": "hive-north" }
       ]
     }
   ],
@@ -287,9 +291,7 @@
       "intervalMs": 15000,
       "countPerTick": 12,
       "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "source": { "type": "zone", "zoneId": "hive-north" }
     },
     {
       "id": "map-12-pressure-1",
@@ -297,9 +299,7 @@
       "intervalMs": 15000,
       "countPerTick": 3,
       "startAtMs": 15000,
-      "source": {
-        "type": "map"
-      }
+      "source": { "type": "zone", "zoneId": "hive-south" }
     },
     {
       "id": "map-12-pressure-2",
@@ -307,9 +307,7 @@
       "intervalMs": 30000,
       "countPerTick": 2,
       "startAtMs": 15000,
-      "source": {
-        "type": "map"
-      }
+      "source": { "type": "zone", "zoneId": "hive-north" }
     },
     {
       "id": "map-12-pressure-3",
@@ -317,9 +315,7 @@
       "intervalMs": 30000,
       "countPerTick": 1,
       "startAtMs": 30000,
-      "source": {
-        "type": "map"
-      }
+      "source": { "type": "zone", "zoneId": "hive-south" }
     },
     {
       "id": "map-12-pressure-4",
@@ -327,9 +323,7 @@
       "intervalMs": 30000,
       "countPerTick": 1,
       "startAtMs": 0,
-      "source": {
-        "type": "map"
-      }
+      "source": { "type": "zone", "zoneId": "hive-north" }
     },
     {
       "id": "map-12-pressure-5",
@@ -337,9 +331,7 @@
       "intervalMs": 30000,
       "countPerTick": 3,
       "startAtMs": 15000,
-      "source": {
-        "type": "map"
-      }
+      "source": { "type": "zone", "zoneId": "hive-south" }
     }
   ],
   "tutorialAnchor": {

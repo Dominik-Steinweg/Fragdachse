@@ -3,7 +3,8 @@
   "arenaWidthCells": 105,
   "arenaHeightCells": 42,
   "spawnZones": [
-    { "id": "kraken-heralds-1", "gridX": 56, "gridY": 35, "widthCells": 12, "heightCells": 6, "medium": "water", "cluster": true, "keepClear": false }
+    { "id": "kraken-heralds-1", "gridX": 56, "gridY": 35, "widthCells": 12, "heightCells": 6, "medium": "water", "cluster": true, "keepClear": false },
+    { "id": "west-mid", "gridX": 0, "gridY": 15, "widthCells": 8, "heightCells": 12 }
   ],
   "timeOfDay": "18:45",
   "objective": "destroy-hostile-bases",
@@ -510,10 +511,7 @@
       "intervalMs": 8000,
       "countPerTick": 4,
       "startAtMs": 16000,
-      "front": "west",
-      "source": {
-        "type": "map"
-      }
+      "source": { "type": "zone", "zoneId": "west-mid" }
     },
     {
       "id": "base-13-spawn-point-zombie-badger-pressure",

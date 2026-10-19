@@ -2,6 +2,12 @@
   "mapId": "11",
   "arenaWidthCells": 60,
   "arenaHeightCells": 45,
+  "spawnZones": [
+    { "id": "north-west", "gridX": 8, "gridY": 0, "widthCells": 10, "heightCells": 6 },
+    { "id": "north-east", "gridX": 42, "gridY": 0, "widthCells": 10, "heightCells": 6 },
+    { "id": "west-mid", "gridX": 0, "gridY": 16, "widthCells": 8, "heightCells": 13 },
+    { "id": "south-mid", "gridX": 25, "gridY": 39, "widthCells": 10, "heightCells": 6 }
+  ],
   "timeOfDay": "10:30",
   "tutorialDurationMs": 10000,
   "rockFillRatio": 0.4,
@@ -64,13 +70,13 @@
         {
           "enemyKind": "zombie-badger",
           "count": 6,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "demon-badger",
           "count": 3,
           "delayMs": 0,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         }
       ]
     },
@@ -85,25 +91,31 @@
         {
           "enemyKind": "spore-warden",
           "count": 1,
-          "front": "north"
+          "spawnZoneId": "north-east"
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 48,
-          "front": "north",
-          "spawnStaggerMs": 9000
+          "count": 24,
+          "spawnStaggerMs": 9000,
+          "spawnZoneId": "north-west"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 24,
+          "spawnStaggerMs": 9000,
+          "spawnZoneId": "north-east"
         },
         {
           "enemyKind": "void-stalker",
           "count": 1,
           "delayMs": 4000,
-          "front": "north"
+          "spawnZoneId": "north-west"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
           "delayMs": 6000,
-          "front": "north"
+          "spawnZoneId": "north-east"
         }
       ]
     },
@@ -117,27 +129,35 @@
         {
           "enemyKind": "zombie-badger",
           "count": 15,
-          "front": "north",
-          "spawnStaggerMs": 5000
+          "spawnStaggerMs": 5000,
+          "spawnZoneId": "north-west"
         },
         {
           "enemyKind": "demon-badger",
-          "count": 24,
+          "count": 12,
           "delayMs": 700,
-          "front": "north",
-          "spawnStaggerMs": 7000
+          "spawnStaggerMs": 7000,
+          "spawnZoneId": "north-east"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 12,
+          "delayMs": 700,
+          "spawnStaggerMs": 7000,
+          "spawnZoneId": "north-west"
         },
         {
           "enemyKind": "void-stalker",
           "count": 2,
           "delayMs": 1600,
-          "front": "north",
-          "spawnStaggerMs": 8000
+          "spawnStaggerMs": 8000,
+          "spawnZoneId": "north-east"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 12,
-          "spawnStaggerMs": 7000
+          "spawnStaggerMs": 7000,
+          "spawnZoneId": "west-mid"
         }
       ]
     },
@@ -150,22 +170,35 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 60,
-          "front": "north",
-          "spawnStaggerMs": 6000
+          "count": 30,
+          "spawnStaggerMs": 6000,
+          "spawnZoneId": "north-east"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 30,
+          "spawnStaggerMs": 6000,
+          "spawnZoneId": "north-west"
         },
         {
           "enemyKind": "demon-badger",
-          "count": 30,
+          "count": 15,
           "delayMs": 700,
-          "front": "north",
-          "spawnStaggerMs": 6000
+          "spawnStaggerMs": 6000,
+          "spawnZoneId": "north-east"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 15,
+          "delayMs": 700,
+          "spawnStaggerMs": 6000,
+          "spawnZoneId": "north-west"
         },
         {
           "enemyKind": "spore-warden",
           "count": 3,
-          "front": "north",
-          "spawnStaggerMs": 6000
+          "spawnStaggerMs": 6000,
+          "spawnZoneId": "north-east"
         }
       ]
     },
@@ -178,17 +211,20 @@
         {
           "enemyKind": "zombie-badger",
           "count": 40,
-          "spawnStaggerMs": 8000
+          "spawnStaggerMs": 8000,
+          "spawnZoneId": "west-mid"
         },
         {
           "enemyKind": "plague-medic",
           "count": 5,
-          "spawnStaggerMs": 8000
+          "spawnStaggerMs": 8000,
+          "spawnZoneId": "west-mid"
         },
         {
           "enemyKind": "spore-warden",
           "count": 7,
-          "spawnStaggerMs": 8000
+          "spawnStaggerMs": 8000,
+          "spawnZoneId": "west-mid"
         }
       ],
       "restAfterMs": 3000
@@ -202,46 +238,47 @@
         {
           "enemyKind": "spore-warden",
           "count": 2,
-          "front": "north"
+          "spawnZoneId": "north-east"
         },
         {
           "enemyKind": "spore-warden",
           "count": 2,
-          "front": "south",
-          "spawnStaggerMs": 4000
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "void-stalker",
           "count": 2,
           "delayMs": 800,
-          "front": "north",
-          "spawnStaggerMs": 4000
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "north-west"
         },
         {
           "enemyKind": "void-stalker",
           "count": 1,
           "delayMs": 800,
-          "front": "south",
-          "spawnStaggerMs": 4000
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
           "delayMs": 1700,
-          "front": "north",
-          "spawnStaggerMs": 4000
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "north-east"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
           "delayMs": 1700,
-          "front": "south",
-          "spawnStaggerMs": 4000
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 24,
-          "spawnStaggerMs": 8000
+          "spawnStaggerMs": 8000,
+          "spawnZoneId": "west-mid"
         }
       ]
     }

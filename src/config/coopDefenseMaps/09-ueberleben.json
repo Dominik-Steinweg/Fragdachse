@@ -2,6 +2,13 @@
   "mapId": "9",
   "arenaWidthCells": 84,
   "arenaHeightCells": 38,
+  "spawnZones": [
+    { "id": "west-upper", "gridX": 0, "gridY": 6, "widthCells": 8, "heightCells": 11 },
+    { "id": "west-lower", "gridX": 0, "gridY": 21, "widthCells": 8, "heightCells": 11 },
+    { "id": "east-mid", "gridX": 76, "gridY": 14, "widthCells": 8, "heightCells": 11 },
+    { "id": "north-mid", "gridX": 36, "gridY": 0, "widthCells": 13, "heightCells": 5 },
+    { "id": "south-mid", "gridX": 36, "gridY": 33, "widthCells": 13, "heightCells": 5 }
+  ],
   "timeOfDay": "19:00",
   "rockFillRatio": 0.4,
   "trackPosition": "center",
@@ -32,21 +39,27 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 72,
-          "front": "west",
-          "spawnStaggerMs": 18000
+          "count": 36,
+          "spawnStaggerMs": 18000,
+          "spawnZoneId": "west-upper"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 36,
+          "spawnStaggerMs": 18000,
+          "spawnZoneId": "west-lower"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
           "delayMs": 3000,
-          "front": "east"
+          "spawnZoneId": "east-mid"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
           "delayMs": 3000,
-          "front": "west"
+          "spawnZoneId": "west-upper"
         }
       ]
     },
@@ -60,24 +73,32 @@
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
-          "front": "north"
+          "spawnZoneId": "north-mid"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 10,
           "delayMs": 3000,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 36,
+          "count": 18,
           "spawnStaggerMs": 12000,
-          "delayMs": 6000
+          "delayMs": 6000,
+          "spawnZoneId": "west-lower"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 18,
+          "spawnStaggerMs": 12000,
+          "delayMs": 6000,
+          "spawnZoneId": "west-upper"
         }
       ]
     },
@@ -91,28 +112,35 @@
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
-          "front": "west"
+          "spawnZoneId": "west-upper"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
-          "front": "east"
+          "spawnZoneId": "east-mid"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "void-stalker",
           "count": 1,
           "delayMs": 1200,
-          "front": "east"
+          "spawnZoneId": "east-mid"
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 60,
-          "spawnStaggerMs": 18000
+          "count": 30,
+          "spawnStaggerMs": 18000,
+          "spawnZoneId": "west-lower"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 30,
+          "spawnStaggerMs": 18000,
+          "spawnZoneId": "west-upper"
         }
       ]
     },
@@ -126,39 +154,39 @@
         {
           "enemyKind": "stink-broodmother",
           "count": 3,
-          "front": "west",
-          "spawnStaggerMs": 2000
+          "spawnStaggerMs": 2000,
+          "spawnZoneId": "west-lower"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
-          "front": "west",
-          "spawnStaggerMs": 2000
+          "spawnStaggerMs": 2000,
+          "spawnZoneId": "west-upper"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
-          "front": "east",
-          "spawnStaggerMs": 2000
+          "spawnStaggerMs": 2000,
+          "spawnZoneId": "east-mid"
         },
         {
           "enemyKind": "stink-broodmother",
           "count": 1,
-          "front": "north",
-          "spawnStaggerMs": 2000
+          "spawnStaggerMs": 2000,
+          "spawnZoneId": "north-mid"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 24,
           "delayMs": 0,
-          "front": "north",
-          "spawnStaggerMs": 20000
+          "spawnStaggerMs": 20000,
+          "spawnZoneId": "north-mid"
         },
         {
           "enemyKind": "void-stalker",
           "count": 1,
           "delayMs": 6000,
-          "front": "south"
+          "spawnZoneId": "south-mid"
         }
       ]
     }
@@ -170,7 +198,7 @@
       "intervalMs": 2500,
       "countPerTick": 1,
       "startAtMs": 0,
-      "source": { "type": "map" }
+      "source": { "type": "zone", "zoneId": "west-upper" }
     },
     {
       "id": "map-9-player-pressure-void",
@@ -178,7 +206,7 @@
       "intervalMs": 20000,
       "countPerTick": 1,
       "startAtMs": 12000,
-      "source": { "type": "map" }
+      "source": { "type": "zone", "zoneId": "west-lower" }
     },
     {
       "id": "map-9-player-pressure-brood",
@@ -186,7 +214,7 @@
       "intervalMs": 12500,
       "countPerTick": 1,
       "startAtMs": 30000,
-      "source": { "type": "map" }
+      "source": { "type": "zone", "zoneId": "west-upper" }
     }
   ]
 }

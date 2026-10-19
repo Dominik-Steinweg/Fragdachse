@@ -2,6 +2,12 @@
   "mapId": "17",
   "arenaWidthCells": 112,
   "arenaHeightCells": 43,
+  "spawnZones": [
+    { "id": "west-upper", "gridX": 0, "gridY": 5, "widthCells": 8, "heightCells": 12 },
+    { "id": "east-mid", "gridX": 104, "gridY": 16, "widthCells": 8, "heightCells": 12 },
+    { "id": "north-mid", "gridX": 48, "gridY": 0, "widthCells": 16, "heightCells": 6 },
+    { "id": "south-mid", "gridX": 48, "gridY": 37, "widthCells": 16, "heightCells": 6 }
+  ],
   "timeOfDay": "18:30",
   "trackMode": "void-fire",
   "mapEvents": [
@@ -118,32 +124,32 @@
       "id": "beer-opening",
       "start": { "type": "time", "atMs": 0 },
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 12, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 5, "delayMs": 900, "front": "north" }
+        { "enemyKind": "zombie-badger", "count": 12, "spawnZoneId": "west-upper" },
+        { "enemyKind": "demon-badger", "count": 5, "delayMs": 900, "spawnZoneId": "north-mid" }
       ]
     },
     {
       "id": "beer-flank",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 8, "front": "south" },
-        { "enemyKind": "pyro-badger", "count": 4, "delayMs": 1100, "front": "east" }
+        { "enemyKind": "rabid-badger", "count": 8, "spawnZoneId": "south-mid" },
+        { "enemyKind": "pyro-badger", "count": 4, "delayMs": 1100, "spawnZoneId": "east-mid" }
       ]
     },
     {
       "id": "beer-counterpush",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "void-stalker", "count": 5, "front": "north" },
-        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1000, "front": "south" }
+        { "enemyKind": "void-stalker", "count": 5, "spawnZoneId": "north-mid" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 1000, "spawnZoneId": "south-mid" }
       ]
     },
     {
       "id": "beer-final-assault",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "stink-broodmother", "count": 3, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 12, "delayMs": 900, "front": "east" }
+        { "enemyKind": "stink-broodmother", "count": 3, "spawnZoneId": "west-upper" },
+        { "enemyKind": "rabid-badger", "count": 12, "delayMs": 900, "spawnZoneId": "east-mid" }
       ]
     }
   ],

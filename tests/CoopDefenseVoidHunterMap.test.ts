@@ -37,12 +37,17 @@ describe('Map 15 - Leerenjäger', () => {
       'time',
     ]);
     expect(map.encounters?.[1].start).toEqual({ type: 'boss-phase', phase: 2 });
-    expect(map.encounters?.[1].groups.every((group) =>
-      group.front === 'north'
-      || group.front === 'south'
-      || group.front === 'west'
-      || group.front === 'east')).toBe(true);
-    expect(new Set(map.encounters?.[2].groups.map((group) => group.front))).toEqual(
+    // Reinforcements come from spawn zones on the arena's edges, the finale from all four sides.
+    const side = (zoneId: string | undefined): string | null => {
+      const zone = map.spawnZones?.find(({ id }) => id === zoneId);
+      if (!zone) return null;
+      if (zone.gridX === 0) return 'west';
+      if (zone.gridX + zone.widthCells === map.arenaWidthCells) return 'east';
+      if (zone.gridY === 0) return 'north';
+      return zone.gridY + zone.heightCells === map.arenaHeightCells ? 'south' : null;
+    };
+    expect(map.encounters?.[1].groups.every((group) => side(group.spawnZoneId) !== null)).toBe(true);
+    expect(new Set(map.encounters?.[2].groups.map((group) => side(group.spawnZoneId)))).toEqual(
       new Set(['west', 'north', 'east', 'south']),
     );
 

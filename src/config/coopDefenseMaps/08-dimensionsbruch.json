@@ -2,6 +2,13 @@
   "mapId": "8",
   "arenaWidthCells": 110,
   "arenaHeightCells": 52,
+  "spawnZones": [
+    { "id": "west-upper", "gridX": 0, "gridY": 3, "widthCells": 8, "heightCells": 14 },
+    { "id": "west-mid", "gridX": 0, "gridY": 19, "widthCells": 8, "heightCells": 14 },
+    { "id": "west-lower", "gridX": 0, "gridY": 35, "widthCells": 8, "heightCells": 14 },
+    { "id": "north-mid", "gridX": 47, "gridY": 0, "widthCells": 16, "heightCells": 7 },
+    { "id": "south-mid", "gridX": 47, "gridY": 45, "widthCells": 16, "heightCells": 7 }
+  ],
   "timeOfDay": "20:45",
   "rockFillRatio": 0.18,
   "trackMode": "none",
@@ -138,30 +145,47 @@
         {
           "enemyKind": "void-stalker",
           "count": 2,
-          "front": "west",
-          "spawnStaggerMs": 3000
+          "spawnStaggerMs": 3000,
+          "spawnZoneId": "west-upper"
         },
         {
           "enemyKind": "spore-warden",
           "count": 6,
-          "front": "west"
+          "spawnZoneId": "west-mid"
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 16,
-          "front": "west"
+          "count": 8,
+          "spawnZoneId": "west-lower"
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 16,
-          "front": "west",
-          "delayMs": 2000
+          "count": 8,
+          "spawnZoneId": "west-upper"
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 16,
-          "front": "west",
-          "delayMs": 4000
+          "count": 8,
+          "delayMs": 2000,
+          "spawnZoneId": "west-mid"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8,
+          "delayMs": 2000,
+          "spawnZoneId": "west-lower"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8,
+          "delayMs": 4000,
+          "spawnZoneId": "west-upper"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8,
+          "delayMs": 4000,
+          "spawnZoneId": "west-mid"
         }
       ]
     },
@@ -175,20 +199,20 @@
         {
           "enemyKind": "void-stalker",
           "count": 2,
-          "front": "west"
+          "spawnZoneId": "north-mid"
         },
         {
           "enemyKind": "demon-badger",
           "count": 24,
-          "front": "west",
-          "spawnStaggerMs": 4000
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "north-mid"
         },
         {
           "enemyKind": "spore-warden",
           "count": 4,
           "delayMs": 2000,
-          "front": "west",
-          "spawnStaggerMs": 3000
+          "spawnStaggerMs": 3000,
+          "spawnZoneId": "north-mid"
         }
       ]
     },
@@ -202,22 +226,22 @@
         {
           "enemyKind": "void-stalker",
           "count": 4,
-          "front": "west",
-          "spawnStaggerMs": 6000
+          "spawnStaggerMs": 6000,
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "rabid-badger",
           "count": 8,
           "delayMs": 1000,
-          "front": "west",
-          "spawnStaggerMs": 5000
+          "spawnStaggerMs": 5000,
+          "spawnZoneId": "south-mid"
         },
         {
           "enemyKind": "spore-warden",
           "count": 4,
           "delayMs": 1000,
-          "front": "west",
-          "spawnStaggerMs": 5000
+          "spawnStaggerMs": 5000,
+          "spawnZoneId": "south-mid"
         }
       ]
     },
@@ -229,8 +253,21 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 80,
-          "spawnStaggerMs": 7000
+          "count": 27,
+          "spawnStaggerMs": 7000,
+          "spawnZoneId": "west-upper"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 27,
+          "spawnStaggerMs": 7000,
+          "spawnZoneId": "west-mid"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 26,
+          "spawnStaggerMs": 7000,
+          "spawnZoneId": "west-lower"
         }
       ]
     },
@@ -243,17 +280,20 @@
         {
           "enemyKind": "plague-medic",
           "count": 3,
-          "spawnStaggerMs": 3000
+          "spawnStaggerMs": 3000,
+          "spawnZoneId": "west-mid"
         },
         {
           "enemyKind": "spore-warden",
           "count": 7,
-          "spawnStaggerMs": 3000
+          "spawnStaggerMs": 3000,
+          "spawnZoneId": "west-lower"
         },
         {
           "enemyKind": "void-stalker",
           "count": 1,
-          "spawnStaggerMs": 3000
+          "spawnStaggerMs": 3000,
+          "spawnZoneId": "west-upper"
         }
       ]
     },
@@ -266,27 +306,35 @@
         {
           "enemyKind": "void-stalker",
           "count": 3,
-          "front": "west",
-          "spawnStaggerMs": 4000
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "west-lower"
         },
         {
           "enemyKind": "spore-warden",
           "count": 4,
           "delayMs": 0,
-          "front": "west",
-          "spawnStaggerMs": 4000
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "west-upper"
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 20,
+          "count": 10,
           "delayMs": 0,
-          "front": "west",
-          "spawnStaggerMs": 4000
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "west-mid"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 10,
+          "delayMs": 0,
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "west-lower"
         },
         {
           "enemyKind": "plague-medic",
           "count": 2,
-          "spawnStaggerMs": 4000
+          "spawnStaggerMs": 4000,
+          "spawnZoneId": "west-upper"
         }
       ]
     }

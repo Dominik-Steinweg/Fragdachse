@@ -2,6 +2,12 @@
   "mapId": "14",
   "arenaWidthCells": 90,
   "arenaHeightCells": 42,
+  "spawnZones": [
+    { "id": "west-upper", "gridX": 0, "gridY": 7, "widthCells": 8, "heightCells": 12 },
+    { "id": "west-lower", "gridX": 0, "gridY": 23, "widthCells": 8, "heightCells": 12 },
+    { "id": "north-mid", "gridX": 38, "gridY": 0, "widthCells": 14, "heightCells": 6 },
+    { "id": "south-mid", "gridX": 38, "gridY": 36, "widthCells": 14, "heightCells": 6 }
+  ],
   "timeOfDay": "20:30",
   "tutorialDurationMs": 10000,
   "tutorialAnchor": { "gridX": 76, "gridY": 2 },
@@ -228,8 +234,8 @@
       "start": { "type": "time", "atMs": 10000 },
       "restAfterMs": 9000,
       "groups": [
-        { "enemyKind": "demon-badger", "count": 3, "delayMs": 500, "front": "west" },
-        { "enemyKind": "rabid-badger", "count": 4, "delayMs": 2000, "front": "west" }
+        { "enemyKind": "demon-badger", "count": 3, "delayMs": 500, "spawnZoneId": "west-upper" },
+        { "enemyKind": "rabid-badger", "count": 4, "delayMs": 2000, "spawnZoneId": "west-lower" }
       ]
     },
     {
@@ -237,8 +243,8 @@
       "start": { "type": "time", "atMs": 25000 },
       "restAfterMs": 10000,
       "groups": [
-        { "enemyKind": "pyro-badger", "count": 1, "front": "north" },
-        { "enemyKind": "pyro-badger", "count": 1, "front": "south" }
+        { "enemyKind": "pyro-badger", "count": 1, "spawnZoneId": "north-mid" },
+        { "enemyKind": "pyro-badger", "count": 1, "spawnZoneId": "south-mid" }
       ]
     },
     {
@@ -246,9 +252,9 @@
       "start": { "type": "time", "atMs": 45000 },
       "restAfterMs": 10000,
       "groups": [
-        { "enemyKind": "alien-badger", "count": 3, "front": "west" },
-        { "enemyKind": "void-stalker", "count": 1, "front": "west" },
-        { "enemyKind": "spore-warden", "count": 4, "front": "west" }
+        { "enemyKind": "alien-badger", "count": 3, "spawnZoneId": "west-upper" },
+        { "enemyKind": "void-stalker", "count": 1, "spawnZoneId": "west-lower" },
+        { "enemyKind": "spore-warden", "count": 4, "spawnZoneId": "west-upper" }
       ]
     },
     {
@@ -256,18 +262,19 @@
       "start": { "type": "time", "atMs": 75000 },
       "restAfterMs": 10000,
       "groups": [
-        { "enemyKind": "pyro-badger", "count": 1, "front": "north" },
-        { "enemyKind": "pyro-badger", "count": 1, "front": "south" },
-        { "enemyKind": "pyro-badger", "count": 1, "front": "west" }
+        { "enemyKind": "pyro-badger", "count": 1, "spawnZoneId": "north-mid" },
+        { "enemyKind": "pyro-badger", "count": 1, "spawnZoneId": "south-mid" },
+        { "enemyKind": "pyro-badger", "count": 1, "spawnZoneId": "west-lower" }
       ]
     },
     {
       "id": "three-front-finale",
       "start": { "type": "time", "atMs": 100000 },
       "groups": [
-        { "enemyKind": "pyro-badger", "count": 1, "front": "north" },
-        { "enemyKind": "pyro-badger", "count": 1, "delayMs": 7500, "front": "south" },
-        { "enemyKind": "demon-badger", "count": 16, "delayMs": 500, "front": "west" }
+        { "enemyKind": "pyro-badger", "count": 1, "spawnZoneId": "north-mid" },
+        { "enemyKind": "pyro-badger", "count": 1, "delayMs": 7500, "spawnZoneId": "south-mid" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 500, "spawnZoneId": "west-upper" },
+        { "enemyKind": "demon-badger", "count": 8, "delayMs": 500, "spawnZoneId": "west-lower" }
       ]
     }
   ],
@@ -278,8 +285,7 @@
       "intervalMs": 5000,
       "countPerTick": 4,
       "startAtMs": 0,
-      "source": { "type": "map" },
-      "front": "west"
+      "source": { "type": "zone", "zoneId": "west-upper" }
     },
     {
       "id": "player-pressure-alien",
@@ -287,8 +293,7 @@
       "intervalMs": 10000,
       "countPerTick": 1,
       "startAtMs": 0,
-      "source": { "type": "map" },
-      "front": "west"
+      "source": { "type": "zone", "zoneId": "west-lower" }
     },
     {
       "id": "final-pressure-alien",
@@ -296,8 +301,7 @@
       "intervalMs": 2000,
       "countPerTick": 1,
       "startAtMs": 100000,
-      "source": { "type": "map" },
-      "front": "west"
+      "source": { "type": "zone", "zoneId": "west-upper" }
     }
   ],
   "secondaryObjectives": [],
