@@ -37,6 +37,13 @@ import {
   type MainObjectiveBossProgress,
 } from '../ui/coopDefenseMainObjectiveModel';
 import { resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps } from '../config/coopDefenseMaps';
+import type { CompassDirection8 } from '../utils/spawnDirection';
+import type { EncounterTelegraphIncoming } from '../effects/CoopDefenseEncounterTelegraphRenderer';
+import {
+  resolveEncounterDirections,
+  resolveEncounterTelegraphIncoming,
+  type EncounterSpawnZoneRects,
+} from './coopMissionEncounterDirections';
 import type {
   CoopMissionClientPresentationFrame,
   CoopMissionRuntime,
@@ -48,6 +55,13 @@ export interface CoopMissionPresentationReadPort {
   readonly subscribeAreaClaw?: (handler: (event: EnemyAreaClawEvent) => void) => () => void;
   readonly subscribePartHit?: (handler: (receipt: CombatPartHitReceipt) => void) => () => void;
   readonly getEncounterPresentationState: () => CoopDefenseEncounterPresentationState | null;
+  /**
+   * Welt-Rechtecke der Spawnzonen, die der Encounter ankündigt. Solange Zonen-IDs nicht
+   * repliziert werden, fehlt der Port und die Randwarnung zeigt nur Fronten.
+   */
+  readonly getEncounterSpawnZones?: (state: CoopDefenseEncounterPresentationState) => EncounterSpawnZoneRects | null;
+  /** Mitte des sichtbaren Weltbereichs; Bezugspunkt für Zonenrichtungen. */
+  readonly getVisibleWorldCentre: () => { readonly x: number; readonly y: number };
   readonly getMapEventPresentationState: () => CoopDefenseMapEventPresentationState | null;
   readonly getSecondaryObjectivePresentationState: () => CoopDefenseSecondaryObjectivePresentationState | null;
   readonly getMissionProgressPresentationState: () => CoopDefenseMissionProgressPresentationState | null;
@@ -70,6 +84,7 @@ export interface CoopMissionPresentationUiPort {
     readonly updateEncounterPresentation: (
       state: CoopDefenseEncounterPresentationState | null,
       elapsedMs: number,
+      directions: readonly CompassDirection8[],
     ) => void;
     readonly updateMissionStackOcclusion: (deltaMs: number) => void;
     readonly updateTutorial: (
@@ -102,6 +117,7 @@ export interface CoopMissionPresentationUiPort {
     readonly syncEncounterTelegraph: (
       state: CoopDefenseEncounterPresentationState | null,
       elapsedMs: number,
+      incoming: EncounterTelegraphIncoming,
     ) => void;
     readonly syncSecondaryObjectiveMarkers: (
       snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
@@ -134,6 +150,8 @@ export interface CoopMissionPresentationUiPort {
     readonly reset: () => void;
   };
 }
+
+const NO_DIRECTIONS: readonly CompassDirection8[] = [];
 
 /**
  * Activity-scoped owner for the screen- and world-space Coop mission presentation.
@@ -209,6 +227,12 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     const elapsedMs = this.runtime.getMissionNow(this.reads.getSynchronizedNow()) - this.reads.getArenaStartTime();
     const missionProgress = this.reads.getMissionProgressPresentationState();
     const encounter = this.reads.getEncounterPresentationState();
+    // Richtung und Randabschnitt entstehen hier aus Host-Zustand und Blickpunkt; HUD und
+    // Randwarnung stellen nur dar.
+    const spawnZones = encounter ? this.reads.getEncounterSpawnZones?.(encounter) ?? null : null;
+    const encounterDirections = encounter
+      ? resolveEncounterDirections(encounter, spawnZones, spawnZones ? this.reads.getVisibleWorldCentre() : null)
+      : NO_DIRECTIONS;
 
     this.ui.mapEvents.sync(this.reads.getMapEventPresentationState());
 
@@ -242,7 +266,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     });
 
     this.ui.centerHud.updateMainObjectivePresentation(mainObjective);
-    this.ui.centerHud.updateEncounterPresentation(encounter, elapsedMs);
+    this.ui.centerHud.updateEncounterPresentation(encounter, elapsedMs, encounterDirections);
     this.ui.centerHud.updateMissionStackOcclusion(deltaMs);
 
     const secondaryObjectivePresentation = this.reads.getSecondaryObjectivePresentationState();
@@ -257,7 +281,11 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     // World-space Coop visuals share the same Activity owner as the HUD. The concrete Phaser
     // objects remain scene-lifetime infrastructure behind the UI port; this binding supplies only
     // Activity state and the current read models.
-    this.ui.worldSpace.syncEncounterTelegraph(encounter, elapsedMs);
+    this.ui.worldSpace.syncEncounterTelegraph(
+      encounter,
+      elapsedMs,
+      resolveEncounterTelegraphIncoming(encounter, spawnZones),
+    );
     this.ui.worldSpace.syncSecondaryObjectiveMarkers(
       secondaryObjectivePresentation,
       this.runtime.secondaryObjectiveConfigs,

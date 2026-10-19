@@ -14,6 +14,7 @@ import * as Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT, DEPTH, COLORS, toCssColor } from '../config';
 import { getUtilityHudDisplayName, type ArenaHUDData } from './ArenaHUD';
 import type { CoopDefenseEncounterPresentationState } from '../types';
+import type { CompassDirection8 } from '../utils/spawnDirection';
 import type { CoopDefenseLifeStatusViewModel } from './coopDefenseLifeStatusModel';
 import { formatNumber, getLocale, t } from '../i18n';
 import { getContentDisplayName, getSourceName } from '../i18n/contentPresentation';
@@ -89,24 +90,33 @@ function encounterTone(phase: EncounterPhase): HudTone {
   return phase === 'cleared' || phase === 'complete' ? 'green' : 'purple';
 }
 
-function formatEncounterFronts(fronts: readonly string[] | undefined): string {
-  const labels = (fronts ?? ['west']).map((front) => ({
-    west: t('ui.direction.west'),
-    north: t('ui.direction.north'),
-    east: t('ui.direction.east'),
-    south: t('ui.direction.south'),
-  } as Record<string, string>)[front] ?? t('ui.direction.west'));
-  return labels.length > 1 ? labels.join(' + ') : labels[0] ?? t('ui.direction.west');
+const DIRECTION_LABEL_KEYS: Readonly<Record<CompassDirection8, string>> = {
+  north: 'ui.direction.north',
+  northEast: 'ui.direction.northEast',
+  east: 'ui.direction.east',
+  southEast: 'ui.direction.southEast',
+  south: 'ui.direction.south',
+  southWest: 'ui.direction.southWest',
+  west: 'ui.direction.west',
+  northWest: 'ui.direction.northWest',
+};
+
+/** Die Richtungen kommen fertig aus der Präsentationsbindung; ohne Richtung ist der Angriff nah. */
+function formatEncounterDirections(directions: readonly CompassDirection8[]): string | null {
+  return directions.length === 0 ? null : directions.map((direction) => t(DIRECTION_LABEL_KEYS[direction])).join(' + ');
 }
 
 function formatEncounterLabel(
   sequenceIndex: number,
   sequenceCount: number,
-  fronts: readonly string[] | undefined,
+  directions: readonly CompassDirection8[],
 ): string {
   const count = Math.max(1, Math.floor(sequenceCount));
   const index = Math.min(count, Math.max(1, Math.floor(sequenceIndex)));
-  return t('ui.encounter.waveLabel', { index, count, fronts: formatEncounterFronts(fronts) });
+  const fronts = formatEncounterDirections(directions);
+  return fronts === null
+    ? t('ui.encounter.waveKicker', { index, count })
+    : t('ui.encounter.waveLabel', { index, count, fronts });
 }
 
 function formatClock(secs: number): string {
@@ -553,9 +563,14 @@ export class CenterHUD {
 
   // ── Angriffsserie ─────────────────────────────────────────────────────────
 
+  /**
+   * @param directions Achtel-Kompassrichtungen der angekündigten Fronten und Spawnzonen, von der
+   *   Präsentationsbindung bestimmt; leer bedeutet einen Angriff in unmittelbarer Nähe.
+   */
   updateEncounterPresentation(
     state: CoopDefenseEncounterPresentationState | null,
     elapsedMs: number,
+    directions: readonly CompassDirection8[],
   ): void {
     if (!state) {
       this.currentEncounterAnnouncementId = null;
@@ -566,7 +581,7 @@ export class CenterHUD {
 
     this.currentEncounterAnnouncementId = state.encounterId;
     this.currentEncounterAnnouncementPhase = state.phase;
-    this.queueEncounterAnnouncements(state);
+    this.queueEncounterAnnouncements(state, directions);
 
     const elapsed = Number.isFinite(elapsedMs) ? elapsedMs : 0;
     const remainingMs = state.phaseEndsAtMs === null
@@ -616,7 +631,7 @@ export class CenterHUD {
       card.setTitle(statusText, accent);
       this.lastEncounterPresentationSignature = textSignature;
     }
-    this.syncEncounterPips(state);
+    this.syncEncounterPips(state, directions);
 
     // Nur die Gegnerbilanz oder eine wirklich zeitlich endende Phase darf einen Abschluss
     // behaupten. Für einen offenen active-State ohne belastbare Gegnerzuordnung bleibt die
@@ -653,7 +668,10 @@ export class CenterHUD {
    * Farbe unterscheidbar. Der Kicker nennt Welle und Front; bei sehr vielen Wellen bleibt er
    * allein, weil einzelne Marken dann nicht mehr zählbar wären.
    */
-  private syncEncounterPips(state: CoopDefenseEncounterPresentationState): void {
+  private syncEncounterPips(
+    state: CoopDefenseEncounterPresentationState,
+    directions: readonly CompassDirection8[],
+  ): void {
     const count = Math.max(1, Math.floor(state.sequenceCount));
     const isDone = state.phase === 'cleared' || state.phase === 'complete';
     const clearedCount = state.phase === 'complete'
@@ -662,23 +680,27 @@ export class CenterHUD {
         ? state.sequenceIndex
         : state.sequenceIndex - 1;
     const currentIndex = isDone ? -1 : state.sequenceIndex - 1;
-    this.encounterCard.setKicker(state.finale ? t('ui.encounter.finaleKicker') : formatEncounterLabel(state.sequenceIndex, count, state.encounterFronts));
+    this.encounterCard.setKicker(state.finale ? t('ui.encounter.finaleKicker') : formatEncounterLabel(state.sequenceIndex, count, directions));
     if (count > ENCOUNTER_PIP_MAX || count < 2) this.encounterCard.setPips(0, 0, -1);
     else this.encounterCard.setPips(count, clearedCount, currentIndex);
   }
 
-  private queueEncounterAnnouncements(state: CoopDefenseEncounterPresentationState): void {
+  private queueEncounterAnnouncements(
+    state: CoopDefenseEncounterPresentationState,
+    directions: readonly CompassDirection8[],
+  ): void {
     if (!this.objectiveAnnouncements) return;
     const isStarting = state.phase === 'incoming' || state.phase === 'active';
     if (isStarting && !this.announcedEncounterStarts.has(state.encounterId)) {
       this.announcedEncounterStarts.add(state.encounterId);
       const targetId = state.encounterId;
+      const fronts = formatEncounterDirections(directions);
       this.objectiveAnnouncements.enqueue({
         id: `wave:start:${targetId}`,
         topic: 'wave',
         priority: ENCOUNTER_ANNOUNCEMENT_PRIORITY,
         kicker: state.finale ? t('ui.encounter.finaleKicker') : t('ui.encounter.waveKicker', { index: state.sequenceIndex, count: state.sequenceCount }),
-        title: t('ui.encounter.attackFrom', { fronts: formatEncounterFronts(state.encounterFronts) }),
+        title: fronts === null ? t('ui.encounter.attackNearby') : t('ui.encounter.attackFrom', { fronts }),
         detail: t('ui.encounter.prepare'),
         tone: 'wave',
         holdMs: ENCOUNTER_START_ANNOUNCEMENT_HOLD_MS,

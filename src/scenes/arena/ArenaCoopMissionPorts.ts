@@ -33,6 +33,7 @@ export function createArenaCoopMissionPresentationPort(
   input: Pick<ArenaCoopMissionPortsInput, 'getBaseManager' | 'getEnemyManager'> & {
     readonly getCoopMissionRuntime: () => CoopMissionRuntime | null;
     readonly getEnemyVulnerability: (enemyId: string, now: number) => boolean;
+    readonly getVisibleWorldCentre: () => { readonly x: number; readonly y: number };
   },
 ): CoopMissionPresentationReadPort {
   return {
@@ -51,6 +52,7 @@ export function createArenaCoopMissionPresentationPort(
       return round?.status === 'active' ? readBossIntroState(round.coopDefenseBossIntro) : null;
     },
     getEnemyVulnerability: (enemyId, now) => input.getEnemyVulnerability(enemyId, now),
+    getVisibleWorldCentre: () => input.getVisibleWorldCentre(),
     getCarryPresentationItems: () => resolveCoopDefenseCarryPresentationSnapshot(
       bridge.isHost(),
       input.getCoopMissionRuntime()?.coopDefenseCarrySystem ?? null,

@@ -93,6 +93,7 @@ function createHarness(mapConfig = getCoopDefenseMapConfig('1') as CoopDefenseMa
     getBossIntroState: () => null,
     getEnemyVulnerability: () => false,
     getCarryPresentationItems: () => [],
+    getVisibleWorldCentre: () => ({ x: 0, y: 0 }),
   };
   const binding = new CoopMissionPresentationBinding(
     mapConfig,
@@ -113,6 +114,33 @@ describe('CoopMissionPresentationBinding', () => {
     harness.runtime.bind(harness.binding);
     harness.binding.sync(16, true);
     expect(present.mock.calls.at(-1)?.[0]?.progressLabel).toContain('06:15');
+    harness.runtime.destroy();
+  });
+
+  it('names attack directions for the HUD and hands fronts or zones to the edge telegraph', () => {
+    const harness = createHarness();
+    const encounter = {
+      encounterId: 'wave-1', sequenceIndex: 1, sequenceCount: 2, phase: 'incoming' as const,
+      phaseStartedAtMs: 0, phaseEndsAtMs: 1000, encounterFronts: ['north' as const], fronts: ['north' as const],
+    };
+    Object.assign(harness.reads, { getEncounterPresentationState: () => encounter });
+    const hud = vi.spyOn(harness.ui.centerHud, 'updateEncounterPresentation');
+    const telegraph = vi.spyOn(harness.ui.worldSpace, 'syncEncounterTelegraph');
+    harness.runtime.bind(harness.binding);
+    harness.binding.sync(16, true);
+    expect(hud.mock.calls.at(-1)?.[2]).toEqual(['north']);
+    expect(telegraph.mock.calls.at(-1)?.[2]).toEqual({ fronts: ['north'], zones: [] });
+
+    // Replizierte Zonen-IDs kommen als Welt-Rechtecke; die Richtung zählt ab der Bildmitte.
+    const nest = { id: 'nest-1', x: 1800, y: -200, width: 200, height: 200 };
+    Object.assign(harness.reads, {
+      getEncounterPresentationState: () => ({ ...encounter, encounterFronts: [], fronts: [] }),
+      getEncounterSpawnZones: () => ({ encounter: [nest], live: [nest] }),
+      getVisibleWorldCentre: () => ({ x: 1000, y: 500 }),
+    });
+    harness.binding.sync(16, true);
+    expect(hud.mock.calls.at(-1)?.[2]).toEqual(['northEast']);
+    expect(telegraph.mock.calls.at(-1)?.[2]).toEqual({ fronts: [], zones: [nest] });
     harness.runtime.destroy();
   });
 

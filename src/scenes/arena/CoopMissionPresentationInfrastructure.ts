@@ -218,8 +218,8 @@ export class CoopMissionPresentationInfrastructure {
         updateMainObjectivePresentation: (model) => {
           if (!this.destroyed) input.centerHUD.updateMainObjectivePresentation(model);
         },
-        updateEncounterPresentation: (state, elapsedMs) => {
-          if (!this.destroyed) input.centerHUD.updateEncounterPresentation(state, elapsedMs);
+        updateEncounterPresentation: (state, elapsedMs, directions) => {
+          if (!this.destroyed) input.centerHUD.updateEncounterPresentation(state, elapsedMs, directions);
         },
         updateMissionStackOcclusion: (deltaMs) => {
           if (!this.destroyed) {
@@ -283,8 +283,8 @@ export class CoopMissionPresentationInfrastructure {
         },
         applyKrakenClaw: (event, now) => { if (!this.destroyed) this.kraken?.applyAreaClaw(event, now); },
         confirmKrakenHit: (receipt, now) => { if (!this.destroyed) this.kraken?.confirmContact(receipt, now); },
-        syncEncounterTelegraph: (state, elapsedMs) => {
-          if (!this.destroyed) input.renderers.encounterTelegraph.sync(state, elapsedMs, true);
+        syncEncounterTelegraph: (state, elapsedMs, incoming) => {
+          if (!this.destroyed) input.renderers.encounterTelegraph.sync(state, elapsedMs, true, incoming);
         },
         syncSecondaryObjectiveMarkers: (snapshot, configs, carryItems, elapsedMs) => {
           if (!this.destroyed) {

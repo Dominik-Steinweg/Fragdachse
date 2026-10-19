@@ -11,6 +11,7 @@ import type { ArenaHUDData } from '../ui/ArenaHUD';
 import { CoopDefenseObjectiveAnnouncement } from '../ui/CoopDefenseObjectiveAnnouncement';
 import { CoopDefenseSecondaryObjectiveHud } from '../ui/CoopDefenseSecondaryObjectiveHud';
 import { buildCoopDefenseLifeStatusViewModel } from '../ui/coopDefenseLifeStatusModel';
+import { resolveEncounterDirections } from '../activity/coopMissionEncounterDirections';
 import type {
   CoopDefenseEncounterPresentationState,
   CoopDefenseSecondaryObjectivePresentationEntry,
@@ -127,7 +128,8 @@ export function openArenaHudPreview(scene: Phaser.Scene, status: (message: strin
         progress: Math.min(6, Math.floor(t / 3_500)) / 6,
       });
     }
-    centerHUD.updateEncounterPresentation(encounterState(t), t);
+    const encounter = encounterState(t);
+    centerHUD.updateEncounterPresentation(encounter, t, encounter ? resolveEncounterDirections(encounter, null, null) : []);
     secondary.sync(secondaryState(t), [], t, true);
     // Zuerst genau eine Karte: die Zentrierung ist so vor dem Aufbau der vollen Zeile prüfbar.
     centerHUD.updateBottomStatus(hudData(t), t < 8_000);
