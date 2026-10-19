@@ -1,6 +1,6 @@
 # Void-Gefahrenzonen und feste Spawnzonen (V1)
 
-Status: umgesetzt im Branch `void-danger` (2026-10-19), noch nicht auf `main`. Ersetzt N-6 und N-7 aus
+Status: umgesetzt und auf `main` (2026-10-19). Ersetzt N-6 und N-7 aus
 [Nachtsicht, Mondlicht und Void-Botanik V1](Fragdachse_GDD_Nachtsicht_Void_Botanik_V1.md). Die übrigen
 Nachtsicht-Entscheidungen gelten weiter: Mondinseln, Lampe am Fels und blaues Nachtwasser.
 
@@ -51,13 +51,13 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 
 | Phase | Inhalt | Stand |
 |---|---|---|
-| 1 | Spawnzonen in Daten, Host, Generator und Map-Editor; Migration der Inline-Flächen (Maps 00, 01, 06, 07, 13, 16, 20) | fertig (Branch) |
-| 2 | Gefahrenfeld ersetzt das ambiente Void | fertig (Branch) |
-| 3 | GPU-Sporen; der Nebel leiht seine Luft | fertig (Branch) |
-| 4 | Host-Warnungen und Drahtformat (Protokoll +1) | fertig (Branch); Anschluss der Randwarnung an Zonen folgt mit Phase 5 |
-| 5 | Gerichtete Randwarnung und HUD-Richtung | fertig im eigenen Branch `claude/objective-darwin-f3f889`; Zusammenführung offen |
-| 6 | Umbau der Front-Karten (02–06, 08–15, 17–20) auf feste Spawnzonen | fertig (Branch); Void-Vorschau im Map-Editor offen |
-| 7 | Doku und Release | Doku fertig; Release-Prüfung nach der Zusammenführung |
+| 1 | Spawnzonen in Daten, Host, Generator und Map-Editor; Migration der Inline-Flächen (Maps 00, 01, 06, 07, 13, 16, 20) | fertig |
+| 2 | Gefahrenfeld ersetzt das ambiente Void | fertig |
+| 3 | GPU-Sporen; der Nebel leiht seine Luft | fertig |
+| 4 | Host-Warnungen und Drahtformat (Protokoll 40) | fertig |
+| 5 | Gerichtete Randwarnung und HUD-Richtung | fertig, an Zonen angeschlossen |
+| 6 | Umbau der Front-Karten (02–06, 08–15, 17–20) auf feste Spawnzonen | fertig; Void-Vorschau im Map-Editor offen |
+| 7 | Doku und Release | fertig; Spieltest und Perf-Messpaar offen |
 
 ## 5. Entscheidungslog
 

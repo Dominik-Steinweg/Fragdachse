@@ -64,7 +64,7 @@ gesetzt.
 |---|---|
 | [Bodennebel-Konzept v1](Fragdachse_Bodennebel_Konzept_v1.md) | umgesetzt ([Lab](../ground-fog-lab.md)) |
 | [Nachtsicht, Mondlicht und Void-Botanik V1](Fragdachse_GDD_Nachtsicht_Void_Botanik_V1.md) | umgesetzt (Mondinseln, Lampe an Felsen, Nachtwasser, Void-Botanik mit Argon- und ComfyUI-Assets); offen: Spieltest, Referenzbilder des Nachttests |
-| [Void-Gefahrenzonen und feste Spawnzonen V1](Fragdachse_GDD_Void_Gefahrenzonen_V1.md) | umgesetzt im Branch `void-danger`, Randwarnung im Branch `claude/objective-darwin-f3f889`; ersetzt N-6/N-7 der Nachtsicht |
+| [Void-Gefahrenzonen und feste Spawnzonen V1](Fragdachse_GDD_Void_Gefahrenzonen_V1.md) | umgesetzt (2026-10-19); offen: Spieltest, Void-Vorschau im Map-Editor, Perf-Messpaar; ersetzt N-6/N-7 der Nachtsicht |
 | [Hindernisklassen und Schusslinien](FRAGDACHSE_GDD_Hindernisklassen_und_Schusslinien.md) und [Umsetzung](FRAGDACHSE_Hindernisklassen_Umsetzung.md) | umgesetzt |
 | [HP-Balken-Trefferfeedback](HP_Bar_Feedback_Implementation.md) | umgesetzt |
 | [KI- und Navigationskonzept](Fragdachse_KI_Navigation_Implementierungskonzept.md) | umgesetzt ([Status](../navigation-implementation-status.md)) |
