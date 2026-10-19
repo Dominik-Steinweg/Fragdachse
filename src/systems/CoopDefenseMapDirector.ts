@@ -850,19 +850,17 @@ export class CoopDefenseMapDirector {
   }
 
   /**
-   * Which spawn zones this director still uses (GDD Void-Gefahrenzonen V1): a zone is active while
-   * a running encounter still has a group due there, and upcoming while an encounter that has not
-   * started has one.
+   * Which spawn zones this director still uses (GDD Void-Gefahrenzonen V1): a zone is active until
+   * the running encounter that spawns there is defeated, so lifting its haze rewards the players;
+   * it is upcoming while an encounter that has not started has a group there.
    */
   collectSpawnZoneUse(active: Set<string>, upcoming: Set<string>): void {
     this.encounters.forEach((encounter, index) => {
       const state = this.executionStates[index];
       if (state.cleared) return;
-      encounter.groups.forEach((group, groupIndex) => {
-        if (!group.spawnZoneId) return;
-        if (!state.started) upcoming.add(group.spawnZoneId);
-        else if (!state.groupsExecuted[groupIndex]) active.add(group.spawnZoneId);
-      });
+      for (const group of encounter.groups) {
+        if (group.spawnZoneId) (state.started ? active : upcoming).add(group.spawnZoneId);
+      }
     });
   }
 

@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from 'vitest';
 const resources=vi.hoisted(()=>({canopies:new Set<object>(),fields:new Set<object>(),flora:new Set<object>(),moons:new Set<object>(),creeps:new Set<object>(),
- creepFields:[] as unknown[],fades:[] as {to:Uint8Array}[]}));
+ creepFields:[] as unknown[],fades:[] as {to:Uint8Array;lift:unknown}[]}));
 vi.mock('phaser',async()=>{const {createFakePhaserModule}=await import('../fakeArenaRenderScene');return {...createFakePhaserModule(),Filters:{ParallelFilters:class {},Displacement:class {}}};});
 vi.mock('../../src/arena/trees/CanopyLighting',()=>({CanopyLighting:class {
  constructor(){resources.canopies.add(this);}setClouds(){}setLighting(){}update(){}destroy(){resources.canopies.delete(this);}
@@ -12,7 +12,7 @@ vi.mock('../../src/effects/sunlight/MoonSkyLight',()=>({MoonSkyLight:class {
  constructor(){resources.moons.add(this);}update(){return null;}sampleAt(_x:number,_y:number,out:number[]){return out;}destroy(){resources.moons.delete(this);}
 }}));
 vi.mock('../../src/effects/sunlight/VoidCreepPresentation',()=>({VoidCreepPresentation:class {
- constructor(){resources.creeps.add(this);}setCreep(creep:unknown){resources.creepFields.push(creep);}fadeHaze(_rect:unknown,to:Uint8Array){resources.fades.push({to});}
+ constructor(){resources.creeps.add(this);}setCreep(creep:unknown){resources.creepFields.push(creep);}fadeHaze(_rect:unknown,to:Uint8Array,lift:unknown){resources.fades.push({to,lift});}
  setAlerts(){}setAir(){}update(){return null;}destroy(){resources.creeps.delete(this);}
 }}));
 vi.mock('../../src/arena/WoodlandEcologyRenderer',()=>({WoodlandEcologyRenderer:class {
@@ -130,7 +130,10 @@ it('carries void only around danger; a destroyed base loses its haze, not its pl
  expect(creep).not.toBeNull();expect(creep!.haze.some(v=>v>0)).toBe(true);
  present=0;owner.update(480,16);owner.update(480,32);
  // One crossfade towards no haze; the woodland and its creep stay as they are.
- expect(resources.fades).toHaveLength(1);expect(Math.max(...resources.fades[0].to)).toBe(0);
+ // One lifting wave from the hive towards a far thinner residue: only small patches stay.
+ expect(resources.fades).toHaveLength(1);expect(resources.fades[0].lift).toMatchObject({x:expect.any(Number),radius:expect.any(Number)});
+ const sum=(bytes:Uint8Array)=>bytes.reduce((total,value)=>total+value,0);
+ expect(sum(resources.fades[0].to)).toBeLessThan(sum(creep!.haze)*.35);
  expect(resources.creepFields).toHaveLength(1);
  // The Activity adds a permanent hazard: the flora is rebuilt exactly once, already without the hive's haze.
  owner.setActivityVoidDanger({...danger,sources:[voidHazardSource('corridor',0,0,[{gridX:20,gridY:12},{gridX:21,gridY:12}])]});

@@ -5,6 +5,8 @@ import { createVisibleWorldView, getVisibleWorldView } from '../../graphics/Came
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
 import type { VoidCreepField, VoidCreepTexelRect } from '../../arena/VoidCreepField';
 import { MAX_VOID_DANGER_ALERTS, type VoidDangerAlert } from '../../arena/VoidDangerField';
+/** The creep's domain warp reaches this far (world px); a region rewrite grows by as much. */
+const WARP_REACH_PX = 150;
 import type { LightMapAmbientLayer } from '../LightingSystem';
 import type { FogVoidHaze } from '../groundFog/FogVoidHaze';
 import type { FogAirBinding } from '../groundFog/FogAirBinding';
@@ -23,11 +25,25 @@ const AIR_STRENGTH = 0.85;
 const VIEW_MARGIN_PX = 24;
 /** A haze region crossfades this long after its place lost or regained presence (E7). */
 const HAZE_FADE_SEC = 3;
+/**
+ * A deactivated place has its haze lifted by a wave running out from its centre this long; the
+ * texels behind the front reach their residue over this width (world px).
+ */
+const LIFT_SEC = 3.2, LIFT_SOFT_PX = 140;
+/** Lifting waves shown at once; a further one replaces the oldest. */
+const MAX_LIFTS = 4;
 /** Haze crossfades re-upload the field at most this often; the haze drifts slowly anyway. */
 const HAZE_UPLOAD_SEC = 1 / 15;
 
-/** A running crossfade of one texel region of the haze channel. */
-interface HazeFade { readonly rect: VoidCreepTexelRect; readonly from: Uint8Array; readonly to: Uint8Array; elapsed: number }
+/** A running crossfade of one texel region of the haze channel; a lift wipes outward from its centre. */
+interface HazeFade {
+  readonly rect: VoidCreepTexelRect;
+  readonly from: Uint8Array;
+  readonly to: Uint8Array;
+  elapsed: number;
+  readonly lift: { readonly x: number; readonly y: number; readonly radius: number; readonly slot: number } | null;
+}
+const easeOut = (t: number): number => 1 - (1 - t) ** 2;
 
 let nextCreepId = 0;
 type Set = (name: string, value: unknown) => void;
@@ -87,7 +103,10 @@ export class VoidCreepPresentation {
   private lastTime = NaN;
   private sinceUpload = 0;
   private readonly creep = { frame: new Float32Array(4), time: 0,
-    alerts: new Float32Array(MAX_VOID_DANGER_ALERTS * 4), alertLevels: new Float32Array(MAX_VOID_DANGER_ALERTS) };
+    alerts: new Float32Array(MAX_VOID_DANGER_ALERTS * 4), alertLevels: new Float32Array(MAX_VOID_DANGER_ALERTS),
+    /** Lifting waves for the motes: centre x, y, front radius, strength. */
+    lifts: new Float32Array(MAX_LIFTS * 4) };
+  private nextLiftSlot = 0;
   /** World px per screen pixel; the surface shaders fade detail finer than that. */
   private pixelWorld = 1;
   private readonly view = new Float32Array(4);
@@ -144,12 +163,19 @@ export class VoidCreepPresentation {
    * a destroyed base or a closed site lets its haze lift while the soaked ground stays. A region
    * that is still fading starts from what it shows now.
    */
-  fadeHaze(rect: VoidCreepTexelRect, to: Uint8Array): void {
+  fadeHaze(rect: VoidCreepTexelRect, to: Uint8Array, lift: { x: number; y: number; radius: number } | null = null): void {
     if (!this.haze || !this.field) return;
     const width = rect.x1 - rect.x0 + 1, from = new Uint8Array(to.length);
     for (let y = rect.y0; y <= rect.y1; y++) for (let x = rect.x0; x <= rect.x1; x++)
       from[(y - rect.y0) * width + x - rect.x0] = this.haze[y * this.field.width + x];
-    this.fades.push({ rect, from, to, elapsed: 0 });
+    let slot = -1;
+    if (lift) {
+      slot = this.nextLiftSlot; this.nextLiftSlot = (slot + 1) % MAX_LIFTS;
+      this.fades = this.fades.filter(fade => fade.lift?.slot !== slot);
+    }
+    // The wave runs past the far corner of the region, so every texel reaches its residue.
+    const radius = lift ? lift.radius + (WARP_REACH_PX + this.field.texelPx) : 0;
+    this.fades.push({ rect, from, to, elapsed: 0, lift: lift ? { x: lift.x, y: lift.y, radius, slot } : null });
   }
 
   /** True while a haze crossfade is running. */
@@ -160,21 +186,39 @@ export class VoidCreepPresentation {
     this.lastTime = timeSec;
     if (!this.fades.length || !this.field || !this.haze || !this.pixels || !this.texture) return;
     this.sinceUpload += step;
+    const duration = (fade: HazeFade): number => fade.lift ? LIFT_SEC : HAZE_FADE_SEC;
     for (const fade of this.fades) fade.elapsed += step;
-    if (this.sinceUpload < HAZE_UPLOAD_SEC && this.fades.every(fade => fade.elapsed < HAZE_FADE_SEC)) return;
+    // The waves move every frame; the haze behind them is uploaded at a calmer rate.
+    this.creep.lifts.fill(0);
+    for (const fade of this.fades) {
+      if (!fade.lift) continue;
+      const t = Math.min(1, fade.elapsed / LIFT_SEC), o = fade.lift.slot * 4;
+      this.creep.lifts[o] = fade.lift.x; this.creep.lifts[o + 1] = fade.lift.y;
+      this.creep.lifts[o + 2] = fade.lift.radius * easeOut(t);
+      // Swells in quickly, fades over the last third: a soft breath, not a flash.
+      this.creep.lifts[o + 3] = Math.min(1, t / .08) * Math.min(1, (1 - t) / .35);
+    }
+    if (this.sinceUpload < HAZE_UPLOAD_SEC && this.fades.every(fade => fade.elapsed < duration(fade))) return;
     this.sinceUpload = 0;
     const field = this.field, haze = this.haze, data = this.pixels.data;
     let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
     // Later fades win where regions overlap; each starts from what the earlier ones showed.
     for (const fade of this.fades) {
-      const t = Math.min(1, fade.elapsed / HAZE_FADE_SEC), k = t * t * (3 - 2 * t), { rect } = fade, width = rect.x1 - rect.x0 + 1;
+      const t = Math.min(1, fade.elapsed / duration(fade)), { rect, lift } = fade, width = rect.x1 - rect.x0 + 1;
+      const front = lift ? lift.radius * easeOut(t) : 0, uniform = t * t * (3 - 2 * t);
       for (let y = rect.y0; y <= rect.y1; y++) for (let x = rect.x0; x <= rect.x1; x++) {
+        let k = uniform;
+        if (lift && t < 1) {
+          const distance = Math.hypot(field.offsetX + (x + .5) * field.texelPx - lift.x, field.offsetY + (y + .5) * field.texelPx - lift.y);
+          const behind = Math.max(0, Math.min(1, (front - distance) / LIFT_SOFT_PX));
+          k = behind * behind * (3 - 2 * behind);
+        }
         const i = (y - rect.y0) * width + x - rect.x0, value = Math.round(fade.from[i] + (fade.to[i] - fade.from[i]) * k);
         haze[y * field.width + x] = value; data[(y * field.width + x) * 4 + 2] = value;
       }
       x0 = Math.min(x0, rect.x0); y0 = Math.min(y0, rect.y0); x1 = Math.max(x1, rect.x1); y1 = Math.max(y1, rect.y1);
     }
-    this.fades = this.fades.filter(fade => fade.elapsed < HAZE_FADE_SEC);
+    this.fades = this.fades.filter(fade => fade.elapsed < duration(fade));
     this.texture.context.putImageData(this.pixels, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
     this.texture.refresh();
   }
@@ -255,6 +299,7 @@ export class VoidCreepPresentation {
     this.motes?.destroy(); this.motes = null;
     this.fogHaze = null;
     this.texture = null; this.pixels = null; this.field = null; this.haze = null; this.fades = []; this.lastTime = NaN; this.sinceUpload = 0;
+    this.creep.lifts.fill(0);
     if (this.key) { this.scene.textures.remove(this.key); this.key = null; }
   }
 }

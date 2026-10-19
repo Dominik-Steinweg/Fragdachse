@@ -15,6 +15,7 @@ import { buildVoidWaterStain } from '../../arena/VoidWaterStain';
 import { buildVoidCreepField, buildVoidCreepHaze, voidCreepTexelRect, type VoidCreepField, type VoidCreepSource } from '../../arena/VoidCreepField';
 import { VoidCreepPresentation } from './VoidCreepPresentation';
 import { VoidDangerField, resolveVoidDangerSources, type ActivityVoidDanger, type VoidDangerSource } from '../../arena/VoidDangerField';
+import { VoidHazeResidue } from '../../arena/VoidHazeResidue';
 import { VoidFloraGlow } from './VoidFloraGlow';
 import { VoidFloraEmission } from './VoidFloraEmission';
 import { voidLilyFrame } from '../../arena/VoidFloraAssets';
@@ -161,8 +162,16 @@ export class WorldSunlightPresentation {
  private voidCreepField:VoidCreepField|null=null;
  private readonly voidHazeSource:VoidCreepSource={
   intensityAt:(x,y)=>this.voidField?.intensityAt(x,y)??0,
-  hazeAt:(x,y)=>this.voidField?.hazeAt(x,y,id=>this.voidPresence.get(id)??1)??0,
+  hazeAt:(x,y)=>this.voidField?.hazeAt(x,y,id=>this.voidPresence.get(id)??1,this.residueAt)??0,
  };
+ /** Small dense patches the haze keeps over the scar of a deactivated place. */
+ private voidResidue:VoidHazeResidue|null=null;
+ private readonly residueAt=(x:number,y:number):number=>this.voidResidue?.at(x,y)??0;
+ /** Patches follow the void plants standing now: lily colonies and rock colonies on standing rocks. */
+ private refreshResidue():void {
+  this.voidResidue=new VoidHazeResidue([...this.voidPondPoints,...this.voidRockPoints],
+   (x,y)=>this.voidField?.intensityAt(x,y)??0,this.targets.layout.seed);
+ }
  private voidGlow:VoidFloraGlow|null=null;
  private voidEmission:VoidFloraEmission|null=null;
  private voidCreep:VoidCreepPresentation|null=null;
@@ -306,11 +315,14 @@ export class WorldSunlightPresentation {
     if(!field||!creep||!this.voidCreep)return;
     for(const source of field.sources){
       if(source.haze<=0)continue;
-      const present=this.readPresence(source.id);
-      if(Math.abs(present-(this.voidPresence.get(source.id)??1))<.01)continue;
+      const present=this.readPresence(source.id),was=this.voidPresence.get(source.id)??1;
+      if(Math.abs(present-was)<.01)continue;
       this.voidPresence.set(source.id,present);
+      // A deactivated place is a success: its haze is lifted by a wave down to small patches.
+      const lifted=present<=0&&was>0;
+      if(lifted)this.refreshResidue();
       const reach=field.reachOf(source.id),rect=reach?voidCreepTexelRect(creep,reach):null;
-      if(rect)this.voidCreep.fadeHaze(rect,buildVoidCreepHaze(creep,this.voidHazeSource,rect));
+      if(rect)this.voidCreep.fadeHaze(rect,buildVoidCreepHaze(creep,this.voidHazeSource,rect),lifted?field.extentOf(source.id):null);
     }
   }
   private syncWoodland(targets:Targets):void {
@@ -336,7 +348,8 @@ export class WorldSunlightPresentation {
       for(const c of colonies.values())this.voidPondPoints.push(c.x,c.y,c.sum/c.n);
       // One creep field joins ground, rock and water: the established takeover soaks the land,
       // infested ponds seep up their banks, and their pads and the creep ink the water.
-      // A late joiner sees a destroyed base without haze at once; only later changes crossfade.
+      // A late joiner sees a destroyed base with only its residual patches; later changes crossfade.
+      this.refreshResidue();
       this.voidPresence.clear();
       for(const source of danger?.sources??[])if(source.haze>0)this.voidPresence.set(source.id,this.readPresence(source.id));
       const creep=danger?buildVoidCreepField(this.voidHazeSource,frame,this.voidPondPoints,(x,y)=>{
@@ -369,7 +382,7 @@ export class WorldSunlightPresentation {
   if(t.fog&&this.fogBase)Object.assign(t.fog.tuning,this.fogBase);
   t.rockOverlays?.setFormationReceiver(null);
   t.rocks?.setFormationOptions(true,true);t.rocks?.setSurfaceLights(null);
-  t.rockOverlays?.setVoidFlora(null);this.voidGlow?.destroy();this.voidGlow=null;this.voidCreepField=null;
+  t.rockOverlays?.setVoidFlora(null);this.voidGlow?.destroy();this.voidGlow=null;this.voidCreepField=null;this.voidResidue=null;
   this.voidEmission?.destroy();this.voidEmission=null;
   t.fog?.setVoidHaze(null);t.lighting.setGlowLayer(null);this.voidCreep?.destroy();this.voidCreep=null;
   t.lighting.setRockCoverage(null);

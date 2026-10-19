@@ -67,14 +67,21 @@ describe('spawn zone alerts (GDD Void-Gefahrenzonen V1)', () => {
         groups: [{ enemyKind: 'zombie-badger', count: 1, delayMs: 500, spawnZoneId: 'nest-a', spawnArea: area }] },
       { id: 'second', start: { type: 'after-previous' }, restAfterMs: 0,
         groups: [{ enemyKind: 'zombie-badger', count: 1, delayMs: 0, spawnZoneId: 'nest-b', spawnArea: area }] },
-    ], (_kind, count) => Array.from({ length: count }, (_, i) => `e${i}`), { isEnemyActive: () => true });
+    ], (_kind, count) => Array.from({ length: count }, (_, i) => `e${i}`), { isEnemyActive: () => alive });
+    let alive = true;
     const use = () => { const active = new Set<string>(), upcoming = new Set<string>(); director.collectSpawnZoneUse(active, upcoming); return { active: [...active], upcoming: [...upcoming] }; };
     expect(use()).toEqual({ active: [], upcoming: ['nest-a', 'nest-b'] });
     director.hostUpdate(0, false);
     expect(use()).toEqual({ active: ['nest-a'], upcoming: ['nest-b'] });
+    // Its group came out, but the wave is still being fought: the zone stays in use.
     director.hostUpdate(600, false);
-    // Its group came out: nest-a is spent while the encounter is still being fought.
-    expect(use()).toEqual({ active: [], upcoming: ['nest-b'] });
+    expect(use()).toEqual({ active: ['nest-a'], upcoming: ['nest-b'] });
+    // The wave is defeated: nest-a is spent, the next encounter takes nest-b.
+    alive = false;
+    director.hostUpdate(16, false);
+    director.hostUpdate(16, false);
+    expect(use().active).not.toContain('nest-a');
+    expect(use().upcoming).not.toContain('nest-a');
 
     const pressure = new CoopDefensePersistentPressureSystem([
       { id: 'nest', enemyKind: 'zombie-badger', intervalMs: 5000, countPerTick: 1, startAtMs: 1000, source: { type: 'zone', zoneId: 'nest-c' }, spawnArea: area },

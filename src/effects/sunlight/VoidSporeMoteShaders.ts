@@ -30,8 +30,26 @@ uniform float uLayers;
 uniform float uGradient;
 uniform float uHasAir;
 uniform vec3 uMoteDeep,uMoteBright;
+// Lifting waves over deactivated places: centre x, y, front radius, strength.
+uniform vec4 uVoidLift[4];
 ${VOID_CREEP_GLSL}
 ${FOG_AIR_GLSL}
+// The wave that lifts the haze of a deactivated place: a soft band at its front, and the outward
+// push it gives the motes just behind it, so they are swept along before the patches settle.
+float liftWave(vec2 world, out vec2 push) {
+  float wave=0.0;
+  push=vec2(0.0);
+  for(int i=0;i<4;i++) {
+    vec4 lift=uVoidLift[i];
+    if(lift.w<=0.0) continue;
+    vec2 away=world-lift.xy;
+    float dist=length(away);
+    float band=(dist-lift.z)/72.0, wake=(dist-lift.z+50.0)/80.0;
+    wave=max(wave,exp(-band*band)*lift.w);
+    if(dist>1.0) push+=away/dist*exp(-wake*wake)*lift.w*36.0;
+  }
+  return wave;
+}
 float moteHash(vec2 p, float salt) { return fract(sin(dot(p,vec2(127.1+salt,311.7-salt*1.7)))*43758.5453); }
 vec3 moteLayer(vec2 p, float cellSize, float radius, float salt, float share) {
   vec2 cell=floor(p/cellSize);
@@ -54,8 +72,12 @@ vec3 moteLayer(vec2 p, float cellSize, float radius, float salt, float share) {
 }
 void main() {
   vec2 world=uView.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uView.zw;
-  if(creepTexel(world).b<.02) discard;
-  vec2 p=world;
+  vec2 push;
+  float wave=liftWave(world,push);
+  float here=creepTexel(world).b;
+  if(here<.02&&wave<.01) discard;
+  // A mote swept outward by a lifting wave is drawn ahead of where it hovered.
+  vec2 p=world-push;
   float calm=1.0;
   if(uHasAir>.5) {
     vec3 air=fogAt(world);
@@ -71,7 +93,11 @@ void main() {
   float thick=smoothstep(.04,.62,creepTexel(p).b);
   vec3 light=moteLayer(p,28.0,1.15,0.0,.48*thick);
   if(uLayers>1.5) light+=moteLayer(p,19.0,.8,17.0,.32*thick)*.7;
-  light*=thick*calm*uGlow;
+  // Motes caught by the wave flare briefly as they are carried off.
+  light*=thick*calm*uGlow*(1.0+1.8*wave);
+  // The wave itself: a faint, wispy shimmer where haze is being lifted, never a hard ring.
+  float wisp=.55+.45*creepNoise(world*.011+vec2(uCreepTime*.35,-uCreepTime*.2));
+  light+=mix(uMoteDeep,uMoteBright,.6)*wave*wisp*smoothstep(.0,.35,here)*uGlow*.38;
   if(max(light.r,max(light.g,light.b))<.003) discard;
   gl_FragColor=vec4(light,0.0);
 }`;

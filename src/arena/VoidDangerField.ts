@@ -34,6 +34,8 @@ export interface VoidDangerBounds { readonly x: number; readonly y: number; read
 const TAKEOVER_SALT = 0x5f0d;
 /** Per-plant variation of the infestation; small, so neighbours stay alike. */
 const PLANT_JITTER = .05;
+/** A deactivated place keeps its residual patches at least this thick (user 2026-10-19: "recht dicht"). */
+export const RESIDUE_HAZE = .72;
 /** The rim is broken by noise of this many rim widths per cell, by up to this share of the rim. */
 const RIM_NOISE_SCALE = 1.4, RIM_NOISE = .55;
 /** The takeover is complete a little inside the outline, so the outline itself never shows. */
@@ -98,16 +100,31 @@ export class VoidDangerField {
     return 1 - spared;
   }
 
-  /** Thickness of the spore haze at a world point, 0..1; `presence` dims sources by id. */
-  hazeAt(x: number, y: number, presence?: (id: string) => number): number {
-    let clear = 1;
+  /**
+   * Thickness of the spore haze at a world point, 0..1; `presence` dims sources by id. A source
+   * without presence keeps only the `residue` (small dense patches over its scar), at least
+   * RESIDUE_HAZE thick, so a deactivated place never shows infested plants in clear air.
+   */
+  hazeAt(x: number, y: number, presence?: (id: string) => number, residue?: (x: number, y: number) => number): number {
+    let clear = 1, residual = NaN;
     for (const entry of this.resolved) {
       if (entry.source.haze <= 0 || !inside(entry.reach, x, y)) continue;
       const present = presence ? Math.max(0, Math.min(1, presence(entry.source.id))) : 1;
-      if (present <= 0) continue;
-      clear *= 1 - entry.source.haze * present * this.coverage(entry, x, y);
+      if (present > 0) {
+        clear *= 1 - entry.source.haze * present * this.coverage(entry, x, y);
+        continue;
+      }
+      if (!residue) continue;
+      if (Number.isNaN(residual)) residual = Math.max(0, Math.min(1, residue(x, y)));
+      if (residual > 0) clear *= 1 - Math.max(entry.source.haze, RESIDUE_HAZE) * residual * this.coverage(entry, x, y);
     }
     return 1 - clear;
+  }
+
+  /** Centre of a source's takeover and the distance from there to its farthest reach. */
+  extentOf(id: string): { x: number; y: number; radius: number } | null {
+    const reach = this.reachOf(id);
+    return reach ? { x: reach.x + reach.width / 2, y: reach.y + reach.height / 2, radius: Math.hypot(reach.width, reach.height) / 2 } : null;
   }
 
   /** Area a source's takeover can reach, or null for an unknown id. */

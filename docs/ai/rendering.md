@@ -416,8 +416,10 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
   - Die Activity liefert per Pull dauerhafte Void-Bodengefahren und die Präsenz jeder Quelle
     ([CoopMissionVoidDanger](../../src/activity/CoopMissionVoidDanger.ts)).
 - Pflanzen und Dunst sind getrennt. Fehlt die Präsenz einer Quelle (Basis zerstört, Stätte geschlossen, Spawnort
-  verbraucht), verfliegt nur ihr Dunst. Pflanzen und getränkter Boden bleiben als Narbe. Ein noch nicht aktiver
-  Spawnort (kommende Zone, schlafende Basis) trägt nur gedämpften Dunst.
+  verbraucht), wird ihr Dunst von einer Welle aus ihrem Zentrum bis auf kleine, dichte Restflecken über den
+  Void-Pflanzen abgetragen ([VoidHazeResidue](../../src/arena/VoidHazeResidue.ts)). Befallene Pflanzen stehen so nie in
+  klarer Luft. Pflanzen und getränkter Boden bleiben als Narbe. Ein noch nicht aktiver Spawnort (kommende Zone,
+  schlafende Basis) trägt nur gedämpften Dunst.
 - Die Geflecht-Textur trägt getränkten Boden (R), Landanteil (G) und Dunst (B). Ein Präsenzwechsel schreibt nur B im
   Begrenzungsrahmen der Quelle neu und blendet über Teil-Uploads über. Daten im Alpha einer Canvas-Textur würden
   vormultipliziert, und ein weiterer Sampler passt nicht in den Nebel-Pass.
