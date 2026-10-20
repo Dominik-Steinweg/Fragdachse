@@ -35,6 +35,7 @@ export function createArenaFlowFieldDebugPort(service: EnemyFlowFieldService): E
     isTraversableAt: (gridX, gridY) => service.isTraversableAt(gridX, gridY),
     gridToWorld: (gridX, gridY) => service.gridToWorld(gridX, gridY),
     getGoalCells: () => service.getGoalCells(),
+    getPortalLinks: () => service.getPortalLinkSegments(),
     setRefreshListener: (listener) => service.registerDebugOverlayCallback(
       listener ? () => listener() : null,
     ),
@@ -308,6 +309,18 @@ export function createNavigationLabWorldPort(
       const outcome = flow.getWorldObjectMutationRuntime()?.applyResolvedDamage(
         'rock', id, 1_000_000, bridge.getLocalPlayerId(), 'navigation-lab.geometry-change');
       return outcome?.kind === 'damage-applied';
+    },
+    setScenarioPortalLinks: links => {
+      const runtime = flow.getCoopMissionRuntime();
+      if (!runtime?.analysisScenarioActive || !bridge.isHost() || !runtime.flowFieldCoordinator) return false;
+      runtime.flowFieldCoordinator.setPortalLinks(links);
+      return true;
+    },
+    teleportEnemy: (id, x, y) => {
+      const runtime = flow.getCoopMissionRuntime(), enemy = runtime?.enemyManager?.getEnemy(id);
+      if (!runtime?.analysisScenarioActive || !bridge.isHost() || !enemy) return false;
+      enemy.setPosition(x, y);
+      return true;
     },
     spawnEnemy: (x, y, kind, allied) => {
       const manager = flow.getCoopMissionRuntime()?.enemyManager;

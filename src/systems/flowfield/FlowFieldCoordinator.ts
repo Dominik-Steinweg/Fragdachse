@@ -44,6 +44,7 @@ import {
   type FlowFieldJobField,
   type FlowFieldJobMessage,
   type FlowFieldPatch,
+  type FlowFieldPortalLink,
   type FlowFieldResultMessage,
 } from './FlowFieldProtocol';
 import { InlineFlowFieldRunner, type FlowFieldRunner, type FlowFieldRunnerKind } from './FlowFieldRunner';
@@ -76,7 +77,10 @@ export interface FlowFieldSnapshot {
   /** Nur bei Clearance-Profilen: das erodierte `traversable` zu genau diesem Feld. */
   readonly profileTraversable: Uint8Array | null;
   readonly edges?: Uint8Array;
+  /** Body regions joined across the portal links of this profile. */
   readonly regions?: Int32Array;
+  /** `[entryNode, exitNode, cost]` per directed jump of this profile (see `PORTAL_LINK_STRIDE`). */
+  readonly portalLinks: Int32Array;
 }
 
 /** Lesefenster eines Feldes. Die Fassade haelt genau dieses Objekt und liest immer den aktuellen Stand. */
@@ -250,6 +254,7 @@ export class FlowFieldCoordinator {
   private swimGeometrySource: NavigationGeometry | null = null;
   private swimGeometryCache: NavigationGeometry | null = null;
   private readonly suppressedGoalIndexes = new Set<number>();
+  private portalLinks: readonly FlowFieldPortalLink[] = [];
 
   private runner: FlowFieldRunner;
   private initialized = false;
@@ -448,6 +453,28 @@ export class FlowFieldCoordinator {
         obstacles: geometry.snapshot.obstacles.filter(obstacle => obstacle.kind !== 'water') });
     }
     return this.swimGeometryCache;
+  }
+
+  /**
+   * Replaces the authored navigation links. Links add jumps to the unchanged body graph: the
+   * topology version rises so stale fields lose their authority, but no geometry is rebuilt.
+   */
+  setPortalLinks(links: readonly FlowFieldPortalLink[]): void {
+    if (!this.geometryProvider) throw new Error('Portal links require exact navigation geometry');
+    const next = normalizePortalLinks(links);
+    if (samePortalLinks(next, this.portalLinks)) return;
+    this.portalLinks = next;
+    this.topologyVersion += 1;
+    this.markFieldsRecomputeRequested();
+    if (!this.initialized) return;
+    const patch: FlowFieldPatch = { t: 'portal-links', links: next };
+    const pending = this.pendingPatches.findIndex(entry => entry.t === 'portal-links');
+    if (pending >= 0) this.pendingPatches[pending] = patch;
+    else this.pendingPatches.push(patch);
+  }
+
+  getPortalLinks(): readonly FlowFieldPortalLink[] {
+    return this.portalLinks;
   }
 
   /** Einzelzellenereignis mit Koordinate: der haeufige Fall, O(9) im Spiegel. */
@@ -802,6 +829,7 @@ export class FlowFieldCoordinator {
         profileTraversable: resultField.profileTraversable,
         edges: resultField.edges,
         regions: resultField.regions,
+        portalLinks: resultField.portalLinks,
       };
       field.lastActivatedAtMs = nowMs();
       if (this.needsRecompute(field)) field.recomputeRequestedAtMs ??= field.lastActivatedAtMs;
@@ -910,6 +938,7 @@ export class FlowFieldCoordinator {
       profiles: [...this.profiles.values()],
       geometry,
       fields: [...this.fields.values()].map((field) => field.descriptor),
+      portalLinks: this.portalLinks,
     };
   }
 
@@ -1111,6 +1140,32 @@ export class FlowFieldCoordinator {
     this.fields.clear();
     this.workspaces.clear();
   }
+}
+
+/** Validated, id-sorted copy: the worker trusts this canonical link set. */
+function normalizePortalLinks(links: readonly FlowFieldPortalLink[]): readonly FlowFieldPortalLink[] {
+  const ids = new Set<string>();
+  const normalized = links.map(link => {
+    const { id, ax, ay, bx, by, radiusPx, maxBodyRadiusPx, costPx } = link;
+    if (typeof id !== 'string' || !id || ids.has(id)) throw new Error(`Invalid or duplicate portal link id: ${id}`);
+    ids.add(id);
+    if (![ax, ay, bx, by, radiusPx, maxBodyRadiusPx].every(Number.isFinite) || radiusPx <= 1 || maxBodyRadiusPx < 0) {
+      throw new Error(`Portal link ${id} needs finite endpoints, a radius above 1 px and a body limit`);
+    }
+    // A positive whole-pixel cost keeps jumps exact in both Float32 and Int32 and prevents ping-pong.
+    if (!Number.isSafeInteger(costPx) || costPx < 1) throw new Error(`Portal link ${id} needs a positive whole-pixel cost`);
+    return Object.freeze({ id, ax, ay, bx, by, radiusPx, maxBodyRadiusPx, costPx });
+  });
+  return Object.freeze(normalized.sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)));
+}
+
+function samePortalLinks(left: readonly FlowFieldPortalLink[], right: readonly FlowFieldPortalLink[]): boolean {
+  return left.length === right.length && left.every((link, index) => {
+    const other = right[index];
+    return link.id === other.id && link.ax === other.ax && link.ay === other.ay && link.bx === other.bx
+      && link.by === other.by && link.radiusPx === other.radiusPx && link.maxBodyRadiusPx === other.maxBodyRadiusPx
+      && link.costPx === other.costPx;
+  });
 }
 
 function profileIdFor(clearanceCells: number): string {

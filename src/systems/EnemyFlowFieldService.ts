@@ -39,6 +39,7 @@ import {
   type FlowFieldSnapshot,
 } from './flowfield/FlowFieldCoordinator';
 import { InlineFlowFieldRunner } from './flowfield/FlowFieldRunner';
+import { PORTAL_LINK_STRIDE } from './flowfield/FlowFieldProtocol';
 import {
   buildBaseDescriptors,
   buildStaticKindRaster,
@@ -286,6 +287,7 @@ export class EnemyFlowFieldService {
     let waypoint = navigationPoint(this.view.metrics, best);
     for (let step = 0; step < 4; step++) {
       const vx = snapshot.vectorField[best * 2], vy = snapshot.vectorField[best * 2 + 1];
+      // Zero marks a goal or a portal entry: the waypoint stays inside the crossing circle.
       if (!vx && !vy) break;
       const next = best + Math.sign(vx) + Math.sign(vy) * this.view.metrics.cols;
       const point = navigationPoint(this.view.metrics, next);
@@ -341,6 +343,20 @@ export class EnemyFlowFieldService {
     return { region, reachable: false };
   }
   getNavigationSnapshot() { return this.view.snapshot(); }
+
+  /** Resolved portal jumps of the active field as world segments (debug projection). */
+  getPortalLinkSegments(): readonly { from: { x: number; y: number }; to: { x: number; y: number } }[] {
+    const links = this.view.snapshot()?.portalLinks;
+    if (!links?.length) return [];
+    const segments: { from: { x: number; y: number }; to: { x: number; y: number } }[] = [];
+    for (let cursor = 0; cursor < links.length; cursor += PORTAL_LINK_STRIDE) {
+      // Symmetric links list both directions; one segment per pair suffices.
+      if (links[cursor] > links[cursor + 1]) continue;
+      segments.push({ from: navigationPoint(this.view.metrics, links[cursor]),
+        to: navigationPoint(this.view.metrics, links[cursor + 1]) });
+    }
+    return segments;
+  }
 
   /** Current topology, including mutations whose worker snapshot has not arrived yet. */
   getTopologyVersion(): number { return this.view.version().topology; }
@@ -676,15 +692,29 @@ export class EnemyFlowFieldService {
     const tuning = this.view.tuning;
     const workspace = this.view.workspace();
     const open = this.pathHeap;
+    const jumps = this.view.snapshot()?.portalLinks;
+    const hasJumps = !!jumps?.length;
+    // Integration costs carry the distance and swim scales; this search counts whole cell steps.
+    const jumpScale = 1 / ((topology.distanceScale ?? 1) * (this.view.costScale ?? 1));
+    // Admissible with jumps: the straight line or the cheapest line into a portal and out of it.
+    const estimate = (index: number): number => {
+      const x = index % cols, y = Math.floor(index / cols);
+      let best = Math.hypot(target.gridX - x, target.gridY - y);
+      for (let cursor = 0; hasJumps && cursor < jumps!.length; cursor += PORTAL_LINK_STRIDE) {
+        const entry = jumps![cursor], exit = jumps![cursor + 1];
+        best = Math.min(best, Math.hypot(entry % cols - x, Math.floor(entry / cols) - y) + jumps![cursor + 2] * jumpScale
+          + Math.hypot(target.gridX - exit % cols, target.gridY - Math.floor(exit / cols)));
+      }
+      return best;
+    };
     const generation = this.beginTargetPathSearch(workspace, startIndex);
 
     while (open.size > 0) {
       open.pop();
       const currentIndex = open.poppedIndex;
       const currentCost = workspace.costs[currentIndex];
-      const currentX = currentIndex % cols;
-      const currentY = Math.floor(currentIndex / cols);
-      const currentScore = currentCost + Math.hypot(target.gridX - currentX, target.gridY - currentY);
+      const currentScore = currentCost + (hasJumps ? estimate(currentIndex)
+        : Math.hypot(target.gridX - currentIndex % cols, target.gridY - Math.floor(currentIndex / cols)));
       // Der Heap erlaubt bewusst doppelte Eintraege: veraltete Prioritaeten werden hier billig
       // verworfen, statt das Open Set linear nach dem Zellindex zu durchsuchen.
       if (open.poppedPriority > currentScore) continue;
@@ -706,11 +736,24 @@ export class EnemyFlowFieldService {
         workspace.parents[nextIndex] = currentIndex;
         const nextX = nextIndex % cols;
         const nextY = Math.floor(nextIndex / cols);
+        // Prioritize the stored Float32 cost: a float64 priority above it would read as stale on pop.
         open.push(
           nextIndex,
-          candidate + Math.hypot(target.gridX - nextX, target.gridY - nextY),
+          workspace.costs[nextIndex] + (hasJumps ? estimate(nextIndex) : Math.hypot(target.gridX - nextX, target.gridY - nextY)),
           workspace.sequence++,
         );
+      }
+
+      for (let cursor = 0; hasJumps && cursor < jumps!.length; cursor += PORTAL_LINK_STRIDE) {
+        if (jumps![cursor] !== currentIndex) continue;
+        const exitIndex = jumps![cursor + 1];
+        if (topology.traversable[exitIndex] !== 1) continue;
+        const candidate = currentCost + jumps![cursor + 2] * jumpScale;
+        if (workspace.generation[exitIndex] === generation && candidate >= workspace.costs[exitIndex]) continue;
+        workspace.generation[exitIndex] = generation;
+        workspace.costs[exitIndex] = candidate;
+        workspace.parents[exitIndex] = currentIndex;
+        open.push(exitIndex, workspace.costs[exitIndex] + estimate(exitIndex), workspace.sequence++);
       }
     }
 
@@ -723,6 +766,9 @@ export class EnemyFlowFieldService {
       stepIndex = workspace.parents[stepIndex];
     }
     open.clear();
+    // A first step that is not a grid neighbor is a jump: the next position is the portal entry itself.
+    const dx = stepIndex % cols - fromGridX, dy = Math.floor(stepIndex / cols) - fromGridY;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) return this.gridToWorld(fromGridX, fromGridY);
     return this.gridToWorld(stepIndex % cols, Math.floor(stepIndex / cols));
   }
 

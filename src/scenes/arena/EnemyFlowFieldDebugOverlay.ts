@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DEPTH } from '../../config';
+import { DEPTH, VOID_PALETTE } from '../../config';
 import type { EnemyFlowFieldDebugPort } from './ArenaRuntimePorts';
 
 /**
@@ -118,6 +118,15 @@ export class EnemyFlowFieldDebugOverlay {
       this.graphics.strokeCircleShape(
         new Phaser.Geom.Circle(worldPos.x, worldPos.y, cellSize * 0.15),
       );
+    }
+
+    // Portal links in the void palette: the jump between the two resolved endpoint nodes.
+    for (const link of flowFieldPort.getPortalLinks()) {
+      this.graphics.lineStyle(2, VOID_PALETTE.bright, 0.9);
+      this.graphics.lineBetween(link.from.x, link.from.y, link.to.x, link.to.y);
+      for (const point of [link.from, link.to]) {
+        this.graphics.strokeCircleShape(new Phaser.Geom.Circle(point.x, point.y, cellSize * 0.6));
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   ENEMY_FLOW_FIELD_IDS,
@@ -15,6 +15,14 @@ import {
 import { INTEGRATION_INFINITY, type FlowFieldMetrics } from '../src/systems/flowfield/FlowFieldKernel';
 import { EnemyFlowFieldService } from '../src/systems/EnemyFlowFieldService';
 import type { ArenaLayout } from '../src/types';
+import { FlowFieldEngine } from '../src/systems/flowfield/FlowFieldEngine';
+import {
+  collectResultTransferables,
+  type FlowFieldInitMessage,
+  type FlowFieldJobMessage,
+  type FlowFieldRequest,
+} from '../src/systems/flowfield/FlowFieldProtocol';
+import { navigationTestWorld } from './navigationTestWorld';
 import type { BaseSpec } from '../src/arena/BaseRegistry';
 
 const METRICS: FlowFieldMetrics = {
@@ -468,5 +476,95 @@ describe('FlowFieldCoordinator', () => {
     expect(service.getVectorAt(goalCell.gridX, goalCell.gridY)).toEqual({ x: 0, y: 0 });
     expect(service.getVectorAt(goalCell.gridX + 2, goalCell.gridY)).toEqual({ x: -1, y: 0 });
     harness.coordinator.destroy();
+  });
+});
+
+describe('FlowFieldCoordinator portal links', () => {
+  const sealed = () => navigationTestWorld([{ id: 'middle', kind: 'barrier', shape: 'rect', left: 112, top: 0, right: 144, bottom: 256 }]);
+  const link = (id: string, ay = 48) => ({ id, ax: 48, ay, bx: 208, by: ay, radiusPx: 28, maxBodyRadiusPx: 20, costPx: 192 });
+  const requests = (spy: { mock: { calls: unknown[][] } }) => spy.mock.calls.map(([message]) => message as FlowFieldRequest);
+
+  it('raises the topology version, sends only the newest link set and never rebuilds geometry', () => {
+    const world = sealed(); world.goal(224, 128); world.flush();
+    const version = world.coordinator.getTopologyVersion(), geometry = world.coordinator.getGeometry();
+    const post = vi.spyOn(world.runner, 'post');
+    world.coordinator.setPortalLinks([link('first')]);
+    world.coordinator.setPortalLinks([link('second', 64)]);
+    world.coordinator.setPortalLinks([link('second', 64)]);
+    expect(world.coordinator.getTopologyVersion()).toBe(version + 2);
+    expect(world.field.queryNavigation(32, 128).status).toBe('pending');
+    world.flush();
+    const patches = requests(post).flatMap(message => message.type === 'job' ? message.patches : []);
+    expect(patches.filter(patch => patch.t === 'geometry')).toHaveLength(0);
+    expect(patches.filter(patch => patch.t === 'portal-links')).toEqual([{ t: 'portal-links', links: [link('second', 64)] }]);
+    expect(world.coordinator.getGeometry()).toBe(geometry);
+    expect(world.field.getNavigationSnapshot()!.topologyVersion).toBe(version + 2);
+    expect(world.field.queryNavigation(32, 128).status).toBe('ready');
+    world.destroy();
+  });
+
+  it('drops a result computed before the link change', () => {
+    const world = sealed(); world.goal(224, 128); world.flush();
+    world.runner.setAutoFlush(false);
+    world.goal(224, 112);
+    world.coordinator.advance(100);
+    world.coordinator.setPortalLinks([link('flank')]);
+    world.runner.flush();
+    const dropped = world.coordinator.getDiagnostics().droppedStale;
+    world.coordinator.advance(1);
+    expect(world.coordinator.getDiagnostics().droppedStale).toBe(dropped + 1);
+    expect(world.field.getNavigationSnapshot()!.portalLinks).toHaveLength(0);
+    world.coordinator.advance(100); world.runner.flush(); world.coordinator.advance(1);
+    expect(world.field.getNavigationSnapshot()!.portalLinks).toHaveLength(6);
+    world.destroy();
+  });
+
+  it('keeps the links in the init message of a restarted runner', () => {
+    const world = sealed(); world.goal(224, 128);
+    world.coordinator.setPortalLinks([link('flank')]); world.flush();
+    const replacement = new InlineFlowFieldRunner(), post = vi.spyOn(replacement, 'post');
+    world.coordinator.replaceRunner(replacement);
+    world.flush();
+    const init = requests(post).find((message): message is FlowFieldInitMessage => message.type === 'init')!;
+    expect(init.protocolVersion).toBe(5);
+    expect(init.portalLinks).toEqual([link('flank')]);
+    expect(requests(post).filter(message => message.type === 'job')
+      .flatMap(message => (message as FlowFieldJobMessage).patches).some(patch => patch.t === 'portal-links')).toBe(false);
+    expect(world.field.getNavigationSnapshot()!.portalLinks).toHaveLength(6);
+    expect(world.field.queryNavigation(32, 128).status).toBe('ready');
+    world.destroy();
+  });
+
+  it('transfers an own link buffer with every result field', () => {
+    const world = sealed(); world.goal(224, 128);
+    world.coordinator.registerField('second', { goalMode: 'dynamic', bodyRadius: 15 });
+    world.coordinator.setGoalCells('second', [8 * 17 + 14]);
+    world.coordinator.setPortalLinks([link('flank')]);
+    const post = vi.spyOn(world.runner, 'post');
+    world.flush();
+    const engine = new FlowFieldEngine();
+    // The first synchronous run initializes the runner; the same messages drive a second engine.
+    engine.init(requests(post).find((message): message is FlowFieldInitMessage => message.type === 'init')!);
+    const job = requests(post).find((message): message is FlowFieldJobMessage => message.type === 'job')!;
+    const result = engine.runJob(job), transfer = collectResultTransferables(result);
+    expect(result.fields).toHaveLength(2);
+    for (const field of result.fields) {
+      expect(field.portalLinks).toHaveLength(6);
+      expect(transfer).toContain(field.portalLinks.buffer);
+    }
+    expect(result.fields[0].portalLinks.buffer).not.toBe(result.fields[1].portalLinks.buffer);
+    expect(new Set(transfer).size).toBe(transfer.length);
+    world.destroy();
+  });
+
+  it('rejects links without exact geometry and malformed link sets', () => {
+    const harness = createHarness();
+    expect(() => harness.coordinator.setPortalLinks([link('flank')])).toThrow(/exact navigation geometry/);
+    harness.coordinator.destroy();
+    const world = sealed();
+    expect(() => world.coordinator.setPortalLinks([link('twin'), link('twin', 64)])).toThrow(/duplicate/);
+    expect(() => world.coordinator.setPortalLinks([{ ...link('free'), costPx: 0 }])).toThrow(/whole-pixel cost/);
+    expect(() => world.coordinator.setPortalLinks([{ ...link('nan'), bx: Number.NaN }])).toThrow(/finite/);
+    world.destroy();
   });
 });

@@ -229,6 +229,14 @@ export interface FlowFieldTopology {
   edges?: Uint8Array;
   distanceScale?: number;
   density?: Float32Array;
+  /**
+   * Portal jumps, -1 = none. `jumpTo[u] = v` lets u jump to v for `jumpCost[u]` (already in
+   * integration units); `jumpFrom[v] = u` is the same jump seen from its exit. Absent without links,
+   * so the link-free path stays byte-identical.
+   */
+  jumpTo?: Int32Array;
+  jumpFrom?: Int32Array;
+  jumpCost?: Float32Array;
   readonly costs: Uint32Array;
   readonly kindCodes: Uint8Array;
   readonly traversable: Uint8Array;
@@ -625,6 +633,7 @@ export function computeIntegrationField(
   heap: FlowFieldMinHeap = new FlowFieldMinHeap(),
 ): void {
   const { integrationField, goalSourceField } = target;
+  const { jumpFrom, jumpCost } = topology;
   integrationField.fill(INTEGRATION_INFINITY);
   goalSourceField.fill(-1);
 
@@ -665,6 +674,22 @@ export function computeIntegrationField(
         heap.push(neighborIndex, newValue, sourceIndex);
       }
     }
+
+    // Costs run from the goals outward: a jump u -> v therefore relaxes its entry u once v is final.
+    if (jumpFrom === undefined) continue;
+    const entryIndex = jumpFrom[currentIndex];
+    if (entryIndex < 0 || topology.traversable[entryIndex] !== 1) continue;
+    const jumpValue = Math.fround(currentValue + jumpCost![entryIndex]);
+    if (
+      jumpValue < integrationField[entryIndex]
+      || (jumpValue === integrationField[entryIndex]
+        && sourceIndex >= 0
+        && (goalSourceField[entryIndex] < 0 || sourceIndex < goalSourceField[entryIndex]))
+    ) {
+      integrationField[entryIndex] = jumpValue;
+      goalSourceField[entryIndex] = sourceIndex;
+      heap.push(entryIndex, jumpValue, sourceIndex);
+    }
   }
 }
 
@@ -675,12 +700,22 @@ export function computeVectorField(
   metrics: FlowFieldMetrics,
 ): void {
   const { integrationField, vectorField } = target;
+  const { jumpTo, jumpCost } = topology;
   for (let gridY = 0; gridY < metrics.rows; gridY += 1) {
     for (let gridX = 0; gridX < metrics.cols; gridX += 1) {
       const index = toIndex(metrics, gridX, gridY);
       const vIndex = index * 2;
 
       if (topology.traversable[index] !== 1) {
+        vectorField[vIndex] = 0;
+        vectorField[vIndex + 1] = 0;
+        continue;
+      }
+
+      // The jump realizes this node's cost: the zero vector means "enter the portal here".
+      const exitIndex = jumpTo === undefined ? -1 : jumpTo[index];
+      if (exitIndex >= 0 && integrationField[index] < INTEGRATION_INFINITY
+        && Math.fround(integrationField[exitIndex] + jumpCost![index]) <= integrationField[index]) {
         vectorField[vIndex] = 0;
         vectorField[vIndex + 1] = 0;
         continue;

@@ -1,5 +1,15 @@
-export const NAVIGATION_SCENARIO_VERSION = 4;
+export const NAVIGATION_SCENARIO_VERSION = 5;
 export const NAVIGATION_BENCHMARK_SEEDS = [1, 17, 183, 731, 1337, 8191, 424242, 20260916, 987654321, 20260817] as const;
+
+/** Dev-only navigation link in 32-px world cells; the lab snaps both ends to free ground. */
+export interface NavigationLabPortalLink {
+  readonly id: string;
+  readonly entry: { readonly gridX: number; readonly gridY: number };
+  readonly exit: { readonly gridX: number; readonly gridY: number };
+  readonly radiusPx: number;
+  readonly maxBodyRadiusPx: number;
+  readonly costPx: number;
+}
 
 export interface NavigationLabScenario {
   readonly id: string;
@@ -8,6 +18,11 @@ export interface NavigationLabScenario {
   readonly combat: boolean;
   readonly allyFraction: number;
   readonly kinds: readonly string[];
+  readonly portalLink?: NavigationLabPortalLink;
+  /** Reference player near this world cell instead of the arena center. */
+  readonly playerCell?: { readonly gridX: number; readonly gridY: number };
+  /** Spawn band in world cells instead of the 256-800 px ring around the player. */
+  readonly spawnArea?: { readonly gridX: number; readonly gridY: number; readonly widthCells: number; readonly heightCells: number };
 }
 
 export const NAVIGATION_LAB_SCENARIOS: readonly NavigationLabScenario[] = [
@@ -19,6 +34,12 @@ export const NAVIGATION_LAB_SCENARIOS: readonly NavigationLabScenario[] = [
     allyFraction: 0, kinds: ['rabid-badger', 'pyro-badger', 'alien-badger', 'void-stalker', 'thrower-badger'] },
   { id: 'allies', mapId: '6', description: 'Feinde und Verbuendete', combat: true,
     allyFraction: 0.2, kinds: ['rabid-badger', 'zombie-badger', 'pyro-badger'] },
+  // Map 08 west waves: a link around the bastion line (x = 63) to the far side of the rear base (79,26).
+  { id: 'portal-flank', mapId: '8', description: 'Portal-Flanke um die Bastionslinie', combat: false,
+    allyFraction: 0, kinds: ['void-stalker', 'spore-warden', 'zombie-badger', 'demon-badger'],
+    portalLink: { id: 'lab-dimension-flank', entry: { gridX: 18, gridY: 10 }, exit: { gridX: 96, gridY: 12 },
+      radiusPx: 28, maxBodyRadiusPx: 20, costPx: 192 },
+    playerCell: { gridX: 86, gridY: 22 }, spawnArea: { gridX: 0, gridY: 3, widthCells: 8, heightCells: 46 } },
 ];
 
 export function navigationScenario(id: string): NavigationLabScenario {

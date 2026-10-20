@@ -32,11 +32,13 @@ import {
 } from './FlowFieldKernel';
 import {
   FLOW_FIELD_PROTOCOL_VERSION,
+  PORTAL_LINK_STRIDE,
   SWIM_COST_SCALE,
   type FlowFieldFieldDescriptor,
   type FlowFieldInitMessage,
   type FlowFieldJobMessage,
   type FlowFieldPatch,
+  type FlowFieldPortalLink,
   type FlowFieldResultField,
   type FlowFieldResultMessage,
 } from './FlowFieldProtocol';
@@ -55,7 +57,14 @@ interface EngineProfile {
   /** Sammelt Einzelzellen bis zum naechsten Job; nur fuer Profile ohne Clearance gueltig. */
   readonly pendingCells: Set<number>;
   needsFullReclassify: boolean;
+  /** Graph regions joined across this profile's links; the graph's own regions without links. */
+  regions?: Int32Array;
+  /** Resolved jumps, {@link PORTAL_LINK_STRIDE} entries each. */
+  portalLinks: Int32Array;
+  linksDirty: boolean;
 }
+
+const NO_PORTAL_LINKS = new Int32Array(0);
 
 export class FlowFieldEngine {
   private metrics: FlowFieldMetrics | null = null;
@@ -72,6 +81,7 @@ export class FlowFieldEngine {
   private geometry: NavigationGeometry | null = null;
   private swimGeometry: { source: NavigationGeometry; geometry: NavigationGeometry } | null = null;
   private density: Float32Array | undefined;
+  private portalLinks: readonly FlowFieldPortalLink[] = [];
 
   init(message: FlowFieldInitMessage): void {
     this.metrics = message.metrics;
@@ -83,6 +93,7 @@ export class FlowFieldEngine {
     this.generationId = message.generationId;
     this.bases = message.bases;
     this.activeBaseIds = new Set(message.activeBaseIds);
+    this.portalLinks = message.portalLinks;
 
     const totalCells = totalCellsOf(message.metrics);
     this.sources = {
@@ -104,6 +115,8 @@ export class FlowFieldEngine {
         counts: { traversableCells: 0, blockedCells: totalCells, countsByKind: createEmptyCounts() },
         pendingCells: new Set<number>(),
         needsFullReclassify: true,
+        portalLinks: NO_PORTAL_LINKS,
+        linksDirty: true,
       });
     }
 
@@ -190,7 +203,9 @@ export class FlowFieldEngine {
       goalSourceField: target.goalSourceField,
       profileTraversable,
       edges: profile.graph ? copyUint8(profile.graph.edges, jobField.edgeBuffer) : undefined,
-      regions: profile.graph ? copyInt32(profile.graph.regions, jobField.regionBuffer) : undefined,
+      regions: profile.graph ? copyInt32(profile.regions ?? profile.graph.regions, jobField.regionBuffer) : undefined,
+      // Fresh per result: the buffer is transferred with it.
+      portalLinks: profile.portalLinks.slice(),
     };
   }
 
@@ -248,7 +263,7 @@ export class FlowFieldEngine {
         this.profiles.set(descriptor.profileId, { ...descriptor,
           topology: createTopology(totalCellsOf(metrics)),
           counts: { traversableCells: 0, blockedCells: totalCellsOf(metrics), countsByKind: createEmptyCounts() },
-          pendingCells: new Set(), needsFullReclassify: true });
+          pendingCells: new Set(), needsFullReclassify: true, portalLinks: NO_PORTAL_LINKS, linksDirty: true });
         return;
       }
       case 'cell': {
@@ -286,6 +301,12 @@ export class FlowFieldEngine {
         this.fields.delete(patch.fieldId);
         return;
       }
+      case 'portal-links': {
+        // Links only add jumps on top of the unchanged body graph; nothing is reclassified.
+        this.portalLinks = patch.links;
+        for (const profile of this.profiles.values()) profile.linksDirty = true;
+        return;
+      }
     }
   }
 
@@ -315,6 +336,61 @@ export class FlowFieldEngine {
     if (this.swimGeometry?.source !== geometry) this.swimGeometry = { source: geometry, geometry: new NavigationGeometry({ ...geometry.snapshot,
       obstacles: geometry.snapshot.obstacles.filter(obstacle => obstacle.kind !== 'water') }) };
     return this.swimGeometry.geometry;
+  }
+
+  /**
+   * Projects the link set onto one profile without touching its graph: one node per endpoint (the
+   * body-free node closest to the portal center, within the crossing radius), jump arrays on the
+   * topology and graph regions joined across every resolved link.
+   */
+  private resolvePortalLinks(profile: EngineProfile): void {
+    if (!profile.linksDirty) return;
+    profile.linksDirty = false;
+    const topology = profile.topology, graph = profile.graph;
+    topology.jumpTo = topology.jumpFrom = topology.jumpCost = undefined;
+    profile.regions = graph?.regions;
+    profile.portalLinks = NO_PORTAL_LINKS;
+    if (!graph || !this.portalLinks.length) return;
+    const metrics = this.metrics!, bodyRadius = profile.bodyRadius ?? 15;
+    const scale = this.tuning!.groundCost * (profile.swimCostRatio ? SWIM_COST_SCALE : 1);
+    const jumps: number[] = [], used = new Set<number>();
+    for (const link of this.portalLinks) {
+      if (bodyRadius > link.maxBodyRadiusPx) continue;
+      const a = nearestPortalNode(metrics, graph, link.ax, link.ay, link.radiusPx - 1);
+      const b = nearestPortalNode(metrics, graph, link.bx, link.by, link.radiusPx - 1);
+      // A node carries at most one jump; an overlapping later link is skipped for this profile.
+      if (a < 0 || b < 0 || a === b || used.has(a) || used.has(b)) continue;
+      used.add(a); used.add(b);
+      const cost = link.costPx * scale;
+      jumps.push(a, b, cost, b, a, cost);
+    }
+    if (!jumps.length) return;
+    const total = totalCellsOf(metrics);
+    const jumpTo = new Int32Array(total).fill(-1), jumpFrom = new Int32Array(total).fill(-1);
+    const jumpCost = new Float32Array(total);
+    let maxRegion = 0;
+    for (const region of graph.regions) if (region > maxRegion) maxRegion = region;
+    const parents = Int32Array.from({ length: maxRegion + 1 }, (_, region) => region);
+    let joined = false;
+    for (let cursor = 0; cursor < jumps.length; cursor += PORTAL_LINK_STRIDE) {
+      const entry = jumps[cursor], exit = jumps[cursor + 1];
+      jumpTo[entry] = exit; jumpFrom[exit] = entry; jumpCost[entry] = jumps[cursor + 2];
+      const left = findRegionRoot(parents, graph.regions[entry]);
+      const right = findRegionRoot(parents, graph.regions[exit]);
+      if (left === right) continue;
+      // The smaller id represents the union, so joined ids do not depend on link order.
+      if (left < right) parents[right] = left; else parents[left] = right;
+      joined = true;
+    }
+    topology.jumpTo = jumpTo; topology.jumpFrom = jumpFrom; topology.jumpCost = jumpCost;
+    profile.portalLinks = Int32Array.from(jumps);
+    if (!joined) return;
+    const regions = new Int32Array(total);
+    for (let index = 0; index < total; index++) {
+      const region = graph.regions[index];
+      regions[index] = region ? findRegionRoot(parents, region) : 0;
+    }
+    profile.regions = regions;
   }
 
   private refreshTopologies(): void {
@@ -356,8 +432,12 @@ export class FlowFieldEngine {
         }
         profile.needsFullReclassify = false;
         profile.pendingCells.clear();
+        // A rebuilt graph moves nodes and regions; links resolve against it again.
+        profile.linksDirty = true;
+        this.resolvePortalLinks(profile);
         continue;
       }
+      this.resolvePortalLinks(profile);
       if (profile.pendingCells.size === 0) continue;
       patchTopologyCells(
         profile.topology,
@@ -372,6 +452,33 @@ export class FlowFieldEngine {
       profile.pendingCells.clear();
     }
   }
+}
+
+/** Nearest body-free node to an endpoint within `maxDistance`; ties go to the lower index. */
+function nearestPortalNode(metrics: FlowFieldMetrics, graph: NavigationGraph, x: number, y: number,
+  maxDistance: number): number {
+  if (!(maxDistance >= 0) || !Number.isFinite(x + y)) return -1;
+  const pointOffset = metrics.pointOffset ?? 0.5;
+  const left = Math.max(0, Math.floor((x - maxDistance - metrics.arenaOffsetX) / metrics.cellSize - pointOffset));
+  const right = Math.min(metrics.cols - 1, Math.ceil((x + maxDistance - metrics.arenaOffsetX) / metrics.cellSize - pointOffset));
+  const top = Math.max(0, Math.floor((y - maxDistance - metrics.arenaOffsetY) / metrics.cellSize - pointOffset));
+  const bottom = Math.min(metrics.rows - 1, Math.ceil((y + maxDistance - metrics.arenaOffsetY) / metrics.cellSize - pointOffset));
+  let best = -1, bestDistanceSq = maxDistance * maxDistance;
+  for (let gridY = top; gridY <= bottom; gridY++) for (let gridX = left; gridX <= right; gridX++) {
+    const index = gridY * metrics.cols + gridX;
+    if (graph.traversable[index] !== 1) continue;
+    const point = navigationPoint(metrics, index), distanceSq = (point.x - x) ** 2 + (point.y - y) ** 2;
+    // Row-major order visits lower indexes first, so only a strictly closer node replaces the best.
+    if (distanceSq < bestDistanceSq || (best < 0 && distanceSq === bestDistanceSq)) {
+      best = index; bestDistanceSq = distanceSq;
+    }
+  }
+  return best;
+}
+
+function findRegionRoot(parents: Int32Array, region: number): number {
+  while (parents[region] !== region) region = parents[region] = parents[parents[region]];
+  return region;
 }
 
 function viewFloat32(buffer: ArrayBuffer | undefined, length: number): Float32Array {
