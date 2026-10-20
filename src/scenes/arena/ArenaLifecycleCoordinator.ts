@@ -865,6 +865,7 @@ export class ArenaLifecycleCoordinator {
         if (!this.worldGeometryBinding) throw new Error('Navigation requires materialized World geometry');
         return this.worldGeometryBinding.snapshotMovementGeometry();
       },
+      getCollisionWater: () => this.worldGeometryBinding?.getCollisionWater() ?? null,
       getNavigationObstacleIntegrity: (enemy, id) => {
         const materialization = this.worldRuntime?.materialization;
           if (!materialization) return null;

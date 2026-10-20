@@ -115,6 +115,7 @@ export interface HostWorldFramePort {
   getWorldMutationRuntime(): WorldObjectMutationRuntime | null;
   getProjectileRuntime?(): WorldProjectileRuntime | null;
   getGeometryBinding?(): WorldGeometryBinding | null;
+  getBridgeRuntime?(): import('../../world/WorldBridgeRuntime').WorldBridgeRuntime | null;
 }
 
 /** World-owned player/loadout reads used by the host frame. */
@@ -415,6 +416,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.advanceBomberSquadron(now);
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
     if (!countdownActive) this.smokeBinding?.refresh(now);
+    // World: Zuendschnuere vor der Navigation, damit ein Einsturz im selben Frame umleitet.
+    if (!countdownActive) this.worldFramePort?.getBridgeRuntime?.()?.hostStep();
     // Activity: Missionsfortschritt, Navigation und Gegner. Die Reihenfolge darin gehoert der
     // Activity; dieser Frame kennt nur den Schritt.
     if (coopMission) {
@@ -1232,6 +1235,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       bases: this.baseManager?.getNetSnapshot() ?? [],
       captureTheBeer,
       coopDefenseCarry,
+      bridges: this.worldFramePort?.getBridgeRuntime?.()?.getSnapshot() ?? [],
     }, fullSnapshotRequested);
     const snapshotBuildMs = this.coarsePerformanceMetricsEnabled
       ? Math.max(0, performance.now() - snapshotBuildStartedAt)

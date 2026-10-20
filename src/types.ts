@@ -2428,3 +2428,13 @@ export interface SyncedCoopDefenseCarryItem {
 }
 
 export type SyncedCoopDefenseCarryState = SyncedCoopDefenseCarryItem[];
+
+/**
+ * Replicated bridge state. Only bridges that left `standing` are listed; an empty slice means
+ * every authored bridge of the World stands. `detonatesAt` is host-synchronized time.
+ */
+export interface SyncedBridgeState {
+  id: string;
+  phase: 'charged' | 'collapsed';
+  detonatesAt?: number;
+}

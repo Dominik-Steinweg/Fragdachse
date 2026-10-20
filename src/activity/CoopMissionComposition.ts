@@ -76,6 +76,7 @@ export interface CoopMissionCompositionOptions {
   readonly getKrakenPorts?: () => import('./CoopMissionKrakenComposition').CoopMissionKrakenPorts;
   readonly getCombatScope?: () => import('../combat/CombatScope').CombatScope;
   readonly getNavigationGeometry?: () => import('../systems/navigation/NavigationGeometry').NavigationGeometrySnapshot;
+  readonly getCollisionWater?: () => import('../arena/WaterGeometry').WaterGeometry | null;
   readonly getNavigationObstacleIntegrity?: (enemy: import('../entities/EnemyEntity').EnemyEntity, id: string) => number | null;
   readonly scene: Phaser.Scene;
   readonly getWorld: () => WorldRuntimeContext | null;
@@ -211,6 +212,7 @@ export class CoopMissionComposition {
       getBase: (baseId) => baseManager?.getBase(baseId) ?? null,
       obstacleCellProvider,
       geometryProvider: this.options.getNavigationGeometry,
+      getCollisionWater: this.options.getCollisionWater,
       barrierCells: missionProgressConfig?.barriers.flatMap((barrier) => barrier.cells) ?? [],
       nextGenerationId: this.options.nextGenerationId,
       visualSink: this.options.visualSink,

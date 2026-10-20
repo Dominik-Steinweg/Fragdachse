@@ -397,8 +397,11 @@ export class EnemyManager {
     this.worldMetrics = metrics;
   }
 
-  private waterGeometry: WaterGeometry | null = null;
-  setWaterGeometry(water: WaterGeometry | null): void { this.waterGeometry = water; }
+  /** Collision water is World-owned and changes when a bridge collapses; read it, never copy it. */
+  private waterProvider: (() => WaterGeometry | null) | null = null;
+  private get waterGeometry(): WaterGeometry | null { return this.waterProvider?.() ?? null; }
+  setWaterGeometry(water: WaterGeometry | null): void { this.waterProvider = water ? () => water : null; }
+  setWaterGeometryProvider(provider: (() => WaterGeometry | null) | null): void { this.waterProvider = provider; }
   getWaterGeometry(): WaterGeometry | null { return this.waterGeometry; }
 
   /** Reicht die scene-lifetime Beleuchtung an neue und bestehende Gegner durch. */
@@ -1447,7 +1450,7 @@ export class EnemyManager {
     this.pendingClawEvents.clear();
     this.pendingAreaClawEvents.clear(); this.krakenProjectionRevisions.clear();
     this.locomotion.clear(); this.movementFeedback.clear(); this.intents = null;
-    this.waterGeometry = null;
+    this.waterProvider = null;
     this.combatActive = false;
     this.plagueMovement = null;
     this.plaguePursuers.clear();
