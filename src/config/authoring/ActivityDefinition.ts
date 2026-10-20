@@ -67,6 +67,8 @@ export interface CoopMissionDefinition {
   readonly persistentSpawns?: readonly CoopDefenseMapPersistentSpawnConfig[];
   readonly mapEvents?: readonly CoopDefenseMapEventConfig[];
   readonly secondaryObjectives?: readonly CoopDefenseMapSecondaryObjectiveConfig[];
+  /** Portalverbindungen feindlicher Generatoren zwischen zwei World-Ankern. */
+  readonly portalLinks?: readonly import('../coopDefensePortalLinks').CoopDefenseMapPortalLinkConfig[];
   readonly persistentBaseRewardsOnVictory?: readonly PersistentBaseRewardId[];
   readonly missionProgress?: ResolvedCoopDefenseMapMissionProgressConfig;
   readonly boss?: CoopDefenseMapBossConfig;

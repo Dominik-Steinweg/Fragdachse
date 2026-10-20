@@ -231,11 +231,12 @@ export class ArenaGenerator {
         barrier.cells.map((cell) => `${cell.gridX}_${cell.gridY}`)
       )),
     );
-    // Checkpoints und Salvage-Site-Lichtungen teilen dieselbe Garantie: ihr Kern bleibt frei von
-    // Fels, Felsbaendern und Baeumen. Ohne Sites bleibt die Eingabe (und damit jede RNG-Folge) gleich.
+    // Checkpoints, Salvage-Site- und Portal-Lichtungen teilen dieselbe Garantie: ihr Kern bleibt frei
+    // von Fels, Felsbaendern und Baeumen. Ohne Sites bleibt die Eingabe (und damit jede RNG-Folge) gleich.
     const protectedClearings = [
       ...(coopMapConfig?.missionProgress?.checkpoints ?? []),
       ...(coopMapConfig?.siteClearings ?? []),
+      ...(coopMapConfig?.portalAnchors ?? []),
       ...spawnZoneCores(coopMapConfig?.spawnZones),
     ];
     const missionCheckpointCells = this.collectMissionCheckpointCells(protectedClearings);
@@ -882,6 +883,12 @@ export class ArenaGenerator {
     }
     for (const front of fronts) {
       sourceGroups.push(this.getSpawnFrontCells(front, blocked, baseCells, bases));
+    }
+    // Each portal endpoint must reach the base on land: after the generator falls, travelers that
+    // stand at either end still need a way home without the link.
+    for (const anchor of mapConfig.portalAnchors ?? []) {
+      sourceGroups.push(blocked[anchor.gridY]?.[anchor.gridX] || baseCells.has(this.cellKey(anchor.gridX, anchor.gridY))
+        ? [] : [{ gridX: anchor.gridX, gridY: anchor.gridY }]);
     }
     if (includeStructures) {
       for (const base of bases) {

@@ -51,6 +51,7 @@ export const WORLD_SOURCE_FIELDS = [
   'voidDanger',
   'persistentBase',
   'siteClearings',
+  'portalAnchors',
 ] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
 
 /**
@@ -96,6 +97,7 @@ export const COOP_MISSION_SOURCE_FIELDS = [
   'persistentSpawns',
   'mapEvents',
   'secondaryObjectives',
+  'portalLinks',
   'persistentBaseRewardsOnVictory',
   'missionProgress',
   'boss',
@@ -157,6 +159,7 @@ export function toWorldDefinition(
       rockWalls: mapConfig.rockWalls,
       water: mapConfig.water,
       ...(mapConfig.siteClearings === undefined ? {} : { siteClearings: mapConfig.siteClearings }),
+      ...(mapConfig.portalAnchors === undefined ? {} : { portalAnchors: mapConfig.portalAnchors }),
     },
     bases: mapConfig.bases.map(toWorldBaseDefinition),
     tracks: {
@@ -189,6 +192,7 @@ export function toWorldGenerationConfig(world: WorldDefinition): ArenaGeneration
     rockWalls: world.terrain.rockWalls,
     water: world.terrain.water,
     siteClearings: world.terrain.siteClearings,
+    ...(world.terrain.portalAnchors === undefined ? {} : { portalAnchors: world.terrain.portalAnchors }),
     krakenHabitat: world.krakenHabitat,
     ...(world.spawnZones === undefined ? {} : { spawnZones: world.spawnZones }),
     trackMode: world.tracks?.mode,
@@ -224,6 +228,7 @@ export function toCoopMissionDefinition(
     persistentSpawns: mapConfig.persistentSpawns,
     mapEvents: mapConfig.mapEvents,
     secondaryObjectives: mapConfig.secondaryObjectives,
+    ...(mapConfig.portalLinks === undefined ? {} : { portalLinks: mapConfig.portalLinks }),
     persistentBaseRewardsOnVictory: mapConfig.persistentBaseRewardsOnVictory,
     missionProgress: mapConfig.missionProgress as CoopMissionDefinition['missionProgress'],
     boss: mapConfig.boss,
@@ -306,6 +311,7 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     persistentSpawns: activity.persistentSpawns,
     encounters: activity.encounters,
     secondaryObjectives: activity.secondaryObjectives,
+    ...(activity.portalLinks === undefined ? {} : { portalLinks: activity.portalLinks }),
     persistentBaseRewardsOnVictory: activity.persistentBaseRewardsOnVictory,
     missionProgress: activity.missionProgress,
     boss: activity.boss,
@@ -318,6 +324,7 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     ...(activity.respawnDelaySchedule === undefined ? {} : { respawnDelaySchedule: activity.respawnDelaySchedule }),
     persistentBase: world.persistentBaseSite,
     ...(world.terrain.siteClearings === undefined ? {} : { siteClearings: world.terrain.siteClearings }),
+    ...(world.terrain.portalAnchors === undefined ? {} : { portalAnchors: world.terrain.portalAnchors }),
   };
 }
 

@@ -122,7 +122,7 @@ describe('WorldPortalTransport', () => {
     (gateReleaseMs, endX) => {
       const h = harness();
       h.transport.register(source([pair('link', 'portal-link:link', { x: 0, y: 0 }, { x: 100, y: 0 })],
-        { gateReleaseMs }));
+        { gateReleaseMsFor: () => gateReleaseMs }));
       h.add('enemy', 0, 0);
       h.transport.transferActors(1000);
       expect(h.actors.get('enemy')).toMatchObject({ x: 100, y: 0 });

@@ -21,6 +21,7 @@ import {
   resolveCoopDefenseMapEncounterConfigs,
   resolveCoopDefenseMapPersistentSpawnConfigs,
 } from '../config/coopDefenseMaps';
+import { isCoopDefenseSideEncounter } from '../config/coopDefenseMapAuthoring';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { EnemyManager, type EnemyVisualSink } from '../entities/EnemyManager';
@@ -283,14 +284,18 @@ export class CoopMissionCombatComposition {
       )
       : null;
     if (runtime.kraken) bossSystem?.setDefeatCompletionSource(() => runtime.kraken?.system.isDefeatComplete() ?? false);
-    const mapDirector = encounterConfigs.length > 0
+    const objective = this.options.activity.mapConfig.objective;
+    const chainConfigs = encounterConfigs.filter((encounter) => !isCoopDefenseSideEncounter(objective, encounter));
+    const sideConfigs = encounterConfigs.filter((encounter) => isCoopDefenseSideEncounter(objective, encounter));
+    const createDirector = (configs: readonly ResolvedCoopDefenseMapEncounterConfig[], side: boolean) => configs.length > 0
       ? new CoopDefenseMapDirector(
-        encounterConfigs,
+        configs,
         (enemyKind, count, originId, front, spawnArea) => spawnExecutor
           .hostSpawnEncounterGroup(enemyKind, count, originId, front, spawnArea),
         {
-          mode: this.options.activity.mapConfig.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
-          showComplete: this.options.activity.mapConfig.objective === 'repel-assault',
+          // Side encounters run on the scheduled path beside the chain and never complete it.
+          mode: !side && objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
+          showComplete: !side && objective === 'repel-assault',
           isEnemyActive: (enemyId) => enemyManager.getEnemy(enemyId)?.sprite.active === true,
           isEncounterStartSatisfied: (start) => {
             switch (start.type) {
@@ -325,7 +330,7 @@ export class CoopMissionCombatComposition {
           },
           removeEnemy: (enemyId) => enemyManager.hostRemoveWithoutKill(enemyId) !== null,
           onDiagnosticEvent: this.options.onDiagnosticEvent,
-          onWaveStarted: this.options.onWaveStarted,
+          ...(side ? {} : { onWaveStarted: this.options.onWaveStarted }),
         },
       )
       : null;
@@ -333,7 +338,8 @@ export class CoopMissionCombatComposition {
       spawnExecutor,
       persistentPressure,
       boss: bossSystem,
-      director: mapDirector,
+      director: createDirector(chainConfigs, false),
+      sideDirector: createDirector(sideConfigs, true),
     };
   }
 }

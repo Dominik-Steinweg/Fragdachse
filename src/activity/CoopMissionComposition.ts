@@ -42,6 +42,7 @@ import { CoopMissionEnemySupportComposition } from './CoopMissionEnemySupportCom
 import { CoopMissionMapEventComposition } from './CoopMissionMapEventComposition';
 import { BaseVoidFireSystem, collectBaseFireContacts } from '../systems/BaseVoidFireSystem';
 import { CoopMissionObjectiveComposition } from './CoopMissionObjectiveComposition';
+import { CoopMissionPortalComposition } from './CoopMissionPortalComposition';
 import { CoopMissionPlayerComposition } from './CoopMissionPlayerComposition';
 import type { CoopMissionRuntime } from './CoopMissionRuntime';
 import { resolveCoopDefenseEnemyConfigs } from '../config/coopDefenseEnemies';
@@ -105,6 +106,11 @@ export interface CoopMissionCompositionOptions {
   readonly getLightingSystem: () => LightingSystem;
   readonly getPlayerModifierReadPort: () => CoopDefensePlayerModifierReadPort | null;
   readonly getPlayerWorldRuntime: () => PlayerWorldRuntime | null;
+  /** World portal transport for Activity-owned pair sources (generator links). */
+  readonly getPortalSourcePort?: () => import('../systems/portal/WorldPortalTransport').PortalSourcePort | null;
+  readonly publishPortalLinkState?: (
+    entries: readonly import('../systems/portal/PortalLinkSystem').PortalLinkStateEntry[] | null,
+  ) => void;
   readonly train: CoopTrainPort;
   readonly isHost: () => boolean;
   readonly getHumanPlayerCount: () => number;
@@ -346,6 +352,18 @@ export class CoopMissionComposition {
       patchBarrierCells: this.options.patchBarrierCells,
       markLightDirty: this.options.markLightDirty,
       grantPersistentBaseRewards: this.options.grantPersistentBaseRewards,
+    }).materialize(runtime);
+
+    new CoopMissionPortalComposition({
+      activity,
+      worldMetrics: world.metrics,
+      isHost: this.options.isHost(),
+      transport: this.options.getPortalSourcePort?.() ?? null,
+      isGeneratorStanding: (baseId) => {
+        const base = baseManager?.getBase(baseId);
+        return !!base && !base.isDestroyed();
+      },
+      publish: (entries) => this.options.publishPortalLinkState?.(entries),
     }).materialize(runtime);
 
     new CoopMissionPlayerComposition({

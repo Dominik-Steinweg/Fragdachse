@@ -312,7 +312,12 @@ export function composeWorldCombatGameplay(
       const state = bridge.getCoopDefenseSecondaryObjectivePresentationState();
       return state?.find(entry => entry.objectiveId === objectiveId)?.state ?? null;
     },
-    reportTargetContribution: (objectiveId, baseId) => flow.getCoopMissionRuntime()?.coopDefenseSecondaryObjectiveSystem?.reportTargetContribution(objectiveId, baseId),
+    reportTargetContribution: (objectiveId, baseId) => {
+      const mission = flow.getCoopMissionRuntime();
+      mission?.coopDefenseSecondaryObjectiveSystem?.reportTargetContribution(objectiveId, baseId);
+      // The same eligible hit wakes a structure's site, e.g. the guard of a portal generator.
+      mission?.coopDefenseSiteActivationSystem?.reportStructureDamaged(baseId);
+    },
     reportTargetDestroyed: (objectiveId, baseId) => flow.getCoopMissionRuntime()?.coopDefenseSecondaryObjectiveSystem?.reportTargetDestroyed(objectiveId, baseId) ?? 0,
     reconcilePersistentBaseWorld: () => flow.reconcilePersistentBaseWorld(),
     syncActiveBaseIds,

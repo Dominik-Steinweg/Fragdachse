@@ -132,6 +132,8 @@ export interface WorldTerrainDefinition {
   readonly rockWalls?: readonly CoopDefenseMapRockWallConfig[];
   /** Garantiert freie Lichtungen um Salvage-Sites; ihre ID ist die Site-ID. */
   readonly siteClearings?: readonly import('../coopDefenseMapAuthoring').CoopDefenseMapSiteClearingConfig[];
+  /** Freie Lichtungen moeglicher Portalendpunkte; welche Mission sie verbindet, ist Activity. */
+  readonly portalAnchors?: readonly import('../coopDefensePortalLinks').CoopDefenseMapPortalAnchorConfig[];
 }
 
 export interface WorldTrackDefinition {

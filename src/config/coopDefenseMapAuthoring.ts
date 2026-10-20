@@ -41,6 +41,12 @@ import {
 } from '../persistentBase/PersistentBaseCore';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 import {
+  normalizeCoopDefensePortalAnchors,
+  normalizeCoopDefensePortalLinks,
+  type CoopDefenseMapPortalAnchorConfig,
+  type CoopDefenseMapPortalLinkConfig,
+} from './coopDefensePortalLinks';
+import {
   sanitizePersistentBaseRewardIds,
   type PersistentBaseRewardId,
 } from '../persistentBase/PersistentBaseRewardTypes';
@@ -1024,6 +1030,10 @@ export interface CoopDefenseMapConfig {
    * ist die Site-ID, auf die `site-activated` verweist; der Generator fraest den Kern frei.
    */
   readonly siteClearings?: readonly CoopDefenseMapSiteClearingConfig[];
+  /** World-Geometrie: freie Lichtungen, in denen ein Portalendpunkt stehen kann. */
+  readonly portalAnchors?: readonly CoopDefenseMapPortalAnchorConfig[];
+  /** Activity: ein feindlicher Generator haelt zwischen zwei Ankern ein Portal offen. */
+  readonly portalLinks?: readonly CoopDefenseMapPortalLinkConfig[];
 }
 
 export interface CoopDefenseMapRespawnDelayStep {
@@ -1050,6 +1060,8 @@ export interface CoopDefenseMapSiteClearingConfig {
   readonly gridX: number;
   readonly gridY: number;
   readonly radiusCells: number;
+  /** Bauwerk dieser Lichtung; ein Treffer darauf aktiviert die Site wie das Betreten. */
+  readonly structureBaseId?: string;
 }
 
 /** Groesster erlaubter Lichtungsradius; groessere Flaechen gehoeren in eigenes Terrain-Authoring. */
@@ -1329,7 +1341,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     mapConfig.mapId,
     mapConfig.balanceReferenceDurationSec,
   );
-  const siteClearings = normalizeSiteClearings(mapConfig.mapId, mapConfig.siteClearings, arenaWidthCells, arenaHeightCells);
+  const siteClearings = normalizeSiteClearings(mapConfig.mapId, mapConfig.siteClearings, arenaWidthCells, arenaHeightCells,
+    bases);
   const siteIds = new Set((siteClearings ?? []).map(({ id }) => id));
   const spawnZones = normalizeWorldSpawnZones(`coopDefenseMaps ${mapConfig.mapId}`, mapConfig.spawnZones,
     arenaWidthCells, arenaHeightCells);
@@ -1423,6 +1436,19 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
   validateWaterSpawnAreas(mapConfig.mapId, encounters, water);
   const normalizedPersistentSpawns = normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases, zonesById);
   validateSpawnZoneUse(mapConfig.mapId, spawnZones, encounters, normalizedPersistentSpawns, boss, water);
+  validateRepelSideEncounters(mapConfig.mapId, objective, encounters ?? [], secondaryObjectives ?? [], boss);
+  const portalAnchors = normalizeCoopDefensePortalAnchors(mapConfig.mapId, mapConfig.portalAnchors,
+    arenaWidthCells, arenaHeightCells, water);
+  const portalLinks = normalizeCoopDefensePortalLinks(mapConfig.mapId, mapConfig.portalLinks, {
+    anchors: portalAnchors,
+    bases,
+    destroyObjectiveTargets: new Map((secondaryObjectives ?? []).filter((entry) => entry.type === 'destroy')
+      .flatMap((entry) => entry.targets.map((baseId) => [baseId, {
+        objectiveId: entry.id, expires: entry.expiresAt !== undefined,
+      }] as const))),
+    ...(persistentBase ? { persistentBase: { gridX: persistentBase.anchor.gridX, gridY: persistentBase.anchor.gridY,
+      reservationRadiusCells: resolvePersistentBaseReservationRadiusCells(persistentBase.maxAreaStage) } } : {}),
+  });
   const tutorialSteps = normalizeTutorialSteps(
     mapConfig.mapId,
     mapConfig.tutorialSteps,
@@ -1488,6 +1514,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     persistentBasePreview,
     persistentBase,
     ...(siteClearings === undefined ? {} : { siteClearings }),
+    ...(portalAnchors === undefined ? {} : { portalAnchors }),
+    ...(portalLinks === undefined ? {} : { portalLinks }),
     ...(mapConfig.respawnDelaySchedule === undefined
       ? {}
       : { respawnDelaySchedule: normalizeRespawnDelaySchedule(mapConfig.mapId, mapConfig.respawnDelaySchedule) }),
@@ -1525,10 +1553,12 @@ function normalizeSiteClearings(
   clearings: readonly CoopDefenseMapSiteClearingConfig[] | undefined,
   arenaWidthCells: number,
   arenaHeightCells: number,
+  bases: readonly CoopBaseConfig[],
 ): readonly CoopDefenseMapSiteClearingConfig[] | undefined {
   if (clearings === undefined) return undefined;
   if (!Array.isArray(clearings)) throw new Error(`[coopDefenseMaps] Map ${mapId} siteClearings must be an array`);
   const ids = new Set<string>();
+  const structures = new Set<string>();
   return clearings.map((clearing) => {
     const id = normalizeRequiredId(clearing?.id, `[coopDefenseMaps] Map ${mapId} has a site clearing without id`);
     if (ids.has(id)) throw new Error(`[coopDefenseMaps] Map ${mapId} has duplicate site clearing ${id}`);
@@ -1544,8 +1574,55 @@ function normalizeSiteClearings(
         `[coopDefenseMaps] Site clearing ${mapId}:${id} needs a radius between 1 and ${MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS}`,
       );
     }
-    return { id, gridX, gridY, radiusCells };
+    if (clearing.structureBaseId === undefined) return { id, gridX, gridY, radiusCells };
+    const structureBaseId = clearing.structureBaseId;
+    if (!bases.some((base) => base.id === structureBaseId) || structures.has(structureBaseId)) {
+      throw new Error(`[coopDefenseMaps] Site clearing ${mapId}:${id} needs its own existing structure base`);
+    }
+    structures.add(structureBaseId);
+    return { id, gridX, gridY, radiusCells, structureBaseId };
   });
+}
+
+/**
+ * In `repel-assault` an encounter that waits for a site is a side encounter: it runs beside the
+ * clear chain (e.g. the guard of a structure) and neither blocks nor completes the assault.
+ */
+export function isCoopDefenseSideEncounter(
+  objective: CoopDefenseMapObjective,
+  encounter: { readonly start: CoopDefenseMapEncounterStart },
+): boolean {
+  return objective === 'repel-assault' && encounter.start.type === 'site-activated';
+}
+
+function validateRepelSideEncounters(
+  mapId: string,
+  objective: CoopDefenseMapObjective,
+  encounters: readonly CoopDefenseMapEncounterConfig[],
+  secondaryObjectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
+  boss: CoopDefenseMapBossConfig | undefined,
+): void {
+  const side = encounters.filter((encounter) => isCoopDefenseSideEncounter(objective, encounter));
+  if (side.length === 0) return;
+  const firstSide = encounters.findIndex((encounter) => isCoopDefenseSideEncounter(objective, encounter));
+  if (encounters.slice(firstSide).some((encounter) => !isCoopDefenseSideEncounter(objective, encounter))) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} must list side encounters after its assault chain`);
+  }
+  if (firstSide === 0) throw new Error(`[coopDefenseMaps] Map ${mapId} needs an assault chain before side encounters`);
+  const sideIds = new Set(side.map((encounter) => encounter.id));
+  for (const encounter of side) {
+    if (encounter.announce !== false) {
+      throw new Error(`[coopDefenseMaps] Side encounter ${mapId}:${encounter.id} must be silent (announce: false)`);
+    }
+  }
+  const triggers = [
+    ...encounters.map((encounter) => encounter.start),
+    ...secondaryObjectives.flatMap((entry) => [entry.start, entry.focusUntil, entry.holdUntil, entry.expiresAt]),
+  ];
+  if (triggers.some((trigger) => trigger?.type === 'after-encounter' && sideIds.has(trigger.encounterId))
+    || (boss?.startAfterEncounterId !== undefined && sideIds.has(boss.startAfterEncounterId))) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} must not wait for a side encounter`);
+  }
 }
 
 function validateMapSpawnModel(
@@ -2008,8 +2085,10 @@ function normalizeSecondaryObjectiveConfigs(
     normalizedObjectives.filter((objective) => objective.type !== 'carry' || objective.carry === undefined),
   );
   validateSecondaryObjectiveWindows(mapId, normalizedObjectives, context.encounters);
-  if (context.objective === 'repel-assault' && context.encounters && context.encounters.length > 0) {
-    const lastEncounterId = context.encounters[context.encounters.length - 1].id;
+  const assaultChain = (context.encounters ?? [])
+    .filter((encounter) => !isCoopDefenseSideEncounter(context.objective, encounter));
+  if (context.objective === 'repel-assault' && assaultChain.length > 0) {
+    const lastEncounterId = assaultChain[assaultChain.length - 1].id;
     for (const objective of normalizedObjectives) {
       if (objective.type !== 'hold') continue;
       // Der Reward haengt an holdUntil: Ein Halten, das erst mit dem rundenbeendenden Clear faellig
@@ -3440,9 +3519,10 @@ function validateMissionDependencyGraph(
     const encounter = encounters[index];
     const dependent = `encounter:${encounter.id}` as const;
     addNode(dependent);
-    if (objective === 'repel-assault') addDependency(dependent, 'mission-victory');
+    const chained = objective === 'repel-assault' && !isCoopDefenseSideEncounter(objective, encounter);
+    if (chained) addDependency(dependent, 'mission-victory');
     // Repel assault consumes the authored sequence even when a start uses another trigger.
-    if (objective === 'repel-assault' && index > 0) {
+    if (chained && index > 0) {
       addDependency(`encounter:${encounters[index - 1].id}`, dependent);
     }
     if (encounter.start.type === 'after-previous') {

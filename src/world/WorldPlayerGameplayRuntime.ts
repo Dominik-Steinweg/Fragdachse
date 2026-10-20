@@ -42,7 +42,7 @@ import { BurrowSystem } from '../systems/BurrowSystem';
 import { BurrowEarthbreakRuntime, type EarthbreakPose, type SyncedBurrowEarthbreak } from '../systems/BurrowEarthbreakRuntime';
 import { TranslocatorSystem, type TranslocatorWorldPort } from '../systems/TranslocatorSystem';
 import type { PortalQueryPort, PortalPair } from '../systems/PortalTraversal';
-import { WorldPortalTransport, type PortalActor, type PortalSourceRegistrationPort,
+import { WorldPortalTransport, type PortalActor, type PortalSourcePort,
   type PortalTransportWorldPort } from '../systems/portal/WorldPortalTransport';
 import type { CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import { TunnelSystem } from '../systems/TunnelSystem';
@@ -1226,7 +1226,7 @@ export class WorldPlayerGameplayRuntime implements
 
   getPortalQueryPort(): PortalQueryPort { return this.systems.portalTransport; }
   /** Activity owners register their own pair sources; the World transport stays the only actor mover. */
-  getPortalSourcePort(): PortalSourceRegistrationPort { return this.systems.portalTransport; }
+  getPortalSourcePort(): PortalSourcePort { return this.systems.portalTransport; }
   runHostPortalStage(nowMs: number): void {
     if (this.destroyed) return;
     this.systems.translocator.update(nowMs);

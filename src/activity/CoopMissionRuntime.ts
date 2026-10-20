@@ -69,6 +69,8 @@ export interface CoopMissionEncounterRuntime {
   readonly persistentPressure: CoopDefensePersistentPressureSystem | null;
   readonly boss: CoopDefenseBossSystem | null;
   readonly director: CoopDefenseMapDirector | null;
+  /** Silent side encounters of a `repel-assault` map (e.g. structure guards) outside the clear chain. */
+  readonly sideDirector?: CoopDefenseMapDirector | null;
 }
 
 export interface CoopMissionEnemyBehaviourRuntime {
@@ -226,6 +228,12 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   private encounterOwner: CoopMissionEncounterRuntime | null = null;
   private enemyBehaviourOwner: CoopMissionEnemyBehaviourRuntime | null = null;
   private enemySpecialOwner: CoopMissionEnemySpecialRuntime | null = null;
+  private portalLinkOwner: import('../systems/portal/PortalLinkSystem').PortalLinkSystem | null = null;
+  get coopDefensePortalLinkSystem() { return this.portalLinkOwner; }
+  setPortalLinks(system: import('../systems/portal/PortalLinkSystem').PortalLinkSystem): void {
+    this.claimEmptySlot('portal link runtime', this.portalLinkOwner);
+    this.portalLinkOwner = system;
+  }
   private firestarterOwner: CoopDefenseFirestarterSystem | null = null;
   get coopDefenseFirestarterSystem() { return this.firestarterOwner; }
   setFirestarter(system: CoopDefenseFirestarterSystem): void {
@@ -327,6 +335,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   }
   get coopDefenseBossSystem(): CoopDefenseBossSystem | null { return this.encounterOwner?.boss ?? null; }
   get coopDefenseMapDirector(): CoopDefenseMapDirector | null { return this.encounterOwner?.director ?? null; }
+  get coopDefenseSideEncounterDirector(): CoopDefenseMapDirector | null { return this.encounterOwner?.sideDirector ?? null; }
   get coopDefenseMapEventDirector(): CoopDefenseMapEventDirector | null { return this.mapEventOwner; }
   get coopDefenseEnemyTrainAwarenessSystem(): CoopDefenseEnemyTrainAwarenessSystem | null {
     return this.enemyBehaviourOwner?.trainAwareness ?? null;
@@ -597,9 +606,14 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.objectiveOwner?.teamBuff?.reset();
     this.objectiveOwner?.barriers?.destroy();
 
+    // Portal links leave transport and navigation silently while both still exist.
+    this.portalLinkOwner?.destroy();
+    this.portalLinkOwner = null;
+
     // Abhaengige Directors und Behaviour-Systeme fallen vor Gegnern und Navigation.
     this.mapEventOwner?.reset();
     this.encounterOwner?.director?.reset();
+    this.encounterOwner?.sideDirector?.reset();
     this.encounterOwner?.persistentPressure?.reset();
     this.encounterOwner?.boss?.reset();
 

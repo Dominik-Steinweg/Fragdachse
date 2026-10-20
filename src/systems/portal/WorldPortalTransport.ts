@@ -51,19 +51,22 @@ export interface PortalPairSource {
   isPortalFriendly(ownerId: string, actorId: string): boolean;
   readonly transferFlash: PortalTransferFlash;
   /** Opens an exit gate after this time even without distance; absent keeps distance-only gates. */
-  readonly gateReleaseMs?: number;
+  gateReleaseMsFor?(pair: PortalPair): number | undefined;
   admitsActor?(pair: PortalPair, actor: PortalActor): boolean;
   onActorTransferred?(pair: PortalPair, actor: PortalActor, now: number): void;
 }
 
-export interface PortalSourceRegistrationPort {
+/** What an Activity-scoped pair owner may do with the World transport. */
+export interface PortalSourcePort {
   register(source: PortalPairSource): () => void;
+  collapse(pair: PortalPair, config: PortalCollapseConfig, ownerId: string,
+    affects: (actor: PortalActor) => boolean, now: number): void;
 }
 
 const NO_PAIRS: readonly PortalPair[] = Object.freeze([]);
 
 /** Sole writer of actor portal jumps. Projectile and hitscan stages read the same merged pair view. */
-export class WorldPortalTransport implements PortalQueryPort, PortalSourceRegistrationPort {
+export class WorldPortalTransport implements PortalQueryPort, PortalSourcePort {
   private readonly sources: PortalPairSource[] = [];
   private sourceArrays: (readonly PortalPair[])[] = [];
   private merged: readonly PortalPair[] = NO_PAIRS;
@@ -146,7 +149,8 @@ export class WorldPortalTransport implements PortalQueryPort, PortalSourceRegist
           if (!this.world.canOccupy(actor, hit.exit.x, hit.exit.y)) continue;
           const source = this.pairSource.get(hit.pair.id);
           const rest = { x: to.x - hit.entry.x, y: to.y - hit.entry.y };
-          gatePortalExit(gates, hit, source?.gateReleaseMs === undefined ? undefined : now + source.gateReleaseMs);
+          const releaseMs = source?.gateReleaseMsFor?.(hit.pair);
+          gatePortalExit(gates, hit, releaseMs === undefined ? undefined : now + releaseMs);
           from = hit.exit;
           const desired = { x: hit.exit.x + rest.x, y: hit.exit.y + rest.y };
           to = this.world.resolveExitMovement?.(actor, hit.exit, desired)
