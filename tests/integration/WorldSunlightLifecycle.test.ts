@@ -13,7 +13,7 @@ vi.mock('../../src/effects/sunlight/MoonSkyLight',()=>({MoonSkyLight:class {
 }}));
 vi.mock('../../src/effects/sunlight/VoidCreepPresentation',()=>({VoidCreepPresentation:class {
  constructor(){resources.creeps.add(this);}setCreep(creep:unknown){resources.creepFields.push(creep);}fadeHaze(_rect:unknown,to:Uint8Array,lift:unknown){resources.fades.push({to,lift});}
- setAlerts(){}setAir(){}update(){return null;}destroy(){resources.creeps.delete(this);}
+ setAlerts(){}setAir(){}setFogShape(){}setFogShapeBinding(){}update(){return null;}destroy(){resources.creeps.delete(this);}
 }}));
 vi.mock('../../src/arena/WoodlandEcologyRenderer',()=>({WoodlandEcologyRenderer:class {
  count=0;constructor(){resources.flora.add(this);}update(){}destroy(){resources.flora.delete(this);}
