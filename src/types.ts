@@ -1763,6 +1763,25 @@ export interface DirtCell { gridX: number; gridY: number; }
 /** Immutable water terrain: blocks ground movement, never fire. */
 export interface WaterCell { gridX: number; gridY: number; }
 
+/**
+ * Authored wooden bridge over water. Every deck cell is authored water; both abutment rows (the
+ * cell row before and after the deck along `axis`) are dry land. While the bridge stands, its
+ * deck is walkable; once collapsed, the deck cells are ordinary water again.
+ */
+export interface ArenaBridge {
+  /** Kebab-case, unique per World. */
+  readonly id: string;
+  /** Direction of travel across the river. */
+  readonly axis: 'horizontal' | 'vertical';
+  /** Top-left deck cell. */
+  readonly gridX: number;
+  readonly gridY: number;
+  /** Deck length along `axis`, in cells. */
+  readonly spanCells: number;
+  /** Deck width across `axis`, in cells. */
+  readonly deckWidthCells: number;
+}
+
 export type DecalTerrainLayer = 'dirt' | 'grass' | 'rock';
 
 /** Visuelle Oberflaeche, auf der ein Decal liegt. */
@@ -1917,6 +1936,8 @@ export interface ArenaLayout {
   tracks: TrackCell[];
   dirt:   DirtCell[];
   water?: WaterCell[];
+  /** Authored bridges; their deck cells are part of `water` (omitted when the World has none). */
+  bridges?: ArenaBridge[];
   decals?: DecalCell[];
   powerUpPedestals: PowerUpPedestalCell[];
   /** Seed-deterministic, inactive cells for authored ground-hazard events. */

@@ -8,18 +8,26 @@ const BASE_WATER_CLEARANCE_CELLS = 1;
 /** The persistent core retains its previous water clearance in addition to its reservation. */
 const PERSISTENT_CORE_WATER_CLEARANCE_CELLS = 5;
 
-type WaterAuthoring = Pick<CoopDefenseMapConfig,
-  'water' | 'bases' | 'persistentBase' | 'rockWalls' | 'missionProgress' | 'trackMode' | 'trackPosition'>
+/** Authored structures that water and bridge decks must leave free. */
+export type AuthoredTerrainGuardConfig = Pick<CoopDefenseMapConfig,
+  'bases' | 'persistentBase' | 'rockWalls' | 'missionProgress' | 'trackMode' | 'trackPosition'>;
+
+type WaterAuthoring = AuthoredTerrainGuardConfig & Pick<CoopDefenseMapConfig, 'water'>
   & Pick<CoopDefenseMapAuthoringConfig, 'waterAreas'>;
 
-/** Shared by authoring validation (including editor saves) and deterministic generation. */
-export function normalizeCoopDefenseWater(config: WaterAuthoring, cols: number, rows: number): WaterCell[] | undefined {
-  const { water: cells, waterAreas: areas, bases, persistentBase, rockWalls: walls, missionProgress: mission } = config;
+/**
+ * One reservation rule for authored terrain cells (water, bridge decks and abutments): base
+ * footprints plus clearance, the persistent-base reservation, rock walls, mission barriers,
+ * checkpoints and the railway. Returns the reason a cell is reserved, or null when it is free.
+ */
+export function createAuthoredTerrainGuard(
+  config: AuthoredTerrainGuardConfig,
+  cols: number,
+  rows: number,
+): (gridX: number, gridY: number) => string | null {
+  const { bases, persistentBase, rockWalls: walls, missionProgress: mission } = config;
   const tracks = config.trackMode === 'none' ? undefined : config.trackPosition;
-  if (cells === undefined && areas === undefined) return undefined;
   const reservationRadius = resolvePersistentBaseReservationRadiusCells(persistentBase?.maxAreaStage);
-  if (cells !== undefined && !Array.isArray(cells)) throw new Error('[coopDefenseMaps] Water must be an array');
-  if (areas !== undefined && !Array.isArray(areas)) throw new Error('[coopDefenseMaps] Water areas must be an array');
   const baseRegions = bases.map(base => {
     const { width, height } = getBaseShapeDimensions(base.shape);
     const origin = getBaseOriginForArena(base.anchor, width, height, cols, rows);
@@ -50,15 +58,28 @@ export function normalizeCoopDefenseWater(config: WaterAuthoring, cols: number, 
       for (let x = Math.max(0, Math.ceil(checkpoint.gridX - radius)); x <= Math.min(cols - 1, Math.floor(checkpoint.gridX + radius)); x++)
         if ((x - checkpoint.gridX) ** 2 + (y - checkpoint.gridY) ** 2 <= radius ** 2) blocked.add(x + '_' + y);
   }
-  const validateCell = (gridX: number, gridY: number): void => {
-    const key = gridX + '_' + gridY;
+  return (gridX, gridY) => {
     const base = baseRegions.find(region => gridX >= region.minX && gridX <= region.maxX && gridY >= region.minY && gridY <= region.maxY);
-    if (base) throw new Error(`[coopDefenseMaps] Water overlaps authored structure or base clearance (${base.id}): ${key}`);
+    if (base) return `overlaps authored structure or base clearance (${base.id})`;
     if (persistentBase && isCellInsidePersistentBaseReservation(gridX, gridY, persistentBase.anchor, reservationRadius))
-      throw new Error(`[coopDefenseMaps] Water overlaps persistent base reservation (${persistentBase.baseId}): ${key}`);
-    if (blocked.has(key)) throw new Error('[coopDefenseMaps] Water overlaps authored structure: ' + key);
+      return `overlaps persistent base reservation (${persistentBase.baseId})`;
+    if (blocked.has(gridX + '_' + gridY)) return 'overlaps authored structure';
     if (typeof tracks === 'object' && (gridX === tracks.gridX || gridX === tracks.gridX + 1))
-      throw new Error('[coopDefenseMaps] Water overlaps authored railway: ' + key);
+      return 'overlaps authored railway';
+    return null;
+  };
+}
+
+/** Shared by authoring validation (including editor saves) and deterministic generation. */
+export function normalizeCoopDefenseWater(config: WaterAuthoring, cols: number, rows: number): WaterCell[] | undefined {
+  const { water: cells, waterAreas: areas } = config;
+  if (cells === undefined && areas === undefined) return undefined;
+  if (cells !== undefined && !Array.isArray(cells)) throw new Error('[coopDefenseMaps] Water must be an array');
+  if (areas !== undefined && !Array.isArray(areas)) throw new Error('[coopDefenseMaps] Water areas must be an array');
+  const guard = createAuthoredTerrainGuard(config, cols, rows);
+  const validateCell = (gridX: number, gridY: number): void => {
+    const reason = guard(gridX, gridY);
+    if (reason) throw new Error(`[coopDefenseMaps] Water ${reason}: ${gridX}_${gridY}`);
   };
   const seen = new Set<string>();
   const result = (cells ?? []).map(cell => {

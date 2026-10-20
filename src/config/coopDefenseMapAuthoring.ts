@@ -3,6 +3,7 @@ import { isBossIntroPresetId, type BossIntroPresetId } from './bossIntros';
 import { normalizeFogStrength } from './groundFog';
 import { normalizeWorldMoonlight, normalizeWorldVoidDanger, type WorldMoonlightConfig, type WorldVoidDangerConfig } from './nightWorld';
 import { normalizeCoopDefenseWater } from './coopDefenseWater';
+import { normalizeCoopDefenseBridges } from './coopDefenseBridges';
 import { normalizeKrakenHabitat, type KrakenHabitatConfig } from './krakenHabitat';
 import { normalizeWorldSpawnZones, spawnZoneArea, type WorldSpawnZone } from './spawnZones';
 import { turretAimConfig, validateTurretAimConfig, type TurretAimConfig } from './turretAim';
@@ -902,6 +903,11 @@ export interface CoopDefenseMapConfig {
   /** Feste, benannte Spawnorte der World; Encounter, Dauerquellen und Boss referenzieren sie per ID. */
   readonly spawnZones?: readonly WorldSpawnZone[];
   readonly water?: readonly import('../types').WaterCell[];
+  /**
+   * Authored wooden bridges across `water`. Decks are water cells that stay walkable while the
+   * bridge stands; a World must still connect all land without them (fords or land crossings).
+   */
+  readonly bridges?: readonly import('../types').ArenaBridge[];
   readonly mapId: string;
   /**
    * Horizontale Arenabreite im 32-px-Raster. Standard sind 60 Zellen; Werte werden auf
@@ -1420,6 +1426,10 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     bodyRadiusCells: krakenConfig ? krakenConfig.bodyRadiusPx / CELL_SIZE : undefined,
   });
   if (boss?.habitatId && boss.habitatId !== krakenHabitat?.id) throw new Error('[coopDefenseMaps] Unknown boss habitat');
+  const bridges = normalizeCoopDefenseBridges({
+    bridges: mapConfig.bridges, spawnZones, krakenHabitat,
+    bases, persistentBase, rockWalls, missionProgress, trackMode, trackPosition,
+  }, water ?? [], arenaWidthCells, arenaHeightCells);
   validateWaterSpawnAreas(mapConfig.mapId, encounters, water);
   const normalizedPersistentSpawns = normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases, zonesById);
   validateSpawnZoneUse(mapConfig.mapId, spawnZones, encounters, normalizedPersistentSpawns, boss, water);
@@ -1453,6 +1463,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     tutorialAnchor,
     ...(mapConfig.abyssCameo === undefined ? {} : { abyssCameo: normalizeAbyssCameo(mapConfig.mapId, mapConfig.abyssCameo, water ?? []) }),
     water,
+    ...(bridges === undefined ? {} : { bridges }),
     krakenHabitat,
     tutorialSteps,
     trackMode,

@@ -51,6 +51,7 @@ export type DawnArenaTemplateWorld = Pick<CoopDefenseMapAuthoringConfig,
   | 'rockWalls'
   | 'water'
   | 'waterAreas'
+  | 'bridges'
   | 'trackMode'
   | 'trackPosition'
   | 'timeOfDay'

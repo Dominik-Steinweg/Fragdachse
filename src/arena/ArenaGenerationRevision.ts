@@ -6,6 +6,7 @@ export function projectArenaGenerationRevision(map: ArenaGenerationMapConfig): u
     mapId: map.mapId, arenaWidthCells: map.arenaWidthCells, arenaHeightCells: map.arenaHeightCells,
     bases: map.bases, persistentBase: map.persistentBase, rockField: map.rockField,
     rockFillRatio: map.rockFillRatio, rockWalls: map.rockWalls, treeCount: map.treeCount, water: map.water,
+    bridges: map.bridges, siteClearings: map.siteClearings,
     trackMode: map.trackMode, trackPosition: map.trackPosition,
     tutorialAnchor: map.tutorialAnchor, tutorialShowControls: map.tutorialShowControls,
     tutorialSteps: map.tutorialSteps?.map(s => ({ anchor: s.anchor })),
