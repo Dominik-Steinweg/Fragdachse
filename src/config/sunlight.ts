@@ -25,9 +25,9 @@ export const SUN_TUNING_DEFAULTS = {
   fogPatchScale: 360, fogPatchDensity: 3.6, fogAreaBudget: .15, fogWaterAreaBudget: .12,
   fogMaxCover: .33, fogWaterMaxCover: .16, fogScatterBudget: .025,
   fogPileSoftness: 22, fogScatter: .22, fogDensity: .55,
-  /** Look-dev switch: 0 = patch field by day and simulated banks by night (FogPatchField.ts),
-   * 1 = shaped fog around the clock, void haze included (fogShape.ts). */
-  fogStyle: 0,
+  /** 1 = shaped fog around the clock, void haze included (fogShape.ts). 0 keeps the previous look
+   * for comparison: patch field by day, simulated banks by night (FogPatchField.ts). */
+  fogStyle: 1,
   /** Shaped fog (fogStyle 1): density multiplier and additive coverage shift, tuned per time of day. */
   fogStyleGain: 1, fogStyleCover: 0,
   cloudCover: 0.35, cloudDensity: 0.5, cloudSpeed: 18, cloudScale: 900,

@@ -127,7 +127,8 @@ describe('optional fog woodland presentation',()=>{
     expect(uniforms(display).get('uSceneSun')).toBe(0);expect(uniforms(material).get('uWoodlandBanks')).toBe(0);
     
     const productionBytes=field.bytes;
-    binding.sunCompositeTuning={...SUN_TUNING_DEFAULTS};binding.baseFogOpacity=.4;binding.baseFogDetail=.6;
+    // The previous look (fogStyle 0): patch field by day, no shape pass.
+    binding.sunCompositeTuning={...SUN_TUNING_DEFAULTS,fogStyle:0};binding.baseFogOpacity=.4;binding.baseFogDetail=.6;
     field.setWoodlandLight(binding);field.prepare(view,0);field.render(view,256,256,'normal',1,[],'low');
     expect(field.bytes).toBeGreaterThan(productionBytes);
     expect(uniforms(material).get('uWoodlandBanks')).toBe(0);
@@ -199,7 +200,7 @@ describe('optional fog woodland presentation',()=>{
       textures:{addGLTexture:()=>({}),get:()=>fallback,remove},add:{existing:(value:unknown)=>value}};
     const terrain=new FogTerrainModel({offsetX:100,offsetY:200,width:512,height:512},[]),tuning=fogTuning(1);
     const field=new FogGpuField(scene as never,terrain,1,tuning,10),view={x:100,y:200,width:512,height:512};
-    const light:FogWoodlandLight={sunStrength:0,sun:[0,0,1],sunCompositeTuning:{...SUN_TUNING_DEFAULTS}};
+    const light:FogWoodlandLight={sunStrength:0,sun:[0,0,1],sunCompositeTuning:{...SUN_TUNING_DEFAULTS,fogStyle:0}};
     const creep={key:'__void_creep_test'},haze={texture:creep as never,frame:new Float32Array([100,200,512,512]),time:3,strength:.8,
       alerts:new Float32Array(32),alertLevels:new Float32Array(8)};
     const uniforms=(shader:any)=>{const values=new Map();shader.config.setupUniforms((name:string,value:unknown)=>values.set(name,value));return values;};
