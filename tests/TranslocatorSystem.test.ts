@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TranslocatorSystem, type TranslocatorActor, type TranslocatorWorldPort } from '../src/systems/TranslocatorSystem';
+import { TranslocatorSystem, type TranslocatorWorldPort } from '../src/systems/TranslocatorSystem';
+import { WorldPortalTransport, type PortalActor, type PortalTransportWorldPort } from '../src/systems/portal/WorldPortalTransport';
 import { UTILITY_CONFIGS, type TranslocatorUtilityConfig } from '../src/loadout/LoadoutConfig';
 import type { TranslocatorUseState } from '../src/loadout/TranslocatorUseState';
 
 function world(overrides: Partial<TranslocatorUtilityConfig> = {}) {
   const config = { ...UTILITY_CONFIGS.TRANSLOCATOR, ...overrides } as TranslocatorUtilityConfig;
-  const actors = new Map<string, TranslocatorActor>([['p', { id: 'p', kind: 'player', x: 50, y: 50,
+  const actors = new Map<string, PortalActor>([['p', { id: 'p', kind: 'player', x: 50, y: 50,
     radius: 12, alive: true, surface: true, revision: 0 }]]);
   const pucks = new Map<number, {x: number; y: number}>();
   let nextId = 0;
@@ -16,16 +17,19 @@ function world(overrides: Partial<TranslocatorUtilityConfig> = {}) {
   const published = new Map<string, TranslocatorUseState | null>();
   const network = { getPlayerColor: () => 0xffffff, broadcastTranslocatorFlash: vi.fn(), broadcastExplosionEffect: vi.fn(),
     broadcastPortalCollapse: vi.fn(), publishTranslocatorUseState: (id: string, s: TranslocatorUseState | null) => published.set(id, s) };
-  const port: TranslocatorWorldPort = {
+  const port: TranslocatorWorldPort & PortalTransportWorldPort = {
     getActors: () => [...actors.values()], canOccupy: vi.fn(() => true),
     transferActor: vi.fn((a, x, y) => actors.set(a.id, { ...actors.get(a.id)!, x, y, revision: a.revision + 1 })),
     isFriendly: (owner, target) => owner === target || target.startsWith('friend'),
     // General combat permits self damage. The telefrag must narrow that permission.
     canDamage: (owner, target) => owner === target || target.startsWith('enemy'), collapseEnemy: vi.fn(),
   };
-  const system = new TranslocatorSystem({ getPlayer: (id: string) => actors.get(id) } as never, projectile, combat as never, network);
+  const transport = new WorldPortalTransport(combat as never, network);
+  transport.bindWorld(port);
+  const system = new TranslocatorSystem({ getPlayer: (id: string) => actors.get(id) } as never, projectile, combat as never, network, transport);
   system.bindWorld(port);
-  const add = (id: string, x: number, y: number, extra: Partial<TranslocatorActor> = {}) => {
+  transport.register(system);
+  const add = (id: string, x: number, y: number, extra: Partial<PortalActor> = {}) => {
     actors.set(id, { id, x, y, kind: id.startsWith('enemy') ? 'enemy' : 'player', radius: 12,
       alive: true, surface: true, revision: 0, ...extra });
   };
@@ -34,7 +38,7 @@ function world(overrides: Partial<TranslocatorUtilityConfig> = {}) {
     pucks.set(system.getActivePuckId(id)!, {x: 250, y: 50});
     return system.getUseState(id)!.useId;
   };
-  return { system, config, actors, pucks, projectile, combat, published, port, network, add, throwPuck };
+  return { system, transport, config, actors, pucks, projectile, combat, published, port, network, add, throwPuck };
 }
 
 describe('Translocator use lifetime', () => {
@@ -164,7 +168,7 @@ describe('Translocator use lifetime', () => {
     expect(w.actors.get('p')).toMatchObject({x: 250, y: 50});
     expect(w.actors.get('friend')).toMatchObject({x: 50, y: 55});
     expect(w.actors.get('friend-burrow')).toMatchObject({x: 250, y: 55});
-    w.system.transferActors(1003);
+    w.transport.transferActors(1003);
     expect(w.actors.get('friend')).toMatchObject({x: 50, y: 55});
   });
   it('keeps a boss at its entrance when its full body does not fit the exit', () => {
@@ -172,7 +176,7 @@ describe('Translocator use lifetime', () => {
     w.system.followup('p', use, 1001);
     w.add('enemy-boss', 50, 50, {radius: 80});
     vi.mocked(w.port.canOccupy).mockImplementation(actor => actor.radius < 80);
-    w.system.transferActors(1002);
+    w.transport.transferActors(1002);
     expect(w.actors.get('enemy-boss')).toMatchObject({x: 50, y: 50, revision: 0});
     expect(w.system.getPortalPairs()).toHaveLength(1);
   });
@@ -185,13 +189,13 @@ describe('Translocator use lifetime', () => {
     expect(w.system.followup('owner2', second, 1011)).toBe('opened');
     expect(w.system.getPortalPairs()).toHaveLength(2);
     w.add('friend-traveler', 50, 50);
-    w.system.setTrainManager({ getSegmentPositions: () => [{ x: 250, y: 50 }] } as never);
+    w.transport.setTrainManager({ getSegmentPositions: () => [{ x: 250, y: 50 }] } as never);
     w.combat.applyDamage.mockImplementation((id: string) => {
       if (dies && id === 'friend-traveler') w.actors.set(id, { ...w.actors.get(id)!, alive: false });
     });
     vi.mocked(w.port.transferActor).mockClear();
 
-    w.system.transferActors(1020);
+    w.transport.transferActors(1020);
 
     expect(w.combat.applyDamage).toHaveBeenCalledWith('friend-traveler', 9999, true,
       'train', 'Zug', { sourceX: 250, sourceY: 50 });

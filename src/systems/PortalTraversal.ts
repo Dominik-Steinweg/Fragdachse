@@ -24,17 +24,20 @@ export interface PortalQueryPort {
   getPortalPairs(): readonly PortalPair[];
   isPortalFriendly(ownerId: string, attackerId: string): boolean;
 }
-export type PortalGates = Map<string, { readonly center: PortalPoint; readonly releaseDistance: number }>;
+/** `releaseAtMs` additionally opens a gate by time, for travelers that may be steered back into the exit. */
+export type PortalGates = Map<string, { readonly center: PortalPoint; readonly releaseDistance: number;
+  readonly releaseAtMs?: number }>;
 export const portalEndpointKey = (pair: PortalPair, end: 'a' | 'b'): string => `${pair.id}:${end}`;
 
-export function releasePortalGates(gates: PortalGates, point: PortalPoint): void {
+export function releasePortalGates(gates: PortalGates, point: PortalPoint, nowMs?: number): void {
   for (const [key, gate] of gates) {
-    if (Math.hypot(point.x - gate.center.x, point.y - gate.center.y) >= gate.releaseDistance) gates.delete(key);
+    if (Math.hypot(point.x - gate.center.x, point.y - gate.center.y) >= gate.releaseDistance
+      || (gate.releaseAtMs !== undefined && nowMs !== undefined && nowMs >= gate.releaseAtMs)) gates.delete(key);
   }
 }
-export function gatePortalExit(gates: PortalGates, crossing: PortalCrossing): void {
+export function gatePortalExit(gates: PortalGates, crossing: PortalCrossing, releaseAtMs?: number): void {
   gates.set(crossing.exitKey, { center: crossing.pair[crossing.source === 'a' ? 'b' : 'a'],
-    releaseDistance: crossing.pair.reentryDistance });
+    releaseDistance: crossing.pair.reentryDistance, ...(releaseAtMs === undefined ? {} : { releaseAtMs }) });
 }
 
 /** Earliest center entry, including a point already inside the circle. Tangencies count. */
