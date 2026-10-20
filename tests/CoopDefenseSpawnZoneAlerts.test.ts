@@ -49,7 +49,11 @@ describe('spawn zone alerts (GDD Void-Gefahrenzonen V1)', () => {
       getMapConfig: () => map, getLayout: () => ({ seed: 1 }) as ArenaLayout, getOffset: () => ({ offsetX: 0, offsetY: 0 }),
       getBase: () => undefined, getObjectives: () => null, getSpawnPlaces: () => null, getSpawnZoneAlerts: () => alerts, getMissionElapsedMs: () => now,
     });
+    // An announcement with its lead: the shown haze follows its rise exactly.
     alerts = [{ zoneId: zone.id, fromMs: 0, atMs: 2000, endMs: null }];
+    expect(danger.alerts).toEqual([]);
+    now = 1000;
+    expect(danger.alerts[0]!.level).toBeCloseTo(.5);
     now = 2000;
     expect(danger.alerts).toEqual([{ x: zone.gridX * 32, y: zone.gridY * 32, width: zone.widthCells * 32, height: zone.heightCells * 32, level: 1 }]);
     // The host moves on to the next tick: the shown haze settles instead of vanishing.
@@ -58,6 +62,26 @@ describe('spawn zone alerts (GDD Void-Gefahrenzonen V1)', () => {
     expect(danger.alerts[0]!.level).toBeCloseTo(.6);
     now = 6000;
     expect(danger.alerts).toEqual([]);
+  });
+
+  it('swells a warning in that arrives without its lead instead of popping it up', () => {
+    let now = 5000, alerts: SyncedSpawnZoneAlert[] = [];
+    const map = getCoopDefenseMapConfig('7');
+    const zone = map.spawnZones![0]!;
+    const danger = new CoopMissionVoidDanger({
+      getMapConfig: () => map, getLayout: () => ({ seed: 1 }) as ArenaLayout, getOffset: () => ({ offsetX: 0, offsetY: 0 }),
+      getBase: () => undefined, getObjectives: () => null, getSpawnPlaces: () => null, getSpawnZoneAlerts: () => alerts, getMissionElapsedMs: () => now,
+    });
+    expect(danger.alerts).toEqual([]);
+    // A checkpoint fires: the host announces the group as it spawns, its lead already past.
+    alerts = [{ zoneId: zone.id, fromMs: 3000, atMs: 5000, endMs: null }];
+    now = 5016;
+    const first = danger.alerts[0]!.level;
+    expect(first).toBeLessThan(.01);
+    now = 6216;
+    expect(danger.alerts[0]!.level).toBeCloseTo(.5, 1);
+    now = 7600;
+    expect(danger.alerts[0]!.level).toBe(1);
   });
 
   it('knows which zones are in use, still to come or spent', () => {

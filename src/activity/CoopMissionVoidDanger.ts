@@ -1,7 +1,7 @@
 import { isPermanentVoidGroundHazard, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { CELL_SIZE } from '../config';
 import { MAX_VOID_DANGER_ALERTS, voidHazardSource, type ActivityVoidDanger, type VoidDangerAlert, type VoidDangerSource } from '../arena/VoidDangerField';
-import { spawnZoneAlertLevel } from '../systems/CoopDefenseSpawnZoneAlerts';
+import { SPAWN_ZONE_ALERT_LEAD_MS, spawnZoneAlertLevel } from '../systems/CoopDefenseSpawnZoneAlerts';
 import type { ArenaLayout, CoopDefenseSecondaryObjectivePresentationState, SyncedSpawnPlaceState, SyncedSpawnZoneAlert } from '../types';
 
 /** What the projection reads; every answer may be null while the Activity is not running. */
@@ -21,6 +21,14 @@ export interface CoopMissionVoidDangerPorts {
 
 /** A warning settles this fast once its zone is quiet again, also when the host replaces it. */
 const ALERT_SETTLE_MS = 2500;
+/**
+ * A warning that arrives without its lead swells in over this long (user 2026-10-20: the haze popped
+ * up). A checkpoint, event or base trigger has no predictable time, so the host announces its groups
+ * only when they spawn; a late joiner sees a running warning at full strength at once.
+ */
+const ALERT_SWELL_MS = 2400;
+/** Rising faster than this (per ms) is a jump: an announced lead rises by at most 1.5 / lead. */
+const ALERT_JUMP_RATE = 2 / SPAWN_ZONE_ALERT_LEAD_MS;
 
 const BASE_PREFIX = 'base:';
 const ZONE_PREFIX = 'zone:';
@@ -46,6 +54,8 @@ export class CoopMissionVoidDanger implements ActivityVoidDanger {
   private objectiveCache: { raw: CoopDefenseSecondaryObjectivePresentationState | null; closed: ReadonlySet<string> } = { raw: null, closed: new Set() };
   /** Shown build-up per zone: rises with the host's announcement, never drops faster than it settles. */
   private readonly shown = new Map<string, number>();
+  /** Zones whose warning jumped up: the shown level eases from `from` to the target from `startMs`. */
+  private readonly swells = new Map<string, { from: number; startMs: number }>();
   private alertTime = NaN;
   private alertFrame: readonly VoidDangerAlert[] = [];
 
@@ -73,7 +83,7 @@ export class CoopMissionVoidDanger implements ActivityVoidDanger {
    */
   get alerts(): readonly VoidDangerAlert[] {
     const now = this.ports.getMissionElapsedMs(), mapConfig = this.ports.getMapConfig(), offset = this.ports.getOffset();
-    if (now === null || !mapConfig || !offset) { this.shown.clear(); this.alertTime = NaN; return this.alertFrame = []; }
+    if (now === null || !mapConfig || !offset) { this.shown.clear(); this.swells.clear(); this.alertTime = NaN; return this.alertFrame = []; }
     if (now === this.alertTime) return this.alertFrame;
     const step = Number.isFinite(this.alertTime) ? Math.max(0, now - this.alertTime) : 0;
     this.alertTime = now;
@@ -81,8 +91,18 @@ export class CoopMissionVoidDanger implements ActivityVoidDanger {
     for (const alert of this.ports.getSpawnZoneAlerts()) targets.set(alert.zoneId, spawnZoneAlertLevel(alert, now, ALERT_SETTLE_MS));
     for (const zoneId of new Set([...targets.keys(), ...this.shown.keys()])) {
       const target = targets.get(zoneId) ?? 0, shown = this.shown.get(zoneId) ?? 0;
-      const level = Math.max(target, shown - step / ALERT_SETTLE_MS);
-      if (level > .002) this.shown.set(zoneId, level); else this.shown.delete(zoneId);
+      let swell = this.swells.get(zoneId);
+      if (!swell && target > shown + Math.max(.02, step * ALERT_JUMP_RATE)) this.swells.set(zoneId, swell = { from: shown, startMs: now });
+      let level: number;
+      if (swell && target >= shown) {
+        const k = Math.min(1, Math.max(0, (now - swell.startMs) / ALERT_SWELL_MS));
+        level = swell.from + (target - swell.from) * k * k * (3 - 2 * k);
+        if (k >= 1) this.swells.delete(zoneId);
+      } else {
+        this.swells.delete(zoneId);
+        level = Math.max(target, shown - step / ALERT_SETTLE_MS);
+      }
+      if (level > .002 || swell) this.shown.set(zoneId, level); else this.shown.delete(zoneId);
     }
     const zones = new Map((mapConfig.spawnZones ?? []).map(zone => [zone.id, zone]));
     const frame: VoidDangerAlert[] = [];
