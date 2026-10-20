@@ -13,7 +13,8 @@ export type CombatTargetIdentity =
   | { readonly kind: 'rock'; readonly id: number }
   | { readonly kind: 'base'; readonly id: string }
   | { readonly kind: 'train'; readonly id: string }
-  | { readonly kind: 'construction'; readonly id: string | number };
+  | { readonly kind: 'construction'; readonly id: string | number }
+  | { readonly kind: 'reactive_prop'; readonly id: number };
 
 /**
  * Identity below the World scope. Entity, Activity and Player-life generations stay separate:

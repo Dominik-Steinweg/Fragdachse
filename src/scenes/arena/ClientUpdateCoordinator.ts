@@ -170,6 +170,9 @@ export class ClientUpdateCoordinator {
   private lastGameStateVersion = -1;
   private readonly ultimateReadyFeedback = new UltimateReadyFeedback();
   private readonly damagedStaticRockIds = new Set<number>();
+  /** Zuletzt übernommener Stand reaktiver Map-Objekte (Referenz des gemergten Slices). */
+  private appliedReactiveProps: readonly number[] | null = null;
+  private appliedReactivePropRuntime: object | null = null;
   private readonly prevAliveStates      = new Map<string, boolean>();
   private readonly prevDashPhases       = new Map<string, number>();
   private readonly prevBurrowPhases     = new Map<string, BurrowPhase>();
@@ -540,6 +543,14 @@ export class ClientUpdateCoordinator {
         for (const rockId of nextDamagedStaticRockIds) {
           this.damagedStaticRockIds.add(rockId);
         }
+      }
+
+      const reactiveProps = this.worldRuntime?.materialization?.reactiveProps ?? null;
+      if (reactiveProps && (state.reactiveProps !== this.appliedReactiveProps
+        || reactiveProps !== this.appliedReactivePropRuntime)) {
+        this.appliedReactiveProps = state.reactiveProps;
+        this.appliedReactivePropRuntime = reactiveProps;
+        reactiveProps.applyReplicated(state.reactiveProps ?? [], true);
       }
 
       if (this.placementSystem) {
@@ -1496,6 +1507,8 @@ export class ClientUpdateCoordinator {
     // Zwischen zwei Runden kann das Lobby-Menue den lokalen Spielstand geaendert haben.
     this.refreshStoredProgressFallback();
     this.damagedStaticRockIds.clear();
+    this.appliedReactiveProps = null;
+    this.appliedReactivePropRuntime = null;
     this.prevAliveStates.clear();
     this.prevDashPhases.clear();
     this.prevBurrowPhases.clear();

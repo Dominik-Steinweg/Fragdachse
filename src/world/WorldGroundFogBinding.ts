@@ -22,7 +22,8 @@ export class WorldGroundFogBinding {
   private readonly releaseCombat: () => void;
   private destroyed = false;
   private readonly listener = (event: ArenaMapGridChangedEvent): void => {
-    if (event.source === 'placeable_pedestal') return;
+    // Pedestals und reaktive Map-Objekte gehören nicht zum Nebel-Terrain.
+    if (event.source === 'placeable_pedestal' || event.source === 'reactive_prop') return;
     if (event.removedObstacles) {
       for (const cell of event.removedObstacles) this.pending.set(`construction:${cell.id}`,
         { reason: 'placeable_removed', source: 'placeable_rock', obstacleId: cell.id, gridX: cell.gridX, gridY: cell.gridY });

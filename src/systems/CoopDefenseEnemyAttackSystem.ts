@@ -131,6 +131,8 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   private readonly lastAttackTargets = new Map<string, EnemyAttackCandidate>();
   private actionBlockedChecker: ((enemyId: string) => boolean) | null = null;
 
+  private obstacleExcluded: ((obstacleIndex: number) => boolean) | null = null;
+
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
@@ -153,6 +155,11 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
 
   setActionBlockedChecker(checker: ((enemyId: string) => boolean) | null): void {
     this.actionBlockedChecker = checker;
+  }
+
+  /** Hindernisse, die Gegner nie gezielt angreifen (reaktive Map-Objekte wie Fässer). */
+  setObstacleExclusion(excluded: ((obstacleIndex: number) => boolean) | null): void {
+    this.obstacleExcluded = excluded;
   }
 
   /** No scan, cooldown, lock or salvo mutation: locomotion reads this before moving the enemy. */
@@ -778,7 +785,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   ): EnemyAttackCandidate | null {
     if (!obstacle.active) return null;
     const index = knownIndex ?? rockObjects.indexOf(obstacle);
-    if (index < 0) return null;
+    if (index < 0 || this.obstacleExcluded?.(index)) return null;
     if (this.intents && !this.intents.allowsAttack(enemy.id, 'obstacle', String(index), 'all')) return null;
 
     const runtime = this.placementSystem?.getRuntimeRock(index);

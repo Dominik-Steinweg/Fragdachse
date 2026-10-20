@@ -317,6 +317,7 @@ export function composeWorldObjectMutation(
     construction,
     bases: baseManager,
     train: gameplay.train,
+    reactiveProps: worldRuntime.materialization?.reactiveProps ?? null,
     onDestroy: (destroyed) => { if (gameplay.worldMutation === destroyed) gameplay.worldMutation = null; },
   });
   combatSystem.setStructureDamagePort({

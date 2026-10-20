@@ -1,4 +1,5 @@
 import { DEFAULT_COOP_PROGRAM, isSameCoopProgram, parseCoopProgram, type CoopProgram } from '../dawn/contracts/CoopProgram';
+import { decodeReactivePropSnapshot, encodeReactivePropSnapshot, mergeReactivePropSnapshot, type ReactivePropNetSnapshot } from './ReactivePropSnapshotCodec';
 import { isEnemyClawEvent } from '../systems/EnemyClawAttack';
 import { readEnemyAreaClawEvent, type EnemyAreaClawEvent } from '../systems/EnemyClawAttack';
 import { readKrakenState, type KrakenState, type KrakenSnapshotPatch } from '../systems/KrakenState';
@@ -392,6 +393,8 @@ export interface GameState extends KrakenSnapshotPatch {
   rockRemovals: number[];
   enemies:      SyncedEnemySnapshot | null;
   rocks:        RockNetState[];   // Delta: nur beschädigte Felsen (abwesend = voll HP)
+  /** Zusammengeführter Stand reaktiver Map-Objekte: flache Tripel nur für Nicht-Defaults. */
+  reactiveProps: readonly number[];
   placeableRocks: SyncedPlaceableRock[];
   reinforcementMatrices: SyncedReinforcementMatrix[];
   energyInjectorEffects: SyncedEnergyInjectorEffect[];
@@ -444,6 +447,8 @@ interface OutboundGameState extends KrakenSnapshotPatch {
   projectiles:  SyncedProjectileSnapshot | null;
   enemies:      SyncedEnemySnapshot | null;
   rocks:        SyncedRockSnapshot | null;
+  /** Delta bzw. Vollstand der reaktiven Map-Objekte; `null` = unverändert. */
+  reactiveProps?: ReactivePropNetSnapshot | null;
   placeableRocks: SyncedPlaceableRock[];
   reinforcementMatrices: SyncedReinforcementMatrix[];
   energyInjectorEffects: SyncedEnergyInjectorEffect[];
@@ -3383,6 +3388,7 @@ export class NetworkBridge {
     if (state.projectiles)             payload.j = state.projectiles;
     if (state.enemies)                 payload.e = state.enemies;
     if (state.rocks)                   payload.r = state.rocks;
+    if (state.reactiveProps)           payload.rp = encodeReactivePropSnapshot(state.reactiveProps);
     if (state.placeableRocks.length > 0) payload.br = state.placeableRocks;
     if (state.reinforcementMatrices.length > 0) payload.oc = state.reinforcementMatrices;
     if (state.energyInjectorEffects.length > 0) payload.ei = state.energyInjectorEffects;
@@ -3500,6 +3506,7 @@ export class NetworkBridge {
       j: state.projectiles ?? EMPTY_FULL_PROJECTILE_SNAPSHOT,
       e: state.enemies,
       r: state.rocks ?? { full: true, count: 0, upserts: [], removals: [] } satisfies SyncedRockSnapshot,
+      rp: encodeReactivePropSnapshot(state.reactiveProps?.full ? state.reactiveProps : { full: true, entries: [] }),
       br: state.placeableRocks,
       oc: state.reinforcementMatrices,
       ei: state.energyInjectorEffects,
@@ -3661,6 +3668,7 @@ export class NetworkBridge {
       enemies,
       shootingRange: decodeShootingRange(raw.sr),
       rocks:         nextRocks,
+      reactiveProps: mergeReactivePropSnapshot(decodeReactivePropSnapshot(raw.rp), this.cachedGameState?.reactiveProps ?? []),
       rockRemovals:  rockSnapshot?.removals ?? [],
       placeableRocks: (raw.br as SyncedPlaceableRock[] | undefined) ?? [],
       reinforcementMatrices: (raw.oc as SyncedReinforcementMatrix[] | undefined) ?? [],

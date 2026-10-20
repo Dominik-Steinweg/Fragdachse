@@ -321,6 +321,7 @@ export function composeWorldCombatGameplay(
       rock?.active ? [{ index, active: true, x: rock.x, y: rock.y }] : []
     )),
     getWorldTrain: () => gameplay.train,
+    getReactiveProps: () => worldRuntime.materialization?.reactiveProps ?? null,
     getWorldMutation: () => gameplay.worldMutation,
     getFirestarterSystem: () => flow.getCoopMissionRuntime()?.coopDefenseFirestarterSystem ?? null,
     getShieldChargerSystem: () => flow.getCoopMissionRuntime()?.coopDefenseShieldChargerSystem ?? null,
@@ -401,6 +402,8 @@ export function composeWorldCombatGameplay(
     id => rockVisualHelper.getTurretOriginalVisual(id),
     projectileRuntime.getPresentationRuntime(),
   );
+  const reactiveProps = worldRuntime.materialization?.reactiveProps;
+  if (reactiveProps) worldRuntime.presentationFrame?.bindReactiveProps(reactiveProps, input.renderers?.entityBurnGpu ?? null);
   worldRuntime.presentationFrame?.bindBomberSquadron(() => bridge.getBomberSquadronSnapshot(), {
     // Same warm carpet burst as the attack-drone bombs; it is derived locally, never broadcast.
     explode: (x, y, radius) => ctx.effectSystem.playExplosionEffect(x, y, radius, 0xffae57, 'rocket'),

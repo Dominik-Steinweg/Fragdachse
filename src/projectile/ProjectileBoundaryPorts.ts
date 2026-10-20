@@ -46,7 +46,8 @@ export interface ProjectileWorldImpactBindingPort {
     impact: import('./ProjectileSupportImpactPort').ProjectileSupportImpactPort | null): void;
   setLowSupportTargetChecker(checker: ((rockId: number, ownerId: string) => boolean) | null): void;
   setRockHitCallback(callback: ((rockId: number, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null): void;
-  setObstacleKindResolver(resolver: ((rockId: number) => import('../types').PlaceableKind | undefined) | null): void;
+  /** Placeable-Kind bzw. `reactive_prop`; ohne Ergebnis ist es ein authored Fels. */
+  setObstacleKindResolver(resolver: ((rockId: number) => import('../types').PlaceableKind | 'reactive_prop' | undefined) | null): void;
   setBaseHitCallback(callback: ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null): void;
   setSupportImpactCallback(callback: ((projectile: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null): void;
 }

@@ -300,7 +300,7 @@ export class WorldProjectileRuntime implements
   private standaloneExplosionRequestCallback: ((request: ProjectileExplosionRequest) => void) | null = null;
   private proximityPulseCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
   private rockHitCallback: ((rockId: number, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null = null;
-  private obstacleKindResolver: ((rockId: number) => PlaceableKind | undefined) | null = null;
+  private obstacleKindResolver: ((rockId: number) => PlaceableKind | 'reactive_prop' | undefined) | null = null;
   private plasmaCatalog: PlasmaBurnerTargetCatalogPort | null = null;
   private plasmaSupportImpact: ProjectileSupportImpactPort | null = null;
   setPlasmaBurnerSupportPorts(catalog: PlasmaBurnerTargetCatalogPort | null, impact: ProjectileSupportImpactPort | null): void {
@@ -653,7 +653,7 @@ export class WorldProjectileRuntime implements
     this.rockHitCallback = callback;
   }
 
-  setObstacleKindResolver(resolver: ((rockId: number) => PlaceableKind | undefined) | null): void {
+  setObstacleKindResolver(resolver: ((rockId: number) => PlaceableKind | 'reactive_prop' | undefined) | null): void {
     this.obstacleKindResolver = resolver;
   }
 

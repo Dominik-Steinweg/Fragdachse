@@ -1,0 +1,39 @@
+{
+  "id": "reactive-barrel-toxic",
+  "label": "Explosive barrel (toxic)",
+  "category": "powerup",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/reactive-barrel-toxic.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Round top-down drum with torn-open lid and peeled flaps around a glowing sludge pool; sludge spills over the chime.",
+    "colors": "Dark olive drum paint, corroded chime, classic toxic-green emissive sludge.",
+    "anatomy": "Static reactive map prop on one 32 px cell; drum diameter about 27 px."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "reactive-barrel",
+  "model": {
+    "variant": "toxic"
+  },
+  "orthoScale": 1.2,
+  "textures": {},
+  "materialSource": "procedural",
+  "materialVariants": {
+    "standard": {
+      "label": "Weathered matte drum paint, procedural wear",
+      "textureStrength": 0,
+      "formShadowStrength": 0.83
+    }
+  },
+  "clips": []
+}

@@ -785,6 +785,17 @@ export class ArenaRuntime {
       work: this.flow.getWorldRuntime()?.presentationFrame?.getWorldRenderWork(view) };
   }
 
+  /** Dev-Status: replizierte Phasen der reaktiven Map-Objekte dieser World. */
+  getScenarioReactiveProps(): readonly { index: number; kind: string; gridX: number; gridY: number; variant: string | null; phase: string; progress: number }[] {
+    const runtime = this.flow.getWorldRuntime()?.materialization?.reactiveProps;
+    if (!runtime) return [];
+    const result: { index: number; kind: string; gridX: number; gridY: number; variant: string | null; phase: string; progress: number }[] = [];
+    runtime.forEachPresentationState(state => result.push({ index: state.index, kind: state.kind.id,
+      gridX: state.cell.gridX, gridY: state.cell.gridY, variant: state.cell.variant ?? null,
+      phase: state.phase, progress: Math.round(state.progress * 1000) / 1000 }));
+    return result;
+  }
+
   observeScenarioWorldDamage(observer: Parameters<import('../../world/WorldObjectMutationRuntime').WorldObjectMutationRuntime['observeDamageCommitted']>[0]): () => void {
     return this.flow.getWorldObjectMutationRuntime()?.observeDamageCommitted(observer) ?? (() => {});
   }

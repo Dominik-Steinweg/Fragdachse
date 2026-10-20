@@ -6,9 +6,10 @@ export type ArenaMapGridChangeReason =
   | 'placeable_added'
   | 'placeable_removed'
   | 'placeable_expired'
-  | 'placeables_batch_removed';
+  | 'placeables_batch_removed'
+  | 'reactive_prop_destroyed';
 
-export type ArenaMapGridChangeSource = 'static_rock' | 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal';
+export type ArenaMapGridChangeSource = 'static_rock' | 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal' | 'reactive_prop';
 
 export interface ArenaMapGridChangedEvent {
   readonly reason: ArenaMapGridChangeReason;

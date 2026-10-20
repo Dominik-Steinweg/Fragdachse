@@ -1,4 +1,4 @@
-export type WorldObjectKind = 'rock' | 'construction' | 'base' | 'train';
+export type WorldObjectKind = 'rock' | 'construction' | 'base' | 'train' | 'reactive_prop';
 
 export type WorldRemovalCause = 'damage' | 'decay' | 'removal' | 'teardown';
 

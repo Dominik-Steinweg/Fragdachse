@@ -1,4 +1,7 @@
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
+import { ReactivePropRenderer } from '../effects/reactiveProps/ReactivePropRenderer';
+import type { ReactivePropRuntime } from './reactiveProps/ReactivePropRuntime';
+import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { FireControlRenderer, type FireControlOriginalVisual } from '../effects/fireControl/FireControlRenderer';
 import type { FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import type { BomberSquadronSnapshot } from '../systems/bomberSquadron/BomberSquadronSnapshot';
@@ -276,6 +279,39 @@ export class WorldPresentationFrameBinding {
     this.fireControlPorts = { snapshot, original };
     if (this.input.getLocalWorldPresentation().required) this.createFireControl();
     this.releaseFireControlCopyShots = shots.bindFireControlCopyShots(id => this.fireControl?.onShot(id));
+  }
+
+  private reactiveProps: ReactivePropRuntime | null = null;
+  private reactivePropBurnGpu: EntityBurnGpuController | null = null;
+  private reactivePropRenderer: ReactivePropRenderer | null = null;
+
+  /** Bound once by World composition; the frame owner owns the barrel sprites, glow and burn. */
+  bindReactiveProps(runtime: ReactivePropRuntime, burnGpu: EntityBurnGpuController | null): void {
+    if (this.destroyed) return;
+    if (this.reactiveProps) throw new Error('Reactive prop presentation is already bound');
+    this.reactiveProps = runtime;
+    this.reactivePropBurnGpu = burnGpu;
+  }
+
+  private syncReactiveProps(showWorld: boolean): void {
+    if (!this.reactiveProps || !showWorld || !this.input.getLocalWorldPresentation().required) {
+      this.reactivePropRenderer?.destroy();
+      this.reactivePropRenderer = null;
+      return;
+    }
+    this.reactivePropRenderer ??= new ReactivePropRenderer(this.input.scene, this.input.lighting, this.reactivePropBurnGpu);
+    this.reactivePropRenderer.sync(this.reactiveProps, this.input.scene.time.now);
+  }
+
+  private *reactivePropShadowCells(): Iterable<{ index: number; x: number; y: number; alive: boolean }> {
+    const runtime = this.reactiveProps;
+    if (!runtime) return;
+    const cells: { index: number; x: number; y: number; alive: boolean }[] = [];
+    runtime.forEachPresentationState(state => {
+      const position = runtime.getPosition(state.obstacleId);
+      if (position) cells.push({ index: state.index, x: position.x, y: position.y, alive: state.phase !== 'destroyed' });
+    });
+    yield* cells;
   }
 
   private bomberSquadronSnapshot: BomberSquadronSnapshotSource | null = null;
@@ -873,6 +909,7 @@ export class WorldPresentationFrameBinding {
     }
 
     this.input.shadow.syncBaseShadows(this.input.getBaseShadowCells());
+    this.input.shadow.syncReactivePropShadows(this.reactivePropShadowCells());
     this.input.shadow.syncStaticProfile(
       this.input.getSynchronizedNow(),
       this.forceStaticShadowBake,
@@ -890,6 +927,7 @@ export class WorldPresentationFrameBinding {
     if (this.destroyed) return;
     this.syncFireControl(inArena);
     this.syncBomberSquadron(inArena);
+    this.syncReactiveProps(inArena);
     const lighting = this.input.lighting;
     const artificialFactor = inArena ? lighting.getArtificialLightFactor() : 0;
     const artificialLights = artificialFactor > 0;
@@ -966,6 +1004,8 @@ export class WorldPresentationFrameBinding {
     this.fireControlPorts = null;
     this.bomberSquadron?.destroy(); this.bomberSquadron = null;
     this.bomberSquadronSnapshot = null; this.bomberSquadronEffects = null;
+    this.reactivePropRenderer?.destroy(); this.reactivePropRenderer = null;
+    this.reactiveProps = null; this.reactivePropBurnGpu = null;
     this.cancelRenderRelease();
     this.releasedView = null;
     this.sunlightOwner?.destroy();this.sunlightOwner=null;

@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { isReactivePropObstacleId } from '../world/reactiveProps/ReactivePropObstacleIds';
 import { getCharacterMeshes, CHARACTER_MESH_MANIFEST } from '../assets/CharacterMeshAssets';
 import { quantizeSunAzimuth, type SunPathState } from './sunlight/SunPath';
 import type { SunCloudState } from './sunlight/cloudShadow';
@@ -99,6 +100,7 @@ const STATIC_SHADOW_CASTERS: ReadonlyArray<{
   { config: SHADOW_CASTERS.rock, group: 'rocks' },
   { config: SHADOW_CASTERS.watchtower, group: 'rocks' },
   { config: SHADOW_CASTERS.turret, group: 'rocks' },
+  { config: SHADOW_CASTERS.reactiveProp, group: 'bases' },
   { config: SHADOW_CASTERS.trunk, group: 'trees' },
   { config: SHADOW_CASTERS.canopy, group: 'trees' },
 ];
@@ -501,6 +503,9 @@ export class ShadowSystem {
     { x: number; y: number }
   >();
   private readonly seenBaseCells = new Set<{ readonly x: number; readonly y: number }>();
+  /** Lebende reaktive Map-Objekte, deren Kontaktschatten gebacken ist (Schlüssel: Layout-Index). */
+  private readonly reactivePropCells = new Map<number, { x: number; y: number }>();
+  private readonly seenReactivePropCells = new Set<number>();
   private readonly layers = new Map<string, ShadowLayerBucket>();
   private worldBoundsOverride: ShadowWorldBounds | null = null;
   private profile: ShadowProfile = SHADOW_PROFILES.day;
@@ -597,9 +602,32 @@ export class ShadowSystem {
     this.seenBaseCells.clear();
   }
 
-  private invalidateBaseShadow(x: number, y: number): void {
+  /**
+   * Reaktive Map-Objekte folgen ihren lebenden Zellen wie Basen: Erscheinen, Verschwinden und
+   * Verschieben invalidieren nur die betroffenen Schatten-Chunks.
+   */
+  syncReactivePropShadows(cells: Iterable<{ readonly index: number; readonly x: number; readonly y: number; readonly alive: boolean }>): void {
+    this.seenReactivePropCells.clear();
+    for (const cell of cells) {
+      if (!cell.alive) continue;
+      this.seenReactivePropCells.add(cell.index);
+      const previous = this.reactivePropCells.get(cell.index);
+      if (previous?.x === cell.x && previous.y === cell.y) continue;
+      if (previous) this.invalidateBaseShadow(previous.x, previous.y, SHADOW_CASTERS.reactiveProp);
+      this.reactivePropCells.set(cell.index, { x: cell.x, y: cell.y });
+      this.invalidateBaseShadow(cell.x, cell.y, SHADOW_CASTERS.reactiveProp);
+    }
+    for (const [index, position] of this.reactivePropCells) {
+      if (this.seenReactivePropCells.has(index)) continue;
+      this.reactivePropCells.delete(index);
+      this.invalidateBaseShadow(position.x, position.y, SHADOW_CASTERS.reactiveProp);
+    }
+    this.seenReactivePropCells.clear();
+  }
+
+  private invalidateBaseShadow(x: number, y: number, caster: ShadowCasterConfig = SHADOW_CASTERS.base): void {
     this.characterReceiverDirty = true;
-    const shadow = this.getShadowBounds(x, y, SHADOW_CASTERS.base, this.staticBakeProfile);
+    const shadow = this.getShadowBounds(x, y, caster, this.staticBakeProfile);
     const world = this.getStaticWorldBounds();
     const size = SHADOW_DIRTY_CHUNK_SIZE;
     const minX = Math.floor((Math.max(world.minX, shadow.minX) - world.minX) / size);
@@ -828,7 +856,9 @@ export class ShadowSystem {
       offsetX: ARENA_OFFSET_X,
       offsetY: ARENA_OFFSET_Y,
       runtimeRocks,
-      rockVisibilityPredicate: (index) => Boolean(arenaResult.rockPhysicsProxies[index]?.active),
+      // Reaktive Map-Objekte teilen den Hindernisraum, werfen aber ihren eigenen Schatten.
+      rockVisibilityPredicate: (index) => Boolean(arenaResult.rockPhysicsProxies[index]?.active)
+        && !(arenaResult.obstacleIds && isReactivePropObstacleId(arenaResult.obstacleIds, index)),
     };
 
     // Dies ist der Invalidierungspfad: Er laeuft, wenn sich die Hindernisse geaendert haben.
@@ -871,7 +901,9 @@ export class ShadowSystem {
       offsetX: ARENA_OFFSET_X,
       offsetY: ARENA_OFFSET_Y,
       runtimeRocks,
-      rockVisibilityPredicate: (index) => Boolean(arenaResult.rockPhysicsProxies[index]?.active),
+      // Reaktive Map-Objekte teilen den Hindernisraum, werfen aber ihren eigenen Schatten.
+      rockVisibilityPredicate: (index) => Boolean(arenaResult.rockPhysicsProxies[index]?.active)
+        && !(arenaResult.obstacleIds && isReactivePropObstacleId(arenaResult.obstacleIds, index)),
     };
     const staticProfile = this.lastBakedProfile ?? this.profile;
     this.staticBakeProfile = staticProfile;
@@ -1011,6 +1043,11 @@ export class ShadowSystem {
         if (SHADOW_CASTERS.base.layerDepth === depth) {
           for (const cell of this.baseCells.values()) {
             this.drawStaticFootprintInRegion(bucket, cell.x, cell.y, SHADOW_CASTERS.base, regionBounds, profile);
+          }
+        }
+        if (SHADOW_CASTERS.reactiveProp.layerDepth === depth) {
+          for (const cell of this.reactivePropCells.values()) {
+            this.drawStaticFootprintInRegion(bucket, cell.x, cell.y, SHADOW_CASTERS.reactiveProp, regionBounds, profile);
           }
         }
         const drawsRock = SHADOW_CASTERS.rock.layerDepth === depth;
@@ -1296,6 +1333,7 @@ export class ShadowSystem {
     this.canopyWoodland = false;
     this.baseCells.clear();
     this.seenBaseCells.clear();
+    this.reactivePropCells.clear();
     for (const bucket of this.layers.values()) {
       bucket.staticGraphics.destroy();
       bucket.dynamicGraphics.destroy();
@@ -1326,6 +1364,7 @@ export class ShadowSystem {
     this.watchtowerShadowAnchors.clear();
     this.baseCells.clear();
     this.seenBaseCells.clear();
+    this.reactivePropCells.clear();
     for (const bucket of this.layers.values()) bucket.staticGraphics.clear();
     this.staticHasLayout = false;
     this.hideContinuousStaticShadows();

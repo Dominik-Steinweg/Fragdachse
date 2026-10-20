@@ -31,6 +31,8 @@ export const EXPLOSION_AUDIO = {
   'environment.airstrike': 'sfx_airstrike_explosion',
   'environment.decoy_explosion': 'sfx_explosion_decoy',
   'environment.rock_collapse': 'sfx_explosion_rock_collapse',
+  // Explosives Fass: vorerst die HE-Aufnahme, bis eine eigene Blech-Explosion existiert.
+  'environment.explosive_barrel': 'sfx_explosion_he',
   'environment.base_destruction': 'sfx_explosion_base_destruction',
   'weapon.shotgun_lightning': 'sfx_explosion_shotgun_lightning',
   ENERGY_INJECTOR: 'sfx_explosion_energy_injector',

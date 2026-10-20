@@ -35,6 +35,9 @@ import { createWorldRuntimeContext, type WorldRuntimeContext } from './WorldRunt
 import type { WorldRuntime } from './WorldRuntime';
 import type { WorldDescriptor } from './WorldDescriptor';
 import { PlacementSystem } from '../systems/PlacementSystem';
+import { emitArenaMapGridChanged } from '../scenes/arena/ArenaEvents';
+import { ReactivePropRuntime } from './reactiveProps/ReactivePropRuntime';
+import type { WorldMetrics } from './WorldMetrics';
 import type { ArenaLayout, GameMode } from '../types';
 import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
 
@@ -260,6 +263,7 @@ export function materializeWorldComposition(
     bases,
   );
   materialization.setPlacement(placement);
+  materialization.setReactiveProps(createReactivePropRuntime(input.scene, materialization, arena, layout, world.metrics));
   const baseManager = bases.length > 0
     ? new BaseManager(
       input.scene,
@@ -304,4 +308,29 @@ export function materializeWorldComposition(
     bases: baseManager,
     reusedPresentation: canReusePresentation,
   };
+}
+
+/** Reaktive Map-Objekte belegen ihre Hindernis-IDs bereits seit `buildDynamic`. */
+function createReactivePropRuntime(
+  scene: Phaser.Scene,
+  materialization: WorldMaterialization,
+  arena: ArenaBuilderResult,
+  layout: ArenaLayout,
+  metrics: WorldMetrics,
+): ReactivePropRuntime | null {
+  const cells = layout.reactiveProps ?? [];
+  if (cells.length === 0) return null;
+  return new ReactivePropRuntime({
+    cells,
+    partition: arena.obstacleIds,
+    metrics,
+    removeObstacle: (obstacleId, cell) => {
+      ArenaBuilder.destroyRock(arena, obstacleId);
+      if (arena.rockGrid.getIndex(cell.gridX, cell.gridY) === obstacleId) arena.rockGrid.remove(cell.gridX, cell.gridY);
+      emitArenaMapGridChanged(scene.game.events, {
+        reason: 'reactive_prop_destroyed', source: 'reactive_prop', obstacleId, gridX: cell.gridX, gridY: cell.gridY,
+      });
+      materialization.lightOccluders?.markDirty();
+    },
+  });
 }

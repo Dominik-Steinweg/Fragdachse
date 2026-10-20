@@ -254,6 +254,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   private get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }
   private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
   private get rockRegistry() { return this.worldRuntime?.materialization?.rocks ?? null; }
+  private get reactiveProps() { return this.worldRuntime?.materialization?.reactiveProps ?? null; }
   private get worldMutation() { return this.worldFramePort?.getWorldMutationRuntime() ?? null; }
   private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
   private get world() { return this.worldRuntime?.context ?? null; }
@@ -494,6 +495,15 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // Host-Senken. Die Lobby verarbeitet ihre ASMD-Combo über denselben Weg.
     resolveDetonations(this.detonationEffectSink, detonations);
 
+    // Reaktive Map-Objekte: Brand, Zündschnur und Explosion laufen vor dem Explosions-Drain,
+    // damit ihre Wirkungen noch in diesem Frame aufgelöst werden.
+    if (!countdownActive) {
+      for (const effect of this.reactiveProps?.hostAdvance(now) ?? []) {
+        switch (effect.kind) {
+          case 'explosion': this.pendingStandaloneExplosions.push(effect.request); break;
+        }
+      }
+    }
     const deferredExplosions = this.pendingStandaloneExplosions.splice(0);
     for (const explosion of [...projectileExplosions, ...deferredExplosions]) {
       this.resolveProjectileExplosion(explosion);
@@ -1193,6 +1203,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       // die gesammelten Removals und HP-Änderungen. Weiter oben im Frame aufgerufen, würden
       // sie auf den ~2 von 3 Frames ohne Net-Tick ersatzlos verfallen.
       rocks: this.rockRegistry?.getNetSnapshot() ?? null,
+      reactiveProps: this.reactiveProps?.getNetSnapshot(fullSnapshotRequested) ?? null,
       placeableRocks: this.placementSystem?.getNetSnapshot() ?? [],
       reinforcementMatrices: this.targetingSystems?.reinforcementMatrix?.getNetSnapshot() ?? [],
       energyInjectorEffects: this.targetingSystems?.energyInjector?.getNetEffectSnapshot(now) ?? [],
@@ -1642,7 +1653,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const rockMult  = effect.rockDamageMult  ?? 1;
     const trainMult = effect.trainDamageMult ?? 1;
 
-    if (rockMult !== 0 && arenaResult) {
+    if ((rockMult !== 0 || this.environmentRockSink.hasFullDamageTargets!()) && arenaResult) {
       applyRadialEnvironmentDamage(
         { ...this.environmentRockSinkFor(source),
           resolveRockDamage: (index, damage, owner) => excludedTargets.includes('constructions:' + index)
@@ -1686,7 +1697,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const rockMult:  number = NUKE_CONFIG.rockDamageMult;
     const trainMult: number = NUKE_CONFIG.trainDamageMult;
 
-    if (rockMult !== 0 && arenaResult) {
+    if ((rockMult !== 0 || this.environmentRockSink.hasFullDamageTargets!()) && arenaResult) {
       applyRadialEnvironmentDamage(
         this.environmentRockSink,
         {
@@ -1890,9 +1901,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.forEachArenaRockInRadius(originX, originY, config.radius, (i, rock) => {
         if (Phaser.Math.Distance.Squared(originX, originY, rock.x, rock.y) > radiusSquared) return;
         if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, rock.x, rock.y, i, undefined, 0, 'directFire')) return;
+        const obstacleMult = this.reactiveProps?.isFullDamageTarget(i) ? 1 : (proj.rockDamageMult ?? 1);
+        if (obstacleMult === 0) return;
         const resolvedDamage = this.resolveObstacleDamage(
           i,
-          config.damage * (proj.rockDamageMult ?? 1),
+          config.damage * obstacleMult,
           proj.ownerId,
         );
         if (resolvedDamage <= 0) return;
@@ -2072,6 +2085,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       };
     },
     onRockDestroyed: () => { /* terminal cleanup is part of the atomic owner commit */ },
+    isFullDamageTarget: (index) => this.reactiveProps?.isFullDamageTarget(index) ?? false,
+    hasFullDamageTargets: () => this.reactiveProps?.hasFullDamageTargets() ?? false,
   };
 
   /** Alle autoritaeren Hindernis-/Konstruktpfade teilen denselben Zielstatus-Trichter. */

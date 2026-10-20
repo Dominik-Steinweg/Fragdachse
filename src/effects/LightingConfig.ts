@@ -674,6 +674,23 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0.1,
     flickerHz: 3,
   },
+  /**
+   * Radioaktives Fass: kleiner, ruhiger Giftschein. Verdeckt nicht – das eigene Hindernis des
+   * Fasses würde ihn sonst schlucken.
+   */
+  reactivePropGlow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 44,
+    color: 0x7dff3a,
+    intensity: 0.7,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0.05,
+    flickerHz: 0.8,
+  },
   // ── Welt und Entities ────────────────────────────────────────────────────────
   /**
    * PowerUp-Kugeln, Podeste und das Bier. Dekorativ, deshalb die niedrigste Priorität:

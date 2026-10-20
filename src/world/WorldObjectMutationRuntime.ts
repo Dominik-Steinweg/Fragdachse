@@ -22,6 +22,7 @@ import { worldCellCenter } from './WorldMetrics';
 import type { WorldRockRuntime } from './WorldRockRuntime';
 import type { WorldTrainRuntime } from './WorldTrainRuntime';
 import type { WorldScopedBinding } from './WorldRuntime';
+import type { ReactivePropRuntime } from './reactiveProps/ReactivePropRuntime';
 import type { CombatDamageKind, LoadoutSlot } from '../types';
 
 export interface WorldObjectMutationRuntimeOptions {
@@ -35,6 +36,8 @@ export interface WorldObjectMutationRuntimeOptions {
   readonly construction: ConstructionWorldRuntime;
   readonly bases: BaseManager | null;
   readonly train: WorldTrainRuntime | null;
+  /** Reaktive Map-Objekte; sie teilen den Hindernis-ID-Raum mit Felsen und Placeables. */
+  readonly reactiveProps?: ReactivePropRuntime | null;
   readonly onDestroy?: (runtime: WorldObjectMutationRuntime) => void;
 }
 
@@ -74,6 +77,16 @@ export class WorldObjectMutationRuntime implements WorldTargetMutationPort, Worl
 
   resolveTarget(kind: WorldObjectKind, id: string | number): CombatTargetRef | null {
     const numericId = Number(id);
+    const props = this.options.reactiveProps;
+    if ((kind === 'rock' || kind === 'reactive_prop') && props?.isPropId(numericId)) {
+      if (!props.isAlive(numericId)) return null;
+      return Object.freeze({
+        kind: 'reactive_prop' as const,
+        id: numericId,
+        scope: this.options.scope,
+        instance: Object.freeze({ entityGeneration: 1 }),
+      });
+    }
     if ((kind === 'rock' || kind === 'construction') && Number.isSafeInteger(numericId) && numericId >= 0) {
       const placeable = this.options.placement.getRuntimeRock(numericId);
       if (placeable) {
@@ -202,7 +215,7 @@ export class WorldObjectMutationRuntime implements WorldTargetMutationPort, Worl
       return freezeTargetMutationOutcome({ kind: 'accepted-no-effect', outcomeId: request.outcomeId,
         target: request.target, source: request.source, reason: 'immune', resultingState: toCombatState(before) });
     }
-    const result = this.commitOwnerDamage(request.target, request.damage.amount, sourceActorId(request.source));
+    const result = this.commitOwnerDamage(request.target, request.damage.amount, request.source, request.damage.damageKind);
     const outcome = this.damageOutcome(request, result, facts);
     if (!this.destroyed && outcome.kind === 'damage-applied') for (const observer of this.damageObservers) {
       observer(outcome, facts.position);
@@ -258,6 +271,7 @@ export class WorldObjectMutationRuntime implements WorldTargetMutationPort, Worl
 
   private readState(target: CombatTargetRef): WorldIntegrityState | null {
     const id = Number(target.id);
+    if (target.kind === 'reactive_prop') return this.options.reactiveProps?.readIntegrity(id) ?? null;
     if (target.kind === 'rock') {
       return this.options.placement.readIntegrity(id) ?? this.options.rockRegistry.readIntegrity(id);
     }
@@ -272,6 +286,11 @@ export class WorldObjectMutationRuntime implements WorldTargetMutationPort, Worl
 
   private readFacts(target: CombatTargetRef) {
     const id = Number(target.id);
+    if (target.kind === 'reactive_prop') {
+      const props = this.options.reactiveProps;
+      const position = props?.getPosition(id);
+      return position ? { target, position, targetCategory: `reactive_prop:${props!.getKind(id)!.id}` } : null;
+    }
     if (target.kind === 'rock' || target.kind === 'construction') {
       const placed = this.options.placement.getRuntimeRock(id);
       if (placed) return {
@@ -302,8 +321,17 @@ export class WorldObjectMutationRuntime implements WorldTargetMutationPort, Worl
     return null;
   }
 
-  private commitOwnerDamage(target: CombatTargetRef, amount: number, attackerId: string): WorldIntegrityMutationResult {
+  private commitOwnerDamage(
+    target: CombatTargetRef,
+    amount: number,
+    source: CombatSource,
+    damageKind: CombatDamageKind,
+  ): WorldIntegrityMutationResult {
     const id = Number(target.id);
+    const attackerId = sourceActorId(source);
+    if (target.kind === 'reactive_prop') {
+      return this.options.reactiveProps?.commitDamage(id, amount, source, damageKind) ?? { kind: 'missing' };
+    }
     if (target.kind === 'construction' || (target.kind === 'rock' && this.options.placement.hasRuntimeRock(id))) {
       return this.options.construction.commitDamage(id, amount, attackerId);
     }
@@ -315,6 +343,10 @@ export class WorldObjectMutationRuntime implements WorldTargetMutationPort, Worl
 
   private commitOwnerRepair(target: CombatTargetRef, amount: number): WorldIntegrityMutationResult {
     const id = Number(target.id);
+    if (target.kind === 'reactive_prop') {
+      const state = this.options.reactiveProps?.readIntegrity(id);
+      return state ? { kind: 'immune', state } : { kind: 'missing' };
+    }
     if (target.kind === 'construction' || (target.kind === 'rock' && this.options.placement.hasRuntimeRock(id))) {
       return this.options.construction.commitRepair(id, amount);
     }

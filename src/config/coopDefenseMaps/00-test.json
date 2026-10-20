@@ -349,6 +349,17 @@
       }
     ]
   },
+  "reactiveProps": {
+    "anchors": [
+      { "id": "chain-a1", "kind": "explosive_barrel", "gridX": 12, "gridY": 47 },
+      { "id": "chain-a2", "kind": "explosive_barrel", "gridX": 13, "gridY": 47 },
+      { "id": "chain-a3", "kind": "explosive_barrel", "gridX": 12, "gridY": 48 },
+      { "id": "row-b1", "kind": "explosive_barrel", "gridX": 21, "gridY": 52, "variant": "toxic" },
+      { "id": "row-b2", "kind": "explosive_barrel", "gridX": 23, "gridY": 53, "variant": "toxic" },
+      { "id": "row-b3", "kind": "explosive_barrel", "gridX": 25, "gridY": 54, "variant": "toxic" },
+      { "id": "single-c", "kind": "explosive_barrel", "gridX": 36, "gridY": 56 }
+    ]
+  },
   "objective": "survive",
   "surviveDurationSec": 5400,
   "balanceReferenceDurationSec": 5400,

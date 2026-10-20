@@ -3,7 +3,7 @@
  * any of these slices; a latejoiner must only accept a payload that carries every one explicitly.
  */
 export const FULL_GAME_STATE_SLICE_KEYS = [
-  'eb', 'zs', 'p', 'j', 'e', 'r', 'br', 'oc', 'ei', 'fi', 'rc', 'dc', 's', 'sx', 'pl', 'f', 'sc', 'tb', 'fc', 'bq', 'td',
+  'eb', 'zs', 'p', 'j', 'e', 'r', 'rp', 'br', 'oc', 'ei', 'fi', 'rc', 'dc', 's', 'sx', 'pl', 'f', 'sc', 'tb', 'fc', 'bq', 'td',
   'es', 'g', 'rd', 'sl', 'vu', 'st', 'fg', 'u', 'pd', 'n', 'ak', 'mo', 'tw', 'mt', 'tn', 't', 'b', 'cb', 'cc', 'ae', 'sr', 'kr',
 ] as const;
 

@@ -1,4 +1,5 @@
 import { ENEMY_BURST_PRESETS } from '../config/enemyBurstPresets';
+import { isReactivePropObstacleId } from '../world/reactiveProps/ReactivePropObstacleIds';
 import { isDawnActivityDefinitionId } from '../dawn/contracts/DawnIds';
 import { resolveDawnSites } from '../dawn/resolution/DawnScenarioResolution';
 import { getDawnArenaTemplate, getDawnSchedule, getDawnThreatCurve } from '../config/dawn/dawnContent';
@@ -192,7 +193,11 @@ export class CoopMissionComposition {
       const runtimeRockCells = (this.options.getPlacementSystem()?.getAllRuntimeRocks() ?? [])
         .filter((rock) => rock.kind !== 'pedestal' && rock.collisionMode !== 'none')
         .map((rock) => ({ gridX: rock.gridX, gridY: rock.gridY }));
-      return [...staticRockCells, ...runtimeRockCells];
+      const firstPropId = arenaResult.obstacleIds.firstReactivePropId;
+      const reactivePropCells = (layout.reactiveProps ?? []).flatMap((cell, index) => (
+        arenaResult.rockPhysicsProxies[firstPropId + index]?.active ? [{ gridX: cell.gridX, gridY: cell.gridY }] : []
+      ));
+      return [...staticRockCells, ...reactivePropCells, ...runtimeRockCells];
     };
 
     new CoopMissionCombatComposition({
@@ -386,6 +391,10 @@ export class CoopMissionComposition {
       isFreeEnemyGroundAt: this.options.isFreeEnemyGroundAt,
       hasWalkableEnemyCircleLine: this.options.hasWalkableEnemyCircleLine,
       getRockObjects: () => this.options.getArenaResult()?.rockPhysicsProxies ?? null,
+      isReactivePropObstacle: (index) => {
+        const arena = this.options.getArenaResult();
+        return arena ? isReactivePropObstacleId(arena.obstacleIds, index) : false;
+      },
     }).materialize(runtime);
 
     new CoopMissionEnemySupportComposition({

@@ -130,6 +130,8 @@ export interface WorldTerrainDefinition {
   readonly treeGroves?: import('../coopDefenseMapAuthoring').CoopDefenseMapTreeGrovesConfig;
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   readonly rockWalls?: readonly CoopDefenseMapRockWallConfig[];
+  /** Reaktive Map-Objekte (Fass-Anker und Streuung); gehören zur World, nicht zur Mission. */
+  readonly reactiveProps?: import('../coopDefenseMapAuthoring').CoopDefenseMapReactivePropsConfig;
   /** Garantiert freie Lichtungen um Salvage-Sites; ihre ID ist die Site-ID. */
   readonly siteClearings?: readonly import('../coopDefenseMapAuthoring').CoopDefenseMapSiteClearingConfig[];
 }

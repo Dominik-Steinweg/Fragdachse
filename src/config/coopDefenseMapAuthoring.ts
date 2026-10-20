@@ -1,4 +1,6 @@
 import { resolveEnemyLifecycleTotals } from './coopDefenseEnemyLifecycle';
+import type { ReactivePropAnchor } from '../arena/ReactivePropLayout';
+import { parseReactivePropScatterSpec, REACTIVE_PROP_KINDS, type ReactivePropScatterSpec } from './reactiveProps/reactivePropKinds';
 import { isBossIntroPresetId, type BossIntroPresetId } from './bossIntros';
 import { normalizeFogStrength } from './groundFog';
 import { normalizeWorldMoonlight, normalizeWorldVoidDanger, type WorldMoonlightConfig, type WorldVoidDangerConfig } from './nightWorld';
@@ -807,6 +809,11 @@ export interface CoopDefenseMapRockFieldConfig {
  * blockiert nur so lange, wie es steht, und jede vorhandene Zerstoerungs- oder
  * Bewegungsmechanik loest es auf dieselbe Weise auf wie generierten Fels.
  */
+export interface CoopDefenseMapReactivePropsConfig {
+  readonly anchors?: readonly ReactivePropAnchor[];
+  readonly scatter?: readonly ReactivePropScatterSpec[];
+}
+
 export interface CoopDefenseMapRockWallConfig {
   readonly id: string;
   readonly gridX: number;
@@ -942,6 +949,11 @@ export interface CoopDefenseMapConfig {
    * Gleisspalten, Basisreservierungen und Barrierezellen bleiben frei.
    */
   readonly rockWalls?: readonly CoopDefenseMapRockWallConfig[];
+  /**
+   * Reaktive Map-Objekte (explosive Fässer): authored Anker auf festen Zellen und/oder seeded
+   * gestreute Gruppen. Der Generator hält Anker frei und prüft für beides die Begehbarkeit.
+   */
+  readonly reactiveProps?: CoopDefenseMapReactivePropsConfig;
   /**
    * Verschiebt Tutorial-Fenster und die Felsformation darunter an eine authored Zelle.
    * `gridX` ist die Mittelspalte des Fensters, `gridY` seine obere Zeile. Ohne Angabe bleibt
@@ -1414,6 +1426,10 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     water: mapConfig.water, waterAreas: mapConfig.waterAreas,
     bases, persistentBase, rockWalls, missionProgress, trackMode, trackPosition,
   }, arenaWidthCells, arenaHeightCells);
+  const reactiveProps = normalizeReactivePropsConfig(
+    mapConfig.mapId, mapConfig.reactiveProps, arenaWidthCells, arenaHeightCells,
+    water ?? [], rockWalls ?? [], missionProgress, trackMode === 'none' ? undefined : trackPosition,
+  );
   const krakenConfig = boss ? getCoopDefenseEnemyConfig(boss.enemyKind).krakenBoss : undefined;
   const krakenHabitat = mapConfig.krakenHabitat === undefined ? undefined : normalizeKrakenHabitat(mapConfig.krakenHabitat, {
     widthCells: arenaWidthCells, heightCells: arenaHeightCells, water: water ?? [],
@@ -1450,6 +1466,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     }),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     rockWalls,
+    ...(reactiveProps ? { reactiveProps } : {}),
     tutorialAnchor,
     ...(mapConfig.abyssCameo === undefined ? {} : { abyssCameo: normalizeAbyssCameo(mapConfig.mapId, mapConfig.abyssCameo, water ?? []) }),
     water,
@@ -3853,6 +3870,66 @@ function normalizeRockWallConfigs(
       widthCells: wall.widthCells,
       heightCells: wall.heightCells,
     };
+  });
+}
+
+/**
+ * Reaktive Map-Objekte: Anker müssen in der Arena liegen, eindeutig sein und dürfen weder
+ * Wasser, authored Felsbänder, Missionsbarrieren noch Gleisspalten belegen. Basis- und
+ * Lichtungsreservierungen prüft der Generator, der sie kanonisch kennt.
+ */
+function normalizeReactivePropsConfig(
+  mapId: string,
+  config: CoopDefenseMapReactivePropsConfig | undefined,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+  water: readonly { readonly gridX: number; readonly gridY: number }[],
+  rockWalls: readonly CoopDefenseMapRockWallConfig[],
+  missionProgress: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
+  trackPosition: CoopDefenseMapConfig['trackPosition'],
+): CoopDefenseMapReactivePropsConfig | undefined {
+  if (config === undefined) return undefined;
+  const fail = (message: string): never => { throw new Error(`[coopDefenseMaps] Reactive props on map ${mapId}: ${message}`); };
+  if (!config || typeof config !== 'object' || Array.isArray(config)) fail('expected an object');
+  for (const key of Object.keys(config)) if (key !== 'anchors' && key !== 'scatter') fail(`unknown field ${key}`);
+  const blocked = new Set<string>([
+    ...water.map(cell => `${cell.gridX},${cell.gridY}`),
+    ...(missionProgress?.barriers ?? []).flatMap(barrier => barrier.cells.map(cell => `${cell.gridX},${cell.gridY}`)),
+  ]);
+  for (const wall of rockWalls) {
+    for (let y = wall.gridY; y < wall.gridY + wall.heightCells; y++) {
+      for (let x = wall.gridX; x < wall.gridX + wall.widthCells; x++) blocked.add(`${x},${y}`);
+    }
+  }
+  const ids = new Set<string>();
+  const cells = new Set<string>();
+  const anchors = (config.anchors ?? []).map((anchor, index) => {
+    if (!anchor || typeof anchor !== 'object') return fail(`anchor ${index} must be an object`);
+    for (const key of Object.keys(anchor)) if (!['id', 'kind', 'gridX', 'gridY', 'variant'].includes(key)) fail(`anchor ${index} has unknown field ${key}`);
+    const id = normalizeRequiredId(anchor.id, `[coopDefenseMaps] Reactive prop anchor ${index} on map ${mapId} needs an id`);
+    if (ids.has(id)) fail(`duplicate anchor id ${id}`);
+    ids.add(id);
+    const kind = REACTIVE_PROP_KINDS.get(anchor.kind) ?? fail(`anchor ${id} has unknown kind ${String(anchor.kind)}`);
+    if (anchor.variant !== undefined && !kind.visual.variantIds.includes(anchor.variant)) fail(`anchor ${id} has unknown variant ${anchor.variant}`);
+    if (!Number.isInteger(anchor.gridX) || !Number.isInteger(anchor.gridY)
+      || anchor.gridX < 0 || anchor.gridY < 0 || anchor.gridX >= arenaWidthCells || anchor.gridY >= arenaHeightCells) {
+      fail(`anchor ${id} is outside the arena`);
+    }
+    const key = `${anchor.gridX},${anchor.gridY}`;
+    if (cells.has(key)) fail(`anchor ${id} shares its cell with another anchor`);
+    cells.add(key);
+    if (blocked.has(key)) fail(`anchor ${id} lies on water, a rock wall or a mission barrier`);
+    if (trackPosition && typeof trackPosition === 'object'
+      && anchor.gridX >= trackPosition.gridX - 1 && anchor.gridX <= trackPosition.gridX + 2) {
+      fail(`anchor ${id} lies on or next to the railway`);
+    }
+    return Object.freeze({ id, kind: kind.id, gridX: anchor.gridX, gridY: anchor.gridY, ...(anchor.variant ? { variant: anchor.variant } : {}) });
+  });
+  if (config.scatter !== undefined && !Array.isArray(config.scatter)) fail('scatter must be an array');
+  const scatter = (config.scatter ?? []).map((spec, index) => parseReactivePropScatterSpec(spec, `maps.${mapId}.reactiveProps.scatter[${index}]`));
+  return Object.freeze({
+    ...(anchors.length ? { anchors: Object.freeze(anchors) } : {}),
+    ...(scatter.length ? { scatter: Object.freeze(scatter) } : {}),
   });
 }
 

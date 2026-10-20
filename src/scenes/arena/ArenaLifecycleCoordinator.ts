@@ -870,6 +870,8 @@ export class ArenaLifecycleCoordinator {
           if (!materialization) return null;
           if (id.startsWith('rock:')) {
             const index = Number(id.slice(5));
+            // Fässer sind kein Durchbruchziel: Gegner sprengen sich nicht selbst den Weg frei.
+            if (materialization.reactiveProps?.isPropId(index)) return null;
             if (materialization.rocks?.isIndestructible(index)) return null;
             const placed = materialization.placement?.getRuntimeRock(index);
             if (placed?.indestructible || (placed?.constructionId

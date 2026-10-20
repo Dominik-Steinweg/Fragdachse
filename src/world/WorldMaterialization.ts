@@ -3,6 +3,7 @@ import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
 import type { BaseManager } from '../entities/BaseManager';
 import type { LightOccluderIndex } from '../effects/LightOccluderIndex';
 import type { PlacementSystem } from '../systems/PlacementSystem';
+import type { ReactivePropRuntime } from './reactiveProps/ReactivePropRuntime';
 
 /**
  * Der mutable World-Gameplay-State genau einer World-Instanz.
@@ -24,6 +25,7 @@ export class WorldMaterialization {
   private basesValue: BaseManager | null = null;
   private rocksValue: RockRegistry | null = null;
   private lightOccludersValue: LightOccluderIndex | null = null;
+  private reactivePropsValue: ReactivePropRuntime | null = null;
   private destroyed = false;
 
   /** Aktive Aufbau-Fassade; der Handoff erhaelt davon ausschliesslich die Presentation-Projektion. */
@@ -49,6 +51,11 @@ export class WorldMaterialization {
   /** Verdeckungs-Cache der Beleuchtung; entsteht nur mit lokaler Darstellung. */
   get lightOccluders(): LightOccluderIndex | null {
     return this.lightOccludersValue;
+  }
+
+  /** Reaktive Map-Objekte dieser World (Host entscheidet, Clients spiegeln). */
+  get reactiveProps(): ReactivePropRuntime | null {
+    return this.reactivePropsValue;
   }
 
   isDestroyed(): boolean {
@@ -77,6 +84,11 @@ export class WorldMaterialization {
     this.rocksValue = rocks;
   }
 
+  setReactiveProps(runtime: ReactivePropRuntime | null): void {
+    this.assertAlive('reactive props');
+    this.reactivePropsValue = runtime;
+  }
+
   setLightOccluders(index: LightOccluderIndex | null): void {
     this.assertAlive('light occluders');
     this.lightOccludersValue = index;
@@ -92,6 +104,8 @@ export class WorldMaterialization {
     if (this.destroyed) return;
     this.destroyed = true;
     this.lightOccludersValue = null;
+    this.reactivePropsValue?.destroy();
+    this.reactivePropsValue = null;
     this.rocksValue = null;
     // Runtime-Objekte geben ihre Rasterzellen frei, bevor die Bau-Runtime faellt; sonst
     // kollidierte der naechste Aufbau mit Zellen, die niemand mehr besitzt.

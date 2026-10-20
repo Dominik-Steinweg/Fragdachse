@@ -1,0 +1,39 @@
+{
+  "id": "reactive-barrel-rusted",
+  "label": "Explosive barrel (rusted)",
+  "category": "powerup",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/reactive-barrel-rusted.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Round top-down drum: rolled chime, recessed lid with embossed ring, two screw bungs, faded hazard diamond.",
+    "colors": "Weathered oxide-red paint, rust creep from the chime, galvanised bungs, pale label.",
+    "anatomy": "Static reactive map prop on one 32 px cell; drum diameter about 27 px."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "reactive-barrel",
+  "model": {
+    "variant": "rusted"
+  },
+  "orthoScale": 1.2,
+  "textures": {},
+  "materialSource": "procedural",
+  "materialVariants": {
+    "standard": {
+      "label": "Weathered matte drum paint, procedural wear",
+      "textureStrength": 0,
+      "formShadowStrength": 0.83
+    }
+  },
+  "clips": []
+}

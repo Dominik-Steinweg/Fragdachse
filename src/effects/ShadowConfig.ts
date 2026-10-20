@@ -195,6 +195,20 @@ export const SHADOW_CASTERS = {
     footprintWidthPx: PLAYER_SIZE,
     footprintHeightPx: PLAYER_SIZE,
   },
+  /** Reaktive Map-Objekte (Fässer): kurzer runder Kontaktschatten unter dem Sprite. */
+  reactiveProp: {
+    enabled: true,
+    layerDepth: DEPTH.ROCKS + 0.12,
+    castHeightPx: 7,
+    opacity: 0.46,
+    softnessPx: 3,
+    blurLayers: 6,
+    stretch: 0.9,
+    inflatePx: 0,
+    shape: 'circle',
+    footprintWidthPx: 25,
+    footprintHeightPx: 25,
+  },
   turret: {
     enabled: true,
     layerDepth: DEPTH.ROCKS + 0.12,

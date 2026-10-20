@@ -77,6 +77,8 @@ export interface CoopMissionEnemyBehaviourCompositionOptions {
     radius: number,
   ) => boolean;
   readonly getRockObjects: () => readonly (import('../arena/rocks/RockPhysicsProxy').RockPhysicsProxy | null)[] | null;
+  /** Reaktive Map-Objekte im Hindernisraum; Gegner greifen sie nie gezielt an. */
+  readonly isReactivePropObstacle?: (obstacleIndex: number) => boolean;
 }
 
 /** Owns all Activity-scoped enemy behaviour callbacks and behaviour systems. */
@@ -171,6 +173,7 @@ export class CoopMissionEnemyBehaviourComposition {
     }) : null;
     attack.setDecoyTargets(decoyTargets);
     attack.setIntents(runtime.enemyIntents);
+    attack.setObstacleExclusion(this.options.isReactivePropObstacle ?? null);
     runtime.enemyIntents?.setDecoys(decoyTargets);
     runtime.enemyIntents?.setPerception((enemy, x, y, range) => enemyManager.canSeeThroughSmoke(enemy.id, x, y, range));
     combatPositioning.setDecoyTargets(decoyTargets);

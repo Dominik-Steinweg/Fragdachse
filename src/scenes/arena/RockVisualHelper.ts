@@ -575,7 +575,14 @@ export class RockVisualHelper {
     // Runtime IDs can skip slots a late joiner never saw (placeables destroyed before the join).
     // Keep layout.rocks dense: iterating consumers treat it as RockCell[] without holes.
     const rocks = this.currentLayout.rocks;
-    while (rocks.length < rock.id) rocks.push({ gridX: rock.gridX, gridY: rock.gridY });
+    // Slots reaktiver Map-Objekte tragen deren echte Zelle, nie die des Placeables.
+    const { firstReactivePropId, firstRuntimeObstacleId } = this.arenaResult.obstacleIds;
+    const props = this.currentLayout.reactiveProps ?? [];
+    while (rocks.length < rock.id) {
+      const prop = rocks.length >= firstReactivePropId && rocks.length < firstRuntimeObstacleId
+        ? props[rocks.length - firstReactivePropId] : undefined;
+      rocks.push(prop ? { gridX: prop.gridX, gridY: prop.gridY } : { gridX: rock.gridX, gridY: rock.gridY });
+    }
     rocks[rock.id] = { gridX: rock.gridX, gridY: rock.gridY };
     while (this.arenaResult.rockPhysicsProxies.length <= rock.id) {
       this.arenaResult.rockPhysicsProxies.push(null);

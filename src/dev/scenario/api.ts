@@ -1,4 +1,5 @@
 import { runWatchtowerReview, releaseWatchtowerReview } from './WatchtowerReview';
+import { setReactivePropVariantOverride } from '../../effects/reactiveProps/ReactivePropVariantOverride';
 import { runInspectorUltimatesReview, inspectorUltimatesStatus, releaseInspectorUltimatesReview } from './InspectorUltimatesReview';
 import type { DevScenarioController } from './controller';
 import { parseScenario, type GridPoint } from './config';
@@ -223,6 +224,12 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       controller.spawnPowerUp(c.id, c.gridX === undefined && c.gridY === undefined ? undefined : point(c)); break;
     }
     case 'clearEnemies': controller.clearEnemies(); break;
+    case 'reactivePropVariant': {
+      if (c.variant !== null && (typeof c.variant !== 'string' || !/^[a-z0-9_-]+$/.test(c.variant))) {
+        throw new Error('variant: Variantenname oder null erwartet.');
+      }
+      setReactivePropVariantOverride(c.variant as string | null); break;
+    }
     case 'build': {
       if (!COOP_DEFENSE_CONSTRUCTION_IDS.includes(c.id as ConstructionId)) throw new Error('Unbekanntes Bauwerk.');
       controller.build(c.id as ConstructionId, c.gridX === undefined && c.gridY === undefined ? undefined : point(c)); break;

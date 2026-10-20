@@ -508,6 +508,10 @@ export class PlayerManager implements OwnerVisualSource {
       for (const pedestal of this.layout.powerUpPedestals) {
         blocked.add(`${pedestal.gridX}_${pedestal.gridY}`);
       }
+      // Reaktive Map-Objekte samt Ring: niemand spawnt direkt neben einem Fass.
+      for (const prop of this.layout.reactiveProps ?? []) {
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) blocked.add(`${prop.gridX + dx}_${prop.gridY + dy}`);
+      }
       for (const key of this.getGroundHazardSpawnExclusionCells()) blocked.add(key);
     }
 

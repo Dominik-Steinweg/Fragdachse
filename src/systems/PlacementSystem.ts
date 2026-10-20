@@ -1,4 +1,5 @@
 import { getConstructionCells, getConstructionFootprint, getConstructionBounds, nearestConstructionPoint } from './ConstructionGeometry';
+import { resolveObstacleIdPartition } from '../world/reactiveProps/ReactivePropObstacleIds';
 import { getPersistentBaseRewardFootprint } from '../persistentBase/PersistentBasePlacementRules';
 import { turretAimConfig } from '../config/turretAim';
 import * as Phaser from 'phaser';
@@ -86,7 +87,8 @@ export class PlacementSystem {
     this.rockGrid = rockGrid;
     this.playerManager = playerManager;
     this.coopDefenseBases = coopDefenseBases;
-    this.nextRockId = layout.rocks.length;
+    // Runtime-IDs beginnen hinter den authored Felsen und den reaktiven Map-Objekten.
+    this.nextRockId = resolveObstacleIdPartition(layout).firstRuntimeObstacleId;
 
     for (const cell of layout.water ?? []) this.waterCells.add(this.key(cell.gridX, cell.gridY));
     for (const tree of layout.trees) {

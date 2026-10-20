@@ -304,6 +304,26 @@ export function createSingleOwnerProvenance(
   };
 }
 
+/**
+ * Provenance einer Folgewirkung, die einem bereits erfassten Combat-Source gehört (z. B. die
+ * Explosion eines reaktiven Map-Objekts). Attribution und Allegiance bleiben getrennt erhalten;
+ * Teamschaden ist für solche Folgewirkungen immer aus.
+ */
+export function provenanceFromCombatSource(
+  source: import('../combat/CombatScope').CombatSource,
+  weaponSourceId: string,
+): ProjectileProvenance {
+  const kind = source.gameplaySource.kind;
+  return {
+    gameplaySourceId: String(source.gameplaySource.id),
+    gameplaySourceKind: kind === 'decoy' ? 'environment' : kind,
+    attributionId: source.attribution.id,
+    attributionKind: source.attribution.kind,
+    allegiance: { ...source.allegiance, allowTeamDamage: false },
+    weaponSourceId,
+  };
+}
+
 // ── Interaction ───────────────────────────────────────────────────────────────
 
 /**

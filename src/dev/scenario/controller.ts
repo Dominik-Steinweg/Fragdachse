@@ -998,7 +998,7 @@ export class DevScenarioController {
   snapshot(): Record<string, unknown> {
     const terminated = this.runtime.isMatchTerminated() || (this.readyAt !== null
       && (!bridge.isArenaStarted() || bridge.getGamePhase() !== 'ARENA'));
-    return { state: this.state, ready: this.state === 'ready' && !terminated && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading && !this.pendingKrakenMission && this.pendingKrakenHp === null, terminated, message: this.message, isolated: true, network: 'local-only',
+    return { state: this.state, ready: this.state === 'ready' && !terminated && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading && !this.pendingKrakenMission && this.pendingKrakenHp === null, terminated, message: this.message, isolated: true, network: 'local-only', reactiveProps: this.runtime.getScenarioReactiveProps?.() ?? [],
       krakenResidency: this.runtime.getScenarioKrakenResidency(), krakenDevAction: readKrakenDevAction(), krakenDevGeometry: readKrakenDevGeometry(), initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
       dawnPhaseReview: this.dawnPhaseReview, dawnSkipping: this.clock.fastForwarding,
       fireControlVisualReview: this.fireControlVisualReview?.status() ?? null,

@@ -305,6 +305,13 @@ export interface HitscanTraceOptions extends ObstacleShotOptions {
   readonly includeShooter?: boolean;
 }
 
+/** Hindernisse mit vollem Treffer unabhängig vom `rockDamageMult` (reaktive Map-Objekte). */
+export interface FullDamageObstaclePort {
+  isFullDamageTarget(index: number): boolean;
+  hasFullDamageTargets(): boolean;
+  forEachFullDamageTarget(visit: (index: number) => void): void;
+}
+
 export type HitscanObstacleKind = 'arena' | 'rock' | 'base' | 'barrier' | 'trunk' | 'train';
 
 /**
@@ -618,6 +625,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   // Callbacks für Objekt-Schaden (gesetzt von ArenaScene)
   private onRockDamage:  ((rockIndex: number, damage: number, attackerId: string) => void) | null = null;
+  /** Hindernisse, die unabhängig vom `rockDamageMult` den vollen Treffer nehmen (reaktive Map-Objekte). */
+  private fullDamageObstacles: FullDamageObstaclePort | null = null;
   private onTrainDamage: ((damage: number, attackerId: string) => void) | null = null;
   private playerMaxHpResolver: ((playerId: string) => number) | null = null;
   private playerDamageReductionResolver: ((playerId: string, nowMs: number) => number) | null = null;
@@ -1374,6 +1383,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   setRockDamageCallback(cb: ((rockIndex: number, damage: number, attackerId: string) => void) | null): void {
     this.onRockDamage = cb;
+  }
+
+  setFullDamageObstacles(port: FullDamageObstaclePort | null): void {
+    this.fullDamageObstacles = port;
   }
 
   /** Direct field damage to a semantic structure; uses the existing World mutation bindings. */
@@ -3555,7 +3568,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const EPSILON = 2; // Toleranz in px
 
     // Nächsten Fels am Endpunkt suchen
-    if (rockMult !== 0 && this.rockObjects && this.onRockDamage) {
+    const fullDamage = this.fullDamageObstacles;
+    if ((rockMult !== 0 || fullDamage?.hasFullDamageTargets()) && this.rockObjects && this.onRockDamage) {
       let bestRockIdx = -1;
       let bestRockDist = Infinity;
       this.obstacleIndex.querySegment(
@@ -3571,8 +3585,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         },
         IGNORE_CIRCLE_OBSTACLES,
       );
-      if (bestRockIdx >= 0) {
-        this.onRockDamage(bestRockIdx, damage * rockMult, shooterId);
+      const multiplier = bestRockIdx >= 0 && fullDamage?.isFullDamageTarget(bestRockIdx) ? 1 : rockMult;
+      if (bestRockIdx >= 0 && multiplier !== 0) {
+        this.onRockDamage(bestRockIdx, damage * multiplier, shooterId);
         return; // Fels blockiert – kein Zug dahinter
       }
     }
@@ -3841,22 +3856,29 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     x: number, y: number, angle: number, range: number, halfArcRad: number,
     damage: number, rockMult: number, trainMult: number, shooterId: string,
   ): void {
-    // Felsschaden
-    if (rockMult !== 0 && this.rockObjects && this.onRockDamage) {
-      for (let i = 0; i < this.rockObjects.length; i++) {
-        const rock = this.rockObjects[i];
-        if (!rock?.active || this.structureDamageTargets?.has(i) || this.getStructureOccupancyId(shooterId) === i) continue;
+    // Felsschaden; reaktive Map-Objekte nehmen den vollen Treffer auch ohne `rockDamageMult`.
+    const fullDamage = this.fullDamageObstacles;
+    const rocks = this.rockObjects;
+    const onRockDamage = this.onRockDamage;
+    if ((rockMult !== 0 || fullDamage?.hasFullDamageTargets()) && rocks && onRockDamage) {
+      const visitRock = (i: number): void => {
+        const rock = rocks[i];
+        if (!rock?.active || this.structureDamageTargets?.has(i) || this.getStructureOccupancyId(shooterId) === i) return;
+        const multiplier = fullDamage?.isFullDamageTarget(i) ? 1 : rockMult;
+        if (multiplier === 0) return;
         const bounds = this.isOccupiedStructureTarget(i, shooterId) ? rock.getBounds() : null;
         const dx = (bounds ? Math.max(bounds.left, Math.min(bounds.right, x)) : rock.x) - x;
         const dy = (bounds ? Math.max(bounds.top, Math.min(bounds.bottom, y)) : rock.y) - y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > range) continue;
+        if (dist > range) return;
         let ad = Math.atan2(dy, dx) - angle;
         while (ad >  Math.PI) ad -= 2 * Math.PI;
         while (ad < -Math.PI) ad += 2 * Math.PI;
-        if (Math.abs(ad) > halfArcRad) continue;
-        this.onRockDamage(i, damage * rockMult, shooterId);
-      }
+        if (Math.abs(ad) > halfArcRad) return;
+        onRockDamage(i, damage * multiplier, shooterId);
+      };
+      if (rockMult !== 0) for (let i = 0; i < rocks.length; i++) visitRock(i);
+      else fullDamage!.forEachFullDamageTarget(visitRock);
     }
 
     // Zugschaden

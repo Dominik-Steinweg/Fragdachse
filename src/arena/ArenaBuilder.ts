@@ -39,6 +39,8 @@ import type { GroundSurfacePersistentBaseGravelZone } from './chunks/GroundSurfa
 import { RockOverlayStreamer } from './chunks/RockOverlayStreamer';
 import type { ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { createRockPhysicsProxy, type RockPhysicsProxy } from './rocks/RockPhysicsProxy';
+import { getReactivePropKind } from '../config/reactiveProps/reactivePropKinds';
+import { resolveObstacleIdPartition, type ObstacleIdPartition } from '../world/reactiveProps/ReactivePropObstacleIds';
 import { createTreePhysicsProxy, type TreePhysicsProxy } from './trees/TreePhysicsProxy';
 import { RockVisualStateStore, type RockVisualState } from './rocks/RockVisualState';
 import { RockVisualSystem } from './rocks/RockVisualSystem';
@@ -80,6 +82,8 @@ export interface ArenaGameplayRuntime {
    * Hindernisabfragen lesen ausschliesslich hier - nie am sichtbaren Stamm.
    */
   trunkBodies: TreePhysicsProxy[];
+  /** ID-Bereich der reaktiven Map-Objekte im gemeinsamen Hindernisraum. */
+  obstacleIds: ObstacleIdPartition;
 }
 
 /** Reine, nicht simulierende Darstellung einer World. */
@@ -293,6 +297,25 @@ export class ArenaBuilder {
       rockPhysicsProxies.push(proxy);
     }
 
+    // Reaktive Map-Objekte: eigene Hindernis-IDs direkt hinter den authored Felsen, ohne
+    // Fels-Visual und ohne Blob-Verschmelzung mit Nachbarfelsen.
+    const obstacleIds = resolveObstacleIdPartition(layout);
+    for (let index = 0; index < obstacleIds.reactivePropCount; index++) {
+      const cell = layout.reactiveProps![index];
+      const id = obstacleIds.firstReactivePropId + index;
+      const proxy = createRockPhysicsProxy(
+        this.scene,
+        worldMetrics.offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2,
+        worldMetrics.offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2,
+        getReactivePropKind(cell.kind).obstacleClass,
+      );
+      rockGroup.add(proxy);
+      (proxy.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+      rockPhysicsProxies[id] = proxy;
+      rockGrid.setBlobParticipation(id, false);
+      rockGrid.set(cell.gridX, cell.gridY, id);
+    }
+
     // Bäume (Trunk + Canopy)
     for (const { gridX, gridY } of layout.trees) {
       const worldX = worldMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
@@ -330,6 +353,7 @@ export class ArenaBuilder {
       rockVisualStates,
       rockVisualSystem,
       rockGrid,
+      obstacleIds,
       trunkGroup,
       trunkBodies,
       trunkVisuals,
@@ -1024,6 +1048,8 @@ function replaceArenaLayoutContents(target: ArenaLayout, authored: ArenaLayout):
     target.decals.length = 0;
   }
   target.groundHazardZones = authored.groundHazardZones;
+  if (authored.reactiveProps) target.reactiveProps = authored.reactiveProps.map(cell => ({ ...cell }));
+  else delete target.reactiveProps;
 }
 
 /**

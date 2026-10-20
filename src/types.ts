@@ -1921,6 +1921,22 @@ export interface ArenaLayout {
   powerUpPedestals: PowerUpPedestalCell[];
   /** Seed-deterministic, inactive cells for authored ground-hazard events. */
   groundHazardZones?: ArenaGroundHazardZone[];
+  /**
+   * Reaktive Map-Objekte (z. B. explosive Fässer). Sie liegen nicht in `rocks`, belegen aber
+   * je eine Zelle im gemeinsamen Hindernis-ID-Raum direkt hinter den authored Felsen.
+   */
+  reactiveProps?: ReactivePropCell[];
+}
+
+/** Ein reaktives Map-Objekt im Layout; Kind und Variante sind authored IDs. */
+export interface ReactivePropCell {
+  kind: string;
+  gridX: number;
+  gridY: number;
+  /** Optische Variante; ohne Angabe gilt die Default-Variante des Kinds. */
+  variant?: string;
+  /** Authored Anker-ID; gestreute Objekte haben keine. */
+  anchorId?: string;
 }
 
 /** Pro-Felsen Netzwerkzustand (nur beschädigte Felsen, Delta-Kompression) */

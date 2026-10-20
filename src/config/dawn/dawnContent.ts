@@ -49,6 +49,7 @@ export type DawnArenaTemplateWorld = Pick<CoopDefenseMapAuthoringConfig,
   | 'treeGroves'
   | 'rockField'
   | 'rockWalls'
+  | 'reactiveProps'
   | 'water'
   | 'waterAreas'
   | 'trackMode'

@@ -294,6 +294,8 @@ export interface WorldCombatGameplayBindingOptions {
   }[];
   readonly getWorldTrain: () => { getActiveSegmentPositions: () => { x: number; y: number }[]; applyDamage: (damage: number, ownerId: string) => void } | null;
   readonly getWorldMutation: () => WorldObjectMutationRuntime | null;
+  /** Reaktive Map-Objekte der aktuellen World (Host). */
+  readonly getReactiveProps?: () => import('./reactiveProps/ReactivePropRuntime').ReactivePropRuntime | null;
   readonly getFirestarterSystem: () => import('../systems/CoopDefenseFirestarterSystem').CoopDefenseFirestarterSystem | null;
   readonly getShieldChargerSystem?: () => import('../systems/CoopDefenseShieldChargerSystem').CoopDefenseShieldChargerSystem | null;
   readonly getEnergyConeSystem?: () => import('../systems/CoopDefenseEnergyConeSystem').CoopDefenseEnergyConeSystem | null;
@@ -590,6 +592,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.options.projectileTimeField.setProjectileTimeFieldPort(null);
     this.options.projectileWorldImpact.setRockHitCallback(() => { /* noop */ });
     this.options.projectileWorldImpact.setObstacleKindResolver(null);
+    this.options.combatSystem.setFullDamageObstacles(null);
     this.options.projectileWorldImpact.setLowSupportTargetChecker(null);
     this.options.projectileWorldImpact.setBaseHitCallback(null);
     this.options.projectileWorldImpact.setSupportImpactCallback(null);
@@ -830,6 +833,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       if (death) o.getNecromancySystem()?.recordEnemyDeath(death);
       if (!current()) return true;
       return false;
+    });
+    combat.setFullDamageObstacles({
+      isFullDamageTarget: index => o.getReactiveProps?.()?.isFullDamageTarget(index) ?? false,
+      hasFullDamageTargets: () => o.getReactiveProps?.()?.hasFullDamageTargets() ?? false,
+      forEachFullDamageTarget: visit => o.getReactiveProps?.()?.forEachFullDamageTarget(visit),
     });
     combat.setRockDamageCallback((rockIndex, damage, attackerId) => {
       const resolvedDamage = o.resolveObstacleDamage(rockIndex, damage, attackerId);
@@ -1448,7 +1456,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         o.combatSystem.captureWorldDamageSource(attackerId, 'projectile.world_object', 'direct', projectile?.provenance, projectile?.projectileId),
       );
     });
-    o.projectileWorldImpact.setObstacleKindResolver((rockId) => o.placementSystem.getRuntimeRock(rockId)?.kind);
+    o.projectileWorldImpact.setObstacleKindResolver((rockId) => (o.getReactiveProps?.()?.isPropId(rockId)
+      ? 'reactive_prop' : o.placementSystem.getRuntimeRock(rockId)?.kind));
     o.projectileWorldImpact.setLowSupportTargetChecker((rockId, ownerId) => {
       const rock = o.placementSystem.getRuntimeRock(rockId);
       if (!rock) return false;

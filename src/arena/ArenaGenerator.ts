@@ -1,11 +1,13 @@
 import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS, COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS, COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, getArenaActivityValuesForMode, getArenaModeFlags, getCaptureTheBeerBaseRegion, getCaptureTheBeerMiddleThirdRegion, isGridCellInArenaRegion } from '../config';
+import { placeReactiveProps, type ReactivePropAnchor } from './ReactivePropLayout';
+import { REACTIVE_PROP_ARENA_SCATTER, type ReactivePropScatterSpec } from '../config/reactiveProps/reactivePropKinds';
 import { spawnZoneArea, type WorldSpawnZone } from '../config/spawnZones';
 import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isCoopDefenseBaseCell, isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseReservationCell, resolveCoopDefenseActivityBases, resolveCoopDefenseBases } from './BaseRegistry';
 import type { BaseSpec } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
 import { generateSolidRockFormation } from './SolidRockFormation';
-import type { ArenaGroundHazardZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, RockCell, SpawnFront, TreeCell, TrackCell } from '../types';
+import type { ArenaGroundHazardZone, ArenaLayout, DecalCell, DecalTerrainLayer, DirtCell, ReactivePropCell, RockCell, SpawnFront, TreeCell, TrackCell } from '../types';
 import { POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, TIMED_POWERUP_PEDESTAL_COUNT } from '../powerups/PowerUpConfig';
 import type {
   CoopDefenseMapConfig,
@@ -106,7 +108,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 14;
+export const ARENA_GENERATOR_VERSION = 15;
 
 /**
  * Anteil einzelliger Felsdurchlaesse, die bewusst eng bleiben. Der Rest wird um eine Felszelle
@@ -138,6 +140,8 @@ export interface ArenaGenerationInput {
   readonly treeCount: number;
   readonly captureTheBeerBasesActive: boolean;
   readonly coopDefenseBasesActive: boolean;
+  /** Seeded Fass-Streuung prozeduraler Arenen (PvP); Coop-/Dawn-Maps authoren ihre eigene. */
+  readonly reactivePropScatter?: readonly ReactivePropScatterSpec[];
 }
 
 /**
@@ -155,6 +159,7 @@ export function resolveArenaGenerationInput(mode: GameMode, metrics: WorldMetric
     treeCount: getArenaActivityValuesForMode(mode).treeCount,
     captureTheBeerBasesActive: flags.captureTheBeerBasesActive,
     coopDefenseBasesActive: flags.coopDefenseBasesActive,
+    ...(mode === 'coop_defense' ? {} : { reactivePropScatter: REACTIVE_PROP_ARENA_SCATTER[mode] }),
   };
 }
 
@@ -238,6 +243,16 @@ export class ArenaGenerator {
       ...(coopMapConfig?.siteClearings ?? []),
       ...spawnZoneCores(coopMapConfig?.spawnZones),
     ];
+    // Authored Fass-Anker bleiben wie kleine Lichtungen felsfrei; ohne Anker bleibt jede RNG-Folge gleich.
+    const reactivePropAnchors = coopMapConfig?.reactiveProps?.anchors ?? [];
+    const reactivePropScatter = coopMapConfig ? coopMapConfig.reactiveProps?.scatter ?? [] : this.input.reactivePropScatter ?? [];
+    const reactivePropKeepClear = [
+      ...protectedClearings,
+      ...(coopMapConfig?.missionProgress?.startArea
+        ? [{ ...coopMapConfig.missionProgress.startArea, radiusCells: (coopMapConfig.missionProgress.startArea.radiusCells ?? 4) + 2 }]
+        : []),
+    ];
+    protectedClearings.push(...reactivePropAnchors.map(anchor => ({ gridX: anchor.gridX, gridY: anchor.gridY, radiusCells: 1 })));
     const missionCheckpointCells = this.collectMissionCheckpointCells(protectedClearings);
     // Authored Felsbaender sind reguläre Felsen, aber keine Generatoreingabe: Sie werden erst
     // nach Konnektivitäts-, Baum- und Routenprüfung gestempelt. Sonst läse `ensureConnected` ein
@@ -592,6 +607,14 @@ export class ArenaGenerator {
         failedAttempt('Kein Platz für prozedurale Bodengefahren');
         continue;
       }
+      const reactiveProps = reactivePropAnchors.length + reactivePropScatter.length === 0 ? [] : this.placeReactiveProps(
+        blocked, trackCols, powerUpPedestals, groundHazardZones, reactivePropKeepClear,
+        reactivePropAnchors, reactivePropScatter, coopBaseSpecs, seed + attempt,
+      );
+      if (reactiveProps === null) {
+        failedAttempt('Reaktive Map-Objekte blockieren begehbare Flächen');
+        continue;
+      }
       const decals = this.generateDecals(
         this.makeDecalPrng(seed + attempt),
         rocks,
@@ -617,6 +640,7 @@ export class ArenaGenerator {
         ...(water.length ? { water } : {}),
         powerUpPedestals,
         groundHazardZones,
+        ...(reactiveProps.length ? { reactiveProps } : {}),
       };
     }
 
@@ -2427,6 +2451,47 @@ export class ArenaGenerator {
       t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+  }
+
+  /** Platziert Fass-Anker und gestreute Gruppen; `null` verwirft diesen Generierungsversuch. */
+  private placeReactiveProps(
+    blocked: boolean[][],
+    trackCols: ReadonlySet<number>,
+    pedestals: ArenaLayout['powerUpPedestals'],
+    groundHazardZones: readonly ArenaGroundHazardZone[],
+    keepClear: readonly ProtectedClearing[],
+    anchors: readonly ReactivePropAnchor[],
+    scatter: readonly ReactivePropScatterSpec[],
+    coopBaseSpecs: readonly BaseSpec[] | undefined,
+    attemptSeed: number,
+  ): ReactivePropCell[] | null {
+    const reserved = new Set<string>();
+    for (const { gridX, gridY } of pedestals) {
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) reserved.add(`${gridX + dx}_${gridY + dy}`);
+    }
+    for (const zone of groundHazardZones) for (const { gridX, gridY } of zone.cells) reserved.add(`${gridX}_${gridY}`);
+    const keepClearCells = this.collectMissionCheckpointCells(keepClear.map(clearing => ({
+      ...clearing, radiusCells: (clearing.radiusCells ?? 1) + 1,
+    })));
+    const anchorCells = new Set(anchors.map(anchor => `${anchor.gridX}_${anchor.gridY}`));
+    const result = placeReactiveProps({
+      cols: this.metrics.gridCols,
+      rows: this.metrics.gridRows,
+      blocked,
+      isReserved: (gridX, gridY) => {
+        const key = `${gridX}_${gridY}`;
+        return reserved.has(key)
+          || (keepClearCells.has(key) && !anchorCells.has(key))
+          || trackCols.has(gridX) || trackCols.has(gridX - 1) || trackCols.has(gridX + 1)
+          || this.isCaptureTheBeerBaseCell(gridX, gridY)
+          || this.isReservedBaseObstacleCell(gridX, gridY, coopBaseSpecs);
+      },
+      isConnected: (grid) => this.isConnected(grid),
+      anchors,
+      scatter,
+      rng: this.makePrng((attemptSeed ^ 0x5bd1e995) >>> 0),
+    });
+    return result.kind === 'placed' ? result.cells : null;
   }
 
   private makeDecalPrng(seed: number): () => number {

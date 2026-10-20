@@ -46,6 +46,13 @@ export interface EnvironmentRockSink {
   } | null;
   /** Der Fels ist auf 0 HP gefallen. */
   onRockDestroyed(index: number, attackerId: string): void;
+  /**
+   * Hindernisse, die unabhängig vom `rockDamageMult` den vollen Flächenschaden nehmen (reaktive
+   * Map-Objekte wie Fässer). Ohne Angabe gilt `rockDamageMult` für jedes Hindernis.
+   */
+  isFullDamageTarget?: (index: number) => boolean;
+  /** Gibt es überhaupt solche Hindernisse? Erlaubt Flächenschaden trotz `rockDamageMult = 0`. */
+  hasFullDamageTargets?: () => boolean;
 }
 
 /** Ergebnis eines Umgebungsschadens – die *tatsächlich* betroffenen Felsen. */
@@ -65,7 +72,7 @@ const EMPTY_RADIAL_ENVIRONMENT_DAMAGE_RESULT: RadialEnvironmentDamageResult = {
  * Gemeinsamer Kern des Umgebungsschadens.
  *
  * Radius, Falloff, {@link computeRadialDamage} und `rockDamageMult` werden hier – und nur hier
- * – ausgewertet. Es gibt keine künstliche Obergrenze für die Trefferzahl und keine
+ * – ausgewertet; reaktive Map-Objekte nehmen dabei immer den vollen Flächenschaden. Es gibt keine künstliche Obergrenze für die Trefferzahl und keine
  * nachträgliche Immunität: eine Explosion beschädigt genau die Felsen, die real im Radius
  * liegen. Wer die Zerstörung begrenzen will, muss den Schuss vorher anders planen. Hotpaths
  * ohne Auswertung des Trefferprotokolls können `collectResult = false` setzen und vermeiden
@@ -81,7 +88,7 @@ export function applyRadialEnvironmentDamage(
     ? { damagedRockIndices: [], destroyedRockIndices: [] }
     : EMPTY_RADIAL_ENVIRONMENT_DAMAGE_RESULT;
   const { x, y, radius, damage, rockDamageMult, falloff } = request;
-  if (rockDamageMult === 0) return result;
+  if (rockDamageMult === 0 && !sink.hasFullDamageTargets?.()) return result;
 
   const prepared: { index: number; damage: number }[] = [];
   const preparedIds = new Set<number>();
@@ -95,7 +102,9 @@ export function applyRadialEnvironmentDamage(
     const distance = Math.sqrt(dx * dx + dy * dy);
     if (distance > radius) return;
 
-    const scaledDamage = Math.round(computeRadialDamage(distance, radius, damage, falloff) * rockDamageMult);
+    const multiplier = sink.isFullDamageTarget?.(index) ? 1 : rockDamageMult;
+    if (multiplier === 0) return;
+    const scaledDamage = Math.round(computeRadialDamage(distance, radius, damage, falloff) * multiplier);
     if (scaledDamage <= 0) return;
 
     const resolvedDamage = sink.resolveRockDamage(index, scaledDamage, attackerId);

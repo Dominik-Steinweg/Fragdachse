@@ -363,8 +363,9 @@ export class WorldGeometryBinding implements WorldScopedBinding {
 
   private handleGridChange(event: ArenaMapGridChangedEvent): void {
     if (this.destroyed || event.source === 'placeable_pedestal') return;
-    if (event.source === 'static_rock'
-      && event.reason === 'static_rock_destroyed'
+    // Reaktive Map-Objekte stehen wie authored Felsen im statischen Feuerindex.
+    if (((event.source === 'static_rock' && event.reason === 'static_rock_destroyed')
+      || (event.source === 'reactive_prop' && event.reason === 'reactive_prop_destroyed'))
       && event.obstacleId !== undefined) {
       this.fireObstacles.removeStaticRock(event.obstacleId);
       return;
