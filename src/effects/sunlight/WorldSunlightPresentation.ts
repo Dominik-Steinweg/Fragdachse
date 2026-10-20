@@ -32,6 +32,7 @@ import { MOON_TUNING } from '../../config/sunlight';
 import { validateSunTuning, sunAtmosphereGrade, type SunTuning } from './SunTuning';
 import { createSunPath, resolveSunPath } from './SunPath';
 import type { SunCloudState } from './cloudShadow';
+import { resolveFogShapeClock } from './fogShape';
 import type { SurfaceLightFrame } from '../SurfaceLocalLights';
 import type { FogWoodlandLight } from '../groundFog/FogWoodlandLight';
 import type { FogAirBinding } from '../groundFog/FogAirBinding';
@@ -88,6 +89,7 @@ export class WorldSunlightPresentation {
   this.reviewSun=value;this.sunMinute=NaN;this.sync();
  }
  private readonly sunState: RockLightingState={enabled:true,normals:false,strength:0,sun:[0,0,1]};
+ private readonly fogShapeClock=new Float32Array(4);
  private readonly sunFog: FogWoodlandLight={sun:this.sunState.sun,sunCompositeTuning:this.sunTuning,clouds:this.clouds};
  private readonly ecologyQuality={rockEdgeFlora:1,rockCreviceFlora:1,rockFootFlora:1,rockFloraContact:.24,rockFloraBlend:.5};
  private readonly gradeUniforms={};
@@ -143,6 +145,10 @@ export class WorldSunlightPresentation {
  }
  /** The ground fog's air after this frame's step, lent to the void motes; null without simulating fog. */
  setFogAir(air:FogAirBinding|null):void {if(!this.disposed)this.voidCreep?.setAir(air);}
+ /** The fog's shape after its draw this frame (shaped fog); the void dust and glow draw from it. */
+ setFogShape(shape:{readonly texture:Phaser.Textures.Texture;readonly view:Float32Array}|null):void {
+  if(!this.disposed)this.voidCreep?.setFogShapeBinding(shape);
+ }
  /** Activity overlay of the void danger (permanent hazards, presence), pulled once per frame. */
  setActivityVoidDanger(danger:ActivityVoidDanger|null):void {this.activityDanger=danger;}
  private moon:ActivityMoonlight|null=null;
@@ -257,6 +263,9 @@ export class WorldSunlightPresentation {
   this.voidGlow?.update(this.scene.cameras.main,this.voidPondPoints,this.voidRockPoints,this.lastSceneTime/1000);
   {
     const artificial=targets.lighting.getArtificialLightFactor(),quality=getGraphicsQualityProfile(this.scene).sunlight;
+    // Shaped fog: without the fog's lent shape the haze layers evaluate it at the same clock.
+    const shape=resolveFogShapeClock(this.sunTuning,this.clouds.timeSec,(targets.fog?.strength??1)-1,this.fogShapeClock);
+    this.voidCreep?.setFogShape(this.sunTuning.fogStyle>.5,shape[0],shape[1],shape[2]);
     targets.lighting.setGlowLayer(this.voidCreep?.update(this.scene.cameras.main,targets.water?.getPresentationTime()??this.lastSceneTime/1000,
       Math.max(0,Math.min(1,(artificial-.1)/.6)),{rocks:quality.voidCreepRocks,glow:quality.voidCreepGlow,airborne:!!targets.fog?.carriesVoidHaze,
        motes:{layers:quality.voidMoteLayers,gradient:quality.voidMoteGradient}},

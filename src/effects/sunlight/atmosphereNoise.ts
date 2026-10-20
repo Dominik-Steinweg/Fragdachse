@@ -9,7 +9,7 @@ export const FOG_BANK_GLSL=`
 uniform float uFogCover,uFogBankScale,uFogWaterBoost,uFogShoreRamp,uFogPileSoftness,uFogScatter,uFogDensity;
 uniform float uFogBankCore,uFogBankEdge,uFogClearHaze;
 uniform float uFogPatchScale,uFogPatchDensity,uFogAreaBudget,uFogWaterAreaBudget;
-uniform float uFogOpticalOpacity;
+uniform float uFogOpticalOpacity,uFogStyle,uFogStyleGain,uFogStyleCover;
 float fogBankHash(vec2 p){p=fract(p*vec2(.1031,.11369));p+=dot(p,p.yx+19.19);return fract((p.x+p.y)*p.x);}
 float fogBankNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
  return mix(mix(fogBankHash(i),fogBankHash(i+vec2(1,0)),f.x),mix(fogBankHash(i+vec2(0,1)),fogBankHash(i+vec2(1,1)),f.x),f.y);}
@@ -35,7 +35,7 @@ import type { SunTuning } from './SunTuning';
 export function setFogBankUniforms(set:(name:string,value:unknown)=>void,t:SunTuning):void {
   set('uFogPatchScale',t.fogPatchScale);set('uFogPatchDensity',t.fogPatchDensity);
   set('uFogAreaBudget',t.fogAreaBudget);set('uFogWaterAreaBudget',t.fogWaterAreaBudget);
-  set('uFogOpticalOpacity',t.fogOpacity);
+  set('uFogOpticalOpacity',t.fogOpacity);set('uFogStyle',t.fogStyle);set('uFogStyleGain',t.fogStyleGain);set('uFogStyleCover',t.fogStyleCover);
   set('uFogCover',t.fogCover);set('uFogBankScale',t.fogBankScale);
   set('uFogBankCore',t.fogBankCore);set('uFogBankEdge',t.fogBankEdge);set('uFogClearHaze',t.fogClearHaze);
   set('uFogWaterBoost',t.fogWaterBoost);set('uFogShoreRamp',t.fogShoreRamp);

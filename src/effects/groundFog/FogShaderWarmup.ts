@@ -4,7 +4,7 @@ import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode'
 import { canPrelightFog } from './FogMaterialLighting';
 import { SUN_TUNING_DEFAULTS } from '../sunlight/SunTuning';
 import { FOG_DENSITY_FRAGMENT, FOG_DISPLAY_FRAGMENT, FOG_IMPULSE_FRAGMENT, FOG_K_MATERIAL_FRAGMENT,
-  FOG_MATERIAL_FRAGMENT, FOG_VELOCITY_FRAGMENT, FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX } from './fogShaders';
+  FOG_MATERIAL_FRAGMENT, FOG_SHAPE_FRAGMENT, FOG_VELOCITY_FRAGMENT, FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX } from './fogShaders';
 import { FOG_SURFACE_FRAGMENT } from './FogSurfaceMask';
 
 /** Lobby's ordinary fog variants. No framebuffer, draw or display-list entry;
@@ -18,6 +18,7 @@ export function warmupFogShaders(scene: Phaser.Scene, _quality: string): () => v
     ['impulse', FOG_IMPULSE_FRAGMENT], ['density', FOG_DENSITY_FRAGMENT], ['velocity', FOG_VELOCITY_FRAGMENT],
     [prelit ? 'materialLit' : 'material', prelit ? FOG_K_MATERIAL_FRAGMENT : FOG_MATERIAL_FRAGMENT],
     ['display', FOG_DISPLAY_FRAGMENT], ['rockAerial', FOG_DISPLAY_FRAGMENT], ['surface', FOG_SURFACE_FRAGMENT],
+    ['shape', FOG_SHAPE_FRAGMENT],
     // Low omits decorative trails, but FogGpuField still draws projectile wakes.
     ['trails', FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX],
   ];

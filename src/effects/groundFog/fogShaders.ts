@@ -6,12 +6,15 @@ import { SUN_VISIBILITY_GLSL, SUN_COMPOSITE_FACTOR_GLSL } from '../sunlight/sunV
 import { FOG_VISIBILITY_BUDGET_GLSL } from '../sunlight/FogVisibilityBudget';
 import { FOG_PATCH_GLSL } from '../sunlight/FogPatchField';
 import { VOID_CREEP_GLSL } from '../sunlight/VoidCreepShaders';
+import { FOG_SHAPE_GLSL, FOG_SHAPE_RANGE } from '../sunlight/fogShape';
 import { FOG_AIR_GLSL } from './FogAirBinding';
 const cells = FOG.chunkSize / FOG.cellSize;
 const f = (value: number): string => value.toFixed(6);
 const cycle = (seconds: number): string => f(Math.PI * 2 / seconds);
 const [W1, W2, W3, W4] = FOG.meanderPeriods.map(cycle);
 const AMPLITUDE = f(FOG.meanderAmplitude);
+/** Void hue of shaped fog per unit luminance (a violet of luma 1: Rec.709 weights). */
+const VOID_FOG_HUE = '1.30,.82,1.70';
 export const FOG_GLSL = `
 #pragma phaserTemplate(shaderName)
 precision highp float;
@@ -61,8 +64,8 @@ vec2 fogSpace(vec2 world,float t) { return world-uWind*t-meanderOffset(world,t);
 // Separate banks with clear gaps: elongated, gently warped two-octave patches above a wide,
 // soft threshold. Isoline ribbons were avoided on purpose: value-noise isolines narrow into
 // hard, river-like strands wherever the noise gradient is steep.
-float targetDensity(float slot,vec2 p,float water) {
-  vec2 q=fogSpace(origin(slot)+(p+.5)*8.0,uTime);
+float targetDensityAt(vec2 local,float water) {
+  vec2 q=fogSpace(local,uTime);
   vec2 drift=uTime*vec2(.0023,-.0017);
   vec2 warp=vec2(noise(q/560.0+vec2(9.2,3.7)+drift),noise(q/560.0+vec2(1.7,13.4)-drift))-.5;
   // Warp gradients stay well below one so the field never folds into creases with abrupt rims.
@@ -77,6 +80,7 @@ float targetDensity(float slot,vec2 p,float water) {
   float haze=mix(${f(FOG.clearHaze)},${f(FOG.waterHaze)},water)+uBankCover*${f(FOG.extraHaze)};
   return clamp(mix(uDensity.x,uDensity.y,water)*(haze+(1.0-haze)*cover),0.0,.95);
 }
+float targetDensity(float slot,vec2 p,float water) { return targetDensityAt(origin(slot)+(p+.5)*8.0,water); }
 vec4 state(float slot,vec2 p) {
   if(slot<0.0) return vec4(0);
   vec4 mask=terrain(slot,p);
@@ -227,13 +231,20 @@ vec4 lightFog(vec4 fog,vec2 world) {
  if(fog.a<=0.0)return fog;
  // Material optics only: preserve premultiplied colour and alpha, wakes and density.
  float v=0.0;vec2 cloudLight=vec2(0.0);
+ float voidHaze=0.0,voidBody=0.0;
  float day=uSunComposite*smoothstep(0.0,.15,uSceneSun);
  float waterWeight=0.0;
  vec3 fogComposite=vec3(1.0);
- if(day>0.0 && uFogBankMetadata>.5) {
+ // Shaped fog carries its metadata day and night.
+ bool shaped=uFogStyle>.5 && uFogBankMetadata>.5;
+ if((day>0.0||shaped) && uFogBankMetadata>.5) {
    waterWeight=clamp(fog.b/max(.0001,fog.a),0.0,1.0);
    float structure=clamp((fog.g/max(.0001,fog.a)-.79)/.09,0.0,1.0);
    fog.b=mix(.81,.88,structure)*fog.a;
+   if(shaped) {
+     voidHaze=clamp(fog.r/max(.0001,fog.a),0.0,1.0);voidBody=structure;
+     fog.r=mix(.72,.84,structure)*fog.a;
+   }
  }
  if(day>0.0) {
    cloudLight=sunLightSample(world);v=cloudLight.r;
@@ -272,6 +283,12 @@ vec4 lightFog(vec4 fog,vec2 world) {
      fog.rgb=mix(fog.rgb,scattering*fog.a,amount)/max(vec3(.05),factor);
    }
  }
+ // Violet means danger: the same fog takes the void's hue at its own brightness, whatever light
+ // falls on it; its dense body stays a little paler.
+ if(voidHaze>0.0) {
+   float luma=dot(fog.rgb,vec3(.2126,.7152,.0722));
+   fog.rgb=mix(fog.rgb,luma*${f(FOG.voidLuma)}*mix(vec3(${VOID_FOG_HUE}),vec3(1.0),.25*voidBody),voidHaze*${f(FOG.voidHue)});
+ }
  // Preserve premultiplied colour while bounding the denser woodland mist. The
  // ordinary wake still clears around actors; never turn banks into opaque walls.
  if(day>0.0) {
@@ -303,21 +320,34 @@ ${FOG_BANK_GLSL}
 ${FOG_PATCH_GLSL}
 ${ATMOSPHERE_DITHER_GLSL}
 ${FOG_LIGHT_GLSL}
+${FOG_SHAPE_GLSL}
+// Shaped fog: this frame's shape pass over the same view (unit three; the material never reads uMeta).
+uniform sampler2D uShape;
 uniform vec2 uLookupSize,uViewOrigin,uViewSize;
 uniform float uOpacity,uDetail,uDebug,uInterpolation,uHasSurface,uQuality,uWoodlandBanks,uHasRockCoverage;
-// uVelocity is the previous DENSITY buffer in this presentation pass.
+// uVelocity is the previous DENSITY buffer in this presentation pass. The material never reads uMeta:
+// the lookup's green marks a chunk on its first step, and unit three carries the fog shape instead.
 vec4 worldSample(vec2 world) {
  if(any(lessThan(world,vec2(0))) || any(greaterThanEqual(world,uWorldSize))) return vec4(0);
  vec2 chunk=floor(world/512.0);
- float slot=texture2D(uLookup,(chunk+.5)/uLookupSize).r*255.0-1.0;
+ vec4 entry=texture2D(uLookup,(chunk+.5)/uLookupSize);
+ float slot=entry.r*255.0-1.0;
  if(slot<-.5) return vec4(0);
  vec2 p=floor(mod(world,512.0)/8.0);vec2 uv=cellUV(floor(slot+.5),p);
  vec4 mask=terrain(floor(slot+.5),p);
  vec4 s=texture2D(uState,flip(uv));
  vec4 old=texture2D(uVelocity,flip(uv));
- float d=mix(unpackDensity(old.rg),unpackDensity(s.rg),meta(floor(slot+.5),2.0).g>.5?1.0:uInterpolation);
+ float d=mix(unpackDensity(old.rg),unpackDensity(s.rg),entry.g>.5?1.0:uInterpolation);
  if(mask.r<.5 || (mask.b>.5 && s.b<.5)) d=0.0;
  return vec4(d,mask.r,mask.g,s.b);
+}
+// Inhibition of the density state at one cell: explosions and passing bodies raise it, it fades
+// over a few seconds.
+float stirAt(vec2 world) {
+ if(any(lessThan(world,vec2(0))) || any(greaterThanEqual(world,uWorldSize))) return 0.0;
+ float slot=texture2D(uLookup,(floor(world/512.0)+.5)/uLookupSize).r*255.0-1.0;
+ if(slot<-.5) return 0.0;
+ return texture2D(uState,flip(cellUV(floor(slot+.5),floor(mod(world,512.0)/8.0)))).a;
 }
 vec4 smoothWorld(vec2 world) {
  vec2 grid=world/8.0-.5,base=(floor(grid)+.5)*8.0,w=fract(grid);
@@ -366,8 +396,8 @@ vec3 boundaryField(vec2 world) {
  float a=boundaryCell(p),b=boundaryCell(p+vec2(8,0)),c=boundaryCell(p+vec2(0,8)),d=boundaryCell(p+vec2(8,8));
  return vec3(mix(mix(a,b,w.x),mix(c,d,w.x),w.y),mix(b-a,d-c,w.y)/8.0,mix(c-a,d-b,w.x)/8.0);
 }
-float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out float waterWeight,out float patchDistance,out float patchActivity) {
- patchDistance=-1000.0;patchActivity=0.0;
+float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out float waterWeight,out float patchDistance,out float patchActivity,out float hazeShare,out float wake) {
+ patchDistance=-1000.0;patchActivity=0.0;hazeShare=0.0;wake=1.0;
  waterWeight=0.0;
  vec2 global=world+vec2(uWorldOffsetX,uWorldOffsetY);
  vec2 drift=vec2(1.0,.23)*cloudTravel(uCloudTime,uCloudSpeed)*.18;
@@ -383,7 +413,7 @@ float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out
  vec4 transported=smoothWorld(source);
  float slot=texture2D(uLookup,(floor(source/512.0)+.5)/uLookupSize).r*255.0-1.0;
  if(slot<-.5){layered=0.0;return 0.0;}
- float original=targetDensity(floor(slot+.5),mod(source,512.0)/8.0-.5,transported.b);
+ float original=targetDensityAt(source,transported.b);
  float flow=clamp(transported.r/max(.0001,original),0.0,1.8);
  // Invert the existing cubic water-distance encoding, then use a much gentler density ratio.
  float water=boundary.x>=12.0?transported.b:smoothWater(world);
@@ -391,6 +421,50 @@ float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out
  float shoreWarp=(fogBankNoise(q/85.0)-.5)*24.0;
  float waterRamp=smoothstep(-uFogShoreRamp*.65,uFogShoreRamp*.35,distance+shoreWarp);
  waterWeight=waterRamp;
+ if(uFogStyle>.5) {
+  // Shaped fog (fogShape): day, night and the void haze over danger are one field, drawn once per
+  // frame by the shape pass (FOG_SHAPE_FRAGMENT) and read here at the rolled point; transport, shore,
+  // shoulder and wakes stay shared. Light haze is already violet (hazeShare); the haze's coverage
+  // (in the shape pass) and density (here) follow the danger's strength.
+  vec2 rolled=world+tangent*roll*6.0-uViewOrigin;
+  vec4 shape=texture2D(uShape,vec2(rolled.x/uViewSize.x,1.0-rolled.y/uViewSize.y));
+  float core=shape.g,danger=shape.b;
+  float shaped=shape.r*shape.r*${f(FOG_SHAPE_RANGE)};
+  vec2 haze=fogShapeDanger(danger);
+  hazeShare=haze.x;
+  layered=core;patchDistance=1000.0;patchActivity=1.0;
+  // Wakes and blasts: the transport ratio is read at a torn, slowly churning offset, so a wake has
+  // ragged wind-torn edges instead of a ruler-straight channel and a blast no perfect circle.
+  vec2 tear=vec2(fogShapeNoise(global/70.0+vec2(3.1,7.7)+uCloudTime*.07),fogShapeNoise(global/70.0+vec2(9.4,1.3)-uCloudTime*.06))-.5;
+  float open=smoothstep(14.0,40.0,boundary.x);
+  vec2 torn=source+tear*${f(FOG.wakeTear)}*open;
+  // Three taps a few px apart: the cell-sized wake edge becomes a soft, wider shoulder. Only where
+  // the air was stirred lately (the density state's inhibition); elsewhere one tap is the same.
+  float carried=smoothWorld(torn).r;
+  float stirred=smoothstep(.003,.03,stirAt(torn));
+  if(stirred>0.0) {
+    vec2 spread=vec2(${f(FOG.wakeSoft)})*open;
+    carried=mix(carried,(carried+smoothWorld(torn+spread*vec2(.8,.6)).r+smoothWorld(torn-spread*vec2(.6,-.8)).r)/3.0,stirred);
+  }
+  float ratio=clamp(carried/max(.0001,targetDensityAt(torn,transported.b)),0.0,1.8);
+  // A wake thins the fog's coverage directly: thinning the optical depth of dense, saturated fog
+  // would only show where it reaches zero, a hairline crack. Dense cores close a little sooner;
+  // fog shoved aside piles up softly.
+  wake=ratio<1.0?mix(${f(FOG.wakeFloor)},1.0,smoothstep(.04,mix(.95,.75,core),ratio)):1.0;
+  float response=1.0+max(0.0,ratio-1.0)*.7;
+  // The shoved fog's rim reads as a brighter body, also where the fog was already saturated.
+  layered=max(layered,smoothstep(1.02,1.45,ratio));
+  float gain=mix(uFogStyleGain,max(uFogStyleGain,${f(FOG.voidGain)}),haze.y);
+  float styled=uFogDensity*shaped*gain*(1.0+uFogWaterBoost*waterRamp*core)*response;
+  // Fog thins towards obstacles over an eroded, never ruler-straight band, so the rock tops the
+  // display pass cuts out meet thin mist instead of a dense wall along the stepped contour. Like a
+  // wake it thins the coverage: thinner dense fog would still stand there as a wall.
+  float erode=(shape.a-.5)*${f(FOG.obstacleErode)};
+  if(rock.z<.5)wake*=mix(${f(FOG.obstacleFloor)},1.0,smoothstep(-4.0,${f(FOG.obstacleReach)},max(edge,0.0)+erode));
+  float styledPile=rock.z>.5?1.0:smoothstep(-5.0,uFogPileSoftness,edge);
+  float styledShoulder=rock.z>.5?1.0:mix(.22,1.0,smoothstep(-2.0,9.0,edge));
+  return max(0.0,styled*styledPile*styledShoulder*(1.0-surface)-.004);
+ }
  float bank=fogBank(global,uCloudTime,uCloudSpeed);
  layered=clamp(fogPatchStructure(q,uCloudTime,uQuality)+.08*roll,0.0,1.0);
  float patch=fogPatchMaskDistance(q,uCloudTime,bank,waterRamp,patchDistance);
@@ -412,15 +486,18 @@ float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out
 void main() {
  vec2 world=uViewOrigin+flip(outTexCoord)*uViewSize;
  float day=uFogBanksK*smoothstep(0.0,.15,uFogDay);
+ // Shaped fog draws its banks around the clock; day then only changes the optics.
+ float shaped=uFogBanksK*step(.5,uFogStyle);
+ float banksWeight=shaped>.5?1.0:day;
  vec3 rock=rockPresentation(world);
  vec4 center=vec4(0.0);float d=0.0;
- if(day<1.0||uDebug>.5){
+ if(banksWeight<1.0||uDebug>.5){
   center=worldSample(world);
   vec2 grid=world/8.0-.5,base=(floor(grid)+.5)*8.0,weight=fract(grid);
   d=mix(mix(worldSample(base).r,worldSample(base+vec2(8,0)).r,weight.x),
     mix(worldSample(base+vec2(0,8)).r,worldSample(base+vec2(8,8)).r,weight.x),weight.y);
  }
- if(rock.z>.5&&day<1.0)d=smoothWorld(rock.xy).r;
+ if(rock.z>.5&&banksWeight<1.0)d=smoothWorld(rock.xy).r;
  float surface=uHasSurface>.5?texture2D(uBins,outTexCoord).a:0.0;
  d*=1.0-surface;
  if(uDebug>.5) {
@@ -438,7 +515,7 @@ void main() {
    gl_FragColor=vec4(color, .92);return;
  }
  float structure=0.0,thickness=0.0;
- if(day<1.0) {
+ if(banksWeight<1.0) {
  // Displayed density lies between the previous and current step; texture time follows it.
  float t=uTime-(1.0-uInterpolation)*${f(FOG.stepMs / 1000)};
  vec2 q=fogSpace(world,t);
@@ -460,8 +537,8 @@ void main() {
    thickness=max(0.0,d*(.07+2.25*bank)-.025);
  }
  }
- float waterWeight=0.0,patchDistance=-1000.0,patchActivity=0.0;
- if(day>0.0) {
+ float waterWeight=0.0,patchDistance=-1000.0,patchActivity=0.0,hazeShare=0.0,wake=1.0;
+ if(banksWeight>0.0) {
    // Feather the base-image cutout before applying the smooth obstacle shoulder.
    float softSurface=surface;
    if(uHasSurface>.5) {
@@ -470,22 +547,52 @@ void main() {
        +texture2D(uBins,outTexCoord+vec2(0,px.y)).a+texture2D(uBins,outTexCoord-vec2(0,px.y)).a)/6.0;
    }
    float layered;
-   float banks=woodlandThickness(world,softSurface,rock,layered,waterWeight,patchDistance,patchActivity);
-   thickness=mix(thickness,banks,day);
-   structure=mix(structure,layered,day);
+   float banks=woodlandThickness(world,softSurface,rock,layered,waterWeight,patchDistance,patchActivity,hazeShare,wake);
+   thickness=mix(thickness,banks,banksWeight);
+   structure=mix(structure,layered,banksWeight);
  }
  // Weapon wakes are cut in FOG_DISPLAY_FRAGMENT at mask resolution, never at material texels.
  // A denser Activity fog also thickens its banks optically, so they read in lamp light.
- float alpha=(${f(FOG.materialMaxAlpha)}+uBankCover*${f(FOG.extraMaxAlpha)})
-   *(1.0-exp(-${f(FOG.materialGain)}*uOpacity*(1.0+uBankCover)*mix(1.0,uFogOpticalOpacity,day)*thickness));
- if(day>0.0)alpha=mix(alpha,fogPatchEdgeAlpha(alpha,patchDistance,patchActivity),day);
- if(day>0.0)alpha=max(0.0,alpha+atmosphereDither(world+vec2(uWorldOffsetX,uWorldOffsetY))/255.0*day*min(1.0,alpha*255.0));
+ float alpha=(${f(FOG.materialMaxAlpha)}+uBankCover*${f(FOG.extraMaxAlpha)}+${f(FOG.shapedExtraAlpha)}*shaped)
+   *(1.0-exp(-${f(FOG.materialGain)}*uOpacity*(1.0+uBankCover)
+   *mix(mix(1.0,uFogOpticalOpacity,day),mix(uFogOpticalOpacity,${f(FOG.voidOpacity)},hazeShare),shaped)*thickness));
+ if(day>0.0&&shaped<.5)alpha=mix(alpha,fogPatchEdgeAlpha(alpha,patchDistance,patchActivity),day);
+ alpha*=wake;
+ float dither=max(day,shaped);
+ if(dither>0.0)alpha=max(0.0,alpha+atmosphereDither(world+vec2(uWorldOffsetX,uWorldOffsetY))/255.0*dither*min(1.0,alpha*255.0));
  gl_FragColor=vec4(mix(vec3(.72,.79,.81),vec3(.84,.88,.88),structure)*alpha,alpha);
  // Woodland intermediate material: B carries premultiplied shoreline weight.
  // Display reconstructs blue from green/alpha before lighting. No extra sampler
  // or surface pass; linear filtering and wake attenuation preserve the ratio.
- if(day>0.0)gl_FragColor.b=waterWeight*alpha;
+ if(day>0.0||shaped>.5)gl_FragColor.b=waterWeight*alpha;
+ // Shaped fog: R carries the premultiplied void share; lighting rebuilds red from the structure.
+ if(shaped>.5)gl_FragColor.r=hazeShare*alpha;
  if(uFogPrelit>.5)gl_FragColor=lightFog(gl_FragColor,world+vec2(uWorldOffsetX,uWorldOffsetY));
+}
+`;
+
+/**
+ * Shaped fog, once per frame over the material's view at a fraction of its resolution
+ * (FOG.shapeDownscale): the field is far softer than a texel. R sqrt of thickness/FOG_SHAPE_RANGE, G dense core, B void danger (the creep's
+ * haze, alerts included), A a static erosion noise for the obstacle band. Data, never PMA colour.
+ */
+export const FOG_SHAPE_FRAGMENT = `
+#pragma phaserTemplate(shaderName)
+precision highp float;
+varying vec2 outTexCoord;
+// World rect of the material; x time (s), y wind travel (px), z time-of-day cover, w 1 with void haze.
+uniform vec4 uShapeView,uShapeClock;
+${VOID_CREEP_GLSL}
+void main() {
+ vec2 world=uShapeView.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uShapeView.zw;
+ float danger=uShapeClock.w>.5?clamp(creepTexel(world).b,0.0,1.0):0.0;
+ // Danger raises the coverage towards the void haze's own; the shape stays the fog's.
+ float lift=fogShapeDanger(danger).y;
+ float cover=max(uShapeClock.z,mix(uShapeClock.z,${f(FOG.voidCover)},lift));
+ float core;
+ vec2 q=world-vec2(1.0,.23)*uShapeClock.y;
+ float thick=fogShapeSpores(q,uShapeClock.x,lift,core,fogShape(q,uShapeClock.x,cover,0.0,core));
+ gl_FragColor=vec4(sqrt(clamp(thick/${f(FOG_SHAPE_RANGE)},0.0,1.0)),core,danger,fogShapeNoise(world/52.0+vec2(4.3,1.9)));
 }
 `;
 
@@ -517,7 +624,8 @@ ${FOG_AIR_GLSL}
 // by the fog's air and blown open where explosions and passing figures stir it, refilling as the
 // fog settles. Premultiplied.
 vec4 voidAir(vec2 world, float trace) {
- if(uVoidHaze.x<.5||creepTexel(world).b<.006)return vec4(0.0);
+ // Shaped fog carries the haze in its own material (woodlandThickness).
+ if(uVoidHaze.x<.5||(uFogStyle>.5&&uFogBankMetadata>.5)||creepTexel(world).b<.006)return vec4(0.0);
  vec3 fog=fogAt(world);
  vec2 carried=world-fog.xy*.35;
  float haze=creepTexel(carried).b;
@@ -530,7 +638,7 @@ vec4 voidAir(vec2 world, float trace) {
 // The haze sits inside the fog: fog over it veils it, and the fog itself takes a faint violet cast
 // where the creep lies, so both read as one air.
 vec4 withVoidAir(vec4 fog, vec4 haze, vec2 world) {
- if(uVoidHaze.x<.5)return fog;
+ if(uVoidHaze.x<.5||(uFogStyle>.5&&uFogBankMetadata>.5))return fog;
  float violet=smoothstep(.05,.8,creepTexel(world).b)*.35;
  fog.rgb=mix(fog.rgb,fog.rgb*vec3(.90,.80,1.02),violet);
  return fog+haze*(1.0-fog.a);

@@ -607,7 +607,7 @@ export class WorldPresentationFrameBinding {
     this.input.clientWorldPresentation.powerUp.updatePresentation(this.presentationTimeMs);
     this.syncSunlight();
     const fog = this.prepareGroundFog();
-    if (!fog) { this.sunlightOwner?.setFogAir(null); return; }
+    if (!fog) { this.sunlightOwner?.setFogAir(null); this.sunlightOwner?.setFogShape(null); return; }
     this.syncActivityFogStrength(fog);
     const quality = getGraphicsQualityController(this.input.scene);
     fog.enabled = quality?.getGroundFogEnabled() ?? true; fog.quality = quality?.getLevel() ?? 'high';
@@ -623,6 +623,7 @@ export class WorldPresentationFrameBinding {
     fog.update(deltaMs, this.input.lighting.getTimeOfDayMinutes(), view, showWorld);
     // The void motes borrow the air only after the step: it swaps textures and may release them.
     this.sunlightOwner?.setFogAir(fog.getAirBinding());
+    this.sunlightOwner?.setFogShape(fog.getShapeBinding());
   }
 
   private activityFogBaseline: { fog: GroundFogSystem; strength: number } | null = null;

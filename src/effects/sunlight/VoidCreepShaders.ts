@@ -1,4 +1,6 @@
 import { ROCK_COVERAGE_GLSL } from '../RockPenetrationShader';
+import { FOG_SHAPE_GLSL, FOG_SHAPE_RANGE } from './fogShape';
+import { FOG } from '../groundFog/FogConfig';
 
 /** Fixed program keys: one linked program each per renderer, warmed while loading. */
 export const VOID_CREEP_GROUND_SHADER_NAME = 'VoidCreepGround';
@@ -20,6 +22,18 @@ export const VOID_CREEP_GLSL = `
 uniform sampler2D uCreep;
 uniform vec4 uCreepFrame;
 uniform float uCreepTime;
+// Shaped fog (fogStyle 1): x on, y the fog's shape time (s), z its drift travel along the wind (px),
+// w its time-of-day cover. The haze then draws the fog's own shape (woodlandThickness), so ground
+// dust, glow and the violet fog coincide.
+uniform vec4 uHazeShape;
+${FOG_SHAPE_GLSL}
+#ifdef CREEP_LENT_SHAPE
+// The fog's own shape pass this frame (GroundFogSystem.getShapeBinding) over the world rect
+// uFogShapeView; while lent, the haze reads it instead of evaluating the shape again.
+uniform sampler2D uFogShape;
+uniform vec4 uFogShapeView;
+uniform float uFogShapeLent;
+#endif
 // Spawn zone warnings (Void-Gefahrenzonen V1): world rectangle and build-up per zone.
 uniform vec4 uVoidAlert[8];
 uniform float uVoidAlertLevel[8];
@@ -64,6 +78,27 @@ vec3 creepTexel(vec2 world) {
 // Spore haze: x thickness 0..1, y the thick body of the clouds (where light gathers), from two
 // drifting layers. Clearings stay open even where the creep is complete.
 vec2 creepHaze(vec2 world, float density) {
+  if(uHazeShape.x>.5) {
+    vec2 danger=fogShapeDanger(density);
+    float share=danger.x;
+    if(share<=0.0) return vec2(0.0);
+    float core=0.0,thick=-1.0;
+#ifdef CREEP_LENT_SHAPE
+    vec2 lent=(world-uFogShapeView.xy)/uFogShapeView.zw;
+    if(uFogShapeLent>.5&&all(greaterThanEqual(lent,vec2(0.0)))&&all(lessThanEqual(lent,vec2(1.0)))) {
+      vec4 shape=texture2D(uFogShape,vec2(lent.x,1.0-lent.y));
+      thick=shape.r*shape.r*${FOG_SHAPE_RANGE.toFixed(1)};core=shape.g;
+    }
+#endif
+    if(thick<0.0) {
+      // Same coverage as the fog's shape pass (FOG_SHAPE_FRAGMENT).
+      float cover=max(uHazeShape.w,mix(uHazeShape.w,${FOG.voidCover.toFixed(3)},danger.y));
+      vec2 q=world-vec2(1.0,.23)*uHazeShape.z;
+      thick=fogShape(q,uHazeShape.y,cover,0.0,core);
+      thick=fogShapeSpores(q,uHazeShape.y,danger.y,core,thick);
+    }
+    return vec2((1.0-exp(-1.1*thick*mix(1.0,${FOG.voidGain.toFixed(3)},danger.y)))*share,core*share);
+  }
   mat2 turn=mat2(.8,.6,-.6,.8);
   vec2 driftA=vec2(uCreepTime*.75,uCreepTime*.42), driftB=vec2(-uCreepTime*.55,uCreepTime*.85);
   float banks=creepNoise((world+driftA)*.0072+3.0)*.62+creepNoise(turn*(world+driftA)*.017+8.0)*.38;
@@ -88,6 +123,7 @@ float creepGrain(vec2 world, float pixel) {
 const surfaceFragment = (rock: boolean, bruise: number, haze: number): string => `
 #pragma phaserTemplate(shaderName)
 precision highp float;
+#define CREEP_LENT_SHAPE
 varying vec2 outTexCoord;
 // World rectangle this quad covers; world px per screen pixel.
 uniform vec4 uView;
@@ -106,8 +142,9 @@ void main() {
   float bruise=density*density*${bruise.toFixed(2)}*(.70+.60*creepNoise(world*.0062+5.0))*surface;
   vec2 mist=creepHaze(world,haze)*surface;
   // Volume: the haze a few pixels towards the light is the lit top of a cloud, its far side the
-  // shaded underside. Soft, so it reads as depth rather than an outline.
-  vec2 lit=creepHaze(world+vec2(-5.0,-7.0),haze)*surface;
+  // shaded underside. Soft, so it reads as depth rather than an outline. The shaped fog carries
+  // its own relief in the air above.
+  vec2 lit=uHazeShape.x>.5?mist:creepHaze(world+vec2(-5.0,-7.0),haze)*surface;
   float relief=clamp((lit.x-mist.x)*2.2,-1.0,1.0);
   float grain=creepGrain(world,uPixelWorld);
   // Dense veil: plum-grey in thin haze, paler lilac-grey where the clouds are thick; the grain
@@ -135,6 +172,7 @@ export const VOID_CREEP_ROCK_FRAGMENT = surfaceFragment(true, .16, .85);
 export const VOID_CREEP_GLOW_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
 precision highp float;
+#define CREEP_LENT_SHAPE
 varying vec2 outTexCoord;
 uniform vec4 uWorld;
 uniform vec3 uGlow;
@@ -145,5 +183,6 @@ void main() {
   if(texel.b<.006) { gl_FragColor=vec4(0.0,0.0,0.0,1.0); return; }
   vec2 mist=creepHaze(world,texel.b);
   float breathe=.80+.20*sin(uCreepTime*.25+creepNoise(world*.0025)*6.2831853);
-  gl_FragColor=vec4(uGlow*(mist.x*.34+mist.y*.30)*breathe,1.0);
+  // Shaped fog: the light gathers in the dense streaks and patches, so the glow keeps the fog's shape.
+  gl_FragColor=vec4(uGlow*(uHazeShape.x>.5?mist.x*.22+mist.y*.52:mist.x*.34+mist.y*.30)*breathe,1.0);
 }`;

@@ -155,7 +155,8 @@ export class GroundFogSystem {
         && distance < Math.max(s.size * 4, delta * (s.mode === 'dash' ? 2.8 : 1))) {
         const speed = distance / delta * 1000;
         const dash = s.mode === 'dash';
-        this.impulses.add({ x: before.x, y: before.y, endX: s.x, endY: s.y, radius: Math.max(14, s.size * (dash ? .70 : .68)),
+        // A body parts the air about its own width: narrower wakes read as hairline cracks in dense fog.
+        this.impulses.add({ x: before.x, y: before.y, endX: s.x, endY: s.y, radius: Math.max(18, s.size * (dash ? 1.0 : .95)),
           strength: Math.min(dash ? .68 : .62, distance / Math.max(24, s.size) * (.1 + speed / 1700) * (dash ? FOG.dashGain : FOG.motionGain)),
           kind: 'motion', priority: player ? 90 : 40 + Math.min(30, s.size / 4) });
       }
@@ -264,6 +265,10 @@ export class GroundFogSystem {
   get carriesVoidHaze(): boolean { return this.active && !!this.voidHaze; }
   /** The fog's air after this frame's step, read-only; null while the fog does not simulate. */
   getAirBinding(): FogAirBinding | null { return this.active && this.gpu ? this.gpu.getAirBinding() : null; }
+  /** This frame's fog shape after the draw, read-only (shaped fog only); null otherwise. Ask every frame. */
+  getShapeBinding(): { readonly texture: Phaser.Textures.Texture; readonly view: Float32Array } | null {
+    return this.active && this.gpu && !this.debugDisplaySuppressed ? this.gpu.getShapeBinding() : null;
+  }
   private voidHaze: FogVoidHaze | null = null;
   prepare(minutes: number, view: FogRect): boolean {
     if (this.stats.status === 'preparing') { this.update(0, minutes, view); this.gpu?.hide(); }

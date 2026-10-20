@@ -59,15 +59,23 @@ class VoidCreepGlow implements LightMapAmbientLayer {
   private height = 0;
 
   constructor(scene: Phaser.Scene, texture: string,
-    private readonly creep: { frame: Float32Array; time: number; alerts: Float32Array; alertLevels: Float32Array }) {
+    private readonly creep: { frame: Float32Array; time: number; alerts: Float32Array; alertLevels: Float32Array; shape: Float32Array;
+      fogShapeView: Float32Array; fogShapeLent: number }) {
     this.renderer = scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     this.target = new SunRenderTarget(scene, 'VoidCreepGlow', VOID_CREEP_GLOW_FRAGMENT, set => {
       set('uCreep', 0); set('uCreepFrame', this.creep.frame); set('uCreepTime', this.creep.time);
       set('uVoidAlert[0]', this.creep.alerts); set('uVoidAlertLevel[0]', this.creep.alertLevels);
-      set('uWorld', this.world); set('uGlow', this.glow);
-    }, [texture], VOID_CREEP_GLOW_SHADER_NAME);
+      set('uHazeShape', this.creep.shape); set('uWorld', this.world); set('uGlow', this.glow);
+      set('uFogShape', 1); set('uFogShapeView', this.creep.fogShapeView); set('uFogShapeLent', this.creep.fogShapeLent);
+    }, [texture, '__DEFAULT'], VOID_CREEP_GLOW_SHADER_NAME);
     this.image = new Phaser.GameObjects.Image(scene, 0, 0, this.target.shader.texture!.key)
       .setOrigin(0).setBlendMode(Phaser.BlendModes.ADD);
+  }
+
+  /** The fog's lent shape texture on unit one; null falls back to evaluating the shape. */
+  setFogShape(texture: Phaser.Textures.Texture | null): void {
+    const shader = this.target.shader, next = texture ?? shader.scene.textures.get('__DEFAULT');
+    if (shader.textures[1] !== next) shader.textures[1] = next;
   }
 
   update(worldX: number, worldY: number, worldWidth: number, worldHeight: number, width: number, height: number):
@@ -105,7 +113,13 @@ export class VoidCreepPresentation {
   private readonly creep = { frame: new Float32Array(4), time: 0,
     alerts: new Float32Array(MAX_VOID_DANGER_ALERTS * 4), alertLevels: new Float32Array(MAX_VOID_DANGER_ALERTS),
     /** Lifting waves for the motes: centre x, y, front radius, strength. */
-    lifts: new Float32Array(MAX_LIFTS * 4) };
+    lifts: new Float32Array(MAX_LIFTS * 4),
+    /** Shaped fog: on, shape time (s), drift travel (px), cover; the haze then draws the fog's shape. */
+    shape: new Float32Array(4),
+    /** The fog's lent shape pass: the world rect it covers and 1 while lent (fogShape). */
+    fogShapeView: new Float32Array(4), fogShapeLent: 0 };
+  /** The fog's shape texture this frame, borrowed read-only; null evaluates the shape here. */
+  private fogShapeTexture: Phaser.Textures.Texture | null = null;
   private nextLiftSlot = 0;
   /** World px per screen pixel; the surface shaders fade detail finer than that. */
   private pixelWorld = 1;
@@ -141,7 +155,8 @@ export class VoidCreepPresentation {
     this.creep.frame.set([creep.offsetX, creep.offsetY, creep.width * creep.texelPx, creep.height * creep.texelPx]);
     this.fogHaze = { texture, frame: this.creep.frame, time: 0, strength: AIR_STRENGTH,
       alerts: this.creep.alerts, alertLevels: this.creep.alertLevels };
-    this.ground = this.makeQuad(VOID_CREEP_GROUND_SHADER_NAME, VOID_CREEP_GROUND_FRAGMENT, DEPTH.VOID_CREEP, [key], () => {});
+    this.ground = this.makeQuad(VOID_CREEP_GROUND_SHADER_NAME, VOID_CREEP_GROUND_FRAGMENT, DEPTH.VOID_CREEP, [key, '__DEFAULT'],
+      set => set('uFogShape', 1));
     this.motes = new VoidSporeMotes(this.scene, key, this.creep, this.view, () => this.pixelWorld);
   }
 
@@ -153,6 +168,32 @@ export class VoidCreepPresentation {
       rects[i * 4] = alert.x; rects[i * 4 + 1] = alert.y; rects[i * 4 + 2] = alert.width; rects[i * 4 + 3] = alert.height;
       levels[i] = Math.max(0, Math.min(1, alert.level));
     });
+  }
+
+  /**
+   * Shaped fog (fogStyle 1): the haze draws the fog's own shape at the fog's time and wind travel
+   * (`fogShape`, `woodlandThickness`), so the dust below, the glow and the violet fog coincide.
+   */
+  setFogShape(shaped: boolean, timeSec: number, travelPx: number, cover: number): void {
+    this.creep.shape[0] = shaped ? 1 : 0; this.creep.shape[1] = timeSec; this.creep.shape[2] = travelPx; this.creep.shape[3] = cover;
+  }
+
+  /**
+   * The fog's shape pass after its draw this frame (GroundFogSystem.getShapeBinding), lent read-only:
+   * dust and glow then draw exactly the violet fog's shape. Null evaluates the shape here instead.
+   */
+  setFogShapeBinding(binding: { readonly texture: Phaser.Textures.Texture; readonly view: Float32Array } | null): void {
+    this.creep.fogShapeLent = binding ? 1 : 0;
+    if (binding) this.creep.fogShapeView.set(binding.view);
+    this.fogShapeTexture = binding?.texture ?? null;
+    this.bindFogShape();
+  }
+
+  private bindFogShape(): void {
+    const texture = this.fogShapeTexture ?? this.scene.textures.get('__DEFAULT');
+    if (this.ground && this.ground.textures[1] !== texture) this.ground.textures[1] = texture;
+    if (this.rock && this.rock.textures[3] !== texture) this.rock.textures[3] = texture;
+    this.glow?.setFogShape(this.fogShapeTexture);
   }
 
   /** The fog's air after its step this frame, lent to the motes; null without simulating fog. */
@@ -241,8 +282,9 @@ export class VoidCreepPresentation {
     this.place(this.ground);
     this.motes?.update(this.view[0], this.view[1], this.view[2], this.view[3], night, options.motes);
     this.syncRock(options.rocks ? coverage : null);
+    this.bindFogShape();
     if (!options.glow || night <= .01) return null;
-    this.glow ??= new VoidCreepGlow(this.scene, this.key, this.creep);
+    if (!this.glow) { this.glow = new VoidCreepGlow(this.scene, this.key, this.creep); this.bindFogShape(); }
     const [r, g, b] = [(VOID_PALETTE.primary >> 16) & 255, (VOID_PALETTE.primary >> 8) & 255, VOID_PALETTE.primary & 255];
     const strength = GLOW_STRENGTH * Math.min(1, night) / 255;
     this.glow.glow[0] = r * strength; this.glow.glow[1] = g * strength; this.glow.glow[2] = b * strength;
@@ -258,12 +300,12 @@ export class VoidCreepPresentation {
     if (!coverage) { this.rock?.setVisible(false); return; }
     if (!this.rock) {
       this.rock = this.makeQuad(VOID_CREEP_ROCK_SHADER_NAME, VOID_CREEP_ROCK_FRAGMENT, DEPTH.ROCK_VOID_CREEP,
-        [this.key!, coverage.field.key, coverage.lookup.key], set => {
-          set('uRockField', 1); set('uRockLookup', 2); set('uRockFrame', this.rockFrame);
+        [this.key!, coverage.field.key, coverage.lookup.key, '__DEFAULT'], set => {
+          set('uRockField', 1); set('uRockLookup', 2); set('uRockFrame', this.rockFrame); set('uFogShape', 3);
         });
       this.rockBinding = coverage;
     } else if (this.rockBinding !== coverage) {
-      this.rock.setTextures([this.key!, coverage.field.key, coverage.lookup.key]);
+      this.rock.setTextures([this.key!, coverage.field.key, coverage.lookup.key, '__DEFAULT']);
       this.rockBinding = coverage;
     }
     for (let i = 0; i < 4; i++) this.rockFrame[i] = coverage.frame[i];
@@ -281,7 +323,8 @@ export class VoidCreepPresentation {
       setupUniforms: (set: Set) => {
         set('uCreep', 0); set('uCreepFrame', this.creep.frame); set('uCreepTime', this.creep.time); set('uView', this.view);
         set('uVoidAlert[0]', this.creep.alerts); set('uVoidAlertLevel[0]', this.creep.alertLevels);
-        set('uPixelWorld', this.pixelWorld); set('uAirborne', this.airborne);
+        set('uPixelWorld', this.pixelWorld); set('uAirborne', this.airborne); set('uHazeShape', this.creep.shape);
+        set('uFogShapeView', this.creep.fogShapeView); set('uFogShapeLent', this.creep.fogShapeLent);
         extra(set);
       },
     }, 0, 0, 1, 1, textures);
@@ -297,7 +340,7 @@ export class VoidCreepPresentation {
     this.rock?.destroy(); this.rock = null; this.rockBinding = null;
     this.glow?.destroy(); this.glow = null;
     this.motes?.destroy(); this.motes = null;
-    this.fogHaze = null;
+    this.fogHaze = null; this.fogShapeTexture = null; this.creep.fogShapeLent = 0;
     this.texture = null; this.pixels = null; this.field = null; this.haze = null; this.fades = []; this.lastTime = NaN; this.sinceUpload = 0;
     this.creep.lifts.fill(0);
     if (this.key) { this.scene.textures.remove(this.key); this.key = null; }

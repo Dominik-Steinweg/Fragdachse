@@ -22,7 +22,7 @@ vi.mock('phaser',()=>({
 import { FogGpuField } from '../src/effects/groundFog/FogGpuField';
 vi.mock('../src/effects/groundFog/FogTrailRenderer',()=>({FogTrailRenderer:class {draw(){}get drawCalls(){return 0;}get visibleTraces(){return 0;}}}));
 import { FogTerrainModel } from '../src/effects/groundFog/FogTerrainModel';
-import { fogTuning } from '../src/effects/groundFog/FogConfig';
+import { FOG, fogTuning } from '../src/effects/groundFog/FogConfig';
 import type { FogWoodlandLight } from '../src/effects/groundFog/FogWoodlandLight';
 import { DEPTH } from '../src/config';
 import { CHARACTER_SHADOW_CONFIG } from '../src/effects/ShadowConfig';
@@ -190,5 +190,42 @@ describe('optional fog woodland presentation',()=>{
     field.destroy();expect(field.getAirBinding()).toBeNull();
     // Borrowing never adds anything the fog would not release itself.
     expect(remove.mock.calls.length).toBeGreaterThanOrEqual(removed);
+  });
+  it('draws the shaped fog once per frame on the metadata unit and lends it, only while shaped',()=>{
+    const gl={ZERO:0,ONE:1,ONE_MINUS_SRC_ALPHA:771,FUNC_ADD:32774,DITHER:1,MAX_TEXTURE_SIZE:2,MAX_TEXTURE_IMAGE_UNITS:3,FRAMEBUFFER_COMPLETE:4,
+      isEnabled:()=>false,getParameter:(key:number)=>key===2?8192:16,getShaderPrecisionFormat:()=>({precision:23}),
+      getProgramParameter:()=>true,checkFramebufferStatus:()=>4,texSubImage2D(){},disable(){},enable(){}};
+    const fallback={source:[{glTexture:{}}]},remove=vi.fn(),scene={sys:{renderer:{gl,blendModes:[],addBlendMode:vi.fn(),updateBlendMode:vi.fn(),createTexture2D:()=>({}),glTextureUnits:{bind(){}},glWrapper:{updateTexturing(){},update(){}}}},
+      textures:{addGLTexture:()=>({}),get:()=>fallback,remove},add:{existing:(value:unknown)=>value}};
+    const terrain=new FogTerrainModel({offsetX:100,offsetY:200,width:512,height:512},[]),tuning=fogTuning(1);
+    const field=new FogGpuField(scene as never,terrain,1,tuning,10),view={x:100,y:200,width:512,height:512};
+    const light:FogWoodlandLight={sunStrength:0,sun:[0,0,1],sunCompositeTuning:{...SUN_TUNING_DEFAULTS}};
+    const creep={key:'__void_creep_test'},haze={texture:creep as never,frame:new Float32Array([100,200,512,512]),time:3,strength:.8,
+      alerts:new Float32Array(32),alertLevels:new Float32Array(8)};
+    const uniforms=(shader:any)=>{const values=new Map();shader.config.setupUniforms((name:string,value:unknown)=>values.set(name,value));return values;};
+    field.setWoodlandLight(light);field.setVoidHaze(haze);
+    field.prepare(view,0);field.step([], [.3,.5],tuning,0);field.render(view,256,256,'normal',1,[],'high');
+    // The patch field (style 0) has no shape pass and lends nothing; the display carries the haze.
+    expect(fake.shaders.some(s=>s.config.name==='GroundFog_shape')).toBe(false);
+    expect(field.getShapeBinding()).toBeNull();
+    light.sunCompositeTuning!.fogStyle=1;fake.draws.mockClear();
+    field.render(view,256,256,'normal',1,[],'high');
+    const shape=fake.shaders.find(s=>s.config.name==='GroundFog_shape');
+    const material=fake.shaders.filter(s=>s.config.name.startsWith('GroundFog_material')).at(-1);
+    // Night and day alike: one extra draw at a fraction of the material's resolution, no new sampler unit.
+    expect(fake.draws).toHaveBeenCalledTimes(2);
+    expect([shape.width,shape.height]).toEqual([256/FOG.shapeDownscale,256/FOG.shapeDownscale]);
+    expect(shape.textures).toEqual([creep]);
+    expect(material.textures[3]).toBe(shape.texture);expect(material.textures).toHaveLength(8);
+    expect(uniforms(material).get('uShape')).toBe(3);
+    expect(Array.from(uniforms(shape).get('uShapeView'))).toEqual([100,200,512,512]);
+    expect(uniforms(shape).get('uShapeClock')[3]).toBe(1);
+    const lent=field.getShapeBinding()!;
+    expect(lent.texture).toBe(shape.texture);expect(Array.from(lent.view)).toEqual([100,200,512,512]);
+    // The creep owner may destroy its texture right after unbinding: the shape pass lets go at once.
+    field.setVoidHaze(null);expect(shape.textures).not.toContain(creep);
+    light.sunCompositeTuning!.fogStyle=0;field.render(view,256,256,'normal',1,[],'high');
+    expect(field.getShapeBinding()).toBeNull();expect(material.textures[3]).not.toBe(shape.texture);
+    field.destroy();expect(shape.destroy).toHaveBeenCalledOnce();expect(field.getShapeBinding()).toBeNull();
   });
 });

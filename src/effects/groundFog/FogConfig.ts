@@ -31,6 +31,20 @@ export const FOG = {
   // Soft optical saturation instead of a hard opacity clip.
   materialMaxAlpha: .62, materialGain: 2.4, materialEdge: .03,
   materialMargin: 64,
+  // Shaped fog (fogShape): extra peak alpha of its banks; over danger the void haze's own coverage,
+  // density gain and optical opacity replace the time-of-day values (GDD Void-Gefahrenzonen V1).
+  // voidHue is how far the fog's colour turns violet over danger.
+  // voidLuma darkens it to a plum-grey (the night glow lights it from inside).
+  // The shape pass runs at this fraction of the material's resolution; the field is far softer.
+  shapeDownscale: 4,
+  shapedExtraAlpha: .20, voidCover: .72, voidGain: 1.35, voidOpacity: 1.15, voidHue: 1, voidLuma: .74,
+  // Shaped fog's coverage thins to obstacleFloor at an obstacle and is whole obstacleReach px away; the band's
+  // contour is eroded by up to obstacleErode px.
+  obstacleFloor: .3, obstacleReach: 64, obstacleErode: 44,
+  // Wind travel of shaped fog (share of the cloud travel; the patch field drifts .18), how far
+  // (world px) a wake's edge is torn and how wide its shoulder is softened.
+  // wakeFloor is the share of coverage a fully cleared wake keeps (a faint veil, never a cut).
+  shapedDrift: .32, wakeTear: 22, wakeSoft: 11, wakeFloor: .06,
 } as const;
 export type FogQuality = 'high' | 'medium' | 'low';
 export type FogDebug = 'normal' | 'barriers' | 'water' | 'density' | 'unreached' | 'velocity' | 'impulses' | 'surface';

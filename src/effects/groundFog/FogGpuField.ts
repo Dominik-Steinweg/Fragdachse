@@ -8,7 +8,8 @@ import { FOG, FOG_DEBUG, type FogDebug, type FogRect, type FogTuning, type FogQu
 import { FogTerrainModel } from './FogTerrainModel';
 import { FogResidency } from './FogResidency';
 import type { FogImpulse } from './FogImpulses';
-import { FOG_DENSITY_FRAGMENT, FOG_DISPLAY_FRAGMENT, FOG_IMPULSE_FRAGMENT, FOG_MATERIAL_FRAGMENT, FOG_K_MATERIAL_FRAGMENT, FOG_VELOCITY_FRAGMENT, FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX } from './fogShaders';
+import { FOG_DENSITY_FRAGMENT, FOG_DISPLAY_FRAGMENT, FOG_IMPULSE_FRAGMENT, FOG_MATERIAL_FRAGMENT, FOG_K_MATERIAL_FRAGMENT, FOG_SHAPE_FRAGMENT, FOG_VELOCITY_FRAGMENT, FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX } from './fogShaders';
+import { resolveFogShapeClock } from '../sunlight/fogShape';
 import { FogTrailSegments } from './FogTrailSegments';
 import { FogTrailRenderer } from './FogTrailRenderer';
 import type { FogWoodlandLight } from './FogWoodlandLight';
@@ -88,6 +89,12 @@ export class FogGpuField {
   private readonly velocities: Phaser.GameObjects.Shader[] = [];
   private readonly impulse: Phaser.GameObjects.Shader;
   private material: Phaser.GameObjects.Shader | null = null;
+  /** Shaped fog (fogStyle 1): the shape pass over the material's view, at FOG.shapeDownscale of its resolution. */
+  private shapePass: Phaser.GameObjects.Shader | null = null;
+  private shaped = false;
+  private readonly shapeView = new Float32Array(4);
+  private readonly shapeClock = new Float32Array(4);
+  private readonly shapeBinding = { texture: null as unknown as Phaser.Textures.Texture, view: this.shapeView };
   private display: Phaser.GameObjects.Shader | null = null;
   private rockAerial: Phaser.GameObjects.Shader | null = null;
   private rockAerialStrength = 0;
@@ -121,6 +128,8 @@ export class FogGpuField {
   private readonly neutralSun=[0,0,0];
   private tint: readonly number[] = [1, 1, 1];
   private lookupKey = '';
+  /** First-step flag per slot as of the last step, mirrored into the lookup's green for the material. */
+  private readonly slotFresh = new Uint8Array(SLOTS);
   private current = 0;
   private elapsed = 0;
   private density: readonly number[] = [0, 0];
@@ -193,6 +202,8 @@ export class FogGpuField {
         setCloudUniforms(set,this.woodlandLight?.clouds);
         setFogBankUniforms(set,this.woodlandLight?.sunCompositeTuning??SUN_TUNING_DEFAULTS);
         if(name==='materialLit')this.setLightingUniforms(set);
+        if(name==='material'||name==='materialLit')set('uShape',3);
+        if(name==='shape')this.setShapeUniforms(set);
         set('uDebug', FOG_DEBUG.indexOf(this.debug)); set('uInterpolation', this.interpolation);
         set('uHasSurface', this.hasSurfaces ? 1 : 0); set('uQuality', this.quality === 'high' ? 2 : this.quality === 'medium' ? 1 : 0);
         set('uHasRockCoverage', this.rockCoverage && this.debug==='normal' ? 1 : 0);
@@ -234,6 +245,8 @@ export class FogGpuField {
     shader.setTextures([state.texture!, velocity.texture!, this.terrainTexture.texture, this.metaTexture.texture,
       this.commands.texture, this.bins.texture, this.impulse.texture!, this.lookup.texture]);
     if (shader === this.material) {
+      // The material never reads the chunk metadata (FOG_K_MATERIAL_FRAGMENT); unit three carries the fog shape.
+      shader.textures[3] = this.shaped && this.shapePass ? this.shapePass.texture! : this.scene.textures.get('__DEFAULT');
       shader.textures[4] = this.debug==='normal' ? this.presentation.texture : this.velocities[this.current].texture!;
       shader.textures[5] = this.packedSurface?.texture ?? this.scene.textures.get('__DEFAULT');
       if(this.boundary && this.debug==='normal')shader.textures[6]=this.boundary.texture;
@@ -296,7 +309,10 @@ export class FogGpuField {
     const lookupKey = [...this.residency.chunks.values()].filter(c => c.active).map(c => `${c.slot}:${c.cx}:${c.cy}`).join(';');
     if (lookupKey !== this.lookupKey) {
       this.lookupKey = lookupKey; this.lookup.data.fill(0);
-      for (const c of this.residency.chunks.values()) if (c.active) this.lookup.data[(c.cy * this.lookup.width + c.cx) * 4] = c.slot + 1;
+      for (const c of this.residency.chunks.values()) if (c.active) {
+        const i = (c.cy * this.lookup.width + c.cx) * 4;
+        this.lookup.data[i] = c.slot + 1; this.lookup.data[i + 1] = c.fresh ? 255 : this.slotFresh[c.slot];
+      }
       this.lookup.upload();
     }
   }
@@ -316,7 +332,14 @@ export class FogGpuField {
       encode(this.commands.data, (768 + i) * 4, (Math.cos((p.arcDegrees ?? 0) * Math.PI / 360) * .5 + .5) * 65535);
       encode(this.commands.data, (768 + i) * 4 + 2, (Math.atan2(p.endY - p.y, p.endX - p.x) / (Math.PI * 2) + .5) * 65535);
     });
+    // The material reads the first-step flag from the lookup's green (it has no metadata sampler).
+    let freshChanged = false;
     for (const c of this.residency.chunks.values()) {
+      if (c.active) {
+        const i = (c.cy * this.lookup.width + c.cx) * 4 + 1, fresh = c.fresh ? 255 : 0;
+        this.slotFresh[c.slot] = fresh;
+        if (this.lookup.data[i] !== fresh) { this.lookup.data[i] = fresh; freshChanged = true; }
+      }
       for (const [i, [dx, dy]] of [[-1, 0], [1, 0], [0, -1], [0, 1]].entries()) {
         const n = this.residency.chunks.get(`${c.cx + dx},${c.cy + dy}`);
         meta[c.slot * 4 + i] = n?.active ? n.slot + 1 : 0;
@@ -337,6 +360,7 @@ export class FogGpuField {
       meta[offset + 2] = count;
     }
     this.metaTexture.upload(); this.commands.upload(); this.bins.upload();
+    if (freshChanged) this.lookup.upload();
     this.submitted = impulses.length;
     this.dropped += impulses.length - accepted.size;
   }
@@ -360,6 +384,17 @@ export class FogGpuField {
       this.resetSlots.delete(slot); cleared = true;
     }
     if (cleared) this.terrainTexture.upload();
+  }
+  /** Shape pass (FOG_SHAPE_FRAGMENT): the material's view, the shape clock and the borrowed creep on unit zero. */
+  private setShapeUniforms(set:(name:string,value:unknown)=>void):void {
+    const haze=this.debug==='normal'?this.voidHaze:null;
+    this.shapeView[0]=this.view.x;this.shapeView[1]=this.view.y;this.shapeView[2]=this.view.width;this.shapeView[3]=this.view.height;
+    const tuning=this.woodlandLight?.sunCompositeTuning??SUN_TUNING_DEFAULTS;
+    resolveFogShapeClock(tuning,this.woodlandLight?.clouds?.timeSec??0,this.bankCover,this.shapeClock);
+    this.shapeClock[3]=haze?1:0;
+    set('uShapeView',this.shapeView);set('uShapeClock',this.shapeClock);set('uCreep',0);
+    set('uCreepFrame',haze?.frame??this.view4);set('uCreepTime',haze?.time??0);
+    if(haze){set('uVoidAlert[0]',haze.alerts);set('uVoidAlertLevel[0]',haze.alertLevels);}
   }
   /** Screen-space composite of the soft material and the finer wake mask. */
   private setLightingUniforms(set:(name:string,value:unknown)=>void):void {
@@ -487,6 +522,16 @@ export class FogGpuField {
       mask.render();
       this.renderSurfacePass(surfaces.length>0);
     }
+    this.shaped=!!this.woodlandLight?.sunCompositeTuning&&this.woodlandLight.sunCompositeTuning.fogStyle>.5&&!!this.boundary&&debug==='normal';
+    if(this.shaped) {
+      const sw=Math.max(2,Math.ceil(w/FOG.shapeDownscale)),sh=Math.max(2,Math.ceil(h/FOG.shapeDownscale));
+      if(!this.shapePass||this.shapePass.width!==sw||this.shapePass.height!==sh) {
+        this.shapePass?.destroy();
+        this.shapePass=this.makePass('shape',FOG_SHAPE_FRAGMENT,sw,sh);
+        this.shapePass.texture!.setFilter(Phaser.Textures.FilterMode.LINEAR);
+      }
+      this.renderShapePass();
+    }
     this.draw(this.material, this.states[this.current], this.states[1 - this.current]);
     const fallback=this.scene.textures.get('__DEFAULT');
     const displayTextures=[this.material.texture!, this.trailMask?.texture ?? fallback];
@@ -504,6 +549,24 @@ export class FogGpuField {
       this.rockAerial.setPosition(view.x,view.y).setDisplaySize(view.width,view.height);
     }
     this.rockAerial?.setVisible(showAerial);
+  }
+  private renderShapePass():void {
+    const shader=this.shapePass!;
+    shader.setTextures([this.voidHaze&&this.debug==='normal'?this.voidHaze.texture:this.scene.textures.get('__DEFAULT')]);
+    const renderer=this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+    renderer.gl.disable(renderer.gl.DITHER);
+    shader.renderWebGLStep(renderer,shader,shader.drawingContext!);
+    if(this.dither)renderer.gl.enable(renderer.gl.DITHER);
+    renderer.glWrapper.update({blend:{enabled:true}});
+  }
+  /**
+   * This frame's fog shape for read-only borrowers (the void creep draws its dust and glow from it):
+   * the texture and the world rect it covers. Null unless the fog is shaped. Ask again every frame.
+   */
+  getShapeBinding(): { readonly texture: Phaser.Textures.Texture; readonly view: Float32Array } | null {
+    if (this.destroyed || !this.shaped || !this.shapePass) return null;
+    this.shapeBinding.texture = this.shapePass.texture!;
+    return this.shapeBinding;
   }
   hide(): void { this.display?.setVisible(false);this.rockAerial?.setVisible(false); }
   setRockLighting(strength: [number, number]): void { this.rockFogStrength=strength; }
@@ -523,8 +586,11 @@ export class FogGpuField {
     this.voidHaze = haze;
     // The owner may destroy the texture right after this call: drop the borrowed samplers now,
     // not at the next render, so the display never draws with a released texture.
-    if (!haze) for (const display of [this.display, this.rockAerial])
-      if (display && display.textures.length > 3) display.setTextures(display.textures.slice(0, 3));
+    if (!haze) {
+      for (const display of [this.display, this.rockAerial])
+        if (display && display.textures.length > 3) display.setTextures(display.textures.slice(0, 3));
+      if (this.shapePass) this.shapePass.textures[0] = this.scene.textures.get('__DEFAULT');
+    }
   }
   private readonly view4 = new Float32Array(4);
   private readonly air = { velocity: null as unknown as Phaser.Textures.Texture, state: null as unknown as Phaser.Textures.Texture,
@@ -598,6 +664,7 @@ export class FogGpuField {
   get bytes(): number {
     return WIDTH * HEIGHT * 4 * 6 + this.metaTexture.data.length + this.commands.data.length + this.bins.data.length
       + this.lookup.data.length + (this.material ? this.material.width * this.material.height * 4 : 0)
+      + (this.shapePass ? this.shapePass.width * this.shapePass.height * 4 : 0)
       + (this.surfaceMask ? this.surfaceMask.width * this.surfaceMask.height * 4 : 0)
       + (this.packedSurface ? this.packedSurface.width * this.packedSurface.height * 4 : 0) + this.presentation.data.length
       + (this.trailMask ? this.trailMask.width * this.trailMask.height * 4 : 0)
@@ -613,6 +680,7 @@ export class FogGpuField {
     this.surfaceMask?.destroy(); this.surfaceMask = null;
     this.packedSurface?.destroy();this.packedSurface=null;
     this.material?.destroy();
+    this.shapePass?.destroy(); this.shapePass = null; this.shaped = false;
     this.trailMask?.destroy();
     for (const shader of [...this.states, ...this.velocities, this.impulse]) shader?.destroy();
     for (const dispose of this.resources.splice(0)) dispose();
