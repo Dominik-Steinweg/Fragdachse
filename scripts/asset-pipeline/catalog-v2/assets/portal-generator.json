@@ -1,0 +1,40 @@
+{
+  "id": "portal-generator",
+  "label": "Portal-Generator (feindlich)",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/dawn-extractor.png",
+  "targetSize": 96,
+  "sourceSizes": [
+    192
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Heavy hostile void-tech machine on a 3 x 3 cell footprint: a central resonance core, radial coils or emitter pylons and one armored energy outlet pointing toward the portal entry outside the asset.",
+    "colors": "Matte blackened gunmetal, charcoal iron and dull oxidised bronze with honest chips, soot and rust bleed; a single motivated violet accent (VOID_PALETTE) in the core, coil tips and outlet only.",
+    "anatomy": "Strict orthographic plan view, no ground or baked shadow. Intact, damaged and rubble states share one fixed 96 px canvas and centered pivot; emission is authored only on the violet energy parts so a congruent emissive pass can drive charging versus open."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "portal-generator",
+  "model": {
+    "concept": "a",
+    "state": "intact",
+    "outlet": "north"
+  },
+  "orthoScale": 3.2,
+  "materialSource": "procedural",
+  "textures": {},
+  "materialVariants": {
+    "standard": {
+      "label": "Matte blackened void-tech, procedural wear",
+      "textureStrength": 1,
+      "formShadowStrength": 0.8
+    }
+  },
+  "clips": []
+}
