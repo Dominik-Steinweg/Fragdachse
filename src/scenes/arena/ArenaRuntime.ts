@@ -326,7 +326,7 @@ export class ArenaRuntime {
 
   /** Gleicht die residenten Render-Chunks dieser World an den sichtbaren Ausschnitt an. */
   private syncWorldSurfaceResidency(showWorld: boolean, deltaMs: number): void {
-    this.flow.getWorldRuntime()?.presentationFrame?.syncSurfaceResidency(showWorld, deltaMs);
+    this.flow.getWorldRuntime()?.presentationFrame?.syncSurfaceResidency(showWorld, deltaMs, this.flow.getWorldEnemyManager());
   }
 
   notifyWildlifeShot(shooterId: string): void {

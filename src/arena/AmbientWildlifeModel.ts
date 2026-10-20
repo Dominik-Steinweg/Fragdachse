@@ -3,12 +3,22 @@ import type { ArenaLayout } from '../types';
 import type { ChunkWorldFrame, ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { hashSeededCell01 } from './CellHash';
 import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
-import { createWildlifeAppearance, isWingedInsect, type WildlifeAppearance, type WildlifeKind } from './AmbientWildlifeAppearance';
+import { createWildlifeAppearance, isWingedInsect, WILDLIFE_KINDS, type WildlifeAppearance, type WildlifeKind } from './AmbientWildlifeAppearance';
 import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 
 export type { WildlifeKind } from './AmbientWildlifeAppearance';
 export type FishPhase = 'swimming' | 'fleeing' | 'diving' | 'hidden' | 'emerging';
-export interface WildlifePlayer { readonly id: string; readonly x: number; readonly y: number }
+/** A displayed body (player or enemy); local presentation only, never wire state. */
+export interface WildlifeMover {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  /** Half-size beyond a player-sized body: distances are measured to the body's edge. */
+  readonly radius?: number;
+}
+export type WildlifeImpulseKind = 'shot' | 'explosion';
+/** The nearest live impulse that alarmed an animal; its reach is fixed when it is noticed. */
+export interface WildlifeAlarm { x: number; y: number; until: number; reach: number }
 export interface WildlifeAnimal {
   readonly kind: WildlifeKind;
   readonly homeX: number;
@@ -32,10 +42,48 @@ export interface WildlifeAnimal {
   resting: boolean;
   diurnalActive: boolean;
   retireTime: number;
-  readonly shot: { x: number; y: number; until: number };
+  readonly alarm: WildlifeAlarm;
 }
-interface PlayerMotion { x: number; y: number; movingUntil: number; seen: number }
+
+export interface WildlifeAnimalInit {
+  readonly kind: WildlifeKind;
+  readonly x: number;
+  readonly y: number;
+  readonly homeX?: number;
+  readonly homeY?: number;
+  readonly variation: number;
+  readonly phaseOffset: number;
+  readonly appearance: WildlifeAppearance;
+  readonly speed?: number;
+  readonly calmTime?: number;
+  readonly resting?: boolean;
+  readonly diurnalActive?: boolean;
+  readonly opacity?: number;
+}
+
+/** The only constructor of animal state, shared with scripted reuses of the wildlife meshes. */
+export function createWildlifeAnimal(init: WildlifeAnimalInit): WildlifeAnimal {
+  const diurnalActive = init.diurnalActive ?? true;
+  return { kind: init.kind, x: init.x, y: init.y, homeX: init.homeX ?? init.x, homeY: init.homeY ?? init.y,
+    variation: init.variation, phaseOffset: init.phaseOffset, appearance: init.appearance,
+    angle: init.phaseOffset, turnSpeed: 0, avoidanceAngle: null, speed: init.speed ?? 0,
+    animation: init.phaseOffset, opacity: init.opacity ?? (diurnalActive ? 1 : 0),
+    fishPhase: 'swimming', phaseTime: 0, calmTime: init.calmTime ?? 0, alertCooldown: 0, fleeing: false,
+    resting: init.resting ?? false, diurnalActive, retireTime: 0, alarm: { x: 0, y: 0, until: 0, reach: 0 } };
+}
+
+interface MoverMotion { x: number; y: number; movingUntil: number; seen: number }
 const TAU = Math.PI * 2;
+/** Upper bound of the coarse mover grid per axis; wider spreads use coarser cells. */
+const MOVER_GRID_AXIS = 64;
+/** Animals further outside the view keep their state without simulation. */
+const SIMULATION_MARGIN_PX = 192;
+/**
+ * Bodies beyond this distance from the view cannot alarm a simulated animal: the simulation margin,
+ * the widest alert radius and headroom for the edge of a large body. Callers may cull movers with it.
+ */
+export const WILDLIFE_DISTURBANCE_MARGIN_PX = SIMULATION_MARGIN_PX
+  + Math.max(...WILDLIFE_KINDS.map(kind => TUNING[kind].alertRadius)) + 128;
 // Static cell flags. Probes run per animal and frame; string keys allocated thousands of times.
 const WATER = 1, DEEP_WATER = 2, ROCK = 4, DIRT = 8;
 /** Trunk lookups may step one cell outside the frame; offset keeps the key non-negative. */
@@ -51,7 +99,23 @@ export class AmbientWildlifeModel {
   private readonly tracks = new Set<number>();
   private readonly trees: { x: number; y: number }[];
   private readonly trunks = new Map<number, { x: number; y: number }>();
-  private readonly players = new Map<string, PlayerMotion>();
+  private readonly motions = new Map<string, MoverMotion>();
+  // Movers compacted once per frame; threat lookups visit only nearby grid buckets.
+  private readonly moverX = new Float64Array(TUNING.disturbance.moverCapacity);
+  private readonly moverY = new Float64Array(TUNING.disturbance.moverCapacity);
+  private readonly moverRadius = new Float64Array(TUNING.disturbance.moverCapacity);
+  private readonly moverMoving = new Uint8Array(TUNING.disturbance.moverCapacity);
+  private readonly bucketNext = new Int32Array(TUNING.disturbance.moverCapacity);
+  private readonly bucketHead = new Int32Array(MOVER_GRID_AXIS * MOVER_GRID_AXIS);
+  private moverMaxRadius = 0;
+  private gridX = 0;
+  private gridY = 0;
+  private gridCell = 1;
+  private gridCols = 0;
+  private gridRows = 0;
+  private threatX = 0;
+  private threatY = 0;
+  private threatDistance = 0;
   private time = 0;
   private frameId = 0;
   private daylightInitialized = false;
@@ -94,12 +158,8 @@ export class AmbientWildlifeModel {
       const calmTime = kind === 'butterfly'
         ? random(x, y, 805) * (resting ? TUNING.butterflyRestSeconds : TUNING.butterflyFlightSeconds) * (.7 + variation * .6)
         : 3 + variation * 9;
-      const animal: WildlifeAnimal = { kind, x, y, homeX, homeY, variation, phaseOffset, appearance,
-        angle: phaseOffset, turnSpeed: 0, avoidanceAngle: null, speed: resting ? 0 : TUNING[kind].speed, animation: phaseOffset, opacity: 1,
-        fishPhase: 'swimming', phaseTime: 0, calmTime, alertCooldown: 0, fleeing: false,
-        resting, diurnalActive: kind !== 'moth' && kind !== 'firefly', retireTime: 0,
-        shot: { x: 0, y: 0, until: 0 } };
-      if (!animal.diurnalActive) animal.opacity = 0;
+      const animal = createWildlifeAnimal({ kind, x, y, homeX, homeY, variation, phaseOffset, appearance,
+        speed: resting ? 0 : TUNING[kind].speed, calmTime, resting, diurnalActive: kind !== 'moth' && kind !== 'firefly' });
       this.animals.push(animal);
       return animal;
     };
@@ -230,51 +290,43 @@ export class AmbientWildlifeModel {
       && this.isLand(x, y, animal.appearance.footprint);
   }
 
-  /** A brief local disturbance at the displayed shooter's position, without a gameplay event queue. */
-  notifyShot(x: number, y: number): void {
+  /**
+   * A brief local disturbance (a displayed shot, an explosion) without a gameplay event queue.
+   * The nearest live impulse is remembered per animal, so it also reaches animals outside the view.
+   */
+  notifyImpulse(kind: WildlifeImpulseKind, x: number, y: number, radius = 0): void {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const impulse = TUNING.disturbance[kind];
+    const blast = (Number.isFinite(radius) ? Math.max(0, radius) : 0) * impulse.blastScale;
     for (const a of this.animals) {
+      const reach = TUNING[a.kind].alertRadius * impulse.alertScale + blast;
       const distance = Math.hypot(a.x - x, a.y - y);
-      if (distance >= TUNING[a.kind].alertRadius * TUNING.shotRadiusScale) continue;
-      if (a.shot.until <= this.time || distance <= Math.hypot(a.x - a.shot.x, a.y - a.shot.y)) {
-        a.shot.x = x; a.shot.y = y;
+      if (distance >= reach) continue;
+      const alarm = a.alarm;
+      if (alarm.until <= this.time || distance <= Math.hypot(a.x - alarm.x, a.y - alarm.y)) {
+        alarm.x = x; alarm.y = y; alarm.reach = reach;
       }
-      a.shot.until = this.time + TUNING.shotAlertSeconds;
+      alarm.until = Math.max(alarm.until, this.time + impulse.seconds);
     }
   }
 
-  update(deltaMs: number, players: readonly WildlifePlayer[], view?: ChunkWorldRect,
+  update(deltaMs: number, movers: readonly WildlifeMover[], view?: ChunkWorldRect,
     timeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES): void {
     const dt = Math.max(0, Math.min(deltaMs / 1000, .05));
     this.time += dt; this.frameId++;
-    for (const p of players) {
-      const previous = this.players.get(p.id);
-      if (previous) {
-        if (Math.hypot(p.x - previous.x, p.y - previous.y) > .08) previous.movingUntil = this.time + .2;
-        previous.x = p.x; previous.y = p.y; previous.seen = this.frameId;
-      } else this.players.set(p.id, { x: p.x, y: p.y, movingUntil: 0, seen: this.frameId });
-    }
-    for (const [id, p] of this.players) if (p.seen !== this.frameId) this.players.delete(id);
+    this.ingestMovers(movers);
     const minutes = normalizeTimeOfDay(timeOfDayMinutes);
     for (const animal of this.animals) {
       // Daylight transitions must also complete outside the camera's simulation window.
       if (isWingedInsect(animal.kind) && !this.updateInsectDaylight(animal, minutes, dt)) continue;
       // Offscreen state is retained without per-animal animation or habitat queries.
-      if (view && (animal.x < view.x - 192 || animal.y < view.y - 192
-        || animal.x > view.x + view.width + 192 || animal.y > view.y + view.height + 192)) continue;
+      const margin = SIMULATION_MARGIN_PX;
+      if (view && (animal.x < view.x - margin || animal.y < view.y - margin
+        || animal.x > view.x + view.width + margin || animal.y > view.y + view.height + margin)) continue;
       const tuning = TUNING[animal.kind];
-      let threat: { x: number; y: number } | undefined, distance = tuning.alertRadius as number;
-      for (const p of this.players.values()) {
-        // Active insects also react to stationary players and cannot settle
-        // beside them. Ground/water animals retain movement sensitivity.
-        if (!isWingedInsect(animal.kind) && p.movingUntil <= this.time) continue;
-        const d = Math.hypot(animal.x - p.x, animal.y - p.y);
-        if (d < distance) { distance = d; threat = p; }
-      }
-      if (animal.shot.until > this.time) {
-        const d = Math.hypot(animal.x - animal.shot.x, animal.y - animal.shot.y);
-        if (d < tuning.alertRadius * TUNING.shotRadiusScale && (!threat || d < distance)) threat = animal.shot;
-      }
+      // Active insects also react to stationary bodies and cannot settle beside them.
+      // Ground/water animals retain movement sensitivity.
+      const threat = this.resolveThreat(animal, isWingedInsect(animal.kind));
       if (animal.kind === 'fish') this.updateFish(animal, dt, !!threat);
       animal.fleeing = animal.kind === 'fish'
         ? animal.fishPhase === 'fleeing' || (animal.fishPhase === 'diving' && animal.fleeing) : !!threat;
@@ -288,11 +340,85 @@ export class AmbientWildlifeModel {
         + Math.sin(this.time * .27 + animal.phaseOffset * 3) * .45;
       // Aim a short, fixed time ahead; the turn controller integrates dt once.
       let desiredAngle = animal.angle + wander * .25;
-      if (threat && animal.fleeing) desiredAngle = Math.atan2(animal.y - threat.y, animal.x - threat.x);
+      if (threat && animal.fleeing) desiredAngle = Math.atan2(animal.y - this.threatY, animal.x - this.threatX);
       this.move(animal, desiredAngle, dt);
       animal.animation += dt * (isWingedInsect(animal.kind) ? TUNING[animal.kind].animationRate : 5 + animal.speed * .25);
     }
     this.daylightInitialized = true;
+  }
+
+  /** Track per-id motion and compact this frame's bodies into the bucket grid; no per-frame allocation. */
+  private ingestMovers(movers: readonly WildlifeMover[]): void {
+    const tuning = TUNING.disturbance, capacity = tuning.moverCapacity;
+    let count = 0, maxRadius = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const m of movers) {
+      if (count >= capacity) break;
+      if (!Number.isFinite(m.x) || !Number.isFinite(m.y)) continue;
+      let motion = this.motions.get(m.id);
+      if (motion) {
+        if (Math.hypot(m.x - motion.x, m.y - motion.y) > tuning.movingPx) motion.movingUntil = this.time + tuning.movingHoldSeconds;
+        motion.x = m.x; motion.y = m.y; motion.seen = this.frameId;
+      } else {
+        motion = { x: m.x, y: m.y, movingUntil: 0, seen: this.frameId };
+        this.motions.set(m.id, motion);
+      }
+      const radius = m.radius !== undefined && Number.isFinite(m.radius) ? Math.max(0, m.radius) : 0;
+      this.moverX[count] = m.x; this.moverY[count] = m.y; this.moverRadius[count] = radius;
+      this.moverMoving[count] = motion.movingUntil > this.time ? 1 : 0;
+      maxRadius = Math.max(maxRadius, radius);
+      minX = Math.min(minX, m.x); minY = Math.min(minY, m.y); maxX = Math.max(maxX, m.x); maxY = Math.max(maxY, m.y);
+      count++;
+    }
+    for (const [id, motion] of this.motions) if (motion.seen !== this.frameId) this.motions.delete(id);
+    this.moverMaxRadius = maxRadius;
+    if (!count) { this.gridCols = this.gridRows = 0; return; }
+    // Cells never fall below the configured size; wide spreads coarsen to stay within the fixed grid.
+    const cell = Math.max(tuning.gridCellPx, Math.max(maxX - minX, maxY - minY) / (MOVER_GRID_AXIS - 1));
+    this.gridX = minX; this.gridY = minY; this.gridCell = cell;
+    this.gridCols = Math.min(MOVER_GRID_AXIS, Math.floor((maxX - minX) / cell) + 1);
+    this.gridRows = Math.min(MOVER_GRID_AXIS, Math.floor((maxY - minY) / cell) + 1);
+    this.bucketHead.fill(-1, 0, this.gridCols * this.gridRows);
+    for (let i = 0; i < count; i++) {
+      const col = Math.min(this.gridCols - 1, Math.floor((this.moverX[i] - minX) / cell));
+      const row = Math.min(this.gridRows - 1, Math.floor((this.moverY[i] - minY) / cell));
+      const bucket = row * this.gridCols + col;
+      this.bucketNext[i] = this.bucketHead[bucket]; this.bucketHead[bucket] = i;
+    }
+  }
+
+  /** Nearest body within `reach` of its edge; writes the threat position into scratch fields. */
+  private findMoverThreat(x: number, y: number, reach: number, includeStationary: boolean): boolean {
+    if (!this.gridCols) return false;
+    const r = reach + this.moverMaxRadius, cell = this.gridCell;
+    const left = Math.max(0, Math.floor((x - r - this.gridX) / cell));
+    const right = Math.min(this.gridCols - 1, Math.floor((x + r - this.gridX) / cell));
+    const top = Math.max(0, Math.floor((y - r - this.gridY) / cell));
+    const bottom = Math.min(this.gridRows - 1, Math.floor((y + r - this.gridY) / cell));
+    let best = reach, found = false;
+    for (let row = top; row <= bottom; row++) for (let col = left; col <= right; col++) {
+      for (let i = this.bucketHead[row * this.gridCols + col]; i >= 0; i = this.bucketNext[i]) {
+        if (!includeStationary && !this.moverMoving[i]) continue;
+        const dx = this.moverX[i] - x, dy = this.moverY[i] - y, limit = best + this.moverRadius[i];
+        if (dx > limit || dx < -limit || dy > limit || dy < -limit) continue;
+        const d = Math.hypot(dx, dy) - this.moverRadius[i];
+        if (d < best) { best = d; found = true; this.threatX = this.moverX[i]; this.threatY = this.moverY[i]; }
+      }
+    }
+    this.threatDistance = best;
+    return found;
+  }
+
+  /** One rule for every kind: the nearest alarming body or remembered impulse, if any. */
+  private resolveThreat(animal: WildlifeAnimal, includeStationary: boolean): boolean {
+    let threat = this.findMoverThreat(animal.x, animal.y, TUNING[animal.kind].alertRadius, includeStationary);
+    const alarm = animal.alarm;
+    if (alarm.until > this.time) {
+      const d = Math.hypot(animal.x - alarm.x, animal.y - alarm.y);
+      if (d < alarm.reach && (!threat || d < this.threatDistance)) {
+        threat = true; this.threatX = alarm.x; this.threatY = alarm.y; this.threatDistance = d;
+      }
+    }
+    return threat;
   }
 
   private updateInsectDaylight(a: WildlifeAnimal, minutes: number, dt: number): boolean {
@@ -412,5 +538,5 @@ export class AmbientWildlifeModel {
     return t * t * (3 - 2 * t);
   }
 
-  destroy(): void { this.animals.length = 0; this.players.clear(); }
+  destroy(): void { this.animals.length = 0; this.motions.clear(); this.gridCols = this.gridRows = 0; }
 }

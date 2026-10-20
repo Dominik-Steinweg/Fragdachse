@@ -161,7 +161,7 @@ describe('ground fog bounded world state', () => {
     const scene = { game: { events }, sys: { renderer } };
     const fog = new GroundFogSystem(scene as never, frame, 1, []);
     const releaseExplosion = vi.fn(), releaseProjectile = vi.fn(), releaseCombat = vi.fn();
-    const effects = { bindGroundFogExplosion: vi.fn(() => releaseExplosion), bindGroundFogCombat: vi.fn(() => releaseCombat) };
+    const effects = { bindExplosionObserver: vi.fn(() => releaseExplosion), bindGroundFogCombat: vi.fn(() => releaseCombat) };
     const cell = { gridX: 1, gridY: 1 }, gone = { gridX: 2, gridY: 1 };
     const binding = new WorldGroundFogBinding(scene as never, fog, { rocks: [cell, gone] } as never,
       { rockPhysicsProxies: [{ active: true }, { active: false }] } as never, effects);

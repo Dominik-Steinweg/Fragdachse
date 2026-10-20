@@ -88,7 +88,7 @@ class WildlifeLab extends Phaser.Scene {
     bind('shot', () => {
       if (!this.target) return;
       const x = this.target.x - AMBIENT_WILDLIFE[this.kind].alertRadius * .7, y = this.target.y + 10;
-      this.wildlife.notifyShot(x, y);
+      this.wildlife.notifyImpulse('shot', x, y);
       this.shotMarker.setPosition(x, y).setVisible(true).setAlpha(1);
       this.shotTime = 1;
     });

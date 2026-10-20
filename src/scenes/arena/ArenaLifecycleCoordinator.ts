@@ -447,6 +447,7 @@ export class ArenaLifecycleCoordinator {
           const candidate = this.ctx.inputSystem.getInteractionCandidate();
           return candidate?.kind === 'lobby-menu' ? candidate.menu : null;
         },
+        explosions: this.ctx.effectSystem,
         getActivityMoonlight: () => dawnNight()?.moonlight,
         getActivityVoidDanger: () => this.coopMissionVoidDanger.read(),
         groundFog: {

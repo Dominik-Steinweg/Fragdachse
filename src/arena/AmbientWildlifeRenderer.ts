@@ -9,7 +9,7 @@ import type { ChunkWorldFrame, ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { prepareWildlifeVisuals } from './AmbientWildlifeGeometry';
 import { fireflyGlowStrength } from './AmbientWildlifeAppearance';
 import { createAmbientWildlifeLayer, type AmbientWildlifeLayer } from './AmbientWildlifeLayer';
-import { AmbientWildlifeModel, type WildlifeAnimal, type WildlifePlayer } from './AmbientWildlifeModel';
+import { AmbientWildlifeModel, type WildlifeAnimal, type WildlifeImpulseKind, type WildlifeMover } from './AmbientWildlifeModel';
 
 type WildlifeLighting = Pick<LightingSystem, 'setLight' | 'releaseLight'>;
 let nextLightOwner = 0;
@@ -52,11 +52,11 @@ export class AmbientWildlifeRenderer {
     this.sunlight = state;
   }
 
-  update(deltaMs: number, players: readonly WildlifePlayer[], view: ChunkWorldRect, timeOfDayMinutes?: number,
+  update(deltaMs: number, movers: readonly WildlifeMover[], view: ChunkWorldRect, timeOfDayMinutes?: number,
     lighting?: WildlifeLighting): void {
     if (this.destroyed) return;
     this.visualTime += Math.max(0, Math.min(deltaMs / 1000, .05));
-    this.model.update(deltaMs, players, view, timeOfDayMinutes);
+    this.model.update(deltaMs, movers, view, timeOfDayMinutes);
     this.ground.updatePose(view, this.visualTime);
     this.fish.updatePose(view, this.visualTime);
     this.fireflies.updatePose(view, this.visualTime, this.sunlight);
@@ -91,8 +91,8 @@ export class AmbientWildlifeRenderer {
     this.lighting = null;
   }
 
-  notifyShot(x: number, y: number): void {
-    if (!this.destroyed) this.model.notifyShot(x, y);
+  notifyImpulse(kind: WildlifeImpulseKind, x: number, y: number, radius?: number): void {
+    if (!this.destroyed) this.model.notifyImpulse(kind, x, y, radius);
   }
 
   destroy(): void {

@@ -78,7 +78,7 @@ describe('cosmetic wildlife', () => {
     expect(a.opacity).toBe(1);
     let partialFade = false;
     for (let i = 0; i < 200; i++) {
-      model.notifyShot(a.x, a.y);
+      model.notifyImpulse('shot', a.x, a.y);
       model.update(50, [{ id: 'nearby', x: a.x, y: a.y }], undefined, endTime);
       partialFade ||= a.opacity > 0 && a.opacity < 1;
       expect([a.x, a.y, a.animation]).toEqual(pose);
@@ -202,7 +202,7 @@ describe('cosmetic wildlife', () => {
     for (let i = 0; i < 1200; i++) {
       const before = model.animals.map(a => ({ x: a.x, y: a.y, angle: a.angle }));
       const dt = i % 2 ? 1 / 30 : 1 / 60;
-      if (i % 90 === 0) for (const a of model.animals) model.notifyShot(a.x + 20, a.y);
+      if (i % 90 === 0) for (const a of model.animals) model.notifyImpulse('shot', a.x + 20, a.y);
       model.update(dt * 1000, model.animals.map((a, j) => ({ id: `pressure-${j}`,
         x: a.x + Math.cos(i * .04) * 25, y: a.y + Math.sin(i * .04) * 25 })), undefined, minutes);
       for (const [j, a] of model.animals.entries()) {
@@ -292,10 +292,10 @@ describe('cosmetic wildlife', () => {
       for (let i = 0; i < 800 && !a.resting; i++) model.update(25, []);
       expect(a.resting).toBe(true);
     }
-    model.notifyShot(frame.offsetX - 1000, frame.offsetY - 1000);
+    model.notifyImpulse('shot', frame.offsetX - 1000, frame.offsetY - 1000);
     tick(16);
     expect(a.fleeing).toBe(false);
-    model.notifyShot(a.x - AMBIENT_WILDLIFE[kind].alertRadius * 1.2, a.y);
+    model.notifyImpulse('shot', a.x - AMBIENT_WILDLIFE[kind].alertRadius * 1.2, a.y);
     tick(16);
     expect(a.fleeing).toBe(true);
     expect(a.resting).toBe(false);
@@ -306,6 +306,52 @@ describe('cosmetic wildlife', () => {
       expect(phases.has('hidden')).toBe(true);
       expect(phases.has('emerging')).toBe(true);
     }
+  });
+
+  it.each<WildlifeKind>(['butterfly', 'moth', 'firefly', 'snake', 'fish'])('reacts to an explosion beyond shot reach: %s', kind => {
+    const model = new AmbientWildlifeModel(layout(), frame);
+    const a = model.animals.find(a => a.kind === kind)!;
+    const tick = () => model.update(16, [], undefined, kind === 'moth' || kind === 'firefly' ? 0 : 12 * 60);
+    const { shot, explosion } = AMBIENT_WILDLIFE.disturbance, alert = AMBIENT_WILDLIFE[kind].alertRadius, radius = 40;
+    const distance = alert * shot.alertScale + 10;
+    expect(distance).toBeLessThan(alert * explosion.alertScale + radius * explosion.blastScale);
+    tick();
+    model.notifyImpulse('shot', a.x - distance, a.y);
+    tick();
+    expect(a.fleeing).toBe(false);
+    model.notifyImpulse('explosion', a.x - distance, a.y, radius);
+    tick();
+    expect(a.fleeing).toBe(true);
+  });
+
+  it('measures moving bodies of any id to their edge, so a large enemy alarms from further away', () => {
+    const model = new AmbientWildlifeModel(layout(), frame);
+    const a = model.animals.find(a => a.kind === 'snake')!;
+    a.angle = 0;
+    const reach = AMBIENT_WILDLIFE.snake.alertRadius;
+    const small = { id: 'enemy-small', x: a.x - reach - 10, y: a.y };
+    model.update(16, [small]); small.x += 1; model.update(16, [small]);
+    expect(a.fleeing).toBe(false);
+    const large = { id: 'enemy-large', x: a.x - reach - 10, y: a.y, radius: 24 };
+    model.update(16, [large]); large.x += 1; model.update(16, [large]);
+    expect(a.fleeing).toBe(true);
+  });
+
+  it('finds a nearby moving body among hundreds of widely spread bodies', () => {
+    const model = new AmbientWildlifeModel(layout(), frame);
+    const a = model.animals.find(a => a.kind === 'snake')!;
+    a.angle = 0;
+    const startX = a.x;
+    const near = { id: 'near', x: a.x - 30, y: a.y };
+    const crowd = Array.from({ length: 300 }, (_, i) => ({ id: `crowd-${i}`,
+      x: frame.offsetX + (i % 20) * 5000 - 40000, y: frame.offsetY + Math.floor(i / 20) * 5000 - 30000 }));
+    const movers = [near, ...crowd];
+    model.update(16, movers);
+    for (const m of movers) m.x += 1;
+    model.update(16, movers);
+    expect(a.fleeing).toBe(true);
+    for (let i = 0; i < 20; i++) { for (const m of movers) m.x += 1; model.update(16, movers); }
+    expect(a.x).toBeGreaterThan(startX);
   });
 
   it('fishes flee, fully disappear, and return to ordinary swimming; undisturbed schools also dive', () => {

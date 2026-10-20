@@ -16,7 +16,8 @@ export function wildlifeFogCover(x: number, y: number, state: SunCloudState): nu
   return Number.isFinite(alpha) ? Math.min(.55, t.fogMaxCover, alpha) : 0;
 }
 
-export type WildlifeKind = 'butterfly' | 'moth' | 'firefly' | 'snake' | 'fish';
+export const WILDLIFE_KINDS = ['butterfly', 'moth', 'firefly', 'snake', 'fish'] as const;
+export type WildlifeKind = typeof WILDLIFE_KINDS[number];
 export function isWingedInsect(kind: WildlifeKind): kind is 'butterfly' | 'moth' | 'firefly' {
   return kind === 'butterfly' || kind === 'moth' || kind === 'firefly';
 }

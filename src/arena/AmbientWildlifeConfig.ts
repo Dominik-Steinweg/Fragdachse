@@ -16,8 +16,16 @@ export const AMBIENT_WILDLIFE = {
   snake: { size: 24, speed: 9, fleeSpeed: 32, alertRadius: 96, turnRate: 1.6, maxCount: 96,
     treeOccupancy: .25, groupChance: .04, thirdSnakeChance: .15 },
   fish: { size: 4.5, speed: 11, fleeSpeed: 96, alertRadius: 160, turnRate: 3, maxCount: 96, density: .8 },
-  shotRadiusScale: 2,
-  shotAlertSeconds: 1.6,
+  // One disturbance rule for every kind. Bodies (players, enemies) alarm within alertRadius,
+  // measured to their edge; impulses reach alertRadius * alertScale + radius * blastScale.
+  disturbance: {
+    moverCapacity: 256,
+    gridCellPx: 256,
+    movingPx: .08,
+    movingHoldSeconds: .2,
+    shot: { alertScale: 2, blastScale: 0, seconds: 1.6 },
+    explosion: { alertScale: 2.5, blastScale: 2, seconds: 3 },
+  },
   butterflyFlightSeconds: 5,
   butterflyRestSeconds: 30,
   snakeSizes: [.85, 1, 1.22],

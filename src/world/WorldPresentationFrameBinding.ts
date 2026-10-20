@@ -8,13 +8,14 @@ import type { FireControlCopyShotSource } from '../projectile/ProjectilePresenta
 import type { WorldSunlightPresentation } from '../effects/sunlight/WorldSunlightPresentation';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import type { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
-import type { MovementVisualSource } from '../effects/MovementStepSampler';
+import { createMovementVisualSample, type MovementVisualSource } from '../effects/MovementStepSampler';
 import type { BaseManager } from '../entities/BaseManager';
 import type { ProjectilePresentationRuntime } from '../projectile/ProjectilePresentationRuntime';
 import type { EffectSystem } from '../effects/EffectSystem';
 import { getGraphicsQualityController } from '../graphics/GraphicsQuality';
 import { WorldGroundFogBinding } from './WorldGroundFogBinding';
-import type { WildlifePlayer } from '../arena/AmbientWildlifeModel';
+import { WILDLIFE_DISTURBANCE_MARGIN_PX, type WildlifeMover } from '../arena/AmbientWildlifeModel';
+import { AMBIENT_WILDLIFE } from '../arena/AmbientWildlifeConfig';
 import type { MovementEffectsRenderer } from '../effects/MovementEffectsRenderer';
 import type { BurrowGpuRenderer } from '../effects/BurrowGpuRenderer';
 import * as Phaser from 'phaser';
@@ -23,7 +24,7 @@ import {
   ACTIVE_ARENA_METRICS_PROFILE,
   ARENA_MAX_X, ARENA_MAX_Y, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_VIEWPORT_HEIGHT, ARENA_VIEWPORT_WIDTH, GAME_HEIGHT, GAME_WIDTH,
-  NET_SMOOTH_TIME_MS,
+  NET_SMOOTH_TIME_MS, PLAYER_SIZE,
 } from '../config';
 import { setCameraBaseScroll } from '../graphics/cameraBaseScroll';
 import { getCameraFocusOverride, resolveCameraFocusZoom } from '../graphics/cameraFocusOverride';
@@ -170,6 +171,11 @@ export interface WorldClientPresentationRenderers {
  * direkt halten – er ist ausdruecklich kein Service-Locator und kennt die Scene nur ueber die
  * schmalen, benannten Ports dieses Inputs. Activity-Presentation bleibt ausserhalb dieses Owners.
  */
+/** Allocation-free enemy iteration (EnemyManager); wildlife reads only each displayed pose. */
+export interface WildlifeEnemySource {
+  forEachEnemy(visitor: (enemy: MovementVisualSource) => void): void;
+}
+
 export interface WorldPresentationFrameBindingInput {
   readonly getLobbyMerchant?: () => Pick<import('../arena/LobbyMerchantRenderer').LobbyMerchantRenderer, 'update'> | null;
   readonly getLobbyInteractionMenu?: () => import('../config/authoring/lobbyBuildings').LobbyMenu | null;
@@ -182,8 +188,10 @@ export interface WorldPresentationFrameBindingInput {
     readonly getActivityTint?: () => readonly [number, number, number] | undefined;
     readonly getBases: () => BaseManager | null;
     readonly getProjectiles: () => ProjectilePresentationRuntime | null;
-    readonly effects: Pick<EffectSystem, 'bindGroundFogExplosion' | 'bindGroundFogCombat'>;
+    readonly effects: Pick<EffectSystem, 'bindExplosionObserver' | 'bindGroundFogCombat'>;
   };
+  /** Destructive explosions disturb this World's wildlife, independent of the ground fog. */
+  readonly explosions?: Pick<EffectSystem, 'bindExplosionObserver'>;
   /** Activity moonlight for the World's sun owner (Dawn blood moon); undefined = the World sky. */
   readonly getActivityMoonlight?: () => import('../effects/sunlight/WorldSunlightPresentation').ActivityMoonlight | undefined;
   /** Activity share of the void danger (permanent hazards, presence); null = the World's own. */
@@ -357,7 +365,23 @@ export class WorldPresentationFrameBinding {
   private ownershipScope: object | null = null;
   private readonly ownedConstructionIds = new Set<number>();
   private destroyed = false;
-  private readonly wildlifePlayers: WildlifePlayer[] = [];
+  /** Displayed bodies handed to wildlife this frame; entries are pooled and mutated in place. */
+  private readonly wildlifeMovers: WildlifeMover[] = [];
+  private readonly wildlifeMoverPool: { id: string; x: number; y: number; radius: number }[] = [];
+  private readonly wildlifeSample = createMovementVisualSample();
+  private wildlifeView: WorldViewRect | null = null;
+  private readonly releaseWildlifeExplosions: (() => void) | null;
+  /** Created once: an enemy visitor that reads the displayed pose, never the simulation. */
+  private readonly collectWildlifeEnemy = (enemy: MovementVisualSource): void => {
+    const view = this.wildlifeView, sample = this.wildlifeSample;
+    if (!view) return;
+    enemy.readMovementVisualSample(sample);
+    if (!sample.visible || sample.isBurrowDash || !Number.isFinite(sample.x + sample.y + sample.size)) return;
+    const margin = WILDLIFE_DISTURBANCE_MARGIN_PX;
+    if (sample.x < view.x - margin || sample.y < view.y - margin
+      || sample.x > view.x + view.width + margin || sample.y > view.y + view.height + margin) return;
+    this.pushWildlifeMover(sample.id, sample.x, sample.y, Math.max(0, (sample.size - PLAYER_SIZE) / 2));
+  };
   private lastCameraScrollX = 0;
   private focusZoomApplied = false;
   private focusZoomBoundsWereUsed = true;
@@ -374,6 +398,10 @@ export class WorldPresentationFrameBinding {
         return x >= view.x - 100 && y >= view.y - 100 && x <= view.x + view.width + 100 && y <= view.y + view.height + 100;
       });
     this.input.lighting.setDynamicOccluderSource(this.trainLightOccluders);
+    this.releaseWildlifeExplosions = input.explosions?.bindExplosionObserver((x, y, radius) => {
+      if (!this.destroyed && this.input.getLocalWorldPresentation().required)
+        this.input.getArenaResult()?.wildlife?.notifyImpulse('explosion', x, y, radius);
+    }) ?? null;
   }
 
   isDestroyed(): boolean {
@@ -553,7 +581,7 @@ export class WorldPresentationFrameBinding {
    * zuletzt residente Stand unangetastet stehen, die Welt verschwindet also nicht, sie waechst
    * nur nicht mit. Nach `destroy()` wirkungslos.
    */
-  syncSurfaceResidency(showWorld: boolean, deltaMs = 0): void {
+  syncSurfaceResidency(showWorld: boolean, deltaMs = 0, enemies: WildlifeEnemySource | null = null): void {
     if (this.destroyed) return;
     this.syncSunlight();
     const fog = this.prepareGroundFog();
@@ -574,13 +602,8 @@ export class WorldPresentationFrameBinding {
     ArenaBuilder.updateSurfaceResidency(this.input.getArenaResult(), worldView);
     const wildlife = this.input.getArenaResult()?.wildlife;
     if (wildlife) {
-      this.wildlifePlayers.length = 0;
-      for (const player of this.input.getPlayers()) {
-        const sprite = player.displayObject;
-        if (player.active && sprite?.visible && sprite.alpha > .1)
-          this.wildlifePlayers.push({ id: player.id, x: sprite.x, y: sprite.y });
-      }
-      wildlife.update(deltaMs, this.wildlifePlayers, worldView,
+      this.collectWildlifeMovers(worldView, enemies);
+      wildlife.update(deltaMs, this.wildlifeMovers, worldView,
         this.input.lighting.getTimeOfDayMinutes(), this.input.lighting);
     }
     this.input.shadow.updateStaticResidency(worldView);
@@ -598,6 +621,27 @@ export class WorldPresentationFrameBinding {
       this.fogBinding.sync(this.input.constructionOwnership?.getPlacement() ?? null, input.getBases(), input.getProjectiles());
     }
     return fog;
+  }
+
+  /** Displayed players first, then enemies near the view, up to the wildlife's mover capacity. */
+  private collectWildlifeMovers(view: WorldViewRect, enemies: WildlifeEnemySource | null): void {
+    this.wildlifeMovers.length = 0;
+    for (const player of this.input.getPlayers()) {
+      const sprite = player.displayObject;
+      if (player.active && sprite?.visible && sprite.alpha > .1) this.pushWildlifeMover(player.id, sprite.x, sprite.y, 0);
+    }
+    if (!enemies) return;
+    this.wildlifeView = view;
+    enemies.forEachEnemy(this.collectWildlifeEnemy);
+    this.wildlifeView = null;
+  }
+
+  private pushWildlifeMover(id: string, x: number, y: number, radius: number): void {
+    const index = this.wildlifeMovers.length;
+    if (index >= AMBIENT_WILDLIFE.disturbance.moverCapacity) return;
+    const mover = this.wildlifeMoverPool[index] ??= { id: '', x: 0, y: 0, radius: 0 };
+    mover.id = id; mover.x = x; mover.y = y; mover.radius = radius;
+    this.wildlifeMovers.push(mover);
   }
 
   /** Runs after host/client pose presentation; independent of footprint budgets. */
@@ -647,7 +691,7 @@ export class WorldPresentationFrameBinding {
     const player = this.input.getPlayers().find(p => p.id === shooterId);
     const sprite = player?.displayObject;
     if (player?.active && sprite?.visible && sprite.alpha > .1)
-      this.input.getArenaResult()?.wildlife?.notifyShot(sprite.x, sprite.y);
+      this.input.getArenaResult()?.wildlife?.notifyImpulse('shot', sprite.x, sprite.y);
   }
 
   /** Projiziert den allgemeinen replizierten World-Zustand fuer Clients, auch ohne Activity. */
@@ -970,7 +1014,8 @@ export class WorldPresentationFrameBinding {
     this.releasedView = null;
     this.sunlightOwner?.destroy();this.sunlightOwner=null;
     this.fogBinding?.destroy(); this.fogBinding = null;
-    this.wildlifePlayers.length = 0;
+    this.releaseWildlifeExplosions?.();
+    this.wildlifeMovers.length = 0;
     this.input.getArenaResult()?.wildlife?.clearLights();
     this.clearConstructionOwnership();
     if (this.input.healthBarScope) this.input.healthBars?.closeWorld(this.input.healthBarScope);
