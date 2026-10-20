@@ -70,8 +70,8 @@ export const SUN_TUNING_LIMITS = {
 
 const frame = (minute: number, values: Partial<SunTuning>) => ({ minute, values: { ...SUN_TUNING_DEFAULTS, ...values } });
 const night: Partial<SunTuning> = { shade:[1,1,1],daylight:[1,1,1],sun:[1,1,1],
-  // Shaped fog: the night carries plenty of fog (art direction 2026-10).
-  fogStyleGain:1.2,fogStyleCover:.25,
+  // Shaped fog: the night still carries plenty of fog (art direction 2026-10), in separate banks.
+  fogStyleGain:1.1,fogStyleCover:.14,
   fogOpacity:.7,fogShadeOpacity:1,fogShade:[.65,.75,.96],fogSun:[.65,.75,.96],
   cloudCover:0,cloudDensity:0,gradeTemperature:0,gradeContrast:1,gradeBrightness:1,
   gradeSaturation:1,gradeBloomAmount:0 };
@@ -80,32 +80,34 @@ const night: Partial<SunTuning> = { shade:[1,1,1],daylight:[1,1,1],sun:[1,1,1],
 export const SUN_ATMOSPHERE_KEYFRAMES = [
   frame(0,night), frame(360,night),
   // User 2026-09-30: mornings carry clearly more mist; it thins through mid-morning.
-  frame(420,{...night,fogStyleGain:1.3,fogStyleCover:0.08,fogOpacity:1.2,fogCover:.62,fogAreaBudget:.43,fogWaterAreaBudget:.36,
+  // Shaped fog (user 2026-10-20): even the morning leaves most of the ground clear, the fog lies
+  // in separate dense banks (cover about .6 instead of the full 1).
+  frame(420,{...night,fogStyleGain:1.15,fogStyleCover:-.3,fogOpacity:1.2,fogCover:.62,fogAreaBudget:.43,fogWaterAreaBudget:.36,
     fogMaxCover:.52,fogWaterMaxCover:.32}),
-  frame(480,{fogStyleGain:1.0,fogStyleCover:0,shade:[.78,.84,.91],daylight:[1.01,1.01,.99],sun:[1.40,1.31,1.12],fogOpacity:1.5,fogShadeOpacity:.65,
+  frame(480,{fogStyleGain:1.0,fogStyleCover:-.38,shade:[.78,.84,.91],daylight:[1.01,1.01,.99],sun:[1.40,1.31,1.12],fogOpacity:1.5,fogShadeOpacity:.65,
     fogCover:.70,fogAreaBudget:.48,fogWaterAreaBudget:.40,
     fogMaxCover:.58,fogWaterMaxCover:.36,fogScatterBudget:.04,
     fogShade:[.70,.80,.94],fogSun:[1,.89,.65],
     cloudCover:.48,cloudDensity:.5,gradeTemperature:-.06,gradeContrast:1.08,gradeSaturation:.98}),
-  frame(600,{fogStyleGain:0.75,fogStyleCover:-0.08,shade:[.714,.772,.830],daylight:[.965,.965,.955],sun:[1.351,1.298,1.172],fogOpacity:1.15,fogShadeOpacity:.7,
+  frame(600,{fogStyleGain:0.75,fogStyleCover:-.24,shade:[.714,.772,.830],daylight:[.965,.965,.955],sun:[1.351,1.298,1.172],fogOpacity:1.15,fogShadeOpacity:.7,
     fogCover:.50,fogAreaBudget:.33,fogWaterAreaBudget:.22,
     fogMaxCover:.46,fogWaterMaxCover:.24,fogScatterBudget:.028,
     fogShade:[.74,.83,.94],fogSun:[1,.95,.81],
     cloudCover:.52,cloudDensity:.5,gradeTemperature:-.03,gradeContrast:1.13,gradeBrightness:1.045}),
-  frame(720,{fogStyleGain:1.1,fogStyleCover:0.04,shade:[.72,.77,.82],daylight:[1.0,1.0,1.0],sun:[1.40,1.38,1.31],fogOpacity:.8,fogShadeOpacity:.75,
+  frame(720,{fogStyleGain:1.0,fogStyleCover:0,shade:[.72,.77,.82],daylight:[1.0,1.0,1.0],sun:[1.40,1.38,1.31],fogOpacity:.8,fogShadeOpacity:.75,
     fogCover:.25,fogAreaBudget:.12,fogWaterAreaBudget:.10,
     fogMaxCover:.32,fogWaterMaxCover:.10,fogScatterBudget:.015,
     fogShade:[.80,.88,.97],fogSun:[1,1,.96],
     cloudCover:.50,gradeTemperature:0,gradeContrast:1.18,gradeBrightness:1.03}),
-  frame(1020,{fogStyleGain:1.2,fogStyleCover:0.08,shade:[.675,.729,.783],daylight:[.909,.90,.873],sun:[1.332,1.224,1.008],fogOpacity:1.0,fogShadeOpacity:.8,
+  frame(1020,{fogStyleGain:1.1,fogStyleCover:0,shade:[.675,.729,.783],daylight:[.909,.90,.873],sun:[1.332,1.224,1.008],fogOpacity:1.0,fogShadeOpacity:.8,
     fogAreaBudget:.15,fogWaterAreaBudget:.12,cloudCover:.52,gradeTemperature:.06,gradeContrast:1.14}),
-  frame(1140,{fogStyleGain:1.25,fogStyleCover:0.1,shade:[.65,.693,.792],daylight:[.90,.891,.891],sun:[1.188,1.107,1.008],fogOpacity:1.25,fogShadeOpacity:.8,
+  frame(1140,{fogStyleGain:1.15,fogStyleCover:-.02,shade:[.65,.693,.792],daylight:[.90,.891,.891],sun:[1.188,1.107,1.008],fogOpacity:1.25,fogShadeOpacity:.8,
     fogCover:.40,fogAreaBudget:.20,fogWaterAreaBudget:.16,
     fogMaxCover:.36,fogWaterMaxCover:.18,fogScatterBudget:.025,
     fogShade:[.68,.72,.95],fogSun:[1,.83,.63],
     cloudCover:.50,cloudDensity:.5,gradeTemperature:0,gradeContrast:1.08,gradeBrightness:1.03,
     gradeSaturation:.86,gradeBloomAmount:.12}),
-  frame(1185,{fogStyleGain:1.25,fogStyleCover:0.08,shade:[.693,.72,.837],daylight:[.90,.90,.90],sun:[1.026,.99,.954],fogOpacity:1.25,fogShadeOpacity:.9,
+  frame(1185,{fogStyleGain:1.15,fogStyleCover:0,shade:[.693,.72,.837],daylight:[.90,.90,.90],sun:[1.026,.99,.954],fogOpacity:1.25,fogShadeOpacity:.9,
     fogCover:.40,fogAreaBudget:.20,fogWaterAreaBudget:.16,
     fogMaxCover:.32,fogWaterMaxCover:.16,fogScatterBudget:.02,
     fogShade:[.66,.71,.96],fogSun:[1,.72,.60],

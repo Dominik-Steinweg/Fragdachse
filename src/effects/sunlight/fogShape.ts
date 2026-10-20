@@ -58,12 +58,13 @@ float fogShape(vec2 q,float t,float cover,float water,out float core) {
  vec2 w=vec2(fogShapeFbm(p/720.0+vec2(2.0,5.0)+tv),fogShapeFbm(p/720.0+vec2(19.0,8.0)-tv))-.5;
  vec2 tv2=vec2(-t*.017,t*.021);
  vec2 w2=vec2(fogShapeFbm(p/230.0+vec2(7.0,1.0)+tv2),fogShapeFbm(p/230.0+vec2(3.0,13.0)-tv2))-.5;
- vec2 u=p+w*560.0+w2*120.0;
+ // Moderate warp amplitudes: stronger warps fold the field into swept, hard-edged contours.
+ vec2 u=p+w*475.0+w2*102.0;
  float macro=fogShapeSS(.44,.64,fogShapeFbm(u/1150.0+vec2(41.0,23.0)),soft);
  float dens=mix(.20,1.6,macro);
- float F=fogShapeFbm(u/vec2(640.0,430.0)+vec2(31.0,9.0))+(fogShapeFbm(u/105.0+vec2(5.0,9.0))-.5)*.22/soft;
+ float F=fogShapeFbm(u/vec2(640.0,430.0)+vec2(31.0,9.0))+(fogShapeFbm(u/105.0+vec2(5.0,9.0))-.5)*.13/soft;
  float cut=mix(.70,.57,budget)-water*.04;
- float mask=fogShapeSS(cut-.13,cut+.17,F,soft);
+ float mask=fogShapeSS(cut-.18,cut+.24,F,soft);
  // Inner texture and islets ride slightly faster than the banks: the fog visibly moves within itself.
  vec2 lead=vec2(t*2.2,t*.4);
  float inner=fogShapeFbm((u-lead)/150.0+vec2(7.0,2.0));
@@ -78,12 +79,13 @@ float fogShape(vec2 q,float t,float cover,float water,out float core) {
   float r=fogShapeRidge(fogShapeNoise(rq/vec2(360.0,200.0)+vec2(8.0,4.0)),soft,1.25);
   float r2=fogShapeRidge(fogShapeNoise(rq/vec2(180.0,100.0)+vec2(2.0,9.0)),soft,1.7);
   body+=wt*fogShapeSS(.22,.96,r,soft)*(.55+.45*r2);
-  axis+=wt*fogShapeSS(.55,.98,r*(.6+.5*r2),soft);
+  axis+=wt*fogShapeSS(.55,.98,r*(.6+.5*r2),soft*1.5);
  }
- float zone=fogShapeSS(.44,.64,fogShapeFbm(u/vec2(900.0,520.0)+vec2(61.0,3.0))+(budget-.5)*.30-water*.04,soft);
+ float zone=fogShapeSS(.40,.68,fogShapeFbm(u/vec2(900.0,520.0)+vec2(61.0,3.0))+(budget-.5)*.30-water*.04,soft);
  float ribbon=zone*(.04+.70*body+.95*axis)*(1.0+blurPx/55.0);
- float pn=fogShapeFbm((u-lead*1.6)/210.0+vec2(13.0,29.0))+(fogShapeFbm((u-lead*2.4)/70.0+vec2(3.0,41.0))-.5)*.22/soft;
- float islet=fogShapeSS(.60,.82,pn,soft)*fogShapeSS(.15,.65,macro+.25,soft);
+ float pn=fogShapeFbm((u-lead*1.6)/210.0+vec2(13.0,29.0))+(fogShapeFbm((u-lead*2.4)/70.0+vec2(3.0,41.0))-.5)*.13/soft;
+ // Dense patches with a wide, soft rim: a narrow rim reads as a hard, swept edge.
+ float islet=1.15*fogShapeSS(.55,.92,pn,soft)*fogShapeSS(.15,.65,macro+.25,soft);
  float thick=(ribbon+field*(1.0-.5*clamp(ribbon,0.0,1.0)))*dens+islet*(.55+.8*dens);
  core=clamp(max(max(zone*axis,mask*fogShapeSS(.55,.9,inner,soft)*.8),islet)*(.4+.6*dens),0.0,1.0);
  return thick*(1.0+.65*(soft-1.0));

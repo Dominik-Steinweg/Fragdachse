@@ -12,6 +12,7 @@ import type { FogVoidHaze } from '../groundFog/FogVoidHaze';
 import type { FogAirBinding } from '../groundFog/FogAirBinding';
 import { VoidSporeMotes, type VoidMoteQuality } from './VoidSporeMotes';
 import { SunRenderTarget } from './SunRenderTarget';
+import { fogDetailNoise } from './SunFieldModel';
 import {
   VOID_CREEP_GLOW_FRAGMENT, VOID_CREEP_GLOW_SHADER_NAME, VOID_CREEP_GROUND_FRAGMENT, VOID_CREEP_GROUND_SHADER_NAME,
   VOID_CREEP_ROCK_FRAGMENT, VOID_CREEP_ROCK_SHADER_NAME,
@@ -25,6 +26,11 @@ const AIR_STRENGTH = 0.85;
 const VIEW_MARGIN_PX = 24;
 /** A haze region crossfades this long after its place lost or regained presence (E7). */
 const HAZE_FADE_SEC = 3;
+/**
+ * Patches of that crossfade start one after another across this share of it; patch size in world px.
+ * Over the shaped fog a uniform crossfade let whole areas cross the fog's threshold at once.
+ */
+const HAZE_FADE_SPREAD = .55, HAZE_FADE_PATCH_PX = 170;
 /**
  * A deactivated place has its haze lifted by a wave running out from its centre this long; the
  * texels behind the front reach their residue over this width (world px).
@@ -249,10 +255,16 @@ export class VoidCreepPresentation {
       const front = lift ? lift.radius * easeOut(t) : 0, uniform = t * t * (3 - 2 * t);
       for (let y = rect.y0; y <= rect.y1; y++) for (let x = rect.x0; x <= rect.x1; x++) {
         let k = uniform;
+        const wx = field.offsetX + (x + .5) * field.texelPx, wy = field.offsetY + (y + .5) * field.texelPx;
         if (lift && t < 1) {
-          const distance = Math.hypot(field.offsetX + (x + .5) * field.texelPx - lift.x, field.offsetY + (y + .5) * field.texelPx - lift.y);
+          const distance = Math.hypot(wx - lift.x, wy - lift.y);
           const behind = Math.max(0, Math.min(1, (front - distance) / LIFT_SOFT_PX));
           k = behind * behind * (3 - 2 * behind);
+        } else if (t < 1) {
+          // A place gaining or losing presence changes patch by patch, never all at once.
+          const local = Math.max(0, Math.min(1, (t - HAZE_FADE_SPREAD * fogDetailNoise(wx / HAZE_FADE_PATCH_PX, wy / HAZE_FADE_PATCH_PX))
+            / (1 - HAZE_FADE_SPREAD)));
+          k = local * local * (3 - 2 * local);
         }
         const i = (y - rect.y0) * width + x - rect.x0, value = Math.round(fade.from[i] + (fade.to[i] - fade.from[i]) * k);
         haze[y * field.width + x] = value; data[(y * field.width + x) * 4 + 2] = value;
