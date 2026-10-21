@@ -41,6 +41,18 @@ ist unabhängig vom Schutzabstand für Felsen und Bäume; die persistente Basis 
 ihren eigenen Kernfreiraum und die vollständige kreisförmige Reservierung. Maßgeblich sind
 auch `tests/MapEditorFileStore.test.ts` für die Parität von Speichern und Vorschau.
 
+### Brücken über Wasser
+
+`bridges` (World-Feld, `src/config/coopDefenseBridges.ts`) legen Holzdecks über authored Wasser:
+Jede Deckzelle ist Wasser, beide Widerlagerreihen sind trocken; dieselbe Reservierungsprüfung wie
+beim Wasser gilt. Es gibt genau eine Geometrieregel: **Kollisionswasser = authored Wasser minus Decks
+stehender Brücken** (`resolveCollisionWater`, Owner `WorldGeometryBinding.getCollisionWater()`).
+Host-Physik, Client-Prediction, Navigation und Gegner lesen diese Instanz; ein Einsturz tauscht sie
+aus. Darstellung, Platzierung, Spieler-Spawnzellen und der Generator bleiben bewusst auf authored
+Wasser: Decks sind nicht bebaubar, und jede World muss ihr Land ohne Brücken verbinden (Furt oder
+Landübergang), damit ein Einsturz nie ein Gebiet abschneidet. Maßgeblich sind
+`tests/BridgeAuthoring.test.ts` und `tests/WorldBridgeRuntime.test.ts`.
+
 Power-Up-Podeste benötigen keinen Basis-Schutzabstand; die tatsächlich belegten Basiszellen
 bleiben ausgeschlossen. Feste Podestpositionen werden im Arena-Generator vor der prozeduralen
 Terrain-Erzeugung auf seedunabhängige Geometriekonflikte geprüft. Maßgeblich sind

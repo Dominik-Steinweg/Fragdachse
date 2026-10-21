@@ -56,6 +56,7 @@ gesetzt.
 | [Dawn – Bildsprache V1](Fragdachse_From_Dachs_Till_Dawn_Art_Direction_V1.md), [Händler-UI V1](Fragdachse_From_Dachs_Till_Dawn_Haendler_UI_V1.md), [Uhr V1](Fragdachse_From_Dachs_Till_Dawn_Uhr_V1.md) | Gestaltungsvorgaben zu Dawn |
 | [Kampagnenprogression Maps 1–17](Fragdachse_GDD_Kampagnenprogression_Maps_1-17%20%281%29.md) und [Tuning](Kampagnenprogression_Maps_1-17_Tuning.md) | umgesetzt; Playtests und Balancing offen |
 | [Map 16 – Spinnensteig V1](Fragdachse_GDD_Map16_Spinnensteig_V1.md) | umgesetzt (ersetzt den Prototyp „Zeitzünder“); Playtest offen |
+| [Sprengbare Brücken V1](Fragdachse_GDD_Sprengbare_Bruecken_V1.md) | in Umsetzung im Branch `bridges` (Laufzeit, Sprengen, Dev-Szenario fertig; Map 12, Dawn, HQ-Asset folgen) |
 | Persistente Basis Phase 3: [Roadmap](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3_Roadmap.md), [3C](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3C_Implementierungsplan.md), [3D V4](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3D_V4.md), [3E](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3E.md), [3F V3](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3F_V3.md) | umgesetzt; den Stand der einzelnen Phasen nennt die Roadmap |
 
 ## Welt, Darstellung und Technik
