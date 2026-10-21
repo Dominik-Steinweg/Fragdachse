@@ -11,6 +11,7 @@ export const enContent = {
   "construction.watchtower.name": "Watchtower",
   "construction.watchtower.description": "Raised platform for up to four players of any class. Press Shift to enter or leave. Grants +20% range for both weapons and +50% passive adrenaline regeneration. All occupants die if the tower collapses.",
   "source.environment.watchtower_collapse.name": "Watchtower Collapse",
+  "source.environment.bridge_collapse.name": "Bridge Blown",
   "loadout.GLOCK.name": "Glock",
   "loadout.ASMD_PRIM.name": "ASMD Primary",
   "loadout.BITE.name": "Badger Bite",

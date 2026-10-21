@@ -81,6 +81,30 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       if (!Number.isFinite(amount) || amount <= 0) throw new Error('Positive damage required');
       return flow.getWorldObjectMutationRuntime()?.applyResolvedDamage('construction', id, amount, 'watchtower-review-attacker', 'dev-scenario.watchtower');
     },
+    /** Plants a charge as the local player without explosive cargo; the real fuse runs. */
+    chargeBridge(id: string) {
+      requireLocal();
+      const runtime = flow.getWorldBridgeRuntime();
+      if (!runtime) throw new Error('World has no bridges');
+      return runtime.charge(id, bridge.getLocalPlayerId());
+    },
+    collapseBridge(id: string) {
+      requireLocal();
+      const runtime = flow.getWorldBridgeRuntime();
+      if (!runtime) throw new Error('World has no bridges');
+      return runtime.collapse(id);
+    },
+    readBridges() {
+      requireLocal();
+      const runtime = flow.getWorldBridgeRuntime();
+      return {
+        now: bridge.getSynchronizedNow(),
+        bridges: runtime?.getBridges().map((entry) => ({ id: entry.id, ...runtime.getState(entry.id) })) ?? [],
+        alive: flow.getWorldCombatCore()?.isAlive(bridge.getLocalPlayerId()) ?? false,
+        enemies: flow.getWorldEnemyManager()?.getAllEnemies().length ?? 0,
+        nav: flow.getCoopMissionRuntime()?.flowFieldCoordinator?.getDiagnostics() ?? null,
+      };
+    },
     startKrakenMission(skipIntro: boolean): boolean {
       requireLocal();
       const runtime = flow.getCoopMissionRuntime();

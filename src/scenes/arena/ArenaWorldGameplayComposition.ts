@@ -3,6 +3,7 @@ import { composeShootingRangeEnemies, bindShootingRangeGameplay } from './ArenaS
 import type { ShootingRangeWorldBinding } from '../../shootingRange/ShootingRangeWorldBinding';
 import { bridge } from '../../network/bridge';
 import {
+  composeWorldBridges,
   composeWorldGeometry,
   composeWorldSupportGameplay,
   composeWorldTrain,
@@ -38,6 +39,7 @@ import { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
 import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
 import { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
+import type { WorldBridgeRuntime } from '../../world/WorldBridgeRuntime';
 import { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 import { WorldWeaponExecutionRuntime } from '../../world/WorldWeaponExecutionRuntime';
 import type { AutomatedWeaponExecution } from '../../world/AutomatedWeaponExecutionAdapter';
@@ -155,6 +157,7 @@ export class ArenaWorldGameplay {
   projectiles: WorldProjectileRuntime | null = null;
   targeting: WorldTargetingRuntime | null = null;
   train: WorldTrainRuntime | null = null;
+  bridges: WorldBridgeRuntime | null = null;
   weaponExecution: WorldWeaponExecutionRuntime | null = null;
   specializedWeaponExecution: SpecializedWeaponExecutionCapability | null = null;
   automatedWeaponExecution: AutomatedWeaponExecution | null = null;
@@ -182,6 +185,8 @@ export function composeArenaWorldGameplay(
   composeWorldProjectileRuntime(input, gameplay);
   composeWorldCombatRuntime(input, gameplay);
   composeWorldGeometry(input, gameplay);
+  // Bridge state shapes the collision water that the Activity navigation reads.
+  composeWorldBridges(input, gameplay);
   if (coopMissionRuntime && isCoopMission) {
     // Benannter Activity-Schritt: welche Systeme darin entstehen, gehoert der Activity.
     flow.materializeActivityCore(activityDescriptor, coopMissionRuntime, layout);

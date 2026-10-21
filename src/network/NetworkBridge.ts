@@ -3452,7 +3452,7 @@ export class NetworkBridge {
     // a completed item cannot survive in a client's merge cache.
     payload.cc = state.coopDefenseCarry;
     // Like Carry: an empty slice is meaningful (no bridge left `standing`), never a missing delta.
-    payload.bg = state.bridges;
+    payload.bg = state.bridges ?? [];
     this.sampleProjectileSyncPayload(state.projectiles);
     setState(KEY_GAME_STATE, payload, false);
   }
@@ -3564,7 +3564,7 @@ export class NetworkBridge {
       b: state.bases,
       cb: state.captureTheBeer,
       cc: state.coopDefenseCarry,
-      bg: state.bridges,
+      bg: state.bridges ?? [],
     };
     this.sampleProjectileSyncPayload(state.projectiles);
     // Die unreliable Kopie hält bereits verbundene Clients aktuell; der reliable Key ist der

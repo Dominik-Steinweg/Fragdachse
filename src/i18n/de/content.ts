@@ -11,6 +11,7 @@ export const deContent = {
   "construction.watchtower.name": "Wachturm",
   "construction.watchtower.description": "Erhöhte Plattform für bis zu vier Spieler aller Klassen. Mit Shift betreten oder verlassen. Gewährt +20 % Reichweite für beide Waffen und +50 % passive Adrenalinregeneration. Beim Einsturz sterben alle Insassen.",
   "source.environment.watchtower_collapse.name": "Wachturm eingestürzt",
+  "source.environment.bridge_collapse.name": "Brücke gesprengt",
   "loadout.GLOCK.name": "Glock",
   "loadout.ASMD_PRIM.name": "ASMD Primär",
   "loadout.BITE.name": "Dachsbiss",

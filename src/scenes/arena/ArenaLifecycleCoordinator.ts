@@ -1273,6 +1273,9 @@ export class ArenaLifecycleCoordinator {
   getWorldTargetingRuntime(): WorldTargetingRuntime | null { return this.worldGameplay?.targeting ?? null; }
   getWorldGeometryBinding(): WorldGeometryBinding | null { return this.worldGeometryBinding; }
   getWorldTrainRuntime(): WorldTrainRuntime | null { return this.worldTrainRuntime; }
+  getWorldBridgeRuntime(): import('../../world/WorldBridgeRuntime').WorldBridgeRuntime | null {
+    return this.worldGameplay?.bridges ?? null;
+  }
   getWorldProjectileRuntime(): WorldProjectileRuntime | null { return this.worldGameplay?.projectiles ?? null; }
   getWorldObjectMutationRuntime(): import('../../world/WorldObjectMutationRuntime').WorldObjectMutationRuntime | null {
     return this.worldGameplay?.worldMutation ?? null;
