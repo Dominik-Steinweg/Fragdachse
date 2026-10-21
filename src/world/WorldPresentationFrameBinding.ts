@@ -1,6 +1,9 @@
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { ReactivePropRenderer, type ReactivePropZoneSink } from '../effects/reactiveProps/ReactivePropRenderer';
 import { resolveReactivePropPose } from '../effects/reactiveProps/ReactivePropVisualModel';
+import { BeeSwarmRenderer, type BeeSwarmAudio } from '../effects/beeSwarm/BeeSwarmRenderer';
+import type { BeeHivePresentation } from '../effects/beeSwarm/BeeFlockModel';
+import type { SyncedBeeSwarm } from '../types';
 import type { ReactivePropRuntime } from './reactiveProps/ReactivePropRuntime';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { FireControlRenderer, type FireControlOriginalVisual } from '../effects/fireControl/FireControlRenderer';
@@ -105,6 +108,12 @@ export interface WorldPresentationRenderWork {
 }
 
 /** Der generische, replizierte World-Anteil des Client-Snapshots. */
+/** Ports of the bee presentation: game audio and drawn enemy positions (dive targets). */
+export interface BeeSwarmPorts {
+  readonly audio: BeeSwarmAudio | null;
+  readonly enemyPosition: (id: string) => { x: number; y: number } | null;
+}
+
 export interface WorldClientPresentationState {
   readonly earthbreak?: readonly import('../systems/BurrowEarthbreakRuntime').SyncedBurrowEarthbreak[];
   readonly players: Record<string, PlayerNetState>;
@@ -116,6 +125,7 @@ export interface WorldClientPresentationState {
   readonly repairDrones: SyncedRepairDrone[];
   readonly attackDrones?: SyncedAttackDrone[];
   readonly attackDroneBombs?: SyncedAttackDroneBomb[];
+  readonly beeSwarms?: SyncedBeeSwarm[];
   readonly slimeTrail: SyncedSlimeTrailSnapshot;
   readonly burningGround: SyncedBurningGroundSnapshot;
   readonly train: SyncedTrainState | null;
@@ -305,6 +315,55 @@ export class WorldPresentationFrameBinding {
     this.releaseFireControlCopyShots = shots.bindFireControlCopyShots(id => this.fireControl?.onShot(id));
   }
 
+  private beeSwarmPorts: BeeSwarmPorts | null = null;
+  private beeSwarmRenderer: BeeSwarmRenderer | null = null;
+  private latestBeeSwarms: readonly SyncedBeeSwarm[] = [];
+  private readonly beeHives = new Map<number, BeeHivePresentation>();
+
+  /** Bound once by World composition; the frame owner draws hive bees and swarms and plays their buzz. */
+  bindBeeSwarms(ports: BeeSwarmPorts): void {
+    if (this.destroyed) return;
+    if (this.beeSwarmPorts) throw new Error('Bee swarm presentation is already bound');
+    this.beeSwarmPorts = ports;
+  }
+
+  /** Hive entrances from the drawn hive pose; swarms from the replicated slice. Free on maps without hives. */
+  private syncBeeSwarms(showWorld: boolean): void {
+    const runtime = this.reactiveProps, ports = this.beeSwarmPorts;
+    this.beeHives.clear();
+    if (runtime && ports && showWorld && this.input.getLocalWorldPresentation().required) {
+      const layoutCells = this.input.getWorldLayout()?.reactiveProps ?? [];
+      runtime.forEachPresentationState(state => {
+        if (state.kind.visual.presentation !== 'hive' || state.phase === 'destroyed') return;
+        const position = runtime.getPosition(state.obstacleId);
+        if (!position) return;
+        const pose = resolveReactivePropPose(state.index, layoutCells);
+        // The entrance faces the sprite's south, about 10 px from the skep centre.
+        const reach = 10;
+        this.beeHives.set(state.index, { index: state.index, phase: state.phase, progress: state.progress,
+          entranceX: position.x + pose.offsetX - reach * Math.sin(pose.rotation),
+          entranceY: position.y + pose.offsetY + reach * Math.cos(pose.rotation) });
+      });
+    }
+    if (!ports || (this.beeHives.size === 0 && this.latestBeeSwarms.length === 0)) {
+      this.beeSwarmRenderer?.destroy();
+      this.beeSwarmRenderer = null;
+      return;
+    }
+    this.beeSwarmRenderer ??= new BeeSwarmRenderer(this.input.scene, ports.audio);
+    const players = this.input.getPlayers();
+    this.beeSwarmRenderer.sync({
+      swarms: this.latestBeeSwarms, hives: this.beeHives, syncNow: this.input.getSynchronizedNow(),
+      timeMs: this.input.scene.time.now, quality: getGraphicsQualityController(this.input.scene)?.getLevel() ?? 'high',
+      shadowStrength: Math.max(.15, 1 - this.input.lighting.getArtificialLightFactor()),
+      targetPosition: (kind, id) => {
+        if (kind === 'enemy') return ports.enemyPosition(id);
+        const player = players.find(entry => entry.id === id);
+        return player?.active ? { x: player.x, y: player.y } : null;
+      },
+    });
+  }
+
   private reactiveProps: ReactivePropRuntime | null = null;
   private reactivePropBurnGpu: EntityBurnGpuController | null = null;
   private reactivePropZoneSink: ReactivePropZoneSink | null = null;
@@ -326,9 +385,10 @@ export class WorldPresentationFrameBinding {
       return;
     }
     this.reactivePropRenderer ??= new ReactivePropRenderer(this.input.scene, this.input.lighting, this.reactivePropBurnGpu,
-      this.reactivePropZoneSink);
+      this.reactivePropZoneSink, this.beeSwarmPorts?.audio ?? null);
     this.reactivePropRenderer.sync(this.reactiveProps, this.input.getWorldLayout()?.reactiveProps ?? [],
       this.input.scene.time.now, this.input.getSynchronizedNow());
+    this.syncBeeSwarms(showWorld);
   }
 
   private *reactivePropShadowCells(): Iterable<{ index: number; x: number; y: number; alive: boolean }> {
@@ -868,6 +928,7 @@ export class WorldPresentationFrameBinding {
       renderers.guardianSpirit.syncVisuals(state.guardianSpirits);
       renderers.repairDrone.syncVisuals(state.repairDrones, state.placeableRocks);
       renderers.attackDrone?.syncVisuals(state.attackDrones ?? [], state.attackDroneBombs ?? [], state.placeableRocks, now);
+      this.latestBeeSwarms = state.beeSwarms ?? [];
       renderers.slimeTrail.syncVisuals(state.slimeTrail);
       renderers.flamethrowerUpgrades.syncGround(
         countdownActive && state.burningGround.cells.length === 0
@@ -1177,6 +1238,7 @@ export class WorldPresentationFrameBinding {
     this.bomberSquadron?.destroy(); this.bomberSquadron = null;
     this.bomberSquadronSnapshot = null; this.bomberSquadronEffects = null;
     this.reactivePropRenderer?.destroy(); this.reactivePropRenderer = null;
+    this.beeSwarmRenderer?.destroy(); this.beeSwarmRenderer = null; this.beeSwarmPorts = null;
     this.reactiveProps = null; this.reactivePropBurnGpu = null; this.reactivePropZoneSink = null;
     this.cancelRenderRelease();
     this.releasedView = null;

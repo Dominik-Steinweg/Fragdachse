@@ -250,6 +250,16 @@ const WILDLIFE_ASSETS = {
   sfx_wildlife_wing_flap:      './assets/sounds/sfx_wildlife_wing_flap.ogg',
 } as const;
 
+// ── Reactive map props ──────────────────────────────────────────────────────
+// Puffball and bee hive cues (Audio-Studio recipes); silent until a candidate is published.
+const REACTIVE_PROP_ASSETS = {
+  sfx_spore_puffball_burst: './assets/sounds/sfx_spore_puffball_burst.ogg',
+  sfx_bee_hive_release:     './assets/sounds/sfx_bee_hive_release.ogg',
+  sfx_bee_swarm_loop:       './assets/sounds/sfx_bee_swarm_loop.ogg',
+  sfx_bee_sting:            './assets/sounds/sfx_bee_sting.ogg',
+  sfx_bee_swarm_scatter:    './assets/sounds/sfx_bee_swarm_scatter.ogg',
+} as const;
+
 // ── Music ───────────────────────────────────────────────────────────────────
 const MUSIC_ASSETS = {
   music_lobby: './assets/sounds/badger02.ogg', 
@@ -266,6 +276,7 @@ export const AUDIO_ASSETS = {
   ...POWERUP_ASSETS,
   ...GENERAL_ASSETS,
   ...WILDLIFE_ASSETS,
+  ...REACTIVE_PROP_ASSETS,
   ...MUSIC_ASSETS,
 } as const;
 
@@ -425,6 +436,13 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_wildlife_raven_croak:    0.35,
   sfx_wildlife_owl_hoot:       0.3,
   sfx_wildlife_wing_flap:      0.3,
+
+  // Reactive map props: the buzz stays under the fight, the burst and release are short cues.
+  sfx_spore_puffball_burst: 0.55,
+  sfx_bee_hive_release:     0.5,
+  sfx_bee_swarm_loop:       0.32,
+  sfx_bee_sting:            0.3,
+  sfx_bee_swarm_scatter:    0.45,
 
   // Music  (Endwert je nach Lied anpassen; Kette: masterVolume × SOUND_MUSIC_VOLUME × dieser Wert)
   music_lobby: 0.8,

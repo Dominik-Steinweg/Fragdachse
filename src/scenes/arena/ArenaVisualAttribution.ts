@@ -94,6 +94,7 @@ export const GRAPHICS_FAMILIES = {
   tongueLash: ['TongueLashRenderer'],
   restHealTendrils: ['RestHealGpuLayer'],
   turretWebs: ['TurretWebGpuLayer'],
+  beeSwarms: ['BeeSwarmGpuLayer'],
   rocketLifecycleGraphics: ['RocketRenderer'],
   stinkCloudGraphics: ['StinkCloudSystem', 'StinkCloudBody'],
   flameRingEffects: ['FlamethrowerUpgradeRenderer'],

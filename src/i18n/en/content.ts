@@ -209,6 +209,8 @@ export const enContent = {
   "source.weapon.fireball_launcher.name": "Fireball Launcher",
   "source.environment.rock_collapse.name": "Explosive Collapse",
   "source.environment.explosive_barrel.name": "Explosive Barrel",
+  "source.environment.spore_puffball.name": "Giant Puffball",
+  "source.environment.bee_hive.name": "Bee Swarm",
   "source.ground_fire.player_death_burst.name": "Fire Burst",
   "source.ground_fire.kamikaze_napalm.name": "Kamikaze Napalm",
   "source.ground_fire.void_hunter.name": "Voidfire",

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { CELL_SIZE } from '../src/config';
 import { getExplosiveReactivePropKind } from '../src/config/reactiveProps/reactivePropKinds';
 import {
-  REACTIVE_PROP_VISUAL, resolveReactivePropPoses, resolveReactivePropWarning,
+  REACTIVE_PROP_VISUAL, isObservedReactivePropRelease, resolveReactivePropFrame, resolveReactivePropPoses,
+  resolveReactivePropVisual, resolveReactivePropWarning, type ReactivePropSheetClip,
 } from '../src/effects/reactiveProps/ReactivePropVisualModel';
 import type { ReactivePropCell } from '../src/types';
 
@@ -55,5 +56,34 @@ describe('ReactivePropVisualModel', () => {
     expect(first!.hitAt - hit!.hitAt).toBeCloseTo(5 * perHp, 5);
     expect(resolveReactivePropWarning(kind, 'primed', 0.9, 5_000)).toBeNull();
     expect(resolveReactivePropWarning(kind, 'idle', 0.1, 5_000)).toBeNull();
+  });
+
+  const puffballClips: ReactivePropSheetClip[] = [
+    { name: 'swell', frames: [1, 2, 3, 4, 5, 6], frameRate: 24, loop: false },
+    { name: 'burst', frames: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18], frameRate: 24, loop: false },
+    { name: 'refill', frames: [19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34], frameRate: 12, loop: false },
+  ];
+
+  it('refills a puffball monotonically with the recharge and never shows flames on it', () => {
+    let previous = -1;
+    for (let progress = 0; progress <= 1; progress += .05) {
+      const frame = resolveReactivePropFrame('puffball', 'recharging', progress, puffballClips, 0, 10_000, null);
+      expect(frame).toBeGreaterThanOrEqual(previous);
+      previous = frame;
+    }
+    for (const phase of ['idle', 'triggered', 'recharging'] as const) {
+      expect(resolveReactivePropVisual(phase, .2, 'puffball').burnStacks).toBe(0);
+      expect(resolveReactivePropVisual(phase, .2, 'hive').burnStacks).toBe(0);
+    }
+  });
+
+  it('plays the burst only after a release this client saw, never on late join', () => {
+    expect(isObservedReactivePropRelease('triggered', 'recharging', .02)).toBe(true);
+    expect(isObservedReactivePropRelease(null, 'recharging', .02)).toBe(false);
+    expect(isObservedReactivePropRelease('recharging', 'recharging', .02)).toBe(false);
+    const seen = resolveReactivePropFrame('puffball', 'recharging', .01, puffballClips, 0, 1_100, 1_000);
+    const lateJoin = resolveReactivePropFrame('puffball', 'recharging', .01, puffballClips, 0, 1_100, null);
+    expect(puffballClips[1].frames).toContain(seen);
+    expect(puffballClips[2].frames).toContain(lateJoin);
   });
 });

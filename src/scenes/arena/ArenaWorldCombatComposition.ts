@@ -410,6 +410,13 @@ export function composeWorldCombatGameplay(
   const reactiveProps = worldRuntime.materialization?.reactiveProps;
   if (reactiveProps) worldRuntime.presentationFrame?.bindReactiveProps(reactiveProps, input.renderers?.entityBurnGpu ?? null,
     (id, attack, now, visible) => ctx.effectSystem.syncEnemyZone(id, attack, now, visible));
+  if (reactiveProps) worldRuntime.presentationFrame?.bindBeeSwarms({
+    audio: ctx.gameAudioSystem,
+    enemyPosition: id => {
+      const enemy = (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager)?.getEnemy(id);
+      return enemy?.sprite.active ? { x: enemy.sprite.x, y: enemy.sprite.y } : null;
+    },
+  });
   worldRuntime.presentationFrame?.bindBomberSquadron(() => bridge.getBomberSquadronSnapshot(), {
     // Same warm carpet burst as the attack-drone bombs; it is derived locally, never broadcast.
     explode: (x, y, radius) => ctx.effectSystem.playExplosionEffect(x, y, radius, 0xffae57, 'rocket'),

@@ -209,6 +209,8 @@ export const deContent = {
   "source.weapon.fireball_launcher.name": "Feuerball-Werfer",
   "source.environment.rock_collapse.name": "Explosiver Einsturz",
   "source.environment.explosive_barrel.name": "Explosives Fass",
+  "source.environment.spore_puffball.name": "Riesenbovist",
+  "source.environment.bee_hive.name": "Bienenschwarm",
   "source.ground_fire.player_death_burst.name": "Brandexplosion",
   "source.ground_fire.kamikaze_napalm.name": "Kamikaze-Napalm",
   "source.ground_fire.void_hunter.name": "Leerenbrand",

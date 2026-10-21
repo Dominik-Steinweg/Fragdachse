@@ -65,6 +65,61 @@ export function resolveReactivePropWarning(kind: ExplosiveReactivePropKind, phas
   return null;
 }
 
+/** One clip of a prop sheet, as the pipeline exports it. */
+export interface ReactivePropSheetClip {
+  readonly name: string;
+  readonly frames: readonly number[];
+  readonly frameRate: number;
+  readonly loop: boolean;
+}
+
+function clipDurationMs(clip: ReactivePropSheetClip): number {
+  return clip.frames.length / clip.frameRate * 1000;
+}
+
+function scrubClip(clip: ReactivePropSheetClip, t: number): number {
+  return clip.frames[Math.min(clip.frames.length - 1, Math.max(0, Math.floor(t * clip.frames.length)))];
+}
+
+function playClip(clip: ReactivePropSheetClip, elapsedMs: number): number {
+  const n = clip.frames.length, i = Math.floor(Math.max(0, elapsedMs) / 1000 * clip.frameRate);
+  return clip.loop ? clip.frames[i % n] : clip.frames[Math.min(n - 1, i)];
+}
+
+/**
+ * Sheet frame of a rechargeable prop from its replicated phase and progress. Puffball: `swell` follows
+ * the anticipation, `burst` plays once after an observed release, then `refill` follows the recharge.
+ * Hive: `shake` loops in the anticipation, `release` plays once. `releasedAt` is the local time of an
+ * observed release, `null` otherwise (late join never replays a one-shot).
+ */
+export function resolveReactivePropFrame(presentation: ReactivePropPresentation, phase: ReactivePropPhase, progress: number,
+  clips: readonly ReactivePropSheetClip[], idleFrame: number, nowMs: number, releasedAt: number | null): number {
+  const clip = (name: string) => clips.find(c => c.name === name);
+  if (presentation === 'puffball') {
+    if (phase === 'triggered') { const swell = clip('swell'); return swell ? scrubClip(swell, progress) : idleFrame; }
+    if (phase === 'recharging') {
+      const burst = clip('burst');
+      if (burst && releasedAt !== null && nowMs - releasedAt < clipDurationMs(burst)) return playClip(burst, nowMs - releasedAt);
+      const refill = clip('refill');
+      return refill ? scrubClip(refill, progress) : idleFrame;
+    }
+    return idleFrame;
+  }
+  if (presentation === 'hive') {
+    if (phase === 'triggered') { const shake = clip('shake'); return shake ? playClip(shake, nowMs) : idleFrame; }
+    const release = clip('release');
+    if (phase === 'recharging' && release && releasedAt !== null && nowMs - releasedAt < clipDurationMs(release)) {
+      return playClip(release, nowMs - releasedAt);
+    }
+  }
+  return idleFrame;
+}
+
+/** A release the client saw happen (not a late-join state): idle or anticipation turned into a fresh recharge. */
+export function isObservedReactivePropRelease(previous: ReactivePropPhase | null, phase: ReactivePropPhase, progress: number): boolean {
+  return (previous === 'idle' || previous === 'triggered') && phase === 'recharging' && progress < .25;
+}
+
 export interface ReactivePropPose { readonly offsetX: number; readonly offsetY: number; readonly rotation: number }
 
 const NEUTRAL_POSE: ReactivePropPose = Object.freeze({ offsetX: 0, offsetY: 0, rotation: 0 });

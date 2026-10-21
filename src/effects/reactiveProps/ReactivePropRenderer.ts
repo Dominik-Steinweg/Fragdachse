@@ -8,8 +8,10 @@ import type { EntityBurnGpuController } from '../EntityBurnGpuController';
 import { EntityBurnRenderer } from '../EntityBurnRenderer';
 import type { LightingSystem } from '../LightingSystem';
 import type { EnemyZoneAttack } from '../EnemyClawRenderer';
-import { REACTIVE_PROP_VISUAL, resolveReactivePropPose, resolveReactivePropVisual, resolveReactivePropWarning,
-  type ReactivePropPose } from './ReactivePropVisualModel';
+import { REACTIVE_PROP_VISUAL, isObservedReactivePropRelease, resolveReactivePropFrame, resolveReactivePropPose,
+  resolveReactivePropVisual, resolveReactivePropWarning, type ReactivePropPose } from './ReactivePropVisualModel';
+import { getPipelineAssetForTexture } from '../../config/pipelineAssets';
+import type { ReactivePropPhase } from '../../world/reactiveProps/ReactivePropRuntime';
 import { getReactivePropVariantOverride } from './ReactivePropVariantOverride';
 
 const GLOW_TEXTURE = 'reactive_prop_glow';
@@ -35,6 +37,11 @@ interface PropVisual {
   observedKey: string;
   observedSince: number;
   textureKey: string;
+  /** Sheet frame of rechargeable props; -1 for a single image. */
+  frame: number;
+  lastPhase: ReactivePropPhase | null;
+  /** Local time of an observed release (burst/swarm), drives the one-shot clip. */
+  releasedAt: number | null;
   lastProgress: number;
   flashUntil: number;
   /** Zuletzt lebend gesehen: nur dann spielt der Abgang Splitter (kein Effekt beim Late Join). */
@@ -61,6 +68,7 @@ export class ReactivePropRenderer {
     private readonly lighting: LightingSystem | null,
     private readonly burnGpu: EntityBurnGpuController | null,
     private readonly zoneSink: ReactivePropZoneSink | null = null,
+    private readonly audio: Pick<import('../../audio/GameAudioSystem').GameAudioSystem, 'playSound'> | null = null,
   ) {
     fillRadialGradientTexture(scene.textures, GLOW_TEXTURE, 64, [
       [0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [0.65, 'rgba(255,255,255,0.16)'], [1, 'rgba(255,255,255,0)'],
@@ -107,26 +115,48 @@ export class ReactivePropRenderer {
     }
     const variantId = resolveReactivePropVariant(state.kind, getReactivePropVariantOverride() ?? state.cell.variant);
     const variant = state.kind.visual.variants[variantId];
-    const textureKey = this.scene.textures.exists(variant.textureKey)
-      ? variant.textureKey : ensurePlaceholderTexture(this.scene, variantId);
+    const presentation = state.kind.visual.presentation;
+    // Rechargeable props play their Blender clips from the sheet; the barrel is a single image.
+    const sheet = presentation === 'barrel' ? undefined : getPipelineAssetForTexture(variant.textureKey);
+    const sheetReady = !!sheet && this.scene.textures.exists(sheet.sheetTextureKey);
+    const textureKey = sheetReady ? sheet!.sheetTextureKey
+      : this.scene.textures.exists(variant.textureKey) ? variant.textureKey
+        : ensurePlaceholderTexture(this.scene, presentation, variantId);
     if (!visual) {
       const pose = resolveReactivePropPose(state.index, cells);
       visual = {
         sprite: this.scene.add.image(cellX, cellY, textureKey).setOrigin(0.5).setDepth(DEPTH.ROCKS + 0.2).setRotation(pose.rotation),
-        glow: null, burn: null, pose, zone: null, zoneRevision: 0, observedKey: '', observedSince: syncNow, textureKey, lastProgress: state.progress, flashUntil: 0, seenAlive: false,
+        glow: null, burn: null, pose, zone: null, zoneRevision: 0, observedKey: '', observedSince: syncNow, textureKey,
+        frame: -1, lastPhase: null, releasedAt: null, lastProgress: state.progress, flashUntil: 0, seenAlive: false,
       };
       this.props.set(state.index, visual);
     }
     const x = cellX + visual.pose.offsetX, y = cellY + visual.pose.offsetY;
     visual.seenAlive = true;
-    if (visual.textureKey !== textureKey) { visual.sprite.setTexture(textureKey); visual.textureKey = textureKey; }
+    if (isObservedReactivePropRelease(visual.lastPhase, state.phase, state.progress)) {
+      visual.releasedAt = nowMs;
+      // The bee release has its own cue in the swarm renderer; the puffball bursts here.
+      if (presentation === 'puffball') this.audio?.playSound('sfx_spore_puffball_burst', x, y);
+    }
+    const frame = sheetReady
+      ? resolveReactivePropFrame(presentation, state.phase, state.progress, sheet!.clips, sheet!.idleFrame, nowMs, visual.releasedAt)
+      : -1;
+    if (visual.textureKey !== textureKey || visual.frame !== frame) {
+      if (frame >= 0) visual.sprite.setTexture(textureKey, frame); else visual.sprite.setTexture(textureKey);
+      visual.textureKey = textureKey;
+      visual.frame = frame;
+    }
     const size = state.kind.visual.displaySizePx;
     visual.sprite.setPosition(x, y).setDisplaySize(size, size);
 
-    // Echte Treffer heben das Blech kurz an; Brand-Ticks nicht.
+    // Echte Treffer heben das Blech kurz an; Brand-Ticks nicht. Lade-Objekte blitzen beim Auslösen.
     if ((state.phase === 'idle' || state.phase === 'primed') && state.progress < visual.lastProgress - REACTIVE_PROP_VISUAL.hitFlashMinDrop) {
       visual.flashUntil = nowMs + REACTIVE_PROP_VISUAL.hitFlashMs;
     }
+    if (presentation !== 'barrel' && visual.lastPhase === 'idle' && state.phase === 'triggered') {
+      visual.flashUntil = nowMs + REACTIVE_PROP_VISUAL.hitFlashMs;
+    }
+    visual.lastPhase = state.phase;
     visual.lastProgress = state.progress;
     if (nowMs < visual.flashUntil) visual.sprite.setTint(REACTIVE_PROP_VISUAL.hitFlashTint).setTintMode(Phaser.TintModes.ADD);
     else visual.sprite.clearTint();
@@ -250,11 +280,20 @@ function ensureShardTexture(scene: Phaser.Scene): void {
   g.destroy();
 }
 
-/** Platzhalter, solange das Pipeline-Sprite der Variante nicht geladen ist. */
-function ensurePlaceholderTexture(scene: Phaser.Scene, variant: string): string {
-  const key = `reactive_prop_placeholder_${variant}`;
+/** Platzhalter, solange das Pipeline-Sprite der Variante nicht geladen ist; je Darstellung und Variante. */
+function ensurePlaceholderTexture(scene: Phaser.Scene, presentation: string, variant: string): string {
+  const key = `reactive_prop_placeholder_${presentation}_${variant}`;
   if (scene.textures.exists(key)) return key;
   const g = scene.make.graphics({ x: 0, y: 0 }, false);
+  if (presentation !== 'barrel') {
+    const hive = presentation === 'hive';
+    g.fillStyle(hive ? 0x6e5a44 : 0x5e4a26, 1).fillCircle(32, 32, 28);
+    g.fillStyle(hive ? 0xd4a856 : variant === 'void' ? 0xcec4da : 0xece4d0, 1).fillCircle(32, 32, 22);
+    if (hive) for (const r of [17, 12, 7]) g.lineStyle(2, 0x7a5a2a, 1).strokeCircle(32, 32, r);
+    g.generateTexture(key, 64, 64);
+    g.destroy();
+    return key;
+  }
   const toxic = variant === 'toxic';
   g.fillStyle(toxic ? 0x4a5530 : 0x9e3322, 1).fillCircle(32, 32, 27);
   g.lineStyle(4, toxic ? 0x6b6f58 : 0x8a5a3a, 1).strokeCircle(32, 32, 26);

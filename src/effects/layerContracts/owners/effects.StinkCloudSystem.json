@@ -3,7 +3,7 @@
   "source": {
     "blends": [
       "Phaser.BlendModes.ADD",
-      "isElectric || isVoidSpore ? Phaser.BlendModes.ADD : Phaser.BlendModes.MULTIPLY"
+      "style.additiveGround ? Phaser.BlendModes.ADD : Phaser.BlendModes.MULTIPLY"
     ],
     "cameras": [],
     "sites": [

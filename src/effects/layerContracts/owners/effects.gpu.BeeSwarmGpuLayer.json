@@ -1,0 +1,44 @@
+{
+  "owner": "effects/gpu/BeeSwarmGpuLayer.ts",
+  "notes": [
+    "Bees of reactive hives drawn analytically (no texture): soft shadow dots on the ground below actors, bees and faint swarm veils in the low flight band above the ground fog and under the crowns, lit like the ground (birds use the same band)."
+  ],
+  "gpuLayers": [
+    {
+      "id": "beeSwarm:shadow",
+      "owner": "effects/gpu/BeeSwarmGpuLayer.ts",
+      "component": "shadow",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.915
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "beeSwarm:flight",
+      "owner": "effects/gpu/BeeSwarmGpuLayer.ts",
+      "component": "bees",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        12.3
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect"
+    }
+  ]
+}

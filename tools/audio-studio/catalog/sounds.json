@@ -14853,6 +14853,281 @@
         "conflicts": []
       },
       "orphaned": false
+    },
+    "sfx_spore_puffball_burst": {
+      "name": "Riesenbovist – platzt",
+      "category": "environment",
+      "intent": "A giant puffball mushroom bursting when hit: a soft dry papery rupture and a deep muffled puff of dense spore dust exhaling outward, then a short dusty hiss. Organic, not an explosion.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, a giant puffball mushroom bursting open: a soft dry papery leathery rupture, a deep muffled whoomp of dense powdery spore dust puffing outward, a brief dry dusty hiss settling, close outdoor recording, organic and soft, no explosion, no fire, no music.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "impact",
+        "overrides": {}
+      },
+      "notes": "Platz-Moment des reaktiven Riesenbovists; spielt nur bei einem beobachteten Auslösen (nie beim Late Join).",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_spore_puffball_burst",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_spore_puffball_burst.ogg",
+        "asset_path": "./assets/sounds/sfx_spore_puffball_burst.ogg",
+        "filename": "sfx_spore_puffball_burst.ogg",
+        "volume": 0.55,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_spore_puffball_burst"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/reactiveProps/ReactivePropRenderer.ts",
+            "line": 1,
+            "kind": "unknown",
+            "excerpt": "this.audio?.playSound('sfx_spore_puffball_burst', x, y)"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_bee_hive_release": {
+      "name": "Strohkorb – Bienen schwärmen aus",
+      "category": "environment",
+      "intent": "A straw bee skep struck and a swarm of angry honey bees pouring out: a dull straw knock, then a fast rising angry buzz of many bees.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, a straw beehive skep knocked and a swarm of angry honey bees pouring out of it: a dull soft straw thump, then a fast swelling dense angry buzzing of many bees rising in pitch and loudness within one second, close outdoor recording, no music, no voices.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Ausschwärmen eines reaktiven Bienenstocks; nur bei frisch gesehenem Schwarm (nie beim Late Join).",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_bee_hive_release",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_bee_hive_release.ogg",
+        "asset_path": "./assets/sounds/sfx_bee_hive_release.ogg",
+        "filename": "sfx_bee_hive_release.ogg",
+        "volume": 0.5,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_bee_hive_release"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/beeSwarm/BeeSwarmRenderer.ts",
+            "line": 1,
+            "kind": "unknown",
+            "excerpt": "this.audio.playSound('sfx_bee_hive_release', swarm.x, swarm.y)"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_bee_swarm_loop": {
+      "name": "Bienenschwarm – Summen (Loop)",
+      "category": "environment",
+      "intent": "A hunting swarm of honey bees as a steady seamless loop: dense agitated buzzing of many bees with gentle movement in pitch, no clear start or end.",
+      "musical_identity": "",
+      "playback": "loop",
+      "prompt": {
+        "text": "TrackType: SFX, seamless loopable game texture: a dense agitated swarm of honey bees buzzing close by, many overlapping wingbeats, gentle doppler-like movement in pitch and level, constant intensity, no climax, no single bee in front, clean isolated recording, no music.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 8,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "continuous_texture",
+        "overrides": {}
+      },
+      "notes": "Wiedergabe loop: höchstens zwei Schwärme in Kameranähe gleichzeitig; Rückflug leiser.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_bee_swarm_loop",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_bee_swarm_loop.ogg",
+        "asset_path": "./assets/sounds/sfx_bee_swarm_loop.ogg",
+        "filename": "sfx_bee_swarm_loop.ogg",
+        "volume": 0.32,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_bee_swarm_loop"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/beeSwarm/BeeSwarmRenderer.ts",
+            "line": 1,
+            "kind": "unknown",
+            "excerpt": "this.audio.startLoop('sfx_bee_swarm_loop', swarm.x, swarm.y, undefined, ...)"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_bee_sting": {
+      "name": "Biene – Stich",
+      "category": "environment",
+      "intent": "A single bee sting landing: a tiny sharp buzz dive ending in a small dry prick, very short.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, a single honey bee diving in and stinging: a tiny sharp rising buzz lasting a fraction of a second ending in a small dry prick, close recording, very short, no music.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 1,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Stich-Rückmeldung; im Renderer auf höchstens einen Stich je 140 ms begrenzt.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_bee_sting",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_bee_sting.ogg",
+        "asset_path": "./assets/sounds/sfx_bee_sting.ogg",
+        "filename": "sfx_bee_sting.ogg",
+        "volume": 0.3,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_bee_sting"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/beeSwarm/BeeSwarmRenderer.ts",
+            "line": 1,
+            "kind": "unknown",
+            "excerpt": "this.audio.playSound('sfx_bee_sting', ...)"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_bee_swarm_scatter": {
+      "name": "Bienenschwarm – zerstreut",
+      "category": "environment",
+      "intent": "A bee swarm scattered by fire or a blast: the dense buzz breaks apart into many fading individual buzzes flying off in all directions.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, a dense swarm of honey bees scattering in panic: the buzzing breaks apart into many separate fading buzzes darting away in all directions within two seconds, close outdoor recording, no explosion, no music.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Zerstreuen durch Feuer oder Explosion; nur bei beobachtetem Phasenwechsel.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_bee_swarm_scatter",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_bee_swarm_scatter.ogg",
+        "asset_path": "./assets/sounds/sfx_bee_swarm_scatter.ogg",
+        "filename": "sfx_bee_swarm_scatter.ogg",
+        "volume": 0.45,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_bee_swarm_scatter"
+        ],
+        "usages": [
+          {
+            "path": "src/effects/beeSwarm/BeeSwarmRenderer.ts",
+            "line": 1,
+            "kind": "unknown",
+            "excerpt": "this.audio.playSound('sfx_bee_swarm_scatter', swarm.x, swarm.y)"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
     }
   }
 }
