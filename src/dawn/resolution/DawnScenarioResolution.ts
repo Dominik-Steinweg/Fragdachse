@@ -33,6 +33,7 @@ import type { DawnActivityPlan, DawnWorldPlan } from '../contracts/DawnPlans';
 import { DAWN_WRECK_VARIANTS } from '../contracts/DawnContentIds';
 import { getDawnPhaseStartMs, toDawnDynamicTimeOfDay } from '../rules/DawnPhase';
 import { resolveDawnNightModifierContent } from './DawnNightModifierResolution';
+import { DAWN_PORTAL_ANCHOR_RADIUS_CELLS, resolveDawnPortalEntryAnchor } from '../rules/DawnPortalPlacement';
 
 /**
  * Der eine reine Resolver vom replizierten Dawn-Plan zur normalen Coop-Config.
@@ -64,23 +65,15 @@ export interface ResolvedDawnSite {
   readonly portalExitSlot?: DawnSalvageSlot;
 }
 
-/** Clearing of either portal endpoint; generous enough for arrivals to spread out. */
-const DAWN_PORTAL_ANCHOR_RADIUS_CELLS = 3;
-
 /** Entry and exit anchors of a portal generator site: entry inside its clearing toward the base. */
 export function resolveDawnPortalAnchors(template: DawnArenaTemplate, site: ResolvedDawnSite):
   { readonly entry: { readonly gridX: number; readonly gridY: number }; readonly exit: { readonly gridX: number; readonly gridY: number } } | null {
   const portal = site.archetype.portal, exitSlot = site.portalExitSlot;
   if (!portal || !exitSlot) return null;
-  const base = template.world.persistentBase.anchor, anchor = site.slot.anchor;
-  const length = Math.hypot(base.gridX - anchor.gridX, base.gridY - anchor.gridY) || 1;
-  return {
-    entry: {
-      gridX: Math.round(anchor.gridX + (base.gridX - anchor.gridX) / length * portal.entryOffsetCells),
-      gridY: Math.round(anchor.gridY + (base.gridY - anchor.gridY) / length * portal.entryOffsetCells),
-    },
-    exit: { gridX: exitSlot.anchor.gridX, gridY: exitSlot.anchor.gridY },
-  };
+  const entry = resolveDawnPortalEntryAnchor(template, site.slot, portal);
+  // The composer only places generators whose entry stays on land; anything else is a foreign plan.
+  if (!entry) throw new Error(`[DawnScenarioResolution] Portal generator ${site.slotId} has no dry entry`);
+  return { entry, exit: { gridX: exitSlot.anchor.gridX, gridY: exitSlot.anchor.gridY } };
 }
 
 export const toDawnPortalLinkId = (slotId: string): string => `portal-${slotId}`;

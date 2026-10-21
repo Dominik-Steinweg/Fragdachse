@@ -9,6 +9,7 @@ import {
 import type { SpawnFront } from '../../types';
 import type { DawnSitePlan } from '../contracts/DawnPlans';
 import type { DawnRandom } from './DawnRandom';
+import { collectDawnTemplateWetCells, isDawnPortalClearingDry, resolveDawnPortalEntryAnchor } from '../rules/DawnPortalPlacement';
 import type { DawnAssignedFront } from './DawnWaveComposition';
 
 export interface DawnPortalCompositionInput {
@@ -53,15 +54,16 @@ export function composeDawnPortalSite(input: DawnPortalCompositionInput): DawnSi
   const distance = (slot: DawnSalvageSlot) => Math.hypot(slot.anchor.gridX - base.gridX, slot.anchor.gridY - base.gridY);
   const separation = (a: DawnSalvageSlot, b: DawnSalvageSlot) =>
     Math.hypot(a.anchor.gridX - b.anchor.gridX, a.anchor.gridY - b.anchor.gridY);
+  const wet = collectDawnTemplateWetCells(template);
 
   // The generator stands out on the primary front: the farthest open slot on that side first.
-  const generators = free.filter((slot) => slot.band !== 'near')
+  const generators = free.filter((slot) => slot.band !== 'near' && resolveDawnPortalEntryAnchor(template, slot, archetype.portal!, wet))
     .sort((left, right) => Number(resolveDawnSlotSide(template, right) === primary)
       - Number(resolveDawnSlotSide(template, left) === primary)
       || distance(right) - distance(left) || order(left) - order(right));
   for (const generator of generators) {
     // The exit prefers a near slot on an unattacked side, then any side but the generator's own.
-    const exits = free.filter((slot) => slot !== generator
+    const exits = free.filter((slot) => slot !== generator && isDawnPortalClearingDry(slot.anchor, wet)
       && separation(slot, generator) >= MIN_COOP_DEFENSE_PORTAL_ANCHOR_SEPARATION_CELLS
       && resolveDawnSlotSide(template, slot) !== resolveDawnSlotSide(template, generator))
       .sort((left, right) => Number(attacked.has(resolveDawnSlotSide(template, left)))
