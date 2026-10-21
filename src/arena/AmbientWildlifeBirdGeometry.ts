@@ -1,3 +1,8 @@
+import { MOON_TUNING } from '../config/sunlight';
+import { characterShadowOpacity } from '../effects/CharacterShadowModel';
+import type { SunCloudState } from '../effects/sunlight/cloudShadow';
+import { resolveMoonBase } from '../effects/sunlight/MoonSky';
+import { cloudShadowAt } from '../effects/sunlight/SunFieldModel';
 import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
 import type { BirdKind } from './AmbientWildlifeAppearance';
 import { birdDrawScale, isGroundedBird } from './AmbientWildlifeBirds';
@@ -115,7 +120,7 @@ function drawSparrow(mesh: WildlifeMesh, cb: number, length: number, female: boo
     for (const side of [-1, 1]) stroke(mesh, cb + HEAD, length, .37, .085 * side, .2, .11 * side, .03);
   } else {
     mesh.fill(0x7c4a2a, 1, 1); oval(mesh, cb + HEAD, length, .27, 0, .3, .32);
-    mesh.fill(0x6f7273, 1, 1); oval(mesh, cb + HEAD, length, .33, 0, .2, .16);
+    mesh.fill(0x6c6a64, 1, 1); oval(mesh, cb + HEAD, length, .33, 0, .2, .16);
   }
   mesh.fill(female ? 0x9b8a6a : 0x35302b, 1, 1);
   mesh.use(cb + HEAD); mesh.triangle(.44 * length, .05 * length, shape.beak * length, 0, .44 * length, -.05 * length);
@@ -207,14 +212,14 @@ function drawOwl(mesh: WildlifeMesh, cb: number, length: number, colorIndex: num
 function drawFlightShadow(mesh: WildlifeMesh, cb: number, length: number, shape: BirdShape): void {
   const points: number[] = [], channels: number[] = [];
   const add = (x: number, y: number, channel: number): void => { points.push(x, y); channels.push(cb + channel); };
+  // Star-shaped around the body centre in every pose: beak, wing, tail beyond its fanning root, tip.
+  // The head's sides (an owl's look-around) and the tail root (it fans in flight) would fold the fan.
   add(shape.beak, 0, HEAD);
-  add(shape.head[0], shape.head[1], HEAD);
   for (let i = 0; i < shape.wing.length; i += 2) add(shape.wing[i], shape.wing[i + 1], WING_R);
-  for (let i = 0; i < shape.tail.length - 2; i += 2) add(shape.tail[i], shape.tail[i + 1], TAIL);
+  for (let i = 2; i < shape.tail.length - 2; i += 2) add(shape.tail[i], shape.tail[i + 1], TAIL);
   add(shape.tail[shape.tail.length - 2], 0, TAIL);
-  for (let i = shape.tail.length - 4; i >= 0; i -= 2) add(shape.tail[i], -shape.tail[i + 1], TAIL);
+  for (let i = shape.tail.length - 4; i >= 2; i -= 2) add(shape.tail[i], -shape.tail[i + 1], TAIL);
   for (let i = shape.wing.length - 2; i >= 0; i -= 2) add(shape.wing[i], -shape.wing[i + 1], WING_L);
-  add(shape.head[0], -shape.head[1], HEAD);
   mesh.fill(0x05090c, .55, 1);
   const center = mesh.vertex(0, 0, cb + BODY), count = channels.length;
   const inner = channels.map((channel, i) => mesh.vertex(points[i * 2] * length, points[i * 2 + 1] * length, channel));
@@ -251,11 +256,11 @@ function writeWing(pose: WildlifePose, kind: BirdKind, shape: BirdShape, length:
   wings: number, forced: number, animation: number, time: number, phase: number, bank: number,
   k = 1, cm = 1, sm = 0, tx = 0, ty = 0): void {
   const rhythm = cruiseFlap(kind, time, phase), drive = Math.max(forced, rhythm);
-  // A sparrow's bounding flight half-folds the wings between bursts of beats.
-  const open = wings * (kind === 'sparrow' ? .3 + .7 * drive : 1);
-  const flap = open * drive, beat = Math.sin(animation), b = clamp(bank, -1, 1) * open;
+  const open = wings, flap = open * drive, beat = Math.sin(animation), b = clamp(bank, -1, 1) * open;
   const inner = side * b > 0;
-  const span = (.45 + .55 * open) * (1 - flap * .3 * beat * beat) * (1 - Math.abs(b) * (inner ? .3 : .08));
+  // A sparrow's bounding flight pulls the wings in between bursts of beats.
+  const bound = kind === 'sparrow' ? 1 - .6 * open * (1 - drive) : 1;
+  const span = (.45 + .55 * open) * bound * (1 - flap * .3 * beat * beat) * (1 - Math.abs(b) * (inner ? .3 : .08));
   const chord = .35 + .65 * open, fold = smooth(1 - open), angle = side * Math.PI / 2 * fold;
   const cw = Math.cos(angle), sw = Math.sin(angle);
   // Keep the shoulder in place: t = P' - R(S P), with the folded shoulder slightly back and inward.
@@ -399,4 +404,33 @@ function withPresence(visual: WildlifeVisual): BirdVisual {
 /** Built under the loading veil with the World; flocks own their member geometry, nothing is shared. */
 export function prepareBirdVisuals(animals: readonly WildlifeAnimal[]): BirdVisual[] {
   return animals.filter(a => a.bird).map(a => withPresence(a.kind === 'sparrow' ? flockVisual(a) : singleVisual(a)));
+}
+
+/** Flight shadows stretch with low sun, but never further than this from their bird. */
+const MAX_SHADOW_REACH = 220;
+
+/**
+ * Offset and opacity of an airborne bird's ground shadow: by day along the sun like a held weapon's
+ * shadow, fading under clouds and with height; at night a faint moon shadow; none on the ground.
+ */
+export function projectBirdShadow(height: number, x: number, y: number, sunlight: SunCloudState | undefined, minutes: number,
+  out: { x: number; y: number; alpha: number }, moonScratch = { weight: 0, cover: 0 }): typeof out {
+  out.x = out.y = out.alpha = 0;
+  const sun = sunlight?.sunPath;
+  if (!(height >= 1) || !sun || !sunlight) return out;
+  const fade = clamp((height - 1) / 3, 0, 1) * (1 - .45 * clamp(height / 130, 0, 1));
+  const day = sun.strength > 0 && sun.elevation > 0 ? characterShadowOpacity(sun.strength, sun.elevation) : 0;
+  if (day > 0) {
+    const reach = Math.min(MAX_SHADOW_REACH, height / Math.tan(Math.max(sun.elevation, .26)));
+    out.x = -sun.direction[0] * reach; out.y = -sun.direction[1] * reach;
+    out.alpha = day * cloudShadowAt(x + out.x, y + out.y, sunlight) * fade;
+    return out;
+  }
+  const moon = resolveMoonBase(minutes, moonScratch).weight;
+  if (moon <= 0) return out;
+  const cast = sun.castAzimuth * Math.PI / 180;
+  const reach = Math.min(MAX_SHADOW_REACH, height / Math.tan(MOON_TUNING.elevationDegrees * Math.PI / 180));
+  out.x = -Math.cos(cast) * reach; out.y = Math.sin(cast) * reach;
+  out.alpha = .12 * moon * fade;
+  return out;
 }

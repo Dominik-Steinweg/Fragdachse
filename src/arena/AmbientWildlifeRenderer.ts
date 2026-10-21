@@ -1,19 +1,15 @@
 import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_LIGHTING } from '../config';
-import { MOON_TUNING } from '../config/sunlight';
-import { characterShadowOpacity } from '../effects/CharacterShadowModel';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 import { LIGHT_PRESETS } from '../effects/LightingConfig';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { CHARACTER_SHADOW_CONFIG } from '../effects/ShadowConfig';
 import type { SunCloudState } from '../effects/sunlight/cloudShadow';
-import { resolveMoonBase } from '../effects/sunlight/MoonSky';
-import { cloudShadowAt } from '../effects/sunlight/SunFieldModel';
 import { DEFAULT_TIME_OF_DAY_MINUTES } from '../effects/TimeOfDay';
 import type { ArenaLayout } from '../types';
 import type { ChunkWorldFrame, ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { prepareWildlifeVisuals } from './AmbientWildlifeGeometry';
-import { prepareBirdVisuals, type BirdVisual } from './AmbientWildlifeBirdGeometry';
+import { prepareBirdVisuals, projectBirdShadow, type BirdVisual } from './AmbientWildlifeBirdGeometry';
 import { birdDrawScale, writeBirdLayerWeights } from './AmbientWildlifeBirds';
 import { fireflyGlowStrength } from './AmbientWildlifeAppearance';
 import { createAmbientWildlifeLayer, type AmbientWildlifeLayer, type WildlifeLayerProjection } from './AmbientWildlifeLayer';
@@ -34,9 +30,6 @@ export const BIRD_LAYER_DEPTHS = {
   high: DEPTH.CANOPY + .3,
 } as const;
 
-/** Flight shadows stretch with low sun, but never further than this from their bird. */
-const MAX_SHADOW_REACH = 220;
-const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 
 /** World-owned cosmetic presentation, following the existing lighting clock. */
 export class AmbientWildlifeRenderer {
@@ -48,6 +41,7 @@ export class AmbientWildlifeRenderer {
   private readonly birdLayers: readonly AmbientWildlifeLayer[];
   private readonly weights = { ground: 0, low: 0, high: 0 };
   private readonly moonBase = { weight: 0, cover: 0 };
+  private readonly shadow = { x: 0, y: 0, alpha: 0 };
   private destroyed = false;
   private visualTime = 0;
   private lighting: WildlifeLighting | null = null;
@@ -139,25 +133,10 @@ export class AmbientWildlifeRenderer {
     }
   }
 
-  /** Sun by day (as a held weapon's shadow), a faint moon shadow at night; none on the ground. */
   private projectShadow(v: BirdVisual, minutes: number): void {
-    const p = v.presence, a = v.animal, height = a.bird!.altitude, sun = this.sunlight?.sunPath;
-    p.shadowX = p.shadowY = p.shadowAlpha = 0;
-    if (height < 1 || !sun || !this.sunlight) return;
-    const fade = clamp01((height - 1) / 3) * (1 - .45 * clamp01(height / 130));
-    const day = sun.strength > 0 && sun.elevation > 0 ? characterShadowOpacity(sun.strength, sun.elevation) : 0;
-    if (day > 0) {
-      const reach = Math.min(MAX_SHADOW_REACH, height / Math.tan(Math.max(sun.elevation, .26)));
-      p.shadowX = -sun.direction[0] * reach; p.shadowY = -sun.direction[1] * reach;
-      p.shadowAlpha = day * cloudShadowAt(a.x + p.shadowX, a.y + p.shadowY, this.sunlight) * fade;
-      return;
-    }
-    const moon = resolveMoonBase(minutes, this.moonBase).weight;
-    if (moon <= 0) return;
-    const cast = sun.castAzimuth * Math.PI / 180;
-    const reach = Math.min(MAX_SHADOW_REACH, height / Math.tan(MOON_TUNING.elevationDegrees * Math.PI / 180));
-    p.shadowX = -Math.cos(cast) * reach; p.shadowY = Math.sin(cast) * reach;
-    p.shadowAlpha = .12 * moon * fade;
+    const p = v.presence, a = v.animal;
+    projectBirdShadow(a.bird!.altitude, a.x, a.y, this.sunlight, minutes, this.shadow, this.moonBase);
+    p.shadowX = this.shadow.x; p.shadowY = this.shadow.y; p.shadowAlpha = this.shadow.alpha;
   }
 
   private syncFireflyLights(view: ChunkWorldRect): void {

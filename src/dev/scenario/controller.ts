@@ -1022,6 +1022,9 @@ export class DevScenarioController {
       krakenReview: this.krakenLightShadowReview?.status() ?? this.krakenReview?.status() ?? null,
       enemyMeshFixture: this.enemyMeshReview?.inspect() ?? null,
       enemyContour: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().enemyReadability.getDiagnostics() : null,
+      wildlifeBirds: this.state === 'ready' ? (this.runtime.getScenarioLightingTargets().wildlife?.model.animals ?? [])
+        .filter(a => a.bird).map(a => ({ kind: a.kind, x: Math.round(a.x), y: Math.round(a.y),
+          phase: a.bird!.phase, altitude: Math.round(a.bird!.altitude), opacity: a.opacity })) : null,
       characterMaterial: characterMaterialStatus(this.scene),
       worldLightingMeasurement:this.worldLightingMeasurement(),
       camera: { zoom: this.zoom, focusTarget: this.cameraAtTarget, scrollX: this.scene.cameras.main.scrollX,
