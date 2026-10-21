@@ -89,12 +89,36 @@ export interface BloodFieldBounds { minX: number; minY: number; maxX: number; ma
 const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3;
 
 
+/** Pools are found through a coarse grid; a pool never moves, so its cell is fixed. */
+const POOL_CELL_PX = 32;
+const cellKey = (x: number, y: number): number =>
+  ((Math.floor(x / POOL_CELL_PX) & 0xffff) << 16) | (Math.floor(y / POOL_CELL_PX) & 0xffff);
+/** A pool fed this recently keeps its place under budget pressure: it is visibly alive. */
+const FED_GRACE_MS = 2_000;
+
 export class BloodFieldModel {
-  /** Six vertices per mark, written for the accumulation batch. */
+  /** Six vertices per mark, written for the accumulation batch. Freed slots hold an expired mark. */
   readonly data: Float32Array;
   private readonly area: Float32Array;
   private readonly lastSeepMs: Float64Array;
   private readonly forcedFade: Uint8Array;
+  private readonly alive: Uint8Array;
+  private readonly generation: Uint32Array;
+  /** Free slots (LIFO); slots below `highWater` that hold no mark. */
+  private readonly free: Int32Array;
+  private freeTop = 0;
+  private highWater = 0;
+  /** Insertion order (slot, generation) for budget pressure; stale entries are skipped. */
+  private readonly order: Int32Array;
+  private readonly orderGen: Uint32Array;
+  private orderHead = 0;
+  private orderTail = 0;
+  /** Slots whose vertex data changed since the batch last uploaded. */
+  private readonly dirtyFlag: Uint8Array;
+  private readonly dirtyList: Int32Array;
+  private dirtyCount = 0;
+  private dirtyAll = true;
+  private readonly pools = new Map<number, number[]>();
   private live = 0;
   private tinted = 0;
   private revision = 0;
@@ -107,38 +131,80 @@ export class BloodFieldModel {
     this.area = new Float32Array(capacity);
     this.lastSeepMs = new Float64Array(capacity);
     this.forcedFade = new Uint8Array(capacity);
+    this.alive = new Uint8Array(capacity);
+    this.generation = new Uint32Array(capacity);
+    this.free = new Int32Array(capacity);
+    this.order = new Int32Array(Math.max(1, capacity * 2));
+    this.orderGen = new Uint32Array(Math.max(1, capacity * 2));
+    this.dirtyFlag = new Uint8Array(capacity);
+    this.dirtyList = new Int32Array(capacity);
     this.epoch = epochMs;
   }
 
   get count(): number { return this.live; }
+  /** Slots the batch draws: every live mark lies below it, freed slots in between draw nothing. */
+  get drawCount(): number { return this.highWater; }
   /** Marks with their own blood colour; zero keeps the colour pass off. */
   get tintedCount(): number { return this.tinted; }
-  /** Changes whenever the vertex data changes; the batch uploads only then. */
+  /** Changes whenever the vertex data changes. */
   get version(): number { return this.revision; }
   get epochMs(): number { return this.epoch; }
   /** Shader clock: seconds since the epoch. */
   seconds(ms: number): number { return (ms - this.epoch) / 1000; }
 
+  /**
+   * Hands the changed slots to the uploader and forgets them. `all` asks for the whole draw range
+   * (after a clear or when most slots changed); otherwise `slots[0..count)` lists the changed ones.
+   */
+  takeDirty(): { readonly all: boolean; readonly slots: Int32Array; readonly count: number } {
+    const all = this.dirtyAll || this.dirtyCount > this.highWater / 4;
+    const result = { all, slots: this.dirtyList, count: all ? 0 : this.dirtyCount };
+    for (let index = 0; index < this.dirtyCount; index++) this.dirtyFlag[this.dirtyList[index]] = 0;
+    this.dirtyCount = 0;
+    this.dirtyAll = false;
+    return result;
+  }
+
   /** Drops every mark; the epoch restarts so shader times stay small. */
   clear(epochMs = this.epoch): void {
+    this.alive.fill(0);
     this.live = 0;
     this.tinted = 0;
+    this.highWater = 0;
+    this.freeTop = 0;
+    this.orderHead = this.orderTail = 0;
+    this.pools.clear();
+    for (let index = 0; index < this.dirtyCount; index++) this.dirtyFlag[this.dirtyList[index]] = 0;
+    this.dirtyCount = 0;
+    this.dirtyAll = true;
     this.epoch = epochMs;
     for (const bounds of this.channelBounds) bounds.count = 0;
     this.revision++;
   }
 
-  /** Adds a mark; at full capacity the mark closest to its end gives way. Returns its slot. */
+  /** Adds a mark; at full capacity the oldest mark gives way. Returns its slot. */
   add(mark: BloodMarkInput): number {
     if (this.capacity <= 0) return -1;
-    if (this.live >= this.capacity) this.remove(this.earliestEnd());
-    const slot = this.live++;
+    if (this.live >= this.capacity) {
+      const victim = this.oldest(Infinity, false);
+      this.remove(victim >= 0 ? victim : this.earliestEnd());
+    }
+    const slot = this.freeTop > 0 ? this.free[--this.freeTop] : this.highWater++;
+    this.alive[slot] = 1;
+    this.generation[slot]++;
+    this.live++;
     this.write(slot, mark);
     if (mark.color !== undefined) this.tinted++;
     this.area[slot] = mark.kind === BloodMarkKind.Pool ? mark.r1 * mark.r1 : 0;
     this.lastSeepMs[slot] = -Infinity;
     this.forcedFade[slot] = 0;
-    this.revision++;
+    if (mark.kind === BloodMarkKind.Pool) {
+      const key = cellKey(mark.x, mark.y);
+      const cell = this.pools.get(key);
+      if (cell) cell.push(slot); else this.pools.set(key, [slot]);
+    }
+    this.enqueue(slot);
+    this.touch(slot);
     return slot;
   }
 
@@ -149,15 +215,20 @@ export class BloodFieldModel {
    */
   feedPool(feed: BloodPoolFeed): BloodPoolFeedResult {
     let grow = -1, growDistance = Infinity;
-    for (let slot = 0; slot < this.live; slot++) {
-      if (this.word(slot, W.kind) !== BloodMarkKind.Pool || this.word(slot, W.channel) !== feed.channel) continue;
-      if (!this.sameColor(slot, feed.color)) continue;
-      if (this.forcedFade[slot]) continue;
-      const endMs = this.ms(this.word(slot, W.end)), shrinkMs = this.word(slot, W.shrink) * 1000;
-      if (feed.atMs >= endMs - shrinkMs) continue;
-      const radius = this.radiusAt(slot, feed.atMs);
-      const distance = Math.hypot(this.word(slot, W.x) - feed.x, this.word(slot, W.y) - feed.y);
-      if (distance <= radius * feed.growCore && distance < growDistance) { grow = slot; growDistance = distance; }
+    const reach = Math.max(1, Math.ceil(feed.maxRadiusPx * feed.growCore / POOL_CELL_PX));
+    const cx = Math.floor(feed.x / POOL_CELL_PX), cy = Math.floor(feed.y / POOL_CELL_PX);
+    for (let gy = cy - reach; gy <= cy + reach; gy++) for (let gx = cx - reach; gx <= cx + reach; gx++) {
+      const cell = this.pools.get(((gx & 0xffff) << 16) | (gy & 0xffff));
+      if (!cell) continue;
+      for (const slot of cell) {
+        if (this.word(slot, W.channel) !== feed.channel || this.forcedFade[slot]) continue;
+        if (!this.sameColor(slot, feed.color)) continue;
+        const endMs = this.ms(this.word(slot, W.end)), shrinkMs = this.word(slot, W.shrink) * 1000;
+        if (feed.atMs >= endMs - shrinkMs) continue;
+        const radius = this.radiusAt(slot, feed.atMs);
+        const distance = Math.hypot(this.word(slot, W.x) - feed.x, this.word(slot, W.y) - feed.y);
+        if (distance <= radius * feed.growCore && distance < growDistance) { grow = slot; growDistance = distance; }
+      }
     }
     if (grow >= 0) {
       const area = this.area[grow] + feed.area;
@@ -172,7 +243,7 @@ export class BloodFieldModel {
       this.set(grow, W.spread, Math.max(0.001, feed.spreadMs / 1000));
       this.set(grow, W.end, this.seconds(endMs));
       this.set(grow, W.fresh, feedSec);
-      this.revision++;
+      this.touch(grow);
       return { slot: grow, grew: true, radius: Math.max(start, radius) };
     }
     const radius = Math.min(feed.maxRadiusPx, Math.sqrt(feed.area));
@@ -195,7 +266,7 @@ export class BloodFieldModel {
 
   /** Rate limit for seeping into nearby water, per pool. */
   claimSeep(slot: number, atMs: number, intervalMs: number): boolean {
-    if (slot < 0 || slot >= this.live || atMs - this.lastSeepMs[slot] < intervalMs) return false;
+    if (slot < 0 || slot >= this.highWater || !this.alive[slot] || atMs - this.lastSeepMs[slot] < intervalMs) return false;
     this.lastSeepMs[slot] = atMs;
     return true;
   }
@@ -206,22 +277,23 @@ export class BloodFieldModel {
    */
   update(nowMs: number, budget: number, pressure: number, fastFadeMs: number): void {
     const nowSec = this.seconds(nowMs);
-    for (let slot = 0; slot < this.live;) {
-      if (this.word(slot, W.end) <= nowSec) this.remove(slot);
-      else slot++;
+    for (let slot = 0; slot < this.highWater; slot++) {
+      if (this.alive[slot] && this.word(slot, W.end) <= nowSec) this.remove(slot);
     }
     const limit = Math.max(1, Math.floor(Math.min(budget, this.capacity) * pressure));
     let excess = this.live - limit;
-    for (let slot = 0; slot < this.live && excess > 0; slot++) if (this.forcedFade[slot]) excess--;
+    if (excess > 0) for (let slot = 0; slot < this.highWater && excess > 0; slot++) {
+      if (this.alive[slot] && this.forcedFade[slot]) excess--;
+    }
+    const fade = Math.max(0.05, fastFadeMs / 1000);
     while (excess-- > 0) {
-      const slot = this.oldestUnforced();
+      const slot = this.oldest(nowMs, true);
       if (slot < 0) break;
       this.forcedFade[slot] = 1;
-      const fade = Math.max(0.05, fastFadeMs / 1000);
       const end = Math.min(this.word(slot, W.end), nowSec + fade);
       this.set(slot, W.end, end);
       this.set(slot, W.shrink, Math.min(fade, Math.max(0.05, end - nowSec)));
-      this.revision++;
+      this.touch(slot);
     }
     this.refreshBounds(nowSec);
   }
@@ -232,7 +304,8 @@ export class BloodFieldModel {
   /** Marks of one kind and receiver, for diagnostics and the review lab. */
   countOf(kind?: BloodMarkKind, channel?: BloodChannel): number {
     let total = 0;
-    for (let slot = 0; slot < this.live; slot++) {
+    for (let slot = 0; slot < this.highWater; slot++) {
+      if (!this.alive[slot]) continue;
       if (kind !== undefined && this.word(slot, W.kind) !== kind) continue;
       if (channel !== undefined && this.word(slot, W.channel) !== channel) continue;
       total++;
@@ -240,10 +313,10 @@ export class BloodFieldModel {
     return total;
   }
 
-  /** Read access for tests and diagnostics. */
+  /** Read access for tests and diagnostics; null for a free slot. */
   mark(slot: number): { kind: number; channel: number; x: number; y: number; r0: number; r1: number;
     bornAtMs: number; endAtMs: number; area: number } | null {
-    if (slot < 0 || slot >= this.live) return null;
+    if (slot < 0 || slot >= this.highWater || !this.alive[slot]) return null;
     return { kind: this.word(slot, W.kind), channel: this.word(slot, W.channel), x: this.word(slot, W.x),
       y: this.word(slot, W.y), r0: this.word(slot, W.r0), r1: this.word(slot, W.r1),
       bornAtMs: this.ms(this.word(slot, W.born)), endAtMs: this.ms(this.word(slot, W.end)), area: this.area[slot] };
@@ -253,9 +326,9 @@ export class BloodFieldModel {
     for (const bounds of this.channelBounds) {
       bounds.count = 0; bounds.minX = bounds.minY = Infinity; bounds.maxX = bounds.maxY = -Infinity;
     }
-    for (let slot = 0; slot < this.live; slot++) {
+    for (let slot = 0; slot < this.highWater; slot++) {
       // Marks still in flight already count: the pass must exist when they land.
-      if (this.word(slot, W.born) > nowSec + 2) continue;
+      if (!this.alive[slot] || this.word(slot, W.born) > nowSec + 2) continue;
       const bounds = this.channelBounds[this.word(slot, W.channel)];
       const x = this.word(slot, W.x), y = this.word(slot, W.y), reach = this.reach(slot);
       bounds.minX = Math.min(bounds.minX, x - reach); bounds.maxX = Math.max(bounds.maxX, x + reach);
@@ -268,39 +341,95 @@ export class BloodFieldModel {
   private reach(slot: number): number {
     const kind = this.word(slot, W.kind), r0 = this.word(slot, W.r0), r1 = Math.max(r0, this.word(slot, W.r1));
     if (kind === BloodMarkKind.Splat || kind === BloodMarkKind.Drip) return r1 * 1.3 + r0 * 3 + 2;
-    return r1 * 2 + 2;
+    return r1 * 2.4 + 2;
   }
 
   private earliestEnd(): number {
-    let best = 0, end = Infinity;
-    for (let slot = 0; slot < this.live; slot++) {
+    let best = -1, end = Infinity;
+    for (let slot = 0; slot < this.highWater; slot++) {
+      if (!this.alive[slot]) continue;
       const value = this.word(slot, W.end);
       if (value < end) { end = value; best = slot; }
     }
     return best;
   }
 
-  private oldestUnforced(): number {
-    let best = -1, born = Infinity;
-    for (let slot = 0; slot < this.live; slot++) {
-      if (this.forcedFade[slot]) continue;
-      const value = this.word(slot, W.born);
-      if (value < born) { born = value; best = slot; }
-    }
-    return best;
+  private enqueue(slot: number): void {
+    const size = this.order.length;
+    if ((this.orderTail + 1) % size === this.orderHead) this.compactOrder();
+    this.order[this.orderTail] = slot;
+    this.orderGen[this.orderTail] = this.generation[slot];
+    this.orderTail = (this.orderTail + 1) % size;
   }
 
-  /** Swap-remove: the last mark moves into the hole, so the draw range stays dense. */
-  private remove(slot: number): void {
-    if (this.word(slot, W.colorB) !== 0) this.tinted--;
-    const last = --this.live;
-    if (slot !== last) {
-      this.data.copyWithin(slot * BLOCK, last * BLOCK, (last + 1) * BLOCK);
-      this.area[slot] = this.area[last];
-      this.lastSeepMs[slot] = this.lastSeepMs[last];
-      this.forcedFade[slot] = this.forcedFade[last];
+  /** Drops stale entries; the queue then holds at most the live marks. */
+  private compactOrder(): void {
+    const size = this.order.length;
+    let write = this.orderHead;
+    for (let read = this.orderHead; read !== this.orderTail; read = (read + 1) % size) {
+      const slot = this.order[read];
+      if (!this.alive[slot] || this.orderGen[read] !== this.generation[slot]) continue;
+      this.order[write] = slot; this.orderGen[write] = this.orderGen[read];
+      write = (write + 1) % size;
     }
+    this.orderTail = write;
+  }
+
+  /**
+   * Oldest live mark by insertion, skipping marks already drying early and, for pressure, pools
+   * fed within the grace period (they move to the back). -1 when none qualifies.
+   */
+  private oldest(nowMs: number, spareFed: boolean): number {
+    const size = this.order.length;
+    let guard = this.live + 1;
+    while (this.orderHead !== this.orderTail && guard-- > 0) {
+      const slot = this.order[this.orderHead], gen = this.orderGen[this.orderHead];
+      this.orderHead = (this.orderHead + 1) % size;
+      if (!this.alive[slot] || gen !== this.generation[slot] || this.forcedFade[slot]) continue;
+      // A pool that kept being fed is visibly in use: it goes to the back of the queue instead.
+      const fedAgain = this.word(slot, W.kind) === BloodMarkKind.Pool && this.word(slot, W.feed) > this.word(slot, W.born) + 0.001;
+      if (spareFed && fedAgain && nowMs - this.ms(this.word(slot, W.feed)) < FED_GRACE_MS) {
+        this.order[this.orderTail] = slot; this.orderGen[this.orderTail] = gen;
+        this.orderTail = (this.orderTail + 1) % size;
+        continue;
+      }
+      return slot;
+    }
+    return -1;
+  }
+
+  /** Frees a slot: its quad collapses (ended in the past) and it returns to the free list. */
+  private remove(slot: number): void {
+    if (slot < 0 || !this.alive[slot]) return;
+    if (this.word(slot, W.colorB) !== 0) this.tinted--;
+    if (this.word(slot, W.kind) === BloodMarkKind.Pool) {
+      const key = cellKey(this.word(slot, W.x), this.word(slot, W.y));
+      const cell = this.pools.get(key);
+      const index = cell ? cell.indexOf(slot) : -1;
+      if (cell && index >= 0) { cell.splice(index, 1); if (!cell.length) this.pools.delete(key); }
+    }
+    this.alive[slot] = 0;
+    this.live--;
+    this.set(slot, W.born, -1e6);
+    this.set(slot, W.end, -1e6);
+    this.touch(slot);
+    if (slot === this.highWater - 1) {
+      // Trim trailing free slots so the draw range stays tight.
+      this.highWater--;
+      while (this.highWater > 0 && !this.alive[this.highWater - 1]) this.highWater--;
+      let keep = 0;
+      for (let index = 0; index < this.freeTop; index++) if (this.free[index] < this.highWater) this.free[keep++] = this.free[index];
+      this.freeTop = keep;
+    } else {
+      this.free[this.freeTop++] = slot;
+    }
+  }
+
+  private touch(slot: number): void {
     this.revision++;
+    if (this.dirtyAll || this.dirtyFlag[slot]) return;
+    this.dirtyFlag[slot] = 1;
+    this.dirtyList[this.dirtyCount++] = slot;
   }
 
   private write(slot: number, mark: BloodMarkInput): void {

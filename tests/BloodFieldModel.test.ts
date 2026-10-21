@@ -77,4 +77,29 @@ describe('BloodFieldModel', () => {
     expect(model.count).toBe(0);
     expect(model.version).not.toBe(version);
   });
+
+  it('reuses freed slots and uploads only the marks that changed', () => {
+    const model = new BloodFieldModel(16);
+    for (let i = 0; i < 4; i++) splat(model, 0, 1_000 + i * 1_000);
+    expect(model.takeDirty().all).toBe(true);
+    model.update(1_500, 16, 1, 900);
+    const dirty = model.takeDirty();
+    expect(dirty.all).toBe(false);
+    expect(Array.from(dirty.slots.subarray(0, dirty.count))).toEqual([0]);
+    expect(model.drawCount).toBe(4);
+    expect(splat(model, 1_600)).toBe(0);
+    model.update(10_000, 16, 1, 900);
+    expect(model.count).toBe(1);
+    expect(model.drawCount).toBe(1);
+  });
+
+  it('keeps a pool that is still being fed when the budget retires the oldest marks', () => {
+    const model = new BloodFieldModel(16);
+    const { slot: pool } = model.feedPool(feed());
+    for (let i = 0; i < 4; i++) splat(model, 10 + i);
+    model.feedPool(feed({ atMs: 1_000 }));
+    model.update(1_100, 4, 1, 2_500);
+    expect(model.mark(pool)!.endAtMs).toBeGreaterThan(5_000);
+    expect(model.mark(1)!.endAtMs).toBeLessThan(1_100 + 2_501);
+  });
 });

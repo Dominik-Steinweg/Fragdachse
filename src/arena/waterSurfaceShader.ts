@@ -136,7 +136,9 @@ void main() {
   vec3 color=mix(shallow,deep,colorDepth)*(.90+broad*.18);
   color*=1.0+(grain-.5)*(1.0-depth)*.025;
   // Dye: blood spreads inside the water body and curls with the pond's own eddies. It tints the
-  // body before every reflection, ripple and glint, so those still play over it.
+  // body before every reflection, ripple and glint, so those still play over it. Later body grades
+  // (void bloom, void stain) give way where the dye covers the body.
+  float dyeCover=0.0;
   if(uDyeOn>.5) {
     vec2 du=(p-uDyeRect.xy)/uDyeRect.zw;
     if(du.x>0.0&&du.y>0.0&&du.x<1.0&&du.y<1.0) {
@@ -161,6 +163,7 @@ void main() {
           blood=mix(blood,min(hue*(dot(blood,vec3(.299,.587,.114))/.21),vec3(1.0)),share);
         }
         color=mix(color,blood+(color-mix(shallow,deep,colorDepth))*.25,body*.9);
+        dyeCover=body*.9;
       }
     }
   }
@@ -215,7 +218,8 @@ void main() {
     // Ink spreads unevenly: the front is pushed ahead and held back by the pond's own noise.
     float voidDistance=length(p-uVoid.xy)+(pondNoise(p*.0085+vec2(uSeed,17.3))-.5)*130.0+(pondNoise(p*.031+11.0)-.5)*34.0;
     float reached=1.0-smoothstep(uVoid.z-70.0,uVoid.z,voidDistance);
-    float grade=uVoid.w*reached;
+    // Blood in the pond stays visible: the void yields where the dye covers the body.
+    float grade=uVoid.w*reached*(1.0-dyeCover*.9);
     // Deep, saturated void: almost black in the basin, a richer violet over the shelf.
     vec3 voidBody=mix(vec3(.17,.05,.29),vec3(.042,.008,.095),colorDepth)*(.9+broad*.2);
     color=mix(color,voidBody,grade*.94);

@@ -54,6 +54,8 @@ export class BloodMarkPlanner {
   private readonly scratch = createBloodLanding();
   private readonly ripplesList: BloodRipple[] = [];
   private admitted = 0;
+  /** Share of new spatter kept; drops as the field fills, so older blood is not pushed out. */
+  private thinning = 1;
   // Per-hit state between begin/end.
   private rng: () => number = Math.random;
   private hitNowMs = 0;
@@ -80,9 +82,13 @@ export class BloodMarkPlanner {
     }, out);
   }
 
-  /** Once per frame: the spatter admission budget restarts and spent ripples drop out. */
-  beginFrame(nowMs: number): void {
+  /**
+   * Once per frame: the spatter admission budget restarts and spent ripples drop out. `load` is the
+   * field's fill (marks / budget): past half full, new spatter thins out so older blood can stay.
+   */
+  beginFrame(nowMs: number, load = 0): void {
     this.admitted = 0;
+    this.thinning = Math.max(0.3, 1 - Math.max(0, load - 0.5) / 0.4 * 0.7);
     const life = this.config.water.rippleLifeMs;
     for (let index = this.ripplesList.length - 1; index >= 0; index--) {
       if (nowMs - this.ripplesList[index].bornAtMs > life) this.ripplesList.splice(index, 1);
@@ -155,9 +161,9 @@ export class BloodMarkPlanner {
     const ratio = Math.max(0, Math.min(1, travelRatio));
     const distanceScale = spatter.nearScale + (spatter.farScale - spatter.nearScale) * ratio;
     const killScale = this.kill ? spatter.killScale : 1;
-    // Only some flights leave a stain; rock faces always keep the streaks that struck them.
-    const marks = this.rng() < spatter.markShare[kind];
-    if (!marks && !(landing.surface === 'rockFace' && kind === 'streak')) return;
+    // Only some flights leave a stain; rock faces keep the streaks that struck them (thinned under load).
+    const marks = this.rng() < spatter.markShare[kind] * this.thinning;
+    if (!marks && !(landing.surface === 'rockFace' && kind === 'streak' && this.rng() < this.thinning)) return;
 
     switch (landing.surface) {
       case 'water': {
@@ -258,7 +264,7 @@ export class BloodMarkPlanner {
       width, width * (2 + this.rng() * 1.5), atMs, 0);
     if (kind !== 'streak') return;
     // Flecks flung further up the face.
-    const flecks = this.rng() < 0.5 ? 2 : 1;
+    const flecks = this.thinning > 0.7 ? (this.rng() < 0.5 ? 2 : 1) : (this.rng() < this.thinning ? 1 : 0);
     for (let index = 0; index < flecks && this.admit(); index++) {
       const fleck = width * (0.3 + this.rng() * 0.3), depth = 6 + this.rng() * 12, offset = (this.rng() - 0.5) * 18;
       this.splat(BloodChannel.Rock, landing.x - nx * depth + tx * offset, landing.y - ny * depth + ty * offset,

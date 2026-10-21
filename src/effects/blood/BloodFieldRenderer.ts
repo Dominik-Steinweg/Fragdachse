@@ -45,26 +45,35 @@ export interface BloodFieldSurfaces {
 
 const additiveModes = new WeakMap<Phaser.Renderer.WebGL.WebGLRenderer, number>();
 /** Pure sum on every channel, alpha included (Phaser's ADD weights by destination alpha). */
+/** Densities add up (RGB); the liveliness in alpha takes the maximum where the GPU offers it. */
 function additiveMode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): number {
   let mode = additiveModes.get(renderer);
   if (mode === undefined) {
     const gl = renderer.gl;
+    const maximum = maxEquation(renderer);
     // 4.2.1 addBlendMode returns (inserted index - 1); use the appended slot itself.
     mode = renderer.blendModes.length;
     renderer.addBlendMode([gl.ONE, gl.ONE], gl.FUNC_ADD);
-    renderer.updateBlendMode(mode, [gl.ONE, gl.ONE, gl.ONE, gl.ONE], gl.FUNC_ADD);
+    renderer.updateBlendMode(mode, [gl.ONE, gl.ONE, gl.ONE, gl.ONE],
+      maximum === null ? gl.FUNC_ADD : [gl.FUNC_ADD, maximum] as unknown as number);
     // removeBlendMode would shift other owners' indices: keep one slot per renderer.
     additiveModes.set(renderer, mode);
   }
   return mode;
 }
 
+/** The MAX blend equation (WebGL2 or EXT_blend_minmax), or null. */
+function maxEquation(renderer: Phaser.Renderer.WebGL.WebGLRenderer): number | null {
+  const gl = renderer.gl as WebGLRenderingContext & { MAX?: number };
+  return gl.MAX ?? gl.getExtension('EXT_blend_minmax')?.MAX_EXT ?? null;
+}
+
 const maxModes = new WeakMap<Phaser.Renderer.WebGL.WebGLRenderer, number | null>();
 /** Per-channel maximum (WebGL2 or EXT_blend_minmax); null where neither exists. */
 function maximumMode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): number | null {
   if (maxModes.has(renderer)) return maxModes.get(renderer)!;
-  const gl = renderer.gl as WebGLRenderingContext & { MAX?: number };
-  const equation = gl.MAX ?? gl.getExtension('EXT_blend_minmax')?.MAX_EXT ?? null;
+  const gl = renderer.gl;
+  const equation = maxEquation(renderer);
   let mode: number | null = null;
   if (equation !== null) {
     mode = renderer.blendModes.length;
@@ -112,6 +121,8 @@ export class BloodFieldRenderer {
   private lampOn = 0;
   private readonly lamps = createSurfaceLightFrame();
   private pixelsPerWorld = 1;
+  /** 1 when the accumulation's alpha blends by maximum (liveliness without division). */
+  readonly alphaMax: number;
   private detail = 1;
   private timeSec = 0;
   private drawn = false;
@@ -120,6 +131,7 @@ export class BloodFieldRenderer {
   constructor(private readonly scene: Phaser.Scene, private readonly model: BloodFieldModel) {
     const renderer = scene.sys?.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
     this.renderer = renderer?.gl ? renderer : null;
+    this.alphaMax = this.renderer && maxEquation(this.renderer) !== null ? 1 : 0;
   }
 
   /** Texture key of the density field, or null before the first marks were drawn. */
@@ -346,7 +358,7 @@ export class BloodFieldRenderer {
         set('uField', 0); set('uQuad', quadRect); set('uFieldRect', this.fieldRect); set('uFieldTexel', this.fieldTexel);
         set('uThreshold', BLOOD_HIT_VFX.field.threshold); set('uSun', this.sun); set('uNight', this.night);
         set('uDetail', this.detail); set('uPass', pass); set('uLayer', layer); set('uLampOn', this.lampOn); set('uPixelsPerWorld', this.pixelsPerWorld);
-        set('uDeckCount', 0); set('uTintOn', this.tintActive);
+        set('uDeckCount', 0); set('uTintOn', this.tintActive); set('uAlphaMax', this.alphaMax);
         setSurfaceLightUniforms(set, this.lampOn ? this.lamps : null, null);
         extra(set);
       },
@@ -387,7 +399,7 @@ function createBloodAccumulationBatch(renderer: Phaser.Renderer.WebGL.WebGLRende
   const capacity = owner.frame.model.capacity;
   const uRect = new Float32Array(4), uDry = new Float32Array(2);
   class BloodAccumulationBatch extends Phaser.Renderer.WebGL.RenderNodes.BatchHandler {
-    private uploadedVersion = -1;
+    private primed = false;
     private disposed = false;
     constructor() {
       super(renderer.renderNodes, { name: 'BatchHandlerBloodField', shaderName: 'BLOOD_FIELD_ACCUMULATION',
@@ -405,18 +417,27 @@ function createBloodAccumulationBatch(renderer: Phaser.Renderer.WebGL.WebGLRende
     run(context: Phaser.Renderer.WebGL.DrawingContext, preparing = false): boolean {
       const { model, rect, time, mode } = owner.frame;
       if (!preparing && !model.count) return false;
-      const instances = Math.max(preparing ? 1 : 0, model.count);
+      const instances = Math.max(preparing ? 1 : 0, model.drawCount);
       this.onRunBegin(context);
       const program = this.programManager;
       const suite = program.getCurrentProgramSuite() as { program: Phaser.Renderer.WebGL.Wrappers.WebGLProgramWrapper;
         vao: Phaser.Renderer.WebGL.Wrappers.WebGLVAOWrapper } | null;
       if (suite) {
-        if (this.uploadedVersion !== model.version || preparing) {
-          // The colour pass reuses this frame's upload.
-          const data = model.data.subarray(0, instances * BLOOD_FIELD_VERTICES * BLOOD_FIELD_WORDS);
-          this.vertexBufferLayout.buffer.viewF32!.set(data);
-          this.vertexBufferLayout.buffer.update(data.byteLength, 0);
-          this.uploadedVersion = preparing ? -1 : model.version;
+        // Only changed marks travel to the GPU; the colour pass reuses this frame's upload.
+        const buffer = this.vertexBufferLayout.buffer, view = buffer.viewF32!;
+        const block = BLOOD_FIELD_VERTICES * BLOOD_FIELD_WORDS;
+        const dirty = preparing ? null : model.takeDirty();
+        if (preparing || !this.primed || dirty!.all) {
+          view.set(model.data.subarray(0, instances * block));
+          buffer.update(instances * block * 4, 0);
+          this.primed = !preparing;
+        } else {
+          for (let index = 0; index < dirty!.count; index++) {
+            const slot = dirty!.slots[index];
+            if (slot >= instances) continue;
+            view.set(model.data.subarray(slot * block, (slot + 1) * block), slot * block);
+            buffer.update(block * 4, slot * block * 4);
+          }
         }
         const field = BLOOD_HIT_VFX.field;
         uRect.set(rect); uDry[0] = field.dryStartMs / 1000; uDry[1] = field.dryEndMs / 1000;
@@ -426,6 +447,7 @@ function createBloodAccumulationBatch(renderer: Phaser.Renderer.WebGL.WebGLRende
         program.setUniform('uPower', field.falloffPower);
         program.setUniform('uDry', uDry);
         program.setUniform('uMode', mode);
+        program.setUniform('uAlphaMax', owner.alphaMax);
         program.applyUniforms(suite.program);
         renderer.drawElements(context, [], suite.program, suite.vao, instances * BLOOD_FIELD_VERTICES, 0, this.topology);
       }

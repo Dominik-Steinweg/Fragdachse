@@ -67,6 +67,7 @@ uniform float uThreshold;
 uniform float uPower;
 uniform vec2 uDry;
 uniform float uMode;
+uniform float uAlphaMax;
 varying vec2 vLocal;
 varying vec4 vB;
 varying vec4 vC;
@@ -83,12 +84,16 @@ float lobes(float a, float seed) {
 }
 void main() {
   float t = uTime, age = t - vC.x, seed = vB.w;
-  // The last part of a life lowers the peak towards the threshold: the outline withdraws.
+  // The last part of a life fades the mark out: its visibility (written next to its freshness)
+  // falls smoothly while it draws in a little from its edge. Density keeps the shape steady, so the
+  // outline never collapses at the end.
   float life = clamp((vC.w - t) / max(vD.z, 0.001), 0.0, 1.0);
-  life = life * life * (3.0 - 2.0 * life);
-  float amount = vD.y * mix(uThreshold * 0.9, 1.0, life);
+  float visible = mix(life, smoothstep(0.0, 1.0, life), 0.5);
+  float shrink = 0.72 + 0.28 * life;
+  float amount = vD.y;
   float d = 0.0;
-  vec2 p = vLocal;
+  // Clouds in water thin out instead (dilution below); they never shrink.
+  vec2 p = vKind > 2.5 ? vLocal : vLocal / shrink;
   if (vKind < 0.5) {
     // Pool: spreads from r0 to r1 (eased), lobed outline, a bulging front while it still flows.
     float k = clamp((t - vC.y) / max(vC.z, 0.001), 0.0, 1.0);
@@ -148,10 +153,13 @@ void main() {
     gl_FragColor = vec4(tint * weight, weight);
     return;
   }
+  // Liveliness q: 1 fresh, 0.5 dried, 0 gone. With MAX alpha the most alive mark covering a texel
+  // wins (overlaps never add up); otherwise it is density-weighted and divided out again.
   float fresh = 1.0 - smoothstep(uDry.x, uDry.y, t - vD.w);
+  float q = visible * (0.5 + 0.5 * fresh);
   vec4 o = vec4(0.0);
   if (vD.x < 0.5) o.r = d; else if (vD.x < 1.5) o.g = d; else o.b = d;
-  o.a = vD.x < 1.5 ? d * fresh : 0.0;
+  o.a = vD.x < 1.5 ? (uAlphaMax > 0.5 ? smoothstep(0.15, 0.6, d) * q : d * q) : 0.0;
   gl_FragColor = o;
 }`;
 
@@ -197,6 +205,7 @@ uniform float uLampOn;
 uniform float uPixelsPerWorld;
 uniform sampler2D uTint;
 uniform float uTintOn;
+uniform float uAlphaMax;
 ${SURFACE_LIGHT_GLSL}
 ${rock ? ROCK_COVERAGE_GLSL : ''}
 ${NOISE}
@@ -244,7 +253,10 @@ void main() {
     + channel(texture2D(uField, uv + ring * vec2(0.5, 0.866))) + channel(texture2D(uField, uv + ring * vec2(-0.5, 0.866)))
     + channel(texture2D(uField, uv + ring * vec2(0.5, -0.866))) + channel(texture2D(uField, uv + ring * vec2(-0.5, -0.866)))) / 6.0;
   float depth = smoothstep(0.35, 1.0, thick) * smoothstep(uThreshold + 0.05, 1.0, wide);
-  float fresh = clamp(f.a / max(f.r + f.g, 0.02), 0.0, 1.0);
+  // Liveliness of the blood here (see the accumulation): freshness above one half, fading below.
+  float q = uAlphaMax > 0.5 ? f.a : clamp(f.a / max(f.r + f.g, 0.02), 0.0, 1.0);
+  float fresh = clamp(q * 2.0 - 1.0, 0.0, 1.0);
+  float vis = clamp(q * 2.0, 0.0, 1.0);
   // Broad, world-anchored unevenness: clotting and soaking vary across a pool.
   float mottle = bloodNoise(world * 0.05) * 0.55 + bloodNoise(world * 0.12 + 7.1) * 0.45;
   vec4 tint = uTintOn > 0.5 ? texture2D(uTint, uv) : vec4(0.0);
@@ -258,11 +270,11 @@ void main() {
     // Drying draws a darker ring where the edge clots first.
     float ring = smoothstep(0.0, 0.06, thick) * (1.0 - smoothstep(0.06, 0.25, thick));
     dye *= 1.0 - ring * (1.0 - fresh) * 0.35;
-    float alpha = cover * mix(0.88, 1.0, depth);
+    float alpha = cover * mix(0.88, 1.0, depth) * vis;
     dye = bloodRecolor(dye, tint);
     // Around it, blood seeps into the soil: a soft, uneven red-brown darkening (ground and decks only).
     // Only wide pools seep (gentle edge slope); drops would gain a drawn-looking outline.
-    float seep = ${rock ? '0.0' : 'smoothstep(low, uThreshold - 0.03, soaked) * (1.0 - cover) * mask * 0.5 * (1.0 - smoothstep(0.03, 0.1, length(slope)))'};
+    float seep = ${rock ? '0.0' : 'smoothstep(low, uThreshold - 0.03, soaked) * (1.0 - cover) * mask * 0.5 * (1.0 - smoothstep(0.03, 0.1, length(slope))) * vis'};
     vec3 soil = bloodRecolor(vec3(0.74, 0.5, 0.46), tint);
     // MULTIPLY with full alpha writes the factor itself: ground × seep × stain, per channel.
     gl_FragColor = vec4(mix(vec3(1.0), soil, seep) * mix(vec3(1.0), dye, alpha), 1.0);
@@ -272,7 +284,7 @@ void main() {
   // Film (NORMAL): fresh blood stands as a thin, dark, translucent layer on deep spots, so the colour
   // still reads on dark soil; its surface is uneven, catching small sharp highlights, never a sheen.
   // The film thins out towards the edge, so the outline is mostly soaked stain, not a hard skin.
-  float film = cover * (0.52 + 0.3 * depth) * mix(0.6, 1.0, fresh) * (0.88 + 0.24 * mottle);
+  float film = cover * (0.52 + 0.3 * depth) * mix(0.6, 1.0, fresh) * (0.88 + 0.24 * mottle) * vis;
   vec3 body = mix(vec3(0.66, 0.036, 0.05), vec3(0.28, 0.008, 0.02), depth) * (0.85 + 0.3 * mottle);
   body = bloodRecolor(body, tint);
   vec2 bumps = (vec2(bloodNoise(world * 0.21), bloodNoise(world * 0.21 + 11.3)) - 0.5) * 0.9

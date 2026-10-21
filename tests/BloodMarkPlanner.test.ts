@@ -105,6 +105,20 @@ describe('BloodMarkPlanner', () => {
     expect(planner.ripples.length).toBe(1);
   });
 
+  it('thins out new spatter when the field fills up, so older blood is not pushed out', () => {
+    const spatter = (load: number) => {
+      const model = new BloodFieldModel(4096), planner = new BloodMarkPlanner(model);
+      for (let i = 0; i < 40; i++) {
+        planner.beginFrame(i * 100, load);
+        planner.beginHit({ x: 600 + i * 50, y: 600, dirX: 1, dirY: 0, totalDamage: 30, isKill: false, seed: i + 1, nowMs: i * 100 });
+        for (let k = 0; k < 8; k++) planner.flight('streak', planner.land(600 + i * 50, 600, 640 + i * 50, 600 + k * 3, 0.9, createBloodLanding()), 600 + i * 50, 600, 0.5, 1, 100);
+        planner.endHit();
+      }
+      return model.countOf(BloodMarkKind.Splat);
+    };
+    expect(spatter(0.95)).toBeLessThan(spatter(0) * 0.6);
+  });
+
   it('limits new spatter per frame in mass fights while pools still grow', () => {
     const model = new BloodFieldModel(4096), planner = new BloodMarkPlanner(model);
     planner.beginFrame(0);
