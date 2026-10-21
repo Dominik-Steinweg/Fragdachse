@@ -108,14 +108,15 @@ describe('bridge authoring', () => {
 });
 
 describe('bridge generation', () => {
+  // Map 12 authors the bridge over its eastern river; configs are normalized once.
   const base = getCoopDefenseMapConfig('12');
-  // Map configs are normalized once; the generator re-validates the added bridge itself.
-  const withBridge: CoopDefenseMapConfig = { ...base, bridges: [MAP_12_BRIDGE] };
+  const withBridge: CoopDefenseMapConfig = base;
 
   it('keeps maps without bridges byte-identical', () => {
+    const riverMap = getCoopDefenseMapConfig('16');
     for (const seed of [3, 17]) {
-      expect(ArenaGenerator.fingerprint(generate(seed, { ...base, bridges: [] })))
-        .toBe(ArenaGenerator.fingerprint(generate(seed, base)));
+      expect(ArenaGenerator.fingerprint(generate(seed, { ...riverMap, bridges: [] })))
+        .toBe(ArenaGenerator.fingerprint(generate(seed, riverMap)));
     }
   });
 
@@ -174,5 +175,46 @@ describe('explosive carry authoring', () => {
       start: { type: 'time', atMs: 0 }, targets: [], targetGoal: 1,
       carry: { item: 'explosive', spawnZone: { gridX: 30, gridY: 12, widthCells: 2, heightCells: 2 },
         deliveryZone: { gridX: 2, gridY: 2, widthCells: 2, heightCells: 2 } } }] }))).toThrow(/planted on bridges/);
+  });
+});
+
+describe('Map 12 bridge routes', () => {
+  /** Grid BFS over generated land; rocks, trunks and collision water block. */
+  function routeLength(layout: ReturnType<typeof generate>, water: readonly WaterCell[], from: WaterCell, to: WaterCell, cols: number, rows: number): number {
+    const blocked = new Set<string>();
+    for (const cell of [...layout.rocks, ...layout.trees, ...water]) blocked.add(`${cell.gridX}_${cell.gridY}`);
+    const dist = new Map<string, number>([[`${from.gridX}_${from.gridY}`, 0]]);
+    const queue = [from];
+    for (let i = 0; i < queue.length; i++) {
+      const cell = queue[i]!;
+      const d = dist.get(`${cell.gridX}_${cell.gridY}`)!;
+      if (cell.gridX === to.gridX && cell.gridY === to.gridY) return d;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const next = { gridX: cell.gridX + dx!, gridY: cell.gridY + dy! };
+        const key = `${next.gridX}_${next.gridY}`;
+        if (next.gridX < 0 || next.gridY < 0 || next.gridX >= cols || next.gridY >= rows || blocked.has(key) || dist.has(key)) continue;
+        dist.set(key, d + 1);
+        queue.push(next);
+      }
+    }
+    return Infinity;
+  }
+
+  it('gives the hives a shortcut to the rear base while the bridge stands and keeps the south crossing open', () => {
+    const map = getCoopDefenseMapConfig('12');
+    const cols = map.arenaWidthCells!, rows = map.arenaHeightCells!;
+    const rear = { gridX: 95, gridY: 19 };
+    const bridgeEnd = { gridX: 76, gridY: 21 };
+    for (const seed of [1, 7, 12345]) {
+      const layout = generate(seed, map);
+      const standing = resolveCollisionWater(layout.water ?? [], layout.bridges);
+      const collapsed = layout.water ?? [];
+      const viaBridge = routeLength(layout, standing, bridgeEnd, rear, cols, rows);
+      const viaSouth = routeLength(layout, collapsed, bridgeEnd, rear, cols, rows);
+      expect(viaBridge, `seed ${seed}`).toBeLessThan(Infinity);
+      expect(viaSouth, `seed ${seed}`).toBeLessThan(Infinity);
+      // The bridge is a real second flank: the detour through the south crossing is far longer.
+      expect(viaSouth - viaBridge, `seed ${seed}`).toBeGreaterThan(20);
+    }
   });
 });

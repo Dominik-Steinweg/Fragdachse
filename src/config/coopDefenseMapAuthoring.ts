@@ -2547,6 +2547,8 @@ function validateSecondaryObjectiveWindows(
       encounterIndexById,
     );
     for (let secondIndex = firstIndex + 1; secondIndex < objectives.length; secondIndex += 1) {
+      // Concurrent objectives never take the focus slot, so their windows may overlap any other.
+      if (objectives[firstIndex].concurrent || objectives[secondIndex].concurrent) continue;
       const firstStart = objectives[firstIndex].start;
       const secondStart = objectives[secondIndex].start;
       if (firstStart.type === 'after-encounter'

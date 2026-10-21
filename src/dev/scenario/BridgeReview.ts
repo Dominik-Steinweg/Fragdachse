@@ -83,3 +83,23 @@ export async function runBridgeReview(controller: DevScenarioController, command
   controller.lastAction = { bridgeReview: runtime.devScenarioPort.readBridges() };
   controller.syncPanel();
 }
+
+/**
+ * Any World with bridges (e.g. Map 12 or a Dawn river arena):
+ * window.devScenario.run({action:'bridge', step:'plant'|'force-plant'|'collapse'|'status', bridgeId}).
+ */
+export function runBridgeCommand(controller: DevScenarioController, command: Record<string, unknown>): void {
+  const runtime = fixtures.get(controller)?.runtime;
+  if (!runtime) throw new Error('Bridge commands are not bound');
+  controller.requireReadyForBots();
+  const step = command.step ?? 'status';
+  const bridgeId = typeof command.bridgeId === 'string' ? command.bridgeId
+    : runtime.devScenarioPort.readBridges().bridges[0]?.id;
+  if (step !== 'status' && !bridgeId) throw new Error('World has no bridges');
+  if (step === 'plant') bridge.sendBridgeChargeRequest({ bridgeId: bridgeId! });
+  else if (step === 'force-plant') runtime.devScenarioPort.chargeBridge(bridgeId!);
+  else if (step === 'collapse') runtime.devScenarioPort.collapseBridge(bridgeId!);
+  else if (step !== 'status') throw new Error('Unknown bridge step');
+  controller.lastAction = { bridge: runtime.devScenarioPort.readBridges() };
+  controller.syncPanel();
+}

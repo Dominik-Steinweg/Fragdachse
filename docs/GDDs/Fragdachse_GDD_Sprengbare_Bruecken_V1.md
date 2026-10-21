@@ -51,6 +51,9 @@ nachts leichter verteidigen; der eigene Weg zu Sites jenseits des Flusses fällt
 | 2026-10-21 | Bosse 35 % maxHP statt Tod | Sofort-Boss-Kill wäre ein Exploit |
 | 2026-10-21 | Zündsignal: Airstrike-Countdown beim Zünden und 1,6 s vor dem Knall | vorhandener Klang, klare Warnung zum Verlassen des Decks |
 | 2026-10-21 | Eigene Aufnahme `sfx_explosion_bridge` (Mischung aus Detonation, Holzbruch, Wasserplatscher) | Audio-Vertrag verlangt eine eigene Aufnahme pro Quelle |
+| 2026-10-21 | Map 12: Brücke `east-river-bridge` bei x77–80, y20–22 (engste Stelle des Ostflusses), ohne Wasseränderung | Fluss ist dort schon 4 Zellen schmal; Südübergang bleibt unverändert |
+| 2026-10-21 | Map 12: Feldlager `field-cache` (64,22, r 3) zwischen Mittelbasis und Fluss, 2 Kisten, Ziel 1 Brücke, `concurrent` | liegt auf dem Weg der Westwellen, also umkämpft; das Halteziel der Nebenbasis behält den Fokus |
+| 2026-10-21 | Gleichzeitige (`concurrent`) Nebenziele sind von der Fenster-Überlappungsprüfung ausgenommen | sie belegen per Vertrag keinen Fokus-Slot |
 
 ## Offene Punkte
 
