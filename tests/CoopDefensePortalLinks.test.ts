@@ -8,7 +8,7 @@ import {
 import { isCoopDefenseSideEncounter } from '../src/config/coopDefenseMapAuthoring';
 import { resolveCoopDefensePortalLink } from '../src/config/coopDefensePortalLinks';
 import { PortalLinkSystem, type PortalLinkStateEntry } from '../src/systems/portal/PortalLinkSystem';
-import type { PortalActor, PortalPairSource } from '../src/systems/portal/WorldPortalTransport';
+import { WorldPortalTransport, type PortalActor, type PortalPairSource } from '../src/systems/portal/WorldPortalTransport';
 import { decodePortalLinkState, encodePortalLinkState } from '../src/network/coopPortalLinkCodec';
 import { resolveVoidPortalViews, VoidPortalTransitionTracker } from '../src/effects/voidPortal/VoidPortalModel';
 import { CoopDefenseSiteActivationSystem } from '../src/systems/CoopDefenseSiteActivationSystem';
@@ -136,6 +136,36 @@ describe('PortalLinkSystem', () => {
     const s = system();
     s.links.hostUpdate(s.config.chargeDurationMs * 2, true, 0);
     expect(s.links.getState()[0].phase).toBe('waiting');
+  });
+});
+
+describe('PortalLinkSystem with the World transport', () => {
+  it('moves ordinary enemies only while the generator stands and never a boss', () => {
+    const config = resolveCoopDefensePortalLink(getCoopDefenseMapConfig('8').portalLinks![0]);
+    const actors = new Map<string, PortalActor>();
+    const place = (id: string, x: number, extra: Partial<PortalActor> = {}) => actors.set(id, { id, kind: 'enemy', x, y: 0,
+      radius: 12, alive: true, surface: true, revision: actors.get(id)?.revision ?? 0, ...extra });
+    const transport = new WorldPortalTransport({ isAlive: () => true, applyDamage: vi.fn() } as never,
+      { broadcastTranslocatorFlash: vi.fn() });
+    transport.bindWorld({ getActors: () => [...actors.values()], canOccupy: () => true, collapseEnemy: vi.fn(),
+      transferActor: (actor, x, y) => { const current = actors.get(actor.id)!;
+        actors.set(actor.id, { ...current, x, y, revision: current.revision + 1 }); } });
+    let standing = true;
+    const links = new PortalLinkSystem({ links: [config],
+      endpoints: new Map([[config.id, { a: { x: 0, y: 0 }, b: { x: 3000, y: 0 } }]]), transport,
+      isGeneratorStanding: () => standing, isHostileEnemy: () => true, publish: () => {} });
+    links.hostUpdate(config.chargeDurationMs, false, 0);
+    place('enemy', 0); place('enemy-boss', 0, { boss: true });
+    transport.transferActors(1);
+    expect(actors.get('enemy')).toMatchObject({ x: 3000 });
+    expect(actors.get('enemy-boss')).toMatchObject({ x: 0, revision: 0 });
+
+    standing = false;
+    links.hostUpdate(16, false, 2);
+    place('enemy-late', 0);
+    transport.transferActors(3);
+    expect(actors.get('enemy-late')).toMatchObject({ x: 0, revision: 0 });
+    expect(transport.getPortalPairs()).toHaveLength(0);
   });
 });
 
