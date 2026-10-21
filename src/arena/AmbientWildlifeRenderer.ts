@@ -7,7 +7,7 @@ import type { SunCloudState } from '../effects/sunlight/cloudShadow';
 import type { ArenaLayout } from '../types';
 import type { ChunkWorldFrame, ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { prepareWildlifeVisuals } from './AmbientWildlifeGeometry';
-import { fireflyGlowStrength } from './AmbientWildlifeAppearance';
+import { fireflyGlowStrength, isBird } from './AmbientWildlifeAppearance';
 import { createAmbientWildlifeLayer, type AmbientWildlifeLayer } from './AmbientWildlifeLayer';
 import { AmbientWildlifeModel, type WildlifeAnimal, type WildlifeImpulseKind, type WildlifeMover } from './AmbientWildlifeModel';
 
@@ -33,7 +33,8 @@ export class AmbientWildlifeRenderer {
       .map((animal, i) => ({ animal, key: `wildlife:${lightOwner}:${i}`, active: false }));
     // ArenaBuilder constructs this under the existing loading veil. Allocate every mesh
     // and bounded output buffer here, including animals outside the initial viewport.
-    const visuals = prepareWildlifeVisuals(this.model.animals);
+    // Birds get their own layers (meshes follow); until then they are simulated but not drawn.
+    const visuals = prepareWildlifeVisuals(this.model.animals.filter(a => !isBird(a.kind)));
     this.ground = createAmbientWildlifeLayer(scene, visuals.filter(v => v.animal.kind !== 'fish' && v.animal.kind !== 'firefly'),
       DEPTH.GROUND_FOG - .01, 'ambient-wildlife-land');
     this.fish = createAmbientWildlifeLayer(scene, visuals.filter(v => v.animal.kind === 'fish'),

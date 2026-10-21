@@ -19,6 +19,7 @@ export const AMBIENT_WILDLIFE = {
   // One disturbance rule for every kind. Bodies (players, enemies) alarm within alertRadius,
   // measured to their edge; impulses reach alertRadius * alertScale + radius * blastScale.
   disturbance: {
+    simulationMarginPx: 192,
     moverCapacity: 256,
     gridCellPx: 256,
     movingPx: .08,
@@ -52,4 +53,33 @@ export const AMBIENT_WILDLIFE = {
   fishHiddenSeconds: 3.5,
   fishEmergeSeconds: 1.8,
   butterflyColors: [0xefc96b, 0x8cc5eb, 0xc69ee0, 0xf2e7c8, 0xe69b67],
+  // Birds. Speeds px/s, heights px above ground, spot and hop ranges in cells around the roost tree.
+  // `speed` is the walking pace on the ground (sparrow flocks stand and peck).
+  sparrow: { size: 6, speed: 0, fleeSpeed: 165, cruiseSpeed: 120, alertRadius: 112, turnRate: 6, maxCount: 18,
+    occupancy: .45, flockMin: 4, flockMax: 9, spread: 9, cruiseHeight: 92, climbRate: 80, flapHz: 8,
+    spotCount: 6, spotRange: [2.5, 7], hopRange: [3, 8], calmSeconds: [25, 70] },
+  sparrowShore: { spots: 2, range: 12, chance: .35, drinkSeconds: [6, 14], standOff: 13, lateralSpacing: 4.4 },
+  magpie: { size: 14, speed: 16, fleeSpeed: 140, cruiseSpeed: 105, alertRadius: 104, turnRate: 4, maxCount: 10,
+    occupancy: .15, cruiseHeight: 104, climbRate: 64, flapHz: 5.5,
+    spotCount: 6, spotRange: [4, 10], hopRange: [5, 12], calmSeconds: [20, 55],
+    roamRadius: 80, walkSeconds: [1.2, 3], pauseSeconds: [.8, 2.4] },
+  raven: { size: 20, speed: 14, fleeSpeed: 130, cruiseSpeed: 100, alertRadius: 136, turnRate: 3, maxCount: 6,
+    occupancy: .08, cruiseHeight: 118, climbRate: 56, flapHz: 3.4,
+    spotCount: 6, spotRange: [5, 14], hopRange: [6, 16], calmSeconds: [25, 70],
+    roamRadius: 104, walkSeconds: [1.6, 3.6], pauseSeconds: [1, 3] },
+  owl: { size: 11, speed: 85, fleeSpeed: 125, cruiseSpeed: 85, alertRadius: 88, turnRate: 1.4, maxCount: 6,
+    occupancy: .06, cruiseHeight: 124, climbRate: 52, flapHz: 2.6, territory: 18,
+    circleChance: .35, diveChance: .25, mantleSeconds: [.8, 1.6], climbSeconds: 2.4, veerSeconds: 2.5 },
+  owlBrownShare: .7,
+  birdFlight: {
+    // Below c0 a bird passes under tree crowns, above c2 over them; the band is crossed only in the open.
+    crownBand: [56, 62, 66], crownLookaheadSeconds: .4, emergeHeight: 44, emergeSeconds: 1.4,
+    takeoffSeconds: .55, landingRadius: 90, alertCooldownSeconds: 1.2, frameInset: 8,
+  },
+  // World minutes; each bird picks its own moment inside the window.
+  birdSchedule: {
+    sparrowDawn: [330, 390], sparrowDusk: [1170, 1230],
+    corvidDawn: [345, 420], corvidDusk: [1185, 1250],
+    owlDawn: [285, 345], owlDusk: [1230, 1290],
+  },
 } as const;

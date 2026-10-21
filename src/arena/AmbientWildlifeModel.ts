@@ -5,6 +5,7 @@ import { hashSeededCell01 } from './CellHash';
 import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
 import { createWildlifeAppearance, isWingedInsect, WILDLIFE_KINDS, type WildlifeAppearance, type WildlifeKind } from './AmbientWildlifeAppearance';
 import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
+import { AmbientWildlifeBirds, type WildlifeBirdState } from './AmbientWildlifeBirds';
 
 export type { WildlifeKind } from './AmbientWildlifeAppearance';
 export type FishPhase = 'swimming' | 'fleeing' | 'diving' | 'hidden' | 'emerging';
@@ -43,6 +44,8 @@ export interface WildlifeAnimal {
   diurnalActive: boolean;
   retireTime: number;
   readonly alarm: WildlifeAlarm;
+  /** Birds only: phase, altitude and seeded spots. */
+  readonly bird?: WildlifeBirdState;
 }
 
 export interface WildlifeAnimalInit {
@@ -62,9 +65,9 @@ export interface WildlifeAnimalInit {
 }
 
 /** The only constructor of animal state, shared with scripted reuses of the wildlife meshes. */
-export function createWildlifeAnimal(init: WildlifeAnimalInit): WildlifeAnimal {
+export function createWildlifeAnimal(init: WildlifeAnimalInit, bird?: WildlifeBirdState): WildlifeAnimal {
   const diurnalActive = init.diurnalActive ?? true;
-  return { kind: init.kind, x: init.x, y: init.y, homeX: init.homeX ?? init.x, homeY: init.homeY ?? init.y,
+  return { ...(bird ? { bird } : {}), kind: init.kind, x: init.x, y: init.y, homeX: init.homeX ?? init.x, homeY: init.homeY ?? init.y,
     variation: init.variation, phaseOffset: init.phaseOffset, appearance: init.appearance,
     angle: init.phaseOffset, turnSpeed: 0, avoidanceAngle: null, speed: init.speed ?? 0,
     animation: init.phaseOffset, opacity: init.opacity ?? (diurnalActive ? 1 : 0),
@@ -77,7 +80,7 @@ const TAU = Math.PI * 2;
 /** Upper bound of the coarse mover grid per axis; wider spreads use coarser cells. */
 const MOVER_GRID_AXIS = 64;
 /** Animals further outside the view keep their state without simulation. */
-const SIMULATION_MARGIN_PX = 192;
+const SIMULATION_MARGIN_PX = TUNING.disturbance.simulationMarginPx;
 /**
  * Bodies beyond this distance from the view cannot alarm a simulated animal: the simulation margin,
  * the widest alert radius and headroom for the edge of a large body. Callers may cull movers with it.
@@ -85,7 +88,7 @@ const SIMULATION_MARGIN_PX = 192;
 export const WILDLIFE_DISTURBANCE_MARGIN_PX = SIMULATION_MARGIN_PX
   + Math.max(...WILDLIFE_KINDS.map(kind => TUNING[kind].alertRadius)) + 128;
 // Static cell flags. Probes run per animal and frame; string keys allocated thousands of times.
-const WATER = 1, DEEP_WATER = 2, ROCK = 4, DIRT = 8;
+const WATER = 1, DEEP_WATER = 2, ROCK = 4, DIRT = 8, CROWN = 16;
 /** Trunk lookups may step one cell outside the frame; offset keeps the key non-negative. */
 const trunkKey = (x: number, y: number): number => (x + 32768) * 65536 + (y + 32768);
 const angleDelta = (from: number, to: number): number => Math.atan2(Math.sin(to - from), Math.cos(to - from));
@@ -116,6 +119,7 @@ export class AmbientWildlifeModel {
   private threatX = 0;
   private threatY = 0;
   private threatDistance = 0;
+  private readonly birds: AmbientWildlifeBirds;
   private time = 0;
   private frameId = 0;
   private daylightInitialized = false;
@@ -135,6 +139,10 @@ export class AmbientWildlifeModel {
       x: frame.offsetX + (c.gridX + .5) * CELL_SIZE, y: frame.offsetY + (c.gridY + .5) * CELL_SIZE,
     }));
     layout.trees.forEach((c, i) => this.trunks.set(trunkKey(c.gridX, c.gridY), this.trees[i]));
+    // Cells whose centre lies under a crown: birds neither land there nor change height band above them.
+    const crownReach = CANOPY_RADIUS + 8, crownCells = Math.ceil(crownReach / CELL_SIZE);
+    for (const c of layout.trees) for (let dy = -crownCells; dy <= crownCells; dy++) for (let dx = -crownCells; dx <= crownCells; dx++)
+      if (Math.hypot(dx, dy) * CELL_SIZE <= crownReach) mark(c.gridX + dx, c.gridY + dy, CROWN);
     // Erode the water topology by a full cell. A school's complete footprint must
     // fit this interior, so individual fish cannot reach the shallow bank or land.
     const deepCells: number[][] = [];
@@ -241,6 +249,28 @@ export class AmbientWildlifeModel {
     for (let i = 0; i < fishCount; i++) this.animals.push(candidates[Math.floor(i * candidates.length / fishCount)]);
     const firstFish = this.animals[fishStart];
     if (firstFish) { firstFish.fishPhase = 'swimming'; firstFish.opacity = 1; }
+    this.birds = new AmbientWildlifeBirds({
+      seed: layout.seed, frame,
+      isGround: (x, y, radius) => this.footprint(x, y, radius, 0, WATER | ROCK | CROWN, true),
+      underCrown: (x, y) => (this.flagsAt(Math.floor((x - frame.offsetX) / CELL_SIZE),
+        Math.floor((y - frame.offsetY) / CELL_SIZE)) & CROWN) !== 0,
+      isWaterCell: (gx, gy) => (this.flagsAt(gx, gy) & WATER) !== 0,
+      isOpenLandCell: (gx, gy) => gx >= 0 && gy >= 0 && gx < this.cols && gy < this.rows
+        && (this.flagsAt(gx, gy) & (WATER | ROCK | CROWN)) === 0 && !this.tracks.has(gx),
+      findThreat: (animal, x, y, includeStationary, out) => {
+        if (!this.resolveThreatAt(animal, x, y, includeStationary)) return false;
+        out.x = this.threatX; out.y = this.threatY;
+        return true;
+      },
+      turnToward: (animal, desiredAngle, dt) => this.turnToward(animal, desiredAngle, dt),
+      walk: (animal, desiredAngle, dt) => this.move(animal, desiredAngle, dt),
+    });
+    // Birds follow every other kind, so their seeded rolls never shift existing animals.
+    this.birds.spawn(this.trees, (init, bird) => {
+      const animal = createWildlifeAnimal(init, bird);
+      this.animals.push(animal);
+      return animal;
+    });
   }
 
   private flagsAt(gx: number, gy: number): number {
@@ -285,6 +315,7 @@ export class AmbientWildlifeModel {
   contains(animal: WildlifeAnimal, x: number, y: number): boolean {
     if (animal.kind === 'fish') return this.isDeepWater(x, y, animal.appearance.footprint);
     if (isWingedInsect(animal.kind)) return this.isGrass(x, y);
+    if (animal.bird) return this.birds.contains(animal, x, y);
     const roamingRadius = Math.min(CANOPY_RADIUS + 8, CANOPY_RADIUS * 1.5 - animal.appearance.footprint);
     return Math.hypot(x - animal.homeX, y - animal.homeY) <= roamingRadius
       && this.isLand(x, y, animal.appearance.footprint);
@@ -317,6 +348,7 @@ export class AmbientWildlifeModel {
     this.ingestMovers(movers);
     const minutes = normalizeTimeOfDay(timeOfDayMinutes);
     for (const animal of this.animals) {
+      if (animal.bird) { this.birds.update(animal, minutes, dt, view, this.daylightInitialized); continue; }
       // Daylight transitions must also complete outside the camera's simulation window.
       if (isWingedInsect(animal.kind) && !this.updateInsectDaylight(animal, minutes, dt)) continue;
       // Offscreen state is retained without per-animal animation or habitat queries.
@@ -410,10 +442,15 @@ export class AmbientWildlifeModel {
 
   /** One rule for every kind: the nearest alarming body or remembered impulse, if any. */
   private resolveThreat(animal: WildlifeAnimal, includeStationary: boolean): boolean {
-    let threat = this.findMoverThreat(animal.x, animal.y, TUNING[animal.kind].alertRadius, includeStationary);
+    return this.resolveThreatAt(animal, animal.x, animal.y, includeStationary);
+  }
+
+  /** The same rule evaluated at another point, e.g. a bird's landing spot. */
+  private resolveThreatAt(animal: WildlifeAnimal, x: number, y: number, includeStationary: boolean): boolean {
+    let threat = this.findMoverThreat(x, y, TUNING[animal.kind].alertRadius, includeStationary);
     const alarm = animal.alarm;
     if (alarm.until > this.time) {
-      const d = Math.hypot(animal.x - alarm.x, animal.y - alarm.y);
+      const d = Math.hypot(x - alarm.x, y - alarm.y);
       if (d < alarm.reach && (!threat || d < this.threatDistance)) {
         threat = true; this.threatX = alarm.x; this.threatY = alarm.y; this.threatDistance = d;
       }
@@ -473,6 +510,15 @@ export class AmbientWildlifeModel {
     return distance;
   }
 
+  /** Bounded angular velocity and acceleration; never exceeds the kind's turn rate. */
+  private turnToward(a: WildlifeAnimal, desiredAngle: number, dt: number): void {
+    const turnRate = TUNING[a.kind].turnRate;
+    const desiredTurnSpeed = Math.max(-turnRate, Math.min(turnRate, angleDelta(a.angle, desiredAngle) * 4));
+    const acceleration = turnRate * 3 * dt;
+    a.turnSpeed += Math.max(-acceleration, Math.min(acceleration, desiredTurnSpeed - a.turnSpeed));
+    a.angle += a.turnSpeed * dt;
+  }
+
   private move(a: WildlifeAnimal, desiredAngle: number, dt: number): void {
     const turnRate = TUNING[a.kind].turnRate;
     const lookAhead = 8 + a.speed / turnRate * 1.3;
@@ -493,11 +539,7 @@ export class AmbientWildlifeModel {
       }
       a.avoidanceAngle = bestAngle;
     }
-    const turn = angleDelta(a.angle, a.avoidanceAngle ?? desiredAngle);
-    const desiredTurnSpeed = Math.max(-turnRate, Math.min(turnRate, turn * 4));
-    const acceleration = turnRate * 3 * dt;
-    a.turnSpeed += Math.max(-acceleration, Math.min(acceleration, desiredTurnSpeed - a.turnSpeed));
-    a.angle += a.turnSpeed * dt;
+    this.turnToward(a, a.avoidanceAngle ?? desiredAngle, dt);
     // Brake while turning near a bank/trunk instead of snapping to a free angle.
     const step = a.speed * dt * Math.min(1, .15 + forward / lookAhead);
     const x = a.x + Math.cos(a.angle) * step, y = a.y + Math.sin(a.angle) * step;
