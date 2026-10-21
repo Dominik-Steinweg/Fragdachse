@@ -1,5 +1,6 @@
 import { VOID_PALETTE } from '../../config';
 import type { ResolvedCoopDefensePortalLinkConfig } from '../../config/coopDefensePortalLinks';
+import type { FlowFieldPortalLink } from '../flowfield/FlowFieldProtocol';
 import type { PortalPair, PortalPoint } from '../PortalTraversal';
 import type { PortalActor, PortalPairSource, PortalSourcePort, PortalTransferFlash } from './WorldPortalTransport';
 
@@ -14,18 +15,6 @@ export interface PortalLinkStateEntry {
   readonly collapsedAtMs?: number;
 }
 
-/** Navigation view of one open link (the shape of the flow-field link contract). */
-export interface PortalNavigationLink {
-  readonly id: string;
-  readonly ax: number;
-  readonly ay: number;
-  readonly bx: number;
-  readonly by: number;
-  readonly radiusPx: number;
-  readonly maxBodyRadiusPx: number;
-  readonly costPx: number;
-}
-
 export interface PortalLinkEndpoints { readonly a: PortalPoint; readonly b: PortalPoint }
 
 export interface PortalLinkSystemOptions {
@@ -34,7 +23,7 @@ export interface PortalLinkSystemOptions {
   readonly transport: PortalSourcePort;
   readonly isGeneratorStanding: (baseId: string) => boolean;
   readonly isHostileEnemy: (actorId: string) => boolean;
-  readonly setNavigationLinks?: (links: readonly PortalNavigationLink[]) => void;
+  readonly setNavigationLinks?: (links: readonly FlowFieldPortalLink[]) => void;
   readonly publish: (entries: readonly PortalLinkStateEntry[] | null) => void;
 }
 

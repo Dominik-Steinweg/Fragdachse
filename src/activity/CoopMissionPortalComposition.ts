@@ -46,6 +46,8 @@ export class CoopMissionPortalComposition {
       transport,
       isGeneratorStanding: this.options.isGeneratorStanding,
       isHostileEnemy: (actorId) => runtime.enemyManager?.getEnemy(actorId)?.faction === 'hostile',
+      // Only open links enter navigation; enemies then plan the flank instead of stumbling into it.
+      setNavigationLinks: (navigationLinks) => runtime.flowFieldCoordinator?.setPortalLinks(navigationLinks),
       publish: this.options.publish,
     }));
   }
