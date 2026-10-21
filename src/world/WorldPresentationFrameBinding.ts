@@ -210,6 +210,8 @@ export interface WorldPresentationFrameBindingInput {
       | 'isGlobalDismantleHoldActive' | 'isPersistentRewardPlacementActive' | 'isRepositionActive'>;
   };
   readonly movementEffects?: MovementEffectsRenderer;
+  /** Shared portal look; fire-control portals submit their ends to it. */
+  readonly portals?: import('../effects/portal/PortalPresentation').PortalPresentation;
   readonly burrowEffects?: BurrowGpuRenderer;
   readonly healthBars?: WorldHealthBarRenderer;
   readonly healthBarScope?: object;
@@ -374,7 +376,7 @@ export class WorldPresentationFrameBinding {
         const player = this.input.getPlayers().find(p => p.id === ownerId);
         const sprite = player?.active ? player.displayObject : undefined;
         return sprite?.visible ? { x: sprite.x, y: sprite.y } : undefined;
-      });
+      }, this.input.portals);
   }
 
   private syncFireControl(showWorld: boolean): void {
