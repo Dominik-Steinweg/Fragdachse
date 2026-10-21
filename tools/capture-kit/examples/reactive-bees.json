@@ -1,6 +1,6 @@
 {
   "name": "reactive-bees",
-  "description": "Straw skep on test map 00: a few bees at the entrance, a hit shakes it, the swarm pours out, hunts two zombies in turn, flies home and the skep recharges.",
+  "description": "Straw skep on test map 00 and campaign map 04: a few bees at the entrance, a hit shakes it, the swarm pours out, hunts two zombies in turn, flies home and the skep recharges.",
   "viewport": {
     "width": 1280,
     "height": 720
@@ -14,8 +14,7 @@
     "classId": "inspector_gadachs",
     "seed": 12345,
     "weapon1": "GLOCK",
-    "player": "$player",
-    "mapId": "0"
+    "player": "$player"
   },
   "times": [
     {
@@ -34,23 +33,60 @@
       "id": "map00",
       "scenario": {
         "mapId": "0"
+      },
+      "vars": {
+        "player": {
+          "gridX": 25,
+          "gridY": 55.5
+        },
+        "hive": {
+          "gridX": 31.5,
+          "gridY": 55.5
+        },
+        "field": {
+          "gridX": 34,
+          "gridY": 55.5
+        },
+        "z1": {
+          "gridX": 36,
+          "gridY": 53
+        },
+        "z2": {
+          "gridX": 38,
+          "gridY": 57
+        }
+      }
+    },
+    {
+      "id": "map04",
+      "scenario": {
+        "mapId": "4"
+      },
+      "vars": {
+        "player": {
+          "gridX": 33,
+          "gridY": 16
+        },
+        "hive": {
+          "gridX": 33.5,
+          "gridY": 22.5
+        },
+        "field": {
+          "gridX": 37,
+          "gridY": 21.5
+        },
+        "z1": {
+          "gridX": 39,
+          "gridY": 20
+        },
+        "z2": {
+          "gridX": 41,
+          "gridY": 24
+        }
       }
     }
   ],
-  "vars": {
-    "player": {
-      "gridX": 25,
-      "gridY": 55.5
-    },
-    "hive": {
-      "gridX": 31.5,
-      "gridY": 55.5
-    },
-    "field": {
-      "gridX": 34,
-      "gridY": 55.5
-    }
-  },
+  "vars": {},
   "setup": [
     {
       "op": "camera",
@@ -60,20 +96,14 @@
     {
       "op": "spawn",
       "kind": "zombie-badger",
-      "at": {
-        "gridX": 36,
-        "gridY": 53
-      },
+      "at": "$z1",
       "pinned": true,
       "name": "z1"
     },
     {
       "op": "spawn",
       "kind": "zombie-badger",
-      "at": {
-        "gridX": 38,
-        "gridY": 57
-      },
+      "at": "$z2",
       "pinned": true,
       "name": "z2"
     },
@@ -262,7 +292,7 @@
         },
         {
           "op": "until",
-          "expr": "window.devScenario.status().reactiveProps.some(p => p.kind === 'bee_hive' && p.phase === 'idle')",
+          "expr": "window.devScenario.status().reactiveProps.every(p => p.kind !== 'bee_hive' || p.phase === 'idle')",
           "maxFrames": 900
         },
         {

@@ -1,46 +1,284 @@
 {
   "name": "reactive-spores",
-  "description": "Giant puffball on test map 00: idle, a pistol hit swells it, it bursts through its torn lobes, the spore cloud slows and damages two zombies walking through, then the puffball refills and is ready again.",
-  "viewport": { "width": 1280, "height": 720 },
-  "board": { "columns": 4, "tileWidth": 420 },
-  "hud": false,
-  "scenario": { "classId": "inspector_gadachs", "seed": 12345, "weapon1": "GLOCK", "player": "$player", "mapId": "0" },
-  "times": [
-    { "id": "day", "timeOfDay": 720, "label": "12:00" },
-    { "id": "night", "timeOfDay": 1320, "label": "22:00" }
-  ],
-  "layouts": [ { "id": "map00", "scenario": { "mapId": "0" } } ],
-  "vars": {
-    "player": { "gridX": 11, "gridY": 52 },
-    "puff": { "gridX": 16.5, "gridY": 52.5 },
-    "wide": { "gridX": 17.5, "gridY": 52.5 }
+  "description": "Giant puffball on test map 00 and campaign map 06: idle, a pistol hit swells it, it bursts through its torn lobes, the spore cloud slows and damages two zombies walking through, then the puffball refills and is ready again.",
+  "viewport": {
+    "width": 1280,
+    "height": 720
   },
+  "board": {
+    "columns": 4,
+    "tileWidth": 420
+  },
+  "hud": false,
+  "scenario": {
+    "classId": "inspector_gadachs",
+    "seed": 12345,
+    "weapon1": "GLOCK",
+    "player": "$player"
+  },
+  "times": [
+    {
+      "id": "day",
+      "timeOfDay": 720,
+      "label": "12:00"
+    },
+    {
+      "id": "night",
+      "timeOfDay": 1320,
+      "label": "22:00"
+    }
+  ],
+  "layouts": [
+    {
+      "id": "map00",
+      "scenario": {
+        "mapId": "0"
+      },
+      "vars": {
+        "player": {
+          "gridX": 11,
+          "gridY": 52
+        },
+        "puff": {
+          "gridX": 16.5,
+          "gridY": 52.5
+        },
+        "wide": {
+          "gridX": 17.5,
+          "gridY": 52.5
+        },
+        "z1": {
+          "gridX": 21,
+          "gridY": 51
+        },
+        "z2": {
+          "gridX": 22,
+          "gridY": 54
+        }
+      }
+    },
+    {
+      "id": "map06",
+      "scenario": {
+        "mapId": "6"
+      },
+      "vars": {
+        "player": {
+          "gridX": 28,
+          "gridY": 6
+        },
+        "puff": {
+          "gridX": 34.5,
+          "gridY": 6.5
+        },
+        "wide": {
+          "gridX": 33,
+          "gridY": 7.5
+        },
+        "z1": {
+          "gridX": 30,
+          "gridY": 10
+        },
+        "z2": {
+          "gridX": 33,
+          "gridY": 12
+        }
+      }
+    }
+  ],
+  "vars": {},
   "setup": [
-    { "op": "camera", "at": "$puff", "zoom": 2 },
-    { "op": "spawn", "kind": "zombie-badger", "at": { "gridX": 21, "gridY": 51 }, "name": "z1" },
-    { "op": "spawn", "kind": "zombie-badger", "at": { "gridX": 22, "gridY": 54 }, "name": "z2" },
-    { "op": "settle" }
+    {
+      "op": "camera",
+      "at": "$puff",
+      "zoom": 2
+    },
+    {
+      "op": "spawn",
+      "kind": "zombie-badger",
+      "at": "$z1",
+      "name": "z1"
+    },
+    {
+      "op": "spawn",
+      "kind": "zombie-badger",
+      "at": "$z2",
+      "name": "z2"
+    },
+    {
+      "op": "settle"
+    }
   ],
   "shots": [
-    { "id": "idle", "label": "Bovist bereit", "do": [], "crops": [{ "of": "$puff", "size": [120, 110], "scale": 3, "label": "bereit" }] },
-    { "id": "swell", "label": "Treffer: Vorlauf", "do": [
-      { "op": "mark" },
-      { "action": "fire", "slot": "weapon1" },
-      { "op": "until", "expr": "window.devScenario.status().reactiveProps.some(p => p.kind === 'spore_puffball' && p.gridX === 16 && p.phase === 'triggered')", "maxFrames": 90 },
-      { "op": "step", "frames": 8 }
-    ], "crops": [{ "of": "$puff", "size": [120, 110], "scale": 3, "label": "Vorlauf" }] },
-    { "id": "burst", "label": "Platzen", "do": [
-      { "op": "until", "expr": "window.devScenario.status().reactiveProps.some(p => p.kind === 'spore_puffball' && p.gridX === 16 && p.phase === 'recharging')", "maxFrames": 60 },
-      { "op": "step", "frames": 5 }
-    ], "crops": [{ "of": "$puff", "size": [160, 140], "scale": 3, "label": "Platzen" }] },
-    { "id": "cloud", "label": "Sporenwolke", "do": [{ "op": "camera", "at": "$wide", "zoom": 1.4 }, { "op": "ms", "ms": 700 }],
-      "crops": [{ "of": "$wide", "size": [420, 300], "scale": 2, "label": "Wolke" }] },
-    { "id": "slowed", "label": "Gegner in der Wolke", "do": [{ "op": "ms", "ms": 1600 }],
-      "crops": [{ "of": "$wide", "size": [420, 300], "scale": 2, "label": "verlangsamt" }] },
-    { "id": "refill", "label": "Füllt sich wieder", "do": [{ "op": "camera", "at": "$puff", "zoom": 2 }, { "op": "ms", "ms": 6000 }],
-      "crops": [{ "of": "$puff", "size": [120, 110], "scale": 3, "label": "Laden" }] },
-    { "id": "ready", "label": "Wieder bereit", "do": [
-      { "op": "until", "expr": "window.devScenario.status().reactiveProps.some(p => p.kind === 'spore_puffball' && p.gridX === 16 && p.phase === 'idle')", "maxFrames": 900 }
-    ], "crops": [{ "of": "$puff", "size": [120, 110], "scale": 3, "label": "bereit" }] }
+    {
+      "id": "idle",
+      "label": "Bovist bereit",
+      "do": [],
+      "crops": [
+        {
+          "of": "$puff",
+          "size": [
+            120,
+            110
+          ],
+          "scale": 3,
+          "label": "bereit"
+        }
+      ]
+    },
+    {
+      "id": "swell",
+      "label": "Treffer: Vorlauf",
+      "do": [
+        {
+          "op": "mark"
+        },
+        {
+          "action": "fire",
+          "slot": "weapon1"
+        },
+        {
+          "op": "until",
+          "expr": "window.devScenario.status().reactiveProps.some(p => p.kind === 'spore_puffball' && p.phase === 'triggered')",
+          "maxFrames": 90
+        },
+        {
+          "op": "step",
+          "frames": 8
+        }
+      ],
+      "crops": [
+        {
+          "of": "$puff",
+          "size": [
+            120,
+            110
+          ],
+          "scale": 3,
+          "label": "Vorlauf"
+        }
+      ]
+    },
+    {
+      "id": "burst",
+      "label": "Platzen",
+      "do": [
+        {
+          "op": "until",
+          "expr": "window.devScenario.status().reactiveProps.some(p => p.kind === 'spore_puffball' && p.phase === 'recharging')",
+          "maxFrames": 60
+        },
+        {
+          "op": "step",
+          "frames": 5
+        }
+      ],
+      "crops": [
+        {
+          "of": "$puff",
+          "size": [
+            160,
+            140
+          ],
+          "scale": 3,
+          "label": "Platzen"
+        }
+      ]
+    },
+    {
+      "id": "cloud",
+      "label": "Sporenwolke",
+      "do": [
+        {
+          "op": "camera",
+          "at": "$wide",
+          "zoom": 1.4
+        },
+        {
+          "op": "ms",
+          "ms": 700
+        }
+      ],
+      "crops": [
+        {
+          "of": "$wide",
+          "size": [
+            420,
+            300
+          ],
+          "scale": 2,
+          "label": "Wolke"
+        }
+      ]
+    },
+    {
+      "id": "slowed",
+      "label": "Gegner in der Wolke",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 1600
+        }
+      ],
+      "crops": [
+        {
+          "of": "$wide",
+          "size": [
+            420,
+            300
+          ],
+          "scale": 2,
+          "label": "verlangsamt"
+        }
+      ]
+    },
+    {
+      "id": "refill",
+      "label": "Füllt sich wieder",
+      "do": [
+        {
+          "op": "camera",
+          "at": "$puff",
+          "zoom": 2
+        },
+        {
+          "op": "ms",
+          "ms": 6000
+        }
+      ],
+      "crops": [
+        {
+          "of": "$puff",
+          "size": [
+            120,
+            110
+          ],
+          "scale": 3,
+          "label": "Laden"
+        }
+      ]
+    },
+    {
+      "id": "ready",
+      "label": "Wieder bereit",
+      "do": [
+        {
+          "op": "until",
+          "expr": "window.devScenario.status().reactiveProps.every(p => p.kind !== 'spore_puffball' || p.phase === 'idle')",
+          "maxFrames": 900
+        }
+      ],
+      "crops": [
+        {
+          "of": "$puff",
+          "size": [
+            120,
+            110
+          ],
+          "scale": 3,
+          "label": "bereit"
+        }
+      ]
+    }
   ]
 }
