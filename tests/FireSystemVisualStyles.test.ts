@@ -53,6 +53,23 @@ describe('FireSystem static hazard cells', () => {
 });
 
 describe('FireSystem visual styles and damage targets', () => {
+  it('keeps incremental ground snapshots in id order across growth, refresh and removal', () => {
+    const fire = new FireSystem({} as Phaser.Scene);
+    const a = { sourceKey: 'a', ownerId: 'map', durationMs: 60_000 };
+    const b = { sourceKey: 'b', ownerId: 'map', durationMs: 60_000, visualStyle: 'void' as const };
+    for (let x = 0; x < 6; x++) fire.hostRefreshGroundCell(300 + x * 16, 300, a, 1_000);
+    fire.getGroundState();
+    fire.hostRefreshGroundCell(316, 300, b, 1_100);
+    fire.hostRefreshGroundCell(300, 300, a, 2_000);
+    fire.hostRemoveGroundSourcesBySourceKey('b');
+    for (let x = 0; x < 3; x++) fire.hostRefreshGroundCell(300 + x * 16, 332, b, 2_100);
+    const ids = fire.getGroundState().cells.map(cell => cell.id);
+    expect(ids).toEqual([...ids].sort((l, r) => l - r));
+    expect(new Set(ids).size).toBe(9);
+    fire.hostRemoveGroundSourcesBySourceKey('a');
+    expect(fire.getGroundState().cells.map(cell => cell.visualStyle)).toEqual(['void', 'void', 'void']);
+  });
+
   it('publishes spreading ground at most once per net tick while direct reads stay current', () => {
     const fire = new FireSystem({} as Phaser.Scene);
     const options = { sourceKey: 'creep', ownerId: 'map', durationMs: 60_000 };

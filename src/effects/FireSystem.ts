@@ -179,12 +179,18 @@ export class FireSystem {
   private hasLineOfSight: GroundFireLineOfSightResolver | null = null;
   private getObstacleRevision: GroundFireObstacleRevisionResolver | null = null;
   private groundSnapshotDirty = true;
+  /** Without a full rebuild, only these cells and removed visual ids are republished. */
+  private groundSnapshotFull = true;
+  private readonly dirtyGroundCells = new Set<ActiveGroundCell>();
+  private readonly removedGroundVisualIds: number[] = [];
   /** Host time of the last snapshot published by `hostUpdate`; growth within one net tick is coalesced. */
   private groundPublishedAt = Number.NEGATIVE_INFINITY;
   private cachedGroundSnapshot: SyncedBurningGroundSnapshot = { cells: [] };
-  /** Published cell objects by visual id; unchanged cells keep their identity across snapshots. */
+  /**
+   * Published cell objects by visual id, in id order (ids only grow, so appends keep the order);
+   * unchanged cells keep their identity across snapshots.
+   */
   private publishedGroundCells = new Map<number, SyncedBurningGroundCell>();
-  private nextPublishedGroundCells = new Map<number, SyncedBurningGroundCell>();
   private readonly groundWarnings = new Map<string, NonNullable<SyncedBurningGroundSnapshot['warnings']>>();
   private warningCells: NonNullable<SyncedBurningGroundSnapshot['warnings']> = [];
   private groundState: SyncedBurningGroundSnapshot = { cells: [] };
@@ -356,8 +362,7 @@ export class FireSystem {
         if (!cell) continue;
         cell.sourceKeys.delete(sourceId);
         if (cell.sourceKeys.size === 0) {
-          this.cells.delete(cellKey);
-          this.groundSnapshotDirty = true;
+          this.deleteGroundCell(cellKey, cell);
         } else {
           this.refreshCellAggregate(cell.gridX, cell.gridY);
         }
@@ -619,6 +624,9 @@ export class FireSystem {
     this.nextCellId = 1;
     this.lastDamageTick = -1;
     this.groundSnapshotDirty = true;
+    this.groundSnapshotFull = true;
+    this.dirtyGroundCells.clear();
+    this.removedGroundVisualIds.length = 0;
     this.groundPublishedAt = Number.NEGATIVE_INFINITY;
     this.cachedGroundSnapshot = { cells: [] };
     this.publishedGroundCells.clear();
@@ -751,8 +759,7 @@ export class FireSystem {
         if (!cell) continue;
         cell.sourceKeys.delete(sourceKey);
         if (cell.sourceKeys.size === 0) {
-          this.cells.delete(cellKey);
-          this.groundSnapshotDirty = true;
+          this.deleteGroundCell(cellKey, cell);
         } else {
           this.refreshCellAggregate(cell.gridX, cell.gridY);
         }
@@ -778,33 +785,50 @@ export class FireSystem {
     if (!this.groundSnapshotDirty) return this.cachedGroundSnapshot;
     // The array is replaced on every change, but published cells are immutable values: an
     // unchanged cell keeps its object so network and renderers can skip it cheaply.
-    const previous = this.publishedGroundCells;
-    const next = this.nextPublishedGroundCells;
-    next.clear();
-    const cells: SyncedBurningGroundCell[] = [];
-    for (const cell of this.cells.values()) {
-      for (const visual of cell.visuals.values()) {
-        const intensity = Math.max(1, visual.intensity);
-        let synced = previous.get(visual.id);
-        if (!synced || synced.expiresAt !== visual.expiresAt || synced.intensity !== intensity) {
-          synced = {
-            id: visual.id,
-            gridX: cell.gridX,
-            gridY: cell.gridY,
-            expiresAt: visual.expiresAt,
-            intensity,
-            visualStyle: visual.visualStyle,
-          };
+    const published = this.publishedGroundCells;
+    if (this.groundSnapshotFull) {
+      const previous = new Map(published);
+      const cells: SyncedBurningGroundCell[] = [];
+      for (const cell of this.cells.values()) {
+        for (const visual of cell.visuals.values()) cells.push(this.publishGroundVisual(cell, visual, previous.get(visual.id)));
+      }
+      cells.sort((left, right) => left.id - right.id);
+      published.clear();
+      for (const cell of cells) published.set(cell.id, cell);
+      this.groundSnapshotFull = false;
+    } else {
+      // A spreading surface only appends or touches a few cells per publish.
+      for (const id of this.removedGroundVisualIds) published.delete(id);
+      for (const cell of this.dirtyGroundCells) {
+        for (const visual of cell.visuals.values()) {
+          const old = published.get(visual.id);
+          const next = this.publishGroundVisual(cell, visual, old);
+          if (next !== old) published.set(visual.id, next);
         }
-        next.set(visual.id, synced);
-        cells.push(synced);
       }
     }
-    this.publishedGroundCells = next;
-    this.nextPublishedGroundCells = previous;
-    this.cachedGroundSnapshot = { cells: cells.sort((left, right) => left.id - right.id) };
+    this.removedGroundVisualIds.length = 0;
+    this.dirtyGroundCells.clear();
+    this.cachedGroundSnapshot = { cells: [...published.values()] };
     this.groundSnapshotDirty = false;
     return this.cachedGroundSnapshot;
+  }
+
+  private publishGroundVisual(
+    cell: ActiveGroundCell,
+    visual: ActiveGroundCellVisual,
+    previous: SyncedBurningGroundCell | undefined,
+  ): SyncedBurningGroundCell {
+    const intensity = Math.max(1, visual.intensity);
+    if (previous && previous.expiresAt === visual.expiresAt && previous.intensity === intensity) return previous;
+    return {
+      id: visual.id,
+      gridX: cell.gridX,
+      gridY: cell.gridY,
+      expiresAt: visual.expiresAt,
+      intensity,
+      visualStyle: visual.visualStyle,
+    };
   }
 
   private refreshCellAggregate(gridX: number, gridY: number): void {
@@ -824,9 +848,10 @@ export class FireSystem {
     }
     // Repeated refreshes of an unchanged permanent cell must not republish the whole surface.
     let changed = false;
-    for (const visualStyle of cell.visuals.keys()) {
+    for (const [visualStyle, visual] of cell.visuals) {
       if (aggregates.has(visualStyle)) continue;
       cell.visuals.delete(visualStyle);
+      this.removedGroundVisualIds.push(visual.id);
       changed = true;
     }
     for (const [visualStyle, aggregate] of aggregates) {
@@ -845,7 +870,17 @@ export class FireSystem {
       }
       changed = true;
     }
-    if (changed) this.groundSnapshotDirty = true;
+    if (changed) {
+      this.groundSnapshotDirty = true;
+      this.dirtyGroundCells.add(cell);
+    }
+  }
+
+  private deleteGroundCell(cellKey: string, cell: ActiveGroundCell): void {
+    this.cells.delete(cellKey);
+    for (const visual of cell.visuals.values()) this.removedGroundVisualIds.push(visual.id);
+    this.dirtyGroundCells.delete(cell);
+    this.groundSnapshotDirty = true;
   }
 
   private visitTouchingCells(
