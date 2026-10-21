@@ -21,8 +21,8 @@ function readApronMaterials(scene: Phaser.Scene): BaseApronMaterials | null {
 
 /**
  * Owned by the base presentation; excluded from building shadows and destruction cell indices.
- * The procedural apron stays when single cells fall (their bare foundation remains); the sparse
- * stone nests leave with their cell.
+ * The procedural apron stays when single cells fall (their bare foundation remains); stones and
+ * gravel deposits leave with their cell.
  */
 export class BaseGroundingRenderer {
   private readonly imagesByCell = new Map<number, Phaser.GameObjects.Image[]>();
@@ -36,7 +36,8 @@ export class BaseGroundingRenderer {
         .setDisplaySize(placement.width, placement.height)
         .setRotation(placement.rotation)
         .setAlpha(placement.alpha)
-        .setDepth(DEPTH.BASE_GROUNDING - (placement.kind === 'cluster' ? 0.02 : 0));
+        .setDepth(DEPTH.BASE_GROUNDING - (placement.kind === 'gravel' ? 0.06 : 0));
+      if (placement.tint !== undefined) image.setTint(placement.tint);
       let images = this.imagesByCell.get(placement.cellIndex);
       if (!images) this.imagesByCell.set(placement.cellIndex, images = []);
       images.push(image);

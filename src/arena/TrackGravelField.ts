@@ -53,9 +53,9 @@ const smooth = (v: number): number => {
   return t * t * (3 - 2 * t);
 };
 
-/** Creosote-dark and sun-bleached sleeper wood; `age` blends between them per sleeper. */
-const WOOD_DARK = [38, 30, 25] as const;
-const WOOD_WEATHERED = [88, 78, 68] as const;
+/** Warm, oiled oak and sun-bleached grey-brown wood; `age` blends between them per sleeper. */
+const WOOD_FRESH = [124, 88, 58] as const;
+const WOOD_WEATHERED = [158, 137, 110] as const;
 const PLATE = [74, 63, 56] as const;
 const RUST = [104, 72, 50] as const;
 const DUST = [92, 80, 67] as const;
@@ -106,7 +106,7 @@ function sleeperAt(seed: number, gridX: number, index: number, wood: GroundMater
   out.left = CONFIG.sleeperLeftPx + (h(3) - 0.5) * CONFIG.sleeperEndJitterPx;
   out.right = CONFIG.sleeperRightPx + (h(4) - 0.5) * CONFIG.sleeperEndJitterPx;
   out.skew = (h(5) - 0.5) * 2 * CONFIG.sleeperSkew;
-  // Mostly old, dark sleepers; a few bleached ones and the odd fresh replacement.
+  // A spread from warm oiled wood to bleached grey-brown, with the odd fresh replacement.
   const age = h(6);
   out.age = age < 0.12 ? 0 : Math.pow(age, 0.8) * 0.85;
   out.woodX = wood ? Math.floor(h(7) * wood.width) : 0;
@@ -288,11 +288,12 @@ export function writeTrackBallast(
             const w = (wy * wood.width + wx) * 4;
             lum = (wood.rgba[w] * .3 + wood.rgba[w + 1] * .59 + wood.rgba[w + 2] * .11) / 255;
           }
-          let shade = (.36 + .95 * lum) * (.68 + .32 * smooth(Math.min(across, along) / 1.6));
+          // The grain only modulates the wood tone; edges and end grain stay a little darker.
+          let shade = (.74 + .85 * (lum - .5)) * (.72 + .28 * smooth(Math.min(across, along) / 1.6));
           if (along < 2.5) shade *= .84 + .16 * (along / 2.5);
-          let pr = WOOD_DARK[0] + (WOOD_WEATHERED[0] - WOOD_DARK[0]) * sleeper.age;
-          let pg = WOOD_DARK[1] + (WOOD_WEATHERED[1] - WOOD_DARK[1]) * sleeper.age;
-          let pb = WOOD_DARK[2] + (WOOD_WEATHERED[2] - WOOD_DARK[2]) * sleeper.age;
+          let pr = WOOD_FRESH[0] + (WOOD_WEATHERED[0] - WOOD_FRESH[0]) * sleeper.age;
+          let pg = WOOD_FRESH[1] + (WOOD_WEATHERED[1] - WOOD_FRESH[1]) * sleeper.age;
+          let pb = WOOD_FRESH[2] + (WOOD_WEATHERED[2] - WOOD_FRESH[2]) * sleeper.age;
           // Steel tie plates under the rails, with two spike heads each.
           for (const rail of CONFIG.railCentersPx) {
             const px = Math.abs(railX - rail);

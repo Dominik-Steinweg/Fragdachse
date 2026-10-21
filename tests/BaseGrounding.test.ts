@@ -10,7 +10,7 @@ vi.mock('../src/arena/BaseAccentGlowTexture', () => ({
 import { CELL_SIZE, VOID_PALETTE } from '../src/config';
 import { buildBaseGroundingLayout } from '../src/arena/BaseGroundingLayout';
 import { BASE_GROUNDING_ASSETS } from '../src/arena/BaseGroundingConfig';
-import { BASE_APRON_REACH_PX, getBaseApronRaster, writeBaseApron } from '../src/arena/BaseGroundingField';
+import { getBaseApronRaster, writeBaseApron } from '../src/arena/BaseGroundingField';
 import { BaseEntity } from '../src/entities/BaseEntity';
 import type { BaseSpec } from '../src/arena/BaseRegistry';
 import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
@@ -25,7 +25,7 @@ const cells = [
 const metrics = resolveCoopDefenseWorldMetrics(20, 20);
 
 describe('Base foundation layout', () => {
-  it('spreads the stone palette as sparse nests with smaller, fainter pebbles across varied footprints', () => {
+  it('composes stones and gravel, without soil stains, as separated nests across varied footprints', () => {
     const variedCells = Array.from({ length: 16 }, (_, index) => ({ gridX: index * 4, gridY: (index % 3) * 4 }));
     const layout = buildBaseGroundingLayout(variedCells, metrics);
     const used = new Set(layout.map((item) => item.asset));
@@ -34,6 +34,10 @@ describe('Base foundation layout', () => {
     // Nests are an accent, not an outline: far fewer than the exposed edges.
     expect(clusters.length).toBeGreaterThan(0);
     expect(clusters.length).toBeLessThan(variedCells.length * 4 / 3);
+    for (const cluster of clusters) {
+      expect(layout.some((item) => item.cellIndex === cluster.cellIndex && item.kind === 'gravel'
+        && item.asset.startsWith('edge-') && Math.hypot(item.x - cluster.x, item.y - cluster.y) < CELL_SIZE / 2)).toBe(true);
+    }
     for (const pebble of layout.filter((item) => item.kind === 'pebble')) {
       const nest = clusters.find((cluster) => cluster.cellIndex === pebble.cellIndex);
       expect(nest).toBeDefined();
@@ -52,7 +56,7 @@ describe('Base foundation layout', () => {
       .toEqual(layout);
   });
 
-  it('places nests outside exposed edges of concave and disconnected footprints, within the apron reach', () => {
+  it('places decorations outside exposed edges of concave and disconnected footprints, within a cell of them', () => {
     const footprints = [cells, Array.from({ length: 16 }, (_, i) => ({ gridX: 2 + (i % 4), gridY: 2 + Math.floor(i / 4) }))];
     for (const footprint of footprints) {
       const layout = buildBaseGroundingLayout(footprint, metrics);
@@ -64,8 +68,10 @@ describe('Base foundation layout', () => {
         const dy = item.y - cy;
         const normal = Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
         expect(footprint.some((other) => other.gridX === cell.gridX + normal[0] && other.gridY === cell.gridY + normal[1])).toBe(false);
-        expect(Math.max(Math.abs(dx), Math.abs(dy)) + Math.hypot(item.width, item.height) / 2)
-          .toBeLessThanOrEqual(CELL_SIZE / 2 + BASE_APRON_REACH_PX);
+        const halfX = (Math.abs(Math.cos(item.rotation)) * item.width + Math.abs(Math.sin(item.rotation)) * item.height) / 2;
+        const halfY = (Math.abs(Math.sin(item.rotation)) * item.width + Math.abs(Math.cos(item.rotation)) * item.height) / 2;
+        expect(Math.abs(dx) + halfX).toBeLessThanOrEqual(CELL_SIZE * 1.5);
+        expect(Math.abs(dy) + halfY).toBeLessThanOrEqual(CELL_SIZE * 1.5);
       }
     }
     expect(buildBaseGroundingLayout([], metrics)).toEqual([]);

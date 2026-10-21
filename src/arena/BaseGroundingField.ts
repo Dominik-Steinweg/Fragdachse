@@ -20,29 +20,30 @@ export interface BaseApronRaster {
 }
 
 /**
- * Trodden foundation ground around a base: compacted, moist soil with crushed gravel against the
- * platform, a width that wanders from grass right at the plates to a worn patch, a seam that
- * frays into the actual grass blades and loose stones beyond it. World pixels.
+ * Foundation gravel around a base: compacted fines of the same crushed gravel as the base sites,
+ * with a little soil worked in, loose stones on top, a narrow width that wanders from grass right
+ * at the plates to a short spill, and a seam that frays into the actual grass blades. World pixels.
  */
 export const BASE_APRON_CONFIG = {
-  /** Apron width beyond the footprint, before the edge warp; mostly modest, sometimes wide. */
-  minWidthPx: -3,
-  maxWidthPx: 30,
+  /** Apron width beyond the footprint, before the edge warp; often none, never a wide ring. */
+  minWidthPx: -5,
+  maxWidthPx: 13,
   /** Two-dimensional meander of the apron edge. */
-  edgeWarpPx: 7,
+  edgeWarpPx: 5,
   /** Density ramp of the outer edge; the grass seam works within it. */
-  seamPx: 12,
-  /** Dark, damp contact strip right at the plates. */
-  contactPx: 4,
-  contactShade: 0.3,
-  /** Compacted soil is darker than the open soil of the World and greyed by dust. */
-  soilDarken: 0.92,
-  soilDust: 0.35,
-  /** Crushed gravel against the platform, thinning out across the apron. */
-  gravelDesaturate: 0.5,
-  gravelGain: 0.68,
+  seamPx: 8,
+  /** Contact shade right at the plates. */
+  contactPx: 3,
+  contactShade: 0.28,
+  /** Compacted fines: the gravel material, partly desaturated, darkened and mixed with soil. */
+  finesDesaturate: 0.45,
+  finesGain: 0.66,
+  finesSoil: 0.25,
+  /** Loose stones of the same gravel, lighter than the fines between them. */
+  gravelDesaturate: 0.4,
+  gravelGain: 0.92,
   /** Loose gravel beyond the apron edge. */
-  scatterPx: 7,
+  scatterPx: 5,
 } as const;
 
 /** Maximum visual reach beyond the footprint; no gameplay geometry changes. */
@@ -132,9 +133,9 @@ export function writeBaseApron(
       if (nearest >= reach2) continue;
       const distance = Math.sqrt(nearest);
       const inside = distance === 0;
-      // Soil cover: solid inside, a grass seam at the outer edge driven by the real blade height.
+      // Fines cover: solid inside, a grass seam at the outer edge driven by the real blade height.
       // Outside, the edge meanders and its width wanders around the perimeter.
-      let soilAlpha = 1, warped = 0, width = 0;
+      let cover = 1, warped = 0, width = 0;
       if (!inside) {
         warped = distance + (noise(x, y, 17, 1) - .5) * C.edgeWarpPx + (noise(x, y, 6, 2) - .5) * C.edgeWarpPx * .5;
         const wide = smooth(noise(x, y, 71, 3) * .91 + noise(x, y, 29, 4) * .39 - .15);
@@ -142,36 +143,37 @@ export function writeBaseApron(
         const level = .5 + (width - warped) / C.seamPx * .5;
         const blade = grassHeight.data[heightRow + groundMaterialPhase(Math.floor(x), grassHeight.width)] / 255;
         const tuft = noise(x, y, 5, 5) * .45 + noise(x, y, 13, 6) * .55;
-        soilAlpha = smooth((level - (blade * .5 + tuft * .5)) / .07 + .5);
+        cover = smooth((level - (blade * .5 + tuft * .5)) / .07 + .5);
       }
-      // Crushed gravel: dense at the plates, thinning across the apron, a few stones beyond it.
+      // Loose stones: dense at the plates, thinning across the apron, a few beyond it.
       const g = (gravelRow + groundMaterialPhase(Math.floor(x), gravel.width)) * 4;
       const gr = gravel.rgba[g], gg = gravel.rgba[g + 1], gb = gravel.rgba[g + 2];
       const luma = (gr * .3 + gg * .59 + gb * .11) / 255;
       const stone = luma * 1.6 - .25 + (noise(x, y, 4, 7) - .5) * .7;
       const across = inside ? 0 : clamp01(warped / Math.max(4, width + C.scatterPx));
-      // Gravel lies in drifts: broad patches where it gathers, bare soil in between.
+      // Stones lie in drifts: broad patches where they gather, plain fines in between.
       const drift = noise(x, y, 23, 8) * .65 + noise(x, y, 9, 10) * .35;
       const threshold = .5 + across * .6 + (.5 - drift) * .9;
       let stoneAlpha = smooth((stone - threshold) / .12 + .5);
       if (!inside && warped > width + C.scatterPx) stoneAlpha = 0;
-      const alpha = stoneAlpha + soilAlpha * (1 - stoneAlpha);
+      const alpha = stoneAlpha + cover * (1 - stoneAlpha);
       if (alpha <= 0) continue;
 
       const s = (soilRow + groundMaterialPhase(Math.floor(x), soil.width)) * 4;
-      // Moist and compacted at the plates, a little drier outwards; patchy along the perimeter.
-      const damp = C.soilDarken * (.9 + .2 * noise(x, y, 37, 9));
-      // Trodden soil loses some of its warmth to dust.
-      const sr = soil.rgba[s], sg = soil.rgba[s + 1], sb = soil.rgba[s + 2];
-      const dust = (sr * .3 + sg * .59 + sb * .11) * C.soilDust;
+      // Fines vary a little in tone along the perimeter.
+      const tone = C.finesGain * (.92 + .16 * noise(x, y, 37, 9));
+      const grey = luma * 255, stoneDesaturate = C.gravelDesaturate, fineDesaturate = C.finesDesaturate;
       const contact = inside ? 1 - C.contactShade : 1 - C.contactShade * (1 - smooth(distance / C.contactPx));
-      const grey = luma * 255, desaturate = C.gravelDesaturate;
-      const stoneGain = C.gravelGain * stoneAlpha, soilGain = damp * soilAlpha * (1 - stoneAlpha);
-      const keep = 1 - C.soilDust, normalize = contact / alpha;
+      const stoneGain = C.gravelGain * stoneAlpha, normalize = contact / alpha;
+      const fineGain = cover * (1 - stoneAlpha) * tone * (1 - C.finesSoil);
+      const soilGain = cover * (1 - stoneAlpha) * tone * C.finesSoil;
       const out = (py * raster.width + px) * 4;
-      data[out] = ((gr + (grey - gr) * desaturate) * stoneGain + (sr * keep + dust) * soilGain) * normalize;
-      data[out + 1] = ((gg + (grey - gg) * desaturate) * stoneGain + (sg * keep + dust) * soilGain) * normalize;
-      data[out + 2] = ((gb + (grey - gb) * desaturate) * 1.02 * stoneGain + (sb * keep + dust) * soilGain) * normalize;
+      data[out] = ((gr + (grey - gr) * stoneDesaturate) * stoneGain
+        + (gr + (grey - gr) * fineDesaturate) * fineGain + soil.rgba[s] * soilGain) * normalize;
+      data[out + 1] = ((gg + (grey - gg) * stoneDesaturate) * stoneGain
+        + (gg + (grey - gg) * fineDesaturate) * fineGain + soil.rgba[s + 1] * soilGain) * normalize;
+      data[out + 2] = ((gb + (grey - gb) * stoneDesaturate) * stoneGain
+        + (gb + (grey - gb) * fineDesaturate) * fineGain + soil.rgba[s + 2] * soilGain) * normalize;
       data[out + 3] = Math.round(alpha * 255);
     }
   }

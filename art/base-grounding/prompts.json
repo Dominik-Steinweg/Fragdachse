@@ -8,21 +8,21 @@
       "source": "source/edge-a.png",
       "runtime": "../../../public/assets/sprites/base-grounding/edge-a.png",
       "prompt": "Use case: stylized-concept. Generate a NEW production 2D game sprite, NOT a screenshot edit. Input images are style/scale references only: screenshot shows gray sci-fi floor buildings on gravel; tileset shows material colors. Asset: one horizontal weathered foundation gravel fringe, variant A. True orthographic 90-degree overhead view. A narrow irregular horizontal group of chipped matte gray limestone and warm gray-brown grit, a few readable angular fragments among smaller pebbles, restrained earth caught between stones. Dense uneven clumps along the UPPER side, feathering into scattered smaller pebbles toward the LOWER side, both ends broken and tapering. Isolated on genuinely transparent RGBA background, no ground rectangle, no building, no border, no text, no checkerboard. Entire subject within central 80% width and central 45% height of landscape canvas, generous transparent padding. Moderately stylized hand-painted game texture with soft edges, broad readable shapes; designed to display about 32 by 16 game pixels, avoid microscopic noisy detail. Warm neutral stone, no blue lights. Diffuse overhead lighting, subtle contact occlusion only, no directional cast shadows, no perspective or visible vertical wall. One connected loose elongated cluster, not a sprite sheet.",
-      "active": false
+      "active": true
     },
     {
       "name": "edge-b",
       "source": "source/edge-b.png",
       "runtime": "../../../public/assets/sprites/base-grounding/edge-b.png",
       "prompt": "Generate ONE horizontal narrow strip of scattered gray-brown gravel for a top-down 2D game, genuinely transparent background (RGBA alpha). Natural low flat irregular stone chips in two loosely connected small clumps, gritty earth only between stones, broken feathered edges and tapered ends. Pure orthographic overhead view. Soft matte weathered limestone and slate, diffuse neutral overhead light, subtle ambient occlusion only. Hand-painted game texture with broad readable stone shapes. The strip is five times wider than tall, centered in a landscape canvas with wide empty transparent margins. No backdrop at all, no ground plane, no architecture, no checkerboard pattern, no shadow surrounding the group, no text.",
-      "active": false
+      "active": true
     },
     {
       "name": "edge-c",
       "source": "source/edge-c.png",
       "runtime": "../../../public/assets/sprites/base-grounding/edge-c.png",
       "prompt": "Use case: stylized-concept. NEW production 2D game ground decal; reference screenshot and tileset indicate palette and top-down game style only. A THIRD horizontal gravel fringe. Asymmetric narrow broken band, one larger flat angular stone at the left, a smaller clump toward right, loose pebbles between. Dense upper edge, sparse lower edge, taper at both ends. Landscape canvas. True orthographic 90 degree overhead view, no side view or perspective. Matte weathered gray-brown stone, restrained stylized painted texture, readable broad shapes at 20–32 game pixels. Diffuse overhead lighting, only subtle contact occlusion, NO directional shadow. Genuinely transparent RGBA background including gaps; clean neutral antialiased edges, absolutely no colored fringe, red/yellow pixels, checkerboard, text, buildings or rectangular ground slab. Center entire subject with at least 10 percent transparent margin. For horizontal fringes subject height about one third of width. Natural broken edges, no uniform ring. Match a weathered sci-fi concrete building on beige gravel and dark green terrain.",
-      "active": false
+      "active": true
     },
     {
       "name": "corner-a",
@@ -43,7 +43,7 @@
       "source": "source/scatter.png",
       "runtime": "../../../public/assets/sprites/base-grounding/scatter.png",
       "prompt": "Use case: stylized-concept. NEW production 2D game ground decal; reference screenshot and tileset indicate palette and top-down game style only. One loose sparse patch of warm gray-brown earth crumbs and tiny neutral pebbles, no large rocks. Irregular perforated footprint, subtle wisps of soil with isolated specks fading to fully transparent, no solid ground disk. Square canvas. True orthographic 90 degree overhead view, no side view or perspective. Matte weathered gray-brown stone, restrained stylized painted texture, readable broad shapes at 20–32 game pixels. Diffuse overhead lighting, only subtle contact occlusion, NO directional shadow. Genuinely transparent RGBA background including gaps; clean neutral antialiased edges, absolutely no colored fringe, red/yellow pixels, checkerboard, text, buildings or rectangular ground slab. Center entire subject with at least 10 percent transparent margin. For horizontal fringes subject height about one third of width. Natural broken edges, no uniform ring. Match a weathered sci-fi concrete building on beige gravel and dark green terrain.",
-      "active": false
+      "active": true
     },
     {
       "name": "soil-a",

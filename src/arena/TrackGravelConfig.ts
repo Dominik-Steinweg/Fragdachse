@@ -59,6 +59,7 @@ export const TRACK_RAIL_TEXTURE = {
   path: './assets/sprites/track_rails.png',
   /** Texture pixels per world pixel; the column TileSprite uses the inverse as tile scale. */
   scale: 2,
+  /** Texture pixels; one repeat covers 256 world pixels of line, with a rail joint per rail. */
   width: 128,
-  height: 64,
+  height: 512,
 } as const;

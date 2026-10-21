@@ -5,7 +5,7 @@ import type { BaseGroundingAsset } from './BaseGroundingConfig';
 
 export interface BaseGroundingPlacement {
   readonly cellIndex: number;
-  readonly kind: 'cluster' | 'pebble';
+  readonly kind: 'gravel' | 'cluster' | 'pebble';
   readonly asset: BaseGroundingAsset;
   readonly x: number;
   readonly y: number;
@@ -13,6 +13,7 @@ export interface BaseGroundingPlacement {
   readonly height: number;
   readonly rotation: number;
   readonly alpha: number;
+  readonly tint?: number;
 }
 
 const DIRECTIONS = [
@@ -21,10 +22,10 @@ const DIRECTIONS = [
   { x: 0, y: 1, rotation: 0 },
   { x: -1, y: 0, rotation: Math.PI / 2 },
 ] as const;
-/** Nests stay well apart; the ground between them is the procedural apron (BaseGroundingField). */
-const CLUSTER_SPACING = CELL_SIZE * 2.6;
-/** Share of the spaced candidates that actually carry a nest. */
-const CLUSTER_CHANCE = 0.6;
+const CLUSTER_SPACING = CELL_SIZE * 1.35;
+const GRAVEL_VARIANTS = ['edge-a', 'edge-b', 'edge-c'] as const;
+/** Share of the edges without a nest that still carry a loose gravel deposit. */
+const LOOSE_GRAVEL_CHANCE = 0.3;
 
 /** Coordinate-local variation: independent of entity IDs, faction, cell order and peer RNG. */
 function sample(x: number, y: number, salt: number): number {
@@ -74,9 +75,11 @@ function selectClusters(candidates: readonly EdgeCandidate[]): Set<EdgeCandidate
 }
 
 /**
- * Sparse stone nests on exposed edges, favouring corners: one group of stones and one or two
- * loose pebbles further out. The ground around them is the procedural apron
- * (BaseGroundingField). Nothing here changes collision geometry.
+ * Stone nests and gravel deposits on exposed edges, favouring corners: separated nests of a stone
+ * group over gravel and fine aggregate, with smaller pebbles further out, and loose deposits on
+ * some of the other edges. Each piece turns and shifts a little, so no edge reads as a ruled
+ * strip. The ground below them is the procedural apron (BaseGroundingField). Nothing here changes
+ * collision geometry.
  */
 export function buildBaseGroundingLayout(
   cells: readonly BaseVisualCell[],
@@ -93,44 +96,65 @@ export function buildBaseGroundingLayout(
       const nextOpen = !has(cell.gridX + next.x, cell.gridY + next.y);
       const previousOpen = !has(cell.gridX + previous.x, cell.gridY + previous.y);
       // In this tangent basis the next clockwise corner is the positive end of the edge.
-      const cornerBias = nextOpen !== previousOpen ? (nextOpen ? 8 : -8) : 0;
-      const along = cornerBias + (sample(cell.gridX, cell.gridY, side * 16) - 0.5) * 8;
+      const cornerBias = nextOpen !== previousOpen ? (nextOpen ? 5 : -5) : 0;
+      const along = cornerBias + (sample(cell.gridX, cell.gridY, side * 16) - 0.5) * 5;
       candidates.push({
         cellIndex, cell, side, along,
         x: (cell.gridX + 0.5) * CELL_SIZE + normal.x * (CELL_SIZE / 2 + 2) - normal.y * along,
         y: (cell.gridY + 0.5) * CELL_SIZE + normal.y * (CELL_SIZE / 2 + 2) + normal.x * along,
-        priority: sample(cell.gridX, cell.gridY, side * 16 + 1) + (nextOpen || previousOpen ? 0.3 : 0),
+        priority: sample(cell.gridX, cell.gridY, side * 16 + 1) + (nextOpen || previousOpen ? 0.22 : 0),
       });
     });
   });
 
+  const clusters = selectClusters(candidates);
   const result: BaseGroundingPlacement[] = [];
-  for (const candidate of selectClusters(candidates)) {
+  for (const candidate of candidates) {
     const { cell, cellIndex, side } = candidate;
     const normal = DIRECTIONS[side];
     const random = (salt: number) => sample(cell.gridX, cell.gridY, side * 16 + salt);
-    if (random(2) > CLUSTER_CHANCE) continue;
+    const isCluster = clusters.has(candidate);
     const cx = metrics.offsetX + (cell.gridX + 0.5) * CELL_SIZE;
     const cy = metrics.offsetY + (cell.gridY + 0.5) * CELL_SIZE;
     const atEdge = (outward: number, along: number) => ({
       x: cx + normal.x * (CELL_SIZE / 2 + outward) - normal.y * along,
       y: cy + normal.y * (CELL_SIZE / 2 + outward) + normal.x * along,
     });
-    const size = 17 + random(9) * 8;
+    const turn = (salt: number, range: number) => normal.rotation + (random(salt) - 0.5) * range;
+
+    // Discrete gravel deposits, never a strip on every edge.
+    if (isCluster || random(2) < LOOSE_GRAVEL_CHANCE) {
+      result.push({
+        cellIndex, kind: 'gravel', asset: GRAVEL_VARIANTS[Math.floor(random(3) * GRAVEL_VARIANTS.length)],
+        ...atEdge((isCluster ? 4 : 5) + (random(17) - 0.5) * 3, candidate.along + (random(18) - 0.5) * 6),
+        width: isCluster ? 36 + random(5) * 8 : 23 + random(5) * 8,
+        height: isCluster ? 16 + random(6) * 4 : 10 + random(6) * 4,
+        rotation: turn(19, 0.35), alpha: isCluster ? 0.86 : 0.62 + random(7) * 0.12,
+      });
+    }
+    if (!isCluster) continue;
+
+    // Fine aggregate makes a broken transition between the apron and the loose stones.
+    result.push({
+      cellIndex, kind: 'gravel', asset: 'scatter',
+      ...atEdge(8, candidate.along - (random(4) - 0.5) * 7),
+      width: 24 + random(7) * 5, height: 13 + random(6) * 3,
+      rotation: turn(20, 0.6), alpha: 0.5, tint: 0xb9ad9a,
+    });
+
     result.push({
       cellIndex, kind: 'cluster', asset: random(8) < 0.5 ? 'corner-a' : 'corner-b',
-      ...atEdge(1 + random(5) * 4, candidate.along), width: size * (1.15 + random(10) * 0.2), height: size,
-      rotation: normal.rotation + (random(6) - 0.5) * 0.9, alpha: 0.92,
+      ...atEdge(2, candidate.along), width: 28 + random(9) * 6, height: 21 + random(10) * 5,
+      rotation: turn(21, 0.4), alpha: 0.94,
     });
-    // Size and opacity decrease outward: one or two isolated pebbles.
-    const pebbles = random(11) < 0.5 ? 1 : 2;
-    for (let tier = 0; tier < pebbles; tier++) {
-      const pebble = tier === 0 ? 4 + random(12) * 2 : 2.5 + random(13) * 1.5;
+    // Size and opacity decrease outward: one medium stone, then one isolated small pebble.
+    for (let tier = 0; tier < 2; tier++) {
+      const size = tier === 0 ? 5 + random(11) * 2 : 2.5 + random(12) * 1.5;
       result.push({
         cellIndex, kind: 'pebble', asset: 'pebble-a',
-        ...atEdge(size * 0.55 + 3 + tier * 5, candidate.along + (random(14 + tier) - 0.5) * 16),
-        width: pebble, height: pebble, rotation: normal.rotation + random(16 + tier) * Math.PI,
-        alpha: tier === 0 ? 0.85 : 0.7,
+        ...atEdge(tier === 0 ? 8 : 13, candidate.along + (random(13 + tier) - 0.5) * 13),
+        width: size, height: size, rotation: normal.rotation + random(15) * Math.PI,
+        alpha: tier === 0 ? 0.85 : 0.65,
       });
     }
   }
