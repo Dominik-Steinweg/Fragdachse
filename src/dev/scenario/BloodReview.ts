@@ -105,10 +105,10 @@ class BloodReview {
         break;
       }
       case 'massFight': {
-        const view = this.scene.cameras.main.worldView;
+        // Around the spot (the camera only moves there after planning), about one screen wide.
         const hits = Math.max(1, count) * 25;
         for (let i = 0; i < hits; i++) {
-          const x = view.x + view.width * (0.1 + 0.8 * random()), y = view.y + view.height * (0.1 + 0.8 * random());
+          const x = s.x + (random() - 0.5) * 900, y = s.y + (random() - 0.5) * 500;
           const a = random() * Math.PI * 2;
           hit(i * 25, x, y, Math.cos(a), Math.sin(a), 6 + random() * 40, random() < 0.12);
         }

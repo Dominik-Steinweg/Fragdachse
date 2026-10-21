@@ -23,6 +23,19 @@ describe('BloodFieldModel', () => {
     expect(second.radius).toBeGreaterThan(first.radius);
   });
 
+  it('thickens only well-fed pools, so ordinary pools stay a translucent stain', () => {
+    const model = new BloodFieldModel(8);
+    const dense = feed({ denseAreaPx: [140, 900] });
+    const { slot } = model.feedPool(dense);
+    expect(model.mark(slot)!.amount).toBe(1);
+    model.feedPool({ ...dense, atMs: 300, area: 300 });
+    const fed = model.mark(slot)!.amount;
+    expect(fed).toBeGreaterThan(1);
+    for (let i = 1; i <= 8; i++) model.feedPool({ ...dense, atMs: 300 + i * 100, area: 400 });
+    expect(model.mark(slot)!.amount).toBeGreaterThan(fed);
+    expect(model.mark(slot)!.amount).toBeLessThanOrEqual(2);
+  });
+
   it('keeps distant pools and other receivers apart', () => {
     const model = new BloodFieldModel(64);
     model.feedPool(feed());

@@ -103,8 +103,9 @@ void main() {
     float bold = mix(0.12, 0.22, smoothstep(8.0, 30.0, r));
     float edge = 1.0 + bold * lobes(a, seed) + 0.08 * (bloodNoise(p * 0.3 + seed * 41.0) - 0.5);
     float x = length(p) / max(r * edge, 0.5);
-    d = falloff(x) * amount;
-    d += 0.16 * amount * (1.0 - k) * exp(-pow((x - 0.93) / 0.11, 2.0));
+    // A well-fed pool is denser in its core (amount up to 2); the outline (x = 1) stays where it is.
+    d = falloff(x) * (1.0 + (amount - 1.0) * (1.0 - smoothstep(0.35, 0.95, x)));
+    d += 0.16 * (1.0 - k) * exp(-pow((x - 0.93) / 0.11, 2.0));
   } else if (vKind < 1.5) {
     // Splat: round head at the origin, a tapering tail along +x (the flight), a bead at its end.
     float pop = clamp(age / max(vC.z, 0.001), 0.0, 1.0);
@@ -158,7 +159,8 @@ void main() {
   float fresh = 1.0 - smoothstep(uDry.x, uDry.y, t - vD.w);
   float q = visible * (0.5 + 0.5 * fresh);
   vec4 o = vec4(0.0);
-  if (vD.x < 0.5) o.r = d; else if (vD.x < 1.5) o.g = d; else o.b = d;
+  // Ground and rock densities are stored at half scale: overlaps and fed pools up to 2 stay measurable.
+  if (vD.x < 0.5) o.r = d * 0.5; else if (vD.x < 1.5) o.g = d * 0.5; else o.b = d;
   o.a = vD.x < 1.5 ? (uAlphaMax > 0.5 ? smoothstep(0.15, 0.6, d) * q : d * q) : 0.0;
   gl_FragColor = o;
 }`;
@@ -210,7 +212,8 @@ ${SURFACE_LIGHT_GLSL}
 ${rock ? ROCK_COVERAGE_GLSL : ''}
 ${NOISE}
 ${BLOOD_RECOLOR_GLSL}
-float channel(vec4 f) { return uPass > 1.5 ? f.g : f.r; }
+// Ground/rock density, unpacked from its half-scale storage (0..2).
+float channel(vec4 f) { return (uPass > 1.5 ? f.g : f.r) * 2.0; }
 void main() {
   vec2 world = uQuad.xy + vec2(outTexCoord.x, 1.0 - outTexCoord.y) * uQuad.zw;
   vec2 uv = (world - uFieldRect.xy) / uFieldRect.zw;
@@ -253,8 +256,11 @@ void main() {
     + channel(texture2D(uField, uv + ring * vec2(0.5, 0.866))) + channel(texture2D(uField, uv + ring * vec2(-0.5, 0.866)))
     + channel(texture2D(uField, uv + ring * vec2(0.5, -0.866))) + channel(texture2D(uField, uv + ring * vec2(-0.5, -0.866)))) / 6.0;
   float depth = smoothstep(0.35, 1.0, thick) * smoothstep(uThreshold + 0.05, 1.0, wide);
+  // Only dense blood is opaque: fed pools' cores and many overlapping marks (density past 1).
+  // Spatter and ordinary pools stay a translucent stain the ground shows through.
+  float dense = smoothstep(0.75, 1.75, d) * smoothstep(0.8, 1.6, wide);
   // Liveliness of the blood here (see the accumulation): freshness above one half, fading below.
-  float q = uAlphaMax > 0.5 ? f.a : clamp(f.a / max(f.r + f.g, 0.02), 0.0, 1.0);
+  float q = uAlphaMax > 0.5 ? f.a : clamp(f.a / max((f.r + f.g) * 2.0, 0.02), 0.0, 1.0);
   float fresh = clamp(q * 2.0 - 1.0, 0.0, 1.0);
   float vis = clamp(q * 2.0, 0.0, 1.0);
   // Broad, world-anchored unevenness: clotting and soaking vary across a pool.
@@ -270,11 +276,11 @@ void main() {
     // Drying draws a darker ring where the edge clots first.
     float ring = smoothstep(0.0, 0.06, thick) * (1.0 - smoothstep(0.06, 0.25, thick));
     dye *= 1.0 - ring * (1.0 - fresh) * 0.35;
-    float alpha = cover * mix(0.88, 1.0, depth) * vis;
+    float alpha = cover * mix(0.4, 1.0, dense) * vis;
     dye = bloodRecolor(dye, tint);
     // Around it, blood seeps into the soil: a soft, uneven red-brown darkening (ground and decks only).
     // Only wide pools seep (gentle edge slope); drops would gain a drawn-looking outline.
-    float seep = ${rock ? '0.0' : 'smoothstep(low, uThreshold - 0.03, soaked) * (1.0 - cover) * mask * 0.5 * (1.0 - smoothstep(0.03, 0.1, length(slope))) * vis'};
+    float seep = ${rock ? '0.0' : 'smoothstep(low, uThreshold - 0.03, soaked) * (1.0 - cover) * mask * 0.35 * (1.0 - smoothstep(0.03, 0.1, length(slope))) * vis'};
     vec3 soil = bloodRecolor(vec3(0.74, 0.5, 0.46), tint);
     // MULTIPLY with full alpha writes the factor itself: ground × seep × stain, per channel.
     gl_FragColor = vec4(mix(vec3(1.0), soil, seep) * mix(vec3(1.0), dye, alpha), 1.0);
@@ -284,15 +290,16 @@ void main() {
   // Film (NORMAL): fresh blood stands as a thin, dark, translucent layer on deep spots, so the colour
   // still reads on dark soil; its surface is uneven, catching small sharp highlights, never a sheen.
   // The film thins out towards the edge, so the outline is mostly soaked stain, not a hard skin.
-  float film = cover * (0.52 + 0.3 * depth) * mix(0.6, 1.0, fresh) * (0.88 + 0.24 * mottle) * vis;
-  vec3 body = mix(vec3(0.66, 0.036, 0.05), vec3(0.28, 0.008, 0.02), depth) * (0.85 + 0.3 * mottle);
+  float film = cover * mix(0.32, 0.82, dense) * mix(0.6, 1.0, fresh) * (0.88 + 0.24 * mottle) * vis;
+  // Thin film stays darker than the ground it covers: translucent blood darkens, it never lights up a rim.
+  vec3 body = mix(vec3(0.48, 0.026, 0.04), vec3(0.28, 0.008, 0.02), depth) * (0.85 + 0.3 * mottle);
   body = bloodRecolor(body, tint);
   vec2 bumps = (vec2(bloodNoise(world * 0.21), bloodNoise(world * 0.21 + 11.3)) - 0.5) * 0.9
     + (vec2(bloodNoise(world * 0.47 + 5.0), bloodNoise(world * 0.47 + 19.0)) - 0.5) * 0.45;
   vec3 n = normalize(vec3(-slope * 3.0 + bumps * 0.35 * depth * uDetail, 1.0));
   vec3 halfVector = normalize(normalize(uSun.xyz) + vec3(0.0, 0.0, 1.0));
   // Glints only on the broad, flat surface of real pools: drops and edges (steep density) stay matte.
-  float wet = fresh * cover * smoothstep(0.3, 0.7, thick) * (1.0 - smoothstep(0.015, 0.06, length(slope)));
+  float wet = fresh * cover * smoothstep(0.3, 0.7, thick) * (1.0 - smoothstep(0.015, 0.06, length(slope))) * mix(0.35, 1.0, dense);
   float glints = pow(max(dot(n, halfVector), 0.0), 90.0) * wet * uSun.w;
   vec3 light = vec3(1.0, 0.9, 0.84) * glints * 0.9;
   // Night: small glints on the slopes facing a lamp; the light map keeps everything else dark.

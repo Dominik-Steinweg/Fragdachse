@@ -412,6 +412,8 @@ export const BLOOD_HIT_VFX = {
       /** Feeds within `growCore` × radius grow the pool; up to radius + margin they bud a merging satellite. */
       growCore: 0.6,
       mergeMarginPx: 9,
+      /** A pool's core grows dense (opaque) from the first to the second area (px²); smaller pools stay translucent. */
+      denseAreaPx: [140, 900],
       /** Small merging blobs between pool and spray, so the spray visibly leaves the pool. */
       bridges: { tiny: 0, light: 1, medium: 2, heavy: 2, kill: 4 },
     },

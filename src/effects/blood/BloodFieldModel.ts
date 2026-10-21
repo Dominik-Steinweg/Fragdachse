@@ -75,6 +75,14 @@ export interface BloodPoolFeed {
   readonly seed: number;
   /** Blood colour 0xRRGGBB; absent for the default red. Only pools of the same colour merge. */
   readonly color?: number;
+  /** Pool area (px²) at which its core starts to get denser, and at which it is fully dense. */
+  readonly denseAreaPx?: readonly [number, number];
+}
+
+/** Core density of a pool holding `area` px² of blood: 1 for ordinary pools, up to 2 when well fed. */
+export function bloodPoolDensity(area: number, denseAreaPx: readonly [number, number] | undefined): number {
+  if (!denseAreaPx) return 1;
+  return 1 + Math.max(0, Math.min(1, (area - denseAreaPx[0]) / Math.max(1, denseAreaPx[1] - denseAreaPx[0])));
 }
 
 export interface BloodPoolFeedResult {
@@ -243,6 +251,7 @@ export class BloodFieldModel {
       this.set(grow, W.spread, Math.max(0.001, feed.spreadMs / 1000));
       this.set(grow, W.end, this.seconds(endMs));
       this.set(grow, W.fresh, feedSec);
+      this.set(grow, W.amount, bloodPoolDensity(area, feed.denseAreaPx));
       this.touch(grow);
       return { slot: grow, grew: true, radius: Math.max(start, radius) };
     }
@@ -251,6 +260,7 @@ export class BloodFieldModel {
       kind: BloodMarkKind.Pool, channel: feed.channel, x: feed.x, y: feed.y, angle: 0,
       r0: radius * 0.35, r1: radius, seed: feed.seed, bornAtMs: feed.atMs, spreadMs: feed.spreadMs,
       endAtMs: feed.atMs + feed.lifeMs, shrinkMs: feed.shrinkMs, color: feed.color,
+      amount: bloodPoolDensity(feed.area, feed.denseAreaPx),
     });
     if (slot >= 0) this.area[slot] = feed.area;
     return { slot, grew: false, radius };
@@ -315,11 +325,12 @@ export class BloodFieldModel {
 
   /** Read access for tests and diagnostics; null for a free slot. */
   mark(slot: number): { kind: number; channel: number; x: number; y: number; r0: number; r1: number;
-    bornAtMs: number; endAtMs: number; area: number } | null {
+    bornAtMs: number; endAtMs: number; area: number; amount: number } | null {
     if (slot < 0 || slot >= this.highWater || !this.alive[slot]) return null;
     return { kind: this.word(slot, W.kind), channel: this.word(slot, W.channel), x: this.word(slot, W.x),
       y: this.word(slot, W.y), r0: this.word(slot, W.r0), r1: this.word(slot, W.r1),
-      bornAtMs: this.ms(this.word(slot, W.born)), endAtMs: this.ms(this.word(slot, W.end)), area: this.area[slot] };
+      bornAtMs: this.ms(this.word(slot, W.born)), endAtMs: this.ms(this.word(slot, W.end)), area: this.area[slot],
+      amount: this.word(slot, W.amount) };
   }
 
   private refreshBounds(nowSec: number): void {

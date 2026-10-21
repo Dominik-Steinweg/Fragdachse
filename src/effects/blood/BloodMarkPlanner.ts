@@ -297,7 +297,7 @@ export class BloodMarkPlanner {
     const result = this.model.feedPool({
       x, y, area, channel: BloodChannel.Ground, atMs, spreadMs, lifeMs: this.lifeMs, maxLifeMs: config.maxLifeMs,
       shrinkMs: config.shrinkMs, maxRadiusPx: pool.maxRadiusPx, growCore: pool.growCore, mergeMarginPx: pool.mergeMarginPx,
-      seed: this.rng(), color: this.color,
+      seed: this.rng(), color: this.color, denseAreaPx: pool.denseAreaPx,
     });
     this.seep(result.slot, x, y, result.radius, atMs, spreadMs);
   }
