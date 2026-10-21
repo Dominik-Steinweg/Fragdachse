@@ -1,7 +1,7 @@
 {
   "owner": "effects/gpu/SpawnGpuLayer.ts",
   "notes": [
-    "Spawn materialisation of players and enemies: sigil paint and shock dust on the ground below actors, every glow and particle in the emissive band, the falling light column just above the canopy (players only)."
+    "Spawn materialisation of players and enemies: a soft light pool on the ground below actors, every glow and light particle in the emissive band, the falling light column just above the canopy (players only)."
   ],
   "gpuLayers": [
     {

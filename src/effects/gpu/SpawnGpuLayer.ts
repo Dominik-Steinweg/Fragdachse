@@ -2,21 +2,15 @@ import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_LIGHTING } from '../../config';
 import type { ShaderWarmupProbe } from '../../graphics/ShaderWarmupProbe';
 import { registerGraphicsObject } from '../EffectUtils';
+import type { SpawnGpuInstance } from './SpawnInstances';
 import { SPAWN_FRAGMENT, SPAWN_VERTEX } from './SpawnShader';
 
 /** Fixed bounded batch: three draws per frame regardless of how many figures spawn at once. */
-export const SPAWN_GPU_CAPACITY = 1536;
+export const SPAWN_GPU_CAPACITY = 3072;
 /** Sigil paint under the bodies (lit), every glow above the light map, the light column above the canopy. */
 export const SPAWN_PASS_DEPTHS = [DEPTH.PLAYERS - 0.3, DEPTH_LIGHTING + 0.08, DEPTH.CANOPY + 0.3] as const;
 const VERTICES = 6, WORDS = 16;
 const CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
-
-/** One quad; see SpawnShader for the meaning of kind, variant and p1..p4. */
-export interface SpawnGpuInstance {
-  x: number; y: number; kind: number; t0: number; seed: number; variant: number;
-  r: number; g: number; b: number; scale: number;
-  p1: number; p2: number; p3: number; p4: number;
-}
 
 export class SpawnGpuLayer {
   private readonly data = new Float32Array(SPAWN_GPU_CAPACITY * VERTICES * WORDS);
@@ -24,7 +18,6 @@ export class SpawnGpuLayer {
   private version = 0;
   /** Layer clock in seconds, the same base as every instance's t0. */
   private time = 0;
-  private detail = 1;
   private emissive = 1;
   private readonly passes: { image: Phaser.GameObjects.Image; batch: SpawnBatchPort }[] = [];
 
@@ -71,8 +64,8 @@ export class SpawnGpuLayer {
     this.version++;
     for (const { image } of this.passes) image.setVisible(this.count > 0);
   }
-  setFrame(timeSeconds: number, detail: number, emissive: number): void {
-    this.time = timeSeconds; this.detail = detail; this.emissive = emissive;
+  setFrame(timeSeconds: number, emissive: number): void {
+    this.time = timeSeconds; this.emissive = emissive;
   }
 
   /** Shader warmup: links the program and primes every pass with one empty instance. */
@@ -90,7 +83,6 @@ export class SpawnGpuLayer {
   get instanceData(): Float32Array { return this.data; }
   get uploadVersion(): number { return this.version; }
   get clock(): number { return this.time; }
-  get detailLevel(): number { return this.detail; }
   get emissiveScale(): number { return this.emissive; }
 }
 
@@ -106,7 +98,7 @@ export function createSpawnShaderProbe(scene: Phaser.Scene): ShaderWarmupProbe {
 
 interface SpawnGpuLayerFrame {
   readonly instanceData: Float32Array; readonly size: number; readonly uploadVersion: number;
-  readonly clock: number; readonly detailLevel: number; readonly emissiveScale: number;
+  readonly clock: number; readonly emissiveScale: number;
 }
 interface SpawnBatchPort { run(context: Phaser.Renderer.WebGL.DrawingContext, preparing?: boolean): boolean; dispose(): void }
 // Lazy like RestHealGpuLayer: importing presentation must also work in headless runtime tests.
@@ -150,11 +142,8 @@ function createSpawnBatch(renderer: Phaser.Renderer.WebGL.WebGLRenderer, image: 
         program.setUniform('uViewMatrix', [m.a, m.b, 0, m.c, m.d, 0, m.tx, m.ty, 1]);
         program.setUniform('uPass', pass);
         program.setUniform('uTime', frame.clock);
-        program.setUniform('uDetail', frame.detailLevel);
         program.setUniform('uEmissive', frame.emissiveScale);
         program.setUniform('uAlpha', image.alpha);
-        // World units per framebuffer pixel keep every line one pixel soft at any zoom.
-        program.setUniform('uPixel', 1 / Math.max(1e-4, Math.hypot(m.a, m.b)));
         program.applyUniforms(suite.program);
         renderer.drawElements(context, [], suite.program, suite.vao, instances * VERTICES, 0, this.topology);
       }

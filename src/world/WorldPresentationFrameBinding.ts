@@ -82,6 +82,8 @@ import {
 } from '../persistentBase/PersistentBasePresentation';
 
 const TRAIN_LIGHT_SIDES = [-1, 1] as const;
+/** Below this extra zoom the exact spawn framing hands over to the normal follow smoothing. */
+const SPAWN_FRAMING_HANDOVER = 0.06;
 
 export type FireControlSnapshotSource = (now: number) => FireControlSnapshot;
 /** Bestätigte Bomberstaffeln (Slice `bq`); Host und Client lesen dieselbe Quelle. */
@@ -606,11 +608,18 @@ export class WorldPresentationFrameBinding {
     const targetScrollY = Phaser.Math.Clamp(followY - focusScreenY / zoom, minScrollY, zoomedMaxScrollY);
     // The first local spawn is already known during loading; snap once so the startup working
     // set is not invalidated by a camera glide while the barrier is being evaluated. A spawn
-    // close-up cuts onto the figure, and a fixed arena camera tracks it exactly while zoomed.
-    const followLerp = this.input.isArenaLoading() || spawnZoom.cut || spawnFollowsFixedCamera
-      ? 1 : 1 - Math.exp(-deltaMs / 120);
-    this.lastCameraScrollX = Phaser.Math.Linear(this.lastCameraScrollX, targetScrollX, followLerp);
-    this.lastCameraScrollY = Phaser.Math.Linear(this.lastCameraScrollY, targetScrollY, followLerp);
+    // close-up cuts onto the figure and then frames it exactly: near an arena edge the clamp
+    // moves with the zoom, and a smoothed follow would trail it and settle only after the
+    // pull-out. Zoom and framing stay one motion; the normal smoothing returns as the zoom ends.
+    const smoothing = 1 - Math.exp(-deltaMs / 120);
+    const spawnFraming = spawnFollowsFixedCamera ? 1 : Math.min(1, (spawnZoom.factor - 1) / SPAWN_FRAMING_HANDOVER);
+    const followLerp = this.input.isArenaLoading() || spawnZoom.cut ? 1 : Math.max(smoothing, spawnFraming);
+    // A zoom change pivots around the view centre and may leave the valid range for an instant;
+    // the view never shows beyond the clamp, so the follow starts from inside it.
+    const fromX = Phaser.Math.Clamp(this.lastCameraScrollX, minScrollX, zoomedMaxScrollX);
+    const fromY = Phaser.Math.Clamp(this.lastCameraScrollY, minScrollY, zoomedMaxScrollY);
+    this.lastCameraScrollX = Phaser.Math.Linear(fromX, targetScrollX, followLerp);
+    this.lastCameraScrollY = Phaser.Math.Linear(fromY, targetScrollY, followLerp);
     camera.scrollX = this.lastCameraScrollX;
     camera.scrollY = this.lastCameraScrollY;
     setCameraBaseScroll(this.input.scene, this.lastCameraScrollX, this.lastCameraScrollY);

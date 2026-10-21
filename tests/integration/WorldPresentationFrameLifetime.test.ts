@@ -825,6 +825,28 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       expect(camera.useBounds).toBe(true);
     });
 
+    it('zieht Zoom und Randklemmung als eine Bewegung heraus, ohne danach nachzuziehen', () => {
+      applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
+      const { camera, time, scene } = zoomableScene();
+      // Close to the left arena edge: the close-up is centred, the play view is clamped to x = 0.
+      const player = { active: true, x: 700, y: 1000 };
+      const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene, {
+        getLocalPlayerSprite: () => player as never,
+        isLocalPlayerAlive: () => true,
+      }));
+      const framed = () => Math.max(0, player.x - 960 / camera.zoomX);
+      let settled: number | null = null;
+      while (time.now < 4000) {
+        time.now += 16;
+        binding.syncCamera(16, true);
+        binding.syncCamera(16, true);
+        if (camera.zoomX > 1.02) expect(camera.scrollX).toBeCloseTo(framed(), 1);
+        else if (camera.zoomX === 1) settled ??= camera.scrollX;
+      }
+      expect(settled).toBe(0);
+      expect(camera.scrollX).toBe(0);
+    });
+
     it('haelt die Nahaufnahme ueber den Countdown und gibt sie erst mit dem Start frei', () => {
       applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
       const { camera, scene, run } = zoomableScene();

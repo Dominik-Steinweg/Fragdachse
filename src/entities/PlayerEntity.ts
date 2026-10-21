@@ -823,7 +823,7 @@ export class PlayerEntity {
       },
     });
 
-    // World-Space-Effekte auf der GPU: Sammeln, Sigil, Lichtsäule, Blitz, Ringe, Funken, Nachleuchten
+    // World-Space-Effekte auf der GPU: Lichtpartikel sammeln sich, Lichtsäule, Blitz, Funken, Nachleuchten
     this.spawnEffectRenderer ??= new SpawnEffectRenderer(scene);
     this.spawnEffectRenderer.setLightingSystem(this.lighting);
     this.spawnEffectRenderer.play(this.runtime.x, this.runtime.y, this.colorHex);
