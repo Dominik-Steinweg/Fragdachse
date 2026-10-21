@@ -112,6 +112,7 @@ describe.skipIf(!enabled)('Navigation with toggled portal links under load', () 
       obstacles.push({ id: `rock:${obstacles.length}`, kind: 'rock', shape: 'rect', left: col * 32, top: row * 32, right: col * 32 + 32, bottom: row * 32 + 32 });
     }
     const snapshot = { left: 0, top: 0, right: 2048, bottom: 1024, obstacles }, geometry = new NavigationGeometry(snapshot);
+    const initialObstacles = obstacles.length;
     const link = { id: 'stress-flank', ax: 320, ay: 160, bx: 1728, by: 160, radiusPx: 28, maxBodyRadiusPx: 20, costPx: 192 };
     const target = { x: 1936, y: 528 };
     const starts: { x: number; y: number }[] = [];
@@ -140,7 +141,7 @@ describe.skipIf(!enabled)('Navigation with toggled portal links under load', () 
     const intents = new EnemyIntentSystem(coordinator, catalog);
     manager.setNavigationIntents(intents);
     const units = starts.map(p => manager.hostSpawnAtWorld(p.x, p.y, 'void-stalker'));
-    const gates = new Map<string, 'a' | 'b'>(), removed: NavigationObstacle[] = [];
+    const gates = new Map<string, 'a' | 'b'>();
     let linked = false, unsafeSegments = 0, crossings = 0, completedTrips = 0, toggles = 0, geometryChanges = 0;
     const times: number[] = [];
     for (let step = 0; step < durationMs / dt; step++) {
@@ -150,10 +151,11 @@ describe.skipIf(!enabled)('Navigation with toggled portal links under load', () 
         coordinator.setPortalLinks(linked ? [link] : []);
         if (!linked) gates.clear();
       }
-      // Offset by half a period, so a job never carries both kinds of change.
-      if (Math.floor((now + toggleEveryMs / 2) / toggleEveryMs) !== Math.floor((now + toggleEveryMs / 2 - dt) / toggleEveryMs) && step > 0) {
-        if (removed.length) snapshot.obstacles.push(removed.pop()!);
-        else removed.push(...snapshot.obstacles.splice(1 + Math.floor(random() * (snapshot.obstacles.length - 1)), 1));
+      // Offset by half a period, so a job never carries both kinds of change. Rocks are only
+      // destroyed, as in play: a rock reappearing on a unit would trap it and measure nothing.
+      if (Math.floor((now + toggleEveryMs / 2) / toggleEveryMs) !== Math.floor((now + toggleEveryMs / 2 - dt) / toggleEveryMs)
+        && step > 0 && snapshot.obstacles.length > 1) {
+        snapshot.obstacles.splice(1 + Math.floor(random() * (snapshot.obstacles.length - 1)), 1);
         coordinator.invalidateGeometry(); geometryChanges++;
       }
       const started = performance.now();
@@ -191,7 +193,7 @@ describe.skipIf(!enabled)('Navigation with toggled portal links under load', () 
     const report = { schemaVersion: 1, generatedAt: new Date().toISOString(), sourceIdentity: process.env.NAVIGATION_SOURCE_IDENTITY ?? null,
       environment: { node: process.version, os: `${platform()} ${release()}`, cpu: cpus()[0]?.model },
       scope: 'Inline runner; worker cost is the engine compute time of the job carrying the change. Crossings are simulated.',
-      configuration: { seed, count, durationMs, toggleEveryMs, link, enemyKind: 'void-stalker', obstacles: obstacles.length },
+      configuration: { seed, count, durationMs, toggleEveryMs, link, enemyKind: 'void-stalker', obstacles: initialObstacles },
       toggles, geometryChanges, crossings, completedTrips, unsafeSegments,
       navigationCpuMs: summarizeNavigationSamples(times), fields: Object.keys(coordinator.getDiagnostics().fields).length,
       workerCost: { toggle: { ...toggleCost, fieldsPerJob: summarizeNavigationSamples(toggleJobs.map(job => job.fields)) },
