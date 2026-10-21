@@ -7,7 +7,7 @@ import { type PersistentBaseHealthReward } from '../../persistentBase/Persistent
 import { resolveDawnExpansionCoreHpBonus } from '../../dawn/economy/DawnExpansionRewards';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
-import { getDevDawnNightModifier } from '../../dev/scenario/dawnNightModifier';
+import { getDevDawnNightModifier, getDevDawnTemplateId } from '../../dev/scenario/dawnNightModifier';
 import { resolveDawnNightEnvironment } from '../../dawn/resolution/DawnNightModifierResolution';
 import { isLocalScenarioBotPeer } from '../../network/peer/LocalScenarioSession';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
@@ -3917,6 +3917,7 @@ function composeHostDawnRoundPlans(seed: number): DawnRoundPlans {
     threat: resolveDawnThreat(dawn.expansionLevel),
     dayNumber: dawn.stats.roundsPlayed + 1,
     nightModifier: isDevScenarioMode() ? getDevDawnNightModifier() : undefined,
+    templateId: isDevScenarioMode() ? getDevDawnTemplateId() : undefined,
     scrapScanner: freezeDawnInfrastructure(dawn).scrapScanner > 0,
   });
 }

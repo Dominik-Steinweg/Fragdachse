@@ -25,6 +25,8 @@ export interface DawnRoundCompositionInput {
   readonly dayNumber: number;
   /** Explicit dev recipe override; normal host composition leaves this absent. */
   readonly nightModifier?: DawnNightModifierId | 'none';
+  /** Explicit dev recipe override of the arena template; absent draws from the seeded stream. */
+  readonly templateId?: string;
   /** Host infrastructure: reveals hidden sites (scrap heaps) for this round. */
   readonly scrapScanner?: boolean;
 }
@@ -45,10 +47,13 @@ export function composeDawnRoundPlans(input: DawnRoundCompositionInput): DawnRou
   const { seed, threat, dayNumber } = input;
   const curve = getDawnThreatCurve(threat);
   const templates = getDawnArenaTemplates();
-  const template = templates[createDawnRandom(seed, 'template').int(templates.length)];
+  const drawn = templates[createDawnRandom(seed, 'template').int(templates.length)];
+  const template = input.templateId === undefined ? drawn
+    : templates.find((candidate) => candidate.id === input.templateId) ?? drawn;
   const schedule = getDawnSchedule(curve.scheduleId);
   const sites = composeDawnSiteVariants(seed,
-    composeDawnSites({ random: createDawnRandom(seed, 'sites'), template, curve, scrapScanner: input.scrapScanner }));
+    composeDawnSites({ random: createDawnRandom(seed, 'sites'), template, curve, scrapScanner: input.scrapScanner,
+      demolitionRandom: createDawnRandom(seed, 'demolition') }));
   const fronts = assignDawnFronts(createDawnRandom(seed, 'fronts'), template, curve);
   const night = composeDawnModifiedNight({ seed, random: createDawnRandom(seed, 'night'), curve, schedule, fronts, nightModifier: input.nightModifier });
   const waves = [

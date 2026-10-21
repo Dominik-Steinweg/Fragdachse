@@ -182,6 +182,8 @@ export function resolveDawnSitePropVisual(
   }
   // The capsule stays as scenery after its crates are delivered.
   if (archetypeId === 'supply') return { textureKey: DAWN_M3_ASSET_KEYS.supplyCapsule, animationKey: null };
+  // The emptied stockpile stays too; only its crates leave with the carriers.
+  if (archetypeId === 'demolition-cache') return { textureKey: DAWN_M3_ASSET_KEYS.demolitionCache, animationKey: null };
   if (archetypeId === 'scrap-heaps' || archetypeId === 'scavenger') {
     if (objectiveState === 'completed' || !Number.isInteger(tier) || tier < 1 || tier > DAWN_MAX_SITE_TIER) return null;
     const textureKey = archetypeId === 'scavenger' ? DAWN_M3_ASSET_KEYS.scavengerCamp(tier) : DAWN_M3_ASSET_KEYS.scrapHeap(tier);

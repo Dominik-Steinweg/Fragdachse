@@ -7,7 +7,7 @@
 
 /** Site-Archetypen (siehe GDD §6 und D-34). */
 export const DAWN_SITE_ARCHETYPE_IDS = [
-  'wreck', 'extractor', 'brood-nest', 'supply', 'scrap-heaps', 'scavenger',
+  'wreck', 'extractor', 'brood-nest', 'supply', 'scrap-heaps', 'scavenger', 'demolition-cache',
 ] as const;
 export type DawnSiteArchetypeId = typeof DAWN_SITE_ARCHETYPE_IDS[number];
 
@@ -32,6 +32,8 @@ export const DAWN_M3_ASSET_KEYS = {
     ? `construction_dawn_wreck_t${tier}` : `construction_dawn_wreck_${variant}_t${tier}`,
   broodNest: 'construction_dawn_broodnest',
   supplyCapsule: 'construction_dawn_supply_capsule',
+  /** Sprengstofflager; bis zum HQ-Asset zeichnet die Darstellung eine prozedurale Textur unter diesem Key. */
+  demolitionCache: 'construction_dawn_demolition_cache',
   supplyCrate: 'dawn_supply_crate',
   supplyCrateCarried: 'dawn_supply_crate_carried',
   scavengerCamp: (tier: number) => `dawn_scavenger_camp_t${tier}`,

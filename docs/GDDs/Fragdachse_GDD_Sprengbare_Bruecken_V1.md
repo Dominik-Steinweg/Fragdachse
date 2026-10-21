@@ -54,8 +54,14 @@ nachts leichter verteidigen; der eigene Weg zu Sites jenseits des Flusses fällt
 | 2026-10-21 | Map 12: Brücke `east-river-bridge` bei x77–80, y20–22 (engste Stelle des Ostflusses), ohne Wasseränderung | Fluss ist dort schon 4 Zellen schmal; Südübergang bleibt unverändert |
 | 2026-10-21 | Map 12: Feldlager `field-cache` (64,22, r 3) zwischen Mittelbasis und Fluss, 2 Kisten, Ziel 1 Brücke, `concurrent` | liegt auf dem Weg der Westwellen, also umkämpft; das Halteziel der Nebenbasis behält den Fokus |
 | 2026-10-21 | Gleichzeitige (`concurrent`) Nebenziele sind von der Fenster-Überlappungsprüfung ausgenommen | sie belegen per Vertrag keinen Fokus-Slot |
+| 2026-10-21 | Dawn: Archetyp `demolition-cache` (`carryItem: explosive`, `selectionWeight` 0) wird nie gezogen, sondern genau bei Templates mit Brücken eingeplant (eigener Seed-Stream `demolition`, freier Nah-/Mittel-Slot) | Sprengstoff soll tagsüber geholt werden, solange die Brücken noch zu den anderen Sites führen; Templates ohne Brücken behalten exakt ihre Pläne |
+| 2026-10-21 | Lager: eine Kiste je Template-Brücke, Ziel = alle Brücken, Tiers 1–3 mit 15/25/35 Schrott und Angriffswelle (18/30/44) nach 3 s | Lager ist umkämpft und belohnt vollständiges Sprengen nur leicht; der eigentliche Lohn ist die leichtere Nacht |
+| 2026-10-21 | Neues Template `riverbend` (140×96): U-Fluss um die Basis (West, Nord, Ost), nach Süden offen, drei Brücken; alle Sites jenseits des Flusses | ohne Brücken bleibt nur der lange Weg um die Flussenden; tagsüber sind die Brücken der kurze Weg zu den Sites |
+| 2026-10-21 | `pondland`: Kanal vom Ostteich zum Südrand mit einer Brücke | östliche Angreifer haben zwei Wege um den Teich, nach dem Sprengen nur noch den nördlichen |
 
 ## Offene Punkte
 
 - Shift-Plakette und Marker überlagern sich am Brückenende (Marker-Layout).
-- HQ-Asset (Blender) für Deck, Widerlager, Ruine, Kiste und Ladung.
+- HQ-Asset (Blender) für Deck, Widerlager, Ruine, Kiste und Ladung; die Draft-Ruine ist zu unscheinbar.
+- Dawn-Nacht im Dev-Szenario nicht live angesehen (`dawnSkip` verweigerte nach Teleports); Erreichbarkeit aller Fronten
+  und Sites mit gesprengten Brücken sichern `test:stress:dawn` und der Sweep.

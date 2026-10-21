@@ -4,6 +4,7 @@ import type { LightingSystem } from '../effects/LightingSystem';
 import { ensureExplosionSparkTexture, TEX_EXPLOSION_SPARK } from '../effects/gpu/GpuVfxSourceTextures';
 import { DAWN_SITE_DISPLAY_SIZE, DAWN_SUPPLY_CRATE_DISPLAY_SIZE } from '../assets/DawnAssets';
 import { DAWN_M3_ASSET_KEYS } from '../dawn/contracts/DawnContentIds';
+import { ensureDemolitionCacheTexture } from '../effects/bridge/ExplosiveCrateRenderer';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import type { DawnWorldPlan } from '../dawn/contracts/DawnPlans';
 import { toDawnSiteBaseId, toDawnSiteObjectiveId } from '../dawn/resolution/DawnScenarioResolution';
@@ -38,6 +39,9 @@ export class DawnSitePropRenderer {
   ) {
     const metrics = resolveCoopDefenseWorldMetrics(world.metrics.widthCells, world.metrics.heightCells);
     const bases = resolveWorldBases(world, metrics);
+    if (plan.sites.some(site => site.archetypeId === 'demolition-cache')) {
+      ensureDemolitionCacheTexture(scene.textures, DAWN_M3_ASSET_KEYS.demolitionCache);
+    }
     this.sites = plan.sites.flatMap(site => {
       const baseId = toDawnSiteBaseId(site.slotId);
       const base = bases.find(entry => entry.id === baseId);

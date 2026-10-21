@@ -211,8 +211,28 @@ describe('Dawn M3 site archetypes in composition', () => {
         if (ids.length <= eligible.size) expect(new Set(ids).size).toBe(ids.length);
       }
     }
-    const seen = new Set(plansFor(6).flatMap(plans => plans.world.sites.map(site => site.archetypeId)));
+    // The demolition cache is planned for bridges, never drawn.
+    const seen = new Set(plansFor(6).flatMap(plans => plans.world.sites.map(site => site.archetypeId))
+      .filter(id => id !== 'demolition-cache'));
     expect([...seen].sort()).toEqual(['brood-nest', 'extractor', 'scavenger', 'scrap-heaps', 'supply', 'wreck']);
+  });
+
+  it('plans exactly one demolition cache on arenas with bridges and none elsewhere', () => {
+    let withBridges = 0;
+    for (const threat of [1, 6]) {
+      for (const plans of plansFor(threat)) {
+        const template = getDawnArenaTemplate(plans.world.templateId);
+        const caches = plans.world.sites.filter(site => site.archetypeId === 'demolition-cache');
+        const bridges = template.world.bridges?.length ?? 0;
+        expect(caches.length, template.id).toBe(bridges > 0 ? 1 : 0);
+        if (bridges > 0) {
+          withBridges++;
+          const slot = template.salvageSlots.find(entry => entry.id === caches[0]!.slotId)!;
+          expect(slot.band).not.toBe('far');
+        }
+      }
+    }
+    expect(withBridges).toBeGreaterThan(0);
   });
 
   it('hides scrap heaps from navigation unless the host owns the scrap scanner', () => {

@@ -148,6 +148,11 @@ export interface DawnSiteArchetypeTier {
 export interface DawnSiteArchetype {
   readonly id: string;
   readonly objectiveType: DawnSiteObjectiveType;
+  /**
+   * Nur `carry`: `explosive` macht die Site zum Sprengstofflager. Sie wird nie gezogen, sondern genau
+   * dann eingeplant, wenn das Template Brücken hat; ihre Kisten zählen die Brücken (`selectionWeight` 0).
+   */
+  readonly carryItem?: 'explosive';
   /** Relative Auswahlhaeufigkeit beim Komponieren. */
   readonly selectionWeight: number;
   /** Garantiert freie Lichtung und zugleich Aktivierungsradius der Site. */
@@ -424,7 +429,14 @@ function validateSiteArchetypes(raw: { readonly archetypes: readonly unknown[] }
     }
     if (archetype.hidden !== undefined && archetype.hidden !== true) throw new Error(`[dawnContent] ${label} has invalid hidden`);
     validateSiteBehaviour(label, archetype);
-    if (!isPositiveFinite(archetype.selectionWeight)) throw new Error(`[dawnContent] ${label} needs a positive selectionWeight`);
+    if (archetype.carryItem !== undefined) {
+      if (archetype.carryItem !== 'explosive' || archetype.objectiveType !== 'carry') {
+        throw new Error(`[dawnContent] ${label} carryItem must be explosive on a carry site`);
+      }
+      if (archetype.selectionWeight !== 0) throw new Error(`[dawnContent] ${label} is planned for bridges, not drawn: selectionWeight 0`);
+    } else if (!isPositiveFinite(archetype.selectionWeight)) {
+      throw new Error(`[dawnContent] ${label} needs a positive selectionWeight`);
+    }
     const radius = archetype.clearingRadiusCells;
     if (!Number.isFinite(radius) || radius < 2 || radius > MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS) {
       throw new Error(`[dawnContent] ${label} needs a clearing radius between 2 and ${MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS}`);
@@ -483,8 +495,9 @@ function validateSiteBehaviour(label: string, archetype: DawnSiteArchetype): voi
     }
   };
   complete('carryItemCount', 6); complete('scatterPickups', 8); complete('scavengers', 4);
-  if ((archetype.objectiveType === 'carry') !== declared('carryItemCount')) {
-    throw new Error(`[dawnContent] ${label} declares carryItemCount exactly for carry sites`);
+  // Explosive caches hand out one crate per template bridge instead of an authored count.
+  if ((archetype.objectiveType === 'carry' && archetype.carryItem === undefined) !== declared('carryItemCount')) {
+    throw new Error(`[dawnContent] ${label} declares carryItemCount exactly for cargo carry sites`);
   }
   if (declared('nestSpawn')) {
     if (archetype.objectiveType !== 'destroy' || archetype.structure?.role !== 'spawn-point') {
