@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import manifest from './manifests/powerups-powerups-r07.json';
+import manifest from './manifests/powerups-powerups-r09.json';
 import { runtimeAssetUrl } from './RuntimeAssetUrls';
 
 export const POWERUP_BASE_KEY = 'powerup_layer_base';

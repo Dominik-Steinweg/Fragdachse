@@ -8,7 +8,7 @@ import {validatePowerupSpec,POWERUP_IDS,sameProjectionScale} from '../../scripts
 import {validateManifestV2} from '../../scripts/asset-pipeline/export-v2.mjs';
 import {compositePowerup} from '../../scripts/asset-pipeline/review-powerups.mjs';
 import {createHash} from 'node:crypto';
-import runtimeManifest from '../../src/assets/manifests/powerups-powerups-r07.json';
+import runtimeManifest from '../../src/assets/manifests/powerups-powerups-r09.json';
 import {POWERUP_DEFS, POWERUP_RENDER_SIZE, DAWN_SCRAP_DEFS} from '../../src/powerups/PowerUpConfig';
 import {DAWN_PIPELINE_ASSETS, DAWN_SCRAP_KEYS} from '../../src/assets/DawnAssets';
 import {runtimeAssetUrl} from '../../src/assets/RuntimeAssetUrls';

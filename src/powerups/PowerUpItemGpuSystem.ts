@@ -177,6 +177,7 @@ export class PowerUpItemGpuSystem {
       alpha: pulse(0.26, 0.42, GLOW_HALF_PERIOD_MS),
       creationTime: -phaseMs,
     }, handle.color);
+    // The glint keeps the pickup's own hue: a white star would read as a white flash.
     const glintPhase = (uid * 911) % (GLINT_HALF_PERIOD_MS * 2);
     const glint = tint({
       x: handle.x - 4.2,
@@ -187,7 +188,7 @@ export class PowerUpItemGpuSystem {
       rotation: { base: 0, amplitude: Math.PI / 2, duration: GLINT_HALF_PERIOD_MS * 2, ease: 'Linear', loop: true, yoyo: false },
       alpha: 0.95,
       creationTime: -glintPhase,
-    }, mixColors(handle.color, 0xffffff, 0.7));
+    }, mixColors(handle.color, 0xffffff, 0.35));
     const under = [ring, channel, halo];
     if (append) {
       this.shadowLayer.addMember(shadow);

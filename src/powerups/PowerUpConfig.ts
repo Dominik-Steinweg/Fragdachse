@@ -215,6 +215,27 @@ export const POWERUP_ITEM_ART = {
   collectMs: 260,
 } as const;
 
+/**
+ * Glow colour of a lying pickup, its ring, light and pedestal channel: the definition colour, so
+ * the ground signal matches the HUD (health glows green even though its cross is blood red).
+ */
+export function powerUpWorldColor(defId: string): number {
+  return POWERUP_DEFS[defId]?.color ?? 0xffffff;
+}
+
+/**
+ * Particle cadence (ms between spawns) of resting pickups and pedestals. Resting states stay
+ * quiet; the announcement before a respawn keeps a lively signal. 0 disables a stream.
+ */
+export const POWERUP_IDLE_PARTICLES = {
+  itemMoteMs: 1_400,
+  pedestal: {
+    idle: { ambientMs: 700, sparkMs: 0 },
+    ready: { ambientMs: 600, sparkMs: 1_600 },
+    announcing: { ambientMs: 160, sparkMs: 220 },
+  },
+} as const;
+
 /** Pure presentation: identical time/UID gives identical scale, including pause and step. */
 export function powerUpSymbolScale(uid: number, presentationTimeMs: number): number {
   const { amplitude, periodMs } = POWERUP_SYMBOL_PULSE;

@@ -140,16 +140,16 @@ def hologram(mat, alpha):
     return wave.inputs['Phase Offset'], gain.outputs[0]
 
 
-def turbulence(mat):
+def turbulence(mat, scale=4.5, low=.45, high=1.5):
     """Noise-modulated emission colour (hot streaks); returns the keyable noise offset."""
     nodes, links = mat.node_tree.nodes, mat.node_tree.links
     bs = nodes.get('Principled BSDF')
     coords = nodes.new('ShaderNodeTexCoord')
     mapping = nodes.new('ShaderNodeMapping')
     links.new(coords.outputs['Object'], mapping.inputs['Vector'])
-    noise = _node(nodes, 'ShaderNodeTexNoise', Scale=4.5, Detail=3., Roughness=.5, Distortion=1.2)
+    noise = _node(nodes, 'ShaderNodeTexNoise', Scale=scale, Detail=3., Roughness=.5, Distortion=1.2)
     links.new(mapping.outputs['Vector'], noise.inputs['Vector'])
-    streak = _range(nodes, links, noise.outputs['Fac'], .38, .66, .45, 1.5)
+    streak = _range(nodes, links, noise.outputs['Fac'], .38, .66, low, high)
     layer = nodes.new('ShaderNodeLayerWeight'); layer.inputs['Blend'].default_value = .4
     edge = _range(nodes, links, layer.outputs['Facing'], .2, .9, 1., .35)
     colour = tuple(bs.inputs['Emission Color'].default_value[:3])
@@ -226,18 +226,58 @@ def build_symbol(ctx, spec):
 
 
 def hp(ctx, spec):
+    """Medical cross with a living blood-red core: each heartbeat pumps a wave of red from the
+    centre out along the arms over a slowly flowing pattern.
+
+    Every glow stays a saturated red (emission well below the white clip), so the beat reads as
+    blood, not as a white flash.
+    """
     red = surface(ctx, 'Worn crimson enamel', 'C8102A', .46, edge='D9D2C6', edge_amount=.5, grime=.5)
     rim = surface(ctx, 'Dark crimson casing', '7A0A1A', .5, edge='B9B2A8', edge_amount=.45)
-    core = surface(ctx, 'Healing light', 'D9667A', .35, variation=.04, grime=.15)
-    pulse = emissive(core, 'FFD2DA', .2)
+    blood = surface(ctx, 'Pulsing blood core', '4A030C', .3, variation=.05, grime=.15, spec=.55)
+    enamel_glow = emissive(red, 'D0102A', 0.)
+    emissive(blood, 'F01430', .12)
+    flow = turbulence(blood, scale=5.5, low=.35, high=1.3)
+    rest, wave = pumping_wave(blood)
     outline('Medical cross casing', cross_points(length=.76, arm=.27), .24, .16, rim, .05)
     outline('Medical cross enamel', cross_points(length=.7, arm=.215), .38, .12, red, .06)
-    outline('Healing light groove', cross_points(length=.52, arm=.06), .49, .03, core, .015)
+    outline('Blood core groove', cross_points(length=.54, arm=.09), .49, .03, blood, .015)
 
     def animate(frames):
-        # Heartbeat: a strong beat and a softer echo, then rest.
-        keyed(frames, lambda t, f: key_socket(pulse, .12 + 1.6*smooth_pulse(t, .1, .1) + .9*smooth_pulse(t, .32, .09), f))
+        def at(t, f):
+            # Lub-dub: a strong wave and a softer echo travel out to the arm tips, then rest.
+            first, echo = (t - .04)/.3, (t - .3)/.26
+            position = .62*first if 0 <= first < 1 else .62*echo if 0 <= echo < 1 else 9.
+            strength = 1. if 0 <= first < 1 else .6
+            key_socket(wave[0], position, f)
+            key_socket(wave[1], 1.6*strength, f)
+            beat = smooth_pulse(t, .1, .1) + .6*smooth_pulse(t, .34, .09)
+            key_socket(rest, .14 + .45*beat, f)
+            key_socket(enamel_glow, .3*beat, f)
+            angle = 2*math.pi*t
+            key_socket(flow, (.3*math.cos(angle), .3*math.sin(angle), .15*math.sin(2*angle)), f)
+        keyed(frames, at)
     return animate
+
+
+def pumping_wave(mat, width=.16):
+    """Radial emission wave in the object's XY plane. Returns (rest strength, (position, gain))."""
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    bs = nodes.get('Principled BSDF')
+    coords = nodes.new('ShaderNodeTexCoord')
+    split = nodes.new('ShaderNodeSeparateXYZ'); links.new(coords.outputs['Object'], split.inputs[0])
+    flat = nodes.new('ShaderNodeCombineXYZ')
+    links.new(split.outputs['X'], flat.inputs['X']); links.new(split.outputs['Y'], flat.inputs['Y'])
+    length = nodes.new('ShaderNodeVectorMath'); length.operation = 'LENGTH'
+    links.new(flat.outputs['Vector'], length.inputs[0])
+    position = nodes.new('ShaderNodeValue'); position.outputs[0].default_value = 9.
+    gain = nodes.new('ShaderNodeValue'); gain.outputs[0].default_value = 0.
+    rest = nodes.new('ShaderNodeValue'); rest.outputs[0].default_value = bs.inputs['Emission Strength'].default_value
+    distance = _math(nodes, links, 'ABSOLUTE', _math(nodes, links, 'SUBTRACT', length.outputs['Value'], position.outputs[0]))
+    band = _math(nodes, links, 'POWER', _range(nodes, links, distance, 0., width, 1., 0.), 1.5)
+    total = _math(nodes, links, 'ADD', rest.outputs[0], _math(nodes, links, 'MULTIPLY', band, gain.outputs[0]))
+    links.new(total, bs.inputs['Emission Strength'])
+    return rest.outputs[0], (position.outputs[0], gain.outputs[0])
 
 
 SHIELD = [(-.62, .7), (.62, .7), (.6, -.05), (.42, -.44), (0, -.78), (-.42, -.44), (-.6, -.05)]
@@ -318,22 +358,26 @@ def adrenaline(ctx, spec):
     dose = surface(ctx, 'Blue adrenaline dose', '0E7FE0', .3, variation=.06, grime=.1)
     dose_glow = emissive(dose, '2AA8FF', .55)
     jet = surface(ctx, 'Adrenaline jet', '3AA6FF', .2, variation=.02, grime=0.)
-    emissive(jet, '8AD4FF', 1.)
+    emissive(jet, '8AD4FF', 1.2)
+    mist = surface(ctx, 'Adrenaline spray mist', '6CC4FF', .3, variation=.02, grime=0.)
+    emissive(mist, 'B4E6FF', 1.)
+    mist.node_tree.nodes.get('Principled BSDF').inputs['Alpha'].default_value = .62
     tick = surface(ctx, 'Engraved dose ticks', '2B3A48', .5, grime=.2)
     z = .44
     parts = {
-        'barrel': lying_cylinder(ctx, 'Glass barrel', -.3, .34, .2, z, glass, 48, .03),
+        'barrel': lying_cylinder(ctx, 'Glass barrel', BARREL_BACK, BARREL_FRONT + .04, .2, z, glass, 48, .03),
         'dose': lying_cylinder(ctx, 'Blue dose column', SEAL_FULL, BARREL_FRONT, .16, z, dose, 40, .02),
-        'flange': ctx.box('Finger flange', (0, -.35, z), (.7, .08, .12), steel, .03),
+        'flange': ctx.box('Finger flange', (0, BARREL_BACK - .05, z), (.7, .08, .12), steel, .03),
         'seal': lying_cylinder(ctx, 'Plunger seal', SEAL_FULL - .06, SEAL_FULL, .165, z, dark, 32, .012),
         'rod': lying_cylinder(ctx, 'Plunger rod', SEAL_FULL - .64, SEAL_FULL - .06, .045, z, steel, 20, .012),
         'thumb': lying_cylinder(ctx, 'Thumb pad', SEAL_FULL - .7, SEAL_FULL - .64, .16, z, dark, 32, .018),
-        'hub': lying_cylinder(ctx, 'Needle hub', .34, .46, .08, z, steel, 24, .018),
-        'needle': lying_cylinder(ctx, 'Needle', .46, NEEDLE_TIP, .022, z, steel, 12, .005),
+        'hub': lying_cylinder(ctx, 'Needle hub', BARREL_FRONT + .04, BARREL_FRONT + .16, .08, z, steel, 24, .018),
+        'needle': lying_cylinder(ctx, 'Needle', BARREL_FRONT + .16, NEEDLE_TIP, .024, z, steel, 12, .005),
         'stream': sphere(ctx, 'Jet stream', (0, NEEDLE_TIP, z), 1., jet),
+        'puff': sphere(ctx, 'Spray puff', (0, NEEDLE_TIP, z), 1., mist),
     }
     drops = [sphere(ctx, f'Jet droplet {i}', (0, NEEDLE_TIP, z), 1., jet) for i in range(JET_DROPS)]
-    for index, y in enumerate((-.16, .0, .16)):
+    for index, y in enumerate((-.26, -.1, .06)):
         ctx.box(f'Dose tick {index}', (.09, y, z + .205), (.15, .022, .014), tick, .004)
     pivot(parts['dose'], 0, BARREL_FRONT, 0)
     for name in ('rod', 'thumb', 'seal'): pivot(parts[name], 0, SEAL_FULL, 0)
@@ -358,28 +402,43 @@ def adrenaline(ctx, spec):
                 ob = parts[name]; ob.location = at_axis(ob, seal); ob.keyframe_insert('location', frame=f)
             parts['dose'].scale = (1, max(.02, (BARREL_FRONT - seal)/(BARREL_FRONT - SEAL_FULL)), 1)
             parts['dose'].keyframe_insert('scale', frame=f)
-            # The jet only exists while the plunger moves forward.
+            # The jet only exists while the plunger moves forward: a thick stream, a spray
+            # puff at the tip and a burst of droplets, chunky enough for the game view.
             push = (t - .14)/.36
-            length = .24*math.sin(math.pi*push)**.7 if 0 < push < 1 else 0.
+            strength = math.sin(math.pi*push)**.6 if 0 < push < 1 else 0.
+            length = .3*strength
             stream = parts['stream']
             stream.location = at_axis(stream, NEEDLE_TIP + length/2)
-            stream.scale = (.034, max(.001, length/2), .034) if length > .01 else (.001,)*3
+            stream.scale = (.06, max(.001, length/2), .06) if length > .01 else (.001,)*3
             stream.keyframe_insert('location', frame=f); stream.keyframe_insert('scale', frame=f)
+            puff = parts['puff']
+            spray = (t - .2)/.42
+            # The spray cloud erupts right at the tip and swells over the needle: the one shape
+            # that still reads as "squirting" at 25 pixels.
+            if 0 <= spray < 1:
+                reach, radius = NEEDLE_TIP + .06 + .1*spray, .09 + .13*math.sin(math.pi*min(1, spray*1.3))**.8
+            else:
+                reach, radius = NEEDLE_TIP, .001
+            puff.location = at_axis(puff, reach); puff.scale = (radius,)*3
+            puff.keyframe_insert('location', frame=f); puff.keyframe_insert('scale', frame=f)
             for index, droplet in enumerate(drops):
-                age = (t - (.18 + index*.045))/.13
+                age = (t - (.17 + index*.034))/.14
                 if 0 <= age < 1:
-                    distance, radius = NEEDLE_TIP + .05 + .24*age, (.06 - .012*(index % 3))*(1 - .45*age)
+                    side = (index % 3 - 1)*.035*age
+                    distance, radius = NEEDLE_TIP + .05 + .32*age, (.085 - .012*(index % 3))*(1 - .4*age)
                 else:
-                    distance, radius = NEEDLE_TIP, .001
-                droplet.location = at_axis(droplet, distance); droplet.scale = (radius,)*3
+                    side, distance, radius = 0., NEEDLE_TIP, .001
+                droplet.location = (axis[0]*distance + axis[1]*side, axis[1]*distance - axis[0]*side, droplet.location.z)
+                droplet.scale = (radius,)*3
                 droplet.keyframe_insert('location', frame=f); droplet.keyframe_insert('scale', frame=f)
             key_socket(dose_glow, .45 + .55*smooth_pulse(t, .32, .2), f)
         keyed(frames, at)
     return animate
 
 
-# A partial dose: the level drops to about half while the length changes only slightly.
-SEAL_FULL, SEAL_EMPTY, BARREL_FRONT, NEEDLE_TIP, JET_DROPS = -.2, .03, .3, .76, 7
+# The syringe sits slightly back so a chunky jet fits the canvas. A partial dose: the level
+# drops to about half while the length changes only slightly.
+SEAL_FULL, SEAL_EMPTY, BARREL_BACK, BARREL_FRONT, NEEDLE_TIP, JET_DROPS = -.3, -.03, -.4, .2, .62, 10
 
 
 def _ease(t):

@@ -19,11 +19,13 @@ import { ParticleFlowScheduler } from '../effects/gpu/ParticleFlowScheduler';
 import type { LightingSystem } from '../effects/LightingSystem';
 import {
   POWERUP_DEFS,
+  POWERUP_IDLE_PARTICLES,
   POWERUP_ITEM_ART,
   POWERUP_PEDESTAL_CONFIG,
   POWERUP_RENDER_SIZE,
   powerUpHoverHeight,
   powerUpSymbolScale,
+  powerUpWorldColor,
 } from './PowerUpConfig';
 import { POWERUP_TOKEN_KEY, powerUpSymbolArt, type PowerUpSymbolArt } from '../assets/PowerUpAssets';
 import { DAWN_SCRAP_DISPLAY_SIZE, isDawnScrapTexture } from '../assets/DawnAssets';
@@ -43,8 +45,6 @@ const MISSION_REWARD_COLOR           = 0x22d7e8;
 const MISSION_REWARD_PEDESTAL_SIZE   = 38;
 const MISSION_REWARD_PICKUP_SIZE     = 14;
 const PEDESTAL_SPAWN_POINT = { x: 0, y: 0 };
-/** Ambient motes of one lying token per second; the GPU quality controller may thin them. */
-const ITEM_MOTE_FREQUENCY_MS = 420;
 
 /** A power-up with authored token art: ground token plus hovering symbol. */
 interface TokenVisual {
@@ -179,7 +179,7 @@ export class PowerUpRenderer {
       if (isDawnScrap && !this.scene.textures.exists(def.spriteKey!)) continue;
       const art = !isMissionVisual && !isDawnScrap && def?.spriteKey ? powerUpSymbolArt(def.spriteKey) : undefined;
       if (art && this.scene.textures.exists(art.key)) {
-        this.createTokenItem(pu, art, def.color);
+        this.createTokenItem(pu, art, powerUpWorldColor(def.id));
         continue;
       }
       this.createLegacyItem(pu, isMissionMarker, isMissionReward, isDawnScrap);
@@ -222,7 +222,7 @@ export class PowerUpRenderer {
           this.playPedestalSpawnBurst(
             pedestal.x,
             pedestal.y,
-            POWERUP_DEFS[pedestal.defId]?.color ?? 0xffffff,
+            powerUpWorldColor(pedestal.defId),
             existing.source,
           );
         }
@@ -232,12 +232,13 @@ export class PowerUpRenderer {
       }
 
       const mode: PowerUpPedestalGpuMode = pedestal.hasPowerUp ? 'ready' : 'idle';
+      const cadence = POWERUP_IDLE_PARTICLES.pedestal[mode];
       const visual: PedestalVisual = {
         state: pedestal,
         lastHasPowerUp: pedestal.hasPowerUp,
         mode,
-        ambientFrequency: pedestal.hasPowerUp ? 95 : 135,
-        sparkFrequency: pedestal.hasPowerUp ? 150 : 220,
+        ambientFrequency: cadence.ambientMs,
+        sparkFrequency: cadence.sparkMs,
         ambientFlow: new ParticleFlowScheduler(120),
         sparkFlow: new ParticleFlowScheduler(200),
         source: this.gpuVfx?.createSource(GpuVfxEffectId.PowerUpPedestalAmbient)
@@ -265,8 +266,9 @@ export class PowerUpRenderer {
       const mode = resolvePowerUpPedestalGpuMode(visual.state, now);
       if (mode !== visual.mode) visual.mode = mode;
       this.pedestalGpu.upsert(visual.state, mode);
-      visual.ambientFrequency = mode === 'ready' ? 95 : mode === 'announcing' ? 80 : 135;
-      visual.sparkFrequency = mode === 'ready' ? 150 : mode === 'announcing' ? 95 : 220;
+      const cadence = POWERUP_IDLE_PARTICLES.pedestal[mode];
+      visual.ambientFrequency = cadence.ambientMs;
+      visual.sparkFrequency = cadence.sparkMs;
 
       this.lighting?.setLight(
         pedestalLightKey(id),
@@ -275,7 +277,7 @@ export class PowerUpRenderer {
         visual.state.y,
         {
           radiusPx: POWERUP_PEDESTAL_CONFIG.renderBaseRadius * 3.4,
-          color: mixColors(POWERUP_DEFS[visual.state.defId]?.color ?? 0xffffff, 0xffffff, 0.55),
+          color: mixColors(powerUpWorldColor(visual.state.defId), 0xffffff, 0.55),
           intensity: mode === 'ready' ? 0.54 : mode === 'announcing' ? 0.5 : 0.4,
         },
       );
@@ -336,7 +338,7 @@ export class PowerUpRenderer {
       art,
       frame: 0,
       revealStartMs: this.presentationTimeMs,
-      moteFlow: new ParticleFlowScheduler(ITEM_MOTE_FREQUENCY_MS),
+      moteFlow: new ParticleFlowScheduler(POWERUP_IDLE_PARTICLES.itemMoteMs),
     };
     this.sprites.set(pu.uid, visual);
     this.tokenItems.set(pu.uid, visual);
@@ -439,7 +441,7 @@ export class PowerUpRenderer {
     const system = this.gpuVfx;
     const spec = this.sparkSpec;
     if (!system || !spec || this.tokenItems.size === 0) return;
-    const frequency = system.quality.scaleFrequency(ITEM_MOTE_FREQUENCY_MS, GpuVfxEffectId.PowerUpPedestalSpark);
+    const frequency = system.quality.scaleFrequency(POWERUP_IDLE_PARTICLES.itemMoteMs, GpuVfxEffectId.PowerUpPedestalSpark);
     if (frequency <= 0) return;
     const source = this.ensureItemSource();
     for (const visual of this.tokenItems.values()) {
@@ -454,9 +456,10 @@ export class PowerUpRenderer {
         spec.y = visual.y + Math.sin(angle) * radius;
         spec.vx = Math.cos(angle) * Phaser.Math.FloatBetween(3, 9);
         spec.vy = Math.sin(angle) * Phaser.Math.FloatBetween(3, 9) - Phaser.Math.FloatBetween(4, 10);
-        spec.scaleStart = Phaser.Math.FloatBetween(0.2, 0.3);
+        // Resting pickups breathe quietly; spawn and pickup bursts stay the loud moments.
+        spec.scaleStart = Phaser.Math.FloatBetween(0.16, 0.24);
         spec.scaleEnd = 0;
-        spec.alphaStart = 0.85;
+        spec.alphaStart = 0.5;
         spec.tint = Math.random() < 0.4 ? 0xffffff : mixColors(visual.color, 0xffffff, 0.25);
         system.spawn(spec, source, nowMs);
       }
@@ -635,20 +638,20 @@ export class PowerUpRenderer {
 
     for (let index = 0; index < this.activePedestals.length; index += 1) {
       const visual = this.activePedestals[index];
-      const ambientFrequency = system.quality.scaleFrequency(
+      const ambientFrequency = visual.ambientFrequency > 0 ? system.quality.scaleFrequency(
         visual.ambientFrequency,
         GpuVfxEffectId.PowerUpPedestalAmbient,
-      );
+      ) : 0;
       if (ambientFrequency > 0) {
         visual.ambientFlow.setFrequency(ambientFrequency);
         const due = visual.ambientFlow.tick(deltaMs);
         for (let spawn = 0; spawn < due; spawn += 1) this.spawnAmbient(visual, ambient, nowMs);
       }
 
-      const sparkFrequency = system.quality.scaleFrequency(
+      const sparkFrequency = visual.sparkFrequency > 0 ? system.quality.scaleFrequency(
         visual.sparkFrequency,
         GpuVfxEffectId.PowerUpPedestalSpark,
-      );
+      ) : 0;
       if (sparkFrequency > 0) {
         visual.sparkFlow.setFrequency(sparkFrequency);
         const due = visual.sparkFlow.tick(deltaMs);
@@ -666,11 +669,11 @@ export class PowerUpRenderer {
     spec.y = visual.state.y + PEDESTAL_SPAWN_POINT.y;
     spec.vx = Phaser.Math.FloatBetween(-10, 10);
     spec.vy = Phaser.Math.FloatBetween(-10, 10);
-    spec.scaleStart = 0.38;
+    spec.scaleStart = 0.34;
     spec.scaleEnd = 0;
-    spec.alphaStart = 0.28;
+    spec.alphaStart = 0.2;
     spec.tint = Math.random() < 0.5
-      ? (POWERUP_DEFS[visual.state.defId]?.color ?? 0xffffff)
+      ? powerUpWorldColor(visual.state.defId)
       : 0xffffff;
     system.spawn(spec, visual.source, nowMs);
   }
@@ -679,7 +682,7 @@ export class PowerUpRenderer {
     const system = this.gpuVfx;
     if (!system) return;
     randomPointInCircle(POWERUP_PEDESTAL_CONFIG.renderInnerRadius + 3, PEDESTAL_SPAWN_POINT);
-    const color = POWERUP_DEFS[visual.state.defId]?.color ?? 0xffffff;
+    const color = powerUpWorldColor(visual.state.defId);
     spec.lifeMs = Phaser.Math.FloatBetween(180, 320);
     spec.x = visual.state.x + PEDESTAL_SPAWN_POINT.x;
     spec.y = visual.state.y + PEDESTAL_SPAWN_POINT.y;
@@ -687,7 +690,7 @@ export class PowerUpRenderer {
     spec.vy = Phaser.Math.FloatBetween(-20, 20);
     spec.scaleStart = 0.3;
     spec.scaleEnd = 0.06;
-    spec.alphaStart = 0.75;
+    spec.alphaStart = 0.55;
     spec.tint = Math.random() < 0.5 ? 0xffffff : color;
     system.spawn(spec, visual.source, nowMs);
   }
