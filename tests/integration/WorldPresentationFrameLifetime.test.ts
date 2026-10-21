@@ -773,6 +773,108 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     updateSurfaceResidency.mockRestore();
   });
 
+  describe('Spawn-Nahaufnahme', () => {
+    function zoomableScene() {
+      const camera = { ...fakeCamera(), zoomX: 1, zoomY: 1, useBounds: true,
+        setZoom(x: number, y: number) { this.zoomX = x; this.zoomY = y; return this; } };
+      const time = { now: 0 };
+      // Render scale 1: the camera zoom equals the staged zoom factor.
+      const scene = { cameras: { main: camera }, time, scale: { width: 1920, height: 1080 } } as unknown as
+        WorldPresentationFrameBindingInput['scene'];
+      // World point in the middle of the arena view.
+      const centre = () => ({ x: camera.scrollX + 960 / camera.zoomX, y: camera.scrollY + 540 / camera.zoomY });
+      const run = (binding: WorldPresentationFrameBinding, untilMs: number) => {
+        while (time.now < untilMs) { time.now += 16; binding.syncCamera(16, true); }
+      };
+      return { camera, time, scene, centre, run };
+    }
+
+    it('schneidet beim Spawn auf die eigene Figur, faehrt auf die Spielansicht zurueck und wiederholt das beim Respawn', () => {
+      applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
+      const { camera, time, scene, centre, run } = zoomableScene();
+      const player = { active: true, x: 1500, y: 900 };
+      let alive = true;
+      const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene, {
+        getLocalPlayerSprite: () => player as never,
+        isLocalPlayerAlive: () => alive,
+      }));
+      binding.syncCamera(16, true);
+      expect(camera.zoomX).toBeGreaterThan(1);
+      expect(centre().x).toBeCloseTo(1500, 3);
+      expect(centre().y).toBeCloseTo(900, 3);
+
+      // The pull-out keeps the figure centred and ends exactly at the play view.
+      run(binding, 3000);
+      expect(camera.zoomX).toBe(1);
+      expect(camera.useBounds).toBe(true);
+      expect(centre().x).toBeCloseTo(1500, 1);
+
+      alive = false;
+      run(binding, 3100);
+      expect(camera.zoomX).toBe(1);
+      Object.assign(player, { x: 3000, y: 1500 });
+      alive = true;
+      run(binding, 3116);
+      expect(camera.zoomX).toBeGreaterThan(1);
+      expect(centre().x).toBeCloseTo(3000, 3);
+      expect(centre().y).toBeCloseTo(1500, 3);
+
+      // A World handoff during the close-up must not leave the next World zoomed.
+      binding.destroy();
+      expect(camera.zoomX).toBe(1);
+      expect(camera.useBounds).toBe(true);
+    });
+
+    it('zieht Zoom und Randklemmung als eine Bewegung heraus, ohne danach nachzuziehen', () => {
+      applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
+      const { camera, time, scene } = zoomableScene();
+      // Close to the left arena edge: the close-up is centred, the play view is clamped to x = 0.
+      const player = { active: true, x: 700, y: 1000 };
+      const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene, {
+        getLocalPlayerSprite: () => player as never,
+        isLocalPlayerAlive: () => true,
+      }));
+      const framed = () => Math.max(0, player.x - 960 / camera.zoomX);
+      let settled: number | null = null;
+      while (time.now < 4000) {
+        time.now += 16;
+        binding.syncCamera(16, true);
+        binding.syncCamera(16, true);
+        if (camera.zoomX > 1.02) expect(camera.scrollX).toBeCloseTo(framed(), 1);
+        else if (camera.zoomX === 1) settled ??= camera.scrollX;
+      }
+      expect(settled).toBe(0);
+      expect(camera.scrollX).toBe(0);
+    });
+
+    it('haelt die Nahaufnahme ueber den Countdown und gibt sie erst mit dem Start frei', () => {
+      applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
+      const { camera, scene, run } = zoomableScene();
+      let countdown = true, veiled = true;
+      const player = { active: true, x: 1500, y: 900 };
+      const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene, {
+        getLocalPlayerSprite: () => player as never,
+        isLocalPlayerAlive: () => true,
+        isArenaCountdownActive: () => countdown,
+        isLoadingVeilShown: () => veiled,
+      }));
+      // Behind the local loading veil nobody would see it: the close-up starts when it lifts.
+      run(binding, 2000);
+      expect(camera.zoomX).toBe(1);
+      veiled = false;
+      run(binding, 5000);
+      const held = camera.zoomX;
+      expect(held).toBeGreaterThan(1);
+      countdown = false;
+      // Released, not dropped: the pull-out starts from the held close-up.
+      run(binding, 5100);
+      expect(camera.zoomX).toBeGreaterThan(1);
+      expect(camera.zoomX).toBeLessThan(held);
+      run(binding, 5000 + 3000);
+      expect(camera.zoomX).toBe(1);
+    });
+  });
+
   it('hinterlaesst ohne aktive World-Presentation denselben neutralen Kamerastand wie eine World ohne Weltkamera', () => {
     applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
     const camera = fakeCamera();
