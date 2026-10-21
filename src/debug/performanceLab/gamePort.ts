@@ -9,7 +9,7 @@ import type { PerformanceCase, PerformanceLabGamePort, PerformanceWindow } from 
 import type { LoadoutUseResult, WeaponSlot } from '../../types';
 import { NavigationGeometry } from '../../systems/navigation/NavigationGeometry';
 import { quantizeAngle } from '../../utils/angle';
-import { MAP14_FIRE_MAP_ID, MAP15_MAP_ID, REFERENCE_SEED } from './referenceMap';
+import { MAP14_FIRE_MAP_ID, MAP15_MAP_ID, MAP16_MAP_ID, REFERENCE_SEED } from './referenceMap';
 import { getVisibleWorldView, isWorldPointInsideView } from '../../ui/HostileBaseIndicator';
 import { PERFORMANCE_FIXTURE as fixture } from './fixtures';
 import { CELL_SIZE } from '../../config';
@@ -82,6 +82,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     if (performance.now() >= nextResourceAt) {
       flow.weaponBalanceLabPort.setAdrenaline(localId(), maximumAdrenaline);
       if (preparedId === 'boss.map15') add('baseHpRepaired', flow.repairScenarioBases());
+      // The fighting player stays in the authored fire and encounter for the whole window.
+      if (preparedId === 'campaign.map16-endgame') flow.devScenarioPort.healPlayer(localId());
       nextResourceAt = performance.now() + fixture.resourceRefillIntervalMs;
     }
   };
@@ -110,7 +112,9 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       peak('fogTracesPeak', environment.fog?.visibleTraces ?? 0);
     }
     peak('burningCellsPeak', state.burningCells);
-    if (preparedId === 'hazards.void-fire' || preparedId === 'hazards.map14-fire' || preparedId === 'boss.map15') {
+    if (preparedId === 'campaign.map16-endgame') peak('enemiesPeak', flow.getEnemyCount());
+    if (preparedId === 'hazards.void-fire' || preparedId === 'hazards.map14-fire' || preparedId === 'boss.map15'
+      || preparedId === 'campaign.map16-endgame') {
       const view = getVisibleWorldView(scene.cameras.main);
       let total = 0, visible = 0, permanent = 0;
       for (const cell of state.burningGround.cells) {
@@ -198,7 +202,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     stopped = false; lastTrainY = null; lastObservationAt = 0; caseStart = performance.now();
     flow.navigationLabPort.setScenarioActive(true);
     // Authored environment/hazard cases keep the ordinary event scheduler.
-    if (test.kind === 'environment' || test.kind === 'hazard' || test.kind === 'boss' || test.id === 'review.train') flow.navigationLabPort.setScenarioActive(false);
+    if (test.kind === 'environment' || test.kind === 'hazard' || test.kind === 'boss' || test.kind === 'campaign' || test.id === 'review.train') flow.navigationLabPort.setScenarioActive(false);
     if (test.kind === 'hazard') counters.expectedVoidFireCells = fixture.voidFire.area.widthCells
       * fixture.voidFire.area.heightCells * (CELL_SIZE / GROUND_FIRE_CELL_SIZE) ** 2;
     if (test.mapId === MAP14_FIRE_MAP_ID || test.mapId === MAP15_MAP_ID) {
@@ -223,7 +227,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     if (!snapshot) throw new Error('Reference geometry unavailable');
     geometry = new NavigationGeometry(snapshot);
     rocksBefore = rocks();
-    if (test.mapId !== MAP14_FIRE_MAP_ID && test.mapId !== MAP15_MAP_ID && rocksBefore < fixture.minimumGlobalRocks) throw new Error(`Reference rock reserve too small: ${rocksBefore}`);
+    if (test.mapId !== MAP14_FIRE_MAP_ID && test.mapId !== MAP15_MAP_ID && test.mapId !== MAP16_MAP_ID && rocksBefore < fixture.minimumGlobalRocks) throw new Error(`Reference rock reserve too small: ${rocksBefore}`);
     if (test.id.startsWith('destruction')) {
       counters.fieldRocksBefore = fieldRocks(test.itemId);
       if (counters.fieldRocksBefore < fixture.minimumDestructionFieldRocks) throw new Error(`${test.id}: destruction field is already empty`);
@@ -239,8 +243,9 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       : test.id === 'environment.dawn' ? point(80, 64) : test.kind === 'environment' ? point(33, 48)
       : test.itemId === 'NUKE' || test.id === 'destruction.single' ? point(40, 51)
       : test.itemId === 'BFG' || test.itemId === 'HYDRA' ? point(76, 51) : point(67, 72);
-    if (test.mapId === MAP14_FIRE_MAP_ID || test.mapId === MAP15_MAP_ID) {
-      const front = test.mapId === MAP15_MAP_ID ? point(50, 22) : point(60, 21);
+    if (test.mapId === MAP14_FIRE_MAP_ID || test.mapId === MAP15_MAP_ID || test.mapId === MAP16_MAP_ID) {
+      // Map 16: on the cp8 marker, south of the creeping fire, so arrival starts the authored sequence.
+      const front = test.mapId === MAP15_MAP_ID ? point(50, 22) : test.mapId === MAP16_MAP_ID ? point(230, 57) : point(60, 21);
       const free = flow.navigationLabPort.getFreePositions(18);
       const nearest = free.reduce<{ x: number; y: number } | null>((best, p) =>
         !best || Math.hypot(p.x - front.x, p.y - front.y) < Math.hypot(best.x - front.x, best.y - front.y) ? p : best, null);
@@ -289,8 +294,12 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     if (preparedId !== test.id) initializeCase(test);
     if (prepared) return true;
     const now = performance.now();
-    if (test.kind === 'boss') maintainTargets();
+    if (test.kind === 'boss' || test.kind === 'campaign') maintainTargets();
     observe();
+    if (test.kind === 'campaign' && !(counters.voidFireCells > 0 && flow.getEnemyCount() > 0)) {
+      if (now - preparationAt > fixture.voidFire.preparationTimeoutMs) throw new Error(`${test.id}: cp8 fire or encounter missing: ${JSON.stringify(counters)}`);
+      return false;
+    }
     if (test.kind === 'boss' && (!(counters.bossPhase === 1) || !(counters.voidFireCells > 0))) {
       if (now - preparationAt > fixture.map15.preparationTimeoutMs) throw new Error(`${test.id}: phase-one boss or initial fire missing`);
       return false;
@@ -440,7 +449,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
         event('performance:recovery-late-spawns', { count });
         flow.navigationLabPort.removeEnemies();
       }
-      maintainTargets(); observe((test.kind === 'hazard' || test.kind === 'boss') && stage === 'measure');
+      maintainTargets(); observe((test.kind === 'hazard' || test.kind === 'boss' || test.kind === 'campaign') && stage === 'measure');
       if (stage === 'warmup') { input(); return; }
       if (stage === 'tail') { input(); return; }
       if (test.kind === 'boss') {
@@ -504,6 +513,21 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
           else if (result?.reason !== 'cooldown') throw new Error(`Combat shot failed: ${result?.reason}`);
         }
         input();
+      } else if (test.kind === 'campaign') {
+        // Hold the cp8 position and shoot the nearest living enemy at the combat cadence.
+        const player = players.getPlayer(localId())!;
+        let nearest = Infinity;
+        aimPosition = point(230, 46);
+        flow.getMovementEnemyVisuals().forEach(enemy => {
+          const distance = Math.hypot(enemy.sprite.x - player.x, enemy.sprite.y - player.y);
+          if (distance < nearest) { nearest = distance; aimPosition = { x: enemy.sprite.x, y: enemy.sprite.y }; }
+        });
+        if (elapsed >= nextCombatShotAt) {
+          const result = attack('weapon1', ++actionSequence, true);
+          if (result?.ok) add('combatShots');
+          nextCombatShotAt = elapsed + 350;
+        }
+        input();
       } else if (test.kind === 'enemies') {
         const phase = elapsed / 1500, player = players.getPlayer(localId())!;
         const dx = playerPosition.x + Math.cos(phase) * 130 - player.x;
@@ -535,6 +559,10 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
         || !counters.expandedFireSamples || !(counters.expandedFireCellsMin >= counters.expectedVoidFireCells * 0.95)
         || !(counters.visibleVoidFireCellsMin > 0))) {
         throw new Error(`${test.id}: boss phases, Nuke, Armageddon or expanded visible fire missing: ${JSON.stringify(counters)}`);
+      }
+      if (test.kind === 'campaign' && (!(counters.voidFireMeasurementSamples > 0) || !(counters.visibleVoidFireCellsMin > 0)
+        || !(counters.enemiesPeak > 0) || !(counters.combatShots > 0))) {
+        throw new Error(`${test.id}: visible cp8 fire, encounter or player fire missing: ${JSON.stringify(counters)}`);
       }
       if (test.id === 'review.train' && !counters.trainDestroyed) throw new Error('Train destruction was not observed');
       if (test.id === 'review.explosions' && !counters.visualExplosions) throw new Error('No visual explosions');

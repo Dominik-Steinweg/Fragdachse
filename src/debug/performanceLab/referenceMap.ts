@@ -6,10 +6,40 @@ export const VOID_FIRE_MAP_ID = `${PERFORMANCE_MAP_ID}-void-fire`;
 export const DAWN_MAP_ID = `${PERFORMANCE_MAP_ID}-dawn`;
 export const MAP14_FIRE_MAP_ID = `${PERFORMANCE_MAP_ID}-map14-fire`;
 export const MAP15_MAP_ID = `${PERFORMANCE_MAP_ID}-map15`;
+export const MAP16_MAP_ID = `${PERFORMANCE_MAP_ID}-map16`;
+export const MAP16_ENDGAME_CHECKPOINT = 'cp8-burn-clearing';
 export const REFERENCE_SEED = 16092026;
+
+/** Map 16 from the burn clearing on: earlier checkpoints, their encounters, events and gates are dropped. */
+function map16Endgame(mapId: string): CoopDefenseMapConfig {
+  const map = structuredClone(getCoopDefenseMapConfig('16'));
+  const progress = map.missionProgress!;
+  const checkpoints = progress.checkpoints.slice(progress.checkpoints.findIndex(cp => cp.id === MAP16_ENDGAME_CHECKPOINT));
+  const keptCheckpoints = new Set(checkpoints.map(cp => cp.id));
+  const keptEncounters = new Set<string>();
+  // Authored order: chained encounters follow their predecessor.
+  for (const encounter of map.encounters ?? []) {
+    const start = encounter.start;
+    if (start.type === 'after-checkpoint' ? keptCheckpoints.has(start.checkpointId)
+      : start.type === 'after-encounter' && keptEncounters.has(start.encounterId)) keptEncounters.add(encounter.id);
+  }
+  const encounters = (map.encounters ?? []).filter(encounter => keptEncounters.has(encounter.id));
+  const zonesOf = (list: typeof encounters) => new Set(list.flatMap(encounter => encounter.groups.map(group => group.spawnZoneId)));
+  const keptZones = zonesOf(encounters);
+  const droppedZones = zonesOf((map.encounters ?? []).filter(encounter => !keptEncounters.has(encounter.id)));
+  return { ...map, mapId, tutorialDurationMs: 0,
+    bases: map.bases.filter(base => base.id !== map.persistentBase?.baseId),
+    spawnZones: map.spawnZones?.filter(zone => keptZones.has(zone.id) || !droppedZones.has(zone.id)),
+    encounters,
+    mapEvents: map.mapEvents?.filter(event => event.start.type !== 'after-checkpoint' || keptCheckpoints.has(event.start.checkpointId)),
+    missionProgress: { ...progress, checkpoints,
+      barriers: progress.barriers?.filter(barrier => barrier.openOn.type !== 'after-encounter' || keptEncounters.has(barrier.openOn.encounterId)) },
+  };
+}
 
 /** Fixed authored fixture; its load is never scaled to the measuring device. */
 export function referenceMap(mapId = PERFORMANCE_MAP_ID): CoopDefenseMapConfig {
+  if (mapId === MAP16_MAP_ID) return map16Endgame(mapId);
   if (mapId === MAP15_MAP_ID) {
     const map = structuredClone(getCoopDefenseMapConfig('15'));
     return { ...map, mapId, tutorialDurationMs: 0,
@@ -62,7 +92,7 @@ export function referenceMap(mapId = PERFORMANCE_MAP_ID): CoopDefenseMapConfig {
 
 export function registerReferenceMap(): () => void {
   const removers: (() => void)[] = [];
-  try { for (const id of [PERFORMANCE_MAP_ID, `${PERFORMANCE_MAP_ID}-train`, VOID_FIRE_MAP_ID, DAWN_MAP_ID, MAP14_FIRE_MAP_ID, MAP15_MAP_ID]) removers.push(registerDiagnosticMap(referenceMap(id))); }
+  try { for (const id of [PERFORMANCE_MAP_ID, `${PERFORMANCE_MAP_ID}-train`, VOID_FIRE_MAP_ID, DAWN_MAP_ID, MAP14_FIRE_MAP_ID, MAP15_MAP_ID, MAP16_MAP_ID]) removers.push(registerDiagnosticMap(referenceMap(id))); }
   catch (error) { removers.reverse().forEach(remove => remove()); throw error; }
   return () => removers.reverse().forEach(remove => remove());
 }

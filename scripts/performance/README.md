@@ -24,6 +24,11 @@ Completed runs are resumed only for matching build/workload fingerprints.
 Interrupted attempts retain their evidence; a retry gets a new profile directory
 so partial HTTP/shader caches cannot turn a cold-load retry into a warm one.
 
+`campaign.map16-endgame` copies Map 16 from checkpoint cp8 on: the player stands on the
+cp8 marker, which starts the authored void backfire, the creeping fire and the
+burn-clearing encounter. The player is healed, holds position and shoots the nearest
+enemy every 350 ms; earlier checkpoints, their encounters, events and gates are dropped.
+
 Cases: `review`, `review.enemies-100`, `review.enemies-300`,
 `review.enemies-500`, `review.player`, `review.fog-rock`, `review.camera`,
 `review.explosions`, `review.train`, plus the existing weapon/utility/combat cases.
