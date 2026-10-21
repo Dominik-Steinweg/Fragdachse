@@ -39,6 +39,8 @@ export interface EnemyFlowFieldDebugPort {
   readonly isTraversableAt: (gridX: number, gridY: number) => boolean;
   readonly gridToWorld: (gridX: number, gridY: number) => { x: number; y: number } | null;
   readonly getGoalCells: () => readonly { gridX: number; gridY: number }[];
+  /** Resolved portal links of the shown field, as entry/exit node pairs in world pixels. */
+  readonly getPortalLinks: () => readonly { from: { x: number; y: number }; to: { x: number; y: number } }[];
   readonly setRefreshListener: (listener: (() => void) | null) => void;
 }
 

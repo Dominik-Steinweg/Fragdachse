@@ -7,11 +7,12 @@ import { EnemyIntentSystem } from '../src/systems/navigation/EnemyIntentSystem';
 import { NavigationGeometry, type NavigationObstacle } from '../src/systems/navigation/NavigationGeometry';
 import type { FlowFieldBaseDescriptor } from '../src/systems/flowfield/FlowFieldKernel';
 
-export function navigationTestWorld(obstacles: NavigationObstacle[] = [], bases: FlowFieldBaseDescriptor[] = [], radius = 15) {
-  const metrics = { cols: 17, rows: 17, cellSize: 16, pointOffset: 0, arenaOffsetX: 0, arenaOffsetY: 0 };
-  const snapshot = { left: 0, top: 0, right: 256, bottom: 256, obstacles };
+export function navigationTestWorld(obstacles: NavigationObstacle[] = [], bases: FlowFieldBaseDescriptor[] = [], radius = 15,
+  size = { width: 256, height: 256 }) {
+  const metrics = { cols: size.width / 16 + 1, rows: size.height / 16 + 1, cellSize: 16, pointOffset: 0, arenaOffsetX: 0, arenaOffsetY: 0 };
+  const snapshot = { left: 0, top: 0, right: size.width, bottom: size.height, obstacles };
   const runner = new InlineFlowFieldRunner();
-  const coordinator = new FlowFieldCoordinator({ metrics, tuning: createFlowFieldTuning(), staticKind: new Uint8Array(17 * 17),
+  const coordinator = new FlowFieldCoordinator({ metrics, tuning: createFlowFieldTuning(), staticKind: new Uint8Array(metrics.cols * metrics.rows),
     bases, activeBaseIds: new Set(bases.map(b => b.id)), obstacleCellProvider: () => [], runner,
     geometryProvider: () => snapshot, navTickIntervalMs: 100, generationId: 17 });
   const field = EnemyFlowFieldService.fromView(coordinator.registerField('test', { goalMode: 'dynamic', bodyRadius: radius }));

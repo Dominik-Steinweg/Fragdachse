@@ -19,6 +19,8 @@ interface SharedField { readonly id: string; readonly field: EnemyFlowFieldServi
 interface Decision {
   intent: EnemyIntent; field: EnemyFlowFieldService; target: Target; breach: BreachPlan | null; enemy: EnemyEntity;
   readonly queryX: number; readonly queryY: number; readonly querySnapshot: FlowFieldSnapshot | null;
+  /** Discontinuous moves (portal jumps, resets) invalidate the waypoint chosen at the old position. */
+  readonly positionRevision: number;
 }
 
 /** Activity-owned target binding and attack authority. Field identity includes the actual target. */
@@ -78,6 +80,7 @@ export class EnemyIntentSystem {
       enemy.sprite.x, enemy.sprite.y, destination, enemy.getSize() / 2, range, geometry);
     const decision: Decision = { enemy, target, field, breach: null,
       queryX: enemy.sprite.x, queryY: enemy.sprite.y, querySnapshot: field.getNavigationSnapshot(),
+      positionRevision: enemy.positionRevision,
       intent: { target, point: destination, reason: 'follow', selectedAt: this.now, navigation,
         attackContext: this.hasFreeApproach(navigation) ? 'primary' : 'none' } };
     if (navigation.status === 'unreachable' || navigation.status === 'invalid-goal') this.prepareBreach(enemy, decision, geometry);
@@ -140,7 +143,8 @@ export class EnemyIntentSystem {
         });
         if (escape) this.decisions.set(enemy.id, { ...escape, enemy, breach: null,
           target: { kind: 'ally', id: `escape:${enemy.id}`, ...escape.intent.point! },
-          queryX: enemy.sprite.x, queryY: enemy.sprite.y, querySnapshot: escape.field.getNavigationSnapshot() });
+          queryX: enemy.sprite.x, queryY: enemy.sprite.y, querySnapshot: escape.field.getNavigationSnapshot(),
+          positionRevision: enemy.positionRevision });
         else this.decisions.delete(enemy.id);
         continue;
       }
@@ -167,7 +171,9 @@ export class EnemyIntentSystem {
       // Observe the bound player every frame, including frames that reuse the strategic decision.
       if (bound?.kind === 'player') this.lastSeen.set(enemy.id, { ...bound });
       const topologyChanged = prior?.intent.navigation.topology !== this.coordinator.getTopologyVersion();
-      const scan = !prior || !bound || prior.intent.reason !== reason
+      // After a jump the old waypoint still aims at the far portal entry: rescan outside the budget.
+      const teleported = prior !== undefined && prior.positionRevision !== enemy.positionRevision;
+      const scan = !prior || !bound || prior.intent.reason !== reason || teleported
         || (ordinaryScans < scanBudget && (topologyChanged || now >= (this.nextDecisionAt.get(enemy.id) ?? 0)));
       if (!scan && prior && (prior.intent.navigation.status === 'ready'
         || (prior.intent.navigation.status === 'pending' && prior.intent.navigation.continuation
@@ -220,7 +226,8 @@ export class EnemyIntentSystem {
         reason, selectedAt: retained ? prior.intent.selectedAt : now,
         attackContext: reason !== 'memory' && this.hasFreeApproach(chosen.navigation) ? 'primary' : 'none', navigation: chosen.navigation };
       const decision: Decision = { enemy, intent, field: chosen.field, target: chosen.target, breach: null,
-        queryX: enemy.sprite.x, queryY: enemy.sprite.y, querySnapshot: chosen.field.getNavigationSnapshot() };
+        queryX: enemy.sprite.x, queryY: enemy.sprite.y, querySnapshot: chosen.field.getNavigationSnapshot(),
+        positionRevision: enemy.positionRevision };
       if ((chosen.navigation.status === 'unreachable' || chosen.navigation.status === 'invalid-goal') && reason !== 'memory') this.prepareBreach(enemy, decision, geometry);
       else if (chosen.navigation.status === 'ready' && reason !== 'memory') {
         const snapshot = chosen.field.getNavigationSnapshot();

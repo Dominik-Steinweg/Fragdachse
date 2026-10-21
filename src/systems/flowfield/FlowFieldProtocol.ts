@@ -11,7 +11,7 @@ import type {
 } from './FlowFieldKernel';
 import type { NavigationGeometrySnapshot } from '../navigation/NavigationGeometry';
 
-export const FLOW_FIELD_PROTOCOL_VERSION = 4;
+export const FLOW_FIELD_PROTOCOL_VERSION = 5;
 
 export type FlowFieldGoalMode = 'bases' | 'dynamic' | 'dynamic-fallback-bases';
 
@@ -25,6 +25,28 @@ export interface FlowFieldProfileDescriptor {
 
 /** Integer cost scale of amphibious profiles, so water can be cheaper than the unit ground cost. */
 export const SWIM_COST_SCALE = 8;
+
+/**
+ * Authored navigation link between two portal endpoints (world pixels). Both directions are usable.
+ * Each profile resolves every endpoint to exactly one navigation node; bodies wider than
+ * `maxBodyRadiusPx` get no link. `costPx` is the whole-pixel ground equivalent of one crossing.
+ */
+export interface FlowFieldPortalLink {
+  readonly id: string;
+  readonly ax: number;
+  readonly ay: number;
+  readonly bx: number;
+  readonly by: number;
+  readonly radiusPx: number;
+  readonly maxBodyRadiusPx: number;
+  readonly costPx: number;
+}
+
+/**
+ * Resolved jumps of one profile: `[entryNode, exitNode, cost]` per directed jump, cost in the
+ * integration units of that profile. A symmetric link contributes both directions.
+ */
+export const PORTAL_LINK_STRIDE = 3;
 
 export interface FlowFieldFieldDescriptor {
   readonly fieldId: string;
@@ -46,6 +68,8 @@ export interface FlowFieldInitMessage {
   readonly profiles: readonly FlowFieldProfileDescriptor[];
   readonly fields: readonly FlowFieldFieldDescriptor[];
   readonly geometry?: NavigationGeometrySnapshot;
+  /** Current links, so that a worker restart keeps them without replaying patches. */
+  readonly portalLinks: readonly FlowFieldPortalLink[];
 }
 
 /**
@@ -61,7 +85,9 @@ export type FlowFieldPatch =
   | { readonly t: 'barrier-resync'; readonly barrierOccupancy: Uint8Array }
   | { readonly t: 'active-bases'; readonly ids: readonly string[] }
   | { readonly t: 'field-add'; readonly field: FlowFieldFieldDescriptor }
-  | { readonly t: 'field-remove'; readonly fieldId: string };
+  | { readonly t: 'field-remove'; readonly fieldId: string }
+  /** Replaces the complete link set; a newer patch supersedes an older one. */
+  | { readonly t: 'portal-links'; readonly links: readonly FlowFieldPortalLink[] };
 
 export interface FlowFieldJobField {
   readonly fieldId: string;
@@ -103,7 +129,10 @@ export interface FlowFieldResultField {
    */
   readonly profileTraversable: Uint8Array | null;
   readonly edges?: Uint8Array;
+  /** Body regions, already joined across the portal links of this profile. */
   readonly regions?: Int32Array;
+  /** Resolved jumps of this profile, laid out with {@link PORTAL_LINK_STRIDE}; empty without links. */
+  readonly portalLinks: Int32Array;
 }
 
 export interface FlowFieldResultMessage {
@@ -137,6 +166,7 @@ export function collectResultTransferables(result: FlowFieldResultMessage): Arra
     if (field.profileTraversable) transfer.push(field.profileTraversable.buffer as ArrayBuffer);
     if (field.edges) transfer.push(field.edges.buffer as ArrayBuffer);
     if (field.regions) transfer.push(field.regions.buffer as ArrayBuffer);
+    transfer.push(field.portalLinks.buffer as ArrayBuffer);
   }
   return transfer;
 }

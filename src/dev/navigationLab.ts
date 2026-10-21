@@ -55,7 +55,7 @@ const environment = { build: __NAVIGATION_BUILD_ID__, scenarioVersion: NAVIGATIO
   hardware: null as unknown, gpu: null as unknown, session: params.get('session'), suite: params.get('suite'),
   graphicsQuality: getStoredGraphicsQuality(), repeat: Number(params.get('repeat') ?? 0),
   viewport: { width: innerWidth, height: innerHeight }, renderResolution: { width: 0, height: 0 },
-  initialLoadout: null as unknown };
+  initialLoadout: null as unknown, portalLink: null as unknown };
 let port: NavigationLabPort | null = null;
 let state: 'idle' | 'loading' | 'warmup' | 'measuring' | 'complete' | 'failed' = 'idle';
 let paused = false, singleStep = false, elapsed = 0, observationAt = 0, shot = 0;
@@ -63,6 +63,10 @@ let playerPoint: { x: number; y: number } | null = null;
 let pursuitTrack: { start: { x: number; y: number }; end: { x: number; y: number }; speed: number } | null = null;
 let pursuitTime = 0;
 let spawnPoints: readonly { x: number; y: number }[] = [];
+/** Resolved dev link; crossings are simulated here until the real transport exists (M3). */
+let labPortal: { ax: number; ay: number; bx: number; by: number; radius: number; maxBody: number } | null = null;
+const portalGates = new Map<string, 'a' | 'b'>();
+let portalCrossings = 0;
 let spawnSequence = 0, lastWallAt = 0;
 let report: unknown = null;
 let labScene: NavigationArena | null = null;
@@ -117,8 +121,22 @@ function prepare(): void {
   const metrics = port.getMetrics();
   const initial = metrics && { x: metrics.offsetX + metrics.widthPx / 2, y: metrics.offsetY + metrics.heightPx / 2 };
   if (!initial || !free.length) throw new Error('No player / safe scenario positions');
-  playerPoint = free.reduce((a, b) => Math.hypot(b.x - initial.x, b.y - initial.y)
-    < Math.hypot(a.x - initial.x, a.y - initial.y) ? b : a);
+  const cellCenter = (cell: { gridX: number; gridY: number }) =>
+    ({ x: metrics.offsetX + cell.gridX * 32 + 16, y: metrics.offsetY + cell.gridY * 32 + 16 });
+  const nearest = (points: readonly { x: number; y: number }[], to: { x: number; y: number }) =>
+    points.reduce((a, b) => Math.hypot(b.x - to.x, b.y - to.y) < Math.hypot(a.x - to.x, a.y - to.y) ? b : a);
+  playerPoint = nearest(free, scenario.playerCell ? cellCenter(scenario.playerCell) : initial);
+  if (scenario.portalLink) {
+    // Authored cells are a seed-independent intent; generated rocks decide the actual free ground.
+    const link = scenario.portalLink, clear = port.getFreePositions(link.maxBodyRadiusPx + 4);
+    const a = nearest(clear, cellCenter(link.entry)), b = nearest(clear, cellCenter(link.exit));
+    labPortal = { ax: a.x, ay: a.y, bx: b.x, by: b.y, radius: link.radiusPx, maxBody: link.maxBodyRadiusPx };
+    environment.portalLink = { ...link, resolved: { ax: a.x, ay: a.y, bx: b.x, by: b.y } };
+    if (!port.setScenarioPortalLinks([{ id: link.id, ax: a.x, ay: a.y, bx: b.x, by: b.y,
+      radiusPx: link.radiusPx, maxBodyRadiusPx: link.maxBodyRadiusPx, costPx: link.costPx }])) {
+      throw new Error('Scenario portal link rejected');
+    }
+  }
   if (pursuit) {
     const geometry = new NavigationGeometry(port.getGeometry()!);
     const end = free.filter(point => Math.hypot(point.x - playerPoint!.x, point.y - playerPoint!.y) >= 384
@@ -128,10 +146,14 @@ function prepare(): void {
     if (!end) throw new Error('No continuous safe pursuit track on this seed');
     pursuitTrack = { start: { ...playerPoint }, end, speed: 140 };
   }
-  spawnPoints = free.filter(p => {
-    const distance = Math.hypot(p.x - playerPoint!.x, p.y - playerPoint!.y);
-    return distance >= 256 && distance <= (reviewAllKinds ? 450 : 800);
-  });
+  const area = scenario.spawnArea;
+  spawnPoints = area ? free.filter(p => p.x >= metrics.offsetX + area.gridX * 32
+    && p.x < metrics.offsetX + (area.gridX + area.widthCells) * 32
+    && p.y >= metrics.offsetY + area.gridY * 32 && p.y < metrics.offsetY + (area.gridY + area.heightCells) * 32)
+    : free.filter(p => {
+      const distance = Math.hypot(p.x - playerPoint!.x, p.y - playerPoint!.y);
+      return distance >= 256 && distance <= (reviewAllKinds ? 450 : 800);
+    });
   if (!spawnPoints.length) throw new Error('No spawn positions in the scenario band');
   if (spawnAudit) {
     authoredCases = port.getAuthoredSpawnCases();
@@ -146,13 +168,14 @@ function finish(): void {
   removeDamageObserver?.(); removeDamageObserver = null;
   const performance = port.stopRecording();
   const summaries = Object.fromEntries(Object.entries(samples).map(([key, values]) => [key, summarizeNavigationSamples(values)]));
+  if (labPortal) port.setScenarioPortalLinks([]);
   report = { environment, valid: !interrupted, geometryChanges, geometryFingerprint: initialGeometryFingerprint,
     pursuitTrack,
     spawnAudit: spawnAudit ? { expectedCases: authoredCases.length, results: spawnAuditResults } : undefined,
     browserObservations: { longFrames, gc: 'unsupported', longFrameSupport: PerformanceObserver.supportedEntryTypes },
     finalGeometryFingerprint: port.getGeometryFingerprint(), metrics: port.getMetrics(),
     summaries, combatantDamageEvents, overlapEvents, quality: { unwantedStationaryMs, stationaryWithoutAttackMs, attackMs, specialMs, bodyOverlapSamples,
-      observations, respawns, movementReasons }, navigation: { initial: initialNavigation, final: port.getNavigationMetrics() }, samples, performance };
+      observations, respawns, movementReasons, portalCrossings }, navigation: { initial: initialNavigation, final: port.getNavigationMetrics() }, samples, performance };
   results.textContent = JSON.stringify({ environment: { ...environment, enemyConfig: undefined, weaponConfig: undefined, initialLoadout: undefined }, summaries,
     spawnAudit: spawnAudit ? { expectedCases: authoredCases.length, results: spawnAuditResults } : undefined,
     quality: { unwantedStationaryMs, stationaryWithoutAttackMs, attackMs, specialMs, bodyOverlapSamples, observations, respawns, movementReasons } }, null, 2);
@@ -207,6 +230,27 @@ function stepSpawnAudit(delta: number): void {
   } else if (elapsed - caseAt < 5000) return;
   else spawnAuditResults.push({ caseId: entry.id, kind: entry.kind, status: 'no-spawn' });
   authoredIndex++; caseAt = -1;
+}
+
+/**
+ * Lab stand-in for the portal transport: a centre entering one circle jumps to the other end and
+ * stays gated there until it leaves that circle. Bodies above the link limit never cross.
+ */
+function crossLabPortal(): void {
+  if (!port || !labPortal) return;
+  const { ax, ay, bx, by, radius, maxBody } = labPortal;
+  for (const enemy of port.readEnemies()) {
+    const inA = Math.hypot(enemy.x - ax, enemy.y - ay) < radius, inB = Math.hypot(enemy.x - bx, enemy.y - by) < radius;
+    const gate = portalGates.get(enemy.id);
+    if (gate && !(gate === 'a' ? inA : inB)) portalGates.delete(enemy.id);
+    if (portalGates.has(enemy.id) || enemy.radius > maxBody || enemy.special || (!inA && !inB)) continue;
+    // Keep the entry offset so arrivals spread over the exit clearing instead of stacking.
+    const [fromX, fromY, toX, toY] = inA ? [ax, ay, bx, by] : [bx, by, ax, ay];
+    if (port.teleportEnemy(enemy.id, toX + enemy.x - fromX, toY + enemy.y - fromY)) {
+      portalGates.set(enemy.id, inA ? 'b' : 'a');
+      if (state === 'measuring') portalCrossings++;
+    }
+  }
 }
 
 /** A scenario event goes through the canonical mutation owner and observes the actual worker result. */
@@ -312,6 +356,7 @@ class NavigationArena extends ArenaScene {
           playerPoint = { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
         }
         if (playerPoint) port?.placePlayer(playerPoint.x, playerPoint.y);
+        crossLabPortal();
         if (elapsed >= observationAt) {
           const enemies = port!.readEnemies();
           const dt = observationAt === 0 ? 0 : elapsed - lastObservationAt;
@@ -363,6 +408,16 @@ class NavigationArena extends ArenaScene {
               for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
               node.setAttribute('fill', '#53665d'); svg.append(node);
             }
+            if (labPortal) {
+              const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+              for (const [key, value] of Object.entries({ x1: labPortal.ax, y1: labPortal.ay, x2: labPortal.bx, y2: labPortal.by })) line.setAttribute(key, String(value));
+              line.setAttribute('stroke', '#d98cff'); line.setAttribute('stroke-width', '4'); line.setAttribute('stroke-dasharray', '16 12'); svg.append(line);
+              for (const [cx, cy] of [[labPortal.ax, labPortal.ay], [labPortal.bx, labPortal.by]]) {
+                const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                for (const [key, value] of Object.entries({ cx, cy, r: labPortal.radius })) ring.setAttribute(key, String(value));
+                ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', '#d98cff'); ring.setAttribute('stroke-width', '4'); svg.append(ring);
+              }
+            }
             for (const enemy of enemies) {
               const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
               circle.setAttribute('cx', String(enemy.x)); circle.setAttribute('cy', String(enemy.y)); circle.setAttribute('r', String(enemy.radius));
@@ -406,6 +461,7 @@ class NavigationArena extends ArenaScene {
         const wallAt = performance.now(); sample('frameMs', wallAt - lastWallAt); lastWallAt = wallAt;
         for (const [key, value] of Object.entries(port!.getPerformance())) if (typeof value === 'number') sample(key, value);
         status.value = `Messung ${Math.min(durationMs, elapsed).toFixed(0)} / ${durationMs} ms · ${scenario.id}`;
+        if (labPortal) status.value += ` · Portal-Übertritte ${portalCrossings}`;
         if (reviewAllKinds) {
           const glow = port!.getEyeGlowCounts?.();
           status.value += ` · Augen ${glow?.eyes ?? 0} · Bodenlichter ${glow?.lights ?? 0}`;

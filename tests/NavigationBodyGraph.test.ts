@@ -135,3 +135,90 @@ describe('Body graph and current geometry', () => {
     expect(world.field.queryNavigation(32, 128).status).toBe('unreachable'); world.destroy();
   });
 });
+
+describe('Portal links on the body graph', () => {
+  // Index = gridY * 17 + gridX on the 16 px test raster; (48, 48) and (208, 48) are nodes themselves.
+  const ENTRY = 3 * 17 + 3, EXIT = 3 * 17 + 13, LEFT = 8 * 17 + 2, RIGHT = 8 * 17 + 14;
+  const flank = { id: 'flank', ax: 48, ay: 48, bx: 208, by: 48, radiusPx: 28, maxBodyRadiusPx: 20, costPx: 192 };
+  const sealed = () => [wall('middle', 112, 0, 144, 256)];
+
+  it('relaxes a jump from its exit, so the entry costs exactly the exit plus the link', () => {
+    const world = navigationTestWorld(sealed()); world.goal(224, 128); world.flush();
+    expect(world.field.queryNavigation(32, 128).status).toBe('unreachable');
+    world.coordinator.setPortalLinks([flank]); world.flush();
+    const snapshot = world.field.getNavigationSnapshot()!;
+    expect(Array.from(snapshot.portalLinks)).toEqual([ENTRY, EXIT, 192, EXIT, ENTRY, 192]);
+    expect(snapshot.integrationField[ENTRY]).toBe(Math.fround(snapshot.integrationField[EXIT] + 192));
+    expect(snapshot.goalSourceField[ENTRY]).toBe(snapshot.goalSourceField[EXIT]);
+    expect(world.field.queryNavigation(32, 128).status).toBe('ready');
+    world.destroy();
+  });
+
+  it('points into the portal with a zero vector and keeps the waypoint at the entry node', () => {
+    const world = navigationTestWorld(sealed()); world.goal(224, 128);
+    world.coordinator.setPortalLinks([flank]); world.flush();
+    expect(world.field.getVectorAt(3, 3)).toEqual({ x: 0, y: 0 });
+    // The exit is not a portal entry for this goal: returning would cost the link twice.
+    expect(world.field.getVectorAt(13, 3)).not.toEqual({ x: 0, y: 0 });
+    const route = world.field.queryNavigation(48, 72);
+    expect(route.status === 'ready' && route.waypoint).toEqual({ x: 48, y: 48 });
+    world.destroy();
+  });
+
+  it('joins both sides into one region and restores the plain graph without a rebuild', () => {
+    const world = navigationTestWorld(sealed()); world.goal(224, 128); world.flush();
+    const plain = world.field.getNavigationSnapshot()!, plainIntegration = Array.from(plain.integrationField);
+    const plainRegions = Array.from(plain.regions!);
+    expect(plainRegions[LEFT]).not.toBe(plainRegions[RIGHT]);
+    const geometry = world.coordinator.getGeometry();
+    world.coordinator.setPortalLinks([flank]); world.flush();
+    const linked = world.field.getNavigationSnapshot()!;
+    expect(linked.regions![LEFT]).toBe(linked.regions![RIGHT]);
+    expect(linked.regions![LEFT]).toBe(Math.min(plainRegions[LEFT], plainRegions[RIGHT]));
+    expect(world.field.canReachCurrentGoals(32, 128)).toBe(true);
+    expect(world.coordinator.getGeometry()).toBe(geometry);
+    world.coordinator.setPortalLinks([]); world.flush();
+    const restored = world.field.getNavigationSnapshot()!;
+    expect(Array.from(restored.regions!)).toEqual(plainRegions);
+    expect(Array.from(restored.integrationField)).toEqual(plainIntegration);
+    expect(restored.portalLinks).toHaveLength(0);
+    expect(world.field.canReachCurrentGoals(32, 128)).toBe(false);
+    world.destroy();
+  });
+
+  it('gives bodies above the link limit and endpoints without a free node no link', () => {
+    for (const [radius, linked] of [[20, true], [21, false]] as const) {
+      const world = navigationTestWorld(sealed(), [], radius); world.goal(224, 128);
+      world.coordinator.setPortalLinks([flank]); world.flush();
+      expect(world.field.getNavigationSnapshot()!.portalLinks.length > 0).toBe(linked);
+      expect(world.field.queryNavigation(32, 128).status).toBe(linked ? 'ready' : 'unreachable');
+      world.destroy();
+    }
+    // The nearest body-free node lies outside the crossing radius: the link does not exist for this body.
+    const buried = navigationTestWorld([...sealed(), wall('rock', 8, 8, 88, 88)]); buried.goal(224, 128);
+    buried.coordinator.setPortalLinks([flank]); buried.flush();
+    expect(buried.field.getNavigationSnapshot()!.portalLinks).toHaveLength(0);
+    buried.destroy();
+  });
+
+  it('scales the jump like every other cost of a swimming profile', () => {
+    const world = navigationTestWorld(sealed());
+    const swim = world.coordinator.registerField('swim', { goalMode: 'dynamic', bodyRadius: 15, swimCostRatio: 2 });
+    world.coordinator.setGoalCells('swim', [8 * 17 + 14]);
+    world.coordinator.setPortalLinks([flank]); world.flush();
+    const snapshot = swim.snapshot()!;
+    expect(Array.from(snapshot.portalLinks)).toEqual([ENTRY, EXIT, 192 * 8, EXIT, ENTRY, 192 * 8]);
+    expect(snapshot.integrationField[ENTRY]).toBe(Math.fround(snapshot.integrationField[EXIT] + 192 * 8));
+    world.destroy();
+  });
+
+  it('lets the target-bound path search cross the jump and name the entry as the next step', () => {
+    const world = navigationTestWorld(sealed()); world.goal(224, 128); world.flush();
+    expect(world.field.findNextWorldPositionTowards(2, 8, 14, 8)).toBeNull();
+    world.coordinator.setPortalLinks([flank]); world.flush();
+    const next = world.field.findNextWorldPositionTowards(2, 8, 14, 8)!;
+    expect(next.x).toBeLessThan(112);
+    expect(world.field.findNextWorldPositionTowards(3, 3, 14, 8)).toEqual({ x: 48, y: 48 });
+    world.destroy();
+  });
+});
