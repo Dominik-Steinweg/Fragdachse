@@ -230,7 +230,8 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     expect(merchant.update).not.toHaveBeenCalled();
   });
   it('owns one fire-control renderer per World and stops stale frames before handing off presentation', () => {
-    const input = fakeBindingInput(fakeScene(), { getSynchronizedNow: () => 12345 });
+    const portals = { submit: vi.fn(), clear: vi.fn() };
+    const input = fakeBindingInput(fakeScene(), { getSynchronizedNow: () => 12345, portals: portals as never });
     Object.assign(input.lighting, { getArtificialLightFactor: () => 0, update: vi.fn() });
     const snapshot = { deployments: [] };
     const source = vi.fn(() => snapshot);
@@ -249,7 +250,8 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     first.bindPresentationFrame(frame);
     frame.bindFireControl(source, original, shots);
     const renderer = vi.mocked(FireControlRenderer).mock.results.at(-1)!.value;
-    expect(FireControlRenderer).toHaveBeenLastCalledWith(input.scene, original, 'A', input.lighting, expect.any(Function));
+    // Fire-control portals submit their ends to the World's shared portal presentation.
+    expect(FireControlRenderer).toHaveBeenLastCalledWith(input.scene, original, 'A', input.lighting, expect.any(Function), portals);
     first.setPresentation(presentationBinding(() => expect(renderer.destroy).toHaveBeenCalledOnce()));
     frame.syncWorldLighting(true, false); // World without Activity.
     expect(source).toHaveBeenCalledExactlyOnceWith(12345);
