@@ -365,10 +365,15 @@ Die Depth-Reihenfolge ist Teil des Beleuchtungsvertrags:
   Lichtbeiträge im eigenen Material. Ambient und lokale Lichter werden als Irradianz genau einmal
   verbraucht; weißer Vertex-Tint verhindert einen zweiten Kronen-Tint.
 - Glühwürmchen bleiben emissiv über der Lichtkarte; ihre Nebeldämpfung gehört ihrem Material.
+- Vögel am Boden liegen bei den Landtieren unter dem Bodennebel, ihre Flugschatten im Band der
+  Figurenschatten (unter Nebel und Kronen). Fliegende Vögel liegen über der Lichtkarte: niedrig unter
+  den Kronen, hoch über den Kronen und unter Bombern, jeweils mit dem Kronen-Tint des Lichtsystems,
+  der nur abdunkelt. Ein Vogel wird einmal pro Frame gesampelt und je nach Höhe in höchstens zwei
+  dieser Ebenen platziert; die obere Kopie ist vollständig, bevor die untere ausblendet.
 
 Maßgeblich sind [DEPTH](../../src/config.ts), [WorldSunComposite](../../src/effects/sunlight/WorldSunComposite.ts),
 [FogGpuField](../../src/effects/groundFog/FogGpuField.ts) und
-[AmbientWildlifeRenderer](../../src/arena/AmbientWildlifeRenderer.ts).
+[AmbientWildlifeRenderer](../../src/arena/AmbientWildlifeRenderer.ts) (`BIRD_LAYER_DEPTHS`).
 
 Das großflächige Lichtmuster stammt aus den weltverankerten Wolkenöffnungen. Sonnenazimut und
 Elevation verändern geometrische Schatten und Material-Formlicht, nicht die Koordinaten dieses Feldes.
