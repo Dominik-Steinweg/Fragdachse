@@ -147,7 +147,7 @@ describe('retained wildlife rendering', () => {
     expect(glow.depth).toBeLessThan(DEPTH.CANOPY);
     for (let i = 0; i < 30; i++) {
       const players = [{ id: 'p', x: 350 + i, y: 400 }];
-      if (i === 5) { renderer.notifyShot(400, 400); model.notifyShot(400, 400); }
+      if (i === 5) { renderer.notifyImpulse('shot', 400, 400); model.notifyImpulse('shot', 400, 400); }
       const camera = i > 10 && i < 20 ? { ...view, x: 10000 } : view;
       renderer.update(16, players, camera); model.update(16, players, camera);
       expect(renderer.model.animals).toEqual(model.animals);

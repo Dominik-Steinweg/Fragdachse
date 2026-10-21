@@ -237,6 +237,17 @@ const GENERAL_ASSETS = {
   sfx_train_explode:   './assets/sounds/sfx_train_explode.ogg',
 } as const;
 
+// ── Wildlife ────────────────────────────────────────────────────────────────
+// Ambient birds: local presentation cues, positional, rate-limited by the wildlife renderer.
+const WILDLIFE_ASSETS = {
+  sfx_wildlife_sparrow_flush:  './assets/sounds/sfx_wildlife_sparrow_flush.ogg',
+  sfx_wildlife_sparrow_chirp:  './assets/sounds/sfx_wildlife_sparrow_chirp.ogg',
+  sfx_wildlife_magpie_chatter: './assets/sounds/sfx_wildlife_magpie_chatter.ogg',
+  sfx_wildlife_raven_croak:    './assets/sounds/sfx_wildlife_raven_croak.ogg',
+  sfx_wildlife_owl_hoot:       './assets/sounds/sfx_wildlife_owl_hoot.ogg',
+  sfx_wildlife_wing_flap:      './assets/sounds/sfx_wildlife_wing_flap.ogg',
+} as const;
+
 // ── Music ───────────────────────────────────────────────────────────────────
 const MUSIC_ASSETS = {
   music_lobby: './assets/sounds/badger02.ogg', 
@@ -252,6 +263,7 @@ export const AUDIO_ASSETS = {
   ...LOADOUT_ASSETS,
   ...POWERUP_ASSETS,
   ...GENERAL_ASSETS,
+  ...WILDLIFE_ASSETS,
   ...MUSIC_ASSETS,
 } as const;
 
@@ -402,6 +414,14 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_options_preview: 0.5,
   sfx_train_move:      0.8,
   sfx_train_explode:   0.2,
+
+  // Wildlife: quiet ambience under combat.
+  sfx_wildlife_sparrow_flush:  0.4,
+  sfx_wildlife_sparrow_chirp:  0.25,
+  sfx_wildlife_magpie_chatter: 0.3,
+  sfx_wildlife_raven_croak:    0.35,
+  sfx_wildlife_owl_hoot:       0.3,
+  sfx_wildlife_wing_flap:      0.3,
 
   // Music  (Endwert je nach Lied anpassen; Kette: masterVolume × SOUND_MUSIC_VOLUME × dieser Wert)
   music_lobby: 0.8,

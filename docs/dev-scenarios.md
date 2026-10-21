@@ -537,6 +537,19 @@ Masken ohne Doppelkanten bei freier Drehung, alle Laufphasen und Waffenwechsel p
 Nacht nur Fusskontakt, Wasserrand schwaecher, keine Schatten auf Fels/Basen.
 High/Medium/Low-Wechsel, World-Wechsel und WebGL-Kontext-Wiederherstellung separat pruefen.
 
+Wildlife-Vögel: `status().wildlifeBirds` listet Art, Weltposition, Phase, Höhe und Deckkraft aller
+Vögel. `target` erwartet Gitterzellen, also Weltposition abzüglich World-Offset geteilt durch 32:
+
+```js
+const s = dev.status(), bird = s.wildlifeBirds.find(b => b.kind === 'sparrow');
+dev.run({action:'target',gridX:Math.round((bird.x-s.metrics.offsetX)/32),gridY:Math.round((bird.y-s.metrics.offsetY)/32)});
+dev.run({action:'camera',zoom:3,focusTarget:true});
+dev.run({action:'options',values:{timeOfDay:0}}); // Eulen
+```
+
+Ohne Spielszene prüft das [Wildlife-Labor](../wildlife-lab.html) Vögel mit Tageszeit-, Schuss-,
+Explosions- und Gegnerprobe.
+
 Lokale Render-Ausgaben isolieren: `dev.run({action:'renderDebug',disable:['sunComposite','fogDisplay','lightmap','characterShadows']})`.
 Die Liste ersetzt die bisherige Auswahl; zusätzlich sind `distortion`, `bloom`, `grade`, `vignette`, `focus`, `barrel` erlaubt.
 `disable:[]` stellt alle Ausgaben wieder her; beim Szenariostart und Teardown wird ebenfalls zurückgesetzt.
