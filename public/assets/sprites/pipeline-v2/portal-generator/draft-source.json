@@ -1,0 +1,178 @@
+{
+  "quality": "accepted-authoring-preview",
+  "targetSize": 96,
+  "masters": [
+    {
+      "state": "intact",
+      "outlet": "north",
+      "previewInputHash": "493ec7e5082d3cb30b67b6e051c07cdac92269ce1973a05674ccb308a7be9182",
+      "beauty": "1cf349c88ed438322e72abfed2f84f1d5cabbf838d5badf551c3e3eb6efc0e2b",
+      "emissionCore": "ce50a7d06ae13847f4e9bad04e23b7f3d84f8c58cc959392feb7629e01571b9b",
+      "emissionFlow": "0ad5b2453bf34e9028e5f26f0af8851afdc3587b1d88955471f8164eb1952912"
+    },
+    {
+      "state": "intact",
+      "outlet": "east",
+      "previewInputHash": "7eefe373eb89d21d96db99e3b3f4645b0af77c27e8bc8e103c83f1a1757ff875",
+      "beauty": "74258f60db9422003e7fb554546bdc82c991062a224ec836fc4c5ee829b23815",
+      "emissionCore": "2d91e57a39f2270a0ae8eb152ef1894ee8466f20c5d32aac016a8bec7f42208c",
+      "emissionFlow": "ebd7d5deb13bbe21943b4455b72a9524cafe7b96a59c2c920f02f729538819d3"
+    },
+    {
+      "state": "intact",
+      "outlet": "south",
+      "previewInputHash": "f50ccb22377e9f407f2258b4604eb886066894392551f7c3fd445011b38ed93e",
+      "beauty": "1a7db985e3b37701fe10dca344cf53a8e335e31194691e9f137675242022f609",
+      "emissionCore": "5cdc1e5ea76b5ea186f5d5fb582fc05cb3adb6c3d2d1bb176b7afb0f83c9aa9d",
+      "emissionFlow": "185c6857bb8399198ad5a0ff04f3cc9e28dcde79dbd5c5af359556ecf5cf392c"
+    },
+    {
+      "state": "intact",
+      "outlet": "west",
+      "previewInputHash": "925c17bb87f6781f975224c6803c1cd76ceee4efa941c4c5275eb3ead22629e0",
+      "beauty": "e476add82072f6516d4fa8a1229107190ac00690c14fa041366c277f8f52f11e",
+      "emissionCore": "35c7c0d91b50ed85b92b4e7e6f72e02416e0a9b51cbce63fd31d5bd1c874108b",
+      "emissionFlow": "7400e1a9072f2d4c15c40932bd6fa0f280ca6e02c9d896f4e167026d2b2b0eac"
+    },
+    {
+      "state": "damaged",
+      "outlet": "north",
+      "previewInputHash": "a4cf02bfb8f3eb6bbabff48d0049853e1a6cebac5f6d94c031ac5f66d2511cfa",
+      "beauty": "9e6169926a867b8318ba9a78de12c820b26fb178ad2105cbe98d5e2a08b875bb",
+      "emissionCore": "f52299ae46901ff1d5692e019dfee93257fb1f0a7135bf6934b4d48a75b52e62",
+      "emissionFlow": "2cc830dfdff6267497301a2cb22b6afe4582384df863a73057cc241748b9a0a2"
+    },
+    {
+      "state": "damaged",
+      "outlet": "east",
+      "previewInputHash": "ab5732d5b8ef07a8115b4dd59c5396d06fc22429fba60a8fb7ba44a8d904c643",
+      "beauty": "48fc70fd0e8c464291d37fdbf87385e2325ab8747e475a38421e5451edd45c90",
+      "emissionCore": "f57f9488c2ef285e4b288e8cf1c4fccbbb075998e653289f76aabed009839577",
+      "emissionFlow": "e04ae6b99345256ed540854d172e51e5e3a8acee8716e0bea2690e0eca6a8462"
+    },
+    {
+      "state": "damaged",
+      "outlet": "south",
+      "previewInputHash": "eee4696ab922a6181192768b026fa64f39605afbf7b481c211d62422cba65400",
+      "beauty": "b46a76d318729b37de0679842d1ff9c7a1ecb0703b207311b2997a15aa309618",
+      "emissionCore": "e2d5c5ec76317e122c5754be271ff3cd64298411f10dcd21af31e39ee372d255",
+      "emissionFlow": "930fc4d4eed7169a2b5bb6e604214c9e17fb3a5714773e99093f5f03f7c6538c"
+    },
+    {
+      "state": "damaged",
+      "outlet": "west",
+      "previewInputHash": "aa72d810438a97482ad4c7536846fd76885376b3686b8d01af1e509c6f94ff9f",
+      "beauty": "5af61aa219d939e8c68f1d7e0c7af955dfdbf05595f2347330d5081d3a43ecdc",
+      "emissionCore": "9ece79ed55ad0c2396132d334ffa68dad9567df2da0f3448a4756f3e02f81025",
+      "emissionFlow": "9a0a5bc8f7c900fa8a6064cd2ce106db1c547b304cd98b95a9101d52c660c452"
+    },
+    {
+      "state": "rubble",
+      "outlet": "north",
+      "previewInputHash": "62dbf5470aa51318ce15aa2de410908b4fd617bda5d7b7e76351cfb3848c09eb",
+      "beauty": "2cc68bab6027ad51ddf5abbc8057be68649e80c6788e06d30e0c9c27b7ceab3e",
+      "emissionCore": "21c72470ceb95bab80a1c1088420eafeff205202da2488412538da896a5b1975",
+      "emissionFlow": "dd43de4a0d45ce308a84dd1f2f28ee7d34ce5b2d95d914bdd92b51ae60030c3b"
+    },
+    {
+      "state": "rubble",
+      "outlet": "east",
+      "previewInputHash": "06bb534462b85acaa0d22500d67bfe7ccf04da2164694d088360dcb0c601b9c3",
+      "beauty": "ee188dae75808ca33b65fa96a2ace04440f7d534ea40b4c6898adb8902caecb4",
+      "emissionCore": "ada691538354644583fa3da5a3f503a9abcecad0243bde62fd4236c6f5d66d67",
+      "emissionFlow": "1a5f6ce196ebd33004e70dd91769c0bf516eca0e341bc7176a0e7d0fe40c6191"
+    },
+    {
+      "state": "rubble",
+      "outlet": "south",
+      "previewInputHash": "821c65be9a04385adf0fa78b213ec4f82598a7894820fbd8596c7dd24ac95d5c",
+      "beauty": "4823b782e2fd930b5b85a4940bfd251f383a75854504ea6fbbd1854d329a5bea",
+      "emissionCore": "6998cf187e93775076b7a007fdb1ea6ecc04b3c06c9963cc37c7bf281d9b80ec",
+      "emissionFlow": "011ca56a850f2ce86e27ec3e149a5a0249f24e0b65a040f4b79efad8a510b19c"
+    },
+    {
+      "state": "rubble",
+      "outlet": "west",
+      "previewInputHash": "34f090c8f10ad80ed0c38ebe87f3876434fbc21b50b60d6de59bcefcbb56dbce",
+      "beauty": "eba113f9a33618c6b0554d0b0e015a594b8fbc3d82fd8243f5e3be5b4091f06d",
+      "emissionCore": "193296f7c6e802e50a22bbccbd318236439c8bca9dabe0c7cd0e29113a653b64",
+      "emissionFlow": "60314e8677854b73aba2c7753649896cabec9206665fa851ec2762d155ce76f9"
+    }
+  ],
+  "runtime": {
+    "id": "portal-generator",
+    "category": "construction",
+    "gameIds": [],
+    "revision": "pg-prod-r2",
+    "variant": "standard",
+    "sourceSize": 192,
+    "textureKey": "construction_portal_generator",
+    "sheetTextureKey": "construction_portal_generator_sheet",
+    "runtimeContract": "sheet",
+    "forward": "north",
+    "pivot": [
+      0.5,
+      0.5
+    ],
+    "idleFrame": 0,
+    "idlePath": "./assets/sprites/pipeline-v2/portal-generator/idle.png",
+    "sheetPath": "./assets/sprites/pipeline-v2/portal-generator/sheet.png",
+    "layout": {
+      "frameWidth": 192,
+      "frameHeight": 192,
+      "margin": 2,
+      "spacing": 4,
+      "columns": 8,
+      "rows": 2,
+      "frameCount": 12,
+      "width": 1568,
+      "height": 392
+    },
+    "clips": [],
+    "hashes": {
+      "idle": "6bb0a81fdc5c211acf4eb158dbd1863d5302ea8257f1f46e743b37948a878be5",
+      "sheet": "444d7eabc47a9fda13de63f3a6e8be9ce6031b8d85fbb193dc82c258b8f39f65"
+    }
+  },
+  "textures": {
+    "dawnPaint": "art/poc/portal-generator/textures/portal-generator-iron.png",
+    "rust": "art/poc/portal-generator/textures/portal-generator-rust.png",
+    "grime": "art/poc/portal-generator/textures/portal-generator-grime.png",
+    "edgewear": "art/poc/portal-generator/textures/portal-generator-edgewear.png"
+  },
+  "export": {
+    "script": "scripts/asset-pipeline/export-portal-generator.mjs",
+    "passes": "scripts/asset-pipeline/portal-generator-passes.py",
+    "sharp": {
+      "aom": "3.9.1",
+      "archive": "3.7.4",
+      "cairo": "1.18.0",
+      "cgif": "0.4.1",
+      "exif": "0.6.24",
+      "expat": "2.6.2",
+      "ffi": "3.4.6",
+      "fontconfig": "2.15.0",
+      "freetype": "2.13.2",
+      "fribidi": "1.0.15",
+      "glib": "2.81.1",
+      "harfbuzz": "9.0.0",
+      "heif": "1.18.2",
+      "highway": "1.2.0",
+      "imagequant": "2.4.1",
+      "lcms": "2.16",
+      "mozjpeg": "4.1.5",
+      "pango": "1.54.0",
+      "pixman": "0.43.4",
+      "png": "1.6.43",
+      "proxy-libintl": "0.4",
+      "rsvg": "2.58.93",
+      "spng": "0.7.4",
+      "tiff": "4.6.0",
+      "vips": "8.15.3",
+      "webp": "1.4.0",
+      "xml": "2.13.3",
+      "zlib-ng": "2.2.1",
+      "sharp": "0.33.5"
+    }
+  }
+}

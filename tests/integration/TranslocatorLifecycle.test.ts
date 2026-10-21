@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ Math: { Clamp: (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v)) } }));
 import { PlayerUtilityActionRuntime } from '../../src/world/PlayerUtilityActionRuntime';
-import { TranslocatorSystem, type TranslocatorActor } from '../../src/systems/TranslocatorSystem';
+import { TranslocatorSystem } from '../../src/systems/TranslocatorSystem';
+import { WorldPortalTransport, type PortalActor } from '../../src/systems/portal/WorldPortalTransport';
 import { HostHeldActionSystem } from '../../src/systems/HostHeldActionSystem';
 import { UTILITY_CONFIGS, type UtilityConfig } from '../../src/loadout/LoadoutConfig';
 import { resolveRadialActions } from '../../src/systems/RadialActionModel';
@@ -11,19 +12,22 @@ function fixture(boss: boolean) {
   if (base.type !== 'translocator') throw Error('Expected translocator');
   const config = { ...base, portalEnabled: Number(boss), cooldown: 310 };
   let equipped: UtilityConfig = config;
-  let actor: TranslocatorActor = { id: 'p', kind: 'player', x: 0, y: 0, radius: 12, revision: 0, alive: true, surface: true };
+  let actor: PortalActor = { id: 'p', kind: 'player', x: 0, y: 0, radius: 12, revision: 0, alive: true, surface: true };
   let puck: { x: number; y: number } | null = null;
   const cooldown = vi.fn(), inventory = vi.fn(), used = vi.fn();
+  const combat = { isAlive: () => actor.alive, applyDamage: vi.fn() } as never;
+  const transport = new WorldPortalTransport(combat, { broadcastTranslocatorFlash() {} });
   const translocator = new TranslocatorSystem({ getPlayer: () => actor } as never, {
     spawnPuck: () => { puck = { x: 200, y: 0 }; return 1; }, getPuckPosition: () => puck,
     consumePuck: () => { const existed = puck !== null; puck = null; return existed; },
-  }, { isAlive: () => actor.alive, applyDamage: vi.fn() } as never, {
-    getPlayerColor: () => 0xffffff, broadcastTranslocatorFlash() {}, broadcastExplosionEffect() {},
-  });
-  translocator.bindWorld({ getActors: () => [actor], canOccupy: () => true,
-    transferActor: (_a, x, y) => { actor = { ...actor, x, y, revision: actor.revision + 1 }; },
+  }, combat, { getPlayerColor: () => 0xffffff, broadcastExplosionEffect() {} }, transport);
+  const world = { getActors: () => [actor], canOccupy: () => true,
+    transferActor: (_a: PortalActor, x: number, y: number) => { actor = { ...actor, x, y, revision: actor.revision + 1 }; },
     isFriendly: () => true, canDamage: () => true, collapseEnemy() {},
-  });
+  };
+  transport.bindWorld(world);
+  translocator.bindWorld(world);
+  transport.register(translocator);
   const action = new PlayerUtilityActionRuntime({ captureSmokeDamage: () => ({ sourceDamageMultiplier: 1 }),
     projectileSpawn: { spawnProjectile: () => 0 }, combatSystem: {} as never,
     actor: { getPlayer: () => ({ ...actor, color: 0xffffff }), canInteract: () => true,

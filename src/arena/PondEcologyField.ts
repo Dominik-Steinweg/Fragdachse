@@ -1,6 +1,7 @@
 import { CELL_SIZE } from '../config';
 import type { ArenaLayout, WaterCell } from '../types';
 import type { ChunkWorldFrame } from './chunks/ArenaChunkGrid';
+import { getBridgeDeckRect } from './BridgeGeometry';
 import type { EcologyPlacement, EcologyWaterField } from './WoodlandEcologyField';
 import { ecologyHash } from './ecologyHash';
 import pond from '../assets/manifests/lilies.json';
@@ -12,6 +13,8 @@ const families = {
   lilies:pond.assets.filter(a=>a.name.startsWith('lily-group')),
 };
 const sides=[[0,-1],[1,0],[0,1],[-1,0]] as const;
+/** Open water kept around a bridge deck, so a collapse never reveals pads that grew under it. */
+const BRIDGE_LILY_MARGIN=12;
 
 /** Independent water bodies, deterministic under source-cell reordering. */
 export function pondComponents(cells:readonly WaterCell[],columns:number):WaterCell[][] {
@@ -34,11 +37,16 @@ export function pondComponents(cells:readonly WaterCell[],columns:number):WaterC
 export function buildPondEcology(layout:ArenaLayout,frame:ChunkWorldFrame,water:EcologyWaterField,
   fits:(x:number,y:number,r:number,dry:boolean)=>boolean,budget:number):EcologyPlacement[] {
   const columns=Math.ceil(frame.width/CELL_SIZE),out:EcologyPlacement[]=[];
+  const decks=(layout.bridges??[]).map(bridge=>{
+    const r=getBridgeDeckRect(bridge),m=BRIDGE_LILY_MARGIN;
+    return {x0:r.gridX*CELL_SIZE-m,y0:r.gridY*CELL_SIZE-m,x1:(r.gridX+r.widthCells)*CELL_SIZE+m,y1:(r.gridY+r.heightCells)*CELL_SIZE+m};
+  });
   let pondId=0;
   for(const cells of pondComponents(layout.water??[],columns)) {
     if(out.length>=budget)break;
     const id=pondId++,interior:LilyAnchor[]=[];
     const roll=(x:number,y:number,salt:number)=>ecologyHash(x,y,layout.seed+salt);
+    const underBridge=(x:number,y:number,r:number)=>decks.some(d=>x+r>d.x0&&x-r<d.x1&&y+r>d.y0&&y-r<d.y1);
     for(const cell of cells) {
       const cx=(cell.gridX+.5)*CELL_SIZE,cy=(cell.gridY+.5)*CELL_SIZE;
       for(const dx of [-8,8])for(const dy of [-8,8]) {
@@ -48,7 +56,7 @@ export function buildPondEcology(layout:ArenaLayout,frame:ChunkWorldFrame,water:
     }
     const add=(family:keyof typeof families,x:number,y:number,size:number,rotation:number,
       floating:boolean,rank:number,colony?:number,stand?:number):boolean=>{
-      if(out.length>=budget||!fits(x,y,size*.71+2,false))return false;
+      if(out.length>=budget||!fits(x,y,size*.71+2,false)||underBridge(x,y,size*.71+2))return false;
       const d=water.distance(x,y);
       if(d<3||d>63)return false;
       if(floating)for(let i=0;i<8;i++) {

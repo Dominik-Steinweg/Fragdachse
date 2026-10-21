@@ -33,7 +33,11 @@ Weltänderungen, Durchbruchssuche, Nachbarschaft und Entscheidungsbudget.
 - Normale Bewegung verwendet einen konsistenten Nachbarschaftsstand, lokale
   Alternativen, weiche Angriffsplatzreservierungen und überschneidungsreduzierende
   Recovery. Exklusive Fähigkeiten behalten Vorrang. Es gibt keinen neuen
-  allgemeinen Teleport.
+  allgemeinen Teleport. Einzige Ausnahme sind authored Portal-Links
+  ([Portal-Generator](GDDs/Fragdachse_GDD_Portalgenerator_V1.md)): Offene Links
+  verbinden je Körperprofil zwei Navigationsknoten und vereinigen deren Regionen.
+  Der Durchbruchsplaner kennt sie nicht; er läuft nur, wenn auch der vereinigte
+  Graph keinen Weg hat.
 - Navigation und Suchzustände bleiben hostlokal und enden mit der Activity.
   Die [Gegnerprofile](reports/navigation-enemy-migration.md) dokumentieren Zielrollen,
   Fallbacks, Nebenaktionen und Durchbruchsrechte aller bestehenden Arten.

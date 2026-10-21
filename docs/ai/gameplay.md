@@ -79,6 +79,20 @@ direkt. Der Zustand wird als `submerged` repliziert und erzeugt keine Grabeffekt
 [MiniKraken.test.ts](../../tests/MiniKraken.test.ts) und
 [EnemyIntentAndBreach.test.ts](../../tests/EnemyIntentAndBreach.test.ts).
 
+Portale haben einen einzigen Akteur-Transport.
+- **Transport:**
+  - Der World-Owner [WorldPortalTransport](../../src/systems/portal/WorldPortalTransport.ts) führt die Paare aller registrierten Quellen zusammen; Translokator und Portal-Generator sind solche Quellen.
+  - Er allein versetzt Spieler und Gegner. Projektile und Hitscan lesen dieselbe Paarsicht.
+  - Eine Quelle bestimmt nur, wen ihr Paar zulässt, wie es aufblitzt und wann sich ein Austrittstor wieder öffnet. Ihre Lebenszeit bleibt beim Quellen-Owner.
+- **Navigation:**
+  - Die Navigation plant Portale ausschließlich als authored Links über `FlowFieldCoordinator.setPortalLinks`.
+  - Diese Links schreibt allein das Activity-eigene [PortalLinkSystem](../../src/systems/portal/PortalLinkSystem.ts), und nur für offene Links.
+  - Translokator-Paare bleiben rein physisch: Gegner können hineinlaufen, planen aber nie mit ihnen.
+- **Nach dem Sprung:** Ein Sprung erhöht die `positionRevision`. Das Intent entscheidet dann außerhalb seines Scan-Budgets neu.
+
+Dies sichern [WorldPortalTransport.test.ts](../../tests/WorldPortalTransport.test.ts) und
+[PortalLinkNavigation.test.ts](../../tests/integration/PortalLinkNavigation.test.ts).
+
 Authored Spawn-Bereiche und Konstrukte bleiben im 32-px-Weltraster. Navigationsindizes gehören
 zum separaten Punktraster und dürfen nicht als World-Zellen materialisiert werden. Der Spawn-Executor
 prüft den vollständigen Körper an genau der Position, die er erzeugt; ungeprüfter Jitter ist dort unzulässig.

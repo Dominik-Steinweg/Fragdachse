@@ -22,8 +22,8 @@ export class WorldGroundFogBinding {
   private readonly releaseCombat: () => void;
   private destroyed = false;
   private readonly listener = (event: ArenaMapGridChangedEvent): void => {
-    // Pedestals und reaktive Map-Objekte gehören nicht zum Nebel-Terrain.
-    if (event.source === 'placeable_pedestal' || event.source === 'reactive_prop') return;
+    // Pedestals, Brücken und reaktive Map-Objekte gehören nicht zum Nebel-Terrain.
+    if (event.source === 'placeable_pedestal' || event.source === 'bridge' || event.source === 'reactive_prop') return;
     if (event.removedObstacles) {
       for (const cell of event.removedObstacles) this.pending.set(`construction:${cell.id}`,
         { reason: 'placeable_removed', source: 'placeable_rock', obstacleId: cell.id, gridX: cell.gridX, gridY: cell.gridY });
@@ -33,14 +33,14 @@ export class WorldGroundFogBinding {
     else this.pending.set(`${event.source === 'static_rock' ? 'rock' : 'construction'}:${event.obstacleId}`, event);
   };
   constructor(private readonly scene: Phaser.Scene, readonly fog: GroundFogSystem,
-    layout: ArenaLayout, arena: ArenaBuilderResult, effects: Pick<EffectSystem, 'bindGroundFogExplosion' | 'bindGroundFogCombat'>) {
+    layout: ArenaLayout, arena: ArenaBuilderResult, effects: Pick<EffectSystem, 'bindExplosionObserver' | 'bindGroundFogCombat'>) {
     layout.rocks.forEach((cell, id) => {
       if (arena.rockPhysicsProxies[id]?.active) fog.terrain.setObstacle(`rock:${id}`, [cell], true,
         arena.rockVisualStates?.states[id]?.material !== 'walls');
       else fog.terrain.markOpened([cell]);
     });
     scene.game.events.on(ARENA_MAP_GRID_CHANGED_EVENT, this.listener);
-    this.releaseExplosion = effects.bindGroundFogExplosion((x, y, radius, style) => fog.addExplosion(x, y, radius, style));
+    this.releaseExplosion = effects.bindExplosionObserver((x, y, radius, style) => fog.addExplosion(x, y, radius, style));
     this.releaseCombat = effects.bindGroundFogCombat({
       hitscan: (x, y, endX, endY, thickness, source) => fog.addHitscan(x, y, endX, endY, thickness, weaponFogTrail(source)),
       melee: (x, y, angle, arc, range, source) => fog.addMelee(x, y, angle, arc, range, weaponFogTrail(source)),

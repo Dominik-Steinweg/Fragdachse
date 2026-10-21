@@ -111,6 +111,7 @@ function detachRequest(request: FlowFieldRequest): FlowFieldRequest {
       staticKind: copyOf(request.staticKind),
       rockOccupancy: copyOf(request.rockOccupancy),
       barrierOccupancy: copyOf(request.barrierOccupancy),
+      portalLinks: request.portalLinks.map((link) => ({ ...link })),
     };
   }
   return {
@@ -119,6 +120,7 @@ function detachRequest(request: FlowFieldRequest): FlowFieldRequest {
       patch.t === 'density' ? { ...patch, costs: copyOf(patch.costs) }
         : patch.t === 'rock-resync' ? { ...patch, rockOccupancy: copyOf(patch.rockOccupancy) }
         : patch.t === 'barrier-resync' ? { ...patch, barrierOccupancy: copyOf(patch.barrierOccupancy) }
+        : patch.t === 'portal-links' ? { ...patch, links: patch.links.map((link) => ({ ...link })) }
           : patch
     )),
     fields: request.fields.map((field) => ({
@@ -146,6 +148,7 @@ function detachResult(result: FlowFieldResultMessage): FlowFieldResultMessage {
       profileTraversable: field.profileTraversable ? copyOf(field.profileTraversable) : null,
       edges: field.edges ? copyOf(field.edges) : undefined,
       regions: field.regions ? copyOf(field.regions) : undefined,
+      portalLinks: copyOf(field.portalLinks),
     })),
   };
 }

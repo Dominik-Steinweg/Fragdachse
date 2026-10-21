@@ -15,7 +15,8 @@ import { isDawnTemplateId } from './DawnIds';
  * den Stand der Dawn-Registries; ein abweichender Stand bricht den Aufbau ab.
  */
 
-export const DAWN_PLAN_VERSION = 1;
+/** 2: portal generator sites carry the flank slot of their exit. */
+export const DAWN_PLAN_VERSION = 2;
 /** Wire-Obergrenze; die fachliche Kurve liegt im Content. */
 export const DAWN_MAX_THREAT = 10;
 const MAX_WAVES = 64;
@@ -44,6 +45,8 @@ export interface DawnSitePlan {
   readonly variant?: string;
   /** Versteckte Site: ohne Schrottscanner des Hosts keine Navigationsmarker. */
   readonly hidden?: true;
+  /** Portal generator only: the otherwise unused slot near the base where its portal exits. */
+  readonly portalExitSlotId?: string;
 }
 
 /**
@@ -90,6 +93,9 @@ export function parseDawnWorldPlan(raw: unknown): DawnWorldPlan | null {
     slotIds.add(site.slotId);
     sites.push(site);
   }
+  // At most one portal per round, and its exit occupies a slot of its own.
+  const exits = sites.flatMap((site) => site.portalExitSlotId === undefined ? [] : [site.portalExitSlotId]);
+  if (exits.length > 1 || exits.some((slotId) => slotIds.has(slotId))) return null;
   return { version: DAWN_PLAN_VERSION, templateId: raw.templateId, contentHash: raw.contentHash, sites };
 }
 
@@ -99,10 +105,12 @@ function parseDawnSitePlan(raw: unknown): DawnSitePlan | null {
   if (!isIntegerInRange(raw.tier, 1, DAWN_MAX_SITE_TIER)) return null;
   if (raw.variant !== undefined && !isDawnPlanId(raw.variant)) return null;
   if (raw.hidden !== undefined && raw.hidden !== true) return null;
+  if (raw.portalExitSlotId !== undefined && !isDawnPlanId(raw.portalExitSlotId)) return null;
   return {
     slotId: raw.slotId, archetypeId: raw.archetypeId, tier: raw.tier,
     ...(raw.variant === undefined ? {} : { variant: raw.variant }),
     ...(raw.hidden === true ? { hidden: true as const } : {}),
+    ...(raw.portalExitSlotId === undefined ? {} : { portalExitSlotId: raw.portalExitSlotId }),
   };
 }
 

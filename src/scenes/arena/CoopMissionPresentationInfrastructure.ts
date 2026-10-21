@@ -1,6 +1,8 @@
 import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import { WaterSurfaceModel } from '../../arena/WaterSurfaceModel';
+import { ExplosiveCrateRenderer } from '../../effects/bridge/ExplosiveCrateRenderer';
 import { DawnSitePropRenderer } from '../../arena/DawnSitePropRenderer';
+import { toDawnSiteObjectiveId } from '../../dawn/resolution/DawnScenarioResolution';
 import { DawnSiteDecalRenderer } from '../../arena/DawnSiteDecalRenderer';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
@@ -15,6 +17,10 @@ import { KrakenEggFlightView, KrakenRenderer, KrakenSpineFlightView, type Kraken
 import { KrakenIntroRenderer } from '../../effects/kraken/KrakenIntroRenderer';
 import { KrakenPondVoid } from '../../effects/kraken/KrakenPondVoid';
 import { AbyssCameoRenderer } from '../../effects/kraken/AbyssCameoRenderer';
+import { VoidPortalRenderer, type VoidPortalScenario } from '../../effects/voidPortal/VoidPortalRenderer';
+import { resolveCoopDefensePortalLink } from '../../config/coopDefensePortalLinks';
+import type { CoopDefenseMapConfig } from '../../config/coopDefenseMapAuthoring';
+import { resolveCoopMissionPortalEndpoints } from '../../activity/CoopMissionPortalComposition';
 import { KRAKEN_RISE_INTRO } from '../../config/bossIntros';
 import { KRAKEN_BOSS_DEFAULTS } from '../../config/krakenBoss';
 import * as Phaser from 'phaser';
@@ -24,7 +30,7 @@ import { CoopDefenseObjectiveAnnouncement } from '../../ui/CoopDefenseObjectiveA
 import { CoopDefenseMapEventAnnouncementPresenter } from '../../ui/CoopDefenseMapEventAnnouncementPresenter';
 import { CoopDefenseSecondaryObjectiveHud } from '../../ui/CoopDefenseSecondaryObjectiveHud';
 import { getBaseWorldBounds } from '../../arena/BaseRegistry';
-import { mainObjectiveMarkers, enemyMarkers, secondaryObjectiveMarkers, checkpointMarkers } from '../../effects/markers/sources/CoopMissionMarkerSource';
+import { mainObjectiveMarkers, enemyMarkers, secondaryObjectiveMarkers, checkpointMarkers, portalFlankMarkers } from '../../effects/markers/sources/CoopMissionMarkerSource';
 import type { BaseManager } from '../../entities/BaseManager';
 import type { EnemyManager } from '../../entities/EnemyManager';
 import type { PlayerManager } from '../../entities/PlayerManager';
@@ -51,6 +57,8 @@ export interface CoopMissionPresentationInfrastructureInput {
   readonly renderers: RendererBundle;
   readonly getBaseManager: () => BaseManager | null;
   readonly getEnemyManager: () => EnemyManager | null;
+  /** Standing bridges of the World, for demolition markers; absent without bridges. */
+  readonly getStandingBridges?: () => readonly import('../../effects/markers/sources/CoopMissionMarkerSource').BridgeMarkerTarget[];
 }
 
 /**
@@ -65,6 +73,7 @@ export class CoopMissionPresentationInfrastructure {
   private readonly mapEventAnnouncementPresenter: CoopDefenseMapEventAnnouncementPresenter;
   private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
   private dawnSiteProps: DawnSitePropRenderer | null = null;
+  private dawnSiteObjectiveIds: ReadonlySet<string> | undefined;
   private dawnSiteDecals: DawnSiteDecalRenderer | null = null;
   private dawnWorldRevision: number | null = null;
   private ui: CoopMissionPresentationUiPort | null = null;
@@ -81,8 +90,12 @@ export class CoopMissionPresentationInfrastructure {
   private krakenPondVoid: KrakenPondVoid | null = null;
   private krakenStage = 0;
   private abyssCameo: AbyssCameoRenderer | null = null;
+  private voidPortals: VoidPortalRenderer | null = null;
+  private voidPortalScenario: { readonly mapConfig: CoopDefenseMapConfig; readonly scenario: VoidPortalScenario } | null = null;
+  private readonly explosiveCrates: ExplosiveCrateRenderer;
 
   constructor(private readonly scene: Phaser.Scene) {
+    this.explosiveCrates = new ExplosiveCrateRenderer(scene);
     this.objectiveAnnouncements = new CoopDefenseObjectiveAnnouncement(scene);
     this.objectiveAnnouncements.build();
     this.mapEventAnnouncementPresenter = new CoopDefenseMapEventAnnouncementPresenter(
@@ -120,6 +133,8 @@ export class CoopMissionPresentationInfrastructure {
         baseId => this.uiInput?.getBaseManager()?.getStructureHp(baseId) ?? null,
         this.uiInput?.renderers.lighting ?? null);
       this.dawnWorldRevision = world.worldRevision;
+      // Every Dawn site has its own site marker, including the portal generator that starts unentered.
+      this.dawnSiteObjectiveIds = new Set(plan.sites.map(site => toDawnSiteObjectiveId(site.slotId)));
     }
     this.dawnSiteProps?.sync(objectives);
   }
@@ -130,6 +145,7 @@ export class CoopMissionPresentationInfrastructure {
     this.dawnSiteDecals?.destroy();
     this.dawnSiteDecals = null;
     this.dawnWorldRevision = null;
+    this.dawnSiteObjectiveIds = undefined;
   }
 
   createUiPort(input: CoopMissionPresentationInfrastructureInput): CoopMissionPresentationUiPort {
@@ -249,8 +265,8 @@ export class CoopMissionPresentationInfrastructure {
         },
       },
       secondaryObjectives: {
-        sync: (snapshot, configs, elapsedMs) => {
-          if (!this.destroyed) this.secondaryObjectiveHud?.sync(snapshot, configs, elapsedMs, true);
+        sync: (snapshot, configs, elapsedMs, liveStatus) => {
+          if (!this.destroyed) this.secondaryObjectiveHud?.sync(snapshot, configs, elapsedMs, true, liveStatus);
         },
         updateOcclusionFade: (deltaMs) => {
           if (!this.destroyed) {
@@ -294,7 +310,7 @@ export class CoopMissionPresentationInfrastructure {
                 const base = input.getBaseManager()?.getBase(id);
                 return base ? { ...getBaseWorldBounds(base.spec.region, metrics),
                   dormant: base.isDormant(), destroyed: base.isDestroyed() } : null;
-              }), snapshot, this.scene.time.now, elapsedMs);
+              }, input.getStandingBridges?.() ?? [], this.dawnSiteObjectiveIds), snapshot, this.scene.time.now, elapsedMs);
           }
         },
         syncMortarStrikes: (strikes, nowMs) => {
@@ -305,10 +321,13 @@ export class CoopMissionPresentationInfrastructure {
         },
         syncCoopDefenseCarry: (items) => {
           if (this.destroyed) return;
-          // Dawn supply sites carry crates; every other carry objective keeps the campaign bottle.
+          // Explosives are dynamite crates wherever they come from; Dawn supply sites carry their own
+          // crates; every other carry objective keeps the campaign bottle.
+          this.explosiveCrates.sync(items.filter(item => item.item === 'explosive'));
+          const cargo = items.filter(item => item.item !== 'explosive');
           const props = this.dawnSiteProps;
-          input.renderers.beer.syncCoopDefenseCarry(props ? items.filter(item => !props.ownsObjective(item.objectiveId)) : items);
-          props?.syncCrates(items.filter(item => props.ownsObjective(item.objectiveId)));
+          input.renderers.beer.syncCoopDefenseCarry(props ? cargo.filter(item => !props.ownsObjective(item.objectiveId)) : cargo);
+          props?.syncCrates(cargo.filter(item => props.ownsObjective(item.objectiveId)));
         },
         syncEnemyDashVisual: (enemy) => {
           if (!this.destroyed) input.clientUpdate.syncEnemyDashVisual(enemy);
@@ -362,6 +381,28 @@ export class CoopMissionPresentationInfrastructure {
           if (this.destroyed) return;
           if (config && !this.abyssCameo) this.abyssCameo = new AbyssCameoRenderer(this.scene);
           this.abyssCameo?.sync(config, elapsedMs, input.getWorldMetrics?.() ?? null);
+        },
+        syncPortalLinks: (mapConfig, entries, elapsedMs) => {
+          const metrics = input.getWorldMetrics?.();
+          if (this.destroyed || !metrics) return;
+          if (this.voidPortalScenario?.mapConfig !== mapConfig) {
+            this.voidPortalScenario = { mapConfig, scenario: {
+              links: (mapConfig.portalLinks ?? []).map(resolveCoopDefensePortalLink),
+              endpoints: resolveCoopMissionPortalEndpoints(mapConfig, metrics),
+            } };
+          }
+          this.voidPortals ??= new VoidPortalRenderer(this.scene, input.renderers.gpuVfx, input.renderers.lighting ?? null);
+          const bases = input.getBaseManager();
+          const views = this.voidPortals.sync(this.voidPortalScenario.scenario, entries, elapsedMs, (baseId) => {
+            const base = bases?.getBase(baseId);
+            if (!base) return null;
+            const bounds = getBaseWorldBounds(base.spec.region, metrics);
+            return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2,
+              hp: base.getHp(), maxHp: base.getMaxHp(), destroyed: base.isDestroyed() };
+          });
+          input.renderers.markers.coop?.set('portal-links', portalFlankMarkers(views.flatMap(view =>
+            view.phase === 'waiting' || view.phase === 'collapsed' ? [] : [{ id: view.id, exit: view.b, radius: view.radius,
+              phase: view.phase, chargeFraction: view.chargeFraction }])), this.scene.time.now);
         },
         syncBossIntro: (state, now) => {
           if (this.destroyed) return;
@@ -421,6 +462,7 @@ export class CoopMissionPresentationInfrastructure {
       // the HUD objects, matching the previous shutdown order.
       this.destroyWorldSpace(this.uiInput);
     }
+    this.explosiveCrates.destroy();
     this.destroyed = true;
     this.ui = null;
     this.uiInput = null;
@@ -460,8 +502,10 @@ export class CoopMissionPresentationInfrastructure {
     this.kraken?.destroy(); this.kraken = null; this.krakenIntro?.destroy(); this.krakenIntro = null;
     this.krakenPondVoid?.destroy(); this.krakenPondVoid = null;
     this.abyssCameo?.destroy(); this.abyssCameo = null;
+    this.voidPortals?.destroy(); this.voidPortals = null; this.voidPortalScenario = null;
     this.krakenResidency?.destroy(); this.krakenResidency = null;
     input.renderers.beer.syncCoopDefenseCarry([]);
+    this.explosiveCrates.sync([]);
     input.clientUpdate.resetEnemyDashVisuals();
     input.renderers.encounterTelegraph.destroy();
     input.renderers.bossIntro.clear();
@@ -477,6 +521,7 @@ export class CoopMissionPresentationInfrastructure {
     this.clearDawnSites();
     if (this.worldSpaceDestroyed) return;
     input.renderers.beer.syncCoopDefenseCarry([]);
+    this.explosiveCrates.sync([]);
     input.clientUpdate.resetEnemyDashVisuals();
     input.renderers.encounterTelegraph.clear();
     input.renderers.bossIntro.clear();
@@ -484,6 +529,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.voidHunterSparks.clear();
     input.renderers.voidRift.clear();
     this.kraken?.clear(); this.krakenIntro?.clear(); this.krakenPondVoid?.clear(); this.krakenResidency?.setPhase('dead'); this.krakenStage = 0; this.abyssCameo?.hide();
+    this.voidPortals?.hide();
     input.renderers.voidMeteorIntro.clear();
     this.announcedBossIntroKey = null;
     input.renderers.markers.releaseRound();

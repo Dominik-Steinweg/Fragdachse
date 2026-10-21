@@ -8,7 +8,7 @@ import {
 } from '../src/config/coopDefenseMapAuthoring';
 import { toAuthoredScenario, toCoopDefenseMapConfig } from '../src/config/authoring/coopDefenseAuthoringAdapter';
 import { getDawnSchedule } from '../src/config/dawn/dawnContent';
-import { parseDawnWorldPlan } from '../src/dawn/contracts/DawnPlans';
+import { DAWN_PLAN_VERSION, parseDawnWorldPlan } from '../src/dawn/contracts/DawnPlans';
 import { resolveDawnPhase, toDawnDynamicTimeOfDay } from '../src/dawn/rules/DawnPhase';
 
 describe('authored tree groves', () => {
@@ -204,7 +204,7 @@ describe('Dawn phase rules', () => {
 });
 
 describe('Dawn world plan sites', () => {
-  const plan = { version: 1, templateId: 'clearing', contentHash: '0123456789abcdef', sites: [] as unknown[] };
+  const plan = { version: DAWN_PLAN_VERSION, templateId: 'clearing', contentHash: '0123456789abcdef', sites: [] as unknown[] };
 
   it('accepts occupied slots and rejects duplicates and unknown tiers', () => {
     const site = { slotId: 'near-1', archetypeId: 'wreck', tier: 1 };
@@ -212,5 +212,15 @@ describe('Dawn world plan sites', () => {
     expect(parseDawnWorldPlan({ ...plan, sites: [site, site] })).toBeNull();
     expect(parseDawnWorldPlan({ ...plan, sites: [{ ...site, tier: 0 }] })).toBeNull();
     expect(parseDawnWorldPlan({ ...plan, sites: undefined })).toBeNull();
+  });
+
+  it('allows one portal exit per round on a slot no site occupies', () => {
+    const portal = { slotId: 'far-1', archetypeId: 'portal-generator', tier: 2, portalExitSlotId: 'near-2' };
+    const wreck = { slotId: 'near-1', archetypeId: 'wreck', tier: 1 };
+    expect(parseDawnWorldPlan({ ...plan, sites: [wreck, portal] })?.sites).toEqual([wreck, portal]);
+    expect(parseDawnWorldPlan({ ...plan, sites: [wreck, { ...portal, portalExitSlotId: 'near-1' }] })).toBeNull();
+    expect(parseDawnWorldPlan({ ...plan, sites: [portal, { ...portal, slotId: 'far-2', portalExitSlotId: 'near-3' }] }))
+      .toBeNull();
+    expect(parseDawnWorldPlan({ ...plan, sites: [{ ...portal, portalExitSlotId: 'Bad Slot' }] })).toBeNull();
   });
 });

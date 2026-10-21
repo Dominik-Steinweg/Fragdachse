@@ -32,6 +32,10 @@ describe('Coop marker adapters', () => {
     expect(hold.bundleKey).not.toBe(descriptors[0].bundleKey);
     expect(secondaryObjectiveMarkers([entry], [config], [], origin, () => ({ ...bounds, dormant: true }))).toEqual([]);
   });
+  it('leaves an objective that another source marks to that source, even when it starts by time', () => {
+    expect(secondaryObjectiveMarkers([entry], [config], [], origin, () => bounds)).toHaveLength(1);
+    expect(secondaryObjectiveMarkers([entry], [config], [], origin, () => bounds, [], new Set(['a']))).toEqual([]);
+  });
   it('keeps carry-holder and delivery selection semantics, deriving the green ring from the authored zone', () => {
     const carryConfig = { ...config, type: 'carry' as const, targets: [], carry: {
       spawnZone: { gridX: 1, gridY: 1, widthCells: 2, heightCells: 2 },

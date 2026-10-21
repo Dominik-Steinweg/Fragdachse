@@ -68,6 +68,12 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft, g
   };
   array(draft.waterAreas).forEach((r, i) => rect(`water:${session.key(['waterAreas'], i)}`, `Wasserfläche ${i + 1}`, ['waterAreas', i], 'water'));
   array(draft.rockWalls).forEach((r, i) => rect(`wall:${r.id}`, `Felswand · ${r.id}`, ['rockWalls', i], 'walls'));
+  // Bridge decks over water; position is editable, span and width stay in the JSON.
+  array(draft.bridges).forEach((b, i) => {
+    const horizontal = b.axis !== 'vertical', span = Number(b.spanCells ?? 2), width = Number(b.deckWidthCells ?? 2);
+    items.push({ id: `bridge:${b.id}`, label: `Brücke · ${b.id}`, path: ['bridges', i], layer: 'water', kind: 'rect',
+      x: Number(b.gridX ?? 0), y: Number(b.gridY ?? 0), w: horizontal ? span : width, h: horizontal ? width : span, readonly: true });
+  });
   array(object(draft.rockField).corridors).forEach((c, i) => {
     const points = array(c.points).map(p => ({ x: Number(p.gridX), y: Number(p.gridY) }));
     items.push({ id: `corridor:${c.id}`, label: `Korridor · ${c.id}`, path: ['rockField', 'corridors', i], layer: 'corridors', kind: 'corridor', x: points[0]?.x ?? 0, y: points[0]?.y ?? 0, w: 1, h: 1, points, radius: Number(c.radiusCells ?? object(draft.rockField).corridorRadiusCells) * Number(object(draft.rockField).rockDensityScale ?? 1) });
@@ -108,7 +114,11 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft, g
     items.push({ id: 'persistent-base', label: 'Persistenter Basiskern', reservationRadius: MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS, path: ['persistentBase', 'anchor'], layer: 'structures', kind: 'base', x: p.minGridX, y: p.minGridY, w: p.width, h: p.height, anchorX: Number(anchor.gridX), anchorY: Number(anchor.gridY), cells: p.cells.map(c => ({ gridX: p.minGridX + c.gridX, gridY: p.minGridY + c.gridY })) });
   }
   array(draft.secondaryObjectives).forEach((s, i) => {
-    if (s.carry) for (const key of ['spawnZone', 'deliveryZone']) rect(`carry:${s.id}:${key}`, `${s.id} · ${key === 'spawnZone' ? 'Flaschen-Start' : 'Abgabezone'}`, ['secondaryObjectives', i, 'carry', key], 'mission');
+    const carry = s.carry ? object(s.carry) : null;
+    // Explosive cargo is planted on bridges and has no delivery zone.
+    if (carry) for (const key of ['spawnZone', 'deliveryZone']) if (carry[key] !== undefined) {
+      rect(`carry:${s.id}:${key}`, `${s.id} · ${key === 'spawnZone' ? (carry.item === 'explosive' ? 'Sprengstofflager' : 'Flaschen-Start') : 'Abgabezone'}`, ['secondaryObjectives', i, 'carry', key], 'mission');
+    }
   });
   array(draft.spawnZones).forEach((zone, i) => {
     rect(`zone:${zone.id}`, `Spawnzone · ${zone.id}${zone.medium === 'water' ? ' (Wasser)' : ''}`, ['spawnZones', i], 'spawns');

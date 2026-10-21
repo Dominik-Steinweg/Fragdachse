@@ -33,6 +33,8 @@ import type { GameMode } from '../types';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import { WaterGeometry } from './WaterGeometry';
 import { normalizeCoopDefenseWater } from '../config/coopDefenseWater';
+import { normalizeCoopDefenseBridges } from '../config/coopDefenseBridges';
+import { getBridgeApproachClearings } from './BridgeGeometry';
 import { DECAL_SIZE } from './DecalConfig';
 
 // ── Felsfeld-Gänge ──────────────────────────────────────────────────────────
@@ -108,7 +110,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 15;
+export const ARENA_GENERATOR_VERSION = 16;
 
 /**
  * Anteil einzelliger Felsdurchlaesse, die bewusst eng bleiben. Der Rest wird um eine Felszelle
@@ -236,12 +238,23 @@ export class ArenaGenerator {
         barrier.cells.map((cell) => `${cell.gridX}_${cell.gridY}`)
       )),
     );
-    // Checkpoints und Salvage-Site-Lichtungen teilen dieselbe Garantie: ihr Kern bleibt frei von
-    // Fels, Felsbaendern und Baeumen. Ohne Sites bleibt die Eingabe (und damit jede RNG-Folge) gleich.
+    const water = coopMapConfig
+      ? normalizeCoopDefenseWater(coopMapConfig, this.metrics.gridCols, this.metrics.gridRows) ?? []
+      : [];
+    // Bridge decks stay water here: every World must connect its land without them, so a
+    // collapsed bridge can never cut a region off. Only the approaches are kept free of rock.
+    const bridges = coopMapConfig
+      ? normalizeCoopDefenseBridges(coopMapConfig, water, this.metrics.gridCols, this.metrics.gridRows) ?? []
+      : [];
+    // Checkpoints, Salvage-Site- und Portal-Lichtungen teilen dieselbe Garantie: ihr Kern bleibt frei
+    // von Fels, Felsbaendern und Baeumen. Ohne Sites bleibt die Eingabe (und damit jede RNG-Folge) gleich.
+    // Brueckenzugaenge kommen zuletzt, damit Maps ohne Bruecken dieselbe RNG-Folge behalten.
     const protectedClearings = [
       ...(coopMapConfig?.missionProgress?.checkpoints ?? []),
       ...(coopMapConfig?.siteClearings ?? []),
+      ...(coopMapConfig?.portalAnchors ?? []),
       ...spawnZoneCores(coopMapConfig?.spawnZones),
+      ...bridges.flatMap(getBridgeApproachClearings),
     ];
     // Authored Fass-Anker bleiben wie kleine Lichtungen felsfrei; ohne Anker bleibt jede RNG-Folge gleich.
     const reactivePropAnchors = coopMapConfig?.reactiveProps?.anchors ?? [];
@@ -257,9 +270,6 @@ export class ArenaGenerator {
     // Authored Felsbaender sind reguläre Felsen, aber keine Generatoreingabe: Sie werden erst
     // nach Konnektivitäts-, Baum- und Routenprüfung gestempelt. Sonst läse `ensureConnected` ein
     // bewusst gesetztes Band als abgeschnürte Tasche und fräste es wieder auf.
-    const water = coopMapConfig
-      ? normalizeCoopDefenseWater(coopMapConfig, this.metrics.gridCols, this.metrics.gridRows) ?? []
-      : [];
     const waterGeometry = new WaterGeometry(water, this.metrics);
     for (const cell of water) {
       if (this.isCaptureTheBeerBaseCell(cell.gridX, cell.gridY)) throw new Error('[ArenaGenerator] Invalid water cell in Capture the Beer base');
@@ -638,6 +648,7 @@ export class ArenaGenerator {
           (cell.surface === 'rock' ? cell.displaySize ?? ROCK_DECAL_SIZE : DECAL_SIZE) * Math.SQRT1_2,
         )) : decals,
         ...(water.length ? { water } : {}),
+        ...(bridges.length ? { bridges: bridges.map((bridge) => ({ ...bridge })) } : {}),
         powerUpPedestals,
         groundHazardZones,
         ...(reactiveProps.length ? { reactiveProps } : {}),
@@ -933,6 +944,12 @@ export class ArenaGenerator {
     }
     for (const front of fronts) {
       sourceGroups.push(this.getSpawnFrontCells(front, blocked, baseCells, bases));
+    }
+    // Each portal endpoint must reach the base on land: after the generator falls, travelers that
+    // stand at either end still need a way home without the link.
+    for (const anchor of mapConfig.portalAnchors ?? []) {
+      sourceGroups.push(blocked[anchor.gridY]?.[anchor.gridX] || baseCells.has(this.cellKey(anchor.gridX, anchor.gridY))
+        ? [] : [{ gridX: anchor.gridX, gridY: anchor.gridY }]);
     }
     return sourceGroups;
   }

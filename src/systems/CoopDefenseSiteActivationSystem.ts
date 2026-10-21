@@ -6,14 +6,16 @@ import type { CoopDefenseMissionPlayerSample } from './CoopDefenseMissionProgres
 /**
  * Host-autoritative Aktivierung von Salvage-Sites.
  *
- * Eine Site wird aktiviert, sobald ein berechtigter, lebender Teilnehmer ihre Lichtung betritt;
- * die Aktivierung ist dauerhaft fuer die Activity. Nebenziele lesen sie ueber den Trigger
- * `site-activated`; der replizierte Nebenziel-Snapshot traegt die Folgen zu den Clients.
+ * Eine Site wird aktiviert, sobald ein berechtigter, lebender Teilnehmer ihre Lichtung betritt
+ * oder ihr Bauwerk trifft (ein Fernangriff weckt die Wache ebenso); die Aktivierung ist dauerhaft
+ * fuer die Activity. Nebenziele lesen sie ueber den Trigger `site-activated`; der replizierte
+ * Nebenziel-Snapshot traegt die Folgen zu den Clients.
  */
 export class CoopDefenseSiteActivationSystem {
   private elapsedMs = 0;
   private readonly activatedSiteIds = new Set<string>();
   private readonly sites: readonly { readonly id: string; readonly x: number; readonly y: number; readonly radiusPx: number }[];
+  private readonly siteByStructure: ReadonlyMap<string, string>;
 
   constructor(
     clearings: readonly CoopDefenseMapSiteClearingConfig[],
@@ -24,6 +26,17 @@ export class CoopDefenseSiteActivationSystem {
       const center = worldCellCenter(metrics, clearing.gridX, clearing.gridY);
       return { id: clearing.id, x: center.x, y: center.y, radiusPx: clearing.radiusCells * CELL_SIZE };
     });
+    this.siteByStructure = new Map(clearings.flatMap((clearing) => (
+      clearing.structureBaseId === undefined ? [] : [[clearing.structureBaseId, clearing.id] as const])));
+  }
+
+  /** Eligible damage on a clearing's structure activates its site like entering it. */
+  reportStructureDamaged(baseId: string): void {
+    const siteId = this.siteByStructure.get(baseId);
+    if (siteId === undefined || this.activatedSiteIds.has(siteId)) return;
+    const closesAt = this.closesAtRoundMsBySite.get(siteId);
+    if (closesAt !== undefined && this.elapsedMs >= closesAt) return;
+    this.activatedSiteIds.add(siteId);
   }
 
   hostUpdate(deltaMs: number, countdownActive: boolean, samples: readonly CoopDefenseMissionPlayerSample[]): void {

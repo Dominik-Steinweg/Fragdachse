@@ -349,6 +349,24 @@ bei unverändertem Weltlicht und ausgeschaltetem Untertauchfilter: sRGB-Luma sow
 Rec.709-Luminanz. Das ist ein Bildvergleich der gesamten Weltkomposition, keine isolierte
 Messung eines einzelnen Lichtpasses. Der Dev-Server bleibt laufen.
 
+### Sprengbare Brücken (bridgeReview)
+
+Eigene Diagnosekarte (44×34): Ein Fluss läuft vom Nordrand bis Zeile 25, südlich davon verbindet eine
+trockene Furt beide Ufer; eine Holzbrücke quert den Fluss auf halber Höhe. Der Spieler startet am Ostwiderlager
+neben zwei Dynamitkisten (Nebenziel „Brücke sprengen“) und nimmt eine davon sofort auf.
+
+```js
+const dev = window.devScenario;
+await dev.run({ action: 'bridgeReview', step: 'start' });
+await dev.run({ action: 'bridgeReview', step: 'cross' });   // Jäger vom Westufer laufen über die Brücke
+await dev.run({ action: 'bridgeReview', step: 'crowd' });   // drei angeheftete Gegner auf dem Deck
+await dev.run({ action: 'bridgeReview', step: 'plant' });   // echter Shift-Pfad: Request, Hostprüfung, Zündschnur
+await dev.run({ action: 'bridgeReview', step: 'status' });  // Brückenzustand, Kisten, Nebenziel, Nav-Diagnose
+```
+
+`force-plant` zündet ohne Kiste, `collapse` lässt die Brücke sofort einstürzen. Das Dev-Szenario sperrt den
+normalen Spielerinput (`diagnosticsArena`); die Shift-Plakette erscheint deshalb nur in einer echten Partie.
+
 ### Allgemeine Steuerung
 
 Power-Ups gezielt auf einer freien Zelle erzeugen: `devScenario.run({action:'spawnPowerUp', id:'HEALTH_PACK', gridX:24, gridY:24})`.
@@ -518,6 +536,19 @@ Fuer 12 Spieler vor dem Start elf `bots` im Rezept angeben (siehe Bots oben).
 Masken ohne Doppelkanten bei freier Drehung, alle Laufphasen und Waffenwechsel pruefen;
 Nacht nur Fusskontakt, Wasserrand schwaecher, keine Schatten auf Fels/Basen.
 High/Medium/Low-Wechsel, World-Wechsel und WebGL-Kontext-Wiederherstellung separat pruefen.
+
+Wildlife-Vögel: `status().wildlifeBirds` listet Art, Weltposition, Phase, Höhe und Deckkraft aller
+Vögel. `target` erwartet Gitterzellen, also Weltposition abzüglich World-Offset geteilt durch 32:
+
+```js
+const s = dev.status(), bird = s.wildlifeBirds.find(b => b.kind === 'sparrow');
+dev.run({action:'target',gridX:Math.round((bird.x-s.metrics.offsetX)/32),gridY:Math.round((bird.y-s.metrics.offsetY)/32)});
+dev.run({action:'camera',zoom:3,focusTarget:true});
+dev.run({action:'options',values:{timeOfDay:0}}); // Eulen
+```
+
+Ohne Spielszene prüft das [Wildlife-Labor](../wildlife-lab.html) Vögel mit Tageszeit-, Schuss-,
+Explosions- und Gegnerprobe.
 
 Lokale Render-Ausgaben isolieren: `dev.run({action:'renderDebug',disable:['sunComposite','fogDisplay','lightmap','characterShadows']})`.
 Die Liste ersetzt die bisherige Auswahl; zusätzlich sind `distortion`, `bloom`, `grade`, `vignette`, `focus`, `barrel` erlaubt.

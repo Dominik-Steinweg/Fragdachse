@@ -13,7 +13,7 @@ export const MARKER_GLYPH_IDS = [
   'site-wreck', 'site-extractor', 'site-brood-nest', 'site-supply', 'site-scrap-heaps', 'scavenger',
   'mission-destroy', 'mission-hold', 'mission-carry',
   'crate', 'flag', 'hazard', 'timebomb', 'tool',
-  'check', 'cross',
+  'check', 'cross', 'portal',
 ] as const;
 export type MarkerGlyphId = typeof MARKER_GLYPH_IDS[number];
 

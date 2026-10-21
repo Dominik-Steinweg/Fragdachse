@@ -34,11 +34,20 @@ export function enemyMarkers(enemies: readonly EnemyMarkerTarget[]): MarkerDescr
   });
 }
 
+/** A standing bridge an explosive can still be planted on. */
+export interface BridgeMarkerTarget {
+  readonly id: string;
+  readonly bounds: MarkerTargetBounds;
+}
+
 export function secondaryObjectiveMarkers(
   snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
   configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
   carry: readonly SyncedCoopDefenseCarryItem[], origin: Origin,
   boundsFor: (id: string) => MarkerTargetBounds | null,
+  standingBridges: readonly BridgeMarkerTarget[] = [],
+  /** Objectives another source marks (e.g. Dawn sites that start without being entered). */
+  externallyOwned?: ReadonlySet<string>,
 ): MarkerDescriptor[] {
   const out: MarkerDescriptor[] = [];
   for (const entry of snapshot ?? []) {
@@ -47,7 +56,7 @@ export function secondaryObjectiveMarkers(
     if (!config) continue;
     // Site-activated objectives belong to a world site; its own source keeps one marker from dormant to resolved.
     // Carry items and the delivery zone of a site still come from here.
-    const siteOwned = config.start.type === 'site-activated';
+    const siteOwned = config.start.type === 'site-activated' || externallyOwned?.has(config.id) === true;
     if (siteOwned && config.type !== 'carry') continue;
     // Focus remains a semantic grouping boundary; different objective types never share a glyph.
     const group = `mission:${config.type}:${entry.focused ? 'focus' : 'background'}`;
@@ -67,7 +76,14 @@ export function secondaryObjectiveMarkers(
           // The existing Carry runtime uses a 16px item body, independent of the bottle sprite.
           targetHalfHeight: 8, bundleKey: `${group}:carry` });
       }
-      if (config.carry && isCarryDeliveryZoneMarked(carry, entry.objectiveId)) {
+      // Explosives replace the delivery zone with the bridges they can still bring down.
+      if (config.carry?.item === 'explosive' && isCarryDeliveryZoneMarked(carry, entry.objectiveId)) {
+        for (const target of standingBridges) {
+          out.push({ ...common, key: `mission:${encodeURIComponent(config.id)}:bridge:${target.id}`, kind: 'delivery', glyph: 'timebomb',
+            ...pose(target.bounds), groundRing: { radiusPx: Math.max(target.bounds.width, target.bounds.height) / 2 }, bundleKey: `${group}:delivery` });
+        }
+      }
+      if (config.carry?.deliveryZone && isCarryDeliveryZoneMarked(carry, entry.objectiveId)) {
         const z = config.carry.deliveryZone;
         const bounds = { x: origin.offsetX + z.gridX * CELL_SIZE, y: origin.offsetY + z.gridY * CELL_SIZE,
           width: z.widthCells * CELL_SIZE, height: z.heightCells * CELL_SIZE };
@@ -101,6 +117,28 @@ export function checkpointMarkers(config: ResolvedCoopDefenseMapMissionProgressC
       stateChangedAtMs: completed && clock ? clock.nowMs - Math.max(0, clock.elapsedMs - completed.completedAtRoundMs) : undefined,
       visibility: 'world-and-edge' as const }];
   });
+}
+
+export interface PortalFlankMarkerTarget {
+  readonly id: string;
+  readonly exit: { readonly x: number; readonly y: number };
+  readonly radius: number;
+  readonly phase: 'charging' | 'open';
+  readonly chargeFraction: number;
+}
+
+/**
+ * The exit of a generator portal is where the extra flank arrives: a world badge with the charge as
+ * progress while it builds, an urgent edge arrow once it is open. A closed link has no marker.
+ */
+export function portalFlankMarkers(links: readonly PortalFlankMarkerTarget[]): MarkerDescriptor[] {
+  return links.map((link): MarkerDescriptor => ({
+    key: `portal:${encodeURIComponent(link.id)}:exit`, kind: 'hazard', glyph: 'portal', state: 'active',
+    x: link.exit.x, y: link.exit.y, targetHalfHeight: link.radius, groundRing: { radiusPx: link.radius },
+    ...(link.phase === 'charging'
+      ? { visibility: 'world-only' as const, progress: link.chargeFraction }
+      : { visibility: 'world-and-edge' as const, urgent: true }),
+  }));
 }
 
 /** One round's projections. First hydration is a baseline; only observed transitions get a local stamp. */

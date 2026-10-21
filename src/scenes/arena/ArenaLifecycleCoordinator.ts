@@ -7,7 +7,8 @@ import { type PersistentBaseHealthReward } from '../../persistentBase/Persistent
 import { resolveDawnExpansionCoreHpBonus } from '../../dawn/economy/DawnExpansionRewards';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
-import { getDevDawnNightModifier } from '../../dev/scenario/dawnNightModifier';
+import { getDevDawnNightModifier, getDevDawnTemplateId } from '../../dev/scenario/dawnNightModifier';
+import { isDawnPortalGeneratorForced } from '../../dawn/debug/dawnDebugOverrides';
 import { resolveDawnNightEnvironment } from '../../dawn/resolution/DawnNightModifierResolution';
 import { isLocalScenarioBotPeer } from '../../network/peer/LocalScenarioSession';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
@@ -447,6 +448,8 @@ export class ArenaLifecycleCoordinator {
           const candidate = this.ctx.inputSystem.getInteractionCandidate();
           return candidate?.kind === 'lobby-menu' ? candidate.menu : null;
         },
+        explosions: this.ctx.effectSystem,
+        wildlifeAudio: { playSound: (key, x, y, volumeScale) => this.ctx.gameAudioSystem.playSound(key, x, y, undefined, volumeScale) },
         getActivityMoonlight: () => dawnNight()?.moonlight,
         getActivityVoidDanger: () => this.coopMissionVoidDanger.read(),
         groundFog: {
@@ -796,6 +799,12 @@ export class ArenaLifecycleCoordinator {
       renderers,
       getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
       getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
+      getStandingBridges: () => {
+        const bridges = this.worldGameplay?.bridges;
+        if (!bridges) return [];
+        return bridges.getBridges().filter(entry => bridges.isStanding(entry.id))
+          .map(entry => ({ id: entry.id, bounds: bridges.getDeckRect(entry.id)! }));
+      },
     }) ?? null;
     this.coopMissionPorts = createArenaCoopMissionPorts({
       getStructureOccupancyState: id => this.worldPlayerGameplayRuntime?.getStructureOccupancyState(id),
@@ -865,6 +874,7 @@ export class ArenaLifecycleCoordinator {
         if (!this.worldGeometryBinding) throw new Error('Navigation requires materialized World geometry');
         return this.worldGeometryBinding.snapshotMovementGeometry();
       },
+      getCollisionWater: () => this.worldGeometryBinding?.getCollisionWater() ?? null,
       getNavigationObstacleIntegrity: (enemy, id) => {
         const materialization = this.worldRuntime?.materialization;
           if (!materialization) return null;
@@ -915,6 +925,8 @@ export class ArenaLifecycleCoordinator {
       getGameAudioSystem: () => this.ctx.gameAudioSystem,
       getLightingSystem: () => this.renderers.lighting,
       getPlayerWorldRuntime: () => this.worldRuntime?.players ?? null,
+      getPortalSourcePort: () => this.worldPlayerGameplayRuntime?.getPortalSourcePort() ?? null,
+      publishPortalLinkState: (entries) => bridge.publishCoopDefensePortalLinkState(entries),
       train: this.coopTrainPort,
       isHost: () => bridge.isHost(),
       getHumanPlayerCount: () => Math.max(
@@ -1274,6 +1286,9 @@ export class ArenaLifecycleCoordinator {
   getWorldTargetingRuntime(): WorldTargetingRuntime | null { return this.worldGameplay?.targeting ?? null; }
   getWorldGeometryBinding(): WorldGeometryBinding | null { return this.worldGeometryBinding; }
   getWorldTrainRuntime(): WorldTrainRuntime | null { return this.worldTrainRuntime; }
+  getWorldBridgeRuntime(): import('../../world/WorldBridgeRuntime').WorldBridgeRuntime | null {
+    return this.worldGameplay?.bridges ?? null;
+  }
   getWorldProjectileRuntime(): WorldProjectileRuntime | null { return this.worldGameplay?.projectiles ?? null; }
   getWorldObjectMutationRuntime(): import('../../world/WorldObjectMutationRuntime').WorldObjectMutationRuntime | null {
     return this.worldGameplay?.worldMutation ?? null;
@@ -1874,6 +1889,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
+    bridge.publishCoopDefensePortalLinkState(null);
     // Der Seed steht vor der Komposition fest: Dawn-Plaene und Layout derselben Runde teilen ihn.
     const seed = this.nextScenarioSeed ?? Date.now();
     this.nextScenarioSeed = null;
@@ -2255,6 +2271,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
+    bridge.publishCoopDefensePortalLinkState(null);
   }
 
   /** Publiziert den bestehenden Wire-Vertrag eines angewendeten, aktuellen Coop-Abschlusses. */
@@ -2366,6 +2383,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
+    bridge.publishCoopDefensePortalLinkState(null);
     bridge.publishRoundState(null);
     bridge.publishRoundResults([]);
     bridge.publishCoopDefenseRespawnBudgetState(null);
@@ -3226,6 +3244,7 @@ export class ArenaLifecycleCoordinator {
     }
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
+    bridge.publishCoopDefensePortalLinkState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     // Die World-Gameplay-Owner sind mit ihrer `WorldRuntime` bereits zerstoert; hier faellt nur
     // noch die Flow-Referenz auf die vergangene Instanz.
@@ -3909,7 +3928,9 @@ function composeHostDawnRoundPlans(seed: number): DawnRoundPlans {
     threat: resolveDawnThreat(dawn.expansionLevel),
     dayNumber: dawn.stats.roundsPlayed + 1,
     nightModifier: isDevScenarioMode() ? getDevDawnNightModifier() : undefined,
+    templateId: isDevScenarioMode() ? getDevDawnTemplateId() : undefined,
     scrapScanner: freezeDawnInfrastructure(dawn).scrapScanner > 0,
+    forcePortalGenerator: isDawnPortalGeneratorForced(),
   });
 }
 

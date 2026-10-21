@@ -107,6 +107,7 @@ export interface ClientUpdatePerformanceMetrics {
 /** World-owned reads needed by the client frame, scoped to this coordinator. */
 export interface ClientWorldFramePort {
   getShootingRange?(): import('../../shootingRange/ShootingRangeWorldBinding').ShootingRangeWorldBinding | null;
+  getBridgeRuntime?(): import('../../world/WorldBridgeRuntime').WorldBridgeRuntime | null;
   getWorldRuntime(): WorldRuntime | null;
   getTargetingRuntime(): WorldTargetingRuntime | null;
 }
@@ -631,6 +632,8 @@ export class ClientUpdateCoordinator {
     }
 
     const interpolationStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
+    // Bridge collapses change collision water; project them before the replay below.
+    this.worldFramePort?.getBridgeRuntime?.()?.applySnapshot(state.bridges ?? []);
     // Replay sees the current collision geometry, including this snapshot's World mutations.
     this.updateLocalMovement(state, currentVersion, delta, countdownActive);
     for (const player of this.ctx.playerManager.getAllPlayers()) {

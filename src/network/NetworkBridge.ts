@@ -76,7 +76,7 @@ import {
   type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkFlight, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedMortarStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedSpawnPlaceState, SyncedSpawnZoneAlert, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkFlight, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedMortarStrike, SyncedBaseState, SyncedBridgeState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedSpawnPlaceState, SyncedSpawnZoneAlert, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import {
   clonePersistentPlayerBaseContribution,
@@ -115,6 +115,8 @@ import {
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
 import { EMPTY_FIRE_CONTROL_SNAPSHOT, type FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import { encodeFireControlSnapshot, decodeFireControlSnapshot } from './fireControlSnapshotCodec';
+import { decodePortalLinkState, encodePortalLinkState } from './coopPortalLinkCodec';
+import type { PortalLinkStateEntry } from '../systems/portal/PortalLinkSystem';
 import { EMPTY_BOMBER_SQUADRON_SNAPSHOT, type BomberSquadronSnapshot } from '../systems/bomberSquadron/BomberSquadronSnapshot';
 import { encodeBomberSquadronSnapshot, decodeBomberSquadronSnapshot } from './bomberSquadronSnapshotCodec';
 import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
@@ -259,6 +261,7 @@ const KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION = 'cso'; // global reliable: Obj
 const KEY_COOP_MISSION_PROGRESS_PRESENTATION = 'cmp'; // global reliable: route/checkpoint snapshot | null
 const KEY_COOP_SPAWN_ZONE_ALERTS = 'csz'; // global reliable: SyncedSpawnZoneAlert[] | null
 const KEY_COOP_SPAWN_PLACES = 'csp'; // global reliable: SyncedSpawnPlaceState | null
+const KEY_COOP_PORTAL_LINKS = 'cpl'; // global reliable: WirePortalLinkState | null (generator portal lifecycle)
 const MAX_COOP_SPAWN_PLACE_IDS = 64;
 const MAX_COOP_SPAWN_ZONE_ALERTS = 16;
 const MAX_COOP_ENCOUNTER_ZONES = 64;
@@ -420,6 +423,8 @@ export interface GameState extends KrakenSnapshotPatch {
   bases:        SyncedBaseState[];        // Coop-Basen: beschädigte Basen plus Zielwinkel aktiver Basistürme
   captureTheBeer: SyncedCaptureTheBeerState | null;
   coopDefenseCarry: SyncedCoopDefenseCarryState;
+  /** Bridges that left `standing`; always present after decode, empty = all stand. */
+  bridges: SyncedBridgeState[];
   stinkClouds:  SyncedStinkCloud[];      // Stinkdrüsen-Gaswolken (spieler-folgend)
   timeBubbles:  SyncedTimeBubble[];
   teslaDomes:   SyncedTeslaDome[];
@@ -472,6 +477,7 @@ interface OutboundGameState extends KrakenSnapshotPatch {
   bases:        SyncedBaseState[];
   captureTheBeer: SyncedCaptureTheBeerState | null;
   coopDefenseCarry: SyncedCoopDefenseCarryState;
+  bridges: SyncedBridgeState[];
   stinkClouds:  SyncedStinkCloud[];
   timeBubbles:  SyncedTimeBubble[];
   teslaDomes:   SyncedTeslaDome[];
@@ -496,6 +502,27 @@ function encodeSlimeTrailSnapshot(snapshot: SyncedSlimeTrailSnapshot): EncodedSl
     snapshot.cells.map(cell => [cell.id, cell.x, cell.y, cell.size, cell.alpha]),
     snapshot.affectedEnemies.map(enemy => [enemy.enemyId, enemy.x, enemy.y, enemy.alpha]),
   ];
+}
+
+/**
+ * Bridge slice: undefined only when the key is missing (keep the previous value); malformed
+ * entries are dropped instead of trusting the wire.
+ */
+export function decodeBridgeStates(raw: unknown): SyncedBridgeState[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) return [];
+  const states: SyncedBridgeState[] = [];
+  for (const entry of raw.slice(0, 64)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const { id, phase, detonatesAt, throwX, throwY } = entry as Record<string, unknown>;
+    if (typeof id !== 'string' || id.length === 0 || id.length > 64) continue;
+    if (phase === 'collapsed') states.push({ id, phase });
+    else if (phase === 'charged' && typeof detonatesAt === 'number' && Number.isFinite(detonatesAt)) {
+      const thrown = typeof throwX === 'number' && Number.isFinite(throwX) && typeof throwY === 'number' && Number.isFinite(throwY);
+      states.push({ id, phase, detonatesAt, ...(thrown ? { throwX, throwY } : {}) });
+    }
+  }
+  return states;
 }
 
 function decodeSlimeTrailSnapshot(raw: unknown): SyncedSlimeTrailSnapshot {
@@ -888,6 +915,11 @@ export class NetworkBridge {
     expectedRoundRevision: number | null;
     value: CoopDefenseMissionProgressPresentationState | null;
   } | null = null;
+  private portalLinkCache: {
+    raw: unknown;
+    expectedRoundRevision: number | null;
+    value: readonly PortalLinkStateEntry[] | null;
+  } | null = null;
   /**
    * Reliable Map-Event-Snapshots werden vom HUD pro Frame gelesen. Der Transport behält bei
    * unverändertem Zustand dieselbe Raw-Referenz; deshalb wird die Fail-Closed-Sanitization nur
@@ -952,6 +984,7 @@ export class NetworkBridge {
   private dashHandler: DashHandler | null = null;
   private burrowHandler: BurrowHandler | null = null;
   private structureOccupancyHandler: ((id: string, request: import('../systems/StructureOccupancySystem').StructureOccupancyRequest) => boolean) | null = null;
+  private bridgeChargeHandler: ((id: string, request: { readonly bridgeId: string }) => boolean) | null = null;
   private turretControlHandler: ((id: string, request: import('../types').TurretControlRequest) => boolean) | null = null;
   private shootingRangeHandler: ((id: string, request: import('../shootingRange/ShootingRangeContracts').ShootingRangeRequest) => boolean) | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
@@ -1896,6 +1929,22 @@ export class NetworkBridge {
     });
   }
 
+  sendBridgeChargeRequest(request: { readonly bridgeId: string }): void {
+    if (this.getWorldActionRevision() === null) return;
+    if (isHost()) { this.bridgeChargeHandler?.(myPlayer().id, request); return; }
+    this.sendWorldRpc('bridge-charge', { bridgeId: request.bridgeId });
+  }
+
+  registerBridgeChargeHandler(handler: typeof this.bridgeChargeHandler): void {
+    this.bridgeChargeHandler = handler;
+    this.registerHostRpcHandler('bridge-charge', (data: unknown, caller: PlayerState): boolean => {
+      if (!isHost() || !this.acceptsWorldRpc(data) || !data || typeof data !== 'object') return false;
+      const { bridgeId } = data as { bridgeId?: unknown };
+      if (typeof bridgeId !== 'string' || bridgeId.length === 0 || bridgeId.length > 64) return false;
+      return this.bridgeChargeHandler?.(caller.id, { bridgeId }) ?? false;
+    });
+  }
+
   sendTurretControlRequest(request: import('../types').TurretControlRequest): void {
     if (this.getWorldActionRevision() === null) return;
     if (isHost()) { this.turretControlHandler?.(myPlayer().id, request); return; }
@@ -2576,6 +2625,25 @@ export class NetworkBridge {
       ? sanitized
       : null;
     this.missionProgressPresentationCache = { raw, expectedRoundRevision, value };
+    return value;
+  }
+
+  /** Host-only: lifecycle of the generator portal links; null outside a mission with links. */
+  publishCoopDefensePortalLinkState(entries: readonly PortalLinkStateEntry[] | null): void {
+    if (!isHost()) return;
+    const roundRevision = entries ? this.getActiveRoundRevision() : null;
+    setState(KEY_COOP_PORTAL_LINKS, entries && roundRevision !== null
+      ? encodePortalLinkState(roundRevision, entries) : null, true);
+  }
+
+  /** Portal links of the current round; a foreign round or malformed snapshot reads as null. */
+  getCoopDefensePortalLinkState(): readonly PortalLinkStateEntry[] | null {
+    const raw = getState(KEY_COOP_PORTAL_LINKS) as unknown;
+    const expectedRoundRevision = this.getActiveRoundRevision();
+    const cached = this.portalLinkCache;
+    if (cached && cached.raw === raw && cached.expectedRoundRevision === expectedRoundRevision) return cached.value;
+    const value = decodePortalLinkState(raw, expectedRoundRevision);
+    this.portalLinkCache = { raw, expectedRoundRevision, value };
     return value;
   }
 
@@ -3434,6 +3502,8 @@ export class NetworkBridge {
     // Unlike delta-friendly world slices, Carry must publish an empty array after delivery so
     // a completed item cannot survive in a client's merge cache.
     payload.cc = state.coopDefenseCarry;
+    // Like Carry: an empty slice is meaningful (no bridge left `standing`), never a missing delta.
+    payload.bg = state.bridges ?? [];
     this.sampleProjectileSyncPayload(state.projectiles);
     setState(KEY_GAME_STATE, payload, false);
   }
@@ -3546,6 +3616,7 @@ export class NetworkBridge {
       b: state.bases,
       cb: state.captureTheBeer,
       cc: state.coopDefenseCarry,
+      bg: state.bridges ?? [],
     };
     this.sampleProjectileSyncPayload(state.projectiles);
     // Die unreliable Kopie hält bereits verbundene Clients aktuell; der reliable Key ist der
@@ -3707,6 +3778,7 @@ export class NetworkBridge {
       bases:         (raw.b as SyncedBaseState[]     | undefined) ?? [],
       captureTheBeer: (raw.cb as SyncedCaptureTheBeerState | undefined) ?? null,
       coopDefenseCarry: (raw.cc as SyncedCoopDefenseCarryState | undefined) ?? [],
+      bridges: decodeBridgeStates(raw.bg) ?? this.cachedGameState?.bridges ?? [],
     };
     this.cachedGameState = state;
     if (raw._full === true && !isHost()) this.holdFullGameStateUntilFlush = true;

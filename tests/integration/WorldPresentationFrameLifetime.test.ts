@@ -21,7 +21,9 @@ import type { ArenaBuilderResult } from '../../src/arena/ArenaBuilder';
 import { ArenaBuilder } from '../../src/arena/ArenaBuilder';
 import { WaterSurfaceRenderer } from '../../src/arena/WaterSurfaceRenderer';
 import { WaterSurfaceModel } from '../../src/arena/WaterSurfaceModel';
-import { applyArenaWorldMetrics, type ArenaMetricsProfile } from '../../src/config';
+import { applyArenaWorldMetrics, PLAYER_SIZE, type ArenaMetricsProfile } from '../../src/config';
+import type { ExplosionObserver } from '../../src/effects/EffectSystem';
+import type { MovementVisualSource } from '../../src/effects/MovementStepSampler';
 import type { ArenaLayout } from '../../src/types';
 import { WorldLifecycle, type WorldLifecycleSink } from '../../src/world/WorldLifecycle';
 import { WorldPresentationBinding } from '../../src/world/WorldPresentationBinding';
@@ -665,7 +667,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
 
   it('ticks wildlife in an empty preview, reads visible players, and stops before presentation handoff', () => {
     const scene = Object.assign(fakeScene(), { game: { loop: { delta: 16 } } });
-    const wildlife = { update: vi.fn(), notifyShot: vi.fn(), clearLights: vi.fn(), destroy: vi.fn() };
+    const wildlife = { update: vi.fn(), notifyImpulse: vi.fn(), clearLights: vi.fn(), destroy: vi.fn() };
     const arena = { wildlife } as unknown as ArenaBuilderResult;
     const players: { id: string; active: boolean; displayObject: object | null }[] = [];
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
@@ -676,27 +678,61 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     const residency = vi.spyOn(ArenaBuilder, 'updateSurfaceResidency').mockImplementation(() => {});
     try {
       binding.syncSurfaceResidency(true, 0);
-      expect(wildlife.update).toHaveBeenLastCalledWith(0, [], expect.any(Object), 22 * 60, expect.any(Object));
+      expect(wildlife.update).toHaveBeenLastCalledWith(0, [], expect.any(Object), 22 * 60, expect.any(Object), undefined);
       players.push({ id: 'visible', active: true, displayObject: { visible: true, alpha: 1, x: 120, y: 90 } },
         { id: 'hidden', active: true, displayObject: { visible: false, alpha: 1, x: 0, y: 0 } },
         { id: 'absent', active: false, displayObject: null });
       binding.syncSurfaceResidency(true, 25);
-      expect(wildlife.update).toHaveBeenLastCalledWith(25, [{ id: 'visible', x: 120, y: 90 }], expect.any(Object), 22 * 60, expect.any(Object));
+      expect(wildlife.update).toHaveBeenLastCalledWith(25, [{ id: 'visible', x: 120, y: 90, radius: 0 }], expect.any(Object), 22 * 60, expect.any(Object), undefined);
       binding.notifyWildlifeShot('visible');
       binding.notifyWildlifeShot('hidden');
       binding.notifyWildlifeShot('absent');
       binding.notifyWildlifeShot('unknown');
-      expect(wildlife.notifyShot).toHaveBeenCalledExactlyOnceWith(120, 90);
+      expect(wildlife.notifyImpulse).toHaveBeenCalledExactlyOnceWith('shot', 120, 90);
       binding.syncSurfaceResidency(false);
       expect(wildlife.clearLights).toHaveBeenCalledOnce();
       binding.destroy(); binding.syncSurfaceResidency(true);
       expect(wildlife.clearLights).toHaveBeenCalledTimes(2);
       expect(wildlife.update).toHaveBeenCalledTimes(2);
       binding.notifyWildlifeShot('visible');
-      expect(wildlife.notifyShot).toHaveBeenCalledTimes(1);
+      expect(wildlife.notifyImpulse).toHaveBeenCalledTimes(1);
       // The frame binding stops updates; the handoff still owns the drawn objects.
       expect(wildlife.destroy).not.toHaveBeenCalled();
       expect(ArenaBuilder.presentationOf(arena).wildlife).toBe(wildlife);
+    } finally { residency.mockRestore(); }
+  });
+
+  it('disturbs wildlife with displayed enemies near the view and with explosions until handoff', () => {
+    const scene = Object.assign(fakeScene(), { game: { loop: { delta: 16 } } });
+    const wildlife = { update: vi.fn(), notifyImpulse: vi.fn(), clearLights: vi.fn(), destroy: vi.fn() };
+    const arena = { wildlife } as unknown as ArenaBuilderResult;
+    const observers: ExplosionObserver[] = [];
+    const release = vi.fn(), audio = { playSound: vi.fn() };
+    const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
+      getLocalWorldPresentation: () => PREVIEW_PRESENTATION,
+      getArenaResult: () => arena,
+      getPlayers: () => [],
+      explosions: { bindExplosionObserver: observer => { observers.push(observer); return release; } },
+      wildlifeAudio: audio,
+    }));
+    const enemy = (id: string, x: number, y: number, size: number, visible = true): MovementVisualSource => ({
+      readMovementVisualSample: out => { Object.assign(out, { id, x, y, size, visible, isBurrowDash: false }); },
+    });
+    const enemies = [enemy('wolf', 200, 100, PLAYER_SIZE + 32), enemy('ghost', 210, 110, PLAYER_SIZE, false),
+      enemy('far', 1e6, 1e6, PLAYER_SIZE)];
+    const residency = vi.spyOn(ArenaBuilder, 'updateSurfaceResidency').mockImplementation(() => {});
+    try {
+      binding.syncSurfaceResidency(true, 16, { forEachEnemy: visit => enemies.forEach(visit) });
+      // Larger bodies alarm from their edge: half the size beyond a player-sized body.
+      expect(wildlife.update).toHaveBeenLastCalledWith(16, [{ id: 'wolf', x: 200, y: 100, radius: 16 }],
+        expect.any(Object), 22 * 60, expect.any(Object), audio);
+      expect(observers).toHaveLength(1);
+      observers[0](40, 50, 80, 'default');
+      expect(wildlife.notifyImpulse).toHaveBeenCalledExactlyOnceWith('explosion', 40, 50, 80);
+      binding.destroy();
+      expect(release).toHaveBeenCalledOnce();
+      observers[0](40, 50, 80, 'default');
+      expect(wildlife.notifyImpulse).toHaveBeenCalledOnce();
     } finally { residency.mockRestore(); }
   });
 

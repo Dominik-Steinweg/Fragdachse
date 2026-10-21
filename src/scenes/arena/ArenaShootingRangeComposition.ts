@@ -2,7 +2,6 @@ import { bridge } from '../../network/bridge';
 import { CELL_SIZE, COOP_DEFENSE_NAV_TICK_INTERVAL_MS } from '../../config';
 import { isLobbyWorldDefinitionId } from '../../config/authoring/lobbyWorld';
 import { EnemyManager } from '../../entities/EnemyManager';
-import { WaterGeometry } from '../../arena/WaterGeometry';
 import { ShootingRangeWorldBinding } from '../../shootingRange/ShootingRangeWorldBinding';
 import { ShootingRangeControlBodies } from '../../shootingRange/ShootingRangeControlBodies';
 import { SHOOTING_RANGE, shootingRangeControlPosition, isShootingRangeBuildReserved } from '../../shootingRange/ShootingRangeLayout';
@@ -21,7 +20,7 @@ export function composeShootingRangeEnemies(input: ArenaWorldGameplayComposition
   if (!isLobbyWorldDefinitionId(input.world.descriptor.definitionId)) return;
   const enemies = new EnemyManager(input.scene);
   enemies.setWorldMetrics(input.world.metrics);
-  enemies.setWaterGeometry(new WaterGeometry(input.layout.water ?? [], input.world.metrics));
+  enemies.setWaterGeometryProvider(() => gameplay.geometry?.getCollisionWater() ?? null);
   enemies.setLightingSystem(input.renderers.lighting);
   enemies.setHealthBarRenderer(input.renderers.healthBars);
   enemies.setEntityBurnGpuController(input.renderers.entityBurnGpu);

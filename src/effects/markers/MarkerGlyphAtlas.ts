@@ -57,6 +57,7 @@ export const MARKER_GLYPH_PATHS: Readonly<Record<MarkerGlyphId, string>> = {
   tool: 'M10 1L8 5L11 8L15 6L14 10L10 11L5 16L1 12L6 7L6 3Z',
   check: 'M1 8L4 5L7 9L12 2L15 5L7 15Z',
   cross: 'M2 0L8 6L14 0L16 2L10 8L16 14L14 16L8 10L2 16L0 14L6 8L0 2Z',
+  portal: 'M5 1H11L15 5V11L11 15H5L1 11V5Z M6 4L4 6V10L6 12H10L12 10V6L10 4Z M7 7H9V9H7Z',
 };
 
 export function markerGlyphAtlasFrames() {

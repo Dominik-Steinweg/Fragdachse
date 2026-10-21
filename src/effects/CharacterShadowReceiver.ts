@@ -4,6 +4,7 @@ import type { ArenaLayout, SyncedPlaceableRock } from '../types';
 import { CHARACTER_SHADOW_CONFIG } from './ShadowConfig';
 import { sunShaderName } from './sunlight/SunRenderTarget';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../config/coopDefenseConstructions';
+import { getBridgeDeckCells } from '../arena/BridgeGeometry';
 
 /** One cell-sized receiver texel. Obstacles/bases are exclusions, never casters.
  * Updated on the existing shadow invalidation path, not by scanning per player. */
@@ -28,10 +29,16 @@ export class CharacterShadowReceiver {
   }
   update(layout: ArenaLayout, offsetX: number, offsetY: number,
     rockVisible: ((index: number) => boolean) | undefined, runtime: readonly SyncedPlaceableRock[],
-    bases: Iterable<{ x: number; y: number }>): void {
+    bases: Iterable<{ x: number; y: number }>, collapsedBridges: ReadonlySet<string> = new Set()): void {
     this.data.fill(255);
     for (const cell of layout.water ?? []) this.set(offsetX + (cell.gridX + .5) * CELL_SIZE,
       offsetY + (cell.gridY + .5) * CELL_SIZE, Math.round(255 * CHARACTER_SHADOW_CONFIG.waterResponse));
+    // A standing deck is solid ground for figure shadows; its river shows again once it fell.
+    for (const bridge of layout.bridges ?? []) if (!collapsedBridges.has(bridge.id)) {
+      for (const cell of getBridgeDeckCells(bridge)) {
+        this.set(offsetX + (cell.gridX + .5) * CELL_SIZE, offsetY + (cell.gridY + .5) * CELL_SIZE, 255);
+      }
+    }
     for (let i = 0; i < layout.rocks.length; i++) {
       if (rockVisible && !rockVisible(i)) continue;
       const cell = layout.rocks[i];

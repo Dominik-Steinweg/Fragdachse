@@ -116,6 +116,7 @@ export const GpuVfxEffectId = {
   VoidMeteorFragment: 102,
   RestHealMote: 103,
   RestHealSpark: 104,
+  VoidPortal: 105,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -746,6 +747,8 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.DeathGlow, importance: 'decorative', release: 'linger' },
   { id: GpuVfxEffectId.RestHealSpark, label: 'enemy.rest-heal-spark', lane: GpuVfxLaneId.ExplosionLowGlow,
     frame: GpuVfxFrameId.DeathGlow, importance: 'standard', release: 'linger' },
+  { id: GpuVfxEffectId.VoidPortal, label: 'void.portal', lane: GpuVfxLaneId.ExplosionAccent,
+    frame: GpuVfxFrameId.ExplosionSpark, importance: 'standard', release: 'kill-with-source' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

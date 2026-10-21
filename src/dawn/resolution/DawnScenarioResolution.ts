@@ -5,6 +5,7 @@ import {
   normalizeCoopDefenseMapConfig,
   type CoopBaseConfig,
   type CoopDefenseMapAuthoringConfig,
+  type CoopDefenseMapCarryConfig,
   type CoopDefenseMapConfig,
   type CoopDefenseMapEncounterConfig,
   type CoopDefenseMapObjectiveZoneConfig,
@@ -33,6 +34,7 @@ import type { DawnActivityPlan, DawnWorldPlan } from '../contracts/DawnPlans';
 import { DAWN_WRECK_VARIANTS } from '../contracts/DawnContentIds';
 import { getDawnPhaseStartMs, toDawnDynamicTimeOfDay } from '../rules/DawnPhase';
 import { resolveDawnNightModifierContent } from './DawnNightModifierResolution';
+import { DAWN_PORTAL_ANCHOR_RADIUS_CELLS, resolveDawnPortalEntryAnchor } from '../rules/DawnPortalPlacement';
 
 /**
  * Der eine reine Resolver vom replizierten Dawn-Plan zur normalen Coop-Config.
@@ -60,7 +62,22 @@ export interface ResolvedDawnSite {
   readonly slot: DawnSalvageSlot;
   readonly archetype: DawnSiteArchetype;
   readonly tier: DawnSiteArchetypeTier;
+  /** Portal generator only: the slot near the base where its portal exits. */
+  readonly portalExitSlot?: DawnSalvageSlot;
 }
+
+/** Entry and exit anchors of a portal generator site: entry inside its clearing toward the base. */
+export function resolveDawnPortalAnchors(template: DawnArenaTemplate, site: ResolvedDawnSite):
+  { readonly entry: { readonly gridX: number; readonly gridY: number }; readonly exit: { readonly gridX: number; readonly gridY: number } } | null {
+  const portal = site.archetype.portal, exitSlot = site.portalExitSlot;
+  if (!portal || !exitSlot) return null;
+  const entry = resolveDawnPortalEntryAnchor(template, site.slot, portal);
+  // The composer only places generators whose entry stays on land; anything else is a foreign plan.
+  if (!entry) throw new Error(`[DawnScenarioResolution] Portal generator ${site.slotId} has no dry entry`);
+  return { entry, exit: { gridX: exitSlot.anchor.gridX, gridY: exitSlot.anchor.gridY } };
+}
+
+export const toDawnPortalLinkId = (slotId: string): string => `portal-${slotId}`;
 
 /** Kantenlaenge des Spawnbereichs einer Site-Angriffswelle. */
 const SITE_ASSAULT_AREA_CELLS = 3;
@@ -144,6 +161,9 @@ export function resolveDawnSites(worldPlan: DawnWorldPlan): readonly ResolvedDaw
         throw new Error(`[DawnScenarioResolution] Site ${site.slotId}: unknown wreck variant ${site.variant}`);
       }
     }
+    if ((site.portalExitSlotId === undefined) !== (archetype.portal === undefined)) {
+      throw new Error(`[DawnScenarioResolution] Site ${site.slotId}: a portal exit belongs to exactly the portal generator`);
+    }
     return {
       slotId: site.slotId,
       siteId: site.slotId,
@@ -152,12 +172,24 @@ export function resolveDawnSites(worldPlan: DawnWorldPlan): readonly ResolvedDaw
       slot: getDawnSalvageSlot(template, site.slotId),
       archetype,
       tier: getDawnSiteArchetypeTier(archetype, site.tier),
+      ...(site.portalExitSlotId === undefined ? {} : { portalExitSlot: getDawnSalvageSlot(template, site.portalExitSlotId) }),
     };
   });
 }
 
-type DawnWorldAuthoring = Pick<CoopDefenseMapAuthoringConfig, 'mapId' | 'bases' | 'siteClearings'>
+type DawnWorldAuthoring = Pick<CoopDefenseMapAuthoringConfig, 'mapId' | 'bases' | 'siteClearings' | 'portalAnchors'>
   & DawnArenaTemplate['world'];
+
+/**
+ * Carry-Zonen einer Site. Versorgung: Kisten erscheinen unter der Kapsel und werden am Basiskern
+ * abgegeben. Sprengstofflager: je Brücke des Templates eine Dynamitkiste, angebracht an Brücken.
+ */
+export function resolveDawnSiteCarry(template: DawnArenaTemplate, site: ResolvedDawnSite): CoopDefenseMapCarryConfig {
+  const supply = resolveDawnSupplyCarry(template, site);
+  return site.archetype.carryItem === 'explosive'
+    ? { item: 'explosive', spawnZone: supply.spawnZone, itemCount: Math.max(1, template.world.bridges?.length ?? 0) }
+    : supply;
+}
 
 /** Kisten erscheinen unter der Kapsel in der Lichtung; abgegeben wird am Basiskern. */
 export function resolveDawnSupplyCarry(template: DawnArenaTemplate, site: ResolvedDawnSite) {
@@ -186,6 +218,13 @@ function toNestSpawn(site: ResolvedDawnSite): CoopDefenseMapPersistentSpawnConfi
 }
 
 function composeWorldAuthoring(template: DawnArenaTemplate, sites: readonly ResolvedDawnSite[]): DawnWorldAuthoring {
+  const portalAnchors = sites.flatMap((site) => {
+    const anchors = resolveDawnPortalAnchors(template, site);
+    return anchors ? [
+      { id: `${toDawnPortalLinkId(site.slotId)}-entry`, ...anchors.entry, radiusCells: DAWN_PORTAL_ANCHOR_RADIUS_CELLS },
+      { id: `${toDawnPortalLinkId(site.slotId)}-exit`, ...anchors.exit, radiusCells: DAWN_PORTAL_ANCHOR_RADIUS_CELLS },
+    ] : [];
+  });
   return {
     ...template.world,
     mapId: toDawnMapId(template.id),
@@ -195,7 +234,10 @@ function composeWorldAuthoring(template: DawnArenaTemplate, sites: readonly Reso
       gridX: site.slot.anchor.gridX,
       gridY: site.slot.anchor.gridY,
       radiusCells: site.archetype.clearingRadiusCells,
+      // A hit on the generator wakes its guard like entering the clearing.
+      ...(site.archetype.portal ? { structureBaseId: site.baseId } : {}),
     })),
+    ...(portalAnchors.length ? { portalAnchors } : {}),
   };
 }
 
@@ -205,6 +247,7 @@ function toSiteStructure(site: ResolvedDawnSite): CoopBaseConfig {
   const placement = resolveDawnSiteStructurePlacement(structure, site.slot.anchor);
   return {
     id: site.baseId,
+    // Site props draw the structures; the portal renderer draws the generator.
     surface: 'none',
     hpMax: site.tier.hpMax,
     faction: structure.faction,
@@ -270,16 +313,28 @@ function composeActivityAuthoring(
         groups: groups.map((group) => ({ ...group, front: wave.front })),
       };
     }), ...modifierContent.encounters],
+    // The generator charges from round start for its share of the day, then holds the flank open.
+    ...(sites.some((site) => site.archetype.portal) ? { portalLinks: sites.flatMap((site) => site.archetype.portal ? [{
+      id: toDawnPortalLinkId(site.slotId),
+      generatorBaseId: site.baseId,
+      entryAnchorId: `${toDawnPortalLinkId(site.slotId)}-entry`,
+      exitAnchorId: `${toDawnPortalLinkId(site.slotId)}-exit`,
+      chargeStartMs: 0,
+      chargeDurationMs: Math.round(site.archetype.portal.openAtDayFraction
+        * (getDawnPhaseStartMs(schedule, 'dusk') - getDawnPhaseStartMs(schedule, 'day'))),
+    }] : []) } : {}),
     secondaryObjectives: sites.map((site): CoopDefenseMapSecondaryObjectiveConfig => ({
       id: site.objectiveId,
       type: site.archetype.objectiveType,
       // Sites laufen gleichzeitig und unabhaengig vom Fokus-Slot; aktiviert werden sie beim Betreten.
       concurrent: true,
-      start: { type: 'site-activated', siteId: site.siteId },
-      expiresAt: siteClosesAt,
+      // The portal generator stands from round start and stays destroyable until dawn.
+      ...(site.archetype.portal
+        ? { start: { type: 'time', atMs: 0 } as const }
+        : { start: { type: 'site-activated', siteId: site.siteId } as const, expiresAt: siteClosesAt }),
       // Versorgung: die Kapsel ist Kulisse, Ziel sind die Kisten (Carry-Zonen statt Basis-Targets).
       ...(site.archetype.objectiveType === 'carry'
-        ? { targets: [], carry: resolveDawnSupplyCarry(template, site) }
+        ? { targets: [], carry: resolveDawnSiteCarry(template, site) }
         : { targets: [site.baseId] }),
       ...(site.archetype.objectiveType === 'hold'
         ? {

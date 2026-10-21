@@ -535,7 +535,7 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('binds destroy objectives only to dormant hostile base sources', () => {
+  it('binds destroy objectives only to dormant hostile sources: spawn points or portal generators', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS) {
       for (const objective of map.secondaryObjectives ?? []) {
         if (objective.type !== 'destroy') continue;
@@ -546,14 +546,15 @@ describe('Coop defense map progression', () => {
             .filter((spawn) => spawn.source.type === 'base')
             .map((spawn) => spawn.source.type === 'base' ? spawn.source.baseId : ''),
         );
+        const portalGenerators = new Set((map.portalLinks ?? []).map((link) => link.generatorBaseId));
 
         expect(targets.length).toBeGreaterThan(0);
         expect(new Set(targets).size).toBe(targets.length);
         expect(targetBases.every((base) => (
           base?.dormant === true
-          && base.role === 'spawn-point'
           && base.faction === 'hostile'
-          && structureBoundSources.has(base.id)
+          && ((base.role === 'spawn-point' && structureBoundSources.has(base.id))
+            || (base.role === 'outpost' && portalGenerators.has(base.id)))
         ))).toBe(true);
         expect(targetBases.some((base) => base?.role === 'main')).toBe(false);
       }

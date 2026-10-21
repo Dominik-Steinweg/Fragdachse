@@ -1,0 +1,35 @@
+{
+  "id": "portal-generator",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "pg-prod-r2",
+  "variant": "standard",
+  "sourceSize": 192,
+  "textureKey": "construction_portal_generator",
+  "sheetTextureKey": "construction_portal_generator_sheet",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "idlePath": "./assets/sprites/pipeline-v2/portal-generator/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/portal-generator/sheet.png",
+  "layout": {
+    "frameWidth": 192,
+    "frameHeight": 192,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 12,
+    "width": 1568,
+    "height": 392
+  },
+  "clips": [],
+  "hashes": {
+    "idle": "6bb0a81fdc5c211acf4eb158dbd1863d5302ea8257f1f46e743b37948a878be5",
+    "sheet": "444d7eabc47a9fda13de63f3a6e8be9ce6031b8d85fbb193dc82c258b8f39f65"
+  }
+}

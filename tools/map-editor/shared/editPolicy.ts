@@ -37,6 +37,7 @@ const policy: Rule = {
     scatter: { $items: { kind: true, placement: true, clusters: true, minSpacingCells: true, variant: true,
       clusterSize: { $items: true, $mutable: false } }, $mutable: true },
   },
+  bridges: { $items: { ...point as object, spanCells: true, deckWidthCells: true }, $mutable: false, $id: 'id' },
   tutorialAnchor: point, tutorialSteps: { $items: { anchor: point }, $mutable: false, $id: 'id' },
   persistentBase: { anchor: point },
   bases: { $items: { anchor: { kind: true, gridX: true, gridY: true, dxCells: true, dyCells: true, edgeInsetCells: true },

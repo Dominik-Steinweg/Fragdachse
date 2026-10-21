@@ -1,0 +1,189 @@
+{
+  "id": "riverbend",
+  "world": {
+    "arenaWidthCells": 140,
+    "arenaHeightCells": 96,
+    "rockFillRatio": 0.05,
+    "treeCount": 40,
+    "timeOfDay": "10:00",
+    "trackMode": "none",
+    "persistentBase": {
+      "baseId": "dawn-core",
+      "maxAreaStage": 6,
+      "anchor": { "gridX": 70, "gridY": 48 }
+    },
+    "waterAreas": [
+      { "gridX": 78, "gridY": 25, "widthCells": 9, "heightCells": 1 },
+      { "gridX": 54, "gridY": 26, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 65, "gridY": 26, "widthCells": 22, "heightCells": 1 },
+      { "gridX": 52, "gridY": 27, "widthCells": 37, "heightCells": 1 },
+      { "gridX": 51, "gridY": 28, "widthCells": 28, "heightCells": 1 },
+      { "gridX": 85, "gridY": 28, "widthCells": 5, "heightCells": 1 },
+      { "gridX": 51, "gridY": 29, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 59, "gridY": 29, "widthCells": 5, "heightCells": 1 },
+      { "gridX": 87, "gridY": 29, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 30, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 30, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 31, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 31, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 50, "gridY": 32, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 88, "gridY": 32, "widthCells": 5, "heightCells": 1 },
+      { "gridX": 50, "gridY": 33, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 89, "gridY": 33, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 51, "gridY": 34, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 90, "gridY": 34, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 51, "gridY": 35, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 89, "gridY": 35, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 51, "gridY": 36, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 89, "gridY": 36, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 51, "gridY": 37, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 89, "gridY": 37, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 51, "gridY": 38, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 89, "gridY": 38, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 51, "gridY": 39, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 89, "gridY": 39, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 51, "gridY": 40, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 89, "gridY": 40, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 51, "gridY": 41, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 89, "gridY": 41, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 51, "gridY": 42, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 42, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 51, "gridY": 43, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 43, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 44, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 44, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 45, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 45, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 46, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 46, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 47, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 47, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 48, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 48, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 49, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 49, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 50, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 50, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 51, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 51, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 52, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 88, "gridY": 52, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 53, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 87, "gridY": 53, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 54, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 87, "gridY": 54, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 50, "gridY": 55, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 86, "gridY": 55, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 49, "gridY": 56, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 86, "gridY": 56, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 49, "gridY": 57, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 86, "gridY": 57, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 49, "gridY": 58, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 86, "gridY": 58, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 49, "gridY": 59, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 87, "gridY": 59, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 49, "gridY": 60, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 87, "gridY": 60, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 48, "gridY": 61, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 87, "gridY": 61, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 48, "gridY": 62, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 87, "gridY": 62, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 48, "gridY": 63, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 87, "gridY": 63, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 48, "gridY": 64, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 88, "gridY": 64, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 48, "gridY": 65, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 88, "gridY": 65, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 48, "gridY": 66, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 88, "gridY": 66, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 48, "gridY": 67, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 88, "gridY": 67, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 49, "gridY": 68, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 89, "gridY": 68, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 49, "gridY": 69, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 89, "gridY": 69, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 49, "gridY": 70, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 89, "gridY": 70, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 49, "gridY": 71, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 89, "gridY": 71, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 49, "gridY": 72, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 90, "gridY": 72, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 50, "gridY": 73, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 90, "gridY": 73, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 50, "gridY": 74, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 90, "gridY": 74, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 51, "gridY": 75, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 90, "gridY": 75, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 51, "gridY": 76, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 90, "gridY": 76, "widthCells": 2, "heightCells": 1 }
+    ],
+    "bridges": [
+      { "id": "west-bridge", "axis": "horizontal", "gridX": 50, "gridY": 47, "spanCells": 3, "deckWidthCells": 3 },
+      { "id": "north-bridge", "axis": "vertical", "gridX": 68, "gridY": 26, "spanCells": 3, "deckWidthCells": 3 },
+      { "id": "east-bridge", "axis": "horizontal", "gridX": 88, "gridY": 47, "spanCells": 3, "deckWidthCells": 3 }
+    ]
+  },
+  "fronts": ["west", "north", "east", "south"],
+  "salvageSlots": [
+    {
+      "id": "nw-near",
+      "anchor": { "gridX": 42, "gridY": 36 },
+      "band": "near"
+    },
+    {
+      "id": "nw-mid",
+      "anchor": { "gridX": 40, "gridY": 26 },
+      "band": "mid"
+    },
+    {
+      "id": "nw-far",
+      "anchor": { "gridX": 27, "gridY": 30 },
+      "band": "far"
+    },
+    {
+      "id": "ne-near",
+      "anchor": { "gridX": 98, "gridY": 36 },
+      "band": "near"
+    },
+    {
+      "id": "ne-mid",
+      "anchor": { "gridX": 100, "gridY": 26 },
+      "band": "mid"
+    },
+    {
+      "id": "ne-far",
+      "anchor": { "gridX": 112, "gridY": 30 },
+      "band": "far"
+    },
+    {
+      "id": "se-near",
+      "anchor": { "gridX": 98, "gridY": 60 },
+      "band": "near"
+    },
+    {
+      "id": "se-mid",
+      "anchor": { "gridX": 101, "gridY": 71 },
+      "band": "mid"
+    },
+    {
+      "id": "se-far",
+      "anchor": { "gridX": 112, "gridY": 72 },
+      "band": "far"
+    },
+    {
+      "id": "sw-near",
+      "anchor": { "gridX": 42, "gridY": 60 },
+      "band": "near"
+    },
+    {
+      "id": "sw-mid",
+      "anchor": { "gridX": 39, "gridY": 71 },
+      "band": "mid"
+    },
+    {
+      "id": "sw-far",
+      "anchor": { "gridX": 28, "gridY": 72 },
+      "band": "far"
+    }
+  ]
+}

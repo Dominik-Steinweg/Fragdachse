@@ -56,6 +56,8 @@ gesetzt.
 | [Dawn – Bildsprache V1](Fragdachse_From_Dachs_Till_Dawn_Art_Direction_V1.md), [Händler-UI V1](Fragdachse_From_Dachs_Till_Dawn_Haendler_UI_V1.md), [Uhr V1](Fragdachse_From_Dachs_Till_Dawn_Uhr_V1.md) | Gestaltungsvorgaben zu Dawn |
 | [Kampagnenprogression Maps 1–17](Fragdachse_GDD_Kampagnenprogression_Maps_1-17%20%281%29.md) und [Tuning](Kampagnenprogression_Maps_1-17_Tuning.md) | umgesetzt; Playtests und Balancing offen |
 | [Map 16 – Spinnensteig V1](Fragdachse_GDD_Map16_Spinnensteig_V1.md) | umgesetzt (ersetzt den Prototyp „Zeitzünder“); Playtest offen |
+| [Portal-Generator V1](Fragdachse_GDD_Portalgenerator_V1.md) | umgesetzt auf `main` (Map 08 und Dawn-Tagesmission); Spieltest offen |
+| [Sprengbare Brücken V1](Fragdachse_GDD_Sprengbare_Bruecken_V1.md) | umgesetzt auf `main` (Map 12, Dawn-Sprengstofflager, Flussbogen, Teichland-Kanal, Blender-Bausatz); Playtest offen |
 | Persistente Basis Phase 3: [Roadmap](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3_Roadmap.md), [3C](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3C_Implementierungsplan.md), [3D V4](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3D_V4.md), [3E](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3E.md), [3F V3](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3F_V3.md) | umgesetzt; den Stand der einzelnen Phasen nennt die Roadmap |
 
 ## Welt, Darstellung und Technik
@@ -65,7 +67,7 @@ gesetzt.
 | [Bodennebel-Konzept v1](Fragdachse_Bodennebel_Konzept_v1.md) | umgesetzt ([Lab](../ground-fog-lab.md)) |
 | [Nachtsicht, Mondlicht und Void-Botanik V1](Fragdachse_GDD_Nachtsicht_Void_Botanik_V1.md) | umgesetzt (Mondinseln, Lampe an Felsen, Nachtwasser, Void-Botanik mit Argon- und ComfyUI-Assets); offen: Spieltest, Referenzbilder des Nachttests |
 | [Void-Gefahrenzonen und feste Spawnzonen V1](Fragdachse_GDD_Void_Gefahrenzonen_V1.md) | umgesetzt (2026-10-19); offen: Spieltest, Void-Vorschau im Map-Editor, Perf-Messpaar; ersetzt N-6/N-7 der Nachtsicht |
-| [Reaktive Map-Objekte V1 (explosive Fässer)](Fragdachse_GDD_Reaktive_Map_Objekte_V1.md) | umgesetzt auf Branch `reactive-props` (Rostfass Standard, strategisch an Engstellen auf 8 Kampagnenkarten, PvP, 2 Dawn-Arenen, Map-Editor); offen: Tonfreigabe im Audio-Studio, Spieltest, Merge; Sporen und Bienenstock geplant |
+| [Reaktive Map-Objekte V1 (explosive Fässer)](Fragdachse_GDD_Reaktive_Map_Objekte_V1.md) | umgesetzt auf `main` (Rostfass Standard, strategisch an Engstellen auf 8 Kampagnenkarten, PvP, 2 Dawn-Arenen, Map-Editor); offen: Playtest, Tonfreigabe im Audio-Studio; Sporen und Bienenstock geplant |
 | [Hindernisklassen und Schusslinien](FRAGDACHSE_GDD_Hindernisklassen_und_Schusslinien.md) und [Umsetzung](FRAGDACHSE_Hindernisklassen_Umsetzung.md) | umgesetzt |
 | [HP-Balken-Trefferfeedback](HP_Bar_Feedback_Implementation.md) | umgesetzt |
 | [KI- und Navigationskonzept](Fragdachse_KI_Navigation_Implementierungskonzept.md) | umgesetzt ([Status](../navigation-implementation-status.md)) |

@@ -1,0 +1,41 @@
+{
+  "id": "bridge-charge",
+  "label": "Bridge demolition charge",
+  "category": "construction",
+  "gameIds": [
+    "bridge_charge"
+  ],
+  "reference": "scripts/asset-pipeline/references/bridge-charge-draft.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    64
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Bundle of four oversized red sticks lying east-west in the middle of the 32 px canvas, a dark fuse curling off to the north-east corner",
+    "colors": "Red paper sticks with tan ends, two pale twine lashings, a dark copper blasting cap and tarred black fuse",
+    "anatomy": "0.6 m sticks of 92 mm diameter, deliberately enlarged for readability on the deck; two lashings at 0.17 m either side; the fuse ends at (+0.375, +0.3125) m where the runtime spark burns."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "bridge-explosives",
+  "model": {
+    "kind": "charge"
+  },
+  "orthoScale": 1,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Red paper sticks, hemp lashings, tarred fuse",
+      "textureStrength": 0.94,
+      "formShadowStrength": 0.44
+    }
+  },
+  "clips": []
+}

@@ -20,6 +20,7 @@ import type { CoopDefenseClassId } from '../types';
 import { getLocale, t } from '../i18n';
 import { getClassName } from '../i18n/contentPresentation';
 import { getOverlayRoot } from './fullscreen';
+import { isDawnPortalGeneratorForced, setDawnPortalGeneratorForced } from '../dawn/debug/dawnDebugOverrides';
 import { getCoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 
 function sanitizeNumberInput(value: string): number {
@@ -315,6 +316,18 @@ export class CoopDefenseDebugOverlay {
       this.refresh();
     };
     campaignSection.appendChild(unlockDawnButton);
+
+    const forcePortalButton = createButton(
+      t(isDawnPortalGeneratorForced() ? 'ui.coopDebug.portalGeneratorForced' : 'ui.coopDebug.forcePortalGenerator'),
+      isDawnPortalGeneratorForced() ? 'danger' : 'positive',
+    );
+    forcePortalButton.style.marginTop = '7px';
+    forcePortalButton.title = t('ui.coopDebug.portalGeneratorHint');
+    forcePortalButton.onclick = () => {
+      setDawnPortalGeneratorForced(!isDawnPortalGeneratorForced());
+      this.refresh();
+    };
+    campaignSection.appendChild(forcePortalButton);
 
     const itemSection = createSection(t('ui.coopDebug.items'));
     const itemStatus = createStatusLine(

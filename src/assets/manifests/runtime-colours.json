@@ -601,6 +601,54 @@
       "visiblePixelSha256": "707ac5f6cb856e6c25e528c0368fdb403215c3565b3284e2dfbf2368f5987da2",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/bridge-wood-ruin/idle.png": {
+      "file": "assets/sprites/pipeline-v2/bridge-wood-ruin/idle.webp",
+      "source": "assets/sprites/pipeline-v2/bridge-wood-ruin/idle.png",
+      "width": 704,
+      "height": 704,
+      "sourceBytes": 270787,
+      "downloadBytes": 153642,
+      "sourceSha256": "6377cb1b6f7b392e0ae59cf66828db454c3a06f737f56ff2c8d5992bb6a4298a",
+      "sha256": "4efb99ecbc993e2f4c511ddc6fb87369f228935f7b04237950a048f2c5276fe0",
+      "visiblePixelSha256": "82f2641b085eb816e568e736197f3f9dfa437cb8ff4b50ee5550485f1aaac17a",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/bridge-wood-ruin/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/bridge-wood-ruin/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/bridge-wood-ruin/sheet.png",
+      "width": 708,
+      "height": 708,
+      "sourceBytes": 270840,
+      "downloadBytes": 153650,
+      "sourceSha256": "d9182af804cde87572abbeb61239323dfff764344e9d52dd9ada3f7e4a6d7b3a",
+      "sha256": "e26c64168a57b35ea030e17c8f25c10c74cec64bb757b79016f1cfe3241add33",
+      "visiblePixelSha256": "4913becfcd3109128dff805e32e2d6e0be6dd2bf60d04ce5979cf9c57aa77807",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/bridge-wood/idle.png": {
+      "file": "assets/sprites/pipeline-v2/bridge-wood/idle.webp",
+      "source": "assets/sprites/pipeline-v2/bridge-wood/idle.png",
+      "width": 704,
+      "height": 704,
+      "sourceBytes": 954259,
+      "downloadBytes": 434680,
+      "sourceSha256": "3fa27ad8559005213fa77366dbdad0dc21f71730fe7046d2c0b8f8ad2c2ebc94",
+      "sha256": "f65087a3eb59d8ee7792e5c35bf0a4eb0eca78dea3ea5fc012d6f62424740b29",
+      "visiblePixelSha256": "e632350599a3da53b09b84c2f17c034ba0c1310b8eaa2774e8ce344af6197823",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/bridge-wood/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/bridge-wood/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/bridge-wood/sheet.png",
+      "width": 708,
+      "height": 708,
+      "sourceBytes": 954507,
+      "downloadBytes": 432120,
+      "sourceSha256": "c3f6040c55cf2bdc21112e8f6a7d90672b2a0cc8e48789a090268af26cb00952",
+      "sha256": "efce3585cfa66825b8ab52314bc8e6cbe7f6112a12cc640e2d70bde7d043950a",
+      "visiblePixelSha256": "9ed2d1359ebe25521313b1bd59672e31b8280aabb29a694619e2d928ef7dd7eb",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png": {
       "file": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.webp",
       "source": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png",
@@ -899,6 +947,18 @@
       "sourceSha256": "c6a9f0cad8496d74df2e86a0dec58275e2245f9e655ca4cdd15ad31b8d992984",
       "sha256": "e08a63563f0699ac3edeaa76d4ad27d573495de628317d26511517b7c37ab5ea",
       "visiblePixelSha256": "659d751e6801db4236c2af92f4f16a6d50e8dae3120bc70815287cc801cd5513",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/portal-generator/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/portal-generator/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/portal-generator/sheet.png",
+      "width": 1568,
+      "height": 392,
+      "sourceBytes": 567604,
+      "downloadBytes": 363900,
+      "sourceSha256": "444d7eabc47a9fda13de63f3a6e8be9ce6031b8d85fbb193dc82c258b8f39f65",
+      "sha256": "2d64738fde01b1564910e273d2e8bef1ceb7737de15bd46a108d28315d98906a",
+      "visiblePixelSha256": "67ffcf5371e05028df4e9d25df818c6013b3757311cc8bb1d540dedd2689130c",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/rocket/sheet.png": {

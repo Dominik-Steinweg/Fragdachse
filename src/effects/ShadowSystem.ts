@@ -224,7 +224,7 @@ export class ShadowSystem {
       const options = this.lastStaticOptions;
       this.figureReceiver.update(this.lastStaticLayout, options.offsetX ?? ARENA_OFFSET_X,
         options.offsetY ?? ARENA_OFFSET_Y, options.rockVisibilityPredicate, options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS,
-        this.baseCells.values());
+        this.baseCells.values(), this.collapsedBridges);
       this.characterReceiverDirty = false;
     }
     return this.figureReceiver;
@@ -247,6 +247,13 @@ export class ShadowSystem {
     this.enemyShadowSources.length = 0;
   }
   private characterReceiverDirty = true;
+  private collapsedBridges: ReadonlySet<string> = new Set();
+  /** Bridge decks receive figure shadows while they stand; the World bridge owner reports collapses. */
+  setCollapsedBridges(ids: ReadonlySet<string>): void {
+    if (ids.size === this.collapsedBridges.size && [...ids].every((id) => this.collapsedBridges.has(id))) return;
+    this.collapsedBridges = new Set(ids);
+    this.characterReceiverDirty = true;
+  }
   private characterSuppressed = false;
   private characterSolid = false;
   private dynamicVisible = true;

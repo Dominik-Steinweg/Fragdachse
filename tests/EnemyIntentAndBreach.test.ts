@@ -10,7 +10,7 @@ import { applyEnemyTargetingToBaseDescriptors } from '../src/systems/flowfield/F
 
 function enemy(kind: EnemyKind = 'rabid-badger', id = 'enemy', x = 32, y = 128): EnemyEntity {
   const config = getCoopDefenseEnemyConfig(kind);
-  return { id, kind, faction: 'hostile', sprite: { active: true, x, y },
+  return { id, kind, faction: 'hostile', sprite: { active: true, x, y }, positionRevision: 0,
     getSize: () => config.size, getMoveSpeed: () => config.moveSpeed,
     getAttackWeapons: () => config.weapons.map(w => ({ ...w, weapon: { config: WEAPON_CONFIGS[w.weaponId] } })),
   } as unknown as EnemyEntity;
@@ -437,6 +437,131 @@ describe('Base preference of a player hunter', () => {
     world.catalog.updateTargets([{ kind: 'player', id: 'near', x: 232, y: 232 }]);
     for (const time of [0, 200, 400]) settle(world, [unit], time);
     expect(world.intents.get(unit.id)?.target).toEqual({ kind: 'player', id: 'near' });
+    world.destroy();
+  });
+});
+
+describe('Authored portal links in strategic intent', () => {
+  // 512 x 384 px: a barrier from the top leaves only a 128 px passage along the bottom edge.
+  const portalWorld = (wall: NavigationObstacle['kind'] = 'barrier', bottom = 256) =>
+    navigationTestWorld([rect(wall === 'rock' ? 'rock:wall' : 'wall', 240, 0, 272, bottom, wall)], [], 15, { width: 512, height: 384 });
+  const flank = { id: 'flank', ax: 96, ay: 48, bx: 416, by: 48, radiusPx: 28, maxBodyRadiusPx: 20, costPx: 192 };
+  const PLAYER = { kind: 'player' as const, id: 'player', x: 464, y: 48 };
+  /** The lab and the M3 transport cross on entry of the centre; this is the discontinuous move both perform. */
+  const jump = (unit: EnemyEntity, x: number, y: number) => {
+    unit.sprite.x = x; unit.sprite.y = y; (unit as unknown as { positionRevision: number }).positionRevision++;
+  };
+  /** Follows the intent waypoints until the unit stands on an attack position (route cost 0). */
+  function walk(world: ReturnType<typeof portalWorld>, unit: EnemyEntity, crossing: boolean, startMs: number, steps = 600) {
+    const trace = { crossings: 0, maxY: unit.sprite.y, arrived: false, afterJump: null as { x: number; y: number } | null };
+    let gated = false;
+    for (let step = 0; step < steps; step++) {
+      world.coordinator.advance(16); world.intents.update([unit], startMs + step * 16);
+      const route = world.intents.get(unit.id)?.navigation;
+      if (route?.status === 'ready' && route.cost < 1) { trace.arrived = true; break; }
+      const point = route?.status === 'ready' ? route.waypoint : route?.status === 'pending' ? route.continuation : undefined;
+      if (trace.crossings === 1 && !trace.afterJump && route?.status === 'ready') trace.afterJump = route.waypoint;
+      if (point) {
+        const dx = point.x - unit.sprite.x, dy = point.y - unit.sprite.y, distance = Math.hypot(dx, dy);
+        const t = distance > 0 ? Math.min(1, 6 / distance) : 0;
+        expect(world.geometry().canMove(unit.sprite.x, unit.sprite.y, unit.sprite.x + dx * t, unit.sprite.y + dy * t, unit.getSize() / 2)).toBe(true);
+        unit.sprite.x += dx * t; unit.sprite.y += dy * t;
+      }
+      trace.maxY = Math.max(trace.maxY, unit.sprite.y);
+      const inside = Math.hypot(unit.sprite.x - flank.ax, unit.sprite.y - flank.ay) < flank.radiusPx;
+      if (crossing && inside && !gated && unit.getSize() / 2 <= flank.maxBodyRadiusPx) {
+        jump(unit, flank.bx + unit.sprite.x - flank.ax, flank.by + unit.sprite.y - flank.ay);
+        trace.crossings++; gated = true;
+      }
+    }
+    return trace;
+  }
+
+  it('takes the portal when it is shorter and continues from the exit at once', () => {
+    const world = portalWorld(), unit = enemy('rabid-badger', 'flanker', 48, 48);
+    world.catalog.updateTargets([PLAYER]);
+    world.coordinator.setPortalLinks([flank]);
+    settle(world, [unit]);
+    const route = world.intents.get(unit.id)!.navigation;
+    expect(route.status).toBe('ready');
+    if (route.status === 'ready') expect(route.cost).toBeLessThan(600);
+    const trace = walk(world, unit, true, 100);
+    expect(trace.crossings).toBe(1);
+    expect(trace.arrived).toBe(true);
+    expect(unit.sprite.x).toBeGreaterThan(272);
+    // Never toward the bottom passage, and the first decision after the jump starts at the exit.
+    expect(trace.maxY).toBeLessThan(96);
+    expect(trace.afterJump!.x).toBeGreaterThan(272);
+    world.destroy();
+  });
+
+  it('rescans after a discontinuous move inside the decision interval', () => {
+    const world = portalWorld(), unit = enemy('rabid-badger', 'jumper', 48, 48);
+    world.catalog.updateTargets([PLAYER]);
+    world.coordinator.setPortalLinks([flank]);
+    settle(world, [unit]);
+    const before = world.intents.get(unit.id)!.navigation;
+    expect(before.status === 'ready' && before.waypoint.x).toBeLessThan(240);
+    // A position correction without a new revision keeps the decision until its interval ends.
+    unit.sprite.x = 400; unit.sprite.y = 64; world.intents.update([unit], 2);
+    expect(world.intents.get(unit.id)!.navigation).toBe(before);
+    jump(unit, 400, 64); world.intents.update([unit], 3);
+    const after = world.intents.get(unit.id)!.navigation;
+    expect(after.status).toBe('ready');
+    expect(after.status === 'ready' && after.waypoint.x).toBeGreaterThan(272);
+    world.destroy();
+  });
+
+  it('keeps a boss on the land route while smaller bodies use the portal', () => {
+    const world = portalWorld(), boss = enemy('inferno-colossus', 'boss', 64, 64), unit = enemy('rabid-badger', 'flanker', 48, 48);
+    world.catalog.updateTargets([PLAYER]);
+    world.coordinator.setPortalLinks([flank]);
+    settle(world, [boss, unit]);
+    expect(world.intents.getField(boss.id)!.getNavigationSnapshot()!.portalLinks).toHaveLength(0);
+    expect(world.intents.getField(unit.id)!.getNavigationSnapshot()!.portalLinks).toHaveLength(6);
+    const trace = walk(world, boss, true, 100, 900);
+    expect(trace.crossings).toBe(0);
+    expect(trace.arrived).toBe(true);
+    expect(trace.maxY).toBeGreaterThan(256);
+    world.destroy();
+  });
+
+  it('returns to the land route as soon as the links are removed', () => {
+    const world = portalWorld(), unit = enemy('rabid-badger', 'flanker', 48, 48);
+    world.catalog.updateTargets([PLAYER]);
+    world.coordinator.setPortalLinks([flank]); settle(world, [unit]);
+    const linked = world.intents.get(unit.id)!.navigation;
+    world.coordinator.setPortalLinks([]);
+    world.intents.update([unit], 100);
+    expect(world.intents.get(unit.id)!.navigation.status).toBe('pending');
+    expect(world.intents.getBreach(unit.id)).toBeNull();
+    // A pending continuation is kept until the next decision interval, as after any topology change.
+    settle(world, [unit], 400); settle(world, [unit], 600);
+    const land = world.intents.get(unit.id)!.navigation;
+    expect(land.status).toBe('ready');
+    if (land.status === 'ready' && linked.status === 'ready') expect(land.cost).toBeGreaterThan(linked.cost + 300);
+    const trace = walk(world, unit, false, 700, 900);
+    expect(trace.arrived).toBe(true);
+    expect(unit.sprite.x).toBeGreaterThan(272);
+    expect(trace.maxY).toBeGreaterThan(256);
+    world.destroy();
+  });
+
+  it('routes through the portal instead of demolishing a sealed land route', () => {
+    const world = portalWorld('rock', 384), unit = enemy('rabid-badger', 'sealed', 48, 48);
+    world.intents.setObstacleIntegrityResolver(() => 10);
+    world.catalog.updateTargets([PLAYER]);
+    world.coordinator.setPortalLinks([flank]);
+    for (let step = 0; step < 20; step++) settle(world, [unit], step * 100);
+    expect(world.intents.get(unit.id)!.navigation.status).toBe('ready');
+    expect(world.intents.getBreach(unit.id)).toBeNull();
+    expect(world.intents.allowsAttack(unit.id, 'obstacle', 'wall', 'all')).toBe(false);
+    expect(walk(world, unit, true, 2100).arrived).toBe(true);
+    // Without the link the same wall is the only way: demolition becomes a valid order again.
+    jump(unit, 48, 48);
+    world.coordinator.setPortalLinks([]);
+    for (let step = 0; step < 40 && world.intents.getBreach(unit.id)?.status !== 'ready'; step++) settle(world, [unit], 20000 + step * 100);
+    expect(world.intents.getBreach(unit.id)?.nextBlocker).toBe('rock:wall');
     world.destroy();
   });
 });

@@ -125,6 +125,8 @@ export interface WorldMetricsDefinition {
 
 export interface WorldTerrainDefinition {
   readonly water?: readonly import('../../types').WaterCell[];
+  /** Authored bridges across `water`; their state lives in the World runtime. */
+  readonly bridges?: readonly import('../../types').ArenaBridge[];
   readonly rockFillRatio?: number;
   readonly treeCount?: number;
   readonly treeGroves?: import('../coopDefenseMapAuthoring').CoopDefenseMapTreeGrovesConfig;
@@ -134,6 +136,8 @@ export interface WorldTerrainDefinition {
   readonly reactiveProps?: import('../coopDefenseMapAuthoring').CoopDefenseMapReactivePropsConfig;
   /** Garantiert freie Lichtungen um Salvage-Sites; ihre ID ist die Site-ID. */
   readonly siteClearings?: readonly import('../coopDefenseMapAuthoring').CoopDefenseMapSiteClearingConfig[];
+  /** Freie Lichtungen moeglicher Portalendpunkte; welche Mission sie verbindet, ist Activity. */
+  readonly portalAnchors?: readonly import('../coopDefensePortalLinks').CoopDefenseMapPortalAnchorConfig[];
 }
 
 export interface WorldTrackDefinition {

@@ -5,6 +5,7 @@ import { isBossIntroPresetId, type BossIntroPresetId } from './bossIntros';
 import { normalizeFogStrength } from './groundFog';
 import { normalizeWorldMoonlight, normalizeWorldVoidDanger, type WorldMoonlightConfig, type WorldVoidDangerConfig } from './nightWorld';
 import { normalizeCoopDefenseWater } from './coopDefenseWater';
+import { normalizeCoopDefenseBridges } from './coopDefenseBridges';
 import { normalizeKrakenHabitat, type KrakenHabitatConfig } from './krakenHabitat';
 import { normalizeWorldSpawnZones, spawnZoneArea, type WorldSpawnZone } from './spawnZones';
 import { turretAimConfig, validateTurretAimConfig, type TurretAimConfig } from './turretAim';
@@ -42,6 +43,12 @@ import {
   type PersistentBaseOrientation,
 } from '../persistentBase/PersistentBaseCore';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
+import {
+  normalizeCoopDefensePortalAnchors,
+  normalizeCoopDefensePortalLinks,
+  type CoopDefenseMapPortalAnchorConfig,
+  type CoopDefenseMapPortalLinkConfig,
+} from './coopDefensePortalLinks';
 import {
   sanitizePersistentBaseRewardIds,
   type PersistentBaseRewardId,
@@ -284,12 +291,28 @@ export function getCoopDefenseMapObjectiveZoneWorldRect(
 }
 
 /** Carry-specific data; unlike Destroy/Hold it contains no dormant base references. */
-export interface CoopDefenseMapCarryConfig {
+interface CoopDefenseMapCarryConfigBase {
   readonly spawnZone: CoopDefenseMapObjectiveZoneConfig;
-  readonly deliveryZone: CoopDefenseMapObjectiveZoneConfig;
-  /** Number of independently transportable bottles spawned when the objective activates. */
+  /** Number of independently transportable items spawned when the objective activates. */
   readonly itemCount?: number;
 }
+
+/** Cargo (bottles, crates) counts when it reaches the delivery zone. */
+export interface CoopDefenseMapCargoCarryConfig extends CoopDefenseMapCarryConfigBase {
+  readonly item?: 'cargo';
+  readonly deliveryZone: CoopDefenseMapObjectiveZoneConfig;
+}
+
+/**
+ * Explosives count when a carrier plants them on a standing bridge (Shift at the deck); they
+ * have no delivery zone. The World must author at least as many bridges as the target goal.
+ */
+export interface CoopDefenseMapExplosiveCarryConfig extends CoopDefenseMapCarryConfigBase {
+  readonly item: 'explosive';
+  readonly deliveryZone?: undefined;
+}
+
+export type CoopDefenseMapCarryConfig = CoopDefenseMapCargoCarryConfig | CoopDefenseMapExplosiveCarryConfig;
 
 /** Authored immediate team reward; resolved values keep B11 balancing data-driven. */
 export interface CoopDefenseMapTeamBuffRewardConfig {
@@ -909,6 +932,11 @@ export interface CoopDefenseMapConfig {
   /** Feste, benannte Spawnorte der World; Encounter, Dauerquellen und Boss referenzieren sie per ID. */
   readonly spawnZones?: readonly WorldSpawnZone[];
   readonly water?: readonly import('../types').WaterCell[];
+  /**
+   * Authored wooden bridges across `water`. Decks are water cells that stay walkable while the
+   * bridge stands; a World must still connect all land without them (fords or land crossings).
+   */
+  readonly bridges?: readonly import('../types').ArenaBridge[];
   readonly mapId: string;
   /**
    * Horizontale Arenabreite im 32-px-Raster. Standard sind 60 Zellen; Werte werden auf
@@ -1036,6 +1064,10 @@ export interface CoopDefenseMapConfig {
    * ist die Site-ID, auf die `site-activated` verweist; der Generator fraest den Kern frei.
    */
   readonly siteClearings?: readonly CoopDefenseMapSiteClearingConfig[];
+  /** World-Geometrie: freie Lichtungen, in denen ein Portalendpunkt stehen kann. */
+  readonly portalAnchors?: readonly CoopDefenseMapPortalAnchorConfig[];
+  /** Activity: ein feindlicher Generator haelt zwischen zwei Ankern ein Portal offen. */
+  readonly portalLinks?: readonly CoopDefenseMapPortalLinkConfig[];
 }
 
 export interface CoopDefenseMapRespawnDelayStep {
@@ -1062,6 +1094,8 @@ export interface CoopDefenseMapSiteClearingConfig {
   readonly gridX: number;
   readonly gridY: number;
   readonly radiusCells: number;
+  /** Bauwerk dieser Lichtung; ein Treffer darauf aktiviert die Site wie das Betreten. */
+  readonly structureBaseId?: string;
 }
 
 /** Groesster erlaubter Lichtungsradius; groessere Flaechen gehoeren in eigenes Terrain-Authoring. */
@@ -1229,11 +1263,11 @@ export function resolveCoopDefenseMapSecondaryObjectives(
 }
 
 function cloneCarryConfig(config: CoopDefenseMapCarryConfig): CoopDefenseMapCarryConfig {
-  return {
-    spawnZone: { ...config.spawnZone },
-    deliveryZone: { ...config.deliveryZone },
-    ...(config.itemCount === undefined ? {} : { itemCount: config.itemCount }),
-  };
+  const itemCount = config.itemCount === undefined ? {} : { itemCount: config.itemCount };
+  return config.item === 'explosive'
+    ? { item: 'explosive', spawnZone: { ...config.spawnZone }, ...itemCount }
+    : { ...(config.item === undefined ? {} : { item: config.item }), spawnZone: { ...config.spawnZone },
+      deliveryZone: { ...config.deliveryZone }, ...itemCount };
 }
 
 /** Exakte XP-Untergrenze aus endlichem Map-Inhalt; persistenter Druck ist darin nicht enthalten. */
@@ -1341,7 +1375,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     mapConfig.mapId,
     mapConfig.balanceReferenceDurationSec,
   );
-  const siteClearings = normalizeSiteClearings(mapConfig.mapId, mapConfig.siteClearings, arenaWidthCells, arenaHeightCells);
+  const siteClearings = normalizeSiteClearings(mapConfig.mapId, mapConfig.siteClearings, arenaWidthCells, arenaHeightCells,
+    bases);
   const siteIds = new Set((siteClearings ?? []).map(({ id }) => id));
   const spawnZones = normalizeWorldSpawnZones(`coopDefenseMaps ${mapConfig.mapId}`, mapConfig.spawnZones,
     arenaWidthCells, arenaHeightCells);
@@ -1436,9 +1471,27 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     bodyRadiusCells: krakenConfig ? krakenConfig.bodyRadiusPx / CELL_SIZE : undefined,
   });
   if (boss?.habitatId && boss.habitatId !== krakenHabitat?.id) throw new Error('[coopDefenseMaps] Unknown boss habitat');
+  const bridges = normalizeCoopDefenseBridges({
+    bridges: mapConfig.bridges, spawnZones, krakenHabitat,
+    bases, persistentBase, rockWalls, missionProgress, trackMode, trackPosition,
+  }, water ?? [], arenaWidthCells, arenaHeightCells);
+  validateExplosiveCarryBridges(mapConfig.mapId, secondaryObjectives, bridges);
   validateWaterSpawnAreas(mapConfig.mapId, encounters, water);
   const normalizedPersistentSpawns = normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases, zonesById);
   validateSpawnZoneUse(mapConfig.mapId, spawnZones, encounters, normalizedPersistentSpawns, boss, water);
+  validateRepelSideEncounters(mapConfig.mapId, objective, encounters ?? [], secondaryObjectives ?? [], boss);
+  const portalAnchors = normalizeCoopDefensePortalAnchors(mapConfig.mapId, mapConfig.portalAnchors,
+    arenaWidthCells, arenaHeightCells, water);
+  const portalLinks = normalizeCoopDefensePortalLinks(mapConfig.mapId, mapConfig.portalLinks, {
+    anchors: portalAnchors,
+    bases,
+    destroyObjectiveTargets: new Map((secondaryObjectives ?? []).filter((entry) => entry.type === 'destroy')
+      .flatMap((entry) => entry.targets.map((baseId) => [baseId, {
+        objectiveId: entry.id, expires: entry.expiresAt !== undefined,
+      }] as const))),
+    ...(persistentBase ? { persistentBase: { gridX: persistentBase.anchor.gridX, gridY: persistentBase.anchor.gridY,
+      reservationRadiusCells: resolvePersistentBaseReservationRadiusCells(persistentBase.maxAreaStage) } } : {}),
+  });
   const tutorialSteps = normalizeTutorialSteps(
     mapConfig.mapId,
     mapConfig.tutorialSteps,
@@ -1470,6 +1523,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     tutorialAnchor,
     ...(mapConfig.abyssCameo === undefined ? {} : { abyssCameo: normalizeAbyssCameo(mapConfig.mapId, mapConfig.abyssCameo, water ?? []) }),
     water,
+    ...(bridges === undefined ? {} : { bridges }),
     krakenHabitat,
     tutorialSteps,
     trackMode,
@@ -1505,6 +1559,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     persistentBasePreview,
     persistentBase,
     ...(siteClearings === undefined ? {} : { siteClearings }),
+    ...(portalAnchors === undefined ? {} : { portalAnchors }),
+    ...(portalLinks === undefined ? {} : { portalLinks }),
     ...(mapConfig.respawnDelaySchedule === undefined
       ? {}
       : { respawnDelaySchedule: normalizeRespawnDelaySchedule(mapConfig.mapId, mapConfig.respawnDelaySchedule) }),
@@ -1542,10 +1598,12 @@ function normalizeSiteClearings(
   clearings: readonly CoopDefenseMapSiteClearingConfig[] | undefined,
   arenaWidthCells: number,
   arenaHeightCells: number,
+  bases: readonly CoopBaseConfig[],
 ): readonly CoopDefenseMapSiteClearingConfig[] | undefined {
   if (clearings === undefined) return undefined;
   if (!Array.isArray(clearings)) throw new Error(`[coopDefenseMaps] Map ${mapId} siteClearings must be an array`);
   const ids = new Set<string>();
+  const structures = new Set<string>();
   return clearings.map((clearing) => {
     const id = normalizeRequiredId(clearing?.id, `[coopDefenseMaps] Map ${mapId} has a site clearing without id`);
     if (ids.has(id)) throw new Error(`[coopDefenseMaps] Map ${mapId} has duplicate site clearing ${id}`);
@@ -1561,8 +1619,55 @@ function normalizeSiteClearings(
         `[coopDefenseMaps] Site clearing ${mapId}:${id} needs a radius between 1 and ${MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS}`,
       );
     }
-    return { id, gridX, gridY, radiusCells };
+    if (clearing.structureBaseId === undefined) return { id, gridX, gridY, radiusCells };
+    const structureBaseId = clearing.structureBaseId;
+    if (!bases.some((base) => base.id === structureBaseId) || structures.has(structureBaseId)) {
+      throw new Error(`[coopDefenseMaps] Site clearing ${mapId}:${id} needs its own existing structure base`);
+    }
+    structures.add(structureBaseId);
+    return { id, gridX, gridY, radiusCells, structureBaseId };
   });
+}
+
+/**
+ * In `repel-assault` an encounter that waits for a site is a side encounter: it runs beside the
+ * clear chain (e.g. the guard of a structure) and neither blocks nor completes the assault.
+ */
+export function isCoopDefenseSideEncounter(
+  objective: CoopDefenseMapObjective,
+  encounter: { readonly start: CoopDefenseMapEncounterStart },
+): boolean {
+  return objective === 'repel-assault' && encounter.start.type === 'site-activated';
+}
+
+function validateRepelSideEncounters(
+  mapId: string,
+  objective: CoopDefenseMapObjective,
+  encounters: readonly CoopDefenseMapEncounterConfig[],
+  secondaryObjectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
+  boss: CoopDefenseMapBossConfig | undefined,
+): void {
+  const side = encounters.filter((encounter) => isCoopDefenseSideEncounter(objective, encounter));
+  if (side.length === 0) return;
+  const firstSide = encounters.findIndex((encounter) => isCoopDefenseSideEncounter(objective, encounter));
+  if (encounters.slice(firstSide).some((encounter) => !isCoopDefenseSideEncounter(objective, encounter))) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} must list side encounters after its assault chain`);
+  }
+  if (firstSide === 0) throw new Error(`[coopDefenseMaps] Map ${mapId} needs an assault chain before side encounters`);
+  const sideIds = new Set(side.map((encounter) => encounter.id));
+  for (const encounter of side) {
+    if (encounter.announce !== false) {
+      throw new Error(`[coopDefenseMaps] Side encounter ${mapId}:${encounter.id} must be silent (announce: false)`);
+    }
+  }
+  const triggers = [
+    ...encounters.map((encounter) => encounter.start),
+    ...secondaryObjectives.flatMap((entry) => [entry.start, entry.focusUntil, entry.holdUntil, entry.expiresAt]),
+  ];
+  if (triggers.some((trigger) => trigger?.type === 'after-encounter' && sideIds.has(trigger.encounterId))
+    || (boss?.startAfterEncounterId !== undefined && sideIds.has(boss.startAfterEncounterId))) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} must not wait for a side encounter`);
+  }
 }
 
 function validateMapSpawnModel(
@@ -2025,8 +2130,10 @@ function normalizeSecondaryObjectiveConfigs(
     normalizedObjectives.filter((objective) => objective.type !== 'carry' || objective.carry === undefined),
   );
   validateSecondaryObjectiveWindows(mapId, normalizedObjectives, context.encounters);
-  if (context.objective === 'repel-assault' && context.encounters && context.encounters.length > 0) {
-    const lastEncounterId = context.encounters[context.encounters.length - 1].id;
+  const assaultChain = (context.encounters ?? [])
+    .filter((encounter) => !isCoopDefenseSideEncounter(context.objective, encounter));
+  if (context.objective === 'repel-assault' && assaultChain.length > 0) {
+    const lastEncounterId = assaultChain[assaultChain.length - 1].id;
     for (const objective of normalizedObjectives) {
       if (objective.type !== 'hold') continue;
       // Der Reward haengt an holdUntil: Ein Halten, das erst mit dem rundenbeendenden Clear faellig
@@ -2054,9 +2161,17 @@ function normalizeCarryConfig(
     throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} needs carry zones`);
   }
 
+  if (carry.item !== undefined && carry.item !== 'cargo' && carry.item !== 'explosive') {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} item must be cargo or explosive`);
+  }
   const spawnZone = normalizeCarryZone(mapId, objectiveId, 'spawnZone', carry.spawnZone, context);
-  const deliveryZone = normalizeCarryZone(mapId, objectiveId, 'deliveryZone', carry.deliveryZone, context);
-  if (zonesOverlap(spawnZone, deliveryZone)) {
+  const explosive = carry.item === 'explosive';
+  if (explosive && carry.deliveryZone !== undefined) {
+    throw new Error(`[coopDefenseMaps] Explosive carry objective ${mapId}:${objectiveId} is planted on bridges, not delivered`);
+  }
+  const deliveryZone = explosive ? undefined
+    : normalizeCarryZone(mapId, objectiveId, 'deliveryZone', (carry as CoopDefenseMapCargoCarryConfig).deliveryZone, context);
+  if (deliveryZone && zonesOverlap(spawnZone, deliveryZone)) {
     throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} zones must not overlap`);
   }
 
@@ -2073,11 +2188,25 @@ function normalizeCarryConfig(
     );
   }
 
-  return {
-    spawnZone,
-    deliveryZone,
-    itemCount: authoredItemCount,
-  };
+  return deliveryZone
+    ? { spawnZone, deliveryZone, itemCount: authoredItemCount }
+    : { item: 'explosive', spawnZone, itemCount: authoredItemCount };
+}
+
+/** Explosive carry needs bridges to plant on; validated once both are normalized. */
+function validateExplosiveCarryBridges(
+  mapId: string,
+  objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[] | undefined,
+  bridges: readonly import('../types').ArenaBridge[] | undefined,
+): void {
+  for (const objective of objectives ?? []) {
+    if (objective.carry?.item !== 'explosive') continue;
+    const count = bridges?.length ?? 0;
+    if (count === 0) throw new Error(`[coopDefenseMaps] Explosive carry objective ${mapId}:${objective.id} needs bridges`);
+    if ((objective.targetGoal ?? objective.carry.itemCount ?? 1) > count) {
+      throw new Error(`[coopDefenseMaps] Explosive carry objective ${mapId}:${objective.id} targetGoal exceeds the bridge count`);
+    }
+  }
 }
 
 function normalizeCarryZone(
@@ -2514,6 +2643,8 @@ function validateSecondaryObjectiveWindows(
       encounterIndexById,
     );
     for (let secondIndex = firstIndex + 1; secondIndex < objectives.length; secondIndex += 1) {
+      // Concurrent objectives never take the focus slot, so their windows may overlap any other.
+      if (objectives[firstIndex].concurrent || objectives[secondIndex].concurrent) continue;
       const firstStart = objectives[firstIndex].start;
       const secondStart = objectives[secondIndex].start;
       if (firstStart.type === 'after-encounter'
@@ -3457,9 +3588,10 @@ function validateMissionDependencyGraph(
     const encounter = encounters[index];
     const dependent = `encounter:${encounter.id}` as const;
     addNode(dependent);
-    if (objective === 'repel-assault') addDependency(dependent, 'mission-victory');
+    const chained = objective === 'repel-assault' && !isCoopDefenseSideEncounter(objective, encounter);
+    if (chained) addDependency(dependent, 'mission-victory');
     // Repel assault consumes the authored sequence even when a start uses another trigger.
-    if (objective === 'repel-assault' && index > 0) {
+    if (chained && index > 0) {
       addDependency(`encounter:${encounters[index - 1].id}`, dependent);
     }
     if (encounter.start.type === 'after-previous') {

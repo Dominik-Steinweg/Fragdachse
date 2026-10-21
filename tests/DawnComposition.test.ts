@@ -138,7 +138,9 @@ describe('Dawn round composition', () => {
         const plans = compose(seed, threat);
         const template = getDawnArenaTemplate(plans.world.templateId);
         const base = template.world.persistentBase.anchor;
-        const sites = plans.world.sites.map((site) => ({ ...site, slot: getDawnSalvageSlot(template, site.slotId) }));
+        // The portal generator is composed on its own and has its own placement rules.
+        const sites = plans.world.sites.filter((site) => !getDawnSiteArchetype(site.archetypeId).portal)
+          .map((site) => ({ ...site, slot: getDawnSalvageSlot(template, site.slotId) }));
         const distance = ({ slot }: (typeof sites)[number]) => Math.hypot(
           slot.anchor.gridX - base.gridX, slot.anchor.gridY - base.gridY,
         );
@@ -204,15 +206,36 @@ describe('Dawn M3 site archetypes in composition', () => {
   it('offers distinct archetypes per round and keeps later archetypes out below their threat', () => {
     for (const threat of [1, 2, 6]) {
       for (const plans of plansFor(threat)) {
-        const ids = plans.world.sites.map(site => site.archetypeId);
-        for (const id of ids) expect(getDawnSiteArchetype(id).minThreat ?? 1).toBeLessThanOrEqual(threat);
+        for (const site of plans.world.sites) expect(getDawnSiteArchetype(site.archetypeId).minThreat ?? 1).toBeLessThanOrEqual(threat);
+        // Portal generators and demolition caches come from their own steps, never from the ordinary picks.
+        const ids = plans.world.sites.map(site => site.archetypeId)
+          .filter(id => !getDawnSiteArchetype(id).portal && id !== 'demolition-cache');
         const eligible = new Set(['wreck', 'extractor', 'brood-nest', 'supply', 'scrap-heaps', 'scavenger']
           .filter(id => (getDawnSiteArchetype(id).minThreat ?? 1) <= threat));
         if (ids.length <= eligible.size) expect(new Set(ids).size).toBe(ids.length);
       }
     }
-    const seen = new Set(plansFor(6).flatMap(plans => plans.world.sites.map(site => site.archetypeId)));
+    const seen = new Set(plansFor(6).flatMap(plans => plans.world.sites.map(site => site.archetypeId))
+      .filter(id => !getDawnSiteArchetype(id).portal && id !== 'demolition-cache'));
     expect([...seen].sort()).toEqual(['brood-nest', 'extractor', 'scavenger', 'scrap-heaps', 'supply', 'wreck']);
+  });
+
+  it('plans exactly one demolition cache on arenas with bridges and none elsewhere', () => {
+    let withBridges = 0;
+    for (const threat of [1, 6]) {
+      for (const plans of plansFor(threat)) {
+        const template = getDawnArenaTemplate(plans.world.templateId);
+        const caches = plans.world.sites.filter(site => site.archetypeId === 'demolition-cache');
+        const bridges = template.world.bridges?.length ?? 0;
+        expect(caches.length, template.id).toBe(bridges > 0 ? 1 : 0);
+        if (bridges > 0) {
+          withBridges++;
+          const slot = template.salvageSlots.find(entry => entry.id === caches[0]!.slotId)!;
+          expect(slot.band).not.toBe('far');
+        }
+      }
+    }
+    expect(withBridges).toBeGreaterThan(0);
   });
 
   it('hides scrap heaps from navigation unless the host owns the scrap scanner', () => {

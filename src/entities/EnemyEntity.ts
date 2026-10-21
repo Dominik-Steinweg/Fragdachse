@@ -497,6 +497,8 @@ export class EnemyEntity {
 
   get positionRevision(): number { return this.movementRevision; }
 
+  isStationary(): boolean { return this.stationary; }
+
   /** A host-owned fixed target keeps its position even through portals and external impulses. */
   setStationary(stationary: boolean): void {
     const resumingKraken = this.stationary && !stationary && !!this.config.krakenBoss;

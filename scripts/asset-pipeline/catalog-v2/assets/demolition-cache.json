@@ -1,0 +1,42 @@
+{
+  "id": "demolition-cache",
+  "label": "Dawn demolition cache",
+  "category": "construction",
+  "gameIds": [
+    "dawn_demolition_cache"
+  ],
+  "reference": "scripts/asset-pipeline/references/demolition-cache-draft.png",
+  "targetSize": 96,
+  "sourceSizes": [
+    192
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Pallet stacked with dynamite crates under a draped olive tarp, a plunger detonator with T handle and a coil of fuse cord on the ground in front, inside the 96 px site canvas",
+    "colors": "Stained crate timber with red warning bands, two opened crates showing red sticks, olive tarp, dark iron detonator handle and black fuse",
+    "anatomy": "1.7 by 1.36 m pallet on three runners; five crates of the carried crate model on the pallet and two stacked; plunger box 0.24 by 0.18 m with a 0.3 m T handle; loose sticks and a three-ring fuse coil. The stockpile stays as scenery after its crates leave."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "bridge-explosives",
+  "model": {
+    "kind": "cache"
+  },
+  "orthoScale": 3,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png",
+    "wood": "art/poc/pipeline-v2/textures/watchtower-weathered-timber-v4.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Stained crate timber, red paper sticks, matte iron",
+      "textureStrength": 0.94,
+      "formShadowStrength": 0.44
+    }
+  },
+  "clips": []
+}

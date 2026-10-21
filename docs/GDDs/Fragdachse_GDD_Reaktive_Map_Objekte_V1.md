@@ -2,7 +2,7 @@
 
 - Version: 1.1
 - Datum: 2026-10-21
-- Status: umgesetzt auf Branch `reactive-props` (Produktion `barrel-r3`, Standard Rostfass); Explosionston im Audio-Studio zur Freigabe, Merge offen
+- Status: umgesetzt auf `main` (Produktion `barrel-r3`, Standard Rostfass); offen: Playtest, Freigabe des Explosionstons im Audio-Studio
 - Spielmodus: Coop-Kampagne, From Dachs Till Dawn, PvP-Arenen (Deathmatch, Team-Deathmatch, Capture the Beer)
 - Kind-ID: `explosive_barrel`; Varianten `rusted` (Rostfass) und `toxic` (radioaktives Fass)
 
@@ -93,8 +93,8 @@ Explosionen von Gegnern zünden sie trotzdem. Spieler spawnen nie direkt neben e
   Projektil, Näherungsimpuls).
 - `commitDamage` ändert nur Zustand; Entfernen und Explosion passieren in `hostAdvance` vor dem
   Explosions-Drain des Host-Frames.
-- Replikation: Slice `rp` (Phase und Fortschrittsbyte je Objekt), Protokoll 42; Layout über
-  Generator-Version 15. Die Phase `recharging` ist im Drahtformat bereits belegt.
+- Replikation: Slice `rp` (Phase und Fortschrittsbyte je Objekt), Protokoll 44; Layout über
+  Generator-Version 16. Die Phase `recharging` ist im Drahtformat bereits belegt.
 
 ## 8. Geplante Erweiterungen (nicht umgesetzt)
 
@@ -114,4 +114,4 @@ ohne Änderung am Drahtformat dazu.
 | GA1 | Form-Entwürfe beider Varianten | erledigt (Rostfass nach Rückmeldung mit großem Schild) |
 | G2 | Optik: Brand, Gefahrenzone, Glühen, Schatten, Explosionsstil, Audio | erledigt; Ton: Kandidaten im Studio, Freigabe durch den User |
 | G3 | Kampagne, PvP, Dawn, Map-Editor; strategische Engstellen-Platzierung | erledigt |
-| G4 | Produktion `barrel-r3`, Rostfass Standard, Review-Paket | erledigt; offen: Tonfreigabe, Merge |
+| G4 | Produktion `barrel-r3`, Rostfass Standard, Review-Paket, Merge nach `main` | erledigt; offen: Playtest, Tonfreigabe |

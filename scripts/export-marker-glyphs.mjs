@@ -13,7 +13,7 @@ const ids = [
   'site-wreck', 'site-extractor', 'site-brood-nest', 'site-supply', 'site-scrap-heaps', 'scavenger',
   'mission-destroy', 'mission-hold', 'mission-carry',
   'crate', 'flag', 'hazard', 'timebomb', 'tool',
-  'check', 'cross',
+  'check', 'cross', 'portal',
 ];
 // Exact MARKER_GLYPH_IDS order from dawn 0eb7d320, MarkerTypes.ts.
 const sizes = [16, 24, 32];

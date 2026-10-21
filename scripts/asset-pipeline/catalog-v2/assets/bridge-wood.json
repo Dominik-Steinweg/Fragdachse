@@ -1,0 +1,42 @@
+{
+  "id": "bridge-wood",
+  "label": "Wooden bridge kit",
+  "category": "construction",
+  "gameIds": [
+    "bridge_wood"
+  ],
+  "reference": "scripts/asset-pipeline/references/bridge-wood-draft.png",
+  "targetSize": 352,
+  "sourceSizes": [
+    704
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Kit master holding three overgrown timber footbridges of four, three and two cells width, eight cells long, stacked on the 352 px canvas: cross boards between low curbs, handrails on posts, dressed stone abutments with a timber sill at both ends",
+    "colors": "Watchtower timber gone wild: varied weathered boards with a green algae film, moss cushions in the seams and along the curbs, ivy on the handrails, fallen leaves, grass at the banks, matte charcoal iron, cool grey abutment stone with moss",
+    "anatomy": "Courses of six boards per metre laid like the watchtower floor: pieces butt-jointed over the stringers, never on the neighbouring course's stringer, the odd piece missing. Curb, handrail and guard rail in one metre segments with iron splices on the cell lines; posts, cushions, ivy and leaves stay inside their cell. The runtime picks the deck of the authored width and cuts it along cell lines into any span. Key and fill stand ten times further out along their shared directions so that cells from both ends match in brightness."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "bridge-wood",
+  "model": {
+    "state": "standing"
+  },
+  "orthoScale": 11,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png",
+    "wood": "art/poc/pipeline-v2/textures/watchtower-weathered-timber-v4.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Watchtower timber, moss, ivy and leaf litter",
+      "textureStrength": 0.94,
+      "formShadowStrength": 0.44
+    }
+  },
+  "clips": []
+}

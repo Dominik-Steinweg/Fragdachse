@@ -193,16 +193,22 @@ describe('EffectSystem player death animation', () => {
     release(); expect(() => system.playMeleeSwingEffect(300, 300, 0, 90, 100, 0xffffff, 'KATANA')).toThrow(stop);
     expect(sink.melee).toHaveBeenCalledOnce();
   });
-  it('delivers destructive fog impulses before individual VFX gates and detaches their owner', () => {
+  it('delivers destructive explosions to every observer before individual VFX gates and detaches each owner', () => {
     const system = Object.create(EffectSystem.prototype) as EffectSystem;
-    const sink = vi.fn(), stop = new Error('VFX preparation gate');
+    const fog = vi.fn(), wildlife = vi.fn(), stop = new Error('VFX preparation gate');
     Object.assign(system, { ensureTextures: () => { throw stop; } });
-    const release = system.bindGroundFogExplosion(sink);
+    const releaseFog = system.bindExplosionObserver(fog);
+    const releaseWildlife = system.bindExplosionObserver(wildlife);
     expect(() => system.playExplosionEffect(10, 20, 50, undefined, 'mini_rocket')).toThrow(stop);
-    expect(sink).toHaveBeenCalledExactlyOnceWith(10, 20, 50, 'mini_rocket');
+    expect(fog).toHaveBeenCalledExactlyOnceWith(10, 20, 50, 'mini_rocket');
+    expect(wildlife).toHaveBeenCalledExactlyOnceWith(10, 20, 50, 'mini_rocket');
     expect(() => system.playExplosionEffect(10, 20, 50, undefined, 'regeneration')).toThrow(stop);
-    release(); expect(() => system.playExplosionEffect(10, 20, 50)).toThrow(stop);
-    expect(sink).toHaveBeenCalledTimes(1);
+    releaseFog(); releaseFog();
+    expect(() => system.playExplosionEffect(10, 20, 50)).toThrow(stop);
+    expect(fog).toHaveBeenCalledTimes(1);
+    expect(wildlife).toHaveBeenCalledTimes(2);
+    releaseWildlife(); expect(() => system.playExplosionEffect(10, 20, 50)).toThrow(stop);
+    expect(wildlife).toHaveBeenCalledTimes(2);
   });
   it('starts GPU death and the temporary player ghost together', () => {
     const { gpu, internals, scene, sprites } = makeSystem((targetId) => targetId === 'player-1');

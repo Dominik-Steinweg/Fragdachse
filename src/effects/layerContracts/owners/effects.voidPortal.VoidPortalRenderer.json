@@ -1,0 +1,163 @@
+{
+  "owner": "effects/voidPortal/VoidPortalRenderer.ts",
+  "notes": [
+    "Generator portals: apertures and conduit at the translocator aperture depth, the generator body on the structure layer, its emissive passes above the light map like site emissions, implosions at the additive transfer flash depth."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.graphics/setDepth/0",
+        "expression": "DEPTH_FX - 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "syncGenerator/sprite/setDepth/0",
+        "expression": "DEPTH.BASES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "syncGenerator/core/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "syncGenerator/flow/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playCollapse/g/setDepth/0",
+        "expression": "DEPTH_FX",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/voidPortal/VoidPortalRenderer.ts:module/this.graphics/setDepth/0",
+      "owner": "effects/voidPortal/VoidPortalRenderer.ts",
+      "component": "module/this.graphics/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        24.8
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.graphics/setDepth/0",
+        "expression": "DEPTH_FX - 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/voidPortal/VoidPortalRenderer.ts:syncGenerator/sprite/setDepth/0",
+      "owner": "effects/voidPortal/VoidPortalRenderer.ts",
+      "component": "syncGenerator/sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncGenerator/sprite/setDepth/0",
+        "expression": "DEPTH.BASES"
+      }
+    },
+    {
+      "id": "cpu:effects/voidPortal/VoidPortalRenderer.ts:syncGenerator/core/setDepth/0",
+      "owner": "effects/voidPortal/VoidPortalRenderer.ts",
+      "component": "syncGenerator/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncGenerator/core/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/voidPortal/VoidPortalRenderer.ts:syncGenerator/flow/setDepth/0",
+      "owner": "effects/voidPortal/VoidPortalRenderer.ts",
+      "component": "syncGenerator/flow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncGenerator/flow/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/voidPortal/VoidPortalRenderer.ts:playCollapse/g/setDepth/0",
+      "owner": "effects/voidPortal/VoidPortalRenderer.ts",
+      "component": "playCollapse/g/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playCollapse/g/setDepth/0",
+        "expression": "DEPTH_FX"
+      }
+    }
+  ]
+}

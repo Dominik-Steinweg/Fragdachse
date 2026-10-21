@@ -43,9 +43,14 @@ export interface CoopDefenseCarrySystemOptions {
    * the host broadcasts it, so the burst never depends on the item snapshot that just lost the item.
    */
   readonly onDeliveredFx?: (x: number, y: number) => void;
+  /** Moves a drop point out of collision water (a collapsed deck); absent keeps the point. */
+  readonly resolveDropPoint?: (x: number, y: number) => { x: number; y: number };
 }
 
+export type CarryItemKind = 'cargo' | 'explosive';
+
 interface LocalCarryItem extends SyncedCoopDefenseCarryItem {
+  readonly kind: CarryItemKind;
   readonly spawnX: number;
   readonly spawnY: number;
   pickupBlockedByPlayerId: string | null;
@@ -94,12 +99,14 @@ export class CoopDefenseCarrySystem {
 
     this.activeObjectives.add(objectiveId);
     const itemCount = config.carry.itemCount ?? config.targetGoal;
+    const kind: CarryItemKind = config.carry.item === 'explosive' ? 'explosive' : 'cargo';
     for (let index = 0; index < itemCount; index += 1) {
       const spawnPosition = getCarrySpawnPosition(config.carry.spawnZone, index, itemCount);
-      const itemId = `${objectiveId}:beer-${this.items.size}`;
+      const itemId = `${objectiveId}:${kind === 'explosive' ? 'charge' : 'beer'}-${this.items.size}`;
       this.items.set(itemId, {
         id: itemId,
         objectiveId,
+        kind,
         x: spawnPosition.x,
         y: spawnPosition.y,
         holderId: null,
@@ -159,14 +166,52 @@ export class CoopDefenseCarrySystem {
   getSnapshot(): SyncedCoopDefenseCarryState {
     return [...this.items.values()]
       .sort((left, right) => left.id.localeCompare(right.id))
-      .map(({ id, objectiveId, x, y, holderId, state }) => ({
+      .map(({ id, objectiveId, x, y, holderId, state, kind }) => ({
         id,
         objectiveId,
         x,
         y,
         holderId,
         state,
+        ...(kind === 'explosive' ? { item: 'explosive' as const } : {}),
       }));
+  }
+
+  /** Whether any item of this kind exists this round, carried or on the ground. */
+  hasItems(kind: CarryItemKind): boolean {
+    for (const item of this.items.values()) if (item.kind === kind) return true;
+    return false;
+  }
+
+  isCarrying(playerId: string, kind: CarryItemKind): boolean {
+    for (const item of this.items.values()) {
+      if (item.kind === kind && item.state === 'carried' && item.holderId === playerId) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Host: the carrier uses the item up (an explosive planted on a bridge). The objective hears
+   * about it through the regular delivery seam; an objective that already ended ignores it.
+   */
+  consumeCarried(playerId: string, kind: CarryItemKind): { readonly itemId: string; readonly objectiveId: string } | null {
+    for (const item of this.items.values()) {
+      if (item.kind !== kind || item.state !== 'carried' || item.holderId !== playerId) continue;
+      this.items.delete(item.id);
+      this.options.onDelivered(item.objectiveId, item.id, playerId);
+      return { itemId: item.id, objectiveId: item.objectiveId };
+    }
+    return null;
+  }
+
+  /** Ground items inside the rectangle (a collapsing deck) move to the nearest dry point. */
+  relocateGroundItems(rect: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }): void {
+    for (const item of this.items.values()) {
+      if (item.state === 'carried') continue;
+      if (item.x < rect.x || item.x >= rect.x + rect.width || item.y < rect.y || item.y >= rect.y + rect.height) continue;
+      const point = this.options.resolveDropPoint?.(item.x, item.y);
+      if (point) { item.x = point.x; item.y = point.y; }
+    }
   }
 
   private resolveUnavailableCarriers(): void {
@@ -246,7 +291,8 @@ export class CoopDefenseCarrySystem {
       if (item.state !== 'carried' || !item.holderId) continue;
       const player = this.playerManager.getPlayer(item.holderId);
       const config = this.carryConfigs.get(item.objectiveId);
-      if (!player || !config?.carry || !this.isPlayerAlive(item.holderId)) continue;
+      // Explosives have no delivery zone; they are consumed by planting them on a bridge.
+      if (!player || !config?.carry?.deliveryZone || !this.isPlayerAlive(item.holderId)) continue;
       const deliveryZone = getCoopDefenseMapObjectiveZoneWorldRect(config.carry.deliveryZone);
       if (
         player.x < deliveryZone.x
@@ -263,8 +309,11 @@ export class CoopDefenseCarrySystem {
   private dropItem(item: LocalCarryItem, x: number, y: number, blockedBy: string | null): void {
     item.holderId = null;
     item.state = 'dropped';
-    item.x = Number.isFinite(x) ? x : item.spawnX;
-    item.y = Number.isFinite(y) ? y : item.spawnY;
+    const point = Number.isFinite(x) && Number.isFinite(y)
+      ? this.options.resolveDropPoint?.(x, y) ?? { x, y }
+      : { x: item.spawnX, y: item.spawnY };
+    item.x = point.x;
+    item.y = point.y;
     item.pickupBlockedByPlayerId = blockedBy;
   }
 

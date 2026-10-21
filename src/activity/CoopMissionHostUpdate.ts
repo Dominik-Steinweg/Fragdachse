@@ -192,6 +192,7 @@ export class CoopMissionHostUpdate {
     // Vor den Nebenzielen: eine betretene Site startet ihr Ziel noch in diesem Host-Frame.
     this.runtime.coopDefenseSiteActivationSystem?.hostUpdate(deltaMs, countdownActive, playerSamples);
     this.runtime.coopDefenseMapDirector?.hostUpdate(deltaMs, countdownActive);
+    this.runtime.coopDefenseSideEncounterDirector?.hostUpdate(deltaMs, countdownActive);
     this.runtime.coopDefenseMapEventDirector?.hostUpdate(deltaMs, countdownActive);
     this.runtime.coopDefenseSecondaryObjectiveSystem?.hostUpdate(deltaMs, countdownActive);
     this.publishEncounterPresentation();
@@ -200,6 +201,9 @@ export class CoopMissionHostUpdate {
     // The objective snapshot is now current; activate prebuilt mission structures before
     // flow-field refresh and enemy movement in this same host frame.
     this.port.syncDormantBaseStates();
+    // Portal links read the generators' structure state before flow fields and movement, so a
+    // generator destroyed in the previous frame never transports anybody in this one.
+    this.runtime.coopDefensePortalLinkSystem?.hostUpdate(deltaMs, countdownActive, nowMs);
     // Reward-Ausführung nach dem Zustandswechsel und vor dem Basis-Snapshot dieses Frames.
     this.runtime.coopDefenseObjectiveRepairSystem?.hostUpdate(deltaMs, countdownActive);
     // Read active structure sources after the objective transition so pressure starts in the same
@@ -307,6 +311,7 @@ export class CoopMissionHostUpdate {
   private publishSpawnZoneAlerts(): void {
     const alerts: SyncedSpawnZoneAlert[] = [];
     this.runtime.coopDefenseMapDirector?.getSpawnZoneAlerts(alerts);
+    this.runtime.coopDefenseSideEncounterDirector?.getSpawnZoneAlerts(alerts);
     this.runtime.coopDefensePersistentPressureSystem?.getSpawnZoneAlerts(alerts);
     const boss = this.runtime.coopDefenseBossSystem?.getSpawnZoneAlert();
     if (boss) alerts.push(boss);
@@ -322,6 +327,7 @@ export class CoopMissionHostUpdate {
   private publishSpawnPlaceState(): void {
     const active = new Set<string>(), upcoming = new Set<string>();
     this.runtime.coopDefenseMapDirector?.collectSpawnZoneUse(active, upcoming);
+    this.runtime.coopDefenseSideEncounterDirector?.collectSpawnZoneUse(active, upcoming);
     this.runtime.coopDefensePersistentPressureSystem?.collectSpawnZoneUse(active, upcoming);
     this.runtime.coopDefenseBossSystem?.collectSpawnZoneUse(active, upcoming);
     const state: SyncedSpawnPlaceState = {

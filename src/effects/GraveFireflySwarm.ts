@@ -4,7 +4,7 @@ import { AMBIENT_WILDLIFE } from '../arena/AmbientWildlifeConfig';
 import { createWildlifeAppearance, fireflyGlowStrength } from '../arena/AmbientWildlifeAppearance';
 import { prepareWildlifeVisuals } from '../arena/AmbientWildlifeGeometry';
 import { createAmbientWildlifeLayer, type AmbientWildlifeLayer } from '../arena/AmbientWildlifeLayer';
-import type { WildlifeAnimal } from '../arena/AmbientWildlifeModel';
+import { createWildlifeAnimal, type WildlifeAnimal } from '../arena/AmbientWildlifeModel';
 import { createVisibleWorldView, getVisibleWorldView } from '../graphics/CameraWorldView';
 import { LIGHT_PRESETS } from './LightingConfig';
 import { registerGraphicsObject } from './EffectUtils';
@@ -115,30 +115,12 @@ export class GraveFireflySwarm {
 /** Glühwürmchen mit derselben Erscheinungs- und Pulsvariation wie im Ambient-Modell. */
 function createFirefly(random: () => number): WildlifeAnimal {
   const phaseOffset = random() * TAU;
-  return {
-    kind: 'firefly',
-    homeX: 0,
-    homeY: 0,
-    variation: random(),
-    phaseOffset,
+  const variation = random();
+  return createWildlifeAnimal({
+    kind: 'firefly', x: 0, y: 0, homeX: 0, homeY: 0, variation, phaseOffset,
     appearance: createWildlifeAppearance('firefly', random(), random(), 0),
-    x: 0,
-    y: 0,
-    angle: phaseOffset,
-    turnSpeed: 0,
-    avoidanceAngle: null,
     // Ruhige Ambient-Fluggeschwindigkeit: der Puls zeigt kein Flucht-Aufleuchten.
     speed: AMBIENT_WILDLIFE.firefly.speed,
-    animation: phaseOffset,
-    opacity: 0,
-    fishPhase: 'swimming',
-    phaseTime: 0,
-    calmTime: 0,
-    alertCooldown: 0,
-    fleeing: false,
-    resting: false,
-    diurnalActive: false,
-    retireTime: 0,
-    shot: { x: 0, y: 0, until: 0 },
-  };
+    diurnalActive: false, opacity: 0,
+  });
 }

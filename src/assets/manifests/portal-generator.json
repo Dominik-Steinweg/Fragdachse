@@ -1,0 +1,254 @@
+{
+  "version": 1,
+  "id": "portal-generator",
+  "revision": "pg-prod-r2",
+  "displaySize": 96,
+  "sourceSize": 192,
+  "textureKey": "construction_portal_generator",
+  "sheetTextureKey": "construction_portal_generator_sheet",
+  "layout": {
+    "frameWidth": 192,
+    "frameHeight": 192,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 12,
+    "width": 1568,
+    "height": 392
+  },
+  "states": [
+    "intact",
+    "damaged",
+    "rubble"
+  ],
+  "outlets": [
+    "north",
+    "east",
+    "south",
+    "west"
+  ],
+  "frameOrder": "index = stateIndex * outlets.length + outletIndex",
+  "emissive": {
+    "encoding": "white RGB, alpha = emission intensity; congruent with sheet layout; tint and blend (ADD) at runtime",
+    "core": {
+      "key": "construction_portal_generator_emissive_core",
+      "path": "./assets/sprites/pipeline-v2/portal-generator/emissive-core.png",
+      "sha256": "17c153f0227545dfd4f1f731a31be7afd8081c317a11baf6e2c004f4da485fdc",
+      "content": "resonance core, halo seam, coil tips, leaking crystal splinters; spent residue in rubble"
+    },
+    "flow": {
+      "key": "construction_portal_generator_emissive_flow",
+      "path": "./assets/sprites/pipeline-v2/portal-generator/emissive-flow.png",
+      "sha256": "5e3abba523abc38f98d1f8c15220ba4df7b2b0a9b37653e0406d7360e6c46a91",
+      "content": "conduit flow slot, rupture discharge and emitter discharge slit; empty in rubble"
+    }
+  },
+  "sockets": "normalized full-canvas x/y (0..1, y down), z in Blender units; outlet = emitter front toward the portal entry",
+  "frames": [
+    {
+      "index": 0,
+      "state": "intact",
+      "outlet": "north",
+      "sockets": {
+        "outlet": {
+          "x": 0.525,
+          "y": 0.05625,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 1,
+      "state": "intact",
+      "outlet": "east",
+      "sockets": {
+        "outlet": {
+          "x": 0.94375,
+          "y": 0.525,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 2,
+      "state": "intact",
+      "outlet": "south",
+      "sockets": {
+        "outlet": {
+          "x": 0.475,
+          "y": 0.94375,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 3,
+      "state": "intact",
+      "outlet": "west",
+      "sockets": {
+        "outlet": {
+          "x": 0.05625,
+          "y": 0.475,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 4,
+      "state": "damaged",
+      "outlet": "north",
+      "sockets": {
+        "outlet": {
+          "x": 0.525,
+          "y": 0.05625,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 5,
+      "state": "damaged",
+      "outlet": "east",
+      "sockets": {
+        "outlet": {
+          "x": 0.94375,
+          "y": 0.525,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 6,
+      "state": "damaged",
+      "outlet": "south",
+      "sockets": {
+        "outlet": {
+          "x": 0.475,
+          "y": 0.94375,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 7,
+      "state": "damaged",
+      "outlet": "west",
+      "sockets": {
+        "outlet": {
+          "x": 0.05625,
+          "y": 0.475,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 8,
+      "state": "rubble",
+      "outlet": "north",
+      "sockets": {
+        "outlet": {
+          "x": 0.525,
+          "y": 0.05625,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 9,
+      "state": "rubble",
+      "outlet": "east",
+      "sockets": {
+        "outlet": {
+          "x": 0.94375,
+          "y": 0.525,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 10,
+      "state": "rubble",
+      "outlet": "south",
+      "sockets": {
+        "outlet": {
+          "x": 0.475,
+          "y": 0.94375,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    },
+    {
+      "index": 11,
+      "state": "rubble",
+      "outlet": "west",
+      "sockets": {
+        "outlet": {
+          "x": 0.05625,
+          "y": 0.475,
+          "z": 0.45
+        },
+        "core": {
+          "x": 0.5,
+          "y": 0.5,
+          "z": 0.5
+        }
+      }
+    }
+  ]
+}

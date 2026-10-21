@@ -38,6 +38,7 @@ export const EXPLOSION_AUDIO = {
   TIME_BUBBLE: 'sfx_explosion_time_bubble',
   'enemy.kaboomtula': 'sfx_explosion_timebomb',
   'environment.train': 'sfx_train_explode',
+  'environment.bridge_collapse': 'sfx_explosion_bridge',
 } as const satisfies Record<string, AudioAssetKey>;
 
 export const EXPLOSION_AUDIO_SUBSTITUTES: Partial<Record<AudioAssetKey, AudioAssetKey>> = {
@@ -67,6 +68,8 @@ export const EXPLOSION_AUDIO_SUBSTITUTES: Partial<Record<AudioAssetKey, AudioAss
   sfx_explosion_time_bubble: 'sfx_explosion_he',
   sfx_explosion_timebomb: 'sfx_explosion_he',
   sfx_explosion_explosive_barrel: 'sfx_explosion_he',
+  // Dynamite under a deck: the heavy airstrike blast until a dedicated recording exists.
+  sfx_explosion_bridge: 'sfx_airstrike_explosion',
 };
 
 export function resolveExplosionAudio(sourceId: string, chargeDamage?: number): { key: AudioAssetKey; scale: number } | undefined {

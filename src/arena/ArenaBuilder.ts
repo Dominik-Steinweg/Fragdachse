@@ -1039,6 +1039,8 @@ function replaceArenaLayoutContents(target: ArenaLayout, authored: ArenaLayout):
   replaceArrayContents(target.dirt, authored.dirt);
   if (authored.water) target.water = authored.water.map(cell => ({ ...cell }));
   else delete target.water;
+  if (authored.bridges) target.bridges = authored.bridges.map(bridge => ({ ...bridge }));
+  else delete target.bridges;
   replaceArrayContents(target.powerUpPedestals, authored.powerUpPedestals);
 
   if (authored.decals) {

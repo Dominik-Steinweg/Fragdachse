@@ -79,6 +79,10 @@
     "cross": {
       "source": "../glyphs/cross.svg",
       "sha256": "0faf94fe3f346976ba0d10ea2d004517ce39f352d817ce8e08fa11ea5abcd917"
+    },
+    "portal": {
+      "source": "../glyphs/portal.svg",
+      "sha256": "339ffd25547aea49e48779e06e0175ccd59ee6be1d00b81b5b5f296fc16aadc6"
     }
   },
   "file": "marker-glyphs-16.webp",
@@ -190,6 +194,12 @@
     },
     "cross": {
       "x": 42,
+      "y": 62,
+      "w": 16,
+      "h": 16
+    },
+    "portal": {
+      "x": 62,
       "y": 62,
       "w": 16,
       "h": 16

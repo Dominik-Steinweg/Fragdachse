@@ -13,6 +13,7 @@
       "anchor": { "gridX": 75, "gridY": 50 }
     },
     "waterAreas": [
+      { "gridX": 128, "gridY": 62, "widthCells": 3, "heightCells": 38 },
       { "gridX": 70, "gridY": 4, "widthCells": 6, "heightCells": 1 },
       { "gridX": 50, "gridY": 5, "widthCells": 12, "heightCells": 1 },
       { "gridX": 68, "gridY": 5, "widthCells": 12, "heightCells": 1 },
@@ -132,6 +133,9 @@
     ],
     "water": [
       { "gridX": 87, "gridY": 35 }
+    ],
+    "bridges": [
+      { "id": "channel-bridge", "axis": "horizontal", "gridX": 128, "gridY": 80, "spanCells": 3, "deckWidthCells": 3 }
     ]
   },
   "fronts": [

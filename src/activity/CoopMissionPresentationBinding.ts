@@ -13,6 +13,7 @@ import type {
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { BossIntroState } from '../config/bossIntros';
 import type { BossPresenceSource } from '../effects/BossPresenceRenderer';
+import { resolvePortalObjectiveStatusLines } from '../ui/coopDefenseSecondaryObjectiveModel';
 import type {
   CoopDefenseMapConfig,
   ResolvedCoopDefenseMapEventConfig,
@@ -65,6 +66,7 @@ export interface CoopMissionPresentationReadPort {
   readonly getMapEventPresentationState: () => CoopDefenseMapEventPresentationState | null;
   readonly getSecondaryObjectivePresentationState: () => CoopDefenseSecondaryObjectivePresentationState | null;
   readonly getMissionProgressPresentationState: () => CoopDefenseMissionProgressPresentationState | null;
+  readonly getPortalLinkState?: () => readonly import('../systems/portal/PortalLinkSystem').PortalLinkStateEntry[] | null;
   readonly getLocalRespawnBudgetState: () => CoopDefenseRespawnBudgetPlayerState | null;
   readonly getSynchronizedNow: () => number;
   readonly getArenaStartTime: () => number;
@@ -104,6 +106,7 @@ export interface CoopMissionPresentationUiPort {
       snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
       configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
       elapsedMs: number,
+      liveStatus?: ReadonlyMap<string, string>,
     ) => void;
     readonly updateOcclusionFade: (deltaMs: number) => void;
     readonly reset: () => void;
@@ -113,6 +116,11 @@ export interface CoopMissionPresentationUiPort {
     readonly applyKrakenClaw?: (event: EnemyAreaClawEvent, now: number) => void;
     /** Cosmetic herald of the abyssal kraken, derived from the shared mission clock. */
     readonly syncAbyssCameo?: (config: import('../config/coopDefenseMapAuthoring').CoopDefenseMapAbyssCameoConfig | null, elapsedMs: number) => void;
+    readonly syncPortalLinks?: (
+      mapConfig: CoopDefenseMapConfig,
+      entries: readonly import('../systems/portal/PortalLinkSystem').PortalLinkStateEntry[] | null,
+      elapsedMs: number,
+    ) => void;
     readonly confirmKrakenHit?: (receipt: CombatPartHitReceipt, now: number) => void;
     readonly syncEncounterTelegraph: (
       state: CoopDefenseEncounterPresentationState | null,
@@ -271,10 +279,13 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
 
     const secondaryObjectivePresentation = this.reads.getSecondaryObjectivePresentationState();
     const carryItems = this.resolveCarryPresentationItems();
+    const portalLinks = this.mapConfig.portalLinks?.length ? this.reads.getPortalLinkState?.() ?? null : null;
     this.ui.secondaryObjectives.sync(
       secondaryObjectivePresentation,
       this.runtime.secondaryObjectiveConfigs,
       elapsedMs,
+      portalLinks ? resolvePortalObjectiveStatusLines(this.mapConfig.portalLinks!, this.runtime.secondaryObjectiveConfigs,
+        portalLinks, elapsedMs) : undefined,
     );
     this.ui.secondaryObjectives.updateOcclusionFade(deltaMs);
 
@@ -306,6 +317,9 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     this.ui.worldSpace.syncMainObjectiveMarkers(this.mapConfig);
     this.ui.worldSpace.syncBossIntro(this.reads.getBossIntroState(), this.reads.getSynchronizedNow());
     this.ui.worldSpace.syncAbyssCameo?.(this.mapConfig.abyssCameo ?? null, elapsedMs);
+    if (this.mapConfig.portalLinks?.length) {
+      this.ui.worldSpace.syncPortalLinks?.(this.mapConfig, this.reads.getPortalLinkState?.() ?? null, elapsedMs);
+    }
     this.syncKraken();
     this.syncBossPresence();
   }

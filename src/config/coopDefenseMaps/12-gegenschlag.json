@@ -255,6 +255,19 @@
         "repairTargetOnComplete": false,
         "persistentBaseRewardsOnComplete": ["base_holy_hand_grenade_pedestal"]
       }
+    },
+    {
+      "id": "blow-east-bridge",
+      "type": "carry",
+      "start": { "type": "time", "atMs": 0 },
+      "concurrent": true,
+      "targets": [],
+      "targetGoal": 1,
+      "carry": {
+        "item": "explosive",
+        "spawnZone": { "gridX": 63, "gridY": 21, "widthCells": 3, "heightCells": 3 },
+        "itemCount": 2
+      }
     }
   ],
   "powerUps": [
@@ -575,5 +588,11 @@
       "heightCells": 2
     }
   ],
-  "treeCount": 7
+  "treeCount": 7,
+  "bridges": [
+    { "id": "east-river-bridge", "axis": "horizontal", "gridX": 77, "gridY": 20, "spanCells": 4, "deckWidthCells": 3 }
+  ],
+  "siteClearings": [
+    { "id": "field-cache", "gridX": 64, "gridY": 22, "radiusCells": 3 }
+  ]
 }

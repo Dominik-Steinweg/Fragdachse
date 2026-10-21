@@ -42,6 +42,10 @@ export interface NavigationLabWorldPort {
   observeCombatantDamage: CombatDamageObservationPort['addDamageDealtObserver'];
   setDensityEnabled(enabled: boolean): void;
   destroyScenarioRock(id: number): boolean;
+  /** Dev-only navigation links of the running Activity; an empty list removes them. */
+  setScenarioPortalLinks(links: readonly import('../../systems/flowfield/FlowFieldProtocol').FlowFieldPortalLink[]): boolean;
+  /** Discontinuous host move standing in for a portal crossing; the transport arrives in M3. */
+  teleportEnemy(id: string, x: number, y: number): boolean;
   spawnEnemy(x: number, y: number, kind: string, allied: boolean): string | null;
   removeEnemies(): void;
   readEnemies(): readonly NavigationLabEnemy[];

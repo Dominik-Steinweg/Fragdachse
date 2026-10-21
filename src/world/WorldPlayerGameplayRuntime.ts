@@ -40,8 +40,10 @@ import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
 import { BurrowSystem } from '../systems/BurrowSystem';
 import { BurrowEarthbreakRuntime, type EarthbreakPose, type SyncedBurrowEarthbreak } from '../systems/BurrowEarthbreakRuntime';
-import { TranslocatorSystem, type TranslocatorActor } from '../systems/TranslocatorSystem';
+import { TranslocatorSystem, type TranslocatorWorldPort } from '../systems/TranslocatorSystem';
 import type { PortalQueryPort, PortalPair } from '../systems/PortalTraversal';
+import { WorldPortalTransport, type PortalActor, type PortalSourcePort,
+  type PortalTransportWorldPort } from '../systems/portal/WorldPortalTransport';
 import type { CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import { TunnelSystem } from '../systems/TunnelSystem';
 import {
@@ -179,6 +181,7 @@ interface WorldPlayerGameplaySystems {
   readonly burrow: BurrowSystem;
   readonly loadout: LoadoutManager;
   readonly translocator: TranslocatorSystem;
+  readonly portalTransport: WorldPortalTransport;
   readonly tunnel: TunnelSystem;
   readonly guardianSpirit: GuardianSpiritSystem | null;
   readonly repairDrone: RepairDroneSystem | null;
@@ -608,24 +611,25 @@ export class WorldPlayerGameplayRuntime implements
       relationship: options.relationship,
       roundStats: options.network.roundStats,
     });
+    // Der World-Owner setzt die fachliche Portal- und Translocator-Sicht aus seinen eigenen
+    // Portgruppen zusammen; die Systeme bekommen keinen breiteren Netzwerkzugriff als sie brauchen.
+    const portalTransport = new WorldPortalTransport(options.combatSystem,
+      { broadcastTranslocatorFlash: options.network.presentation.broadcastTranslocatorFlash }, null);
     const translocator = new TranslocatorSystem(
       options.playerManager,
       options.translocatorProjectilePort,
       options.combatSystem,
-      // Der World-Owner setzt die fachliche Translocator-Sicht aus seinen eigenen Portgruppen
-      // zusammen; das System bekommt keinen breiteren Netzwerkzugriff als es braucht.
       {
         getPlayerColor: options.network.presentation.getPlayerColor,
         publishTranslocatorUseState: options.network.loadout.publishTranslocatorUseState,
         broadcastPortalCollapse: options.network.presentation.broadcastPortalCollapse,
-        broadcastTranslocatorFlash: options.network.presentation.broadcastTranslocatorFlash,
         broadcastExplosionEffect: options.network.presentation.broadcastExplosionEffect,
       },
-      null,
+      portalTransport,
     );
-    translocator.bindWorld({
+    const portalWorld: PortalTransportWorldPort & TranslocatorWorldPort = {
       getActors: () => {
-        const actors: TranslocatorActor[] = options.playerManager.getAllPlayers().map(player => ({
+        const actors: PortalActor[] = options.playerManager.getAllPlayers().map(player => ({
           id: player.id, kind: 'player', x: player.x, y: player.y, radius: player.getCollisionRadius(),
           alive: options.combatSystem.isAlive(player.id) && options.getPlayerCapabilities(player.id).canInteract
             && !this.getStructureOccupancyState(player.id),
@@ -634,6 +638,7 @@ export class WorldPlayerGameplayRuntime implements
         for (const enemy of options.getEnemyManager()?.getAllEnemies() ?? []) actors.push({
           id: enemy.id, kind: 'enemy', x: enemy.sprite.x, y: enemy.sprite.y, radius: enemy.getCollisionRadius(),
           alive: options.combatSystem.isAlive(enemy.id), surface: true, revision: enemy.positionRevision,
+          boss: enemy.isBoss(), fixed: enemy.isStationary(),
         });
         return actors;
       },
@@ -662,7 +667,10 @@ export class WorldPlayerGameplayRuntime implements
           dy / distance * speed, config.collapsePullDurationMs, owner);
         options.combatSystem.applyEnemySlow(actor.id, config.collapseSlowFraction, config.collapseSlowDurationMs, now);
       },
-    });
+    };
+    portalTransport.bindWorld(portalWorld);
+    translocator.bindWorld(portalWorld);
+    portalTransport.register(translocator);
     const utilityAction = new PlayerUtilityActionRuntime({
       canUseType: (id, type) => !this.getStructureOccupancyState(id)
         || (type !== 'translocator' && type !== 'placeable_rock' && type !== 'placeable_turret' && type !== 'placeable_pedestal'),
@@ -903,6 +911,7 @@ export class WorldPlayerGameplayRuntime implements
       burrow,
       loadout,
       translocator,
+      portalTransport,
       tunnel,
       guardianSpirit,
       repairDrone,
@@ -1087,7 +1096,7 @@ export class WorldPlayerGameplayRuntime implements
 
   setTranslocatorTrainManager(train: TrainManager | null): void {
     if (this.destroyed) return;
-    this.systems.translocator.setTrainManager(train);
+    this.systems.portalTransport.setTrainManager(train);
   }
 
   setBurrowStinkCloudSystem(system: StinkCloudSystem | null): void {
@@ -1215,11 +1224,13 @@ export class WorldPlayerGameplayRuntime implements
     return true;
   }
 
-  getPortalQueryPort(): PortalQueryPort { return this.systems.translocator; }
+  getPortalQueryPort(): PortalQueryPort { return this.systems.portalTransport; }
+  /** Activity owners register their own pair sources; the World transport stays the only actor mover. */
+  getPortalSourcePort(): PortalSourcePort { return this.systems.portalTransport; }
   runHostPortalStage(nowMs: number): void {
     if (this.destroyed) return;
     this.systems.translocator.update(nowMs);
-    this.systems.translocator.transferActors(nowMs);
+    this.systems.portalTransport.transferActors(nowMs);
   }
 
   runHostPostProjectileStage(
@@ -1425,6 +1436,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.loadout.removePlayer(playerId);
     this.shieldBuffPort?.removePlayer(playerId);
     this.systems.translocator.removePlayer(playerId);
+    this.systems.portalTransport.forgetActor(playerId);
     this.options.decoySystem.clearPlayer(playerId);
     this.systems.tunnel.removePlayer(playerId);
   }
@@ -1494,6 +1506,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.rocketMagazine?.cancelAll();
     this.systems.heldAction.reset();
     this.systems.translocator.clear();
+    this.systems.portalTransport.clearActorState();
   }
 
   /** Host-authoritative Phase-6A Player Action entry point for Weapon1/Weapon2. */
@@ -1820,7 +1833,9 @@ export class WorldPlayerGameplayRuntime implements
     systems.translocator.setUseCallback(null);
     systems.translocator.clear();
     systems.translocator.bindWorld(null);
-    systems.translocator.setPositionResetCallback(null);
+    systems.portalTransport.setPositionResetCallback(null);
+    systems.portalTransport.clearActorState();
+    systems.portalTransport.bindWorld(null);
     for (const player of this.options.playerManager.getAllPlayers()) {
       systems.utilityAction.removePlayer(player.id);
       systems.resource.removePlayer(player.id);
@@ -1922,7 +1937,7 @@ export class WorldPlayerGameplayRuntime implements
     });
     loadout.setUltimateModifierReadPort(this.systems.ultimateBehavior);
     translocator.setUseCallback((playerId) => this.options.dropBeer(playerId));
-    translocator.setPositionResetCallback((playerId, x, y) => this.options.resetPlayerPosition(playerId, x, y));
+    this.systems.portalTransport.setPositionResetCallback((playerId, x, y) => this.options.resetPlayerPosition(playerId, x, y));
     tunnel.setTunnelEnterCallback((playerId, x, y) => {
       this.options.dropBeer(playerId, x, y);
       this.options.gameAudioSystem.playSound('sfx_use_dachstunnel', x, y, playerId);

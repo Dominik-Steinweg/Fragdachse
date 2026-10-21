@@ -127,6 +127,7 @@ function makeRuntime() {
       clear: vi.fn(),
       removePlayer: vi.fn(),
     },
+    portalTransport: { forgetActor: vi.fn(), clearActorState: vi.fn() },
     heldAction: {
       clearPlayer: tag('heldAction.clearPlayer'),
       reset: tag('heldAction.reset'),
@@ -218,6 +219,7 @@ function makeConcreteRemoveRuntime() {
     heldAction,
     playerModifier,
     translocator,
+    portalTransport: { forgetActor: vi.fn() },
     utilityAction: { removePlayer: vi.fn(), destroy: vi.fn() },
     ak47Behavior: { removePlayer: vi.fn(), destroy: vi.fn() },
   };
@@ -279,8 +281,12 @@ function makeDestroyRuntime() {
     setUseCallback: vi.fn(),
     clear: vi.fn(),
     bindWorld: vi.fn(),
-    setPositionResetCallback: vi.fn(),
     removePlayer: vi.fn(),
+  };
+  const portalTransport = {
+    setPositionResetCallback: vi.fn(),
+    clearActorState: vi.fn(),
+    bindWorld: vi.fn(),
   };
   const systems = { plasmaBurner: plasmaStub(),
     playerAction: scopeStub(),
@@ -301,6 +307,7 @@ function makeDestroyRuntime() {
     ak47StrategicTarget: { clear: vi.fn() },
     tunnel: { clear: vi.fn() },
     translocator,
+    portalTransport,
     resource,
     burrow,
     playerModifier: { clear: vi.fn() },
@@ -590,7 +597,8 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
     runtime.structureOccupancy = { getState: () => undefined, release() {}, reconcile() {}, clear() {} };
   runtime.turretControl = emptyTurretControl();
     runtime.systems = { playerAction: scopeStub(), ultimateBehavior: { cancelTunnelSelections: vi.fn() },
-      plasmaBurner: plasmaStub(), heldAction, translocator: { clear: vi.fn() } };
+      plasmaBurner: plasmaStub(), heldAction, translocator: { clear: vi.fn() },
+      portalTransport: { clearActorState: vi.fn() } };
 
     expect(heldAction.start('p1', 'action-p1', 'charged_throw', 100, 0)).toBe(true);
     expect(heldAction.start('p2', 'action-p2', 'charged_throw', 100, 0)).toBe(true);

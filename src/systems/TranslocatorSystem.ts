@@ -1,36 +1,23 @@
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatActorStatePort, CombatDamageEffectPort } from '../combat/CombatCapabilities';
-import type { TrainManager } from '../train/TrainManager';
 import type { TranslocatorUtilityConfig } from '../loadout/LoadoutConfig';
 import type { LoadoutUseParams } from '../types';
 import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
 import type { TranslocatorUseState } from '../loadout/TranslocatorUseState';
-import { findPortalCrossing, gatePortalExit, portalEndpointKey, releasePortalGates,
-  type PortalGates, type PortalPair, type PortalPoint, type PortalQueryPort } from './PortalTraversal';
+import { portalEndpointKey, type PortalPair, type PortalPoint } from './PortalTraversal';
+import type { PortalActor, PortalPairSource, PortalTransferFlash, WorldPortalTransport } from './portal/WorldPortalTransport';
 
 export interface TranslocatorNetworkPort {
   readonly getPlayerColor: (playerId: string) => number | undefined;
-  readonly broadcastTranslocatorFlash: (x: number, y: number, color: number, phase: 'start' | 'end', ownerId: string) => void;
   readonly broadcastExplosionEffect: (x: number, y: number, radius: number) => void;
   readonly publishTranslocatorUseState?: (playerId: string, state: TranslocatorUseState | null) => void;
   readonly broadcastPortalCollapse?: (pair: PortalPair, radius: number) => void;
 }
-export interface TranslocatorActor extends PortalPoint {
-  readonly id: string;
-  readonly kind: 'player' | 'enemy';
-  readonly radius: number;
-  readonly alive: boolean;
-  readonly surface: boolean;
-  readonly revision: number;
-}
 export interface TranslocatorWorldPort {
-  readonly getActors: () => readonly TranslocatorActor[];
-  readonly canOccupy: (actor: TranslocatorActor, x: number, y: number) => boolean;
-  readonly resolveExitMovement?: (actor: TranslocatorActor, from: PortalPoint, to: PortalPoint) => PortalPoint;
-  readonly transferActor: (actor: TranslocatorActor, x: number, y: number) => void;
+  readonly getActors: () => readonly PortalActor[];
+  readonly canOccupy: (actor: PortalActor, x: number, y: number) => boolean;
   readonly isFriendly: (ownerId: string, actorId: string) => boolean;
   readonly canDamage: (ownerId: string, actorId: string) => boolean;
-  readonly collapseEnemy: (actor: TranslocatorActor, center: PortalPoint, config: TranslocatorUtilityConfig, ownerId: string, now: number) => void;
 }
 export type TranslocatorUseOutcome = 'thrown' | 'teleported' | 'opened' | 'closed' | 'blocked';
 interface ActiveUse {
@@ -40,27 +27,24 @@ interface ActiveUse {
 }
 interface PhaseBuff { readonly value: number; readonly expiresAt: number }
 const INVALID_PUCK_RESET_MS = 1000;
+const TRANSLOCATOR_FLASH: PortalTransferFlash = { start: 0x55bbff, end: 0xff9b45 };
 
 /** Sole writer of a player's complete translocator lifetime and acquired phase buffs. */
-export class TranslocatorSystem implements PortalQueryPort {
+export class TranslocatorSystem implements PortalPairSource {
+  readonly transferFlash = TRANSLOCATOR_FLASH;
   private readonly uses = new Map<string, ActiveUse>();
   private readonly pairs = new Map<string, PortalPair>();
   private pairView: readonly PortalPair[] = [];
-  private readonly gates = new Map<string, PortalGates>();
-  private readonly positions = new Map<string, TranslocatorActor>();
   private readonly moveBuffs = new Map<string, PhaseBuff>();
   private readonly regenBuffs = new Map<string, PhaseBuff>();
   private world: TranslocatorWorldPort | null = null;
   private onUseCb: ((playerId: string) => void) | null = null;
-  private positionResetCb: ((playerId: string, x: number, y: number) => void) | null = null;
   constructor(private readonly playerManager: PlayerManager, private readonly projectilePort: TranslocatorProjectilePort,
     private readonly combatSystem: CombatActorStatePort & CombatDamageEffectPort,
-    private readonly network: TranslocatorNetworkPort, private trainManager?: TrainManager | null) {}
+    private readonly network: TranslocatorNetworkPort, private readonly transport: WorldPortalTransport) {}
 
   bindWorld(world: TranslocatorWorldPort | null): void { this.world = world; }
-  setTrainManager(train: TrainManager | null): void { this.trainManager = train; }
   setUseCallback(cb: ((id: string) => void) | null): void { this.onUseCb = cb; }
-  setPositionResetCallback(cb: ((id: string, x: number, y: number) => void) | null): void { this.positionResetCb = cb; }
   getUseState(id: string): TranslocatorUseState | null { return this.uses.get(id)?.state ?? null; }
   getActivePuckId(id: string): number | undefined {
     const state = this.getUseState(id); return state?.phase === 'puck' ? state.projectileId : undefined;
@@ -70,6 +54,10 @@ export class TranslocatorSystem implements PortalQueryPort {
   }
   getPortalPairs(): readonly PortalPair[] { return this.pairView; }
   isPortalFriendly(ownerId: string, attackerId: string): boolean { return this.world?.isFriendly(ownerId, attackerId) ?? false; }
+  onActorTransferred(pair: PortalPair, actor: PortalActor, now: number): void {
+    const use = this.uses.get(pair.ownerId);
+    if (actor.kind === 'player' && use && this.world?.isFriendly(pair.ownerId, actor.id)) this.applyBuffs(actor.id, use.config, now);
+  }
   getMoveSpeedBonus(id: string, now: number): number { const b = this.moveBuffs.get(id); return b && b.expiresAt > now ? b.value : 0; }
   getHpRegen(id: string, now: number): number { const b = this.regenBuffs.get(id); return b && b.expiresAt > now ? b.value : 0; }
 
@@ -124,10 +112,10 @@ export class TranslocatorSystem implements PortalQueryPort {
     if (pair) {
       use.state = { ...this.common(use.state), phase: 'portals', pair };
       this.pairs.set(pair.id, pair); this.refreshPairs();
-      this.actorGates(id).set(portalEndpointKey(pair, 'a'), { center: pair.a, releaseDistance: pair.reentryDistance });
+      this.transport.gateActor(id, portalEndpointKey(pair, 'a'), { center: pair.a, releaseDistance: pair.reentryDistance });
     } else use.state = { ...this.common(use.state), phase: 'cooldown', cooldownUntil: now + use.state.cooldownDurationMs };
     this.onUseCb?.(id);
-    this.transfer(actor, destination.x, destination.y);
+    this.transport.jump(actor, destination.x, destination.y, this.transferFlash);
     this.applyBuffs(id, cfg, now);
     // Commit before damage: a synchronous death can close the pair exactly once.
     this.publish(id);
@@ -139,9 +127,9 @@ export class TranslocatorSystem implements PortalQueryPort {
         { sourceX: destination.x, sourceY: destination.y },
         { sourceSlot: 'utility', basis: { kind: 'authored', amount: cfg.telefragDamage } });
     }
-    this.checkTrainHazard(id, destination.x, destination.y, actor.radius);
+    this.transport.checkExitHazard(id, destination.x, destination.y, actor.radius);
     this.updateUse(id, now);
-    if (pair && this.pairs.has(pair.id)) this.transferActors(now, true);
+    if (pair && this.pairs.has(pair.id)) this.transport.transferActors(now, true);
     return pair ? 'opened' : 'teleported';
   }
 
@@ -175,57 +163,11 @@ export class TranslocatorSystem implements PortalQueryPort {
     }
   }
 
-  private canTeleportTo(actor: TranslocatorActor, point: PortalPoint, config: TranslocatorUtilityConfig): boolean {
+  private canTeleportTo(actor: PortalActor, point: PortalPoint, config: TranslocatorUtilityConfig): boolean {
     return !!this.world?.canOccupy(actor, point.x, point.y)
       && (config.portalEnabled <= 0 || Math.hypot(point.x - actor.x, point.y - actor.y) >= config.portalMinSeparation);
   }
 
-  /** After physics, before any owner consumes traveled actor segments. */
-  transferActors(now: number, opening = false): void {
-    if (!this.world || !this.pairs.size) { this.positions.clear(); return; }
-    const present = new Set<string>();
-    for (const actor of this.world.getActors()) {
-      present.add(actor.id);
-      const previous = this.positions.get(actor.id);
-      let from: PortalPoint = !opening && previous?.revision === actor.revision ? previous : actor;
-      let to: PortalPoint = actor;
-      const gates = this.actorGates(actor.id);
-      releasePortalGates(gates, from);
-      const visited = new Set<string>();
-      let transfers = 0;
-      if (actor.alive && actor.surface) {
-        for (;;) {
-          const hit = findPortalCrossing(this.pairView, from, to, { gates, excludedEndpoints: visited });
-          if (!hit) break;
-          visited.add(hit.sourceKey);
-          if (!this.world.canOccupy(actor, hit.exit.x, hit.exit.y)) continue;
-          const rest = { x: to.x - hit.entry.x, y: to.y - hit.entry.y };
-          gatePortalExit(gates, hit);
-          from = hit.exit;
-          const desired = { x: hit.exit.x + rest.x, y: hit.exit.y + rest.y };
-          to = this.world.resolveExitMovement?.(actor, hit.exit, desired)
-            ?? (this.world.canOccupy(actor, desired.x, desired.y) ? desired : hit.exit);
-          this.transfer({ ...actor, x: hit.entry.x, y: hit.entry.y }, to.x, to.y);
-          transfers++;
-          const use = this.uses.get(hit.pair.ownerId);
-          if (actor.kind === 'player' && use && this.world.isFriendly(hit.pair.ownerId, actor.id)) this.applyBuffs(actor.id, use.config, now);
-          if (actor.kind === 'player') {
-            this.checkTrainHazard(actor.id, to.x, to.y, actor.radius);
-            if (!this.combatSystem.isAlive(actor.id)) break;
-          }
-        }
-      }
-      this.positions.set(actor.id, { ...actor, x: to.x, y: to.y, revision: actor.revision + transfers });
-    }
-    for (const id of this.positions.keys()) if (!present.has(id)) { this.positions.delete(id); this.gates.delete(id); }
-  }
-
-  private transfer(actor: TranslocatorActor, x: number, y: number): void {
-    this.network.broadcastTranslocatorFlash(actor.x, actor.y, 0x55bbff, 'start', actor.id);
-    this.world!.transferActor(actor, x, y);
-    if (actor.kind === 'player') this.positionResetCb?.(actor.id, x, y);
-    this.network.broadcastTranslocatorFlash(x, y, 0xff9b45, 'end', actor.id);
-  }
   private applyBuffs(id: string, cfg: TranslocatorUtilityConfig, now: number): void {
     if (cfg.phaseMoveSpeedBonus > 0) this.moveBuffs.set(id, { value: cfg.phaseMoveSpeedBonus, expiresAt: now + cfg.phaseMoveDurationMs });
     if (cfg.phaseHpRegenPerSecond > 0) this.regenBuffs.set(id, { value: cfg.phaseHpRegenPerSecond, expiresAt: now + cfg.phaseRegenDurationMs });
@@ -236,35 +178,20 @@ export class TranslocatorSystem implements PortalQueryPort {
     if (state.phase === 'puck') this.projectilePort.consumePuck(state.projectileId);
     if (state.phase === 'portals') {
       this.pairs.delete(state.pair.id); this.refreshPairs();
-      for (const gates of this.gates.values()) { gates.delete(portalEndpointKey(state.pair, 'a')); gates.delete(portalEndpointKey(state.pair, 'b')); }
+      this.transport.forgetPair(state.pair);
     }
     use.state = { ...this.common(state), phase: 'cooldown', cooldownUntil: now + state.cooldownDurationMs };
     this.publish(id);
     if (collapse && state.phase === 'portals') this.network.broadcastPortalCollapse?.(state.pair,
       use.config.collapseSlowFraction > 0 ? use.config.collapseRadius : state.pair.radius);
     if (collapse && state.phase === 'portals' && use.config.collapseSlowFraction > 0 && this.world) {
-      for (const actor of this.world.getActors()) {
-        if (actor.kind !== 'enemy' || !actor.alive || !this.world.canDamage(id, actor.id)) continue;
-        const da = Math.hypot(actor.x - state.pair.a.x, actor.y - state.pair.a.y);
-        const db = Math.hypot(actor.x - state.pair.b.x, actor.y - state.pair.b.y);
-        if (Math.min(da, db) <= use.config.collapseRadius) this.world.collapseEnemy(actor,
-          da <= db ? state.pair.a : state.pair.b, use.config, id, now);
-      }
-    }
-  }
-  private checkTrainHazard(id: string, x: number, y: number, radius: number): void {
-    for (const segment of this.trainManager?.getSegmentPositions() ?? []) {
-      if (Math.abs(x - segment.x) < radius + 32 && Math.abs(y - segment.y) < radius + 32) {
-        this.combatSystem.applyDamage(id, 9999, true, 'train', 'Zug', { sourceX: segment.x, sourceY: segment.y }); break;
-      }
+      const world = this.world;
+      this.transport.collapse(state.pair, use.config, id, actor => world.canDamage(id, actor.id), now);
     }
   }
   private common(state: TranslocatorUseState) {
     return { useId: state.useId, utilityId: state.utilityId, cooldownDurationMs: state.cooldownDurationMs,
       temporaryUtilityInstanceId: state.temporaryUtilityInstanceId };
-  }
-  private actorGates(id: string): PortalGates {
-    let gates = this.gates.get(id); if (!gates) { gates = new Map(); this.gates.set(id, gates); } return gates;
   }
   private refreshPairs(): void { this.pairView = [...this.pairs.values()]; }
   private publish(id: string): void { this.network.publishTranslocatorUseState?.(id, this.getUseState(id)); }
@@ -273,13 +200,13 @@ export class TranslocatorSystem implements PortalQueryPort {
     if (state?.phase === 'puck') this.projectilePort.consumePuck(state.projectileId);
     if (state?.phase === 'portals') {
       this.pairs.delete(state.pair.id); this.refreshPairs();
-      for (const gates of this.gates.values()) { gates.delete(portalEndpointKey(state.pair, 'a')); gates.delete(portalEndpointKey(state.pair, 'b')); }
+      this.transport.forgetPair(state.pair);
     }
-    this.uses.delete(id); this.gates.delete(id); this.positions.delete(id);
+    this.uses.delete(id);
     this.moveBuffs.delete(id); this.regenBuffs.delete(id); this.publish(id);
   }
   clear(): void {
     for (const id of [...this.uses.keys()]) this.removePlayer(id);
-    this.positions.clear(); this.gates.clear(); this.moveBuffs.clear(); this.regenBuffs.clear();
+    this.moveBuffs.clear(); this.regenBuffs.clear();
   }
 }

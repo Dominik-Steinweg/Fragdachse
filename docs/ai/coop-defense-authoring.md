@@ -41,6 +41,18 @@ ist unabhängig vom Schutzabstand für Felsen und Bäume; die persistente Basis 
 ihren eigenen Kernfreiraum und die vollständige kreisförmige Reservierung. Maßgeblich sind
 auch `tests/MapEditorFileStore.test.ts` für die Parität von Speichern und Vorschau.
 
+### Brücken über Wasser
+
+`bridges` (World-Feld, `src/config/coopDefenseBridges.ts`) legen Holzdecks über authored Wasser:
+Jede Deckzelle ist Wasser, beide Widerlagerreihen sind trocken; dieselbe Reservierungsprüfung wie
+beim Wasser gilt. Es gibt genau eine Geometrieregel: **Kollisionswasser = authored Wasser minus Decks
+stehender Brücken** (`resolveCollisionWater`, Owner `WorldGeometryBinding.getCollisionWater()`).
+Host-Physik, Client-Prediction, Navigation und Gegner lesen diese Instanz; ein Einsturz tauscht sie
+aus. Darstellung, Platzierung, Spieler-Spawnzellen und der Generator bleiben bewusst auf authored
+Wasser: Decks sind nicht bebaubar, und jede World muss ihr Land ohne Brücken verbinden (Furt oder
+Landübergang), damit ein Einsturz nie ein Gebiet abschneidet. Maßgeblich sind
+`tests/BridgeAuthoring.test.ts` und `tests/WorldBridgeRuntime.test.ts`.
+
 Power-Up-Podeste benötigen keinen Basis-Schutzabstand; die tatsächlich belegten Basiszellen
 bleiben ausgeschlossen. Feste Podestpositionen werden im Arena-Generator vor der prozeduralen
 Terrain-Erzeugung auf seedunabhängige Geometriekonflikte geprüft. Maßgeblich sind
@@ -129,6 +141,22 @@ eigener Präsentations-Owner (Dawn: `DawnSitePropRenderer`, auch im ruhenden Zus
 `announce`: fehlt es, ist jeder Encounter eine eigene Welle; `false` hält ihn aus Wellenkarte, -ansage und -zählung;
 `{ group, finale? }` fasst Encounter zu einer angesagten Welle zusammen. Index, Anzahl und Finale bestimmt der Host im
 `CoopDefenseMapDirector`; Clients zeigen nur den replizierten Zustand.
+
+## Portal-Links
+
+Ein Portal-Generator teilt sich wie jede Struktur auf World und Activity auf.
+- **World:** Die Endpunkte sind World-Geometrie (`portalAnchors`). Der Generator hält ihre Lichtungen frei und prüft sie als Erreichbarkeitsquellen.
+- **Activity:** Was eine Mission daraus macht, ist Activity (`portalLinks`): welcher feindliche, ruhende `outpost` sie speist, wann der Aufbau startet und wie lange er dauert, wer durchgeht und wie sie kollabiert.
+- **Generator:** Er braucht genau ein nicht ablaufendes `destroy`-Ziel.
+- **Defaults:** Alle Tuning-Defaults stehen in [coopDefensePortalLinks.ts](../../src/config/coopDefensePortalLinks.ts).
+- **Wachen:** Eine `siteClearings`-Lichtung mit `structureBaseId` aktiviert ihre Site auch durch einen berechtigten Treffer auf das Bauwerk, nicht nur durch Betreten.
+
+In `repel-assault` gilt ein Encounter mit Start `site-activated` als Neben-Encounter.
+- Er muss `announce: false` tragen, nach der Angriffskette stehen und darf von keinem Trigger referenziert werden.
+- Er läuft in einem eigenen, stillen Director neben der Kette und blockiert oder beendet sie nie.
+
+Dies sichern [CoopDefensePortalLinks.test.ts](../../tests/CoopDefensePortalLinks.test.ts) und
+[DawnPortalGenerator.test.ts](../../tests/DawnPortalGenerator.test.ts).
 
 ## Checkpoint-Fortschritt
 

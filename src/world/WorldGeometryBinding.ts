@@ -1,6 +1,7 @@
 import { getConstructionBounds } from '../systems/ConstructionGeometry';
 import * as Phaser from 'phaser';
 import { WaterGeometry } from '../arena/WaterGeometry';
+import { resolveCollisionWater } from '../arena/BridgeGeometry';
 import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
 import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
 import { CELL_SIZE } from '../config';
@@ -14,6 +15,7 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileGeometryBindingPort } from '../projectile/ProjectileBoundaryPorts';
 import {
   ARENA_MAP_GRID_CHANGED_EVENT,
+  emitArenaMapGridChanged,
   type ArenaMapGridChangedEvent,
 } from '../scenes/arena/ArenaEvents';
 import type { WorldCombatCore } from '../combat/WorldCombatCore';
@@ -71,6 +73,12 @@ export class WorldGeometryBinding implements WorldScopedBinding {
   private readonly gridListener: (event: ArenaMapGridChangedEvent) => void;
   private destroyed = false;
   private worldProps: readonly ObstacleRectBody[] = [];
+  /**
+   * Collision water: authored water minus the decks of standing bridges. Immutable per state; a
+   * collapse swaps in a new instance, which consumers detect by identity.
+   */
+  private collisionWater: WaterGeometry;
+  private collapsedBridgeIds: ReadonlySet<string> = new Set();
 
   constructor(private readonly input: WorldGeometryBindingInput) {
     const {
@@ -99,8 +107,8 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       baseId: carrierSite.baseId,
       ...getBaseWorldBounds(carrierSite.base.region, world.metrics),
     } : null);
-    const water = new WaterGeometry(layout.water ?? [], world.metrics);
-    this.obstacleIndex.setWaterGeometry(water);
+    this.collisionWater = new WaterGeometry(resolveCollisionWater(layout.water ?? [], layout.bridges), world.metrics);
+    this.obstacleIndex.setWaterGeometry(this.collisionWater);
     this.geometryQueries = createWorldGeometryQueries({
       metrics: world.metrics,
       index: this.obstacleIndex,
@@ -140,9 +148,9 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     hostPhysics.setRockGroup(arena.rockGroup, arena.trunkGroup);
     hostPhysics.setBaseGroup(baseManager?.getBaseGroup() ?? null);
     hostPhysics.setWorldMetrics(world.metrics);
-    hostPhysics.setWaterGeometry(water);
+    hostPhysics.setWaterGeometry(this.collisionWater);
     const movementBlocked = (gridX: number, gridY: number): boolean => {
-      if (water.hasCell(gridX, gridY)) return true;
+      if (this.collisionWater.hasCell(gridX, gridY)) return true;
       const rockId = arena.rockGrid.getIndex(gridX, gridY);
       if (rockId >= 0 && arena.rockPhysicsProxies[rockId]?.active === true) return true;
       if (baseManager?.isMovementBlockedCell(gridX, gridY) === true) return true;
@@ -170,14 +178,14 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       collide: (proxy, playerId) => {
         if (this.destroyed) return;
         for (const group of movementGroups()) if (group) scene.physics.world.collide(proxy, group, undefined, (_player, obstacle) => !ownStructure(playerId, obstacle));
-        collidePlayerWater(proxy.body as Phaser.Physics.Arcade.Body | null, water, waterSlide);
+        collidePlayerWater(proxy.body as Phaser.Physics.Arcade.Body | null, this.collisionWater, waterSlide);
         clampStructureBody(proxy.body as Phaser.Physics.Arcade.Body | null, playerId ? this.structurePlatformResolver?.(playerId) ?? null : null);
       },
       canOccupyCircle: (x, y, radius, playerId) => {
         const m = world.metrics;
         if (this.destroyed || ![x, y, radius].every(Number.isFinite) || radius < 0
           || x - radius < m.offsetX || y - radius < m.offsetY
-          || x + radius > m.maxX || y + radius > m.maxY || water.isCircleBlocked(x, y, radius)) return false;
+          || x + radius > m.maxX || y + radius > m.maxY || this.collisionWater.isCircleBlocked(x, y, radius)) return false;
         const groups = movementGroups();
         for (const body of scene.physics.overlapRect(x - radius, y - radius, radius * 2, radius * 2, false, true)) {
           if (ownStructure(playerId, body.gameObject)) continue;
@@ -214,6 +222,27 @@ export class WorldGeometryBinding implements WorldScopedBinding {
 
   /** Read-only geometry capability for host queries and passive client previews. */
   getGeometryQueries(): WorldGeometryQueries { return this.geometryQueries; }
+
+  /** Current collision water. Placement and spawn rules deliberately keep authored water. */
+  getCollisionWater(): WaterGeometry { return this.collisionWater; }
+
+  /**
+   * Projects the bridge owner's state: collapsed decks become collision water again. Host
+   * physics, client prediction and the navigation snapshot all read the new instance; the grid
+   * event lets cached consumers (flow fields) resync.
+   */
+  setCollapsedBridges(ids: ReadonlySet<string>): void {
+    if (this.destroyed) return;
+    const { layout, world, scene, hostPhysics } = this.input;
+    const known = (layout.bridges ?? []).filter((bridge) => ids.has(bridge.id)).map((bridge) => bridge.id);
+    if (known.length === this.collapsedBridgeIds.size && known.every((id) => this.collapsedBridgeIds.has(id))) return;
+    this.collapsedBridgeIds = new Set(known);
+    this.collisionWater = new WaterGeometry(
+      resolveCollisionWater(layout.water ?? [], layout.bridges, this.collapsedBridgeIds), world.metrics);
+    this.obstacleIndex.setWaterGeometry(this.collisionWater);
+    hostPhysics.setWaterGeometry(this.collisionWater);
+    emitArenaMapGridChanged(scene.game.events, { reason: 'bridge_collapsed', source: 'bridge' });
+  }
 
   setWorldProps(props: readonly ObstacleRectBody[]): void {
     if (this.destroyed) return;
@@ -362,7 +391,8 @@ export class WorldGeometryBinding implements WorldScopedBinding {
   }
 
   private handleGridChange(event: ArenaMapGridChangedEvent): void {
-    if (this.destroyed || event.source === 'placeable_pedestal') return;
+    // Fire spreads over water and decks alike; a collapse changes no fire obstacle.
+    if (this.destroyed || event.source === 'placeable_pedestal' || event.source === 'bridge') return;
     // Reaktive Map-Objekte stehen wie authored Felsen im statischen Feuerindex.
     if (((event.source === 'static_rock' && event.reason === 'static_rock_destroyed')
       || (event.source === 'reactive_prop' && event.reason === 'reactive_prop_destroyed'))

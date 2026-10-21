@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AmbientWildlifeModel, type WildlifeKind } from '../src/arena/AmbientWildlifeModel';
 import { AMBIENT_WILDLIFE } from '../src/arena/AmbientWildlifeConfig';
-import { createWildlifeAppearance, isWingedInsect, snakeTongueExtension, writeSnakeBodyPose, writeFishMemberPose } from '../src/arena/AmbientWildlifeAppearance';
+import { BIRD_KINDS, createWildlifeAppearance, isBird, isWingedInsect, snakeTongueExtension, WILDLIFE_KINDS, writeSnakeBodyPose, writeFishMemberPose } from '../src/arena/AmbientWildlifeAppearance';
+import { isGroundedBird } from '../src/arena/AmbientWildlifeBirds';
 import { CANOPY_RADIUS, CELL_SIZE } from '../src/config';
 import type { ArenaLayout } from '../src/types';
 
@@ -78,7 +79,7 @@ describe('cosmetic wildlife', () => {
     expect(a.opacity).toBe(1);
     let partialFade = false;
     for (let i = 0; i < 200; i++) {
-      model.notifyShot(a.x, a.y);
+      model.notifyImpulse('shot', a.x, a.y);
       model.update(50, [{ id: 'nearby', x: a.x, y: a.y }], undefined, endTime);
       partialFade ||= a.opacity > 0 && a.opacity < 1;
       expect([a.x, a.y, a.animation]).toEqual(pose);
@@ -181,7 +182,7 @@ describe('cosmetic wildlife', () => {
   it('derives habitats from any layout without modifying it or needing players', () => {
     const source = layout(), before = JSON.stringify(source);
     const model = new AmbientWildlifeModel(source, frame);
-    expect(new Set(model.animals.map(a => a.kind))).toEqual(new Set(['butterfly', 'moth', 'firefly', 'snake', 'fish']));
+    expect(new Set(model.animals.map(a => a.kind))).toEqual(new Set(WILDLIFE_KINDS));
     expect(new AmbientWildlifeModel(source, frame).animals).toEqual(model.animals);
     const positions = model.animals.map(a => [a.x, a.y, a.animation]);
     for (let i = 0; i < 120; i++) model.update(1000 / 60, []);
@@ -202,7 +203,7 @@ describe('cosmetic wildlife', () => {
     for (let i = 0; i < 1200; i++) {
       const before = model.animals.map(a => ({ x: a.x, y: a.y, angle: a.angle }));
       const dt = i % 2 ? 1 / 30 : 1 / 60;
-      if (i % 90 === 0) for (const a of model.animals) model.notifyShot(a.x + 20, a.y);
+      if (i % 90 === 0) for (const a of model.animals) model.notifyImpulse('shot', a.x + 20, a.y);
       model.update(dt * 1000, model.animals.map((a, j) => ({ id: `pressure-${j}`,
         x: a.x + Math.cos(i * .04) * 25, y: a.y + Math.sin(i * .04) * 25 })), undefined, minutes);
       for (const [j, a] of model.animals.entries()) {
@@ -284,18 +285,18 @@ describe('cosmetic wildlife', () => {
     expect(firstToSwitch.resting).toBe(!wasResting);
   });
 
-  it.each<WildlifeKind>(['butterfly', 'moth', 'firefly', 'snake', 'fish'])('reacts to nearby shots without movement and forgets the disturbance: %s', kind => {
+  it.each<WildlifeKind>([...WILDLIFE_KINDS])('reacts to nearby shots without movement and forgets the disturbance: %s', kind => {
     const model = new AmbientWildlifeModel(layout(), frame);
     const a = model.animals.find(a => a.kind === kind)!;
-    const tick = (ms: number) => model.update(ms, [], undefined, kind === 'moth' || kind === 'firefly' ? 0 : 12 * 60);
+    const tick = (ms: number) => model.update(ms, [], undefined, kind === 'moth' || kind === 'firefly' || kind === 'owl' ? 0 : 12 * 60);
     if (kind === 'butterfly') {
       for (let i = 0; i < 800 && !a.resting; i++) model.update(25, []);
       expect(a.resting).toBe(true);
     }
-    model.notifyShot(frame.offsetX - 1000, frame.offsetY - 1000);
+    model.notifyImpulse('shot', frame.offsetX - 1000, frame.offsetY - 1000);
     tick(16);
     expect(a.fleeing).toBe(false);
-    model.notifyShot(a.x - AMBIENT_WILDLIFE[kind].alertRadius * 1.2, a.y);
+    model.notifyImpulse('shot', a.x - AMBIENT_WILDLIFE[kind].alertRadius * 1.2, a.y);
     tick(16);
     expect(a.fleeing).toBe(true);
     expect(a.resting).toBe(false);
@@ -306,6 +307,52 @@ describe('cosmetic wildlife', () => {
       expect(phases.has('hidden')).toBe(true);
       expect(phases.has('emerging')).toBe(true);
     }
+  });
+
+  it.each<WildlifeKind>([...WILDLIFE_KINDS])('reacts to an explosion beyond shot reach: %s', kind => {
+    const model = new AmbientWildlifeModel(layout(), frame);
+    const a = model.animals.find(a => a.kind === kind)!;
+    const tick = () => model.update(16, [], undefined, kind === 'moth' || kind === 'firefly' || kind === 'owl' ? 0 : 12 * 60);
+    const { shot, explosion } = AMBIENT_WILDLIFE.disturbance, alert = AMBIENT_WILDLIFE[kind].alertRadius, radius = 40;
+    const distance = alert * shot.alertScale + 10;
+    expect(distance).toBeLessThan(alert * explosion.alertScale + radius * explosion.blastScale);
+    tick();
+    model.notifyImpulse('shot', a.x - distance, a.y);
+    tick();
+    expect(a.fleeing).toBe(false);
+    model.notifyImpulse('explosion', a.x - distance, a.y, radius);
+    tick();
+    expect(a.fleeing).toBe(true);
+  });
+
+  it('measures moving bodies of any id to their edge, so a large enemy alarms from further away', () => {
+    const model = new AmbientWildlifeModel(layout(), frame);
+    const a = model.animals.find(a => a.kind === 'snake')!;
+    a.angle = 0;
+    const reach = AMBIENT_WILDLIFE.snake.alertRadius;
+    const small = { id: 'enemy-small', x: a.x - reach - 10, y: a.y };
+    model.update(16, [small]); small.x += 1; model.update(16, [small]);
+    expect(a.fleeing).toBe(false);
+    const large = { id: 'enemy-large', x: a.x - reach - 10, y: a.y, radius: 24 };
+    model.update(16, [large]); large.x += 1; model.update(16, [large]);
+    expect(a.fleeing).toBe(true);
+  });
+
+  it('finds a nearby moving body among hundreds of widely spread bodies', () => {
+    const model = new AmbientWildlifeModel(layout(), frame);
+    const a = model.animals.find(a => a.kind === 'snake')!;
+    a.angle = 0;
+    const startX = a.x;
+    const near = { id: 'near', x: a.x - 30, y: a.y };
+    const crowd = Array.from({ length: 300 }, (_, i) => ({ id: `crowd-${i}`,
+      x: frame.offsetX + (i % 20) * 5000 - 40000, y: frame.offsetY + Math.floor(i / 20) * 5000 - 30000 }));
+    const movers = [near, ...crowd];
+    model.update(16, movers);
+    for (const m of movers) m.x += 1;
+    model.update(16, movers);
+    expect(a.fleeing).toBe(true);
+    for (let i = 0; i < 20; i++) { for (const m of movers) m.x += 1; model.update(16, movers); }
+    expect(a.x).toBeGreaterThan(startX);
   });
 
   it('fishes flee, fully disappear, and return to ordinary swimming; undisturbed schools also dive', () => {
@@ -333,7 +380,7 @@ describe('cosmetic wildlife', () => {
 
   it('bounds populations and releases local state on teardown', () => {
     const model = new AmbientWildlifeModel(layout(), { ...frame, width: 65536, height: 65536 });
-    for (const kind of ['butterfly', 'snake', 'fish'] as const)
+    for (const kind of ['butterfly', 'snake', 'fish', ...BIRD_KINDS] as const)
       expect(model.animals.filter(a => a.kind === kind).length).toBeLessThanOrEqual(AMBIENT_WILDLIFE[kind].maxCount);
     model.destroy(); model.destroy(); model.update(16, []);
     expect(model.animals).toEqual([]);
@@ -356,5 +403,99 @@ describe('cosmetic wildlife', () => {
         }
       }
     }
+  });
+
+  describe('birds', () => {
+    const forest = (): ArenaLayout => ({ ...layout(), trees: Array.from({ length: 12 }, (_, i) => ({
+      gridX: 4 + (i % 4) * 9, gridY: 4 + Math.floor(i / 4) * 9 })) });
+
+    it.each(['sparrow', 'magpie', 'raven'] as const)('%s ignores a stationary body, takes off from a moving one and lands elsewhere on open ground', kind => {
+      const model = new AmbientWildlifeModel(forest(), frame);
+      model.update(16, [], undefined, 12 * 60);
+      const a = model.animals.find(a => a.kind === kind)!;
+      expect(isGroundedBird(a.bird!)).toBe(true);
+      const start = { x: a.x, y: a.y };
+      const body = { id: 'enemy-1', x: a.x - 30, y: a.y };
+      for (let i = 0; i < 40; i++) model.update(16, [body], undefined, 12 * 60);
+      expect(a.fleeing).toBe(false);
+      expect(isGroundedBird(a.bird!)).toBe(true);
+      body.x += 2;
+      model.update(16, [body], undefined, 12 * 60);
+      expect(a.fleeing).toBe(true);
+      expect(a.bird!.phase).toBe('flight');
+      let landed = false;
+      for (let i = 0; i < 1200 && !landed; i++) {
+        model.update(16, [], undefined, 12 * 60);
+        landed = isGroundedBird(a.bird!);
+      }
+      expect(landed).toBe(true);
+      expect(a.fleeing).toBe(false);
+      expect(Math.hypot(a.x - start.x, a.y - start.y)).toBeGreaterThan(CELL_SIZE);
+      expect(model.contains(a, a.x, a.y)).toBe(true);
+    });
+
+    it('keeps diurnal birds and owls on opposite shifts, also outside the view, without moving inactive birds', () => {
+      const model = new AmbientWildlifeModel(forest(), frame);
+      const offscreen = { x: -10000, y: -10000, width: 1, height: 1 };
+      const birds = model.animals.filter(a => isBird(a.kind));
+      const visible = () => new Set(birds.filter(a => a.opacity > 0).map(a => a.kind));
+      const run = (minutes: number, frames = 400) => { for (let i = 0; i < frames; i++) model.update(50, [], offscreen, minutes); };
+      run(12 * 60, 1);
+      expect(visible()).toEqual(new Set(['sparrow', 'magpie', 'raven']));
+      const owl = birds.find(a => a.kind === 'owl')!;
+      const roosted = [owl.x, owl.y, owl.angle];
+      run(12 * 60);
+      expect([owl.x, owl.y, owl.angle]).toEqual(roosted);
+      for (let minute = 12 * 60; minute <= 23 * 60; minute += 2) run(minute, 3);
+      run(23 * 60);
+      expect(visible()).toEqual(new Set(['owl']));
+      expect(birds.filter(a => a.kind !== 'owl').every(a => a.bird!.phase === 'hidden' && a.resting)).toBe(true);
+      for (let minute = 23 * 60; minute <= 32 * 60; minute += 2) run(minute % (24 * 60), 3);
+      run(8 * 60);
+      expect(visible()).toEqual(new Set(['sparrow', 'magpie', 'raven']));
+      expect(birds.filter(a => a.kind !== 'owl').every(a => isGroundedBird(a.bird!) && model.contains(a, a.x, a.y))).toBe(true);
+    });
+
+    it('lets owls patrol at night with circles and hunting dives onto open ground', () => {
+      const meadow: ArenaLayout = { ...layout(), water: [], rocks: [], trees: [{ gridX: 30, gridY: 30 }, { gridX: 70, gridY: 40 }, { gridX: 50, gridY: 90 }] };
+      const model = new AmbientWildlifeModel(meadow, { ...frame, width: 4096, height: 4096 });
+      const owls = model.animals.filter(a => a.kind === 'owl');
+      expect(owls.length).toBeGreaterThan(0);
+      const phases = new Set<string>();
+      for (let i = 0; i < 6000; i++) {
+        model.update(33, [], undefined, 0);
+        for (const owl of owls) {
+          phases.add(owl.bird!.phase);
+          if (owl.bird!.phase === 'mantle') expect(model.contains(owl, owl.x, owl.y)).toBe(true);
+        }
+      }
+      expect(phases).toEqual(new Set(['patrol', 'circle', 'dive', 'mantle', 'climb']));
+    }, 30000);
+
+    it('places sparrow drinking spots on land right at the water, facing it', () => {
+      const model = new AmbientWildlifeModel(layout(), frame);
+      const shore: number[][] = [];
+      for (const a of model.animals.filter(a => a.kind === 'sparrow')) {
+        const s = a.bird!.spots;
+        for (let i = 0; i < s.length; i += 4) if (s[i + 3] === 1) shore.push([s[i], s[i + 1], s[i + 2]]);
+      }
+      expect(shore.length).toBeGreaterThan(0);
+      const water = new Set(layout().water!.map(c => `${c.gridX},${c.gridY}`));
+      const cell = (x: number, y: number) => `${Math.floor((x - frame.offsetX) / CELL_SIZE)},${Math.floor((y - frame.offsetY) / CELL_SIZE)}`;
+      for (const [x, y, facing] of shore) {
+        expect(water.has(cell(x, y))).toBe(false);
+        expect(water.has(cell(x + Math.cos(facing) * CELL_SIZE / 2, y + Math.sin(facing) * CELL_SIZE / 2))).toBe(true);
+      }
+    });
+
+    it('seeds identical birds for a rebuilt World and for any authored tree order', () => {
+      const birds = (l: ArenaLayout) => new AmbientWildlifeModel(l, frame).animals.filter(a => isBird(a.kind));
+      const source = forest();
+      expect(birds(source).length).toBeGreaterThan(0);
+      expect(birds(source)).toEqual(birds(source));
+      const key = (a: { kind: string; homeX: number; homeY: number }) => `${a.kind}:${a.homeX},${a.homeY}`;
+      const reversed = birds({ ...source, trees: [...source.trees].reverse() });
+      expect(reversed.map(key).sort()).toEqual(birds(source).map(key).sort());
+    });
   });
 });

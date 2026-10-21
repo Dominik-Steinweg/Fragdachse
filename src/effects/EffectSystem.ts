@@ -120,16 +120,23 @@ function meleePresetOf(weaponId: string | undefined): string | undefined {
   return fire?.type === 'melee' ? fire.visualPreset : undefined;
 }
 
+export type ExplosionObserver = (x: number, y: number, radius: number, style: ExplosionVisualStyle) => void;
+
 export class EffectSystem implements EnemyVisualSink {
   private groundFogCombat: GroundFogCombatSink | null = null;
   bindGroundFogCombat(sink: GroundFogCombatSink): () => void {
     this.groundFogCombat = sink;
     return () => { if (this.groundFogCombat === sink) this.groundFogCombat = null; };
   }
-  private groundFogExplosion: ((x: number, y: number, radius: number, style: ExplosionVisualStyle) => void) | null = null;
-  bindGroundFogExplosion(sink: (x: number, y: number, radius: number, style: ExplosionVisualStyle) => void): () => void {
-    this.groundFogExplosion = sink;
-    return () => { if (this.groundFogExplosion === sink) this.groundFogExplosion = null; };
+  // Created on first use: presentation observers (ground fog, wildlife) may bind before or without the constructor's fields.
+  private explosionObservers?: ExplosionObserver[];
+  /** Destructive explosions, before individual VFX gates; the returned release detaches only this observer. */
+  bindExplosionObserver(observer: ExplosionObserver): () => void {
+    (this.explosionObservers ??= []).push(observer);
+    return () => {
+      const observers = this.explosionObservers, index = observers?.indexOf(observer) ?? -1;
+      if (index >= 0) observers!.splice(index, 1);
+    };
   }
   private xpTextRenderer: CoopXpTextRenderer | null = null;
   private holyExplosionRenderer: HolyExplosionRenderer | null = null;
@@ -961,7 +968,9 @@ export class EffectSystem implements EnemyVisualSink {
       this.meteorExplosionRenderer?.(x, y, radius, meteorVariant, options?.meteorCrater);
       if (meteorVariant === 'normal') visualStyle = 'meteor';
     }
-    if (isDestructiveExplosionStyle(visualStyle)) this.groundFogExplosion?.(x, y, radius, visualStyle);
+    if (isDestructiveExplosionStyle(visualStyle) && this.explosionObservers) {
+      for (const observer of this.explosionObservers) observer(x, y, radius, visualStyle);
+    }
     this.ensureTextures();
     if (visualStyle === 'time_bubble_release') {
       const strength = resonanceReleaseStrength(chargeDamage);

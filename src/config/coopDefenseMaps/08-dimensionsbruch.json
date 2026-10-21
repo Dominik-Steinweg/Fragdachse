@@ -105,6 +105,40 @@
           "weaponId": "TURRET_ROCKET_BURST"
         }
       ]
+    },
+    {
+      "id": "portal-generator",
+      "surface": "none",
+      "role": "outpost",
+      "faction": "hostile",
+      "dormant": true,
+      "hpMax": 3000,
+      "anchor": {"kind": "grid", "gridX": 23, "gridY": 13},
+      "shape": {
+        "kind": "cells",
+        "cells": [
+          {"gridX": 0, "gridY": 0}, {"gridX": 1, "gridY": 0}, {"gridX": 2, "gridY": 0},
+          {"gridX": 0, "gridY": 1}, {"gridX": 1, "gridY": 1}, {"gridX": 2, "gridY": 1},
+          {"gridX": 0, "gridY": 2}, {"gridX": 1, "gridY": 2}, {"gridX": 2, "gridY": 2}
+        ]
+      }
+    }
+  ],
+  "siteClearings": [
+    {"id": "portal-generator-site", "gridX": 24, "gridY": 14, "radiusCells": 5, "structureBaseId": "portal-generator"}
+  ],
+  "portalAnchors": [
+    {"id": "flank-entry", "gridX": 25, "gridY": 9, "radiusCells": 3},
+    {"id": "flank-exit", "gridX": 100, "gridY": 18, "radiusCells": 3}
+  ],
+  "portalLinks": [
+    {
+      "id": "dimension-flank",
+      "generatorBaseId": "portal-generator",
+      "entryAnchorId": "flank-entry",
+      "exitAnchorId": "flank-exit",
+      "chargeStartMs": 0,
+      "chargeDurationMs": 75000
     }
   ],
   "persistentBase": {
@@ -338,9 +372,27 @@
           "spawnZoneId": "west-upper"
         }
       ]
+    },
+    {
+      "id": "portal-guard",
+      "announce": false,
+      "start": {"type": "site-activated", "siteId": "portal-generator-site"},
+      "groups": [
+        {"enemyKind": "void-stalker", "count": 1, "spawnZoneId": "west-upper"},
+        {"enemyKind": "spore-warden", "count": 2, "spawnStaggerMs": 2000, "spawnZoneId": "west-upper"},
+        {"enemyKind": "demon-badger", "count": 8, "spawnStaggerMs": 3000, "spawnZoneId": "west-upper"}
+      ]
     }
   ],
   "secondaryObjectives": [
+    {
+      "id": "destroy-portal-generator",
+      "type": "destroy",
+      "start": {"type": "time", "atMs": 0},
+      "concurrent": true,
+      "targets": ["portal-generator"],
+      "rewards": {"xpPerTarget": 150}
+    },
     {
       "id": "hold-dimension-bastion",
       "type": "hold",

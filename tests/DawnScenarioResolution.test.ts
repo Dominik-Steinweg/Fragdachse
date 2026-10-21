@@ -69,7 +69,7 @@ describe('Dawn scenario transport', () => {
 
   it('rejects a whole descriptor instead of dropping an unreadable plan', () => {
     const { world, activity } = dawnRound();
-    const brokenWorld = { ...world, parameters: { ...world.parameters, dawn: { ...world.parameters!.dawn, version: 2 } } };
+    const brokenWorld = { ...world, parameters: { ...world.parameters, dawn: { ...world.parameters!.dawn, version: 999 } } };
     const brokenActivity = { ...activity, parameters: { dawn: { ...activity.parameters!.dawn, threat: 0 } } };
 
     expect(parseWorldDescriptor(brokenWorld)).toBeNull();
