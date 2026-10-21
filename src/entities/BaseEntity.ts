@@ -26,6 +26,7 @@ import { makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
 import type { SyncedBaseTurretState } from '../types';
 import { createBaseSurfaceImages, getBaseLightSpots } from './BaseVisuals';
 import { BaseGroundingRenderer } from '../arena/BaseGroundingRenderer';
+import type { PersistentBaseGravelCoverage } from '../arena/PersistentBaseGravelField';
 import { BaseAccentGlowRenderer } from '../arena/BaseAccentGlowRenderer';
 import {
   integrityState,
@@ -85,6 +86,8 @@ export class BaseEntity {
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private presentationCreated = false;
   private grounding: BaseGroundingRenderer | null = null;
+  /** Gravel of a base site below this base, if any; the grounding matches it. */
+  private groundGravel: PersistentBaseGravelCoverage | null = null;
   private accentGlow: BaseAccentGlowRenderer | null = null;
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Sprite>();
@@ -173,7 +176,8 @@ export class BaseEntity {
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
     if (this.spec.surface !== 'none') {
       this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
-      this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics, { hostile });
+      this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics,
+        { hostile, gravel: this.groundGravel });
       this.accentGlow = new BaseAccentGlowRenderer(this.scene, this.cellImages, cellTexture);
     }
 
@@ -260,6 +264,12 @@ export class BaseEntity {
       ease: 'Sine.easeInOut',
     });
     this.vulnerableMarker = marker;
+  }
+
+  /** The ground below changed (base-site gravel appeared, grew or vanished). */
+  setGroundGravel(gravel: PersistentBaseGravelCoverage | null): void {
+    this.groundGravel = gravel;
+    this.grounding?.setGravel(gravel);
   }
 
   /** Entfernt genau das Zellbild, dessen Explosion gerade abgespielt wird. */

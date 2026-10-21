@@ -48,7 +48,16 @@ export const BASE_APRON_CONFIG = {
   gravelGain: 0.82,
   /** Loose gravel beyond the apron edge. */
   scatterPx: 5,
+  /**
+   * On the gravel of a base site the apron is no earth band: only gravel compacted a little
+   * darker than the gravel around it, with lower opacity so the site's own surface carries on.
+   */
+  onGravelTone: 0.88,
+  onGravelCover: 0.55,
 } as const;
+
+/** Spacing of the coarse lattice on which the ground's gravel coverage is sampled. */
+const GRAVEL_COVERAGE_STEP = 4;
 
 /** Maximum visual reach beyond the footprint; no gameplay geometry changes. */
 export const BASE_APRON_REACH_PX = Math.ceil(BASE_APRON_CONFIG.maxWidthPx + BASE_APRON_CONFIG.edgeWarpPx * .75
@@ -85,9 +94,10 @@ export function getBaseApronRaster(
 
 /**
  * Writes the apron as straight RGBA into `data` (raster width × height). Pure function of the
- * footprint, the World frame and the shared ground materials, so every peer and rebuild draws the
- * same ground. Under the footprint itself the ground stays compacted soil: a destroyed cell
- * leaves its bare foundation, not grass.
+ * footprint, the World frame, the shared ground materials and the optional gravel coverage of
+ * the ground below, so every peer and rebuild draws the same ground. Under the footprint itself
+ * the ground stays compacted: a destroyed cell leaves its bare foundation, not grass. Where the
+ * ground below is gravel, earth gives way to compacted gravel of the same material.
  */
 export function writeBaseApron(
   data: Uint8ClampedArray,
@@ -97,9 +107,20 @@ export function writeBaseApron(
   materials: BaseApronMaterials,
   /** Overall brightness; hostile bases sit on darker, void-stained ground. */
   brightness = 1,
+  /** Gravel opacity of the ground below at a world point (0 grass, 1 gravel); none means grass. */
+  gravelCoverage?: (worldX: number, worldY: number) => number,
 ): void {
   data.fill(0);
   const C = BASE_APRON_CONFIG;
+  // The ground's gravel varies smoothly; a coarse lattice keeps the probe off the pixel loop.
+  const step = GRAVEL_COVERAGE_STEP;
+  const coverageCols = Math.ceil(raster.width / step) + 2, coverageRows = Math.ceil(raster.height / step) + 2;
+  const coverage = gravelCoverage ? new Float32Array(coverageCols * coverageRows) : null;
+  if (coverage && gravelCoverage) {
+    for (let j = 0; j < coverageRows; j++) for (let i = 0; i < coverageCols; i++) {
+      coverage[j * coverageCols + i] = gravelCoverage(raster.worldX + i * step, raster.worldY + j * step);
+    }
+  }
   const lattice = new SeededValueNoise(APRON_SEED);
   const noise = (x: number, y: number, period: number, salt: number) => lattice.sample(x, y, period, salt);
   const { soil, gravel, grassHeight } = materials;
@@ -162,17 +183,29 @@ export function writeBaseApron(
       const threshold = C.stoneThreshold + across * .6 + (.5 - drift) * .9;
       let stoneAlpha = smooth((stone - threshold) / .12 + .5);
       if (!inside && warped > width + C.scatterPx) stoneAlpha = 0;
+      // Gravel of the ground below: 0 on grass, 1 on a base site's gravel.
+      let onGravel = 0;
+      if (coverage) {
+        const u = (px + .5) / step, v = (py + .5) / step, i = Math.floor(u), j = Math.floor(v);
+        const tx = u - i, ty = v - j, k = j * coverageCols + i;
+        const top = coverage[k] + (coverage[k + 1] - coverage[k]) * tx;
+        const bottom = coverage[k + coverageCols] + (coverage[k + coverageCols + 1] - coverage[k + coverageCols]) * tx;
+        onGravel = clamp01(top + (bottom - top) * ty);
+      }
+      cover *= 1 + (C.onGravelCover - 1) * onGravel;
       const alpha = stoneAlpha + cover * (1 - stoneAlpha);
       if (alpha <= 0) continue;
 
       const s = (soilRow + groundMaterialPhase(Math.floor(x), soil.width)) * 4;
-      // Fines vary a little in tone along the perimeter.
-      const tone = C.finesGain * (.92 + .16 * noise(x, y, 37, 9));
-      const grey = luma * 255, stoneDesaturate = C.gravelDesaturate, fineDesaturate = C.finesDesaturate;
+      // Fines vary a little in tone along the perimeter; on gravel they are the gravel itself.
+      const earthTone = C.finesGain * (.92 + .16 * noise(x, y, 37, 9));
+      const tone = earthTone + (C.onGravelTone - earthTone) * onGravel;
+      const soilShare = C.finesSoil * (1 - onGravel);
+      const grey = luma * 255, stoneDesaturate = C.gravelDesaturate, fineDesaturate = C.finesDesaturate * (1 - onGravel);
       const contact = inside ? 1 - C.contactShade : 1 - C.contactShade * (1 - smooth(distance / C.contactPx));
       const stoneGain = C.gravelGain * stoneAlpha, normalize = contact * brightness / alpha;
-      const fineGain = cover * (1 - stoneAlpha) * tone * (1 - C.finesSoil);
-      const soilGain = cover * (1 - stoneAlpha) * tone * C.finesSoil;
+      const fineGain = cover * (1 - stoneAlpha) * tone * (1 - soilShare);
+      const soilGain = cover * (1 - stoneAlpha) * tone * soilShare;
       const out = (py * raster.width + px) * 4;
       data[out] = ((gr + (grey - gr) * stoneDesaturate) * stoneGain
         + (gr + (grey - gr) * fineDesaturate) * fineGain + soil.rgba[s] * soilGain) * normalize;

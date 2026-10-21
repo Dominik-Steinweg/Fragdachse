@@ -31,7 +31,9 @@ import {
   NET_SMOOTH_TIME_MS, PLAYER_SIZE,
 } from '../config';
 import { setCameraBaseScroll } from '../graphics/cameraBaseScroll';
-import { getCameraFocusOverride, resolveCameraFocusZoom } from '../graphics/cameraFocusOverride';
+import { getCameraFocusOverride, resolveCameraFocusZoom, setAppliedStagedZoom } from '../graphics/cameraFocusOverride';
+import { SpawnCameraZoom } from '../effects/camera/SpawnCameraZoom';
+import { playerCameraZoomFor } from '../effects/camera/PlayerCameraZoom';
 import type { ArenaSpectatorCameraInput } from '../scenes/arena/ArenaInputBindings';
 import { advanceSpectatorCameraScroll } from '../scenes/arena/SpectatorCameraModel';
 import { getVisibleWorldView, type WorldViewRect } from '../ui/HostileBaseIndicator';
@@ -231,6 +233,13 @@ export interface WorldPresentationFrameBindingInput {
   readonly isArenaLoading: () => boolean;
   /** Der Countdown laeuft; wie beim Laden gilt der vorbereitete Startfokus bereits. */
   readonly isArenaCountdownActive: () => boolean;
+  /** Ob diese World Spawn und Tod der eigenen Figur mit der Kamera inszeniert; die LobbyWorld nicht. */
+  readonly stagesLocalSpawn?: boolean;
+  /**
+   * Der lokale Ladeschleier deckt die World noch ab. Er kann laenger stehen als die gemeinsame
+   * Ladephase; was nur fuer die Augen inszeniert ist, beginnt erst, wenn er aufgeht.
+   */
+  readonly isLoadingVeilShown?: () => boolean;
   /** Der gebaute World-Zustand, dessen residente Render-Chunks der Residency-Sync angleicht. */
   readonly getArenaResult: () => ArenaBuilderResult | null;
   readonly clientWorldPresentation: WorldClientPresentationRenderers;
@@ -242,6 +251,8 @@ export interface WorldPresentationFrameBindingInput {
   readonly getWorldMetrics: () => WorldMetrics | null;
   readonly getPersistentBaseSite: () => WorldPersistentBaseSite | null;
   readonly getPersistentBaseVisualSite: () => PersistentBaseVisualSite | null;
+  /** The World's bases; their grounding follows the base-site gravel below them. */
+  readonly getBases?: () => BaseManager | null;
   readonly isPersistentBasePlacementOverlayActive: () => boolean;
   readonly persistentBaseVisuals: WorldPresentationPersistentBaseVisuals;
   readonly persistentBasePreview: WorldPresentationPersistentBasePreview;
@@ -434,6 +445,22 @@ export class WorldPresentationFrameBinding {
   private lastCameraScrollX = 0;
   private focusZoomApplied = false;
   private focusZoomBoundsWereUsed = true;
+  /** Zuletzt angewandter Zusatzzoom ueber dem Designzoom (Spieler, Spawn, Tod, Boss-Intro). */
+  private focusZoomFactor = 1;
+  /** Nahaufnahme des eigenen Spawns; die Figur, fuer die sie zuletzt begonnen hat. */
+  private readonly spawnZoom = new SpawnCameraZoom();
+  private spawnZoomSprite: Phaser.GameObjects.Sprite | null = null;
+  /** Wo die eigene Figur gefallen ist, solange die Kamera dort auf den Respawn wartet. */
+  private deathFocus: { x: number; y: number } | null = null;
+  /**
+   * Der geglaettete Weltpunkt, den die Kamera zeigt. Geglaettet wird nur er, nie der geklemmte
+   * Ausschnitt: Der Ausschnitt entsteht jeden Frame exakt aus Punkt, Zoom und Klemmung. Am
+   * Arenarand verschiebt sich die Klemmung mit dem Zoom; eine geglaettete Scroll-Position liefe
+   * ihr hinterher und zoege nach jeder Zoomfahrt nach.
+   */
+  private followFocusX = 0;
+  private followFocusY = 0;
+  private followFocusValid = false;
   private lastCameraScrollY = 0;
   private spectatorCameraScrollX = 0;
   private spectatorCameraScrollY = 0;
@@ -511,7 +538,8 @@ export class WorldPresentationFrameBinding {
    */
   syncCamera(deltaMs: number, showWorld: boolean): void {
     if (this.destroyed) return;
-    const camera = this.input.scene.cameras.main;
+    const scene = this.input.scene;
+    const camera = scene.cameras.main;
 
     const spectator = showWorld && this.input.isLocalPlayerSpectator();
     const arenaWidth = Math.max(0, ARENA_MAX_X - ARENA_OFFSET_X);
@@ -522,15 +550,24 @@ export class WorldPresentationFrameBinding {
     // Die Weltkamera ist World-Presentation: ohne lokale Darstellung dieser World gibt es sie
     // nicht, auch wenn die Simulation weiterlaeuft.
     const worldCamera = allowsWorldPresentationSurface(this.input.getLocalWorldPresentation(), 'worldCamera');
+    const localSprite = this.input.getLocalPlayerSprite();
+    const following = showWorld && worldCamera && !spectator;
+    const spawn = this.syncSpawnZoom(following, localSprite);
+    // Der Spieler waehlt per Mausrad seine Grundsicht; Spawn und Tod setzen darauf auf.
+    const requestedZoom = (following ? playerCameraZoomFor(scene).sample(scene.time.now) : 1) * spawn.factor;
+    // Eine feste Arenakamera folgt der Figur nur, solange gezoomt ist. Bei Zoom 1 faellt die
+    // Klemmung auf genau den festen Ausschnitt zurueck, der Uebergang ist nahtlos.
+    const fixedCameraFollows = !ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera && requestedZoom > 1.0005;
     if (!showWorld || !worldCamera
-      || (!ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera && !(spectator && canSpectatorPan))) {
+      || (!ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera && !fixedCameraFollows && !(spectator && canSpectatorPan))) {
+      // Zoom gilt nur in der normalen Spielerverfolgung.
+      this.syncFocusZoom(1);
       this.lastCameraScrollX = 0;
       this.lastCameraScrollY = 0;
       this.spectatorCameraScrollX = 0;
       this.spectatorCameraScrollY = 0;
-      // Ein inszenierter Zoom gilt nur in der normalen Spielerverfolgung.
-      this.syncFocusZoom(1);
-      resetWorldCameraBase(this.input.scene);
+      resetWorldCameraBase(scene);
+      this.holdFollowFocus();
       return;
     }
 
@@ -557,46 +594,57 @@ export class WorldPresentationFrameBinding {
       this.lastCameraScrollY = this.spectatorCameraScrollY;
       camera.scrollX = this.spectatorCameraScrollX;
       camera.scrollY = this.spectatorCameraScrollY;
-      setCameraBaseScroll(this.input.scene, this.spectatorCameraScrollX, this.spectatorCameraScrollY);
+      setCameraBaseScroll(scene, this.spectatorCameraScrollX, this.spectatorCameraScrollY);
+      this.holdFollowFocus();
       return;
     }
 
-    const localSprite = this.input.getLocalPlayerSprite();
-    const preparedStartFocus = this.input.isArenaLoading() || this.input.isArenaCountdownActive();
-    if (!localSprite?.active || (!this.input.isLocalPlayerAlive() && !preparedStartFocus)) {
-      this.syncFocusZoom(1);
-      camera.scrollX = this.lastCameraScrollX;
-      camera.scrollY = this.lastCameraScrollY;
-      setCameraBaseScroll(this.input.scene, this.lastCameraScrollX, this.lastCameraScrollY);
-      return;
+    // Laden und Countdown zeigen bereits den vorbereiteten Startpunkt der Figur.
+    const alive = this.input.isLocalPlayerAlive() || this.input.isArenaLoading() || this.input.isArenaCountdownActive();
+    // Ohne Figur, oder tot ohne inszenierte Todesnahaufnahme, haelt die Kamera ihren Punkt.
+    const holding = !localSprite?.active || (!alive && !this.deathFocus);
+    if (holding && !this.followFocusValid) this.holdFollowFocus();
+    // Ein inszenierter Fokus (Boss-Intro) blendet das Spielerziel weich zu seinem Punkt über.
+    const focus = holding || !alive || this.input.isArenaLoading() ? null : getCameraFocusOverride(scene);
+    let followX = this.followFocusX, followY = this.followFocusY;
+    if (!holding && localSprite) {
+      const target = !alive && this.deathFocus ? this.deathFocus : localSprite;
+      const focusWeight = focus?.weight ?? 0;
+      followX = focus ? Phaser.Math.Linear(target.x, focus.x, focusWeight) : target.x;
+      followY = focus ? Phaser.Math.Linear(target.y, focus.y, focusWeight) : target.y;
     }
 
     const maxScrollX = Math.max(0, ARENA_MAX_X - (ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH));
     const maxScrollY = Math.max(0, ARENA_MAX_Y - (ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT));
     const focusScreenX = ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH * 0.5;
     const focusScreenY = ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT * 0.5;
-    // Ein inszenierter Fokus (Boss-Intro) blendet das Spielerziel weich zu seinem Punkt über.
-    const focus = this.input.isArenaLoading() ? null : getCameraFocusOverride(this.input.scene);
-    const focusWeight = focus?.weight ?? 0;
-    const followX = focus ? Phaser.Math.Linear(localSprite.x, focus.x, focusWeight) : localSprite.x;
-    const followY = focus ? Phaser.Math.Linear(localSprite.y, focus.y, focusWeight) : localSprite.y;
     // Die Kamera hat ihren Ursprung oben links; unter Zoom zeigt Bildschirmpunkt s die Welt bei
     // scroll + s / zoom. Ziel und Klemmung rechnen deshalb im gezoomten Sichtfeld.
-    const zoom = this.syncFocusZoom(resolveCameraFocusZoom(focus));
+    const zoom = this.syncFocusZoom(Math.max(resolveCameraFocusZoom(focus), requestedZoom));
     const minScrollX = ARENA_OFFSET_X * (1 - 1 / zoom);
     const minScrollY = ARENA_OFFSET_Y * (1 - 1 / zoom);
     const zoomedMaxScrollX = zoom > 1 ? Math.max(minScrollX, ARENA_MAX_X - (ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH) / zoom) : maxScrollX;
     const zoomedMaxScrollY = zoom > 1 ? Math.max(minScrollY, ARENA_MAX_Y - (ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT) / zoom) : maxScrollY;
-    const targetScrollX = Phaser.Math.Clamp(followX - focusScreenX / zoom, minScrollX, zoomedMaxScrollX);
-    const targetScrollY = Phaser.Math.Clamp(followY - focusScreenY / zoom, minScrollY, zoomedMaxScrollY);
     // The first local spawn is already known during loading; snap once so the startup working
-    // set is not invalidated by a camera glide while the barrier is being evaluated.
-    const followLerp = this.input.isArenaLoading() ? 1 : 1 - Math.exp(-deltaMs / 120);
-    this.lastCameraScrollX = Phaser.Math.Linear(this.lastCameraScrollX, targetScrollX, followLerp);
-    this.lastCameraScrollY = Phaser.Math.Linear(this.lastCameraScrollY, targetScrollY, followLerp);
+    // set is not invalidated by a camera glide while the barrier is being evaluated. A spawn
+    // close-up cuts onto the figure. Otherwise the followed point glides; the view is then
+    // derived exactly, so any zoom change (staged or by wheel) and its clamp stay one motion.
+    const followLerp = this.input.isArenaLoading() || spawn.cut || !this.followFocusValid ? 1 : 1 - Math.exp(-deltaMs / 120);
+    this.followFocusX = Phaser.Math.Linear(this.followFocusX, followX, followLerp);
+    this.followFocusY = Phaser.Math.Linear(this.followFocusY, followY, followLerp);
+    this.followFocusValid = true;
+    this.lastCameraScrollX = Phaser.Math.Clamp(this.followFocusX - focusScreenX / zoom, minScrollX, zoomedMaxScrollX);
+    this.lastCameraScrollY = Phaser.Math.Clamp(this.followFocusY - focusScreenY / zoom, minScrollY, zoomedMaxScrollY);
     camera.scrollX = this.lastCameraScrollX;
     camera.scrollY = this.lastCameraScrollY;
-    setCameraBaseScroll(this.input.scene, this.lastCameraScrollX, this.lastCameraScrollY);
+    setCameraBaseScroll(scene, this.lastCameraScrollX, this.lastCameraScrollY);
+  }
+
+  /** Der gezeigte Punkt wird die Mitte des aktuellen Ausschnitts; eine spaetere Verfolgung setzt dort an. */
+  private holdFollowFocus(): void {
+    this.followFocusX = this.lastCameraScrollX + (ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH * 0.5) / this.focusZoomFactor;
+    this.followFocusY = this.lastCameraScrollY + (ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT * 0.5) / this.focusZoomFactor;
+    this.followFocusValid = true;
   }
 
   /**
@@ -607,6 +655,10 @@ export class WorldPresentationFrameBinding {
    */
   private syncFocusZoom(factor: number): number {
     const zoom = factor > 1.0005 ? factor : 1;
+    if (zoom !== this.focusZoomFactor) {
+      this.focusZoomFactor = zoom;
+      setAppliedStagedZoom(this.input.scene, zoom);
+    }
     if (zoom === 1 && !this.focusZoomApplied) return 1;
     const scene = this.input.scene;
     const camera = scene.cameras.main;
@@ -619,6 +671,45 @@ export class WorldPresentationFrameBinding {
     }
     this.focusZoomApplied = zoom > 1;
     return zoom;
+  }
+
+  /**
+   * Fuehrt die Inszenierung von Spawn und Tod der eigenen Figur. Jede neu darstellbare lebende
+   * Figur ist ein Spawn: der erste nach dem Ladeschleier (gehalten, bis der Countdown endet), jeder
+   * Respawn und der Eintritt in eine Runden-World. Faellt die Figur, faehrt die Kamera an die
+   * Stelle heran bis auf das Zoomniveau, mit dem der Respawn beginnt. Die LobbyWorld inszeniert
+   * nichts. `cut` meldet den Frame, in dem die Kamera auf die Figur springt.
+   */
+  private syncSpawnZoom(enabled: boolean, localSprite: Phaser.GameObjects.Sprite | null): { factor: number; cut: boolean } {
+    const staged = enabled && this.input.stagesLocalSpawn !== false && !this.input.isArenaLoading()
+      && !this.input.isLoadingVeilShown?.() && !!localSprite?.active;
+    if (!staged || !localSprite) {
+      this.spawnZoom.cancel();
+      this.spawnZoomSprite = null;
+      this.deathFocus = null;
+      return { factor: 1, cut: false };
+    }
+    const now = this.input.scene.time.now;
+    const countdown = this.input.isArenaCountdownActive();
+    if (!countdown && !this.input.isLocalPlayerAlive()) {
+      // Nur eine Figur, die hier lebte, faellt sichtbar; wer tot beitritt, wartet ohne Fahrt.
+      if (this.spawnZoomSprite && !this.deathFocus) {
+        this.deathFocus = { x: localSprite.x, y: localSprite.y };
+        this.spawnZoom.death(now);
+      }
+      this.spawnZoomSprite = null;
+      return { factor: this.deathFocus ? this.spawnZoom.sample(now) : 1, cut: false };
+    }
+    let cut = false;
+    if (localSprite !== this.spawnZoomSprite) {
+      this.spawnZoomSprite = localSprite;
+      this.deathFocus = null;
+      this.spawnZoom.begin(now, countdown);
+      cut = true;
+    } else if (!countdown && this.spawnZoom.holding) {
+      this.spawnZoom.release(now);
+    }
+    return { factor: this.spawnZoom.sample(now), cut };
   }
 
   /**
@@ -647,15 +738,28 @@ export class WorldPresentationFrameBinding {
       return;
     }
     const worldView = getVisibleWorldView(this.input.scene.cameras.main);
+    const residencyView = this.resolveResidencyView(worldView);
     this.input.getArenaResult()?.waterSurface?.prepareMasks();
-    ArenaBuilder.updateSurfaceResidency(this.input.getArenaResult(), worldView);
+    ArenaBuilder.updateSurfaceResidency(this.input.getArenaResult(), residencyView);
     const wildlife = this.input.getArenaResult()?.wildlife;
     if (wildlife) {
       this.collectWildlifeMovers(worldView, enemies);
       wildlife.update(deltaMs, this.wildlifeMovers, worldView,
         this.input.lighting.getTimeOfDayMinutes(), this.input.lighting, this.input.wildlifeAudio);
     }
-    this.input.shadow.updateStaticResidency(worldView);
+    this.input.shadow.updateStaticResidency(residencyView);
+  }
+
+  /**
+   * Waehrend einer Nahaufnahme bleibt die Spielansicht um dieselbe Mitte resident: Das
+   * Herausfahren deckt dann fertig gebackene Flaechen auf, statt sie an den Raendern nachzuladen.
+   */
+  private resolveResidencyView(view: WorldViewRect): WorldViewRect {
+    const zoom = this.focusZoomFactor;
+    if (zoom <= 1) return view;
+    const width = view.width * zoom, height = view.height * zoom;
+    const x = view.centerX - width * 0.5, y = view.centerY - height * 0.5;
+    return { ...view, x, y, width, height, right: x + width, bottom: y + height } as WorldViewRect;
   }
 
   /** Reconcile local terrain before preparation or simulation of this World. */
@@ -930,9 +1034,9 @@ export class WorldPresentationFrameBinding {
     const arenaResult = this.input.getArenaResult();
     const layout = this.input.getWorldLayout();
     const visualSite = showWorld ? this.input.getPersistentBaseVisualSite() : null;
-    arenaResult?.groundSurface?.setPersistentBaseGravel(
-      visualSite && layout ? toPersistentBaseGravelZone(visualSite, layout.seed) : null,
-    );
+    const gravel = visualSite && layout ? toPersistentBaseGravelZone(visualSite, layout.seed) : null;
+    arenaResult?.groundSurface?.setPersistentBaseGravel(gravel);
+    this.input.getBases?.()?.setPersistentBaseGravel(gravel);
     this.input.persistentBaseVisuals.sync(
       showWorld ? this.input.getPersistentBaseSite() : null,
       showWorld ? this.input.getWorldMetrics() : null,
@@ -1051,6 +1155,17 @@ export class WorldPresentationFrameBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    // Eine laufende Nahaufnahme (Spawn, Boss-Intro) darf nicht in die naechste World ueberlaufen.
+    const camera = this.focusZoomApplied ? this.input.scene.cameras?.main : null;
+    if (camera) {
+      camera.setZoom(this.input.scene.scale.width / GAME_WIDTH, this.input.scene.scale.height / GAME_HEIGHT);
+      camera.useBounds = this.focusZoomBoundsWereUsed;
+    }
+    this.focusZoomApplied = false;
+    if (this.focusZoomFactor !== 1) setAppliedStagedZoom(this.input.scene, 1);
+    this.focusZoomFactor = 1;
+    this.spawnZoom.cancel();
+    this.deathFocus = null;
     if (this.activityFogBaseline) {
       this.activityFogBaseline.fog.strength = this.activityFogBaseline.strength;
       this.activityFogBaseline = null;

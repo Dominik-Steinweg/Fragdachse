@@ -23,6 +23,7 @@ import { createFireControlPortalShaderProbe } from './fireControl/FireControlPor
 import { createPortalShaderProbe } from './gpu/PortalGpuLayer';
 import { BLOOD_GROUND_SHADER_NAME, BLOOD_ROCK_SHADER_NAME, createBloodFieldShaderProbe } from './blood/BloodFieldRenderer';
 import { BLOOD_GROUND_FRAGMENT, BLOOD_ROCK_FRAGMENT } from './blood/bloodFieldShaders';
+import { createSpawnShaderProbe } from './gpu/SpawnGpuLayer';
 import { PLASMA_BURNER_BEAM_FRAGMENT_SOURCE, PLASMA_BURNER_BEAM_SHADER_NAME } from './plasmaBurnerBeamShader';
 
 /** Lazy probes; their owner releases them on completion, failure and Scene teardown.
@@ -136,6 +137,8 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
     createBloodFieldShaderProbe(scene),
     shaderQuadProbe(scene, BLOOD_GROUND_SHADER_NAME, BLOOD_GROUND_FRAGMENT),
     shaderQuadProbe(scene, BLOOD_ROCK_SHADER_NAME, BLOOD_ROCK_FRAGMENT),
+    // Player respawns and enemy arrivals share one program; the first spawn must not stall.
+    createSpawnShaderProbe(scene),
   ];
 }
 

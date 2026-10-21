@@ -4,17 +4,17 @@
     "id": "gpu:PowerUpPedestalSpark",
     "owner": "effects/gpu/GpuVfxEffects.ts",
     "component": "PowerUpPedestalSpark",
-    "height": "ground",
+    "height": "body",
     "lighting": "emissive",
     "camera": "world",
     "depths": [
-      7.95
+      19.56
     ],
     "blends": [
       "ADD"
     ],
     "profiles": [
-      "M"
+      "E"
     ],
     "role": "effect",
     "lanes": [

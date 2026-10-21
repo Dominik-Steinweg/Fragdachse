@@ -30,6 +30,7 @@ import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { DecoySystem } from './DecoySystem';
 import type { EnemyAiTargetCatalog, EnemyAiTargetKind, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
+import type { SafeGroundPositionResolver } from './CoopDefenseEnemyBurrowSystem';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
 
@@ -64,6 +65,11 @@ interface ThrowTarget {
 }
 
 const ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER = 2;
+/**
+ * Der Puck ist kleiner als der Gegnerkoerper und darf ueber Wasser liegen bleiben. Der Sprung
+ * landet deshalb auf dem naechsten freien Boden in dieser Naehe – oder faellt aus.
+ */
+const ENEMY_TRANSLOCATOR_LANDING_SEARCH_CELLS = 2;
 /** Extra clearance around rocks so thrown projectiles are checked as bodies, not as zero-width lines. */
 const ENEMY_THROW_PATH_SAFETY_MARGIN = 4;
 
@@ -147,6 +153,7 @@ export class CoopDefenseEnemyAbilitySystem {
     private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
     private readonly decoySystem: DecoySystem | null = null,
     private readonly translocatorProjectilePort: TranslocatorProjectilePort | null = null,
+    private readonly findSafeGroundPosition: SafeGroundPositionResolver | null = null,
   ) {}
 
   hostUpdate(now: number): void {
@@ -816,7 +823,18 @@ export class CoopDefenseEnemyAbilitySystem {
     state: EnemyTeleportState,
   ): void {
     const color = this.translocatorColor(enemy);
+    const landing = this.findSafeGroundPosition
+      ? this.findSafeGroundPosition(targetX, targetY, enemy.getCollisionRadius(), ENEMY_TRANSLOCATOR_LANDING_SEARCH_CELLS)
+      : { x: targetX, y: targetY };
+    if (!landing) {
+      // Kein Boden fuer den ganzen Koerper (Puck im Wasser, zwischen Felsen): Der Sprung verfaellt.
+      this.translocatorProjectilePort?.consumePuck(puckId);
+      this.resetTeleportState(state, now + ability.cooldownMs);
+      return;
+    }
     if (!this.translocatorProjectilePort?.consumePuck(puckId)) return;
+    targetX = landing.x;
+    targetY = landing.y;
     this.network.broadcastTranslocatorFlash(enemy.sprite.x, enemy.sprite.y, color, 'start', enemy.id);
     enemy.setPosition(targetX, targetY);
     this.network.broadcastTranslocatorFlash(targetX, targetY, color, 'end', enemy.id);

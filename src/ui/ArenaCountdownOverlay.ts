@@ -382,6 +382,8 @@ export class ArenaCountdownOverlay {
       camera.scrollY,
       this.revealRadius,
       this.veilAlpha,
+      // Countdown und Respawn-Reveal laufen in der Spawn-Nahaufnahme: deren Zoom liegt ueber dem Designzoom.
+      camera.zoomX * GAME_WIDTH / Math.max(1, this.scene.scale.width),
     );
 
     this.postFx?.setRadialFocus(frame);

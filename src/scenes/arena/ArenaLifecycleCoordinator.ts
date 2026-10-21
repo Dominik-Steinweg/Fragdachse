@@ -482,6 +482,8 @@ export class ArenaLifecycleCoordinator {
         isLocalPlayerAlive: () => this.localPlayerState.alive,
         isArenaLoading: () => bridge.isArenaLoading(),
         isArenaCountdownActive: () => bridge.isArenaCountdownActive(),
+        isLoadingVeilShown: () => this.ctx.arenaCountdown?.isLoading() ?? false,
+        stagesLocalSpawn: !isLobbyWorldDefinitionId(this.worldRuntime.descriptor.definitionId),
         getArenaResult: () => this.worldRuntime?.materialization?.arena ?? null,
         clientWorldPresentation: {
           timeBubble: this.renderers.timeBubble,
@@ -504,6 +506,7 @@ export class ArenaLifecycleCoordinator {
         getWorldMetrics: () => this.worldRuntime?.context.metrics ?? null,
         getPersistentBaseSite: () => this.worldRuntime?.context.persistentBaseSite ?? null,
         getPersistentBaseVisualSite: () => this.getPersistentBaseVisualSite(),
+        getBases: () => this.worldRuntime?.materialization?.bases ?? null,
         isPersistentBasePlacementOverlayActive: () => (
           this.ctx.inputSystem.isUtilityPlacementActive()
           || this.ctx.inputSystem.isConstructionPlacementActive()
@@ -2983,6 +2986,7 @@ export class ArenaLifecycleCoordinator {
     this.persistentBasePreviewRenderer.sync(
       persistentBaseSite === null ? persistentBaseVisualSite : null,
       world.metrics,
+      persistentBaseGravel,
     );
     const worldRuntime = this.worldRuntime;
     if (!worldRuntime) throw new Error('[ArenaLifecycleCoordinator] WorldRuntime was not attached');

@@ -15,6 +15,7 @@ import {
   createPersistentBaseGravelState,
   getPersistentBaseGravelDecorationReachPx,
   getPersistentBaseGravelStateKey,
+  getPersistentBaseGravelSurfaceSeed,
   persistentBaseGravelCellKey,
 } from '../PersistentBaseGravelField';
 import type {
@@ -63,8 +64,6 @@ export const GROUND_PERSISTENT_BASE_GRAVEL_DECORATION_LAYER_ID = 'persistentBase
 export const GROUND_COVER_LAYER_ID = 'groundCover';
 export const GROUND_TRACK_GRAVEL_LAYER_ID = 'trackGravel';
 export const GROUND_DECAL_LAYER_ID = 'groundDecals';
-/** Separates the gravel seam's noise from the soil seam of the same World seed. */
-const PERSISTENT_BASE_GRAVEL_SEED_SALT = 0x6a7e1;
 
 export interface GroundSurfacePersistentBaseGravelZone {
   readonly seed: number;
@@ -662,7 +661,7 @@ export class GroundSurfaceStreamer {
     if (!state || state.cells.length === 0) return null;
     const materials = this.getGroundMaterials();
     if (!materials.gravel) return null;
-    return new DirtSurfaceLayer(this.scene, (state.seed ^ PERSISTENT_BASE_GRAVEL_SEED_SALT) >>> 0, state.cells,
+    return new DirtSurfaceLayer(this.scene, getPersistentBaseGravelSurfaceSeed(state.seed), state.cells,
       this.frame, this.scratchSize, {
         dirt: materials.gravel,
         dirtAlt: materials.gravelAlt,

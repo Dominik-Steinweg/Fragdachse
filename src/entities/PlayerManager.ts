@@ -304,6 +304,15 @@ export class PlayerManager implements OwnerVisualSource {
     }
   }
 
+  /**
+   * Zeigt verdeckt gestartete Materialisierungen erneut (siehe `PlayerEntity.replaySpawnEffect`).
+   * Ohne Angabe gilt das fuer alle Figuren, etwa wenn der Ladeschleier zum Countdown aufgeht.
+   */
+  replaySpawnEffects(playerIds?: Iterable<string>): void {
+    const entities = playerIds ? [...playerIds].map(id => this.players.get(id)) : [...this.players.values()];
+    for (const entity of entities) entity?.replaySpawnEffect();
+  }
+
   hasPlayer(id: string): boolean {
     return this.players.has(id);
   }

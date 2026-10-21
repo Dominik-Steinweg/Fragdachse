@@ -1,4 +1,4 @@
-from powerup_parts import build_symbol
+from powerup_symbol_parts import build_symbol
 
 
 def build(ctx, spec):

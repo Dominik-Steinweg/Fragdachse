@@ -46,7 +46,8 @@ describe('PowerUpRenderer GPU pedestals', () => {
     renderer.updatePedestals(10_000);
     gpuVfx.update(220);
 
-    expect(scene.layers).toHaveLength(GPU_VFX_LANES.length + 3);
+    // Three persistent pedestal layers plus three persistent item-decoration layers.
+    expect(scene.layers).toHaveLength(GPU_VFX_LANES.length + 6);
     expect(findFakeLane(scene, 'powerup-pedestal-base').added).toBe(1);
     expect(findFakeLane(scene, 'powerup-pedestal-glow').added).toBe(3);
     expect(scene.objects).toHaveLength(0);
@@ -55,7 +56,7 @@ describe('PowerUpRenderer GPU pedestals', () => {
     const transient = findFakeLane(scene, 'powerup-pedestal');
     expect(transient.edited.length).toBeGreaterThan(0);
     expect(new Set(transient.members.map((member) => member.frame)))
-      .toEqual(new Set(['death-glow', 'death-fragment']));
+      .toEqual(new Set(['death-glow']));
 
     renderer.syncPedestals([]);
     expect(findFakeLane(scene, 'powerup-pedestal-base').visible).toBe(false);

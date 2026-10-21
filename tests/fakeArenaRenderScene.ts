@@ -498,7 +498,7 @@ export class FakeZone {
  */
 export function createFakePhaserModule(): Record<string, unknown> {
   return {
-    Scenes: { Events: { POST_UPDATE: 'postupdate', SHUTDOWN: 'shutdown' } },
+    Scenes: { Events: { POST_UPDATE: 'postupdate', PRE_RENDER: 'prerender', SHUTDOWN: 'shutdown' } },
     BlendModes: { NORMAL: 0, MULTIPLY: 1, ADD: 2, ERASE: 17, SKIP_CHECK: -1 },
     Math: {
       Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),

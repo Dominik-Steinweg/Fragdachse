@@ -8,18 +8,18 @@ import {validatePowerupSpec,POWERUP_IDS,sameProjectionScale} from '../../scripts
 import {validateManifestV2} from '../../scripts/asset-pipeline/export-v2.mjs';
 import {compositePowerup} from '../../scripts/asset-pipeline/review-powerups.mjs';
 import {createHash} from 'node:crypto';
-import runtimeManifest from '../../src/assets/manifests/powerups-powerups-r02.json';
+import runtimeManifest from '../../src/assets/manifests/powerups-powerups-r07.json';
 import {POWERUP_DEFS, POWERUP_RENDER_SIZE, DAWN_SCRAP_DEFS} from '../../src/powerups/PowerUpConfig';
 import {DAWN_PIPELINE_ASSETS, DAWN_SCRAP_KEYS} from '../../src/assets/DawnAssets';
 import {runtimeAssetUrl} from '../../src/assets/RuntimeAssetUrls';
 const spec=JSON.parse(await readFile('scripts/asset-pipeline/powerups-v2.json','utf8'));
 
-test('published pickup layers retain hashes, shared full canvases and exact static UI composites', async () => {
+test('published pickup layers and world token retain hashes, shared full canvases and exact static UI composites', async () => {
   const m = runtimeManifest;
   assert.equal(m.displaySize, POWERUP_RENDER_SIZE);
   assert.deepEqual(m.pivot, [.5, .5]);
   assert.deepEqual(new Set(m.symbols.map(s => s.gameId)), new Set(Object.values(POWERUP_DEFS).filter(d => d.spriteKey && d.type !== 'dawn_scrap').map(d => d.id)));
-  for (const asset of [m.base, ...m.symbols.flatMap(s => [s.image, s.composite])]) {
+  for (const asset of [m.base, m.token, ...m.symbols.flatMap(s => [s.image, s.composite])]) {
     const bytes = await readFile('public/' + asset.file);
     assert.equal(createHash('sha256').update(bytes).digest('hex'), asset.sha256);
     assert.equal(bytes.length, asset.downloadBytes);
@@ -29,6 +29,14 @@ test('published pickup layers retain hashes, shared full canvases and exact stat
     assert.ok(runtimeAssetUrl(asset.file).endsWith('?v=' + asset.sha256));
   }
   for (const symbol of m.symbols) {
+    // Every symbol loops; its sheet is bound like the layers and frame 0 continues the static symbol.
+    const sheet = symbol.loop.sheet, bytes = await readFile('public/' + sheet.file);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), sheet.sha256);
+    const meta = await sharp(bytes).metadata();
+    assert.equal(meta.width, symbol.loop.layout.width); assert.equal(meta.height, symbol.loop.layout.height);
+    assert.equal(symbol.loop.layout.frameCount, symbol.loop.frames);
+    assert.equal(symbol.loop.layout.frameWidth, symbol.loop.frameSize);
+    assert.ok(runtimeAssetUrl(sheet.file).endsWith('?v=' + sheet.sha256));
     assert.equal(POWERUP_DEFS[symbol.gameId].spriteKey, symbol.spriteKey);
     const expected = await sharp('public/' + m.base.file).composite([{ input: 'public/' + symbol.image.file }]).raw().toBuffer();
     assert.deepEqual(await sharp('public/' + symbol.composite.file).raw().toBuffer(), expected);
@@ -46,13 +54,13 @@ test('Dawn scrap tiers use their published standalone pipeline art', async () =>
     assert.match(runtimeAssetUrl(asset.idlePath), /\?v=[a-f0-9]{64}$/);
   }
 });
-test('exactly one base, eight semantic symbols and a shared projection',()=>{
+test('exactly one UI base, one world token, eight semantic symbols and a shared projection',()=>{
   validatePowerupSpec(spec);assert.equal(POWERUP_IDS.length,8);
-  for(const mutate of [s=>s.assets.pop(),s=>s.assets.push(s.assets[0]),s=>s.assets[1].pivot=[.4,.5],s=>s.assets[2].orthoScale=3,s=>s.assets[2].model.symbol='hp',s=>s.pulseScales[2]=1.5]){
+  for(const mutate of [s=>s.assets.pop(),s=>s.assets.push(s.assets[0]),s=>s.assets[1].pivot=[.4,.5],s=>s.assets[2].orthoScale=3,s=>s.assets[3].model.symbol='hp',s=>s.assets[1].role='base',s=>s.pulseScales[2]=1.5]){
     const s=structuredClone(spec);mutate(s);assert.throws(()=>validatePowerupSpec(s));
   }
 });
-test('all nine static powerup specs satisfy the existing V2 manifest contract',()=>{
+test('all ten static powerup specs satisfy the existing V2 manifest contract',()=>{
   for(const a of spec.assets){
     const hash='a'.repeat(64);
     const m={...a,pipelineVersion:2,revision:'powerups-unit',variant:'standard',masterSize:1024,

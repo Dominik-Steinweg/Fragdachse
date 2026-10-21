@@ -46,6 +46,23 @@ export function findSafeEnemyGroundPosition(
   return getEnemyNavigationFlowField(runtime)?.findNearestSafeWorldPosition(x, y, radius, maxRadiusCells) ?? null;
 }
 
+/**
+ * Landepunkt fuer einen Gegnerkoerper, der ohne Laufweg an einer Stelle erscheint (Brut, Sprung).
+ * Ohne Navigationsfeld gibt es keine Bodenfrage, der Punkt bleibt unveraendert; mit Feld liefert
+ * `null`, dass in der Naehe kein freier, erreichbarer Boden liegt.
+ */
+export function resolveEnemyLandingPosition(
+  runtime: CoopMissionRuntime | null,
+  x: number,
+  y: number,
+  radius: number,
+  maxRadiusCells: number,
+): { x: number; y: number } | null {
+  const flowFieldService = getEnemyNavigationFlowField(runtime);
+  if (!flowFieldService) return { x, y };
+  return flowFieldService.findNearestSafeWorldPosition(x, y, radius, maxRadiusCells);
+}
+
 export function hasWalkableEnemyCircleLine(
   runtime: CoopMissionRuntime | null,
   fromX: number,

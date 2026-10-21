@@ -6,7 +6,7 @@ import { GPU_VFX_ATLAS, GpuVfxFrameId } from '../src/effects/gpu/GpuVfxAtlas';
 import { GPU_VFX_EFFECTS, EXPLOSION_LAYER_EFFECTS } from '../src/effects/gpu/GpuVfxEffects';
 import { GpuVfxEase } from '../src/effects/gpu/GpuVfxEase';
 import { GPU_VFX_DEPTH_EPSILON, GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
-import { DEPTH } from '../src/config';
+import { DEPTH, DEPTH_LIGHTING } from '../src/config';
 import { BURROW_FX } from '../src/config/burrowEffects';
 import { LEAF_BLOWER_FX } from '../src/config/leafBlowerEffects';
 
@@ -141,7 +141,9 @@ describe('gpu vfx render lanes', () => {
       'powerup.pedestal-burst',
     ].map((label) => GPU_VFX_EFFECTS.find((effect) => effect.label === label)!);
 
-    expect(lane.depth).toBe(DEPTH.PLAYERS - 2.05);
+    // Self-lit pickup sparks: after the light map and its bleed pass, still below the canopy.
+    expect(lane.depth).toBeGreaterThan(DEPTH_LIGHTING + 0.001);
+    expect(lane.depth).toBeLessThan(DEPTH.CANOPY);
     expect(lane.blendMode).toBe(1);
     expect(lane.capacity).toBe(1024);
     expect(lane.maxLifetimeMs).toBe(1100);

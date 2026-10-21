@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { playerCameraZoomFor, wheelDeltaPixels } from '../../effects/camera/PlayerCameraZoom';
 import type { GameAudioSystem } from '../../audio/GameAudioSystem';
 import { getCoopDefenseConstructionDefinition, COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE } from '../../config/coopDefenseConstructions';
 import type { CoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
@@ -269,6 +270,8 @@ export class ArenaInputBindings {
 
   private setupComplete = false;
   private destroyed = false;
+  /** Aus dem letzten Frame: Die World nimmt Eingaben an und keine Oberflaeche blockiert. */
+  private wheelZoomEnabled = false;
 
   constructor(private readonly input: ArenaInputBindingsInput) {}
 
@@ -278,6 +281,7 @@ export class ArenaInputBindings {
     if (!keyboard) return;
 
     this.setupComplete = true;
+    this.input.scene.input.on('wheel', this.onWheelZoom);
     this.spectatorCameraLeftKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A, false);
     this.spectatorCameraRightKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D, false);
     this.spectatorCameraUpKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W, false);
@@ -934,6 +938,7 @@ export class ArenaInputBindings {
    * Die Scene liefert nur den Frame-Kontext; Capabilities werden ueber den Read-Port bezogen.
    */
   updateFrame(frame: ArenaInputFrameState): void {
+    this.wheelZoomEnabled = frame.enabled && !frame.uiBlocking;
     if (!frame.enabled) {
       this.input.inputSystem.setTurretInputEnabled?.(false);
       this.input.inputSystem.setAimEnabled(false);
@@ -956,6 +961,19 @@ export class ArenaInputBindings {
     this.input.inputSystem.setInputEnabled(inputPolicy.movement, inputPolicy.worldInteraction);
     this.input.inputSystem.update();
   }
+
+  /**
+   * Das Mausrad zoomt die Weltkamera heran und wieder heraus, nie weiter als die Standardansicht.
+   * Bildschirmfeste Bedienflaechen unter dem Zeiger und blockierende Menues behalten das Rad.
+   */
+  private readonly onWheelZoom = (
+    pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[], _dx: number, dy: number,
+  ): void => {
+    if (this.destroyed || !this.wheelZoomEnabled) return;
+    if (over.some(object => (object as { scrollFactorX?: number }).scrollFactorX === 0)) return;
+    const event = pointer.event as WheelEvent | undefined;
+    playerCameraZoomFor(this.input.scene).nudge(wheelDeltaPixels(dy, event?.deltaMode));
+  };
 
   /** Liefert die lokale Aim-/Systemcursor-Freigabe fuer die Presentation-Schicht. */
   getAimPresentationState(
@@ -1096,6 +1114,7 @@ export class ArenaInputBindings {
     if (this.destroyed) return;
     this.destroyed = true;
     this.input.inputSystem.onInvalidFireControlPlacement = null;
+    this.input.scene.input?.off('wheel', this.onWheelZoom);
 
     const keyboard = this.input.scene.input.keyboard;
     if (keyboard) {

@@ -1,11 +1,11 @@
 import * as Phaser from 'phaser';
-import { DEPTH_FX } from '../config';
-import { ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, recordParticleSpawn, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
-import { emissiveAlpha } from './EmissiveScale';
+import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
+import { mixColors } from './EffectUtils';
+import { getEmissiveScale } from './EmissiveScale';
 import type { LightingSystem } from './LightingSystem';
-
-const TEX_SPAWN_SPARK = '_spawn_spark';
-const TEX_SPAWN_GLOW  = '_spawn_glow';
+import { SpawnGpuLayer } from './gpu/SpawnGpuLayer';
+import { buildSpawnInstances, type SpawnGpuInstance } from './gpu/SpawnInstances';
+import { SPAWN_VARIANT } from './gpu/SpawnShader';
 
 /**
  * Dauer des Nachleuchtens am Spawnpunkt. Deutlich länger als der Blitz selbst: der Blitz sagt
@@ -14,11 +14,105 @@ const TEX_SPAWN_GLOW  = '_spawn_glow';
  */
 const AFTERGLOW_DURATION_MS = 1800;
 
+interface SpawnEvent {
+  readonly owner: SpawnEffectRenderer;
+  readonly endMs: number;
+  /** Built once at the spawn, t0 on the stage clock; the GPU animates them from there. */
+  readonly instances: SpawnGpuInstance[];
+}
+
+const stages = new WeakMap<Phaser.Scene, SpawnEffectStage>();
+
+/**
+ * Szenenweite Bühne aller Spawn-Effekte: Spieler und Gegner teilen einen begrenzten GPU-Batch.
+ * Jedes Ereignis gehört genau einem {@link SpawnEffectRenderer}; dessen `clear()` löst nur die
+ * eigenen. Der Instanzpuffer wird nur bei neuen oder abgelaufenen Ereignissen neu geschrieben,
+ * pro Frame bewegt sich allein die Uhr.
+ */
+class SpawnEffectStage {
+  static for(scene: Phaser.Scene): SpawnEffectStage {
+    let stage = stages.get(scene);
+    if (!stage) { stage = new SpawnEffectStage(scene); stages.set(scene, stage); }
+    return stage;
+  }
+
+  static peek(scene: Phaser.Scene): SpawnEffectStage | null { return stages.get(scene) ?? null; }
+
+  private readonly events: SpawnEvent[] = [];
+  private layer: SpawnGpuLayer | null = null;
+  /** Scene time of the layer clock's zero; restarts whenever the stage runs empty. */
+  private epochMs = 0;
+  private dirty = false;
+
+  private constructor(private readonly scene: Phaser.Scene) {
+    scene.events.on(Phaser.Scenes.Events.PRE_RENDER, this.sync);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy);
+  }
+
+  get size(): number { return this.events.length; }
+
+  add(owner: SpawnEffectRenderer, startMs: number, durationMs: number, instances: SpawnGpuInstance[]): void {
+    // Created here, in the update phase: objects added during PRE_RENDER would miss this
+    // frame's depth sort and draw once on top of everything.
+    this.layer ??= new SpawnGpuLayer(this.scene);
+    if (this.events.length === 0) this.epochMs = startMs;
+    for (const instance of instances) instance.t0 = (startMs - this.epochMs) / 1000;
+    this.events.push({ owner, endMs: startMs + durationMs, instances });
+    this.dirty = true;
+  }
+
+  release(owner: SpawnEffectRenderer): void {
+    const before = this.events.length;
+    for (let i = this.events.length - 1; i >= 0; i--) if (this.events[i].owner === owner) this.events.splice(i, 1);
+    if (this.events.length !== before) this.publish();
+  }
+
+  /** Läuft vor jedem Render: abgelaufene Ereignisse fallen weg, die Uhr rückt vor. */
+  readonly sync = (): void => {
+    if (this.events.length === 0 && !this.dirty) return;
+    const now = this.scene.time.now;
+    const before = this.events.length;
+    for (let i = this.events.length - 1; i >= 0; i--) if (this.events[i].endMs <= now) this.events.splice(i, 1);
+    if (this.dirty || this.events.length !== before) this.publish();
+    this.layer?.setFrame((now - this.epochMs) / 1000, getEmissiveScale());
+  };
+
+  private publish(): void {
+    this.dirty = false;
+    const layer = this.layer;
+    if (!layer) return;
+    layer.begin();
+    // Newest first: if a burst ever exceeds the batch, the oldest (fading) spawns give way.
+    fill: for (let e = this.events.length - 1; e >= 0; e--) {
+      for (const instance of this.events[e].instances) if (!layer.add(instance)) break fill;
+    }
+    layer.end();
+  }
+
+  private readonly destroy = (): void => {
+    this.scene.events.off(Phaser.Scenes.Events.PRE_RENDER, this.sync);
+    this.events.length = 0;
+    this.layer?.destroy();
+    this.layer = null;
+    stages.delete(this.scene);
+  };
+}
+
+/** Anzahl laufender Spawn-Effekte einer Scene (Diagnose und Lifecycle-Tests). */
+export function countActiveSpawnEffects(scene: Phaser.Scene): number {
+  return SpawnEffectStage.peek(scene)?.size ?? 0;
+}
+
+/**
+ * Spawn- und Respawn-Materialisierung als GPU-Effekt (siehe `gpu/SpawnShader.ts`), getragen von
+ * Lichtpartikeln statt gezeichneter Ringe: Licht sammelt sich von allen Seiten, eine Lichtsäule
+ * fokussiert auf den Punkt, der Blitz materialisiert die Figur, Funken und weiche Lichtwolken
+ * stoßen nach außen, Restlicht kreist um die Figur, Glut steigt aus dem Nachleuchten.
+ * Diese Klasse ist der Besitzer-Handle: Jeder Besitzer (Spielerfigur, Effektsystem) löst mit
+ * `clear()` genau seine eigenen laufenden Effekte.
+ */
 export class SpawnEffectRenderer {
-  private texturesReady = false;
   private lighting: LightingSystem | null = null;
-  private readonly effects = new Set<Phaser.GameObjects.GameObject>();
-  private readonly timers = new Set<Phaser.Time.TimerEvent>();
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -27,134 +121,39 @@ export class SpawnEffectRenderer {
   }
 
   clear(): void {
-    for (const timer of this.timers) timer.remove(false);
-    this.timers.clear();
-    for (const effect of this.effects) {
-      this.scene.tweens.killTweensOf(effect);
-      effect.destroy();
-    }
-    this.effects.clear();
-  }
-
-  private track(effect: Phaser.GameObjects.GameObject): void {
-    this.effects.add(effect);
-    effect.once('destroy', () => this.effects.delete(effect));
-  }
-
-  private release(effect: Phaser.GameObjects.GameObject): void {
-    if (this.effects.delete(effect)) effect.destroy();
-  }
-
-  private releaseAfter(effect: Phaser.GameObjects.GameObject, delay: number): void {
-    const timer = this.scene.time.delayedCall(delay, () => {
-      this.timers.delete(timer);
-      this.release(effect);
-    });
-    this.timers.add(timer);
-  }
-
-  private ensureTextures(): void {
-    if (this.texturesReady) return;
-    this.texturesReady = true;
-
-    // Kleine weiche Kreisscheibe für Partikel-Funken
-    ensureCanvasTexture(this.scene.textures, TEX_SPAWN_SPARK, 12, 12, (ctx) => {
-      const cx = 6, cy = 6;
-      const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 6);
-      grd.addColorStop(0,   'rgba(255,255,255,1)');
-      grd.addColorStop(0.4, 'rgba(255,255,255,0.6)');
-      grd.addColorStop(1,   'rgba(255,255,255,0)');
-      ctx.fillStyle = grd;
-      ctx.fillRect(0, 0, 12, 12);
-    });
-
-    // Großes Radialgradient-Blob für den zentralen Lichtflash
-    fillRadialGradientTexture(this.scene.textures, TEX_SPAWN_GLOW, 64, [
-      [0,   'rgba(255,255,255,1)'],
-      [0.25,'rgba(255,255,255,0.7)'],
-      [0.6, 'rgba(255,255,255,0.2)'],
-      [1,   'rgba(255,255,255,0)'],
-    ]);
+    SpawnEffectStage.peek(this.scene)?.release(this);
   }
 
   /**
    * Spielt den vollständigen Spawn-Effekt an Position (x, y) ab.
-   * colorHex bestimmt die Tint-Farbe aller Elemente (Spielerfarbe).
+   * colorHex bestimmt die Farbe aller Elemente (Spielerfarbe).
    */
   play(x: number, y: number, colorHex: number): void {
-    this.ensureTextures();
-
     this.lighting?.pulse('teleportFlash', x, y, {
       color: mixColors(colorHex, 0xffffff, 0.6),
     });
-
-    this.playCoreBurst(x, y, colorHex);
-    this.playRings(x, y, colorHex);
-    this.playBeam(x, y, colorHex);
-    this.playParticleBurst(x, y, colorHex);
-    this.playSecondaryRipple(x, y, colorHex);
-    this.playAfterglow(x, y, colorHex, 1);
+    this.submit(x, y, colorHex, SPAWN_VARIANT.player);
+    this.pulseAfterglow(x, y, colorHex, 1);
   }
 
   /**
-   * Gegner-Variante des Spawns. Bewusst zurückhaltender als der Spielerspawn: kein Lichtstrahl,
-   * ein einzelner Ring, weniger Funken. Bei bis zu einem Gegner pro Sekunde muss der Effekt die
-   * Stelle markieren, ohne das Gefecht zu überstrahlen – der Spielerspawn bleibt das lautere
+   * Gegner-Variante des Spawns. Bewusst zurückhaltender als der Spielerspawn: keine Lichtsäule,
+   * kein kreisendes Restlicht, kleiner und mit weniger Partikeln. Bei bis zu einem Gegner pro Sekunde muss der Effekt
+   * die Stelle markieren, ohne das Gefecht zu überstrahlen – der Spielerspawn bleibt das lautere
    * Ereignis, weil er selten ist und die eigene Aufmerksamkeit verdient.
    */
   playEnemy(x: number, y: number, colorHex: number): void {
-    this.ensureTextures();
-
     this.lighting?.pulse('teleportFlash', x, y, {
       color: mixColors(colorHex, 0xffffff, 0.35),
       radiusPx: 105,
       intensity: 0.5,
     });
-
-    this.playEnemyCoreBurst(x, y, colorHex);
-    this.spawnRing(x, y, colorHex, 0, 300, 3, 26);
-    this.spawnRing(x, y, colorHex, 90, 420, 1.5, 40);
-    this.playEnemyParticleBurst(x, y, colorHex);
-    this.playAfterglow(x, y, colorHex, 0.62);
+    this.submit(x, y, colorHex, SPAWN_VARIANT.enemy);
+    this.pulseAfterglow(x, y, colorHex, 0.62);
   }
 
-  // ─── Nachleuchten am Spawnpunkt ─────────────────────────────────────────────
-
-  /**
-   * Weicher Schein, der nach dem Blitz eine knappe Sekunde am Spawnpunkt stehen bleibt.
-   * `scale` skaliert Größe und Deckkraft gemeinsam, damit Gegner denselben Effekt eine Nummer
-   * kleiner bekommen, ohne dafür eigene Werte zu pflegen.
-   */
-  private playAfterglow(x: number, y: number, colorHex: number, scale: number): void {
-    const glow = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
-    this.track(glow);
-    glow.setDisplaySize(196 * scale, 196 * scale);
-    glow.setDepth(DEPTH_FX - 0.7);
-    makeAdditive(glow);
-    glow.setTint(colorHex);
-    glow.setAlpha(0);
-
-    // Kurz aufblenden, dann über den Rest der Sekunde auslaufen: ein sofort startendes
-    // Abklingen würde im Blitz untergehen und wäre erst sichtbar, wenn es fast weg ist.
-    this.scene.tweens.add({
-      targets:  glow,
-      alpha:    emissiveAlpha(0.5 * scale),
-      duration: 140,
-      ease:     'Quad.easeOut',
-      onComplete: () => {
-        if (!this.effects.has(glow)) return;
-        this.scene.tweens.add({
-          targets:  glow,
-          alpha:    0,
-          scaleX:   glow.scaleX * 1.25,
-          scaleY:   glow.scaleY * 1.25,
-          duration: AFTERGLOW_DURATION_MS - 140,
-          ease:     'Sine.easeIn',
-          onComplete: () => this.release(glow),
-        });
-      },
-    });
-
+  /** Das Nachleuchten als Licht: bei Nacht hellt es die Umgebung des Spawnpunkts mit auf. */
+  private pulseAfterglow(x: number, y: number, colorHex: number, scale: number): void {
     this.lighting?.pulse('spawnAfterglow', x, y, {
       color:      mixColors(colorHex, 0xffffff, 0.45),
       radiusPx:   250 * scale,
@@ -163,209 +162,9 @@ export class SpawnEffectRenderer {
     });
   }
 
-  private playEnemyCoreBurst(x: number, y: number, colorHex: number): void {
-    const core = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
-    this.track(core);
-    core.setDisplaySize(18, 18);
-    core.setDepth(DEPTH_FX + 1);
-    makeAdditive(core);
-    core.setTint(mixColors(colorHex, 0xffffff, 0.5));
-    core.setAlpha(emissiveAlpha(0.9));
-
-    this.scene.tweens.add({
-      targets:  core,
-      scaleX:   3.4,
-      scaleY:   3.4,
-      alpha:    0,
-      duration: 300,
-      ease:     'Expo.easeOut',
-      onComplete: () => this.release(core),
-    });
+  private submit(x: number, y: number, colorHex: number, variant: number): void {
+    const share = getGraphicsQualityProfile(this.scene).level === 'low' ? 0.5 : 1;
+    const { instances, lifeS } = buildSpawnInstances(x, y, colorHex, variant, share);
+    SpawnEffectStage.for(this.scene).add(this, this.scene.time.now, lifeS * 1000, instances);
   }
-
-  private playEnemyParticleBurst(x: number, y: number, colorHex: number): void {
-    const emitter = this.scene.add.particles(x, y, TEX_SPAWN_SPARK, {
-      quantity:  12,
-      lifespan:  { min: 260, max: 460 },
-      speedX:    { min: -110, max: 110 },
-      speedY:    { min: -110, max: 110 },
-      scale:     { start: 0.6, end: 0 },
-      alpha:     { start: 0.9, end: 0 },
-      tint:      [colorHex, brightenColor(colorHex, 60)],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting:  false,
-      gravityY:  40,
-    });
-    this.track(emitter);
-    registerParticleEmitter(this.scene, 'spawnEffect', emitter);
-    emitter.setDepth(DEPTH_FX + 0.5);
-    emitter.explode(12);
-    recordParticleSpawn(this.scene, 'spawnEffect', 12);
-
-    this.releaseAfter(emitter, 600);
-  }
-
-  // ─── Zentraler Licht-Burst ──────────────────────────────────────────────────
-
-  private playCoreBurst(x: number, y: number, colorHex: number): void {
-    // Weißer Kern
-    const core = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
-    this.track(core);
-    core.setDisplaySize(20, 20);
-    core.setDepth(DEPTH_FX + 1.5);
-    makeAdditive(core);
-    core.setTint(0xffffff);
-
-    this.scene.tweens.add({
-      targets:  core,
-      scaleX:   7,
-      scaleY:   7,
-      alpha:    0,
-      duration: 380,
-      ease:     'Expo.easeOut',
-      onComplete: () => this.release(core),
-    });
-
-    // Farbiger Halo (leicht verzögert)
-    const halo = this.scene.add.image(x, y, TEX_SPAWN_GLOW);
-    this.track(halo);
-    halo.setDisplaySize(24, 24);
-    halo.setDepth(DEPTH_FX + 1);
-    halo.setBlendMode(Phaser.BlendModes.ADD);
-    halo.setTint(colorHex);
-    halo.setAlpha(emissiveAlpha(0.85));
-
-    this.scene.tweens.add({
-      targets:  halo,
-      scaleX:   5,
-      scaleY:   5,
-      alpha:    0,
-      delay:    40,
-      duration: 500,
-      ease:     'Cubic.easeOut',
-      onComplete: () => this.release(halo),
-    });
-  }
-
-  // ─── Expandierende Ringe ────────────────────────────────────────────────────
-
-  private playRings(x: number, y: number, colorHex: number): void {
-    // Primärring – Spielerfarbe, breit
-    this.spawnRing(x, y, colorHex, 0,   400, 6, 44);
-    // Sekundärring – weiß, schmal, leicht versetzt
-    this.spawnRing(x, y, 0xffffff,  60,  320, 3, 32);
-    // Tertiärring – Spielerfarbe, sehr dünn
-    this.spawnRing(x, y, colorHex, 120, 480, 2, 58);
-  }
-
-  private spawnRing(
-    x:            number,
-    y:            number,
-    color:        number,
-    delay:        number,
-    duration:     number,
-    lineWidth:    number,
-    targetRadius: number,
-  ): void {
-    const startRadius = 5;
-    const ring = this.scene.add.circle(x, y, startRadius, 0, 0);
-    this.track(ring);
-    registerGraphicsObject(this.scene, 'spawnRings', ring);
-    ring.setDepth(DEPTH_FX);
-    ring.isFilled     = false;
-    ring.isStroked    = true;
-    ring.strokeColor  = color;
-    ring.lineWidth    = lineWidth;
-    ring.strokeAlpha  = 0.9;
-    makeAdditive(ring);
-
-    this.scene.tweens.add({
-      targets:  ring,
-      scaleX:   targetRadius / startRadius,
-      scaleY:   targetRadius / startRadius,
-      alpha:    0,
-      delay,
-      duration,
-      ease:     'Cubic.easeOut',
-      onComplete: () => this.release(ring),
-    });
-  }
-
-  // ─── Vertikaler Lichtstrahl ─────────────────────────────────────────────────
-
-  private playBeam(x: number, y: number, colorHex: number): void {
-    const beam = this.scene.add.rectangle(x, y - 56, 10, 112, colorHex, 0.75);
-    this.track(beam);
-    registerGraphicsObject(this.scene, 'spawnRings', beam);
-    beam.setDepth(DEPTH_FX - 0.5);
-    makeAdditive(beam);
-
-    this.scene.tweens.add({
-      targets:  beam,
-      scaleX:   0.05,
-      alpha:    0,
-      y:        y - 140,
-      duration: 420,
-      ease:     'Quad.easeOut',
-      onComplete: () => this.release(beam),
-    });
-
-    // Weicher weißer Überschuss am Strahl
-    const beamGlow = this.scene.add.rectangle(x, y - 56, 28, 112, 0xffffff, 0.25);
-    this.track(beamGlow);
-    registerGraphicsObject(this.scene, 'spawnRings', beamGlow);
-    beamGlow.setDepth(DEPTH_FX - 0.6);
-    makeAdditive(beamGlow);
-
-    this.scene.tweens.add({
-      targets:  beamGlow,
-      scaleX:   0.05,
-      alpha:    0,
-      y:        y - 140,
-      duration: 420,
-      ease:     'Quad.easeOut',
-      onComplete: () => this.release(beamGlow),
-    });
-  }
-
-  // ─── Partikel-Burst ─────────────────────────────────────────────────────────
-
-  private playParticleBurst(x: number, y: number, colorHex: number): void {
-    const brightened = brightenColor(colorHex, 80);
-
-    const emitter = this.scene.add.particles(x, y, TEX_SPAWN_SPARK, {
-      quantity:  28,
-      lifespan:  { min: 350, max: 650 },
-      speedX:    { min: -180, max: 180 },
-      speedY:    { min: -180, max: 180 },
-      scale:     { start: 0.9, end: 0 },
-      alpha:     { start: 1, end: 0 },
-      tint:      [colorHex, brightened, 0xffffff],
-      blendMode: Phaser.BlendModes.ADD,
-      emitting:  false,
-      gravityY:  60,
-    });
-    this.track(emitter);
-    registerParticleEmitter(this.scene, 'spawnEffect', emitter);
-    emitter.setDepth(DEPTH_FX + 0.5);
-    emitter.explode(28);
-    recordParticleSpawn(this.scene, 'spawnEffect', 28);
-
-    this.releaseAfter(emitter, 800);
-  }
-
-  // ─── Nachhall-Wellring (langsam) ────────────────────────────────────────────
-
-  private playSecondaryRipple(x: number, y: number, colorHex: number): void {
-    this.spawnRing(x, y, colorHex, 180, 680, 1.5, 72);
-  }
-}
-
-// ─── Hilfsfunktion ──────────────────────────────────────────────────────────
-
-function brightenColor(color: number, amount: number): number {
-  const r = Math.min(255, ((color >> 16) & 0xff) + amount);
-  const g = Math.min(255, ((color >> 8)  & 0xff) + amount);
-  const b = Math.min(255, (color & 0xff)          + amount);
-  return (r << 16) | (g << 8) | b;
 }
