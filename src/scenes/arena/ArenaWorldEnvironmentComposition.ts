@@ -13,6 +13,7 @@ import { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
 import { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
 import { WorldBridgeRuntime, type WorldBridgeHostPort } from '../../world/WorldBridgeRuntime';
 import { BridgeRenderer } from '../../effects/bridge/BridgeRenderer';
+import { stampBridgeTerrainColor } from '../../effects/bridge/BridgeTerrainColor';
 import { nearestBridgeDeckPoint } from '../../arena/BridgeGeometry';
 import { resolveBridgeChargeDenial } from '../../systems/BridgeDemolitionRules';
 import { BRIDGE_COLLAPSE_KILLER_ID, BRIDGE_COLLAPSE_SOURCE_ID, BRIDGE_DEMOLITION_RULES } from '../../config/bridges';
@@ -240,10 +241,16 @@ export function composeWorldBridges(
     const renderer = new BridgeRenderer(scene, bridges, world.metrics, {
       onFuseCue: (x, y) => ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y, undefined, 0.7),
     });
+    let stampedSnapshot: unknown = null;
     worldRuntime.bind({
       update: () => {
-        if (renderer.sync((id) => runtime.getState(id), bridge.getSynchronizedNow())) {
-          renderers.shadow.setCollapsedBridges(runtime.getCollapsedIds());
+        const collapseChanged = renderer.sync((id) => runtime.getState(id), bridge.getSynchronizedNow());
+        if (collapseChanged) renderers.shadow.setCollapsedBridges(runtime.getCollapsedIds());
+        // The terrain colour snapshot arrives asynchronously after the World and bakes authored water.
+        const snapshot = renderers.movement.getTerrainColorSnapshot();
+        if (snapshot && (collapseChanged || snapshot !== stampedSnapshot)) {
+          stampBridgeTerrainColor(snapshot, bridges, world.metrics, runtime.getCollapsedIds());
+          stampedSnapshot = snapshot;
         }
       },
       destroy: () => {

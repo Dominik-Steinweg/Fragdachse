@@ -123,3 +123,20 @@ describe('bridge collision geometry', () => {
     expect(collapsed.snapshot.obstacles.some((obstacle) => obstacle.id.startsWith('water:'))).toBe(true);
   });
 });
+
+describe('bridge terrain colour', () => {
+  it('reads standing decks as wood and collapsed decks as water in the shared snapshot', async () => {
+    const { TerrainColorSnapshot } = await import('../src/arena/TerrainColorSnapshot');
+    const { stampBridgeTerrainColor, BRIDGE_DECK_GROUND_COLOR } = await import('../src/effects/bridge/BridgeTerrainColor');
+    const { WATER_COLOR } = await import('../src/arena/WaterSurfaceModel');
+    const width = 40 * CELL_SIZE / 4, height = 30 * CELL_SIZE / 4;
+    const snapshot = new TerrainColorSnapshot(width, height, 0, 0, new Uint8Array(width * height * 3));
+    const origin = { offsetX: 0, offsetY: 0 };
+    const deck = getBridgeDeckWorldRect(BRIDGE, origin);
+    stampBridgeTerrainColor(snapshot, [BRIDGE], origin, new Set());
+    expect(snapshot.sample(deck.x + 5, deck.y + 5)).toBe(BRIDGE_DECK_GROUND_COLOR);
+    expect(snapshot.sample(deck.x - 5, deck.y + 5)).toBe(0);
+    stampBridgeTerrainColor(snapshot, [BRIDGE], origin, new Set([BRIDGE.id]));
+    expect(snapshot.sample(deck.x + deck.width - 2, deck.y + deck.height - 2)).toBe(WATER_COLOR);
+  });
+});
