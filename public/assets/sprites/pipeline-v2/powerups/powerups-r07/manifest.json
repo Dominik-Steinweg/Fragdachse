@@ -1,0 +1,478 @@
+{
+  "schema": "fd-layered-powerups",
+  "version": 1,
+  "status": "rendered-awaiting-review",
+  "revision": "powerups-r07",
+  "sourceSize": 256,
+  "displaySize": 22,
+  "countdownDisplaySize": 16,
+  "orthoScale": 2.2,
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "axes": [
+    "right",
+    "south"
+  ],
+  "symbolFinish": "tinted-edge-contact-v1",
+  "pulseScales": [
+    0.92,
+    1,
+    1.08
+  ],
+  "animation": "Scale only symbol about shared pivot; keep base at fitted size. No per-layer alpha-bounds fit.",
+  "base": {
+    "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/base-1f1bd14048cbaa0a425cd47b53c8184847dcc1003b120b16ae2f7aef5e6c864f.png",
+    "width": 256,
+    "height": 256,
+    "sha256": "1f1bd14048cbaa0a425cd47b53c8184847dcc1003b120b16ae2f7aef5e6c864f",
+    "downloadBytes": 49949,
+    "gpuBytes": 262144,
+    "encoding": "srgb8-straight-rgba",
+    "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/base-1f1bd14048cbaa0a425cd47b53c8184847dcc1003b120b16ae2f7aef5e6c864f.png?v=1f1bd14048cbaa0a425cd47b53c8184847dcc1003b120b16ae2f7aef5e6c864f"
+  },
+  "token": {
+    "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/token-75cf78f93154a4fbccf127867b1a0002995cedb4c065ca0e3c2a5a4a3d177503.png",
+    "width": 256,
+    "height": 256,
+    "sha256": "75cf78f93154a4fbccf127867b1a0002995cedb4c065ca0e3c2a5a4a3d177503",
+    "downloadBytes": 62637,
+    "gpuBytes": 262144,
+    "encoding": "srgb8-straight-rgba",
+    "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/token-75cf78f93154a4fbccf127867b1a0002995cedb4c065ca0e3c2a5a4a3d177503.png?v=75cf78f93154a4fbccf127867b1a0002995cedb4c065ca0e3c2a5a4a3d177503"
+  },
+  "symbols": [
+    {
+      "id": "hp",
+      "gameId": "HEALTH_PACK",
+      "spriteKey": "powerup_hp",
+      "previousComposite": "public/assets/sprites/16x16HP.png",
+      "rawSymbolSha256": "967386b84c1cd4a6cd0997a968c33255cab3d639c76f0608f08067caa490c873",
+      "image": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/hp-3bb51c1c7b3666117744b32b9b7726d3ca5d5b1bb81c2e19721a1dd8ed8b0560.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "3bb51c1c7b3666117744b32b9b7726d3ca5d5b1bb81c2e19721a1dd8ed8b0560",
+        "downloadBytes": 42322,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/hp-3bb51c1c7b3666117744b32b9b7726d3ca5d5b1bb81c2e19721a1dd8ed8b0560.png?v=3bb51c1c7b3666117744b32b9b7726d3ca5d5b1bb81c2e19721a1dd8ed8b0560"
+      },
+      "composite": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/hp-b6e4ad09a0d72398b9fdd9dcf5874dc65cd684b9320ad8af2182960b36a58507.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "b6e4ad09a0d72398b9fdd9dcf5874dc65cd684b9320ad8af2182960b36a58507",
+        "downloadBytes": 78502,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/hp-b6e4ad09a0d72398b9fdd9dcf5874dc65cd684b9320ad8af2182960b36a58507.png?v=b6e4ad09a0d72398b9fdd9dcf5874dc65cd684b9320ad8af2182960b36a58507"
+      },
+      "loop": {
+        "frames": 16,
+        "fps": 12,
+        "frameSize": 64,
+        "layout": {
+          "frameWidth": 64,
+          "frameHeight": 64,
+          "margin": 2,
+          "spacing": 4,
+          "columns": 8,
+          "rows": 2,
+          "frameCount": 16,
+          "width": 544,
+          "height": 136
+        },
+        "sheet": {
+          "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/hp-loop-4e841ea75a46e734a0c636fbb9282afe5036610c6fbacc2a82502e2badd4ced2.png",
+          "width": 544,
+          "height": 136,
+          "sha256": "4e841ea75a46e734a0c636fbb9282afe5036610c6fbacc2a82502e2badd4ced2",
+          "downloadBytes": 19057,
+          "gpuBytes": 295936,
+          "encoding": "srgb8-straight-rgba",
+          "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/hp-loop-4e841ea75a46e734a0c636fbb9282afe5036610c6fbacc2a82502e2badd4ced2.png?v=4e841ea75a46e734a0c636fbb9282afe5036610c6fbacc2a82502e2badd4ced2"
+        }
+      }
+    },
+    {
+      "id": "armor",
+      "gameId": "ARMOR",
+      "spriteKey": "powerup_arm",
+      "previousComposite": "public/assets/sprites/16x16Armor.png",
+      "rawSymbolSha256": "2df9d8e94c34442cc76d14785e53e2daef4cd25f54158ad0194e39918414d8a9",
+      "image": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/armor-4c1a6471781c94be4a8a1f08d7109b5e62d52b581f218d3d419aee2c4ae381de.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "4c1a6471781c94be4a8a1f08d7109b5e62d52b581f218d3d419aee2c4ae381de",
+        "downloadBytes": 50307,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/armor-4c1a6471781c94be4a8a1f08d7109b5e62d52b581f218d3d419aee2c4ae381de.png?v=4c1a6471781c94be4a8a1f08d7109b5e62d52b581f218d3d419aee2c4ae381de"
+      },
+      "composite": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/armor-28a86abf9fdf6d86882e612520c624b048f120546e9e808a3bc1e14474c75309.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "28a86abf9fdf6d86882e612520c624b048f120546e9e808a3bc1e14474c75309",
+        "downloadBytes": 85267,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/armor-28a86abf9fdf6d86882e612520c624b048f120546e9e808a3bc1e14474c75309.png?v=28a86abf9fdf6d86882e612520c624b048f120546e9e808a3bc1e14474c75309"
+      },
+      "loop": {
+        "frames": 24,
+        "fps": 12,
+        "frameSize": 64,
+        "layout": {
+          "frameWidth": 64,
+          "frameHeight": 64,
+          "margin": 2,
+          "spacing": 4,
+          "columns": 8,
+          "rows": 3,
+          "frameCount": 24,
+          "width": 544,
+          "height": 204
+        },
+        "sheet": {
+          "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/armor-loop-961c63ed60a9827287ef2c4a9e957f1ea5a66cbe9e770e56ee70123c586ff485.png",
+          "width": 544,
+          "height": 204,
+          "sha256": "961c63ed60a9827287ef2c4a9e957f1ea5a66cbe9e770e56ee70123c586ff485",
+          "downloadBytes": 28593,
+          "gpuBytes": 443904,
+          "encoding": "srgb8-straight-rgba",
+          "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/armor-loop-961c63ed60a9827287ef2c4a9e957f1ea5a66cbe9e770e56ee70123c586ff485.png?v=961c63ed60a9827287ef2c4a9e957f1ea5a66cbe9e770e56ee70123c586ff485"
+        }
+      }
+    },
+    {
+      "id": "rage",
+      "gameId": "RAGE",
+      "spriteKey": "powerup_rage",
+      "previousComposite": "public/assets/sprites/16x16Rage.png",
+      "rawSymbolSha256": "a223fcbef50365303c51499d609ce5ef09ce2fbe296fbfffed08aae6887df352",
+      "image": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/rage-c696a568d28ffb176e07c2c95b51034cab776d4f1b23d7333787fc3df8730f18.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "c696a568d28ffb176e07c2c95b51034cab776d4f1b23d7333787fc3df8730f18",
+        "downloadBytes": 38388,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/rage-c696a568d28ffb176e07c2c95b51034cab776d4f1b23d7333787fc3df8730f18.png?v=c696a568d28ffb176e07c2c95b51034cab776d4f1b23d7333787fc3df8730f18"
+      },
+      "composite": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/rage-da74c1c9d81939c9fd154af236089b4c2d43190c22c1bb173f79edf971f5e0b7.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "da74c1c9d81939c9fd154af236089b4c2d43190c22c1bb173f79edf971f5e0b7",
+        "downloadBytes": 77418,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/rage-da74c1c9d81939c9fd154af236089b4c2d43190c22c1bb173f79edf971f5e0b7.png?v=da74c1c9d81939c9fd154af236089b4c2d43190c22c1bb173f79edf971f5e0b7"
+      },
+      "loop": {
+        "frames": 12,
+        "fps": 12,
+        "frameSize": 64,
+        "layout": {
+          "frameWidth": 64,
+          "frameHeight": 64,
+          "margin": 2,
+          "spacing": 4,
+          "columns": 8,
+          "rows": 2,
+          "frameCount": 12,
+          "width": 544,
+          "height": 136
+        },
+        "sheet": {
+          "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/rage-loop-27e41e16ee52f5b1c22a6497135ca8ed172ff2d0cea670af44f5a56f61905c5b.png",
+          "width": 544,
+          "height": 136,
+          "sha256": "27e41e16ee52f5b1c22a6497135ca8ed172ff2d0cea670af44f5a56f61905c5b",
+          "downloadBytes": 41707,
+          "gpuBytes": 295936,
+          "encoding": "srgb8-straight-rgba",
+          "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/rage-loop-27e41e16ee52f5b1c22a6497135ca8ed172ff2d0cea670af44f5a56f61905c5b.png?v=27e41e16ee52f5b1c22a6497135ca8ed172ff2d0cea670af44f5a56f61905c5b"
+        }
+      }
+    },
+    {
+      "id": "adrenaline",
+      "gameId": "ADRENALINE",
+      "spriteKey": "powerup_adr",
+      "previousComposite": "public/assets/sprites/16x16adrenalin.png",
+      "rawSymbolSha256": "95e2daf6861adb7f0134789f396cb254b47d4970ca449c31e5950e46db8669fe",
+      "image": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/adrenaline-d0be23cad91ece22909b00edfbc45cdd3c5acf9d1bf7a26de555bc4e1b529377.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "d0be23cad91ece22909b00edfbc45cdd3c5acf9d1bf7a26de555bc4e1b529377",
+        "downloadBytes": 24600,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/adrenaline-d0be23cad91ece22909b00edfbc45cdd3c5acf9d1bf7a26de555bc4e1b529377.png?v=d0be23cad91ece22909b00edfbc45cdd3c5acf9d1bf7a26de555bc4e1b529377"
+      },
+      "composite": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/adrenaline-a3273dbba87f24247869aeef8a88f1cd45a52648f161e54df60c59ff456f5011.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "a3273dbba87f24247869aeef8a88f1cd45a52648f161e54df60c59ff456f5011",
+        "downloadBytes": 67138,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/adrenaline-a3273dbba87f24247869aeef8a88f1cd45a52648f161e54df60c59ff456f5011.png?v=a3273dbba87f24247869aeef8a88f1cd45a52648f161e54df60c59ff456f5011"
+      },
+      "loop": {
+        "frames": 32,
+        "fps": 14,
+        "frameSize": 64,
+        "layout": {
+          "frameWidth": 64,
+          "frameHeight": 64,
+          "margin": 2,
+          "spacing": 4,
+          "columns": 8,
+          "rows": 4,
+          "frameCount": 32,
+          "width": 544,
+          "height": 272
+        },
+        "sheet": {
+          "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/adrenaline-loop-bb8a3d56f9497252cd9d7cedd63299a10ce37848441b2d8f9669387ae56e3936.png",
+          "width": 544,
+          "height": 272,
+          "sha256": "bb8a3d56f9497252cd9d7cedd63299a10ce37848441b2d8f9669387ae56e3936",
+          "downloadBytes": 38119,
+          "gpuBytes": 591872,
+          "encoding": "srgb8-straight-rgba",
+          "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/adrenaline-loop-bb8a3d56f9497252cd9d7cedd63299a10ce37848441b2d8f9669387ae56e3936.png?v=bb8a3d56f9497252cd9d7cedd63299a10ce37848441b2d8f9669387ae56e3936"
+        }
+      }
+    },
+    {
+      "id": "bfg",
+      "gameId": "BFG",
+      "spriteKey": "powerup_bfg",
+      "previousComposite": "public/assets/sprites/16x16bfg.png",
+      "rawSymbolSha256": "281f2d1901b15c3e6dc3173ba7578d62d3fad3632b5f0b96a261b2ac0b95f3b0",
+      "image": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/bfg-9834bb8f4cf44c7d5c6952a2be159ef9765bb48b584ae14240457719b70c50eb.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "9834bb8f4cf44c7d5c6952a2be159ef9765bb48b584ae14240457719b70c50eb",
+        "downloadBytes": 82037,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/bfg-9834bb8f4cf44c7d5c6952a2be159ef9765bb48b584ae14240457719b70c50eb.png?v=9834bb8f4cf44c7d5c6952a2be159ef9765bb48b584ae14240457719b70c50eb"
+      },
+      "composite": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/bfg-7c508a40133a056aae0b699c5953a1b06439071e31282bcd0db9b790d50208ed.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "7c508a40133a056aae0b699c5953a1b06439071e31282bcd0db9b790d50208ed",
+        "downloadBytes": 110520,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/bfg-7c508a40133a056aae0b699c5953a1b06439071e31282bcd0db9b790d50208ed.png?v=7c508a40133a056aae0b699c5953a1b06439071e31282bcd0db9b790d50208ed"
+      },
+      "loop": {
+        "frames": 24,
+        "fps": 12,
+        "frameSize": 64,
+        "layout": {
+          "frameWidth": 64,
+          "frameHeight": 64,
+          "margin": 2,
+          "spacing": 4,
+          "columns": 8,
+          "rows": 3,
+          "frameCount": 24,
+          "width": 544,
+          "height": 204
+        },
+        "sheet": {
+          "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/bfg-loop-af31ef7fc37200beec57b7db6d7f98a8881e1695e46d2c3deef02ca367a7575b.png",
+          "width": 544,
+          "height": 204,
+          "sha256": "af31ef7fc37200beec57b7db6d7f98a8881e1695e46d2c3deef02ca367a7575b",
+          "downloadBytes": 117487,
+          "gpuBytes": 443904,
+          "encoding": "srgb8-straight-rgba",
+          "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/bfg-loop-af31ef7fc37200beec57b7db6d7f98a8881e1695e46d2c3deef02ca367a7575b.png?v=af31ef7fc37200beec57b7db6d7f98a8881e1695e46d2c3deef02ca367a7575b"
+        }
+      }
+    },
+    {
+      "id": "damage-amp",
+      "gameId": "DOUBLE_DAMAGE",
+      "spriteKey": "powerup_dam",
+      "previousComposite": "public/assets/sprites/16x16damageamp.png",
+      "rawSymbolSha256": "49b74bfc6e0aedc2b3026fa6cd99334001b293b7086c87c4bd69a84904641f53",
+      "image": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/damage-amp-33bbf6b2b67a04557496a13df604835b3a7949c60647f1797a24f94480c84f10.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "33bbf6b2b67a04557496a13df604835b3a7949c60647f1797a24f94480c84f10",
+        "downloadBytes": 70170,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/damage-amp-33bbf6b2b67a04557496a13df604835b3a7949c60647f1797a24f94480c84f10.png?v=33bbf6b2b67a04557496a13df604835b3a7949c60647f1797a24f94480c84f10"
+      },
+      "composite": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/damage-amp-7efb831d0480173cbf299c769dc6a82ffefc72b578b68e6f9ef31066940202f8.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "7efb831d0480173cbf299c769dc6a82ffefc72b578b68e6f9ef31066940202f8",
+        "downloadBytes": 97812,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/damage-amp-7efb831d0480173cbf299c769dc6a82ffefc72b578b68e6f9ef31066940202f8.png?v=7efb831d0480173cbf299c769dc6a82ffefc72b578b68e6f9ef31066940202f8"
+      },
+      "loop": {
+        "frames": 16,
+        "fps": 12,
+        "frameSize": 64,
+        "layout": {
+          "frameWidth": 64,
+          "frameHeight": 64,
+          "margin": 2,
+          "spacing": 4,
+          "columns": 8,
+          "rows": 2,
+          "frameCount": 16,
+          "width": 544,
+          "height": 136
+        },
+        "sheet": {
+          "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/damage-amp-loop-09b7ab6c3a731d967df04ff0452e9218457e1a5d22504dac23b885fd786346ba.png",
+          "width": 544,
+          "height": 136,
+          "sha256": "09b7ab6c3a731d967df04ff0452e9218457e1a5d22504dac23b885fd786346ba",
+          "downloadBytes": 68257,
+          "gpuBytes": 295936,
+          "encoding": "srgb8-straight-rgba",
+          "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/damage-amp-loop-09b7ab6c3a731d967df04ff0452e9218457e1a5d22504dac23b885fd786346ba.png?v=09b7ab6c3a731d967df04ff0452e9218457e1a5d22504dac23b885fd786346ba"
+        }
+      }
+    },
+    {
+      "id": "holy-grenade",
+      "gameId": "HOLY_HAND_GRENADE",
+      "spriteKey": "powerup_hhg",
+      "previousComposite": "public/assets/sprites/16x16holy_grenade.png",
+      "rawSymbolSha256": "f912ff24b780d5f969ca8b85fe2b4b08315f29bdfbbb1a652e958827ba260356",
+      "image": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/holy-grenade-9dc90440d91a1d67247d1a0b48ed485ea3ea6529dc08105666aa2e3da41a2e10.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "9dc90440d91a1d67247d1a0b48ed485ea3ea6529dc08105666aa2e3da41a2e10",
+        "downloadBytes": 48175,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/holy-grenade-9dc90440d91a1d67247d1a0b48ed485ea3ea6529dc08105666aa2e3da41a2e10.png?v=9dc90440d91a1d67247d1a0b48ed485ea3ea6529dc08105666aa2e3da41a2e10"
+      },
+      "composite": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/holy-grenade-384ac0bcc876a979cd607b7e5b11422a5144f006641ba358d27c8f6f14e19320.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "384ac0bcc876a979cd607b7e5b11422a5144f006641ba358d27c8f6f14e19320",
+        "downloadBytes": 85605,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/holy-grenade-384ac0bcc876a979cd607b7e5b11422a5144f006641ba358d27c8f6f14e19320.png?v=384ac0bcc876a979cd607b7e5b11422a5144f006641ba358d27c8f6f14e19320"
+      },
+      "loop": {
+        "frames": 24,
+        "fps": 12,
+        "frameSize": 64,
+        "layout": {
+          "frameWidth": 64,
+          "frameHeight": 64,
+          "margin": 2,
+          "spacing": 4,
+          "columns": 8,
+          "rows": 3,
+          "frameCount": 24,
+          "width": 544,
+          "height": 204
+        },
+        "sheet": {
+          "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/holy-grenade-loop-323f41aae1a8e959007f8efe3b1985fd4a4bdc7ba3d4cf2d8758a8380c31bff9.png",
+          "width": 544,
+          "height": 204,
+          "sha256": "323f41aae1a8e959007f8efe3b1985fd4a4bdc7ba3d4cf2d8758a8380c31bff9",
+          "downloadBytes": 31343,
+          "gpuBytes": 443904,
+          "encoding": "srgb8-straight-rgba",
+          "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/holy-grenade-loop-323f41aae1a8e959007f8efe3b1985fd4a4bdc7ba3d4cf2d8758a8380c31bff9.png?v=323f41aae1a8e959007f8efe3b1985fd4a4bdc7ba3d4cf2d8758a8380c31bff9"
+        }
+      }
+    },
+    {
+      "id": "nuke",
+      "gameId": "NUKE",
+      "spriteKey": "powerup_nuk",
+      "previousComposite": "public/assets/sprites/16x16nuke.png",
+      "rawSymbolSha256": "9ab3432bf0c1cdf3478864a08786ed2dc1de35858d34b64fedb086b67adf2a77",
+      "image": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/nuke-8b4ced085dbacdd7513e7a34e85754e0f70eaa0eac934eebb94d2581a3314545.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "8b4ced085dbacdd7513e7a34e85754e0f70eaa0eac934eebb94d2581a3314545",
+        "downloadBytes": 70707,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/nuke-8b4ced085dbacdd7513e7a34e85754e0f70eaa0eac934eebb94d2581a3314545.png?v=8b4ced085dbacdd7513e7a34e85754e0f70eaa0eac934eebb94d2581a3314545"
+      },
+      "composite": {
+        "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/nuke-3ff75cad754d504a9a10ca881cf3602fb1076c91c2eaeb6198cef9f6d379b96f.png",
+        "width": 256,
+        "height": 256,
+        "sha256": "3ff75cad754d504a9a10ca881cf3602fb1076c91c2eaeb6198cef9f6d379b96f",
+        "downloadBytes": 98114,
+        "gpuBytes": 262144,
+        "encoding": "srgb8-straight-rgba",
+        "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/nuke-3ff75cad754d504a9a10ca881cf3602fb1076c91c2eaeb6198cef9f6d379b96f.png?v=3ff75cad754d504a9a10ca881cf3602fb1076c91c2eaeb6198cef9f6d379b96f"
+      },
+      "loop": {
+        "frames": 24,
+        "fps": 12,
+        "frameSize": 64,
+        "layout": {
+          "frameWidth": 64,
+          "frameHeight": 64,
+          "margin": 2,
+          "spacing": 4,
+          "columns": 8,
+          "rows": 3,
+          "frameCount": 24,
+          "width": 544,
+          "height": 204
+        },
+        "sheet": {
+          "file": "assets/sprites/pipeline-v2/powerups/powerups-r07/nuke-loop-714c3058dad24e1760fc12dc33d515c6a4fedafd33c31f9172e55dcc7b8fccad.png",
+          "width": 544,
+          "height": 204,
+          "sha256": "714c3058dad24e1760fc12dc33d515c6a4fedafd33c31f9172e55dcc7b8fccad",
+          "downloadBytes": 82060,
+          "gpuBytes": 443904,
+          "encoding": "srgb8-straight-rgba",
+          "url": "assets/sprites/pipeline-v2/powerups/powerups-r07/nuke-loop-714c3058dad24e1760fc12dc33d515c6a4fedafd33c31f9172e55dcc7b8fccad.png?v=714c3058dad24e1760fc12dc33d515c6a4fedafd33c31f9172e55dcc7b8fccad"
+        }
+      }
+    }
+  ],
+  "totalDownloadBytes": 1239668,
+  "layerGpuBytes": 2621440,
+  "withCompositesGpuBytes": 4718592,
+  "loopDownloadBytes": 426623,
+  "loopGpuBytes": 3255296,
+  "sourceSelectionSha256": "b8593136ffb94a756e5a57388711e07ba49053c85c7b2cbee35289594f9c0dc7",
+  "sourceArchiveSha256": "5439e96d938fd41a3baa00d570c96a9a924e630cb654dc89481460aa1e565d50"
+}

@@ -28,8 +28,9 @@ async function bind(img){
   copies.push({file:path.join(repo,'public',file),bytes});return {...img,file,url:file+'?v='+img.sha256};
 }
 const published={...manifest,sourceSelectionSha256:receipt.selectionSha256,sourceArchiveSha256:receipt.archiveSha256,
-  base:await bind(manifest.base),symbols:[]};
-for(const s of manifest.symbols)published.symbols.push({...s,image:await bind(s.image),composite:await bind(s.composite)});
+  base:await bind(manifest.base),token:await bind(manifest.token),symbols:[]};
+for(const s of manifest.symbols)published.symbols.push({...s,image:await bind(s.image),composite:await bind(s.composite),
+  ...(s.loop?{loop:{...s.loop,sheet:await bind(s.loop.sheet)}}:{})});
 if(values.apply){
   await mkdir(path.dirname(target),{recursive:true});await mkdir(target);
   for(const c of copies)await writeFile(c.file,c.bytes,{flag:'wx'});

@@ -1,0 +1,105 @@
+{
+  "owner": "powerups/PowerUpItemGpuSystem.ts",
+  "notes": [
+    "Ground shadow is lit ground material below figures; ring, channel glow, halo and glint of a lying pickup are self-lit additions just above the light map, below the canopy."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.shadowLayer/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.shadow",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.underLayer/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.glow",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.overLayer/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.glint",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:powerups/PowerUpItemGpuSystem.ts:module/this.shadowLayer/setDepth/0",
+      "owner": "powerups/PowerUpItemGpuSystem.ts",
+      "component": "module/this.shadowLayer/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.shadowLayer/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.shadow"
+      }
+    },
+    {
+      "id": "cpu:powerups/PowerUpItemGpuSystem.ts:module/this.underLayer/setDepth/0",
+      "owner": "powerups/PowerUpItemGpuSystem.ts",
+      "component": "module/this.underLayer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.57
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.underLayer/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.glow"
+      }
+    },
+    {
+      "id": "cpu:powerups/PowerUpItemGpuSystem.ts:module/this.overLayer/setDepth/0",
+      "owner": "powerups/PowerUpItemGpuSystem.ts",
+      "component": "module/this.overLayer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.overLayer/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.glint"
+      }
+    }
+  ]
+}

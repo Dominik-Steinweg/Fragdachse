@@ -6,6 +6,7 @@ import { validateManifestV2 } from './export-v2.mjs';
 import { inspectMaster } from './export.mjs';
 import { compositePowerup } from './review-powerups.mjs';
 import { finishPowerupSymbol, SYMBOL_FINISH } from './powerup-symbol-finish.mjs';
+import { powerupLoopSheet, LOOP_FRAME_SIZE } from './powerup-loop-sheet.mjs';
 export const POWERUP_IDS = ['hp', 'armor', 'rage', 'adrenaline', 'bfg', 'damage-amp', 'holy-grenade', 'nuke'];
 const demand = (value, message) => { if (!value) throw Error(message); };
 export const sameProjectionScale = (a,b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a-b)<1e-5;
@@ -13,18 +14,23 @@ export function validatePowerupSpec(s) {
   demand(s?.schema === 'fd-layered-powerups-spec' && s.version === 2 && s.masterSize === 1024
     && s.exportSize === 256 && s.displaySize === 22 && s.countdownDisplaySize === 16
     && s.reviewZoom === 1.4 && JSON.stringify(s.pulseScales) === '[0.92,1,1.08]', 'Invalid layered powerup contract');
-  demand(s.assets?.length === 9 && s.assets[0].id === 'powerup-base' && s.assets[0].role === 'base', 'Exactly one common base required');
-  demand(JSON.stringify(s.assets.slice(1).map(a => a.model.symbol)) === JSON.stringify(POWERUP_IDS), 'Incomplete/duplicate symbol roster');
+  demand(s.assets?.length === 10 && s.assets[0].id === 'powerup-base' && s.assets[0].role === 'base', 'Exactly one common base required');
+  demand(s.assets[1].id === 'powerup-token' && s.assets[1].role === 'token', 'Exactly one common world token required');
+  demand(JSON.stringify(s.assets.slice(2).map(a => a.model.symbol)) === JSON.stringify(POWERUP_IDS), 'Incomplete/duplicate symbol roster');
   for (const a of s.assets) {
     demand(a.category === 'powerup' && a.targetSize === 22 && a.orthoScale === 2.2
       && JSON.stringify(a.pivot) === '[0.5,0.5]' && a.forward === 'north' && a.clips.length === 0
       && JSON.stringify(a.sourceSizes) === '[128,256]' && a.production === 'reference', 'Mismatched layer projection');
-    demand(a.recipe === (a.role === 'base' ? 'powerup-base' : 'powerup-symbol'), 'Unknown recipe');
+    demand(a.recipe === ({ base: 'powerup-base', token: 'powerup-token' }[a.role] ?? 'powerup-symbol'), 'Unknown recipe');
     relativePath(a.reference);
-    if (a.role !== 'base') {
+    if (a.role !== 'base' && a.role !== 'token') {
       demand(a.role === 'symbol' && a.id === 'powerup-'+a.model.symbol && a.gameIds.length === 1 && typeof a.spriteKey === 'string', 'Invalid symbol binding');
       relativePath(a.symbolReference);
       demand(/^[a-f0-9]{64}$/.test(a.referenceSha256) && /^[a-f0-9]{64}$/.test(a.symbolReferenceSha256), 'Missing approved reference hash');
+      demand(a.loop === undefined || (Number.isInteger(a.loop.frames) && a.loop.frames >= 2 && a.loop.frames <= 48
+        && Number.isFinite(a.loop.fps) && a.loop.fps >= 6 && a.loop.fps <= 24), 'Invalid symbol loop');
+    } else {
+      demand(a.loop === undefined, 'Only symbols loop');
     }
   }
   return s;
@@ -47,7 +53,7 @@ export async function verifyPowerupBundle(root) {
     && manifest.sourceSize === 256 && JSON.stringify(manifest.pivot) === '[0.5,0.5]'
     && manifest.orthoScale === 2.2 && JSON.stringify(manifest.pulseScales) === '[0.92,1,1.08]'
     && JSON.stringify(manifest.symbols.map(s=>s.id)) === JSON.stringify(POWERUP_IDS), 'Incomplete layered manifest');
-  for (const img of [manifest.base, ...manifest.symbols.flatMap(s=>[s.image,s.composite])]) {
+  for (const img of [manifest.base, manifest.token, ...manifest.symbols.flatMap(s=>[s.image,s.composite])]) {
     demand(img.width === 256 && img.height === 256 && img.gpuBytes === 256*256*4
       && selection.files[relativePath(img.file)] === img.sha256, 'Unbound layer');
     const b = await readFile(path.join(root,img.file));
@@ -65,12 +71,12 @@ export async function verifyPowerupBundle(root) {
     const folder=asset.id+'/standard/', bytes=await readFile(path.join(root,folder+'render.json'));
     demand(selection.files[folder+'render.json']===digest(bytes),'Unbound V2 render manifest');
     const rendered=JSON.parse(bytes);validateManifestV2(rendered);
-    demand(rendered.id===asset.id && rendered.revision===selection.revision && rendered.frames.length===1
+    demand(rendered.id===asset.id && rendered.revision===selection.revision && rendered.frames.length===(asset.loop?.frames ?? 1)
       && rendered.category==='powerup' && rendered.orthoScale===spec.assets[0].orthoScale
       && sameProjectionScale(rendered.camera.orthoScale,rendered.orthoScale) && rendered.targetSize===22
       && JSON.stringify(rendered.pivot)==='[0.5,0.5]','V2 layer projection mismatch');
-    const entry=asset.role==='base'?manifest.base:manifest.symbols.find(s=>s.id===asset.model.symbol)?.image;
-    if(asset.role==='base' || !manifest.symbolFinish)
+    const entry={base:manifest.base,token:manifest.token}[asset.role]??manifest.symbols.find(s=>s.id===asset.model.symbol)?.image;
+    if(asset.role!=='symbol' || !manifest.symbolFinish)
       demand(entry && selection.files[folder+'sprite-256.png']===entry.sha256,'Layer differs from V2 export');
     if(asset.role==='symbol'){
       const symbol=manifest.symbols.find(s=>s.id===asset.model.symbol);
@@ -82,10 +88,24 @@ export async function verifyPowerupBundle(root) {
       demand(symbol.gameId===asset.gameIds[0] && symbol.spriteKey===asset.spriteKey && symbol.previousComposite===asset.reference,'Runtime identity mismatch');
       const composed=await compositePowerup(base,await readFile(path.join(root,symbol.image.file)));
       demand(digest(composed)===symbol.composite.sha256,'UI composite differs from runtime layers');
+      demand(JSON.stringify(asset.loop?.frames ?? null)===JSON.stringify(symbol.loop?.frames ?? null)
+        && (asset.loop?.fps ?? null)===(symbol.loop?.fps ?? null),'Loop differs from specification');
+      if(symbol.loop){
+        demand(rendered.frames.length===symbol.loop.frames && rendered.clips.length===1 && rendered.clips[0].loop
+          && rendered.clips[0].frameRate===symbol.loop.fps && symbol.loop.frameSize===LOOP_FRAME_SIZE,'Loop clip mismatch');
+        const masters=[];
+        for(const frame of rendered.frames){
+          demand(selection.files[folder+frame.file]===frame.sha256,'Unbound loop master');
+          masters.push(await readFile(path.join(root,folder+frame.file)));
+        }
+        const {buffer,layout}=await powerupLoopSheet(masters);
+        demand(digest(buffer)===symbol.loop.sheet.sha256 && JSON.stringify(layout)===JSON.stringify(symbol.loop.layout)
+          && selection.files[relativePath(symbol.loop.sheet.file)]===symbol.loop.sheet.sha256,'Loop sheet differs from masters');
+      }
     }
   }
-  const images=[manifest.base,...manifest.symbols.flatMap(s=>[s.image,s.composite])];
+  const images=[manifest.base,manifest.token,...manifest.symbols.flatMap(s=>[s.image,s.composite])];
   demand(manifest.totalDownloadBytes===images.reduce((n,i)=>n+i.downloadBytes,0)
-    && manifest.layerGpuBytes===9*256*256*4 && manifest.withCompositesGpuBytes===17*256*256*4,'Incorrect memory accounting');
+    && manifest.layerGpuBytes===10*256*256*4 && manifest.withCompositesGpuBytes===18*256*256*4,'Incorrect memory accounting');
   return { manifest, selection, receipt };
 }

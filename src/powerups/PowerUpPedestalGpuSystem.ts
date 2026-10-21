@@ -3,7 +3,8 @@ import { configureGpuLayerCameraTransform } from '../graphics/GpuLayerCameraTran
 import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { DEPTH } from '../config';
 import type { SyncedPowerUpPedestal } from '../types';
-import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS } from './PowerUpConfig';
+import { POWERUP_DEFS, POWERUP_ITEM_ART, POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS } from './PowerUpConfig';
+import { POWERUP_TOKEN_KEY } from '../assets/PowerUpAssets';
 
 const TEX_POWERUP_PEDESTAL_GPU = '__powerup_pedestal_gpu';
 const FRAME_OUTER_GLOW = 'outer-glow';
@@ -12,6 +13,9 @@ const FRAME_AURA = 'aura';
 const FRAME_OWNER_RING = 'owner-ring';
 const FRAME_FALLBACK_BASE = 'base:fallback';
 
+/** Plinth and owner ring are drawn at this many texels per world unit; glows stay soft at 1:1. */
+const PLINTH_TEXELS = 3;
+const PLINTH_FRAME = 36 * PLINTH_TEXELS;
 const MAX_PEDESTALS = 256;
 const ADDITIVE_MEMBERS_PER_PEDESTAL = 3;
 const PULSE_HALF_PERIOD_MS = 1_428;
@@ -47,21 +51,21 @@ interface PedestalModeStyle {
 const MODE_STYLES: Readonly<Record<PowerUpPedestalGpuMode, PedestalModeStyle>> = {
   idle: {
     halfPeriodMs: PULSE_HALF_PERIOD_MS,
-    baseScaleMax: 1.03,
+    baseScaleMax: 1,
     outer: { alphaMin: 0.26, alphaMax: 0.4, scaleMin: 0.86, scaleMax: 1.03 },
     glow: { alphaMin: 0.18, alphaMax: 0.26, scaleMin: 0.82, scaleMax: 0.88 },
     aura: { alphaMin: 0.14, alphaMax: 0.2, scaleMin: 0.56, scaleMax: 0.6 },
   },
   ready: {
     halfPeriodMs: PULSE_HALF_PERIOD_MS,
-    baseScaleMax: 1.065,
+    baseScaleMax: 1,
     outer: { alphaMin: 0.28, alphaMax: 0.6, scaleMin: 0.9, scaleMax: 1.16 },
     glow: { alphaMin: 0.34, alphaMax: 0.48, scaleMin: 0.92, scaleMax: 1.03 },
     aura: { alphaMin: 0.22, alphaMax: 0.32, scaleMin: 0.64, scaleMax: 0.72 },
   },
   announcing: {
     halfPeriodMs: ANNOUNCE_HALF_PERIOD_MS,
-    baseScaleMax: 1.12,
+    baseScaleMax: 1.025,
     outer: { alphaMin: 0.12, alphaMax: 0.54, scaleMin: 0.88, scaleMax: 1.18 },
     glow: { alphaMin: 0.24, alphaMax: 0.66, scaleMin: 0.88, scaleMax: 1.16 },
     aura: { alphaMin: 0.18, alphaMax: 0.38, scaleMin: 0.58, scaleMax: 0.75 },
@@ -222,7 +226,7 @@ export class PowerUpPedestalGpuSystem {
     style: PedestalModeStyle,
     phaseMs: number,
   ): GpuMember {
-    const scale = pulse(1, style.baseScaleMax, style.halfPeriodMs);
+    const scale = pulse(1 / PLINTH_TEXELS, style.baseScaleMax / PLINTH_TEXELS, style.halfPeriodMs);
     return {
       x: handle.x,
       y: handle.y,
@@ -242,7 +246,7 @@ export class PowerUpPedestalGpuSystem {
     phaseMs: number,
   ): GpuMember {
     const color = handle.ownerColor ?? 0xffffff;
-    const scale = pulse(1, 1.025, style.halfPeriodMs);
+    const scale = pulse(1 / PLINTH_TEXELS, 1.025 / PLINTH_TEXELS, style.halfPeriodMs);
     const alpha = handle.ownerColor === undefined
       ? 0
       : pulse(0.72, 0.84, style.halfPeriodMs);
@@ -336,11 +340,12 @@ export function getPowerUpPedestalPreviewFrame(scene: Phaser.Scene, defId: strin
 
 function ensurePedestalTexture(scene: Phaser.Scene): void {
   if (scene.textures.exists(TEX_POWERUP_PEDESTAL_GPU)) return;
-  const texture = scene.textures.createCanvas(TEX_POWERUP_PEDESTAL_GPU, 256, 256);
+  const texture = scene.textures.createCanvas(TEX_POWERUP_PEDESTAL_GPU, 512, 512);
   if (!texture) return;
   const ctx = texture.context;
-  ctx.clearRect(0, 0, 256, 256);
+  ctx.clearRect(0, 0, 512, 512);
   ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   drawRadial(ctx, 2, 2, 160, [
     [0, 0.92], [0.14, 0.6], [0.35, 0.22], [0.62, 0.06], [0.85, 0.01], [1, 0],
@@ -350,22 +355,25 @@ function ensurePedestalTexture(scene: Phaser.Scene): void {
   drawRadial(ctx, 166, 2, 72, [[0, 0.92], [0.22, 0.34], [0.55, 0.12], [1, 0]]);
   texture.add(FRAME_GLOW, 0, 166, 2, 72, 72);
 
-  drawRadial(ctx, 166, 78, 40, [[0, 0.9], [0.32, 0.35], [0.7, 0.08], [1, 0]]);
-  texture.add(FRAME_AURA, 0, 166, 78, 40, 40);
+  drawRadial(ctx, 242, 2, 40, [[0, 0.9], [0.32, 0.35], [0.7, 0.08], [1, 0]]);
+  texture.add(FRAME_AURA, 0, 242, 2, 40, 40);
 
-  drawOwnerRing(ctx, 210, 78, 36);
-  texture.add(FRAME_OWNER_RING, 0, 210, 78, 36, 36);
+  drawOwnerRing(ctx, 290, 2, PLINTH_FRAME);
+  texture.add(FRAME_OWNER_RING, 0, 290, 2, PLINTH_FRAME, PLINTH_FRAME);
 
+  const token = scene.textures.exists(POWERUP_TOKEN_KEY)
+    ? scene.textures.get(POWERUP_TOKEN_KEY).getSourceImage() as CanvasImageSource
+    : null;
   const baseDefs = [
     ...Object.keys(TIMED_POWERUP_PEDESTAL_CONFIGS),
     'fallback',
   ];
   for (let index = 0; index < baseDefs.length; index += 1) {
-    const x = 2 + (index % 4) * 40;
-    const y = 166 + Math.floor(index / 4) * 40;
+    const x = 2 + (index % 4) * (PLINTH_FRAME + 2);
+    const y = 168 + Math.floor(index / 4) * (PLINTH_FRAME + 2);
     const defId = baseDefs[index];
-    drawBase(ctx, x, y, 36, POWERUP_DEFS[defId]?.color ?? 0xffffff);
-    texture.add(defId === 'fallback' ? FRAME_FALLBACK_BASE : `base:${defId}`, 0, x, y, 36, 36);
+    drawPlinth(ctx, x, y, POWERUP_DEFS[defId]?.color ?? 0xffffff, token);
+    texture.add(defId === 'fallback' ? FRAME_FALLBACK_BASE : `base:${defId}`, 0, x, y, PLINTH_FRAME, PLINTH_FRAME);
   }
 
   texture.refresh();
@@ -385,15 +393,36 @@ function drawRadial(
   ctx.fillRect(x, y, size, size);
 }
 
-function drawBase(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: number): void {
-  const centerX = x + size / 2;
-  const centerY = y + size / 2;
-  circle(ctx, centerX, centerY, POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 6, 0x04070c, 0.42);
-  circle(ctx, centerX, centerY, POWERUP_PEDESTAL_CONFIG.renderBaseRadius, 0x0c121c, 0.96, 0x25313c, 0.95, 2);
-  circle(ctx, centerX, centerY, POWERUP_PEDESTAL_CONFIG.renderInnerRadius, 0x121b27, 0.94, color, 0.42, 2);
-  circle(ctx, centerX, centerY, POWERUP_PEDESTAL_CONFIG.renderCoreRadius, color, 0.2, 0xffffff, 0.14, 1.5);
-  circle(ctx, centerX, centerY, POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 1, null, 0, color, 0.75, 2);
-  circle(ctx, centerX, centerY, POWERUP_PEDESTAL_CONFIG.renderInnerRadius - 2, null, 0, 0xffffff, 0.18, 2);
+/**
+ * The pedestal is a larger copy of the shared pickup token: same bronze lip and glass channel,
+ * so a lying item visibly sits in the plinth's channel. The channel carries the pickup colour
+ * even while the pedestal is empty.
+ */
+function drawPlinth(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: number,
+  token: CanvasImageSource | null,
+): void {
+  const k = PLINTH_TEXELS;
+  const centerX = x + PLINTH_FRAME / 2;
+  const centerY = y + PLINTH_FRAME / 2;
+  const radius = POWERUP_PEDESTAL_CONFIG.renderBaseRadius;
+  const shadow = ctx.createRadialGradient(centerX + 1.2 * k, centerY + 1.8 * k, 0, centerX + 1.2 * k, centerY + 1.8 * k, (radius + 3.5) * k);
+  shadow.addColorStop(0, 'rgba(0,0,0,0.55)');
+  shadow.addColorStop(0.72, 'rgba(0,0,0,0.42)');
+  shadow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shadow;
+  ctx.fillRect(x, y, PLINTH_FRAME, PLINTH_FRAME);
+  if (!token) {
+    circle(ctx, centerX, centerY, radius * k, 0x2f251d, 1, 0x7a5a39, 1, 2 * k);
+    circle(ctx, centerX, centerY, POWERUP_PEDESTAL_CONFIG.renderInnerRadius * k, 0x262b2f, 1);
+  } else {
+    const size = radius / POWERUP_ITEM_ART.tokenRadiusRatio * 2 * k;
+    ctx.drawImage(token, centerX - size / 2, centerY - size / 2, size, size);
+  }
+  circle(ctx, centerX, centerY, POWERUP_PEDESTAL_CONFIG.renderInnerRadius * k, null, 0, color, 0.62, 1.1 * k);
 }
 
 function drawOwnerRing(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
@@ -401,12 +430,12 @@ function drawOwnerRing(ctx: CanvasRenderingContext2D, x: number, y: number, size
     ctx,
     x + size / 2,
     y + size / 2,
-    POWERUP_PEDESTAL_CONFIG.renderBaseRadius - 2,
+    (POWERUP_PEDESTAL_CONFIG.renderBaseRadius + 1.6) * PLINTH_TEXELS,
     null,
     0,
     0xffffff,
     0.78,
-    1.5,
+    1.5 * PLINTH_TEXELS,
   );
 }
 

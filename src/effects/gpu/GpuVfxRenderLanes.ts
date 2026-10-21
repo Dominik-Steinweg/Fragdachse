@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DEPTH, DEPTH_FX } from '../../config';
+import { DEPTH, DEPTH_FX, DEPTH_LIGHTING } from '../../config';
 import { GpuVfxEase } from './GpuVfxEase';
 import { MUZZLE_MAX_LIFETIME } from '../muzzleFlashModel';
 import { MOVEMENT_FX } from '../../config/movementEffects';
@@ -688,7 +688,8 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
   {
     id: GpuVfxLaneId.PowerUpPedestal,
     label: 'powerup-pedestal',
-    depth: DEPTH.PLAYERS - 2.05,
+    // Self-lit like the item glow: just above the light map, below the canopy.
+    depth: DEPTH_LIGHTING + 0.06,
     blendMode: Phaser.BlendModes.ADD,
     eases: [GpuVfxEase.Linear],
     capacity: 1024,
@@ -696,8 +697,9 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     order: 'add-over-opaque',
     reserveCritical: 0,
     rationale:
-      'Ambient-Motes, Funken und Spawn-Bursts teilen das additive Pedestal-Tiefenband. Die '
-      + 'dauerhafte Co-Activity bleibt getrennt von den nur waehrend Airstrikes sichtbaren Lanes.',
+      'Ambient-Motes, Funken und Spawn-/Einsammel-Bursts von Pedestals und liegenden Power-Ups '
+      + 'teilen das additive Band knapp ueber der Lightmap. Die dauerhafte Co-Activity bleibt '
+      + 'getrennt von den nur waehrend Airstrikes sichtbaren Lanes.',
     capacityRationale:
       'Die groesste authored Map besitzt 18 Pedestals mit rund 13 lebenden Flow-Membern je '
       + 'Sockel. 1024 laesst mehrere gleichzeitige 19-Member-Spawn-Bursts und Konstruktionen zu.',

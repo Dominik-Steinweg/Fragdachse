@@ -482,6 +482,7 @@ export class ArenaLifecycleCoordinator {
         isLocalPlayerAlive: () => this.localPlayerState.alive,
         isArenaLoading: () => bridge.isArenaLoading(),
         isArenaCountdownActive: () => bridge.isArenaCountdownActive(),
+        isLoadingVeilShown: () => this.ctx.arenaCountdown?.isLoading() ?? false,
         getArenaResult: () => this.worldRuntime?.materialization?.arena ?? null,
         clientWorldPresentation: {
           timeBubble: this.renderers.timeBubble,

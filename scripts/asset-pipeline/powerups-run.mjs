@@ -12,6 +12,7 @@ import {inspectMaster} from './export.mjs';
 import {validatePowerupSpec,verifyPowerupBundle} from './powerups-contract.mjs';
 import {compositePowerup,reviewPowerups,copyPowerupReviews} from './review-powerups.mjs';
 import {finishPowerupSymbol,SYMBOL_FINISH} from './powerup-symbol-finish.mjs';
+import {powerupLoopSheet,LOOP_FRAME_SIZE} from './powerup-loop-sheet.mjs';
 
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const {values}=parseArgs({options:{
@@ -48,7 +49,7 @@ for(const a of spec.assets){
 const files={};for(const name of [...new Set(sources)].sort())files[name]=await fileHash(path.join(repo,name));
 const job={schema:'fd-powerups-job',revision:values.revision,device:values.device,files};
 if(values.plan){console.log(JSON.stringify({status:'prepared-not-rendered',output,reviewDestination,
-  masters:9,masterSize:1024,exports:[128,256],composites:8,pulseScales:spec.pulseScales,sources:Object.keys(files).length},null,2));}
+  masters:10,masterSize:1024,exports:[128,256],composites:8,pulseScales:spec.pulseScales,sources:Object.keys(files).length},null,2));}
 else{
   const started=performance.now();
   await mkdir(output);await mkdir(path.join(output,'cache'));await mkdir(path.join(output,'temp'));
@@ -73,12 +74,18 @@ else{
     await inspectMaster(bytes,256);await writeFile(path.join(output,file),bytes,{flag:'wx'});
     return {file,width:256,height:256,sha256:digest(bytes),downloadBytes:bytes.length,gpuBytes:256*256*4,encoding:'srgb8-straight-rgba'};
   }
+  async function sheetRecord(file,bytes,layout){
+    await writeFile(path.join(output,file),bytes,{flag:'wx'});
+    return {file,width:layout.width,height:layout.height,sha256:digest(bytes),downloadBytes:bytes.length,
+      gpuBytes:layout.width*layout.height*4,encoding:'srgb8-straight-rgba'};
+  }
   const base=await readFile(path.join(output,'powerup-base/standard/sprite-256.png'));
+  const token=await readFile(path.join(output,'powerup-token/standard/sprite-256.png'));
   const manifest={schema:'fd-layered-powerups',version:1,status:'rendered-awaiting-review',revision:values.revision,
     sourceSize:256,displaySize:22,countdownDisplaySize:16,orthoScale:2.2,pivot:[.5,.5],axes:['right','south'],symbolFinish:SYMBOL_FINISH,
     pulseScales:spec.pulseScales,animation:'Scale only symbol about shared pivot; keep base at fitted size. No per-layer alpha-bounds fit.',
-    base:await imageRecord('layers/base.png',base),symbols:[]};
-  for(const a of spec.assets.slice(1)){
+    base:await imageRecord('layers/base.png',base),token:await imageRecord('layers/token.png',token),symbols:[]};
+  for(const a of spec.assets.filter(a=>a.role==='symbol')){
     const rawSymbol=await readFile(path.join(output,a.id,'standard/sprite-256.png'));
     const symbol=await finishPowerupSymbol(rawSymbol);
     const id=a.model.symbol,composite=await compositePowerup(base,symbol);
@@ -87,10 +94,19 @@ else{
     const {data}=await sharp(symbol).ensureAlpha().raw().toBuffer({resolveWithObject:true});
     let opaque=0;for(let i=3;i<data.length;i+=4)if(data[i]>127)opaque++;
     if(opaque<256*256*.04||opaque>256*256*.65)throw Error('Unexpected symbol coverage: '+id);
-    manifest.symbols.push({id,gameId:a.gameIds[0],spriteKey:a.spriteKey,previousComposite:a.reference,rawSymbolSha256:digest(rawSymbol),image,composite:combined});
+    const entry={id,gameId:a.gameIds[0],spriteKey:a.spriteKey,previousComposite:a.reference,rawSymbolSha256:digest(rawSymbol),image,composite:combined};
+    if(a.loop){
+      const masters=[];
+      for(let i=0;i<a.loop.frames;i++)masters.push(await readFile(path.join(output,a.id,'standard/masters',`frame-${String(i).padStart(4,'0')}.png`)));
+      const {buffer,layout}=await powerupLoopSheet(masters);
+      entry.loop={frames:a.loop.frames,fps:a.loop.fps,frameSize:LOOP_FRAME_SIZE,layout,sheet:await sheetRecord('layers/'+id+'-loop.png',buffer,layout)};
+    }
+    manifest.symbols.push(entry);
   }
-  manifest.totalDownloadBytes=[manifest.base,...manifest.symbols.flatMap(s=>[s.image,s.composite])].reduce((n,i)=>n+i.downloadBytes,0);
-  manifest.layerGpuBytes=9*256*256*4;manifest.withCompositesGpuBytes=17*256*256*4;
+  manifest.totalDownloadBytes=[manifest.base,manifest.token,...manifest.symbols.flatMap(s=>[s.image,s.composite])].reduce((n,i)=>n+i.downloadBytes,0);
+  manifest.layerGpuBytes=10*256*256*4;manifest.withCompositesGpuBytes=18*256*256*4;
+  manifest.loopDownloadBytes=manifest.symbols.reduce((n,s)=>n+(s.loop?.sheet.downloadBytes??0),0);
+  manifest.loopGpuBytes=manifest.symbols.reduce((n,s)=>n+(s.loop?.sheet.gpuBytes??0),0);
   await writeFile(path.join(output,'powerups-manifest.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
   const reviews=await reviewPowerups(output,spec,manifest);
   // Preserve review access even if a later archive/final-bundle check fails.

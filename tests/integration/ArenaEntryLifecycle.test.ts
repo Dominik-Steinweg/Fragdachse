@@ -580,7 +580,7 @@ describe('Lobby exit gates local Arena work', () => {
     vi.spyOn(f.flow, 'getWorldRevealState').mockImplementation(() => ({ ready: finalFrame, progress: 99 }));
     Object.assign(scene, { initializationReady: true, ctx: f.flow.ctx, arenaRuntime: f.flow,
       cameras: { main: { width: 100, height: 100, zoom: 1, originX: 0, originY: 0, scrollX: 0, scrollY: 0 } },
-      localPlayerState: { alive: true }, getArenaLoadingScreenState: () => ({}) });
+      localPlayerState: { alive: true }, getArenaLoadingScreenState: () => ({}), time: { delayedCall: vi.fn() } });
     vi.spyOn(bridge, 'isArenaLoading').mockReturnValue(false);
     vi.spyOn(bridge, 'isArenaStarted').mockReturnValue(true);
     vi.spyOn(bridge, 'getArenaStartTime').mockReturnValue(1234);
@@ -618,7 +618,7 @@ describe('Lobby exit gates local Arena work', () => {
     const scene = Object.create(ArenaScene.prototype) as any;
     Object.assign(scene, { initializationReady: true, ctx: f.flow.ctx, arenaRuntime: f.flow,
       cameras: { main: { width: 100, height: 100, zoom: 1, originX: 0, originY: 0, scrollX: 0, scrollY: 0 } },
-      localPlayerState: { alive: true }, getArenaLoadingScreenState: () => ({}) });
+      localPlayerState: { alive: true }, getArenaLoadingScreenState: () => ({}), time: { delayedCall: vi.fn() } });
     vi.spyOn(bridge, 'isArenaLoading').mockReturnValue(false);
     vi.spyOn(bridge, 'isArenaStarted').mockReturnValue(true);
     vi.spyOn(bridge, 'isLocalSpectator').mockReturnValue(false);

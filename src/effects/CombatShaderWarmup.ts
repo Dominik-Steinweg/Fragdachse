@@ -21,6 +21,7 @@ import { createTeslaStormShaderProbe } from './teslaStorm/TeslaStormBoltGpuLayer
 import { createEnergyBallShaderProbe } from './energyBall/EnergyBallGpuLayer';
 import { createFireControlPortalShaderProbe } from './fireControl/FireControlPortalGpuLayer';
 import { createPortalShaderProbe } from './gpu/PortalGpuLayer';
+import { createSpawnShaderProbe } from './gpu/SpawnGpuLayer';
 import { PLASMA_BURNER_BEAM_FRAGMENT_SOURCE, PLASMA_BURNER_BEAM_SHADER_NAME } from './plasmaBurnerBeamShader';
 
 /** Lazy probes; their owner releases them on completion, failure and Scene teardown.
@@ -130,6 +131,8 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
     createEnergyBallShaderProbe(scene),
     createFireControlPortalShaderProbe(scene),
     createPortalShaderProbe(scene),
+    // Player respawns and enemy arrivals share one program; the first spawn must not stall.
+    createSpawnShaderProbe(scene),
   ];
 }
 
