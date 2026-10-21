@@ -71,10 +71,11 @@ function pickTier(random: DawnRandom, curve: DawnThreatCurve): number {
 
 /**
  * Verschiedene Archetypen, solange Sites reichen (gewichtet ohne Zuruecklegen); der Rest folgt den
- * Auswahlgewichten. Archetypen ab einem hoeheren Threat bleiben bis dahin aussen vor.
+ * Auswahlgewichten. Archetypen ab einem hoeheren Threat bleiben bis dahin aussen vor; Portal-Generatoren
+ * komponiert ihr eigener Schritt.
  */
 function pickArchetypes(random: DawnRandom, count: number, threat: number): string[] {
-  const eligible = getDawnSiteArchetypes().filter((archetype) => (archetype.minThreat ?? 1) <= threat);
+  const eligible = getDawnSiteArchetypes().filter((archetype) => (archetype.minThreat ?? 1) <= threat && !archetype.portal);
   const open = [...eligible];
   const picks: string[] = [];
   while (picks.length < count && open.length > 0) {

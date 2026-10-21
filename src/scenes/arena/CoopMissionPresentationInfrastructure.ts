@@ -1,6 +1,7 @@
 import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import { WaterSurfaceModel } from '../../arena/WaterSurfaceModel';
 import { DawnSitePropRenderer } from '../../arena/DawnSitePropRenderer';
+import { toDawnSiteObjectiveId } from '../../dawn/resolution/DawnScenarioResolution';
 import { DawnSiteDecalRenderer } from '../../arena/DawnSiteDecalRenderer';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
@@ -69,6 +70,7 @@ export class CoopMissionPresentationInfrastructure {
   private readonly mapEventAnnouncementPresenter: CoopDefenseMapEventAnnouncementPresenter;
   private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
   private dawnSiteProps: DawnSitePropRenderer | null = null;
+  private dawnSiteObjectiveIds: ReadonlySet<string> | undefined;
   private dawnSiteDecals: DawnSiteDecalRenderer | null = null;
   private dawnWorldRevision: number | null = null;
   private ui: CoopMissionPresentationUiPort | null = null;
@@ -126,6 +128,8 @@ export class CoopMissionPresentationInfrastructure {
         baseId => this.uiInput?.getBaseManager()?.getStructureHp(baseId) ?? null,
         this.uiInput?.renderers.lighting ?? null);
       this.dawnWorldRevision = world.worldRevision;
+      // Every Dawn site has its own site marker, including the portal generator that starts unentered.
+      this.dawnSiteObjectiveIds = new Set(plan.sites.map(site => toDawnSiteObjectiveId(site.slotId)));
     }
     this.dawnSiteProps?.sync(objectives);
   }
@@ -136,6 +140,7 @@ export class CoopMissionPresentationInfrastructure {
     this.dawnSiteDecals?.destroy();
     this.dawnSiteDecals = null;
     this.dawnWorldRevision = null;
+    this.dawnSiteObjectiveIds = undefined;
   }
 
   createUiPort(input: CoopMissionPresentationInfrastructureInput): CoopMissionPresentationUiPort {
@@ -300,7 +305,7 @@ export class CoopMissionPresentationInfrastructure {
                 const base = input.getBaseManager()?.getBase(id);
                 return base ? { ...getBaseWorldBounds(base.spec.region, metrics),
                   dormant: base.isDormant(), destroyed: base.isDestroyed() } : null;
-              }), snapshot, this.scene.time.now, elapsedMs);
+              }, this.dawnSiteObjectiveIds), snapshot, this.scene.time.now, elapsedMs);
           }
         },
         syncMortarStrikes: (strikes, nowMs) => {

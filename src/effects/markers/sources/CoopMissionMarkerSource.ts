@@ -39,6 +39,8 @@ export function secondaryObjectiveMarkers(
   configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
   carry: readonly SyncedCoopDefenseCarryItem[], origin: Origin,
   boundsFor: (id: string) => MarkerTargetBounds | null,
+  /** Objectives another source marks (e.g. Dawn sites that start without being entered). */
+  externallyOwned?: ReadonlySet<string>,
 ): MarkerDescriptor[] {
   const out: MarkerDescriptor[] = [];
   for (const entry of snapshot ?? []) {
@@ -47,7 +49,7 @@ export function secondaryObjectiveMarkers(
     if (!config) continue;
     // Site-activated objectives belong to a world site; its own source keeps one marker from dormant to resolved.
     // Carry items and the delivery zone of a site still come from here.
-    const siteOwned = config.start.type === 'site-activated';
+    const siteOwned = config.start.type === 'site-activated' || externallyOwned?.has(config.id) === true;
     if (siteOwned && config.type !== 'carry') continue;
     // Focus remains a semantic grouping boundary; different objective types never share a glyph.
     const group = `mission:${config.type}:${entry.focused ? 'focus' : 'background'}`;

@@ -410,6 +410,33 @@
           "scavengers": 3
         }
       ]
+    },
+    {
+      "id": "portal-generator",
+      "objectiveType": "destroy",
+      "selectionWeight": 1,
+      "minThreat": 3,
+      "clearingRadiusCells": 5,
+      "portal": {
+        "openAtDayFraction": 0.4,
+        "entryOffsetCells": 4,
+        "chance": { "base": 0.35, "perThreat": 0.05, "max": 0.6 }
+      },
+      "structure": {
+        "role": "outpost",
+        "faction": "hostile",
+        "cells": [
+          { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 },
+          { "gridX": 0, "gridY": 1 }, { "gridX": 1, "gridY": 1 }, { "gridX": 2, "gridY": 1 },
+          { "gridX": 0, "gridY": 2 }, { "gridX": 1, "gridY": 2 }, { "gridX": 2, "gridY": 2 }
+        ]
+      },
+      "tiers": [
+        { "tier": 1, "hpMax": 2400, "scrapReward": 60, "visualKey": "dawn-site-portal-generator-t1", "assaultBudget": 40 },
+        { "tier": 2, "hpMax": 3600, "scrapReward": 95, "visualKey": "dawn-site-portal-generator-t2", "assaultBudget": 64 },
+        { "tier": 3, "hpMax": 5000, "scrapReward": 140, "visualKey": "dawn-site-portal-generator-t3", "assaultBudget": 96 }
+      ],
+      "assaultDelayMs": 0
     }
   ]
 }

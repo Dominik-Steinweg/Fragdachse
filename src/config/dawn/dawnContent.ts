@@ -35,7 +35,7 @@ import { DAWN_SITE_VARIANTS } from './siteVariants';
  */
 
 /** Erhoehen, wenn sich die Bedeutung eines Registry-Felds aendert, ohne dass der Inhalt es tut. */
-const DAWN_CONTENT_SCHEMA_VERSION = 2;
+const DAWN_CONTENT_SCHEMA_VERSION = 3;
 
 export type DawnSalvageDistanceBand = 'near' | 'mid' | 'far';
 const DISTANCE_BANDS: readonly DawnSalvageDistanceBand[] = ['near', 'mid', 'far'];
@@ -144,6 +144,19 @@ export interface DawnSiteArchetypeTier {
   readonly scavengers?: number;
 }
 
+/**
+ * Portal generator site: composed on its own (never by the generic site pick), it charges during the
+ * day and then holds a portal from its clearing to a flank slot near the base open until it falls.
+ */
+export interface DawnSitePortalConfig {
+  /** Share of the day phase after which the charged portal opens. */
+  readonly openAtDayFraction: number;
+  /** Entry endpoint offset from the slot anchor toward the base core. */
+  readonly entryOffsetCells: number;
+  /** Chance per round from `minThreat`: base + perThreat × (threat − minThreat), at most max. */
+  readonly chance: { readonly base: number; readonly perThreat: number; readonly max: number };
+}
+
 export interface DawnSiteArchetype {
   readonly id: string;
   readonly objectiveType: DawnSiteObjectiveType;
@@ -162,6 +175,8 @@ export interface DawnSiteArchetype {
   readonly minThreat?: number;
   /** Versteckte Site: ohne Schrottscanner des Hosts keine Navigationsmarker (GDD 6a). */
   readonly hidden?: true;
+  /** Portal generator; such an archetype is composed separately and never picked as an ordinary site. */
+  readonly portal?: DawnSitePortalConfig;
   /** Genau ein Eintrag je Tier 1..DAWN_MAX_SITE_TIER, aufsteigend. */
   readonly tiers: readonly DawnSiteArchetypeTier[];
 }
@@ -429,6 +444,7 @@ function validateSiteArchetypes(raw: { readonly archetypes: readonly unknown[] }
       throw new Error(`[dawnContent] ${label} needs a clearing radius between 2 and ${MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS}`);
     }
     validateSiteStructure(label, archetype);
+    if (archetype.portal !== undefined) validateSitePortal(label, archetype);
     if (archetype.objectiveType === 'hold') {
       if (!isPositiveInteger(archetype.holdDurationMs)) throw new Error(`[dawnContent] ${label} needs a holdDurationMs`);
       // Eine Site hat genau ein Bauwerk; mehr Ueberlebende kann sie nicht stellen.
@@ -469,6 +485,33 @@ function validateSiteArchetypes(raw: { readonly archetypes: readonly unknown[] }
   }
   if (archetypes.size === 0) throw new Error('[dawnContent] At least one Dawn site archetype is required');
   return archetypes;
+}
+
+/** A portal generator is a visible hostile outpost with a guard, a charge window and a threat-gated chance. */
+function validateSitePortal(label: string, archetype: DawnSiteArchetype): void {
+  const portal = archetype.portal!;
+  if (archetype.objectiveType !== 'destroy' || archetype.structure?.role !== 'outpost' || archetype.hidden) {
+    throw new Error(`[dawnContent] ${label} portal sites need a visible destroyable outpost`);
+  }
+  if (archetype.minThreat === undefined) throw new Error(`[dawnContent] ${label} portal sites need a minThreat`);
+  if (archetype.assaultDelayMs === undefined) throw new Error(`[dawnContent] ${label} portal sites need a guard assault`);
+  if (!(portal.openAtDayFraction > 0 && portal.openAtDayFraction < 1)) {
+    throw new Error(`[dawnContent] ${label} needs openAtDayFraction inside the day`);
+  }
+  if (!isPositiveInteger(portal.entryOffsetCells) || portal.entryOffsetCells >= archetype.clearingRadiusCells) {
+    throw new Error(`[dawnContent] ${label} needs an entryOffsetCells inside its clearing`);
+  }
+  const { base, perThreat, max } = portal.chance ?? {};
+  if (![base, perThreat, max].every((value) => typeof value === 'number' && value >= 0 && value <= 1) || base! > max!) {
+    throw new Error(`[dawnContent] ${label} needs chance values in 0..1 with base <= max`);
+  }
+}
+
+/** Round chance of a portal generator at a threat; 0 below its minThreat. */
+export function resolveDawnPortalGeneratorChance(archetype: DawnSiteArchetype, threat: number): number {
+  const { portal, minThreat = 1 } = archetype;
+  if (!portal || threat < minThreat) return 0;
+  return Math.min(portal.chance.max, portal.chance.base + portal.chance.perThreat * (threat - minThreat));
 }
 
 /** Each tier-level behaviour belongs to exactly one objective shape and is complete across all tiers. */

@@ -14,6 +14,7 @@ import {
 import { createDawnRandom } from './DawnRandom';
 import { composeDawnSites } from './DawnSiteComposition';
 import { composeDawnSiteVariants } from './DawnSiteVariantComposition';
+import { composeDawnPortalSite } from './DawnPortalComposition';
 import { assignDawnFronts, composeDawnDayPressure, composeDawnSiteAssaults } from './DawnWaveComposition';
 import { composeDawnModifiedNight } from './DawnNightModifierComposition';
 import type { DawnNightModifierId } from '../contracts/DawnContentIds';
@@ -27,6 +28,8 @@ export interface DawnRoundCompositionInput {
   readonly nightModifier?: DawnNightModifierId | 'none';
   /** Host infrastructure: reveals hidden sites (scrap heaps) for this round. */
   readonly scrapScanner?: boolean;
+  /** Dev and debug only: place a portal generator whenever the arena allows one. */
+  readonly forcePortalGenerator?: boolean;
 }
 
 export interface DawnRoundPlans {
@@ -47,9 +50,16 @@ export function composeDawnRoundPlans(input: DawnRoundCompositionInput): DawnRou
   const templates = getDawnArenaTemplates();
   const template = templates[createDawnRandom(seed, 'template').int(templates.length)];
   const schedule = getDawnSchedule(curve.scheduleId);
-  const sites = composeDawnSiteVariants(seed,
+  const ordinarySites = composeDawnSiteVariants(seed,
     composeDawnSites({ random: createDawnRandom(seed, 'sites'), template, curve, scrapScanner: input.scrapScanner }));
   const fronts = assignDawnFronts(createDawnRandom(seed, 'fronts'), template, curve);
+  const portalSite = composeDawnPortalSite({ random: createDawnRandom(seed, 'portal'), template, curve, fronts,
+    sites: ordinarySites, force: input.forcePortalGenerator });
+  // Sites stay in template slot order; the generator is one more site, not one of `siteCount`.
+  const sites = portalSite
+    ? [...ordinarySites, portalSite].sort((left, right) => template.salvageSlots.findIndex(slot => slot.id === left.slotId)
+      - template.salvageSlots.findIndex(slot => slot.id === right.slotId))
+    : ordinarySites;
   const night = composeDawnModifiedNight({ seed, random: createDawnRandom(seed, 'night'), curve, schedule, fronts, nightModifier: input.nightModifier });
   const waves = [
     ...composeDawnDayPressure({ random: createDawnRandom(seed, 'day'), curve, schedule, fronts }),

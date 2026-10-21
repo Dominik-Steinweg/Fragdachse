@@ -8,6 +8,7 @@ import { resolveDawnExpansionCoreHpBonus } from '../../dawn/economy/DawnExpansio
 import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
 import { getDevDawnNightModifier } from '../../dev/scenario/dawnNightModifier';
+import { isDawnPortalGeneratorForced } from '../../dawn/debug/dawnDebugOverrides';
 import { resolveDawnNightEnvironment } from '../../dawn/resolution/DawnNightModifierResolution';
 import { isLocalScenarioBotPeer } from '../../network/peer/LocalScenarioSession';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
@@ -3914,6 +3915,7 @@ function composeHostDawnRoundPlans(seed: number): DawnRoundPlans {
     dayNumber: dawn.stats.roundsPlayed + 1,
     nightModifier: isDevScenarioMode() ? getDevDawnNightModifier() : undefined,
     scrapScanner: freezeDawnInfrastructure(dawn).scrapScanner > 0,
+    forcePortalGenerator: isDawnPortalGeneratorForced(),
   });
 }
 
