@@ -11,9 +11,10 @@ import type { WildlifeAnimal } from './AmbientWildlifeModel';
 
 /**
  * Bird channels per individual (a sparrow flock repeats them per member). Geometry faces +x;
- * +y is the right wing, the inner wing of a turn with increasing angle.
+ * +y is the right wing, the inner wing of a turn with increasing angle. Each wing has an arm
+ * channel and a hand channel beyond the wrist, so the hand can flex on the upstroke.
  */
-const SHADOW = 0, BODY = 1, TAIL = 2, HEAD = 3, WING_L = 4, WING_R = 5, PARTS = 6;
+const SHADOW = 0, BODY = 1, TAIL = 2, HEAD = 3, WING_L = 4, WING_R = 5, HAND_L = 6, HAND_R = 7, PARTS = 8;
 const TAU = Math.PI * 2;
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 const smooth = (t: number): number => { const c = clamp(t, 0, 1); return c * c * (3 - 2 * c); };
@@ -49,6 +50,8 @@ interface BirdShape {
   readonly neck: number;
   /** Right wing root (shoulder pivot); folding swings the wing back around it along the body. */
   readonly root: readonly [x: number, y: number];
+  /** Right wrist line: vertices beyond its span belong to the hand, which flexes about its middle. */
+  readonly wrist: readonly [x: number, y: number];
   /** Right wing (+y) from the shoulder over the tip back to the trailing root. */
   readonly wing: readonly number[];
   /** Smoothed wing outline for the flight shadow when the drawn edge is scalloped or fingered. */
@@ -58,15 +61,17 @@ interface BirdShape {
 }
 
 const SHAPES: Record<BirdKind, BirdShape> = {
-  sparrow: { beak: .55, head: [.3, .16], neck: .2, root: [-.03, .1],
+  sparrow: { beak: .55, head: [.3, .16], neck: .2, root: [-.03, .1], wrist: [-.05, .45],
     wing: [.14, .09, .12, .4, .02, .74, -.1, .8, -.2, .62, -.22, .3, -.2, .09], tail: [-.26, .08, -.5, .11, -.47, 0] },
-  magpie: { beak: .44, head: [.27, .085], neck: .2, root: [.01, .07],
-    wing: [.16, .07, .15, .3, .07, .56, -.06, .63, -.17, .56, -.19, .3, -.13, .07], tail: [-.1, .05, -.35, .07, -.55, .05, -.63, 0] },
-  raven: { beak: .54, head: [.3, .12], neck: .2, root: [-.02, .11],
-    wing: [.14, .1, .17, .3, .18, .5, .13, .68, .06, .84, -.02, .88, -.12, .88, -.2, .84, -.25, .68, -.26, .48, -.25, .3, -.2, .12],
-    shadowWing: [.14, .1, .18, .5, .06, .84, .04, 1.12, -.08, 1.17, -.19, 1.08, -.25, .68, -.25, .3, -.2, .12],
+  magpie: { beak: .44, head: [.27, .085], neck: .2, root: [.01, .07], wrist: [-.03, .44],
+    wing: [.16, .07, .18, .2, .17, .33, .12, .46, .05, .57, -.04, .63, -.12, .62, -.18, .55, -.21, .42, -.21, .28, -.18, .15, -.13, .07],
+    tail: [-.1, .05, -.35, .07, -.55, .05, -.63, 0] },
+  raven: { beak: .54, head: [.3, .12], neck: .2, root: [-.02, .11], wrist: [-.05, .54],
+    wing: [.12, .1, .17, .24, .2, .42, .17, .56, .11, .7, .05, .84, -.03, .88, -.12, .88, -.2, .84, -.26, .7,
+      -.29, .52, -.28, .36, -.25, .22, -.19, .12],
+    shadowWing: [.12, .1, .2, .42, .05, .84, .04, 1.06, -.08, 1.12, -.19, 1.03, -.29, .52, -.25, .22, -.19, .12],
     tail: [-.2, .09, -.42, .13, -.5, 0] },
-  owl: { beak: .5, head: [.27, .21], neck: .12, root: [-.02, .12],
+  owl: { beak: .5, head: [.27, .21], neck: .12, root: [-.02, .12], wrist: [-.06, .75],
     wing: [.16, .12, .24, .3, .28, .48, .25, .62, .17, .8, .07, .96,
       .01, 1.06, -.04, 1.03, -.08, 1.12, -.12, 1.08, -.16, 1.12, -.2, 1.07, -.24, 1.07, -.27, 1,
       -.31, .92, -.29, .86, -.33, .78, -.31, .72, -.34, .64, -.32, .58, -.34, .5, -.32, .44, -.33, .36,
@@ -80,20 +85,34 @@ const OWL_COLORS = [
   { back: 0x6b675e, coverts: 0x78736a, flight: 0x5a5752, dark: 0x35332e, pale: 0xc8c1b0 },
 ] as const;
 
+/** A wing drawn on two channels: vertices beyond the wrist ride the hand. */
+interface WingChannels { readonly arm: number; readonly hand: number; readonly wrist: number }
+type Channel = number | WingChannels;
+
+function wingChannels(cb: number, side: number, shape: BirdShape): WingChannels {
+  return side < 0 ? { arm: cb + WING_L, hand: cb + HAND_L, wrist: shape.wrist[1] }
+    : { arm: cb + WING_R, hand: cb + HAND_R, wrist: shape.wrist[1] };
+}
+
+/** `y` in units of the bird's length, mirrored or not. */
+function pick(channel: Channel, y: number): number {
+  return typeof channel === 'number' ? channel : Math.abs(y) > channel.wrist ? channel.hand : channel.arm;
+}
+
 /** Convex-or-star polygon in units of `length`, fanned from its first point; `side` mirrors y. */
-function fan(mesh: WildlifeMesh, points: readonly number[], length: number, channel: number, side = 1): void {
+function fan(mesh: WildlifeMesh, points: readonly number[], length: number, channel: Channel, side = 1): void {
   const base = mesh.channels.length;
-  for (let i = 0; i < points.length; i += 2) mesh.vertex(points[i] * length, points[i + 1] * length * side, channel);
+  for (let i = 0; i < points.length; i += 2) mesh.vertex(points[i] * length, points[i + 1] * length * side, pick(channel, points[i + 1]));
   for (let i = 1; i < points.length / 2 - 1; i++) mesh.indices.push(base, base + i, base + i + 1);
 }
 
-function oval(mesh: WildlifeMesh, channel: number, length: number, x: number, y: number, w: number, h: number, count = 10): void {
-  mesh.use(channel);
+function oval(mesh: WildlifeMesh, channel: Channel, length: number, x: number, y: number, w: number, h: number, count = 10): void {
+  mesh.use(pick(channel, y));
   mesh.ellipse(x * length, y * length, w * length, h * length, count);
 }
 
-function stroke(mesh: WildlifeMesh, channel: number, length: number, x0: number, y0: number, x1: number, y1: number, width: number): void {
-  mesh.line(x0 * length, y0 * length, x1 * length, y1 * length, width * length, channel, channel);
+function stroke(mesh: WildlifeMesh, channel: Channel, length: number, x0: number, y0: number, x1: number, y1: number, width: number): void {
+  mesh.line(x0 * length, y0 * length, x1 * length, y1 * length, width * length, pick(channel, y0), pick(channel, y1));
 }
 
 function mirroredTail(shape: BirdShape): number[] {
@@ -113,7 +132,7 @@ function drawSparrow(mesh: WildlifeMesh, cb: number, length: number, female: boo
   mesh.fill(0x4a3a2a, 1, 1); fan(mesh, mirroredTail(shape), length, cb + TAIL);
   mesh.fill(back, 1, 1); oval(mesh, cb + BODY, length, -.02, 0, .62, .42);
   for (const side of [-1, 1]) {
-    const wing = cb + (side < 0 ? WING_L : WING_R);
+    const wing = wingChannels(cb, side, shape);
     mesh.fill(covert, 1, 1); fan(mesh, shape.wing, length, wing, side);
     mesh.fill(0x3e3125, .95, 1); fan(mesh, [.04, .55, .02, .74, -.1, .8, -.2, .62, -.15, .5], length, wing, side);
     mesh.fill(0xd9d2bf, .9, 1); stroke(mesh, wing, length, .09, .28 * side, -.13, .34 * side, .05);
@@ -142,12 +161,12 @@ function drawMagpie(mesh: WildlifeMesh, cb: number, length: number): void {
   mesh.fill(0x3b3560, .3, 1); stroke(mesh, cb + TAIL, length, -.3, .02, -.5, .015, .025);
   mesh.fill(0x15171a, 1, 1); oval(mesh, cb + BODY, length, .05, 0, .42, .22);
   for (const side of [-1, 1]) {
-    const wing = cb + (side < 0 ? WING_L : WING_R);
+    const wing = wingChannels(cb, side, shape);
     mesh.fill(0x17191c, 1, 1); fan(mesh, shape.wing, length, wing, side);
-    mesh.fill(0x23404a, .5, 1); fan(mesh, [.14, .08, .12, .3, -.08, .32, -.12, .08], length, wing, side);
+    mesh.fill(0x23404a, .5, 1); fan(mesh, [.15, .08, .16, .3, -.08, .34, -.13, .08], length, wing, side);
     // White inner primaries: a bright flash in flight, a narrow edge when folded.
-    mesh.fill(0xe4e4dc, .95, 1); fan(mesh, [.06, .42, .05, .54, -.03, .59, -.1, .55, -.07, .44], length, wing, side);
-    mesh.fill(0x111214, 1, 1); fan(mesh, [.05, .55, .06, .58, -.06, .64, -.1, .57], length, wing, side);
+    mesh.fill(0xe4e4dc, .95, 1); fan(mesh, [.09, .43, .05, .54, -.03, .6, -.11, .58, -.12, .46], length, wing, side);
+    mesh.fill(0x111214, 1, 1); fan(mesh, [.04, .56, -.04, .63, -.12, .62, -.09, .58], length, wing, side);
   }
   // White scapulars: two tapered shoulder patches forming the magpie's pale V.
   mesh.fill(0xe8e8e2, 1, 1);
@@ -167,19 +186,19 @@ function drawRaven(mesh: WildlifeMesh, cb: number, length: number): void {
   // Deep chest and broad shoulders narrowing to the rump: a bird's mass, never a plain stroke.
   mesh.fill(black, 1, 1); oval(mesh, cb + BODY, length, .06, 0, .5, .36, 16); oval(mesh, cb + BODY, length, -.14, 0, .36, .26, 14);
   for (const side of [-1, 1]) {
-    const wing = cb + (side < 0 ? WING_L : WING_R);
+    const wing = wingChannels(cb, side, shape);
     mesh.fill(0x111216, 1, 1); fan(mesh, shape.wing, length, wing, side);
     // Fingered hand: six separated primaries, splayed slightly outwards.
     for (let f = 0; f < 6; f++) {
-      const x = .04 - f * .042, tip = 1.06 + Math.sin(f / 5 * Math.PI) * .06, lean = (x + .06) * .12;
+      const x = .04 - f * .043, tip = 1.02 + Math.sin(f / 5 * Math.PI) * .08, lean = (x + .06) * .12;
       fan(mesh, [x + .018, .84, x + .006 + lean, tip, x - .02 + lean, tip - .02, x - .024, .84], length, wing, side);
     }
     // Glossy coverts and feather edges give the black wing its form.
-    mesh.fill(gloss, .24, 1); fan(mesh, [.14, .12, .16, .32, .15, .5, .02, .56, -.1, .5, -.14, .3, -.12, .12], length, wing, side);
-    mesh.fill(sheen, .35, 1);
-    for (const y of [.24, .38, .52]) stroke(mesh, wing, length, .12, y * side, -.16, (y + .02) * side, .016);
-    mesh.fill(0x24262f, .6, 1);
-    for (const y of [.6, .7, .78]) stroke(mesh, wing, length, .08, y * side, -.2, (y + .03) * side, .012);
+    mesh.fill(gloss, .24, 1); fan(mesh, [.12, .12, .17, .26, .19, .44, .06, .56, -.1, .52, -.15, .3, -.12, .13], length, wing, side);
+    mesh.fill(sheen, .16, 1);
+    for (const y of [.3, .5]) stroke(mesh, wing, length, .12, y * side, -.16, (y + .02) * side, .016);
+    mesh.fill(0x24262f, .3, 1);
+    for (const y of [.64, .76]) stroke(mesh, wing, length, .08, y * side, -.2, (y + .03) * side, .012);
   }
   // Mantle gloss and the shoulder highlight that catch the light from above.
   mesh.fill(gloss, .3, 1); oval(mesh, cb + BODY, length, .04, 0, .36, .16, 12);
@@ -199,7 +218,7 @@ function drawOwl(mesh: WildlifeMesh, cb: number, length: number, colorIndex: num
   for (const x of [-.3, -.36, -.42]) stroke(mesh, cb + TAIL, length, x, .09, x, -.09, .02);
   mesh.fill(c.back, 1, 1); oval(mesh, cb + BODY, length, 0, 0, .62, .48);
   for (const side of [-1, 1]) {
-    const wing = cb + (side < 0 ? WING_L : WING_R);
+    const wing = wingChannels(cb, side, shape);
     // Flight feathers: scalloped secondaries, rounded separated primaries.
     mesh.fill(c.flight, 1, 1); fan(mesh, shape.wing, length, wing, side);
     // Secondaries point backwards: shafts run chordwise, their bars run along the span.
@@ -247,11 +266,12 @@ function drawFlightShadow(mesh: WildlifeMesh, cb: number, length: number, shape:
   // The head's sides (an owl's look-around) and the tail root (it fans in flight) would fold the fan.
   const wing = shape.shadowWing ?? shape.wing;
   add(shape.beak, 0, HEAD);
-  for (let i = 0; i < wing.length; i += 2) add(wing[i], wing[i + 1], WING_R);
+  const wrist = shape.wrist[1];
+  for (let i = 0; i < wing.length; i += 2) add(wing[i], wing[i + 1], wing[i + 1] > wrist ? HAND_R : WING_R);
   for (let i = 2; i < shape.tail.length - 2; i += 2) add(shape.tail[i], shape.tail[i + 1], TAIL);
   add(shape.tail[shape.tail.length - 2], 0, TAIL);
   for (let i = shape.tail.length - 4; i >= 2; i -= 2) add(shape.tail[i], -shape.tail[i + 1], TAIL);
-  for (let i = wing.length - 2; i >= 0; i -= 2) add(wing[i], -wing[i + 1], WING_L);
+  for (let i = wing.length - 2; i >= 0; i -= 2) add(wing[i], -wing[i + 1], wing[i + 1] > wrist ? HAND_L : WING_L);
   mesh.fill(0x05090c, .55, 1);
   const center = mesh.vertex(0, 0, cb + BODY), count = channels.length;
   const inner = channels.map((channel, i) => mesh.vertex(points[i * 2] * length, points[i * 2 + 1] * length, channel));
@@ -280,29 +300,46 @@ function cruiseFlap(kind: BirdKind, time: number, phase: number): number {
   }
 }
 
+/** Writes a pose in a member's frame: local rotation `angle`, scale and translation, then the member transform. */
+function compose(pose: WildlifePose, k: number, cm: number, sm: number, tx: number, ty: number,
+  angle: number, sx: number, sy: number, lx: number, ly: number): void {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  pose.c = cm * c - sm * s; pose.s = sm * c + cm * s;
+  pose.sx = k * sx; pose.sy = k * sy;
+  pose.x = tx + (cm * lx - sm * ly) * k; pose.y = ty + (sm * lx + cm * ly) * k;
+}
+
 /**
- * One wing's channel: spread, it beats (shorter projected span at the stroke ends) and banks
- * (inner wing foreshortened); folding swings it back around the shoulder and narrows it, so a
- * resting bird shows its folded wings along the back. Composed with a flock member's transform.
+ * One wing's arm and hand. Spread, the stroke barely shortens the span; the hand flexes back
+ * about the wrist on the upstroke and reaches slightly forward on the downstroke, the way a real
+ * wing beats seen from above. Banking foreshortens the inner wing; gliding leaves only a slow tip
+ * flex. Folding swings the whole wing back around the shoulder and narrows it along the back.
  */
-function writeWing(pose: WildlifePose, kind: BirdKind, shape: BirdShape, length: number, side: 1 | -1,
+function writeWing(arm: WildlifePose, hand: WildlifePose, kind: BirdKind, shape: BirdShape, length: number, side: 1 | -1,
   wings: number, forced: number, animation: number, time: number, phase: number, bank: number,
   k = 1, cm = 1, sm = 0, tx = 0, ty = 0): void {
-  const rhythm = cruiseFlap(kind, time, phase), drive = Math.max(forced, rhythm);
-  const open = wings, flap = open * drive, beat = Math.sin(animation), b = clamp(bank, -1, 1) * open;
-  const inner = side * b > 0;
+  const tuning = TUNING[kind], rhythm = cruiseFlap(kind, time, phase), drive = Math.max(forced, rhythm);
+  const open = wings, flap = open * drive, b = clamp(bank, -1, 1) * open, inner = side * b > 0;
+  // Stroke position: +1 at the top, -1 at the bottom.
+  const lift = Math.cos(animation), rising = Math.max(0, -Math.sin(animation)), falling = Math.max(0, Math.sin(animation));
   // A sparrow's bounding flight pulls the wings in between bursts of beats.
   const bound = kind === 'sparrow' ? 1 - .6 * open * (1 - drive) : 1;
-  const span = (.45 + .55 * open) * bound * (1 - flap * TUNING[kind].beat * beat * beat) * (1 - Math.abs(b) * (inner ? .3 : .08));
+  const span = (.45 + .55 * open) * bound * (1 - flap * tuning.beat * lift * lift) * (1 - Math.abs(b) * (inner ? .3 : .08));
   const chord = .35 + .65 * open, fold = smooth(1 - open), angle = side * Math.PI / 2 * fold;
   const cw = Math.cos(angle), sw = Math.sin(angle);
   // Keep the shoulder in place: t = P' - R(S P), with the folded shoulder slightly back and inward.
   const px = shape.root[0] * length, py = side * shape.root[1] * length;
-  const wx = px - .03 * length * fold + .05 * length * flap * Math.sin(animation + .6) - (cw * chord * px - sw * span * py);
+  const wx = px - .03 * length * fold + .03 * length * flap * falling - (cw * chord * px - sw * span * py);
   const wy = py * (1 - .15 * fold) - (sw * chord * px + cw * span * py);
-  pose.c = cm * cw - sm * sw; pose.s = sm * cw + cm * sw;
-  pose.sx = k * chord; pose.sy = k * span;
-  pose.x = tx + (cm * wx - sm * wy) * k; pose.y = ty + (sm * wx + cm * wy) * k;
+  compose(arm, k, cm, sm, tx, ty, angle, chord, span, wx, wy);
+  // The hand rotates about the scaled wrist inside the wing frame: back on the way up, a little
+  // forward on the way down, and a slow soaring flex of the tip while gliding.
+  const glide = .05 * Math.sin(time * .8 + phase * 3) * open * (1 - drive);
+  const sweep = side * (open * flap * (tuning.handFlex * rising - .15 * falling) + glide);
+  const qx = chord * shape.wrist[0] * length, qy = span * side * shape.wrist[1] * length;
+  const cq = Math.cos(sweep), sq = Math.sin(sweep);
+  const hx = qx - (cq * qx - sq * qy), hy = qy - (sq * qx + cq * qy);
+  compose(hand, k, cm, sm, tx, ty, angle + sweep, chord, span, cw * hx - sw * hy + wx, sw * hx + cw * hy + wy);
 }
 
 function singleVisual(animal: WildlifeAnimal): WildlifeVisual {
@@ -322,8 +359,8 @@ function singleVisual(animal: WildlifeAnimal): WildlifeVisual {
       p[SHADOW].sx = p[SHADOW].sy = contact;
       const bank = clamp(animal.turnSpeed / turnRate, -1, 1);
       setPart(p[BODY], 1, 1, 0, 0, .03 * length * bank * bird.wings, 0, 0, 1, 1);
-      writeWing(p[WING_R], kind, shape, length, 1, bird.wings, bird.flap, animal.animation, time, animal.phaseOffset, bank);
-      writeWing(p[WING_L], kind, shape, length, -1, bird.wings, bird.flap, animal.animation, time, animal.phaseOffset, bank);
+      writeWing(p[WING_R], p[HAND_R], kind, shape, length, 1, bird.wings, bird.flap, animal.animation, time, animal.phaseOffset, bank);
+      writeWing(p[WING_L], p[HAND_L], kind, shape, length, -1, bird.wings, bird.flap, animal.animation, time, animal.phaseOffset, bank);
       const grounded = isGroundedBird(bird);
       const walking = grounded && bird.walking && animal.speed > 1;
       const peck = grounded && !walking && kind !== 'owl' ? pulse(frac(time * .8 + animal.variation * 3), .22) : 0;
@@ -450,8 +487,8 @@ function flockVisual(animal: WildlifeAnimal): WildlifeVisual {
         setPart(p[cb + BODY], k, c, s, lx, ly, 0, 0, hopScale, hopScale);
         setPart(p[cb + TAIL], k, c, s, lx, ly, 0, 0, 1, 1 + .3 * open);
         setPart(p[cb + HEAD], k, c, s, lx, ly, (drinking ? .12 : .1) * length * peck * (1 - open), 0, 1 - .15 * peck * (1 - open), 1);
-        writeWing(p[cb + WING_R], 'sparrow', shape, length, 1, open, forced * open, beats[i], rhythm, animal.phaseOffset, bank, k, c, s, lx, ly);
-        writeWing(p[cb + WING_L], 'sparrow', shape, length, -1, open, forced * open, beats[i], rhythm, animal.phaseOffset, bank, k, c, s, lx, ly);
+        writeWing(p[cb + WING_R], p[cb + HAND_R], 'sparrow', shape, length, 1, open, forced * open, beats[i], rhythm, animal.phaseOffset, bank, k, c, s, lx, ly);
+        writeWing(p[cb + WING_L], p[cb + HAND_L], 'sparrow', shape, length, -1, open, forced * open, beats[i], rhythm, animal.phaseOffset, bank, k, c, s, lx, ly);
       }
     },
   };
