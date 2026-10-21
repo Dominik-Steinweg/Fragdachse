@@ -394,8 +394,8 @@ export const BLOOD_HIT_VFX = {
     /** Mark lifetime per damage band; feeding a pool extends it up to `maxLifeMs`. */
     lifeMs: { tiny: 10_000, light: 11_000, medium: 12_500, heavy: 13_500, kill: 15_000 },
     maxLifeMs: 15_000,
-    /** Final part of a life in which a mark withdraws from its edge. */
-    shrinkMs: 3_000,
+    /** Final part of a life in which a mark fades out (drawing in a little from its edge). */
+    shrinkMs: 5_000,
     /** Glossy fresh red turns into dull red-brown between these ages (since the last feed). */
     dryStartMs: 2_500,
     dryEndMs: 8_000,
@@ -461,8 +461,10 @@ export const BLOOD_HIT_VFX = {
       rippleLifeMs: 1_200,
     },
     /** Marks per quality; above `pressure` × budget the oldest marks dry out early. */
-    budget: { high: 1_024, medium: 768, low: 512 },
-    pressure: 0.88,
+    budget: { high: 6_144, medium: 4_096, low: 2_560 },
+    pressure: 0.9,
+    /** Drying time of marks the budget retires early (still a soft withdrawal, never a pop). */
+    evictionFadeMs: 2_500,
     /** New spatter marks per frame; beyond it hits only feed pools (mass fights). */
     admissionPerFrame: 72,
     /** Accumulation texels per world pixel. */

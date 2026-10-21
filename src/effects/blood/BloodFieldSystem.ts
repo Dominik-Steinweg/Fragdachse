@@ -169,8 +169,9 @@ export class BloodFieldSystem implements BloodHitPort {
     if (this.destroyed) return;
     this.syncWorld();
     const now = this.scene.time.now, field = BLOOD_HIT_VFX.field;
-    this.planner.beginFrame(now);
-    this.model.update(now, field.budget[getGraphicsQualityProfile(this.scene).level], field.pressure, 900);
+    const budget = field.budget[getGraphicsQualityProfile(this.scene).level];
+    this.planner.beginFrame(now, this.model.count / budget);
+    this.model.update(now, budget, field.pressure, field.evictionFadeMs);
     this.submitRipples(now);
   }
 

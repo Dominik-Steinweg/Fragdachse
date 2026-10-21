@@ -87,7 +87,7 @@ void main() {`).replace('gl_FragColor=vec4(color*alpha,alpha);', `
       float stain=texture2D(uVoidStain,vec2(warped.x/uVoidStainSize.x,1.0-warped.y/uVoidStainSize.y)).r;
       float cloud=pondField(p*.013+drift*.8+vec2(t*.007,-t*.006)+5.0);
       float stainBody=smoothstep(6.0,28.0,shore);
-      float ink=smoothstep(.0,.85,stain*(.62+.55*cloud))*stainBody;
+      float ink=smoothstep(.0,.85,stain*(.62+.55*cloud))*stainBody*(1.0-dyeCover*.9);
       // Translucent plum ink, deepest in the basin. The water's own ripple and reflection detail
       // stays on top, measured against its body at this hour.
       vec3 inkDayBody=mix(shallow,deep,colorDepth)*(.90+broad*.18);
