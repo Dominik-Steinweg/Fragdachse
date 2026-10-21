@@ -19,6 +19,8 @@ import {
 } from './gpu/GpuVfxFrameAnimations';
 import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem } from './gpu/GpuVfxSystem';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
+import type { BloodHitPort } from './blood/BloodFieldSystem';
+import { createBloodLanding } from './blood/BloodTerrain';
 
 const DEATH_FRAGMENT_TEXTURE_SIZE = 4;
 /**
@@ -37,18 +39,6 @@ const DEATH_DUST_MOTE_FRAMES = [
   GpuVfxFrameId.DeathDustMoteD,
   GpuVfxFrameId.DeathDustMoteE,
 ] as const;
-
-/** Sink fuer den unveraenderten, persistenten Blood-Stain-Lifecycle. */
-export type BloodStainSink = (
-  x: number,
-  y: number,
-  scale: number,
-  alpha: number,
-  fadeMs: number,
-  tint: number,
-  rotation: number,
-  flightDelayMs: number,
-) => void;
 
 interface DeathProfile {
   readonly main: number;
@@ -82,6 +72,8 @@ export class CombatGoreGpuRenderer {
   private bloodStreakSpec: GpuVfxSpawnSpec | null = null;
   private bloodDropletSpec: GpuVfxSpawnSpec | null = null;
   private bloodMicroDropletSpec: GpuVfxSpawnSpec | null = null;
+  /** Reused landing of the flight being planned; read before the next flight starts. */
+  private readonly bloodLanding = createBloodLanding();
 
   constructor(scene: Phaser.Scene, createCanvas?: DeathFragmentCanvasFactory) {
     this.fragmentTemplateCache = new DeathFragmentTemplateCache(scene.textures, createCanvas);
@@ -263,8 +255,12 @@ export class CombatGoreGpuRenderer {
     }
   }
 
-  /** Spielt Core-Splash, Streaks, Droplets und wenige Mikrotröpfchen als GPU-Burst. */
-  playHit(effect: SyncedHitEffect, onBloodStain?: BloodStainSink): void {
+  /**
+   * Spielt Core-Splash, Streaks, Droplets und wenige Mikrotröpfchen als GPU-Burst. Mit Blutfeld
+   * werden die Flugbahnen vorher am Gelände geclippt (Fels, Hindernisse, Weltgrenze), und jede
+   * Landung hinterlässt ihre Spur: Lache, Spritzer, Felsblut oder Wolke im Wasser.
+   */
+  playHit(effect: SyncedHitEffect, blood?: BloodHitPort | null, bloodColor?: number): void {
     const gpu = this.gpu;
     const coreSpec = this.bloodCoreSpec;
     const streakSpec = this.bloodStreakSpec;
@@ -321,7 +317,7 @@ export class CombatGoreGpuRenderer {
       coreSpec.alphaStart = core.alpha * randomBetween(coreRng, 0.85, 1);
       coreSpec.alphaEnd = 0;
       coreSpec.alphaEase = GpuVfxEase.CubicIn;
-      coreSpec.tint = pickBloodTint(coreRng);
+      coreSpec.tint = pickBloodTint(coreRng, bloodColor);
       coreSpec.tintBlendStart = 1;
       coreSpec.tintBlendEnd = 1;
       if (BLOOD_HIT_VFX.bloodCoreEnabled) {
@@ -336,23 +332,32 @@ export class CombatGoreGpuRenderer {
     const dropletRequested = randomInt(rng, band.dropletCountMin, band.dropletCountMax)
       + 1
       + (killshot ? 1 : 0);
-    const stainCount = randomInt(rng, band.stainCountMin, band.stainCountMax);
-    let stainsCreated = 0;
+    // Gelaendeentscheidungen ziehen aus einem eigenen Strom: Flugblut bleibt ohne Gelaende gleich.
+    const terrainRng = createSeededRandom(effect.seed ^ 0x7e11a9);
+    const landing = this.bloodLanding;
+    const longestStreak = band.travelMaxPx * (killshot ? BLOOD_HIT_VFX.killshot.streakTravelScale : 1);
+    blood?.beginHit({
+      x: effect.x, y: effect.y, dirX: directionX, dirY: directionY, totalDamage: effect.totalDamage,
+      isKill: killshot, isCritical: effect.isCritical, seed: effect.seed, color: bloodColor,
+    });
 
     const streakCount = this.scaleBurst(GpuVfxEffectId.BloodStreak, streakRequested);
     for (let index = 0; index < streakCount; index += 1) {
       const angle = baseAngle + degToRad((rng() - 0.5) * Math.min(60, band.spreadDeg * spreadScale) * 2);
       const direction = { x: Math.cos(angle), y: Math.sin(angle) };
-      const travel = randomBetween(rng, band.travelMinPx, band.travelMaxPx)
+      const intendedTravel = randomBetween(rng, band.travelMinPx, band.travelMaxPx)
         * (killshot
           ? BLOOD_HIT_VFX.killshot.streakTravelScale
           : effect.isCritical ? 1.08 : 1);
-      const endX = effect.x + direction.x * travel;
-      const endY = effect.y + direction.y * travel;
-      const duration = randomBetween(rng, band.flightMinMs, band.flightMaxMs)
+      const fullDuration = randomBetween(rng, band.flightMinMs, band.flightMaxMs)
         * (killshot ? 0.9 : 1);
-      const authoredScale = randomBetween(rng, band.streakScaleMin, band.streakScaleMax)
-        * (killshot ? BLOOD_HIT_VFX.killshot.streakScale : 1);
+      const baseScale = randomBetween(rng, band.streakScaleMin, band.streakScaleMax);
+      const authoredScale = baseScale * (killshot ? BLOOD_HIT_VFX.killshot.streakScale : 1);
+      // Felsen sind hoeher als die Flugbahn: der Spritzer endet an der Felswand statt darueber.
+      const landed = blood?.land(effect.x, effect.y, effect.x + direction.x * intendedTravel,
+        effect.y + direction.y * intendedTravel, terrainRng(), landing) ?? null;
+      const travel = Math.max(2, landed ? landed.travel : intendedTravel);
+      const duration = fullDuration * flightTimeShare(travel, intendedTravel);
       // 36x16-Textur: Die sichtbare Fahne bleibt ein Teil ihrer tatsaechlichen Flugstrecke.
       const length = Math.min(travel * 0.48, 36 * authoredScale);
       const thickness = Math.min(8 * authoredScale, length * 0.28);
@@ -364,8 +369,6 @@ export class CombatGoreGpuRenderer {
       const endDistance = travel - endLength * 0.5;
       const startX = effect.x + direction.x * startDistance;
       const startY = effect.y + direction.y * startDistance;
-      const leaveStain = stainsCreated < stainCount && (index < stainCount || rng() > 0.45);
-      if (leaveStain) stainsCreated += 1;
 
       streakSpec.lifeMs = duration;
       streakSpec.x = startX;
@@ -385,7 +388,7 @@ export class CombatGoreGpuRenderer {
       streakSpec.alphaStart = 0.98;
       streakSpec.alphaEnd = 0;
       streakSpec.alphaEase = GpuVfxEase.CubicIn;
-      streakSpec.tint = pickBloodTint(rng);
+      streakSpec.tint = pickBloodTint(rng, bloodColor);
       streakSpec.tintBlendStart = 1;
       streakSpec.tintBlendEnd = 1;
       // Nur die Darstellung abschalten; RNG und Bodenflecken bleiben fuer den Vergleich gleich.
@@ -393,18 +396,8 @@ export class CombatGoreGpuRenderer {
         gpu.spawn(streakSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
       }
 
-      if (leaveStain && onBloodStain) {
-        onBloodStain(
-          endX,
-          endY,
-          randomBetween(rng, band.stainScaleMin, band.stainScaleMax)
-            * (killshot ? BLOOD_HIT_VFX.killshot.stainScale : 1),
-          band.stainAlpha,
-          band.stainFadeMs,
-          streakSpec.tint,
-          (rng() - 0.5) * Math.PI,
-          duration,
-        );
+      if (landed && blood) {
+        blood.flight('streak', landed, effect.x, effect.y, travel / longestStreak, baseScale, duration);
       }
     }
 
@@ -416,12 +409,16 @@ export class CombatGoreGpuRenderer {
         (rng() - 0.5) * Math.max(14, band.spreadDeg * 1.35) * 2 * spreadScale,
       );
       const direction = { x: Math.cos(angle), y: Math.sin(angle) };
-      const travel = randomBetween(rng, band.travelMinPx * 0.5, band.travelMaxPx * 0.75)
+      const intendedTravel = randomBetween(rng, band.travelMinPx * 0.5, band.travelMaxPx * 0.75)
         * (killshot ? BLOOD_HIT_VFX.killshot.dropletTravelScale : 1);
       const startX = effect.x + direction.x * BLOOD_HIT_VFX.spawnPushPx * 0.7;
       const startY = effect.y + direction.y * BLOOD_HIT_VFX.spawnPushPx * 0.7;
-      const duration = randomBetween(rng, band.flightMinMs, band.flightMaxMs)
+      const fullDuration = randomBetween(rng, band.flightMinMs, band.flightMaxMs)
         * 0.82 * dropletDurationBoost;
+      const landed = blood?.land(startX, startY, startX + direction.x * intendedTravel,
+        startY + direction.y * intendedTravel, terrainRng(), landing) ?? null;
+      const travel = landed ? landed.travel : intendedTravel;
+      const duration = fullDuration * flightTimeShare(travel, intendedTravel);
       const endX = startX + direction.x * travel;
       const endY = startY + direction.y * travel;
 
@@ -446,11 +443,15 @@ export class CombatGoreGpuRenderer {
       dropletSpec.alphaStart = boostDroplets ? 1 : 0.9;
       dropletSpec.alphaEnd = 0;
       dropletSpec.alphaEase = GpuVfxEase.QuadOut;
-      dropletSpec.tint = pickBloodTint(rng);
+      dropletSpec.tint = pickBloodTint(rng, bloodColor);
       dropletSpec.tintBlendStart = 1;
       dropletSpec.tintBlendEnd = 1;
       if (BLOOD_HIT_VFX.bloodDropletEnabled) {
         gpu.spawn(dropletSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+      }
+      if (landed && blood) {
+        blood.flight('droplet', landed, startX, startY, travel / longestStreak,
+          Math.max(0.5, Math.min(1.4, dropletSpec.scaleStart / 1.2)), duration);
       }
     }
 
@@ -463,11 +464,15 @@ export class CombatGoreGpuRenderer {
     for (let index = 0; index < microCount; index += 1) {
       const angle = baseAngle + degToRad((rng() - 0.5) * (killshot ? 115 : 80));
       const direction = { x: Math.cos(angle), y: Math.sin(angle) };
-      const travel = randomBetween(rng, band.travelMinPx * 0.72, band.travelMaxPx)
+      const intendedTravel = randomBetween(rng, band.travelMinPx * 0.72, band.travelMaxPx)
         * (killshot ? 1.2 : 0.92);
       const startX = originX + direction.x * randomBetween(rng, 0, 4);
       const startY = originY + direction.y * randomBetween(rng, 0, 4);
-      const duration = randomBetween(rng, 80, 150) * dropletDurationBoost;
+      const fullDuration = randomBetween(rng, 80, 150) * dropletDurationBoost;
+      const landed = blood?.land(startX, startY, startX + direction.x * intendedTravel,
+        startY + direction.y * intendedTravel, terrainRng(), landing) ?? null;
+      const travel = landed ? landed.travel : intendedTravel;
+      const duration = fullDuration * flightTimeShare(travel, intendedTravel);
 
       microSpec.lifeMs = duration;
       microSpec.x = startX;
@@ -489,13 +494,17 @@ export class CombatGoreGpuRenderer {
       microSpec.alphaStart = boostDroplets ? 1 : 0.82;
       microSpec.alphaEnd = 0;
       microSpec.alphaEase = GpuVfxEase.QuadOut;
-      microSpec.tint = pickBloodTint(rng);
+      microSpec.tint = pickBloodTint(rng, bloodColor);
       microSpec.tintBlendStart = 1;
       microSpec.tintBlendEnd = 1;
       if (BLOOD_HIT_VFX.bloodMicroDropletEnabled) {
         gpu.spawn(microSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
       }
+      if (landed && blood) {
+        blood.flight('micro', landed, startX, startY, travel / longestStreak, 1, duration);
+      }
     }
+    blood?.endHit();
   }
 
   destroy(): void {
@@ -746,7 +755,9 @@ function getBloodBand(totalDamage: number) {
   return BLOOD_HIT_VFX.bands.heavy;
 }
 
-function pickBloodTint(rng: () => number): number {
+function pickBloodTint(rng: () => number, bloodColor?: number): number {
+  // An own blood colour varies in darkness like the red palette; one draw keeps the sequence.
+  if (bloodColor !== undefined) return mixColors(bloodColor, 0x000000, rng() * 0.35);
   const index = Math.min(
     BLOOD_HIT_VFX.palette.length - 1,
     Math.floor(rng() * BLOOD_HIT_VFX.palette.length),
@@ -756,6 +767,11 @@ function pickBloodTint(rng: () => number): number {
   // clearly against grass, dirt and night grading. This only affects transient/stain blood;
   // the low-health overlay keeps its existing palette contract.
   return mixColors(baseTint, COLORS.RED_3, 0.24);
+}
+
+/** A flight cut short by the terrain lands sooner, but never instantly. */
+function flightTimeShare(travel: number, intendedTravel: number): number {
+  return Math.max(0.35, Math.sqrt(Math.min(1, travel / Math.max(1, intendedTravel))));
 }
 
 function randomBetween(rng: () => number, min: number, max: number): number {

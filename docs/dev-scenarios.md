@@ -367,6 +367,25 @@ await dev.run({ action: 'bridgeReview', step: 'status' });  // Brückenzustand, 
 `force-plant` zündet ohne Kiste, `collapse` lässt die Brücke sofort einstürzen. Das Dev-Szenario sperrt den
 normalen Spielerinput (`diagnosticsArena`); die Shift-Plakette erscheint deshalb nur in einer echten Partie.
 
+### Blut-Labor (bloodReview)
+
+Spielt feste Treffer-Folgen rein lokal ab (`playLocalHitEffect`), an Stellen, die jede Szene selbst auf der
+laufenden Karte sucht. Karte `0` hat Felsfeld und Teich, `bridge-review` eine stehende Brücke. Jede Szene
+leert das Blutfeld (außer `keep: true`) und richtet die Kamera auf ihre Stelle.
+
+```js
+const dev = window.devScenario;
+await dev.run({ action: 'bloodReview', scene: 'rockWall', zoom: 2 });    // Spray gegen eine Felswand, dann Kill
+await dev.run({ action: 'bloodReview', scene: 'poolGrowth', count: 8 });  // Treffer auf dieselbe Stelle
+await dev.run({ action: 'bloodReview', scene: 'pond', color: 0x39af3f }); // Wasser, eigene Blutfarbe
+await dev.run({ action: 'bloodReview', scene: 'status' });              // Marken, Lachen, Empfänger, Budget
+```
+
+Szenen: `rockWall`, `rockCorner`, `pond`, `shore`, `poolGrowth`, `killPool`, `trail`, `bridge`, `bands`
+(tiny bis Kill nebeneinander), `massFight` (Stress), `clear`. Optionen: `damage`, `count`, `seed`, `zoom`,
+`keep`, `color` (0xRRGGBB). In einem verborgenen Browser-Pane laufen keine Animation Frames;
+`scene: 'pump', frames: 60` treibt die Spielschleife dann von Hand.
+
 ### Allgemeine Steuerung
 
 Power-Ups gezielt auf einer freien Zelle erzeugen: `devScenario.run({action:'spawnPowerUp', id:'HEALTH_PACK', gridX:24, gridY:24})`.

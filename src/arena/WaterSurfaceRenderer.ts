@@ -31,6 +31,17 @@ export interface WaterVoidBloom {
   readonly pulse: number;
 }
 
+/** A borrowed texture whose channel B tints the water body over a world rectangle. */
+export interface WaterDye {
+  readonly textureKey: string;
+  /** World x, y, width, height; the owner may move it every frame. */
+  readonly rect: Float32Array;
+  /** True for canvas-style (top-down) texture rows. */
+  readonly flipY: boolean;
+  /** Optional hue over the same rect: colour × presence in RGB, presence in A. */
+  readonly hueKey?: string | null;
+}
+
 const instances = new WeakMap<Phaser.Scene, WaterSurfaceRenderer>();
 
 export class WaterSurfaceRenderer {
@@ -49,6 +60,9 @@ export class WaterSurfaceRenderer {
   private nightLight: WaterNightLight | null = null;
   /** Void stain texture of the sunlight owner's lily pads; this renderer owns the texture. */
   private voidStain: (WaterVoidStainUniforms & { readonly key: string }) | null = null;
+  /** Borrowed dye (blood clouds); its owner keeps the texture and moves `rect` every frame. */
+  private dye: WaterDye | null = null;
+  private readonly dyeRect = new Float32Array(4);
   /** Reused per draw: each chunk pulls the lamps meeting its own rectangle. */
   private readonly nightLamps = createSurfaceLightFrame();
   private readonly worldOffset: Float32Array;
@@ -156,6 +170,20 @@ export class WaterSurfaceRenderer {
     for (const chunk of this.chunks.values()) chunk.quad = this.createQuad(chunk.x, chunk.y, chunk.key);
   }
 
+  /**
+   * Tints the water body from channel B of a borrowed texture over a world rectangle, e.g. blood
+   * clouds. Rebinding only happens when the texture changes; null releases it.
+   */
+  setDye(binding: WaterDye | null): void {
+    if (this.destroyed) return;
+    const changed = (binding?.textureKey ?? null) !== (this.dye?.textureKey ?? null)
+      || (binding?.hueKey ?? null) !== (this.dye?.hueKey ?? null);
+    this.dye = binding;
+    if (!changed) return;
+    // Resident quads bind their samplers at creation (see ensureDisturbance): rebuild them.
+    for (const chunk of this.chunks.values()) { chunk.quad.destroy(); chunk.quad = this.createQuad(chunk.x, chunk.y, chunk.key); }
+  }
+
   /** Borrow the immutable CPU masks. The presentation owner retains their lifetime. */
   *getPreparedMasks(): Generator<{ readonly x: number; readonly y: number; readonly mask: WaterMaskView }> {
     if (!this.isPrepared()) throw new Error('[WaterSurfaceRenderer] Masks are not prepared');
@@ -213,6 +241,13 @@ export class WaterSurfaceRenderer {
           set('uDisturb', 1); set('uDisturbOn', Number(!!this.disturbance?.active));
           set('uDisturbRect', this.disturbRect); set('uDisturbTexel', this.disturbTexel);
           set('uVoid', this.voidBloom); set('uVoidPulse', this.voidPulse);
+          const dye = this.dye;
+          if (dye) {
+            this.dyeRect[0] = dye.rect[0] - this.frame.offsetX; this.dyeRect[1] = dye.rect[1] - this.frame.offsetY;
+            this.dyeRect[2] = Math.max(1, dye.rect[2]); this.dyeRect[3] = Math.max(1, dye.rect[3]);
+          }
+          set('uDye', 3); set('uDyeOn', dye ? 1 : 0); set('uDyeRect', this.dyeRect); set('uDyeFlip', dye?.flipY ? 1 : 0);
+          set('uDyeHue', 4); set('uDyeHueOn', dye?.hueKey ? 1 : 0);
           if(sun) {
             set('uWorldOffset',this.worldOffset);setWaterSunUniforms(set,this.sunlight);
             const night=this.nightLight&&this.nightLight.night>0?this.nightLight:null;
@@ -220,15 +255,18 @@ export class WaterSurfaceRenderer {
             setWaterVoidStainUniforms(set,this.voidStain);
           }
         },
-      }, x + size / 2, y + size / 2, size, size,
-      // The stain rides as a third sampler on both programs, so the variants keep one sampler list.
-      this.voidStain ? [key, this.disturbance?.textureKey ?? '__DEFAULT', this.voidStain.key]
-        : [key, this.disturbance?.textureKey ?? '__DEFAULT']);
+      }, x + size / 2, y + size / 2, size, size, this.samplers(key));
       const node = quad.renderNode;
       if (node) quad.once('destroy', () => disposeShaderWarmupNode(node));
       quad.setDepth(DEPTH.WATER).setBlendMode(Phaser.BlendModes.NORMAL);
       this.scene.add.existing(quad);
       return quad;
+  }
+
+  /** One fixed sampler list for both programs: mask, disturbance, void stain, dye, dye hue. */
+  private samplers(maskKey: string): string[] {
+    return [maskKey, this.disturbance?.textureKey ?? '__DEFAULT', this.voidStain?.key ?? '__DEFAULT',
+      this.dye?.textureKey ?? '__DEFAULT', this.dye?.hueKey ?? '__DEFAULT'];
   }
 
   /** Pure presentation grade, re-set every frame by its owner; null restores natural water. */
@@ -250,5 +288,6 @@ export class WaterSurfaceRenderer {
     for (const chunk of this.chunks.values()) { chunk.quad.destroy(); this.scene.textures.remove(chunk.key); }
     this.chunks.clear();
     if (this.voidStain) { this.scene.textures.remove(this.voidStain.key); this.voidStain = null; }
+    this.dye = null;
   }
 }

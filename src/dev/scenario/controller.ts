@@ -259,6 +259,7 @@ export class DevScenarioController {
     bindWatchtowerReview(this, this.runtime);
     bindBridgeReview(this, this.runtime);
     bindPortalReview(this, this.runtime);
+    bindBloodReview(this, this.runtime);
     let imported: DevScenario | null = null;
     try { imported = decodeScenario(location.hash); } catch (error) { this.fail(error); }
     this.panel = createScenarioPanel(this);
@@ -1112,6 +1113,7 @@ export class DevScenarioController {
 import { bindWatchtowerReview } from './WatchtowerReview';
 import { bindBridgeReview } from './BridgeReview';
 import { bindPortalReview } from './PortalReview';
+import { bindBloodReview } from './BloodReview';
 
 /**
  * structuredClone, falling back to a plain-data copy when a live object (a scene, a function) slipped

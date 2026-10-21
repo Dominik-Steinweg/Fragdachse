@@ -619,6 +619,8 @@ export interface CoopDefenseEnemyConfig {
   readonly spriteRotationOffsetDegrees?: number;
   readonly isBoss?: boolean;
   readonly color?: number;
+  /** Blood colour (0xRRGGBB) of hits on this kind: spray, pools and clouds. Absent = the default red. */
+  readonly bloodColor?: number;
   readonly glow?: CoopDefenseEnemyGlowConfig;
   readonly eyeGlow?: { readonly color: number };
   readonly bossPresence?: CoopDefenseEnemyBossPresenceConfig;
@@ -914,6 +916,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     color: typeof enemy.color === 'number' && Number.isFinite(enemy.color)
       ? Math.max(0, Math.floor(enemy.color))
       : undefined,
+    bloodColor: normalizeBloodColor(enemy.bloodColor, enemy.id),
     glow: normalizeGlowConfig(enemy.glow),
     eyeGlow: normalizeEyeGlowConfig(enemy.eyeGlow),
     bossPresence: normalizeBossPresenceConfig(enemy.bossPresence),
@@ -975,6 +978,14 @@ function normalizeBossPresenceConfig(
     && Number.isInteger(value.footprintGlowColor) && value.footprintGlowColor > 0 && value.footprintGlowColor <= 0xffffff;
   if (!valid) throw new Error('[coopDefenseEnemies] Invalid boss presence config');
   return { fireflyCount: value.fireflyCount, footprintGlowColor: value.footprintGlowColor };
+}
+
+function normalizeBloodColor(value: number | undefined, enemyId: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || value < 0 || value > 0xffffff) {
+    throw new Error(`[coopDefenseEnemies] Invalid blood color: ${enemyId}`);
+  }
+  return value;
 }
 
 function normalizeEyeGlowConfig(value: { readonly color: number } | undefined): { readonly color: number } | undefined {

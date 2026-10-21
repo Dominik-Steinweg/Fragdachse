@@ -21,6 +21,8 @@ import { createTeslaStormShaderProbe } from './teslaStorm/TeslaStormBoltGpuLayer
 import { createEnergyBallShaderProbe } from './energyBall/EnergyBallGpuLayer';
 import { createFireControlPortalShaderProbe } from './fireControl/FireControlPortalGpuLayer';
 import { createPortalShaderProbe } from './gpu/PortalGpuLayer';
+import { BLOOD_GROUND_SHADER_NAME, BLOOD_ROCK_SHADER_NAME, createBloodFieldShaderProbe } from './blood/BloodFieldRenderer';
+import { BLOOD_GROUND_FRAGMENT, BLOOD_ROCK_FRAGMENT } from './blood/bloodFieldShaders';
 import { PLASMA_BURNER_BEAM_FRAGMENT_SOURCE, PLASMA_BURNER_BEAM_SHADER_NAME } from './plasmaBurnerBeamShader';
 
 /** Lazy probes; their owner releases them on completion, failure and Scene teardown.
@@ -130,6 +132,10 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
     createEnergyBallShaderProbe(scene),
     createFireControlPortalShaderProbe(scene),
     createPortalShaderProbe(scene),
+    // The blood field links its accumulation and receivers on the first hit otherwise.
+    createBloodFieldShaderProbe(scene),
+    shaderQuadProbe(scene, BLOOD_GROUND_SHADER_NAME, BLOOD_GROUND_FRAGMENT),
+    shaderQuadProbe(scene, BLOOD_ROCK_SHADER_NAME, BLOOD_ROCK_FRAGMENT),
   ];
 }
 

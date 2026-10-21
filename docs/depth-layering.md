@@ -61,7 +61,7 @@ Die Allowlist beschreibt bekannte Abweichungen; der aktuelle Umfang folgt aus
 | D01 | durch P1 und die Bodentiefe der Blutflecken behoben | 0 |
 | D02 | gewöhnliche Explosionskörper/-rauch über Kronen | 32 |
 | D03 | Boden-/Körpermotiv im Vordergrund | 74 |
-| D04 | Blutstain auf Gegnerdepth: behoben, Flecken liegen bei 9,84 unter Figuren, Schatten und Klauen-Telegraphen | 0 |
+| D04 | Blutstain auf Gegnerdepth: behoben; das Blutfeld liegt am Boden bei 5,14 (unter Wasser, Felsschatten und Figuren), auf stehenden Brückendecks bei 5,605 und auf Felsen bei 9,105 | 0 |
 | D05 | Stink-Bodenanteil: durch P1 behoben | 0 |
 | D06 | Material-/Projektilfamilie außerhalb Sonnenpass | 103 |
 | D07 | Gleichstand Sonnenpass 14,5 | 1 |

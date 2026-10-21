@@ -60,6 +60,7 @@ import { RemoteControlRenderer } from '../../effects/RemoteControlRenderer';
 import { HolyGrenadeRenderer } from '../../effects/HolyGrenadeRenderer';
 import { RocketRenderer }      from '../../effects/RocketRenderer';
 import { GpuVfxSystem }        from '../../effects/gpu/GpuVfxSystem';
+import { BloodFieldSystem }    from '../../effects/blood/BloodFieldSystem';
 import { ConstructionOwnershipMoteRenderer } from '../../effects/ConstructionOwnershipMoteRenderer';
 import { EntityBurnGpuController } from '../../effects/EntityBurnGpuController';
 import { FireballRenderer }    from '../../effects/FireballRenderer';
@@ -153,6 +154,8 @@ export interface RendererBundle {
   voidRift:            VoidRiftIntroRenderer;
   voidMeteorIntro:     VoidMeteorIntroRenderer;
   combatGoreGpu:      CombatGoreGpuRenderer;
+  /** Persistent hit blood: merging pools, rock and water marks. */
+  bloodField:          BloodFieldSystem;
   entityBurnGpu:       EntityBurnGpuController;
   mgAttrition:         MgAttritionRenderer;
   explosionGpu:        ExplosionGpuRenderer;
@@ -223,6 +226,8 @@ export function* createRendererBundleSteps(
   const combatGoreGpu = new CombatGoreGpuRenderer(scene);
   cleanup.push(() => combatGoreGpu.destroy());
   combatGoreGpu.registerGpuVfx(gpuVfx);
+  const bloodField = new BloodFieldSystem(scene);
+  cleanup.push(() => bloodField.destroy());
   const explosionGpu = new ExplosionGpuRenderer();
   cleanup.push(() => explosionGpu.clearPending());
   explosionGpu.registerGpuVfx(gpuVfx);
@@ -533,6 +538,7 @@ export function* createRendererBundleSteps(
     voidRift,
     voidMeteorIntro,
     combatGoreGpu,
+    bloodField,
     entityBurnGpu,
     mgAttrition,
     explosionGpu,
@@ -606,6 +612,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   });
   effectSystem.setBurrowGpuRenderer(bundle.burrowGpu);
   effectSystem.setCombatGoreGpuRenderer(bundle.combatGoreGpu);
+  effectSystem.setBloodField(bundle.bloodField);
   bundle.mortarStrike.setImpactSystems(bundle.explosionGpu, bundle.lighting);
   effectSystem.setMortarImpactRenderer((x, y, radius, color) => bundle.mortarStrike.playImpact(x, y, radius, color));
   effectSystem.setFirestarterRenderer(bundle.firestarter);

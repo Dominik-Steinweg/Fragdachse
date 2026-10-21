@@ -1,7 +1,6 @@
 import * as Phaser from 'phaser';
 import { BLOOD_HIT_VFX, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { createSeededRandom, ensureCanvasTexture } from './EffectUtils';
-import { BloodStainBatch } from './BloodStainBatch';
 
 export const TEX_BLOOD_DROPLET = '__blood_droplet';
 export const TEX_BLOOD_STREAK = '__blood_streak';
@@ -13,8 +12,8 @@ export const TEX_BLOOD_EDGE_LEFT   = '__blood_edge_left';
 export const TEX_BLOOD_EDGE_RIGHT  = '__blood_edge_right';
 export const TEX_BLOOD_SPECKLE     = '__blood_speckle';
 
+/** Canvas-renderer fallback stains; WebGL hit blood lives in the scene's blood field. */
 const activeBloodStains: Phaser.GameObjects.Image[] = [];
-const bloodStainBatches = new WeakMap<Phaser.Scene, BloodStainBatch>();
 
 function pruneDestroyedBloodStains(): void {
   for (let index = activeBloodStains.length - 1; index >= 0; index -= 1) {
@@ -39,8 +38,6 @@ export function clearBloodStains(scene: Phaser.Scene): void {
     scene.tweens.killTweensOf(stain);
     stain.destroy();
   }
-  bloodStainBatches.get(scene)?.destroy();
-  bloodStainBatches.delete(scene);
 }
 
 function resolveTextures(target: Phaser.Scene | Phaser.Textures.TextureManager): Phaser.Textures.TextureManager {
@@ -311,48 +308,8 @@ export interface BloodStainSpawnConfig {
   stainDelayMs: number;
 }
 
-function sceneBloodStainBatch(scene: Phaser.Scene): BloodStainBatch | null {
-  if (scene.sys.renderer.type !== Phaser.WEBGL) return null;
-  let batch = bloodStainBatches.get(scene);
-  if (!batch) {
-    batch = new BloodStainBatch(scene, TEX_BLOOD_STAIN, BLOOD_HIT_VFX.maxActiveStains, () => bloodStainBatches.delete(scene));
-    bloodStainBatches.set(scene, batch);
-  }
-  return batch;
-}
-
-/**
- * Spawns a stain after `delayMs`. WebGL queues it in the scene's stain batch, which a world clear
- * drops together with its decals; the returned cancel only matters for the Canvas timer path.
- */
-export function scheduleBloodStain(scene: Phaser.Scene, delayMs: number, config: BloodStainSpawnConfig,
-  onTimerSettled?: (cancel: () => void) => void): (() => void) | null {
-  const batch = sceneBloodStainBatch(scene);
-  if (batch) {
-    batch.schedule(scene.time.now + Math.max(0, delayMs), () => { spawnBloodStain(scene, config); });
-    return null;
-  }
-  // A removed timer's callback may still be delivered (stale queue); it must never spawn.
-  let cancelled = false;
-  const cancel = () => { cancelled = true; timer.remove(false); };
-  const timer = scene.time.delayedCall(Math.max(0, delayMs), () => {
-    if (cancelled) return;
-    onTimerSettled?.(cancel);
-    spawnBloodStain(scene, config);
-  });
-  return cancel;
-}
-
+/** Canvas fallback stain: one image with a pop-in and a fade, capped per scene set. */
 export function spawnBloodStain(scene: Phaser.Scene, config: BloodStainSpawnConfig): void {
-  const batch = sceneBloodStainBatch(scene);
-  if (batch) {
-    // WebGL decals are data in the scene's stain batch: no Image, tween or display-list entry.
-    batch.add(config.depth, { x: config.x, y: config.y, rotation: config.rotation, tint: config.tint,
-      animation: { bornAt: scene.time.now, alpha: config.alpha, scale: config.scale,
-        holdMs: config.stainDelayMs, fadeMs: config.fadeMs } });
-    return;
-  }
-
   pruneDestroyedBloodStains();
   while (activeBloodStains.length >= BLOOD_HIT_VFX.maxActiveStains) {
     const oldest = activeBloodStains.shift();

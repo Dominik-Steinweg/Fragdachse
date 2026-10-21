@@ -166,6 +166,11 @@ wird vom Wassershader in dessen eigenem Licht schattiert (Himmelsreflex, Sonneng
 Rauschspitze). Overlays zeichnen nur, was ueber der Oberflaeche liegt (Gischt, Nebel, Koerper unter
 Wasser); Spielregeln lesen das Feld nie.
 
+Was ins Wasser faellt, wird Faerbung des Wasserkoerpers statt Decal: Owner leihen dem Renderer ueber
+`WaterSurfaceRenderer.setDye(...)` eine Textur (Dichte in B, optional ein Farbton) ueber einem Weltrechteck;
+der Wassershader faerbt nur den Koerper, vor Reflexen, Wellen und Glanz. Landmarken liegen unter
+`DEPTH.WATER`, damit das Wasser sie verdeckt. Beispiel: das Blutfeld ([BloodFieldSystem.ts](../../src/effects/blood/BloodFieldSystem.ts)).
+
 [ArenaBuilder.ts](../../src/arena/ArenaBuilder.ts) trennt Runtime-/Physik-Proxies von visuellen World-Objekten. Ohne Presentation werden World-Physik, Runtime-Geometrie und notwendige Indizes weiter aufgebaut; nur die visuellen Flächen, Overlays und Streamer entfallen. Renderer beobachten Runtime und werden bei Teardown vollständig gelöst.
 
 Player- und Tree-Runtime folgen demselben Prinzip: PlayerBody und TreePhysicsProxy sind Simulation; Sprite, Licht, Textur und Overlay sind Präsentation. Kollisionen werden aus expliziter Runtime-Geometrie abgeleitet, nicht aus Displaymaßen.

@@ -381,6 +381,95 @@ export const BLOOD_HIT_VFX = {
     alpha: 0.96,
   },
   stainDelayMs: 250,
+  /**
+   * Persistent blood field (WebGL): every ground, rock and water mark writes density into one
+   * camera-following accumulation; the receivers threshold it into merged pools. Areas are px²
+   * (pool radius = sqrt(area)); times are ms. The Canvas renderer keeps the band stains below.
+   */
+  field: {
+    /** Accumulated density where a mark becomes visible blood. */
+    threshold: 0.5,
+    /** Steepness of a mark's density falloff; higher keeps neighbouring marks apart until they touch. */
+    falloffPower: 7,
+    /** Mark lifetime per damage band; feeding a pool extends it up to `maxLifeMs`. */
+    lifeMs: { tiny: 10_000, light: 11_000, medium: 12_500, heavy: 13_500, kill: 15_000 },
+    maxLifeMs: 15_000,
+    /** Final part of a life in which a mark withdraws from its edge. */
+    shrinkMs: 3_000,
+    /** Glossy fresh red turns into dull red-brown between these ages (since the last feed). */
+    dryStartMs: 2_500,
+    dryEndMs: 8_000,
+    /** Pool under and just behind the hit body. */
+    pool: {
+      area: { tiny: 16, light: 48, medium: 80, heavy: 115, kill: 950 },
+      spreadMs: 520,
+      killSpreadMs: 1_500,
+      /** Blood reaches the ground shortly after the impact. */
+      delayMs: 70,
+      maxRadiusPx: 40,
+      /** Pool behind the body centre, along the shot (px). */
+      offsetPx: 5,
+      /** Feeds within `growCore` × radius grow the pool; up to radius + margin they bud a merging satellite. */
+      growCore: 0.6,
+      mergeMarginPx: 9,
+      /** Small merging blobs between pool and spray, so the spray visibly leaves the pool. */
+      bridges: { tiny: 0, light: 1, medium: 2, heavy: 2, kill: 4 },
+    },
+    /** Directional impact stains of streaks and droplets; the tail points along the flight. */
+    spatter: {
+      /** Share of landed flights that leave a stain; the rest only fly (keeps repeated hits crisp). */
+      markShare: { streak: 0.75, droplet: 0.35, micro: 0 },
+      streakWidthPx: [2.4, 4.4],
+      dropletWidthPx: [1.4, 2.8],
+      microWidthPx: [0.8, 1.4],
+      /** Elongation grows with the flight distance (length / width at the band's max travel). */
+      maxElongation: 3.4,
+      /** Near stains are larger than far ones (size factor at zero and at full travel). */
+      nearScale: 1.25,
+      farScale: 0.7,
+      satelliteChance: 0.2,
+      killScale: 1.5,
+    },
+    /** Spray meeting a rock face sticks, runs down and pools at the foot. */
+    rock: {
+      /** Share of the streaks that clear the face and land on the rock top. */
+      overShare: 0.15,
+      overDepthPx: [6, 18],
+      splatWidthPx: [2.4, 4],
+      dripsPerHit: [1, 2],
+      /** Rivulets start this far up the face (inside the contour) and run down to hang at its lip. */
+      dripStartPx: [5, 13],
+      dripWidthPx: [1.6, 2.8],
+      dripRunMs: [320, 900],
+      footArea: 46,
+      footOffsetPx: 4,
+    },
+    /** Blood in water: a cloud that rises, curls, thins out and vanishes. */
+    water: {
+      /** Visible water starts at this signed shore distance (px, > 0 inside); the drawn bank reaches past the cells. */
+      landingDepthPx: -8,
+      cloudStartPx: 5,
+      cloudEndPx: [16, 28],
+      killCloudEndPx: 44,
+      lifeMs: 8_000,
+      spreadMs: 2_400,
+      /** Pools reaching the waterline seep into it. */
+      seepMs: 3_200,
+      seepIntervalMs: 900,
+      rippleRadiusPx: 5,
+      rippleStrength: 0.55,
+      rippleLifeMs: 1_200,
+    },
+    /** Marks per quality; above `pressure` × budget the oldest marks dry out early. */
+    budget: { high: 1_024, medium: 768, low: 512 },
+    pressure: 0.88,
+    /** New spatter marks per frame; beyond it hits only feed pools (mass fights). */
+    admissionPerFrame: 72,
+    /** Accumulation texels per world pixel. */
+    resolution: { high: 1, medium: 0.75, low: 0.5 },
+    /** World pixels around the view kept in the accumulation (camera lag, shake). */
+    viewMarginPx: 96,
+  },
   bands: {
     /** Kleinstschaden bleibt dezent; normale Waffentreffer bekommen deutlich mehr Praesenz. */
     tiny: {

@@ -94,6 +94,7 @@ export const GRAPHICS_FAMILIES = {
   teleportEffects: ['PortalGpuLayer', 'VoidPortalRenderer'],
   tongueLash: ['TongueLashRenderer'],
   restHealTendrils: ['RestHealGpuLayer'],
+  bloodField: ['BloodFieldRenderer'],
   turretWebs: ['TurretWebGpuLayer'],
   rocketLifecycleGraphics: ['RocketRenderer'],
   stinkCloudGraphics: ['StinkCloudSystem', 'StinkCloudBody'],
