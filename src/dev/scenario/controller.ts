@@ -26,7 +26,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../../config';
 import { getVisibleWorldView } from '../../graphics/CameraWorldView';
 import type { TrainDevPassOptions } from '../../train/TrainManager';
 import { setCameraBaseScroll } from '../../graphics/cameraBaseScroll';
-import { getCameraFocusOverride, resolveCameraFocusZoom } from '../../graphics/cameraFocusOverride';
+import { getAppliedStagedZoom, getCameraFocusOverride, resolveCameraFocusZoom } from '../../graphics/cameraFocusOverride';
 import { ScenarioClock } from './clock';
 import { prepareScenarioProgram, dawnPhaseElapsed } from './dawn';
 import { getDawnSchedule, type DawnPhaseId } from '../../config/dawn/dawnContent';
@@ -971,7 +971,9 @@ export class DevScenarioController {
     // Inszenierte Fokusse (Boss-Intro) laufen auch hier, damit Schwenk und Zoom pruefbar sind.
     const focus = this.trainCameraPoint || this.krakenLightShadowReview ? null : getCameraFocusOverride(this.scene);
     if (focus) point = { x: point.x + (focus.x - point.x) * focus.weight, y: point.y + (focus.y - point.y) * focus.weight };
-    const zoom = this.zoom * resolveCameraFocusZoom(focus);
+    // Die Spawn-Nahaufnahme gehoert der Weltkamera-Verfolgung; sie wird hier mit angewandt.
+    const staged = this.trainCameraPoint || this.krakenLightShadowReview ? 1 : getAppliedStagedZoom(this.scene);
+    const zoom = this.zoom * Math.max(resolveCameraFocusZoom(focus), staged);
     const camera = this.scene.cameras.main;
     camera.removeBounds();
     if (this.krakenLightShadowReview) camera.setZoom(1); // A source/world pixel is one camera pixel in the pilot.

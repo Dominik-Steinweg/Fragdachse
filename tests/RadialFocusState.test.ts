@@ -21,6 +21,15 @@ describe('radial focus state', () => {
     expect(Object.keys(frame).sort()).toEqual(['alpha', 'focusX', 'focusY', 'radiusPx']);
   });
 
+  it('keeps the veil on its world focus under a staged close-up zoom', () => {
+    // Countdown and respawn reveal run inside the spawn close-up: the camera magnifies around
+    // its top-left origin, so the screen focus scales with the extra zoom, the radius does not.
+    const frame = resolveRadialFocusFrame(1420, 640, 1100, 300, 176, 1, 1.5);
+    expect(frame.focusX).toBe(480);
+    expect(frame.focusY).toBe(510);
+    expect(frame.radiusPx).toBe(176);
+  });
+
   it('clamps the overlay alpha but preserves a negative death-close radius', () => {
     const frame = resolveRadialFocusFrame(200, 300, 0, 0, -104, 2);
 

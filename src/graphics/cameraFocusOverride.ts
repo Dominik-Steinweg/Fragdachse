@@ -47,3 +47,19 @@ export function resolveCameraFocusZoom(focus: Readonly<CameraFocusOverride> | nu
 export function getCameraFocusOverride(scene: Phaser.Scene): Readonly<CameraFocusOverride> | null {
   return focusByScene.get(scene) ?? null;
 }
+
+const appliedZoomByScene = new WeakMap<Phaser.Scene, number>();
+
+/**
+ * Vom Kamera-Owner zuletzt angewandter inszenierter Zusatzzoom: Fokus oder Spawn-Nahaufnahme,
+ * je nachdem welcher groesser ist. Nur zum Lesen fuer Kameras, die die Verfolgung ersetzen
+ * (Dev-Szenario), damit die Inszenierung dort ebenfalls pruefbar bleibt.
+ */
+export function setAppliedStagedZoom(scene: Phaser.Scene, zoom: number): void {
+  if (zoom > 1) appliedZoomByScene.set(scene, zoom);
+  else appliedZoomByScene.delete(scene);
+}
+
+export function getAppliedStagedZoom(scene: Phaser.Scene): number {
+  return appliedZoomByScene.get(scene) ?? 1;
+}

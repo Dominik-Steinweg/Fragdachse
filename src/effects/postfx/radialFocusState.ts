@@ -42,10 +42,12 @@ export function resolveRadialFocusFrame(
   cameraScrollY: number,
   radiusPx: number,
   alpha: number,
+  /** Inszenierter Zusatzzoom ueber dem Designzoom (Spawn-Nahaufnahme, Boss-Intro); 1 = keiner. */
+  zoom = 1,
 ): RadialFocusFrame {
   return {
-    focusX: focusWorldX - cameraScrollX,
-    focusY: focusWorldY - cameraScrollY,
+    focusX: (focusWorldX - cameraScrollX) * zoom,
+    focusY: (focusWorldY - cameraScrollY) * zoom,
     radiusPx,
     alpha: Math.max(0, Math.min(1, alpha)),
   };

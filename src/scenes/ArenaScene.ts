@@ -209,6 +209,8 @@ import {
   wireRenderersToDistortion,
 } from './arena';
 
+/** Der Ladeschleier blendet in 220 ms aus; die Materialisierung beginnt, wenn er weitgehend weg ist. */
+const SPAWN_REPLAY_AFTER_VEIL_MS = 160;
 
 /**
  * Reine, immutable Frame-Signale fuer die Scene-Orchestrierung. Das Objekt traegt keine
@@ -2544,6 +2546,8 @@ export class ArenaScene extends Phaser.Scene {
       this.localPlayerState.overlayTrackedAlive = this.localPlayerState.alive;
       this.ctx.arenaCountdown.syncTo(bridge.getArenaStartTime());
       this.ctx.arenaCountdown.update(now);
+      // Nur die eigene Figur ist hinter dem Schleier entstanden; alle anderen stehen laengst.
+      this.replaySpawnEffectsAfterVeil([bridge.getLocalPlayerId()]);
       return;
     }
 
@@ -2557,6 +2561,9 @@ export class ArenaScene extends Phaser.Scene {
 
     if (countdownActive) {
       this.localPlayerState.overlayTrackedAlive = this.localPlayerState.alive;
+      // Der erste Spawn der Runde lief unter dem Ladeschleier: Mit dem Countdown materialisieren
+      // sich alle Figuren sichtbar, waehrend die Kamera auf die eigene Figur gezoomt ist.
+      if (this.ctx.arenaCountdown.isLoading()) this.replaySpawnEffectsAfterVeil();
       this.ctx.arenaCountdown.syncTo(bridge.getArenaStartTime());
       this.ctx.arenaCountdown.update(now);
       return;
@@ -2572,6 +2579,11 @@ export class ArenaScene extends Phaser.Scene {
 
     this.localPlayerState.overlayTrackedAlive = this.localPlayerState.alive;
     this.ctx.arenaCountdown.update(now);
+  }
+
+  /** Startet verdeckte Materialisierungen erneut, sobald der Ladeschleier weitgehend ausgeblendet ist. */
+  private replaySpawnEffectsAfterVeil(playerIds?: readonly string[]): void {
+    this.time.delayedCall(SPAWN_REPLAY_AFTER_VEIL_MS, () => this.ctx?.playerManager.replaySpawnEffects(playerIds));
   }
 
   private getArenaLoadingScreenState(): ArenaLoadingScreenState {

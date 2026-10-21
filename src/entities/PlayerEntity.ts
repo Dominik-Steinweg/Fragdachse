@@ -23,6 +23,7 @@ import { HoneyBadgerRageRenderer } from '../effects/HoneyBadgerRageRenderer';
 import { EntityBurnRenderer } from '../effects/EntityBurnRenderer';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
+import { SPAWN_FLASH_S, SPAWN_VARIANT } from '../effects/gpu/SpawnShader';
 import { killAllAndResetParticlePositions, registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
@@ -37,6 +38,9 @@ import {
   getAimAngleFromPlayerSpriteRotation,
   getPlayerSpriteRotationFromAimAngle,
 } from '../config';
+
+/** Ein juengerer Materialisierungsstart war sichtbar genug; er wird nicht wiederholt. */
+const SPAWN_REPLAY_MIN_GAP_MS = 700;
 
 /**
  * Aufbauoptionen der Figur. Der Presentation-Modus liefert dieselbe Darstellung ohne die
@@ -130,6 +134,8 @@ export class PlayerEntity {
   private spawnShineTween: Phaser.Tweens.Tween | null = null;
   private spawnShineProgress = 0;
   private spawnShineAlpha = 0;
+  /** Scene-Zeit des letzten Materialisierungsstarts; entscheidet, ob ein Replay noetig ist. */
+  private spawnEffectStartedAt = Number.NEGATIVE_INFINITY;
   private stealthTween: Phaser.Tweens.Tween | null = null;
   private stealthScanTween: Phaser.Tweens.Tween | null = null;
   private stealthShell: Phaser.GameObjects.Image | null = null;
@@ -750,6 +756,9 @@ export class PlayerEntity {
     if (!this.sprite) return;
     this.stopBurrowTween(true);
     const scene = this.sprite.scene;
+    this.spawnEffectStartedAt = scene.time.now;
+    // Die Figur entsteht im Blitz des GPU-Effekts, nicht davor: Bis dahin sammelt sich das Licht.
+    const materializeDelay = Math.max(0, SPAWN_FLASH_S[SPAWN_VARIANT.player] * 1000 - 40);
 
     // Sprite kurz auf Scale/Alpha 0 setzen und dann animiert einblenden
     this.sprite.scene.tweens.killTweensOf(this.sprite);
@@ -763,6 +772,7 @@ export class PlayerEntity {
     this.spawnShineTween = scene.tweens.add({
       targets:  this,
       spawnShineProgress: 1,
+      delay:    materializeDelay,
       duration: 520,
       ease:     'Sine.easeInOut',
       onUpdate: () => {
@@ -782,6 +792,7 @@ export class PlayerEntity {
       this.glowTween = scene.tweens.add({
         targets:       this.glowFx,
         outerStrength: PLAYER_GLOW_STRENGTH.min,
+        delay:         materializeDelay,
         duration:      480,
         ease:          'Quad.easeOut',
         onComplete:    () => {
@@ -792,29 +803,41 @@ export class PlayerEntity {
       this.startDefaultGlowTween();
     }
 
-    // Sprite: Scale 0 → 1.15 (Überschwingen) → 1, Alpha 0 → 1 – jeweils relativ zur Grundgroesse
+    // Sprite: Scale 0 → 1.12 (Überschwingen) → 1, Alpha 0 → 1 – jeweils relativ zur Grundgroesse
     scene.tweens.add({
       targets:  this.sprite,
-      scaleX:   { from: 0, to: this.spriteBaseScaleX * 1.15 },
-      scaleY:   { from: 0, to: this.spriteBaseScaleY * 1.15 },
+      scaleX:   { from: 0, to: this.spriteBaseScaleX * 1.12 },
+      scaleY:   { from: 0, to: this.spriteBaseScaleY * 1.12 },
       alpha:    { from: 0, to: 1 },
-      duration: 300,
+      delay:    materializeDelay,
+      duration: 280,
       ease:     'Back.easeOut',
       onComplete: () => {
         scene.tweens.add({
           targets:  this.sprite,
           scaleX:   this.spriteBaseScaleX,
           scaleY:   this.spriteBaseScaleY,
-          duration: 130,
+          duration: 150,
           ease:     'Quad.easeInOut',
         });
       },
     });
 
-    // World-Space-Effekte (Ringe, Partikel, Lichtstrahl, Kern-Flash)
+    // World-Space-Effekte auf der GPU: Sammeln, Sigil, Lichtsäule, Blitz, Ringe, Funken, Nachleuchten
     this.spawnEffectRenderer ??= new SpawnEffectRenderer(scene);
     this.spawnEffectRenderer.setLightingSystem(this.lighting);
     this.spawnEffectRenderer.play(this.runtime.x, this.runtime.y, this.colorHex);
+  }
+
+  /**
+   * Zeigt die Materialisierung erneut, falls ihr letzter Start verdeckt war: Der erste Spawn einer
+   * Runde entsteht hinter dem Ladeschleier, sichtbar wird die Figur erst mit dem Countdown.
+   * Ein gerade erst gestarteter Effekt läuft dagegen unverändert weiter.
+   */
+  replaySpawnEffect(): void {
+    if (!this.sprite || !this.isAliveVisual || !this.baseVisible) return;
+    if (this.sprite.scene.time.now - this.spawnEffectStartedAt < SPAWN_REPLAY_MIN_GAP_MS) return;
+    this.playSpawnEffect();
   }
 
   /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite), 1 = normale Spielergroesse. */

@@ -1,0 +1,62 @@
+{
+  "owner": "effects/gpu/SpawnGpuLayer.ts",
+  "notes": [
+    "Spawn materialisation of players and enemies: sigil paint and shock dust on the ground below actors, every glow and particle in the emissive band, the falling light column just above the canopy (players only)."
+  ],
+  "gpuLayers": [
+    {
+      "id": "spawn:ground",
+      "owner": "effects/gpu/SpawnGpuLayer.ts",
+      "component": "ground",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.7
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "spawn:glow",
+      "owner": "effects/gpu/SpawnGpuLayer.ts",
+      "component": "glow",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "spawn:sky",
+      "owner": "effects/gpu/SpawnGpuLayer.ts",
+      "component": "sky",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        20.3
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect"
+    }
+  ]
+}

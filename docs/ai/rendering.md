@@ -67,6 +67,8 @@ Die World-Kamera trägt World-FX und Camera-Feedback. Eine transparente Clarity-
 
 Camera-Feedback besitzt einen zentralen Owner: [CameraFeedbackController.ts](../../src/effects/camera/CameraFeedbackController.ts) und [CameraFeedbackModel.ts](../../src/effects/camera/CameraFeedbackModel.ts) sammeln, priorisieren, begrenzen und lösen Requests. Gameplay ruft keine direkten Kamera-Shakes auf; der Feedback-Offset verändert nicht die fachliche World- oder Pointer-Geometrie.
 
+Inszenierter Zoom (Boss-Intros über [cameraFocusOverride.ts](../../src/graphics/cameraFocusOverride.ts), Spawn-Nahaufnahme über [SpawnCameraZoom.ts](../../src/effects/camera/SpawnCameraZoom.ts)) multipliziert den Designzoom der Weltkamera. Allein die Kameraverfolgung in [WorldPresentationFrameBinding.ts](../../src/world/WorldPresentationFrameBinding.ts) wendet ihn an: Der größere Faktor gewinnt, Zoomwechsel halten die Mitte des Arena-Ausschnitts fest, die Residency hält währenddessen die ungezoomte Spielansicht vor, und World-Teardown setzt den Zoom zurück. Kameras, die die Verfolgung ersetzen (Dev-Szenario), lesen den angewandten Faktor über `getAppliedStagedZoom`. Bildschirmfeste Ebenen, die Weltpunkte selbst in Designkoordinaten umrechnen, multiplizieren mit dem Zusatzzoom (`camera.zoomX` geteilt durch die Renderskalierung), siehe `resolveRadialFocusFrame` in [radialFocusState.ts](../../src/effects/postfx/radialFocusState.ts).
+
 GPU-Fels-/Mauerflächen, Power-Up-Podeste und GPU-VFX verwenden
 [GpuLayerCameraTransform.ts](../../src/graphics/GpuLayerCameraTransform.ts), damit ihre View-Matrix
 auch in versetzten, gefilterten Kameras mit normalen Sprites übereinstimmt. Phaser 4.2.1 setzt
