@@ -83,6 +83,10 @@ Kanäle für Kontaktschatten, Körper, Schwanz, Kopf und beide Flügel; ein Schw
 Mitglied. Gefaltete Flügel schwenken um die Schulter nach hinten, Kanäle tragen dafür eine Rotation
 (`WildlifeMesh.rotated`). Der bestehende Pfad ohne Rotation bleibt unverändert.
 
+Raben sind vorerst abgeschaltet (`raven.maxCount: 0`), weil sie neben den anderen Tieren zu viel
+Aufmerksamkeit ziehen. Modell, Mesh und Ton bleiben erhalten; ein Wert über 0 holt sie zurück. Die
+Seeds der übrigen Arten ändern sich dadurch nicht.
+
 Der Renderer sampelt jeden Vogel einmal pro Frame und gibt die Lage an bis zu zwei von vier Ebenen
 (`BIRD_LAYER_DEPTHS`): Boden unter dem Nebel, Flugschatten im Figurenschattenband, niedriger Flug
 zwischen Nebel-Composite und Sonnenpass (gleiche Sonnen-, Wolken- und Lichtkartenbeleuchtung wie

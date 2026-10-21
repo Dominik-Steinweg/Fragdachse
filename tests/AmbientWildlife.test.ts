@@ -7,6 +7,8 @@ import { CANOPY_RADIUS, CELL_SIZE } from '../src/config';
 import type { ArenaLayout } from '../src/types';
 
 const frame = { offsetX: 147, offsetY: 83, width: 1280, height: 960 };
+// Kinds paused with a zero population cap never spawn.
+const ACTIVE_KINDS = WILDLIFE_KINDS.filter(kind => AMBIENT_WILDLIFE[kind].maxCount > 0);
 function layout(): ArenaLayout {
   return { seed: 882, trees: [{ gridX: 8, gridY: 12 }, { gridX: 34, gridY: 19 }],
     rocks: [{ gridX: 7, gridY: 9 }], dirt: [{ gridX: 6, gridY: 5 }], tracks: [], powerUpPedestals: [],
@@ -182,7 +184,7 @@ describe('cosmetic wildlife', () => {
   it('derives habitats from any layout without modifying it or needing players', () => {
     const source = layout(), before = JSON.stringify(source);
     const model = new AmbientWildlifeModel(source, frame);
-    expect(new Set(model.animals.map(a => a.kind))).toEqual(new Set(WILDLIFE_KINDS));
+    expect(new Set(model.animals.map(a => a.kind))).toEqual(new Set(ACTIVE_KINDS));
     expect(new AmbientWildlifeModel(source, frame).animals).toEqual(model.animals);
     const positions = model.animals.map(a => [a.x, a.y, a.animation]);
     for (let i = 0; i < 120; i++) model.update(1000 / 60, []);
@@ -285,7 +287,7 @@ describe('cosmetic wildlife', () => {
     expect(firstToSwitch.resting).toBe(!wasResting);
   });
 
-  it.each<WildlifeKind>([...WILDLIFE_KINDS])('reacts to nearby shots without movement and forgets the disturbance: %s', kind => {
+  it.each<WildlifeKind>([...ACTIVE_KINDS])('reacts to nearby shots without movement and forgets the disturbance: %s', kind => {
     const model = new AmbientWildlifeModel(layout(), frame);
     const a = model.animals.find(a => a.kind === kind)!;
     const tick = (ms: number) => model.update(ms, [], undefined, kind === 'moth' || kind === 'firefly' || kind === 'owl' ? 0 : 12 * 60);
@@ -309,7 +311,7 @@ describe('cosmetic wildlife', () => {
     }
   });
 
-  it.each<WildlifeKind>([...WILDLIFE_KINDS])('reacts to an explosion beyond shot reach: %s', kind => {
+  it.each<WildlifeKind>([...ACTIVE_KINDS])('reacts to an explosion beyond shot reach: %s', kind => {
     const model = new AmbientWildlifeModel(layout(), frame);
     const a = model.animals.find(a => a.kind === kind)!;
     const tick = () => model.update(16, [], undefined, kind === 'moth' || kind === 'firefly' || kind === 'owl' ? 0 : 12 * 60);
@@ -406,10 +408,12 @@ describe('cosmetic wildlife', () => {
   });
 
   describe('birds', () => {
+    const enabled = ACTIVE_KINDS.filter(isBird);
+    const diurnal = new Set(enabled.filter(kind => kind !== 'owl'));
     const forest = (): ArenaLayout => ({ ...layout(), trees: Array.from({ length: 12 }, (_, i) => ({
       gridX: 4 + (i % 4) * 9, gridY: 4 + Math.floor(i / 4) * 9 })) });
 
-    it.each(['sparrow', 'magpie', 'raven'] as const)('%s ignores a stationary body, takes off from a moving one and lands elsewhere on open ground', kind => {
+    it.each([...diurnal])('%s ignores a stationary body, takes off from a moving one and lands elsewhere on open ground', kind => {
       const model = new AmbientWildlifeModel(forest(), frame);
       model.update(16, [], undefined, 12 * 60);
       const a = model.animals.find(a => a.kind === kind)!;
@@ -441,7 +445,7 @@ describe('cosmetic wildlife', () => {
       const visible = () => new Set(birds.filter(a => a.opacity > 0).map(a => a.kind));
       const run = (minutes: number, frames = 400) => { for (let i = 0; i < frames; i++) model.update(50, [], offscreen, minutes); };
       run(12 * 60, 1);
-      expect(visible()).toEqual(new Set(['sparrow', 'magpie', 'raven']));
+      expect(visible()).toEqual(diurnal);
       const owl = birds.find(a => a.kind === 'owl')!;
       const roosted = [owl.x, owl.y, owl.angle];
       run(12 * 60);
@@ -452,8 +456,13 @@ describe('cosmetic wildlife', () => {
       expect(birds.filter(a => a.kind !== 'owl').every(a => a.bird!.phase === 'hidden' && a.resting)).toBe(true);
       for (let minute = 23 * 60; minute <= 32 * 60; minute += 2) run(minute % (24 * 60), 3);
       run(8 * 60);
-      expect(visible()).toEqual(new Set(['sparrow', 'magpie', 'raven']));
+      expect(visible()).toEqual(diurnal);
       expect(birds.filter(a => a.kind !== 'owl').every(a => isGroundedBird(a.bird!) && model.contains(a, a.x, a.y))).toBe(true);
+    });
+
+    it('leaves kinds with a zero population cap out of the world', () => {
+      const kinds = new Set(new AmbientWildlifeModel(forest(), frame).animals.filter(a => isBird(a.kind)).map(a => a.kind));
+      expect(kinds).toEqual(new Set(enabled));
     });
 
     it('lets owls patrol at night with circles and hunting dives onto open ground', () => {

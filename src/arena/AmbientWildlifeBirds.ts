@@ -100,7 +100,7 @@ export class AmbientWildlifeBirds {
 
   private rand(x: number, y: number, salt: number): number { return hashSeededCell01(this.port.seed, x, y, salt); }
 
-  /** Groups are homed in seeded trees, independent of authored order. Kinds with habitat appear at least once. */
+  /** Groups are homed in seeded trees, independent of authored order. Enabled kinds with habitat appear at least once. */
   spawn(trees: readonly { x: number; y: number }[],
     add: (init: WildlifeAnimalInit, bird: WildlifeBirdState) => WildlifeAnimal): void {
     BIRD_KINDS.forEach((kind, k) => {
@@ -112,7 +112,7 @@ export class AmbientWildlifeBirds {
         if (this.rand(tree.x, tree.y, salt + 1) >= tuning.occupancy) continue;
         if (this.spawnAt(kind, tree, salt, add)) groups++;
       }
-      if (!groups) for (const tree of order.slice(0, 8)) if (this.spawnAt(kind, tree, salt, add)) break;
+      if (!groups && tuning.maxCount > 0) for (const tree of order.slice(0, 8)) if (this.spawnAt(kind, tree, salt, add)) break;
     });
   }
 
