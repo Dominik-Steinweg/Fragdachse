@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { BURN_TICK_INTERVAL_MS, isPointInsideArena } from '../config';
+import { BURN_TICK_INTERVAL_MS, NET_TICK_RATE_HZ, isPointInsideArena } from '../config';
 import type {
   BurnOnHitConfig,
   FireChunkBurstConfig,
@@ -16,6 +16,7 @@ import type {
 export const GROUND_FIRE_CELL_SIZE = 16;
 
 const FADE_IN_MS = 180;
+const GROUND_PUBLISH_INTERVAL_MS = 1000 / NET_TICK_RATE_HZ;
 const FADE_OUT_MS = 500;
 const FLOW_DIRECTIONS: readonly (readonly [number, number])[] = [
   [0, -1], [1, 0], [0, 1], [-1, 0],
@@ -178,6 +179,8 @@ export class FireSystem {
   private hasLineOfSight: GroundFireLineOfSightResolver | null = null;
   private getObstacleRevision: GroundFireObstacleRevisionResolver | null = null;
   private groundSnapshotDirty = true;
+  /** Host time of the last snapshot published by `hostUpdate`; growth within one net tick is coalesced. */
+  private groundPublishedAt = Number.NEGATIVE_INFINITY;
   private cachedGroundSnapshot: SyncedBurningGroundSnapshot = { cells: [] };
   /** Published cell objects by visual id; unchanged cells keep their identity across snapshots. */
   private publishedGroundCells = new Map<number, SyncedBurningGroundCell>();
@@ -518,7 +521,7 @@ export class FireSystem {
         }))
       : [];
 
-    const result = { synced, ground: this.getGroundState(), damageEvents, damageTick };
+    const result = { synced, ground: this.getPublishedGroundState(now), damageEvents, damageTick };
     if (this.performanceMetricsEnabled) this.lastSimulationMs = performance.now() - simulationStartedAt;
     return result;
   }
@@ -616,6 +619,7 @@ export class FireSystem {
     this.nextCellId = 1;
     this.lastDamageTick = -1;
     this.groundSnapshotDirty = true;
+    this.groundPublishedAt = Number.NEGATIVE_INFINITY;
     this.cachedGroundSnapshot = { cells: [] };
     this.publishedGroundCells.clear();
     this.lastSimulationMs = 0;
@@ -756,6 +760,18 @@ export class FireSystem {
       this.sources.delete(sourceKey);
       this.dynamicSources.delete(sourceKey);
     }
+  }
+
+  /**
+   * Frame projection for renderers and the network delta. A spreading surface changes every frame;
+   * republishing it at most once per net tick keeps the host on the cadence clients already see,
+   * while a first change after a quiet tick still publishes at once. Damage reads live cells.
+   */
+  private getPublishedGroundState(now: number): SyncedBurningGroundSnapshot {
+    if (this.groundSnapshotDirty && now - this.groundPublishedAt < GROUND_PUBLISH_INTERVAL_MS
+      && now >= this.groundPublishedAt) return this.groundState;
+    if (this.groundSnapshotDirty) this.groundPublishedAt = now;
+    return this.getGroundState();
   }
 
   private getGroundSnapshot(): SyncedBurningGroundSnapshot {

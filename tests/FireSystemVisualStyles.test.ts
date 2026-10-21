@@ -53,6 +53,21 @@ describe('FireSystem static hazard cells', () => {
 });
 
 describe('FireSystem visual styles and damage targets', () => {
+  it('publishes spreading ground at most once per net tick while direct reads stay current', () => {
+    const fire = new FireSystem({} as Phaser.Scene);
+    const options = { sourceKey: 'creep', ownerId: 'map', durationMs: 60_000 };
+    fire.hostRefreshGroundCell(300, 300, options, 1_000);
+    // The first change after a quiet tick publishes at once.
+    const first = fire.hostUpdate(1_000).ground;
+    expect(first.cells).toHaveLength(1);
+    fire.hostRefreshGroundCell(332, 300, options, 1_010);
+    expect(fire.hostUpdate(1_010).ground).toBe(first);
+    expect(fire.hostUpdate(1_050).ground.cells).toHaveLength(2);
+    // Direct reads (placement, spawning) always see the live surface.
+    fire.hostRefreshGroundCell(364, 300, options, 1_060);
+    expect(fire.getGroundState().cells).toHaveLength(3);
+  });
+
   it('publishes stable cell snapshots and replaces them without mutating earlier values', () => {
     const fire = new FireSystem({} as Phaser.Scene);
     const options = { sourceKey: 'stable-ground', ownerId: 'p0', durationMs: 5_000 };
