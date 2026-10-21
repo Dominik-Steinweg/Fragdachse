@@ -32,7 +32,8 @@ import type { PlayerEntity }      from '../../entities/PlayerEntity';
 import type { HitscanSupportEffect, LoadoutSlot, PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, SupportProjectileImpact, SyncedActiveHudBuff, SyncedReinforcementMatrix, TeamId } from '../../types';
 import type { BaseManager } from '../../entities/BaseManager';
 import { emitArenaMapGridChanged } from './ArenaEvents';
-import { hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
+import { getCoopDefenseEnemyConfig, hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
+import { resolveEnemyLandingPosition } from './arenaWorldQueries';
 import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
 import type { TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
@@ -73,6 +74,8 @@ import type { AdrenalineEssenceBinding } from '../../adrenalineEssence/Adrenalin
 const SUPPORT_BASE_TURRET_SEARCH_RADIUS = 64;
 /** Toleranz fuer Streiftreffer an der Nachbarzelle eines platzierten Turms. */
 const SUPPORT_TURRET_GRAZE_RADIUS = 24;
+/** Suchradius in Zellen, in dem die Brut einer Brutbombe freien Boden sucht. */
+const BROOD_LANDING_SEARCH_CELLS = 2;
 
 export interface HostUpdatePerformanceMetrics {
   navIntentMs?: number;
@@ -1479,11 +1482,18 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       ? this.worldFramePort?.getShootingRange?.()?.necromancy ?? this.coopMissionRuntime?.necromancySystem
       : undefined;
 
+    const bodyRadius = getCoopDefenseEnemyConfig(effect.enemyKind).size * 0.5;
     const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
     for (let index = 0; index < effect.count; index += 1) {
       const angle = baseAngle + index * (Math.PI * 2 / Math.max(1, effect.count));
-      const spawnX = x + Math.cos(angle) * effect.offsetPx;
-      const spawnY = y + Math.sin(angle) * effect.offsetPx;
+      // Der Fellball liegt oft direkt am Fels oder Ufer; der Versatz der Brut darf sie nicht dort
+      // hineinsetzen. Findet sich weder am Versatz noch am Aufschlag Boden, schluepft niemand.
+      const landing = resolveEnemyLandingPosition(this.coopMissionRuntime,
+        x + Math.cos(angle) * effect.offsetPx, y + Math.sin(angle) * effect.offsetPx, bodyRadius, BROOD_LANDING_SEARCH_CELLS)
+        ?? resolveEnemyLandingPosition(this.coopMissionRuntime, x, y, bodyRadius, BROOD_LANDING_SEARCH_CELLS);
+      if (!landing) continue;
+      const spawnX = landing.x;
+      const spawnY = landing.y;
       const captured = capturingPlayerId
         ? necromancy?.captureAlly(capturingPlayerId, spawnX, spawnY, effect.enemyKind, {
           respectAllyLimit: alliedThrowOwnerId !== undefined,
