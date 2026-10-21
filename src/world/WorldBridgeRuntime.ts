@@ -16,6 +16,8 @@ export interface BridgeRuntimeState {
   readonly detonatesAt?: number;
   /** Player credited with the collapse; host-only provenance, not replicated. */
   readonly plantedBy?: string | null;
+  /** Where the charge was thrown from; presentation flies it from here onto the deck. */
+  readonly thrownFrom?: { readonly x: number; readonly y: number };
 }
 
 /** World geometry projection of bridge state; the owner pushes, the binding never decides. */
@@ -103,21 +105,28 @@ export class WorldBridgeRuntime implements WorldScopedBinding {
     const snapshot: SyncedBridgeState[] = [];
     for (const bridge of this.options.bridges) {
       const state = this.states.get(bridge.id)!;
-      if (state.phase === 'charged') snapshot.push({ id: bridge.id, phase: 'charged', detonatesAt: state.detonatesAt });
+      if (state.phase === 'charged') {
+        snapshot.push({ id: bridge.id, phase: 'charged', detonatesAt: state.detonatesAt,
+          ...(state.thrownFrom ? { throwX: Math.round(state.thrownFrom.x), throwY: Math.round(state.thrownFrom.y) } : {}) });
+      }
       else if (state.phase === 'collapsed') snapshot.push({ id: bridge.id, phase: 'collapsed' });
     }
     return snapshot;
   }
 
-  /** Host: plant a charge. Validation of the planter happens at the composition boundary. */
-  charge(id: string, plantedBy: string | null): BridgeChargeResult {
+  /**
+   * Host: plant a charge, thrown from `thrownFrom` when a player planted it. Validation of the
+   * planter happens at the composition boundary.
+   */
+  charge(id: string, plantedBy: string | null, thrownFrom?: { readonly x: number; readonly y: number }): BridgeChargeResult {
     const host = this.options.host;
     if (this.destroyed || !host) return 'unknown';
     const state = this.states.get(id);
     if (!state) return 'unknown';
     if (state.phase === 'charged') return 'charged-already';
     if (state.phase === 'collapsed') return 'collapsed';
-    this.states.set(id, { phase: 'charged', detonatesAt: host.now() + BRIDGE_DEMOLITION_RULES.fuseMs, plantedBy });
+    this.states.set(id, { phase: 'charged', detonatesAt: host.now() + BRIDGE_DEMOLITION_RULES.fuseMs, plantedBy,
+      ...(thrownFrom ? { thrownFrom: { x: thrownFrom.x, y: thrownFrom.y } } : {}) });
     return 'charged';
   }
 
@@ -174,7 +183,8 @@ export class WorldBridgeRuntime implements WorldScopedBinding {
         this.states.set(bridge.id, { phase: 'collapsed' });
         collapsedChanged = true;
       } else if (entry?.phase === 'charged') {
-        this.states.set(bridge.id, { phase: 'charged', detonatesAt: entry.detonatesAt });
+        this.states.set(bridge.id, { phase: 'charged', detonatesAt: entry.detonatesAt,
+          ...(entry.throwX !== undefined && entry.throwY !== undefined ? { thrownFrom: { x: entry.throwX, y: entry.throwY } } : {}) });
       } else if (previous.phase === 'charged') {
         // Charged and then absent: only possible on a malformed slice; keep the fuse visible.
         continue;

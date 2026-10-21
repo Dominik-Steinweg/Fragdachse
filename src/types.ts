@@ -2439,4 +2439,7 @@ export interface SyncedBridgeState {
   id: string;
   phase: 'charged' | 'collapsed';
   detonatesAt?: number;
+  /** Charged: world position the charge was thrown from (rounded px); presentation only. */
+  throwX?: number;
+  throwY?: number;
 }

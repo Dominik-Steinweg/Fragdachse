@@ -34,6 +34,20 @@
         ]
       },
       {
+        "key": "module/flierShadow/setDepth/0",
+        "expression": "DEPTH.WATER + .43",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/flier/setDepth/0",
+        "expression": "DEPTH.PROJECTILES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
         "key": "module/spark/setDepth/0",
         "expression": "TELEGRAPH_DEPTH",
         "blends": [
@@ -42,6 +56,13 @@
       },
       {
         "key": "module/telegraph/setDepth/0",
+        "expression": "TELEGRAPH_DEPTH",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/stripes/setDepth/0",
         "expression": "TELEGRAPH_DEPTH",
         "blends": [
           "ADD"
@@ -141,6 +162,50 @@
       }
     },
     {
+      "id": "cpu:effects/bridge/BridgeRenderer.ts:module/flierShadow/setDepth/0",
+      "owner": "effects/bridge/BridgeRenderer.ts",
+      "component": "module/flierShadow/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        5.63
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/flierShadow/setDepth/0",
+        "expression": "DEPTH.WATER + .43"
+      }
+    },
+    {
+      "id": "cpu:effects/bridge/BridgeRenderer.ts:module/flier/setDepth/0",
+      "owner": "effects/bridge/BridgeRenderer.ts",
+      "component": "module/flier/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/flier/setDepth/0",
+        "expression": "DEPTH.PROJECTILES"
+      }
+    },
+    {
       "id": "cpu:effects/bridge/BridgeRenderer.ts:module/spark/setDepth/0",
       "owner": "effects/bridge/BridgeRenderer.ts",
       "component": "module/spark/setDepth/0",
@@ -181,6 +246,28 @@
       "role": "effect",
       "source": {
         "selector": "module/telegraph/setDepth/0",
+        "expression": "TELEGRAPH_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:effects/bridge/BridgeRenderer.ts:module/stripes/setDepth/0",
+      "owner": "effects/bridge/BridgeRenderer.ts",
+      "component": "module/stripes/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.7
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/stripes/setDepth/0",
         "expression": "TELEGRAPH_DEPTH"
       }
     }

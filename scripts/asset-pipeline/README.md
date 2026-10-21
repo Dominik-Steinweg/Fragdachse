@@ -245,9 +245,9 @@ Neue Konstruktionen erzeugen genau eine passende Materialvariante (`standard`). 
 ## Bausätze für zusammengesetzte Bauten
 
 Die sprengbaren Brücken haben keine feste Größe. [bridge-wood.py](recipes_v2/bridge-wood.py) rendert
-daher je Zustand einen 6×4-Zellen-Master (`bridge-wood`, `bridge-wood-ruin`), den
-`src/effects/bridge/BridgeKit.ts` entlang der Zellgrenzen zu Decks jeder authored Länge und Breite
-zusammensetzt. Solche Rezepte halten an jeder Schnittlinie eine echte Fuge, verteilen Abnutzung
+daher je Zustand einen Master mit drei acht Zellen langen Decks (4, 3 und 2 Zellen breit;
+`bridge-wood`, `bridge-wood-ruin`); `src/effects/bridge/BridgeKit.ts` nimmt das Deck der authored
+Breite und setzt es entlang der Zellgrenzen auf jede Länge zusammen. Solche Rezepte halten an jeder Schnittlinie eine echte Fuge, verteilen Abnutzung
 gleichmäßig entlang der Schnittachse und rücken Key und Fill über `distant_lights` aus
 [bridge_parts.py](bridge_parts.py) entlang ihrer Richtung weiter weg, damit Zellen von beiden Enden
 gleich hell sind. Ein Asset deklariert nur Texturen, die seine Teile tatsächlich verwenden; nicht

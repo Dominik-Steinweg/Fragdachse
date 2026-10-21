@@ -43,9 +43,15 @@ nachts leichter verteidigen; der eigene Weg zu Sites jenseits des Flusses fällt
 - **Shift:** Kandidat nur, wenn in der Runde Sprengstoff existiert, sonst bleiben Brücken normaler Boden
   (Shift bleibt Eingraben). Reichweite 56 px um das Deck.
 - **Darstellung:** Blender-Bausatz der Asset-Pipeline V2 (`bridge-wood`, `bridge-wood-ruin`,
-  `explosive-crate`, `bridge-charge`, `demolition-cache`). Die Brücke ist ein 6×4-Zellen-Master je
-  Zustand; das Spiel schneidet ihn entlang der Zellgrenzen in Decks jeder authored Länge und Breite
-  (`src/effects/bridge/BridgeKit.ts`). Holz wie der Wachturm (gleiche Albedo und Oberflächen).
+  `explosive-crate`, `bridge-charge`, `demolition-cache`). Je Zustand ein Master mit drei Decks
+  (4, 3 und 2 Zellen breit, 8 lang); das Spiel nimmt das Deck der authored Breite und schneidet es
+  entlang der Zellgrenzen auf jede Länge (`src/effects/bridge/BridgeKit.ts`). Holz wie der Wachturm:
+  Bohlenstücke mit versetzten Stoßfugen über Trägern im halben Meter, dazu Moos, Ranken, Laub und
+  vereinzelt fehlende kurze Stücke. Unter Brückendecks wachsen keine Seerosen.
+- **Werfen:** Shift wirft die Ladung vom Dachs im Bogen (Schatten, Drall, brennende Lunte) auf den
+  Ladepunkt; der Abwurfpunkt reist mit dem Brückenzustand (`throwX`/`throwY`). Die Zündschnur läuft
+  ab dem Wurf. Warnung: Strike-Telegraph der Airstrike-/Mörser-Familie über dem Sprengradius mit
+  Countdown, glühender Gefahrenrahmen und wandernde Warnstreifen auf dem Deck.
 
 ## Entscheidungslog (Claude, reversible Defaults)
 
@@ -62,7 +68,8 @@ nachts leichter verteidigen; der eigene Weg zu Sites jenseits des Flusses fällt
 | 2026-10-21 | Lager: eine Kiste je Template-Brücke, Ziel = alle Brücken, Tiers 1–3 mit 15/25/35 Schrott und Angriffswelle (18/30/44) nach 3 s | Lager ist umkämpft und belohnt vollständiges Sprengen nur leicht; der eigentliche Lohn ist die leichtere Nacht |
 | 2026-10-21 | Neues Template `riverbend` (140×96): U-Fluss um die Basis (West, Nord, Ost), nach Süden offen, drei Brücken; alle Sites jenseits des Flusses | ohne Brücken bleibt nur der lange Weg um die Flussenden; tagsüber sind die Brücken der kurze Weg zu den Sites |
 | 2026-10-21 | `pondland`: Kanal vom Ostteich zum Südrand mit einer Brücke | östliche Angreifer haben zwei Wege um den Teich, nach dem Sprengen nur noch den nördlichen |
-| 2026-10-21 | Brücken als Bausatz statt eines Sprites je Größe: ein Master je Zustand, Schnitte nur auf Zellgrenzen (Bohlenfugen, Geländerstöße mit Eisenlaschen, Steinfugen bei y = −1/0/1), Mittelzellen je Brücke per Seed | beliebige authored Größen ohne neue Renders; Abnutzung hängt nur vom Abstand zur Mittellinie ab, daher passen alle Zellen aneinander |
+| 2026-10-21 | Brücken als Bausatz statt eines Sprites je Größe: ein Master je Zustand mit je einem Deck pro Breite, Schnitte nur auf Zellgrenzen entlang der Spannweite (Bohlenfugen, Geländerstöße mit Eisenlaschen), Mittelzellen je Brücke per Seed | beliebige authored Längen ohne neue Renders; quer wird nie geschnitten, damit die versetzten Bohlenstöße erhalten bleiben |
+| 2026-10-21 | User-Feedback: Bohlen wie beim Wachturm unregelmäßig, Brücke verwilderter, keine Seerosen unter Brücken, hochwertigere Warnung, Ladung werfen statt hinlegen; nur kleine fehlende Stücke | umgesetzt (Träger alle 0,5 m, Stücke ≈ 0,8–1 m, nur einzelne 0,5-m-Lücken) |
 | 2026-10-21 | Licht des Bausatzes: Key und Fill zehnfach weiter weg entlang ihrer Richtung (gleicher Winkel, gleiche Weichheit und Helligkeit im Drehpunkt) | sonst wären West- und Ostende unterschiedlich hell und Schnitte sichtbar |
 | 2026-10-21 | Dynamitkiste als offene Kiste mit roten Stangen, Ladung als vergrößertes Bündel (4 Stangen à 0,6 m), Lager mit Plane, Zünder und Zündschnurrolle | kleine Props brauchen ein großes klares Symbol; die Zündschnur endet am Funkenpunkt des Renderers |
 

@@ -506,11 +506,12 @@ export function decodeBridgeStates(raw: unknown): SyncedBridgeState[] | undefine
   const states: SyncedBridgeState[] = [];
   for (const entry of raw.slice(0, 64)) {
     if (!entry || typeof entry !== 'object') continue;
-    const { id, phase, detonatesAt } = entry as Record<string, unknown>;
+    const { id, phase, detonatesAt, throwX, throwY } = entry as Record<string, unknown>;
     if (typeof id !== 'string' || id.length === 0 || id.length > 64) continue;
     if (phase === 'collapsed') states.push({ id, phase });
     else if (phase === 'charged' && typeof detonatesAt === 'number' && Number.isFinite(detonatesAt)) {
-      states.push({ id, phase, detonatesAt });
+      const thrown = typeof throwX === 'number' && Number.isFinite(throwX) && typeof throwY === 'number' && Number.isFinite(throwY);
+      states.push({ id, phase, detonatesAt, ...(thrown ? { throwX, throwY } : {}) });
     }
   }
   return states;

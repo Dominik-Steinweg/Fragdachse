@@ -6,9 +6,9 @@
     "bridge_wood_ruin"
   ],
   "reference": "scripts/asset-pipeline/references/bridge-wood-ruin-draft.png",
-  "targetSize": 224,
+  "targetSize": 352,
   "sourceSizes": [
-    448
+    704
   ],
   "forward": "north",
   "pivot": [
@@ -16,9 +16,9 @@
     0.5
   ],
   "description": {
-    "silhouette": "Collapsed state of the same six by four cell master: identical abutments and sills, sagging stringer stubs and a few remaining boards at each bank, broken trestle piles and drifting board fragments in the open middle",
-    "colors": "The standing timber palette charred towards the blast in the middle: charcoal crust on broken ends, warm unburnt wood near the banks, grey stone unchanged",
-    "anatomy": "Stringer stubs of 0.25 to 0.9 m sag from the sills; up to four rows of remaining boards with missing pieces; two pairs of broken piles near the deck edges inside middle cells; every drifting fragment stays inside one cell and one deck band so the runtime cuts never split it."
+    "silhouette": "Collapsed state of the same three decks: identical abutments, sills, moss and grass, sagging stringer stubs and remaining boards at each bank, broken trestle piles and drifting board fragments in the open middle",
+    "colors": "The overgrown timber palette charred towards the blast in the middle: charcoal crust on broken ends, warm unburnt and mossy wood near the banks, grey stone unchanged",
+    "anatomy": "Stringer stubs of 0.25 to 0.9 m sag from the sills; up to four rows of remaining boards with missing pieces; broken piles near the deck edges in the third and sixth cell; every drifting fragment stays inside one cell so the runtime cuts never split it."
   },
   "requiredClips": [],
   "production": "reference",
@@ -26,7 +26,7 @@
   "model": {
     "state": "ruin"
   },
-  "orthoScale": 7,
+  "orthoScale": 11,
   "textures": {
     "technical": "art/poc/pipeline-v1/textures/technical.png",
     "wood": "art/poc/pipeline-v2/textures/watchtower-weathered-timber-v4.png"

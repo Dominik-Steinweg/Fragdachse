@@ -77,10 +77,16 @@ describe('World bridge runtime', () => {
     owner.hostStep();
     expect(owner.getState(BRIDGE.id)?.phase).toBe('collapsed');
 
+    const thrown = runtime(hostPort());
+    thrown.owner.charge(BRIDGE.id, 'p1', { x: 300.4, y: 288.6 });
+    expect(thrown.owner.getSnapshot()).toEqual([{ id: BRIDGE.id, phase: 'charged',
+      detonatesAt: 1000 + BRIDGE_DEMOLITION_RULES.fuseMs, throwX: 300, throwY: 289 }]);
+
     const client = runtime();
     expect(client.owner.charge(BRIDGE.id, 'p1')).toBe('unknown');
-    client.owner.applySnapshot([{ id: BRIDGE.id, phase: 'charged', detonatesAt: 5 }, { id: 'unknown', phase: 'collapsed' }]);
-    expect(client.owner.getState(BRIDGE.id)).toEqual({ phase: 'charged', detonatesAt: 5 });
+    client.owner.applySnapshot([{ id: BRIDGE.id, phase: 'charged', detonatesAt: 5, throwX: 300, throwY: 289 },
+      { id: 'unknown', phase: 'collapsed' }]);
+    expect(client.owner.getState(BRIDGE.id)).toEqual({ phase: 'charged', detonatesAt: 5, thrownFrom: { x: 300, y: 289 } });
     expect(client.geometry.collapsed).toEqual([]);
     client.owner.applySnapshot([{ id: BRIDGE.id, phase: 'collapsed' }]);
     client.owner.applySnapshot([]);
@@ -94,11 +100,13 @@ describe('World bridge runtime', () => {
     expect(decodeBridgeStates('x')).toEqual([]);
     expect(decodeBridgeStates([
       { id: 'a', phase: 'collapsed' },
-      { id: 'b', phase: 'charged', detonatesAt: 12 },
+      { id: 'b', phase: 'charged', detonatesAt: 12, throwX: 40, throwY: 'x' },
       { id: 'c', phase: 'charged' },
       { id: '', phase: 'collapsed' },
       { id: 'd', phase: 'standing' },
-    ])).toEqual([{ id: 'a', phase: 'collapsed' }, { id: 'b', phase: 'charged', detonatesAt: 12 }]);
+      { id: 'e', phase: 'charged', detonatesAt: 9, throwX: 40, throwY: 52 },
+    ])).toEqual([{ id: 'a', phase: 'collapsed' }, { id: 'b', phase: 'charged', detonatesAt: 12 },
+      { id: 'e', phase: 'charged', detonatesAt: 9, throwX: 40, throwY: 52 }]);
   });
 });
 

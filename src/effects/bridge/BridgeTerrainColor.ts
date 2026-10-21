@@ -4,7 +4,7 @@ import { WATER_COLOR } from '../../arena/WaterSurfaceModel';
 import type { ArenaBridge } from '../../types';
 
 /** Mean albedo of the kit deck boards (pipeline asset `bridge-wood`); dust and leaves picked up on a deck take this colour. */
-export const BRIDGE_DECK_GROUND_COLOR = 0x7a6952;
+export const BRIDGE_DECK_GROUND_COLOR = 0x675f45;
 
 /**
  * Writes bridge decks into the shared terrain colour snapshot (movement dust, leaf blower, burrow):

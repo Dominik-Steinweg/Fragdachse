@@ -233,13 +233,16 @@ export function composeWorldBridges(
           && !gameplay.player?.getTurretControlState(playerId),
       });
       if (denial || !carry?.consumeCarried(playerId, 'explosive')) return false;
-      return runtime.charge(request.bridgeId, playerId) === 'charged';
+      // The badger throws the charge onto the deck from where it stands.
+      return runtime.charge(request.bridgeId, playerId, { x: player.x, y: player.y }) === 'charged';
     });
     worldRuntime.bind({ destroy: () => bridge.registerBridgeChargeHandler(null) });
   }
   if (presentation) {
     const renderer = new BridgeRenderer(scene, bridges, world.metrics, {
-      onFuseCue: (x, y) => ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y, undefined, 0.7),
+      onFuseCue: (x, y, cue) => cue === 'thrown'
+        ? ctx.gameAudioSystem.playSound('shot_throw', x, y, undefined, 0.8)
+        : ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y, undefined, 0.7),
     });
     let stampedSnapshot: unknown = null;
     worldRuntime.bind({

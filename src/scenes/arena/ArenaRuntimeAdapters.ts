@@ -81,12 +81,13 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       if (!Number.isFinite(amount) || amount <= 0) throw new Error('Positive damage required');
       return flow.getWorldObjectMutationRuntime()?.applyResolvedDamage('construction', id, amount, 'watchtower-review-attacker', 'dev-scenario.watchtower');
     },
-    /** Plants a charge as the local player without explosive cargo; the real fuse runs. */
+    /** Plants a charge as the local player without explosive cargo, thrown from where it stands; the real fuse runs. */
     chargeBridge(id: string) {
       requireLocal();
       const runtime = flow.getWorldBridgeRuntime();
       if (!runtime) throw new Error('World has no bridges');
-      return runtime.charge(id, bridge.getLocalPlayerId());
+      const local = players.getPlayer(bridge.getLocalPlayerId());
+      return runtime.charge(id, bridge.getLocalPlayerId(), local ? { x: local.x, y: local.y } : undefined);
     },
     collapseBridge(id: string) {
       requireLocal();

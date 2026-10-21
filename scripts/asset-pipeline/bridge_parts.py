@@ -92,13 +92,19 @@ class Shader:
         return n.outputs['Fac']
 
 
-def finish(mat, mode, char=False):
+def finish(mat, mode, char=0.0, mossy=0.0):
     """Weathering on the real geometry; no baked light, no painted outlines.
 
-    `board`: walking deck boards. Damp, mossy margins along both railings
-    (|y| near the deck edge) and broad scuffing between them.
+    `board`: walking deck boards. Damp, mossy margins along both railings and
+    moss in the board seams, broad scuffing between them.
     `timber`: rails, posts, sills and stringers. `stone`: abutment masonry.
-    `iron`: forged straps and brackets. `char`: soot towards the broken middle.
+    `iron`: forged straps and brackets. `char` (the half span in metres, 0 for
+    none): soot towards the broken middle of the span. `mossy` adds colonies
+    across the whole part (rotting boards).
+
+    Distances across a deck come from the object attributes `fd_deck_cy` (deck
+    centreline) and `fd_deck_inv_half` (1 / half width, 0 off a deck), so one
+    material serves decks of every width; see Kit.tags.
     """
     s = Shader(mat)
     color = s.bs.inputs['Base Color'].links[0].from_socket
@@ -115,7 +121,13 @@ def finish(mat, mode, char=False):
     dx = s.calc('MINIMUM', local.outputs['X'], s.calc('SUBTRACT', 1, local.outputs['X']))
     dy = s.calc('MINIMUM', local.outputs['Y'], s.calc('SUBTRACT', 1, local.outputs['Y']))
     edge = s.remap(s.calc('MINIMUM', dx, dy), .008, .10, 1, 0)
-    across = s.calc('ABSOLUTE', world.outputs['Y'], label='Distance from deck centreline')
+    centre = s.node('ShaderNodeAttribute', 'Deck centreline')
+    centre.attribute_type, centre.attribute_name = 'OBJECT', 'fd_deck_cy'
+    inverse = s.node('ShaderNodeAttribute', 'Inverse deck half width')
+    inverse.attribute_type, inverse.attribute_name = 'OBJECT', 'fd_deck_inv_half'
+    # 0 on the centreline, 1 at the deck edge.
+    across = s.calc('MULTIPLY', s.calc('ABSOLUTE', s.calc('SUBTRACT', world.outputs['Y'], centre.outputs['Fac'])),
+                    inverse.outputs['Fac'], label='Relative distance from deck centreline')
 
     def cushion(mask):
         bump = s.node('ShaderNodeBump', 'Soft raised moss cushion normal')
@@ -142,7 +154,7 @@ def finish(mat, mode, char=False):
         if mode == 'board':
             # Scuffed walking surface between the curbs: grain keeps its luminance.
             fibres = s.noise(geom.outputs['Position'], 1, 1.2, (18, 3, 4), 'Wear along the board fibres')
-            scuff = s.calc('MULTIPLY', s.remap(across, 1.25, .35), s.remap(fibres, .38, .62, .25, 1))
+            scuff = s.calc('MULTIPLY', s.remap(across, .62, .18), s.remap(fibres, .38, .62, .25, 1))
             grey = s.node('ShaderNodeRGBToBW', 'Rubbed wood keeps grain luminance')
             s.links.new(color, grey.inputs[0])
             bare = s.mix(color, grey.outputs[0], .22)
@@ -151,22 +163,35 @@ def finish(mat, mode, char=False):
             dirt = s.calc('MULTIPLY', edge, s.calc('ADD', .25, s.calc('MULTIPLY', irregular, .3)))
             color = s.mix(color, (*linear((71, 60, 42)), 1), dirt, label='Dirt in board ends')
             # Spray and shade keep the deck margins damp; moss settles along the curbs.
-            margin = s.remap(across, 1.55, 1.92)
-            color = s.mix(color, (*linear((92, 84, 66)), 1), s.calc('MULTIPLY', margin, .45), label='Damp deck margin')
-            moss = s.calc('MULTIPLY', margin, s.remap(colony, .36, .56))
+            margin = s.remap(across, .66, .95)
+            color = s.mix(color, (*linear((88, 84, 62)), 1), s.calc('MULTIPLY', margin, .55), label='Damp deck margin')
+            moss = s.calc('MULTIPLY', margin, s.remap(colony, .3, .52))
+            # Moss and algae creep out of the seams and board ends.
+            seams = s.calc('MULTIPLY', edge, s.remap(colony, .38, .6))
+            moss = s.calc('MAXIMUM', moss, s.calc('MULTIPLY', seams, .85))
+            if mossy:
+                moss = s.calc('MAXIMUM', moss, s.calc('MULTIPLY', s.remap(colony, .5 - mossy * .22, .66), mossy))
+            algae = s.calc('MULTIPLY', s.remap(irregular, .4, .9), s.calc('ADD', .18, s.calc('MULTIPLY', margin, .3)))
+            color = s.mix(color, (*linear((96, 104, 66)), 1), algae, label='Green algae film')
             color = s.mix(color, moss_color, s.calc('MULTIPLY', moss, .92))
             cushion(moss)
         else:
             low = s.remap(world.outputs['Z'], -.1, .55, 1, .15)
             patch = s.remap(colony, .40, .58)
-            moss = s.calc('MULTIPLY', s.calc('MULTIPLY', low, patch), s.remap(across, 1.7, 1.95))
+            moss = s.calc('MULTIPLY', s.calc('MULTIPLY', low, patch), s.remap(across, .8, .97))
+            # Lichen and moss also settle on the bridge's rails and posts (not on crates).
+            outdoors = s.remap(inverse.outputs['Fac'], 0, .01)
+            lichen = s.calc('MULTIPLY', s.remap(colony, .56, .7), s.calc('MULTIPLY', outdoors, .7))
+            edge_moss = s.calc('MULTIPLY', edge, s.remap(colony, .45, .62, 0, .7))
+            moss = s.calc('MAXIMUM', moss, s.calc('MULTIPLY', edge_moss, outdoors))
             worn = s.remap(irregular, .3, .8, 0, .24)
             color = s.mix(color, (*linear((188, 174, 145)), 1), worn, label='Hand rubbed timber')
+            color = s.mix(color, (*linear((150, 152, 104)), 1), s.calc('MULTIPLY', lichen, .55), label='Pale lichen')
             color = s.mix(color, moss_color, s.calc('MULTIPLY', moss, .85))
             cushion(moss)
     if char:
         # Burnt towards the blast in the middle of the span; broken ends darkest.
-        towards = s.remap(s.calc('ABSOLUTE', world.outputs['X']), 2.92, 2.25)
+        towards = s.remap(s.calc('ABSOLUTE', world.outputs['X']), char - .08, char - .75)
         flakes = s.remap(s.noise(geom.outputs['Position'], 30, 2, label='Charred crust'), .3, .7)
         soot = s.calc('MINIMUM', 1, s.calc('ADD', s.calc('MULTIPLY', towards, .9), s.calc('MULTIPLY', flakes, .35)))
         charcoal = s.mix((*linear((24, 20, 17)), 1), (*linear((58, 44, 34)), 1), flakes, label='Charcoal tones')
@@ -175,7 +200,7 @@ def finish(mat, mode, char=False):
     return mat
 
 
-def surface(ctx, name, rgb, kind, mode=None, char=False, seam_dirt=.065, grain=(.48, 1.65)):
+def surface(ctx, name, rgb, kind, mode=None, char=0.0, seam_dirt=.065, grain=(.48, 1.65), mossy=0.0):
     """Watchtower carpentry finish: shared material plus the packed timber albedo."""
     mat = material(ctx, name, linear(rgb), 0, kind)
     nodes = mat.node_tree.nodes
@@ -217,7 +242,7 @@ def surface(ctx, name, rgb, kind, mode=None, char=False, seam_dirt=.065, grain=(
     bs.inputs['Metallic'].default_value = 0
     bs.inputs['Specular IOR Level'].default_value = .08
     if mode:
-        finish(mat, mode, char)
+        finish(mat, mode, char, mossy)
     return mat
 
 
@@ -246,9 +271,13 @@ class Kit:
         ctx.scene.collection.objects.link(self.root)
         self.parts = defaultdict(list)
         self.rng = random.Random(seed)
+        # Object attributes stamped on every adopted part (read by `finish`).
+        self.tags = {'fd_deck_cy': 0.0, 'fd_deck_inv_half': 0.0}
 
     def adopt(self, group, ob, mat=None):
         ob.parent = self.root
+        for key, value in self.tags.items():
+            ob[key] = value
         self.parts[group].append(ob)
         if mat is not None and mat.get('FD_SurfaceKind') == 'wood':
             self.timber_uv(ob)
