@@ -443,21 +443,21 @@
         {
           "tier": 1,
           "hpMax": 1200,
-          "scrapReward": 15,
+          "scrapReward": 0,
           "visualKey": "dawn-site-demolition-cache-t1",
           "assaultBudget": 18
         },
         {
           "tier": 2,
           "hpMax": 1600,
-          "scrapReward": 25,
+          "scrapReward": 0,
           "visualKey": "dawn-site-demolition-cache-t2",
           "assaultBudget": 30
         },
         {
           "tier": 3,
           "hpMax": 2000,
-          "scrapReward": 35,
+          "scrapReward": 0,
           "visualKey": "dawn-site-demolition-cache-t3",
           "assaultBudget": 44
         }
