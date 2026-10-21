@@ -130,6 +130,22 @@ eigener Präsentations-Owner (Dawn: `DawnSitePropRenderer`, auch im ruhenden Zus
 `{ group, finale? }` fasst Encounter zu einer angesagten Welle zusammen. Index, Anzahl und Finale bestimmt der Host im
 `CoopDefenseMapDirector`; Clients zeigen nur den replizierten Zustand.
 
+## Portal-Links
+
+Ein Portal-Generator teilt sich wie jede Struktur auf World und Activity auf.
+- **World:** Die Endpunkte sind World-Geometrie (`portalAnchors`). Der Generator hält ihre Lichtungen frei und prüft sie als Erreichbarkeitsquellen.
+- **Activity:** Was eine Mission daraus macht, ist Activity (`portalLinks`): welcher feindliche, ruhende `outpost` sie speist, wann der Aufbau startet und wie lange er dauert, wer durchgeht und wie sie kollabiert.
+- **Generator:** Er braucht genau ein nicht ablaufendes `destroy`-Ziel.
+- **Defaults:** Alle Tuning-Defaults stehen in [coopDefensePortalLinks.ts](../../src/config/coopDefensePortalLinks.ts).
+- **Wachen:** Eine `siteClearings`-Lichtung mit `structureBaseId` aktiviert ihre Site auch durch einen berechtigten Treffer auf das Bauwerk, nicht nur durch Betreten.
+
+In `repel-assault` gilt ein Encounter mit Start `site-activated` als Neben-Encounter.
+- Er muss `announce: false` tragen, nach der Angriffskette stehen und darf von keinem Trigger referenziert werden.
+- Er läuft in einem eigenen, stillen Director neben der Kette und blockiert oder beendet sie nie.
+
+Dies sichern [CoopDefensePortalLinks.test.ts](../../tests/CoopDefensePortalLinks.test.ts) und
+[DawnPortalGenerator.test.ts](../../tests/DawnPortalGenerator.test.ts).
+
 ## Checkpoint-Fortschritt
 
 Checkpoint-Aktivierung und -Abschluss sind getrennte host-autoritative Zustände des
