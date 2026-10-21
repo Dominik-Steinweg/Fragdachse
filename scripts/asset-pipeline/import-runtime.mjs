@@ -35,6 +35,9 @@ export const DAWN_TEXTURE_KEYS = Object.freeze(Object.fromEntries([
 export const REACTIVE_PROP_TEXTURE_KEYS = Object.freeze({
   'reactive-barrel-rusted': 'reactive_prop_barrel_rusted',
   'reactive-barrel-toxic': 'reactive_prop_barrel_toxic',
+  'reactive-puffball-meadow': 'reactive_prop_puffball_meadow',
+  'reactive-puffball-void': 'reactive_prop_puffball_void',
+  'reactive-bee-hive': 'reactive_prop_bee_hive_straw',
 });
 
 // Dawn's fleeing scavenger uses enemy naming and eye anchors, but has no attack.

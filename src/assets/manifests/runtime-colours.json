@@ -961,6 +961,42 @@
       "visiblePixelSha256": "67ffcf5371e05028df4e9d25df818c6013b3757311cc8bb1d540dedd2689130c",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/reactive-bee-hive/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/reactive-bee-hive/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/reactive-bee-hive/sheet.png",
+      "width": 1056,
+      "height": 396,
+      "sourceBytes": 349480,
+      "downloadBytes": 247090,
+      "sourceSha256": "07bf9de6a84d15a6c4912fb02bee5f66cc358bc7ecdd424790cd92d0a1d21e52",
+      "sha256": "af25eedf47b8a9ec110d3929d8f1998767ca4d7895f8987b030a2502a6970677",
+      "visiblePixelSha256": "7c6fb97c57a924bd457e61337b405ac745318b6be531f5855b48f8d7ac278bfd",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/reactive-puffball-meadow/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/reactive-puffball-meadow/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/reactive-puffball-meadow/sheet.png",
+      "width": 1056,
+      "height": 660,
+      "sourceBytes": 437948,
+      "downloadBytes": 358480,
+      "sourceSha256": "7bac8af5a2958017507d73a122e63b30e44b78e7aaeb5938e040848b17649ed8",
+      "sha256": "34437e91d87423827e7e20388a6434501a69afe7fa750b48dd9aa519d6471ebd",
+      "visiblePixelSha256": "d04eaa46a66e1df754c442dc7a6c2d2a8cc5e688adbabcfa30c0ac2a5e077923",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/reactive-puffball-void/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/reactive-puffball-void/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/reactive-puffball-void/sheet.png",
+      "width": 1056,
+      "height": 660,
+      "sourceBytes": 480447,
+      "downloadBytes": 395268,
+      "sourceSha256": "d20ecea319932fdd10dda39f76e9a741e01c42116c54249b6d26b7e47d874794",
+      "sha256": "647619d057a79df652bf4c37c622f84c2e1f632154a4446bf050595ea55fe552",
+      "visiblePixelSha256": "728088ca319e0162afee587b6f9129995b08bd5342a710c24cde273d4e83cda4",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/rocket/sheet.png": {
       "file": "assets/sprites/pipeline-v2/rocket/sheet.webp",
       "source": "assets/sprites/pipeline-v2/rocket/sheet.png",

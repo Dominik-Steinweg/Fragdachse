@@ -2,9 +2,9 @@
   "id": "reactive-bee-hive",
   "category": "powerup",
   "gameIds": [],
-  "revision": "d1",
+  "revision": "rp-r1",
   "variant": "standard",
-  "sourceSize": 32,
+  "sourceSize": 128,
   "textureKey": "reactive_prop_bee_hive_straw",
   "runtimeContract": "sheet",
   "forward": "north",
@@ -27,7 +27,8 @@
         8
       ],
       "frameRate": 24,
-      "loop": true
+      "loop": true,
+      "end": "rest"
     },
     {
       "name": "release",
@@ -44,25 +45,26 @@
         18
       ],
       "frameRate": 24,
-      "loop": false
+      "loop": false,
+      "end": "rest"
     }
   ],
-  "sheetTextureKey": "reactive_prop_bee_hive_straw_walking",
+  "sheetTextureKey": "reactive_prop_bee_hive_straw_sheet",
   "idlePath": "./assets/sprites/pipeline-v2/reactive-bee-hive/idle.png",
   "sheetPath": "./assets/sprites/pipeline-v2/reactive-bee-hive/sheet.png",
   "layout": {
-    "frameWidth": 32,
-    "frameHeight": 32,
+    "frameWidth": 128,
+    "frameHeight": 128,
     "margin": 2,
     "spacing": 4,
     "columns": 8,
     "rows": 3,
     "frameCount": 19,
-    "width": 288,
-    "height": 108
+    "width": 1056,
+    "height": 396
   },
   "hashes": {
-    "idle": "16dd7e1910eb792661eec45b47e5f80912a4337e4955e5f00d2def1cf8fa1d58",
-    "sheet": "4fc7e3a51652069e47818bdfb32d899bfcc1c93b2957b37e1a7011d9fcf035f9"
+    "idle": "c61bf3a21ebc4ed1ad7845e4257c47d3d937017bb5a87b4e28cd2f37bab8f6a0",
+    "sheet": "07bf9de6a84d15a6c4912fb02bee5f66cc358bc7ecdd424790cd92d0a1d21e52"
   }
 }

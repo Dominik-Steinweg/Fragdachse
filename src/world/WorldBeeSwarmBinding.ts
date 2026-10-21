@@ -29,7 +29,8 @@ export interface WorldBeeSwarmOptions {
 export class WorldBeeSwarmBinding {
   readonly system: BeeSwarmSystem<Target>;
   private readonly targets = new Map<string, Target>();
-  private readonly unobserve: () => void;
+  /** Subscribed with the first swarm: Worlds without hives never observe explosions. */
+  private unobserve: (() => void) | null = null;
   private lastNow = 0;
 
   constructor(private readonly options: WorldBeeSwarmOptions) {
@@ -40,11 +41,11 @@ export class WorldBeeSwarmBinding {
       isBurning: (x, y, radius) => options.fire.collectContacts(x, y, radius).length > 0,
       sting: (swarm, target, at) => this.sting(swarm, target, at),
     });
-    this.unobserve = options.combat.observeRadialExplosions((x, y, radius, now) => this.system.observeExplosion(x, y, radius, now));
   }
 
   /** A hive released its swarm; the swarm belongs to the hive's captured trigger. */
   release(effect: ReactivePropFollowUp<'swarm', ReactivePropSwarmEffect>): void {
+    this.unobserve ??= this.options.combat.observeRadialExplosions((x, y, radius, now) => this.system.observeExplosion(x, y, radius, now));
     this.system.release({ hiveIndex: effect.index, x: effect.x, y: effect.y, at: effect.at, source: effect.source,
       config: effect.config, hostile: !isPlayerSideCombatSource(effect.source) });
   }
@@ -70,7 +71,8 @@ export class WorldBeeSwarmBinding {
   }
 
   destroy(): void {
-    this.unobserve();
+    this.unobserve?.();
+    this.unobserve = null;
     this.targets.clear();
     this.system.clear();
   }

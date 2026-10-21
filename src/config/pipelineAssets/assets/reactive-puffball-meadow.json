@@ -2,9 +2,9 @@
   "id": "reactive-puffball-meadow",
   "category": "powerup",
   "gameIds": [],
-  "revision": "d1",
+  "revision": "rp-r1",
   "variant": "standard",
-  "sourceSize": 32,
+  "sourceSize": 128,
   "textureKey": "reactive_prop_puffball_meadow",
   "runtimeContract": "sheet",
   "forward": "north",
@@ -77,22 +77,22 @@
       "end": "rest"
     }
   ],
-  "sheetTextureKey": "reactive_prop_puffball_meadow_walking",
+  "sheetTextureKey": "reactive_prop_puffball_meadow_sheet",
   "idlePath": "./assets/sprites/pipeline-v2/reactive-puffball-meadow/idle.png",
   "sheetPath": "./assets/sprites/pipeline-v2/reactive-puffball-meadow/sheet.png",
   "layout": {
-    "frameWidth": 32,
-    "frameHeight": 32,
+    "frameWidth": 128,
+    "frameHeight": 128,
     "margin": 2,
     "spacing": 4,
     "columns": 8,
     "rows": 5,
     "frameCount": 35,
-    "width": 288,
-    "height": 180
+    "width": 1056,
+    "height": 660
   },
   "hashes": {
-    "idle": "05469bcd39c906fdbffb5d8e3e99d767cb7ce380bd257e56cdcd9f180638cf9c",
-    "sheet": "22b7b96eac28343500bd89e2f164d892158db21d42b831211bbf2d39acc11704"
+    "idle": "e6918c16f0e2924ac87ecb7395d496851e4e7db88fecbef177674f72ac924f5e",
+    "sheet": "7bac8af5a2958017507d73a122e63b30e44b78e7aaeb5938e040848b17649ed8"
   }
 }

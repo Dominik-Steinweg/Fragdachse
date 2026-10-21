@@ -2,9 +2,9 @@
   "id": "reactive-puffball-void",
   "category": "powerup",
   "gameIds": [],
-  "revision": "d1",
+  "revision": "rp-r1",
   "variant": "standard",
-  "sourceSize": 32,
+  "sourceSize": 128,
   "textureKey": "reactive_prop_puffball_void",
   "runtimeContract": "sheet",
   "forward": "north",
@@ -77,22 +77,22 @@
       "end": "rest"
     }
   ],
-  "sheetTextureKey": "reactive_prop_puffball_void_walking",
+  "sheetTextureKey": "reactive_prop_puffball_void_sheet",
   "idlePath": "./assets/sprites/pipeline-v2/reactive-puffball-void/idle.png",
   "sheetPath": "./assets/sprites/pipeline-v2/reactive-puffball-void/sheet.png",
   "layout": {
-    "frameWidth": 32,
-    "frameHeight": 32,
+    "frameWidth": 128,
+    "frameHeight": 128,
     "margin": 2,
     "spacing": 4,
     "columns": 8,
     "rows": 5,
     "frameCount": 35,
-    "width": 288,
-    "height": 180
+    "width": 1056,
+    "height": 660
   },
   "hashes": {
-    "idle": "401c27212b8546d3f9ed6a05ee9891748618ff8b06c4b4ec42e979079d563c47",
-    "sheet": "1afdde3d184cc67f2507583068c735b97fc772473722c6d24a461e63fe83082d"
+    "idle": "85a9dcc6e3487867aa6b516734407abd65cbc52454312ae08e74af5dc118ec67",
+    "sheet": "d20ecea319932fdd10dda39f76e9a741e01c42116c54249b6d26b7e47d874794"
   }
 }

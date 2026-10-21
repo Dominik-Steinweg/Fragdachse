@@ -41,7 +41,7 @@ Claude hat außerdem entschieden (umkehrbare Defaults):
 
 | Phase | Riesenbovist | Strohkorb |
 |---|---|---|
-| Bereit (`idle`) | Pilz atmet ganz leicht. | Drei bis vier Bienen kreisen am Flugloch. |
+| Bereit (`idle`) | Pilz steht prall. | Einige Bienen kreisen am Flugloch. |
 | Vorlauf (`triggered`) | 250 ms: Er bläht sich auf. Weitere Treffer übernehmen den Besitz. | 300 ms: Er wackelt. Weitere Treffer übernehmen den Besitz. |
 | Wirkung | Platzt. Die Wolke (Radius 100 px, 5 s) macht alle 500 ms 4 Schaden und bremst um 40 %. | Ein Schwarm quillt heraus und jagt 7 s lang. Je Ziel gibt es höchstens 4 Stiche à 3 Schaden oder 2,2 s, dann kommt das nächste. |
 | Aufladen (`recharging`) | Sackt zusammen und füllt sich in 15 s wieder. Treffer wirken nicht. | Leer und ruhig bis 15 s nach dem Auslösen. Treffer wirken nicht. |
@@ -65,20 +65,19 @@ Die Strategie ist wie bei den Fässern: Engstellen auf den Gegnerrouten (`placem
 
 | Bereich | Bovist | Korb |
 |---|---|---|
-| Kampagne | Karte 06 (`meadow`), Karten 15 und 20 (`void`) | Karten 04, 07, 17 |
-| Dawn | `pondland` | `clearing` |
-| Testkarte 00 | Anker für beide | |
+| Kampagne | Karte 06 (`meadow`, neben den Fässern), Karten 15 und 20 (`void`): je 3 Gruppen à 1–2 | Karten 04, 07, 17: je 2 einzelne Körbe |
+| Dawn | `pondland`: 3 Gruppen à 1–2 | `clearing`: 3 einzelne Körbe |
+| Testkarte 00 | Anker (`meadow` und `void`) | ein Anker im offenen Gelände |
 
 Der Map-Editor wählt das Kind beim Setzen eines Ankers. Jedes Kind hat einen eigenen Streueintrag.
 
 ## 6. Darstellung und Audio
 
-- **Riesenbovist:** Blender-Asset `reactive-puffball`. Clips:
-  - `idle`: Atemloop.
+- **Riesenbovist:** Blender-Assets `reactive-puffball-meadow` und `-void`. Clips:
   - `swell`: Vorlauf.
   - `burst`: Die Kappe reißt, der Pilz sackt zusammen, der braune Sporenkern wird sichtbar.
   - `refill`: Die Frames folgen dem Ladefortschritt.
-- **Strohkorb:** Blender-Asset `reactive-bee-hive`. Clips:
+- **Strohkorb:** Blender-Asset `reactive-bee-hive` (Wulstringe, Bindungen, Flugloch nach Süden, Holzbock). Clips:
   - `shake`: Vorlauf.
   - `release`: Einmal beim Ausschwärmen.
   - Beim Aufladen steht die Ruhepose.
@@ -87,7 +86,9 @@ Der Map-Editor wählt das Kind beim Setzen eines Ankers. Jedes Kind hat einen ei
   - gestreifter Körper, schimmernde Flügel mit Bewegungsunschärfe, Glanzpunkt;
   - weiche Schattenpunkte;
   - fliegen im tiefen Flugband unter den Kronen;
-  - 32/22/14 Bienen je Schwarm je nach Qualitätsstufe.
+  - 90/64/40 Bienen je Schwarm je nach Qualitätsstufe (User-Rückmeldung: der Schwarm muss groß und gut sichtbar sein), Wolkenradius etwa 50 px mit dichtem Kern;
+  - ein warmer Flügel-Schleier lässt dichte Schwärme als eine Wolke lesen;
+  - Bewegung: Jede Biene folgt ihrem eigenen Orbit um das geglättete Schwarmzentrum, Taucher stoßen auf das Ziel herab, neue Schwärme quellen aus dem Flugloch, heimkehrende strömen hinein.
 - **One-Shots** spielen nur bei einem beobachteten Übergang, nie beim Late Join.
 - **Audio:** Rezepte im Audio-Studio. Bis zur Freigabe durch den User laufen Platzhalter. Die Rezepte:
 

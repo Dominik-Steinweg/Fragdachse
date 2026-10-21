@@ -254,7 +254,7 @@ Rückbau verwendet weiterhin den separaten Entfernungspfad. Diese Grenzen sicher
 [Träger- und Kontakttests](../../tests/ProjectilePhysicsBoundary.test.ts) und die
 [Mutation-Integration](../../tests/integration/WorldObjectMutationRuntime.test.ts).
 
-Reaktive Map-Objekte (explosive Fässer) teilen den Hindernis-ID-Raum: authored Felsen belegen
+Reaktive Map-Objekte (Fässer, Boviste, Strohkörbe) teilen den Hindernis-ID-Raum: authored Felsen belegen
 `[0, R)`, reaktive Objekte `[R, R+P)`, Runtime-Placeables beginnen bei `R+P`
 ([`ReactivePropObstacleIds`](../../src/world/reactiveProps/ReactivePropObstacleIds.ts)). Sie stehen
 weder in `layout.rocks` noch in `RockRegistry` oder `PlacementSystem`; Owner ist der World-scoped
@@ -262,8 +262,15 @@ weder in `layout.rocks` noch in `RockRegistry` oder `PlacementSystem`; Owner ist
 als `reactive_prop` anspricht. Sie nehmen den vollen Treffer unabhängig vom `rockDamageMult` der
 Waffe; jeder Schadenspfad auf Hindernisse (Radial, Hitscan, Melee, Projektil, Impuls) fragt dafür
 `isFullDamageTarget`. `commitDamage` ändert nur Zustand, Entfernen und Folgewirkung laufen in
-`hostAdvance` vor dem Explosions-Drain. Abgesichert in
-[ReactivePropRuntime.test.ts](../../tests/ReactivePropRuntime.test.ts) und
+`hostAdvance` vor dem Explosions-Drain. Lade-Kinds (Riesenbovist, Strohkorb) verlassen den
+Hindernisraum nie: Während Vorlauf und Aufladen antworten sie `immune` und melden sich immer
+intakt, weil `inert` oder `destroyed` downstream „Ziel tot“ bedeuten. Ihre Folgewirkungen tragen
+den erfassten Combat-Source des Auslösers, umgemarkt über `combatSourceForFollowUpEffect` auf den
+Ursprung der Wirkung (`ground`, `direct`), ohne Waffenslot und ohne Teamschaden; die
+Schadensauflösung verwirft sonst Schaden mit abweichendem Ursprung, oder Stiche zählten als
+Primärwaffentreffer. Abgesichert in
+[ReactivePropRuntime.test.ts](../../tests/ReactivePropRuntime.test.ts),
+[ReactivePropCombat.test.ts](../../tests/integration/ReactivePropCombat.test.ts) und
 [EnvironmentDamageResolver.test.ts](../../tests/EnvironmentDamageResolver.test.ts).
 
 Zeitweise Turmsperren (etwa das Netz der Kabummtula) sind Activity-eigene Zustände, die über die
