@@ -141,6 +141,7 @@ export class CoopDefenseSecondaryObjectiveHud {
     configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
     elapsedMs: number,
     active: boolean,
+    liveStatus?: ReadonlyMap<string, string>,
   ): void {
     if (!active) {
       // Erst beim Verlassen der Arena zurücksetzen, nicht in jedem Lobby-Frame. Der Reset
@@ -152,7 +153,7 @@ export class CoopDefenseSecondaryObjectiveHud {
     }
     this.wasActive = true;
 
-    const model = buildSecondaryObjectiveViewModel(snapshot, configs, elapsedMs);
+    const model = buildSecondaryObjectiveViewModel(snapshot, configs, elapsedMs, liveStatus);
     if (!model.focus && model.chips.length === 0) {
       this.hideAll();
       return;

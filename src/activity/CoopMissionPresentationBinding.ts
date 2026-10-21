@@ -13,6 +13,7 @@ import type {
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { BossIntroState } from '../config/bossIntros';
 import type { BossPresenceSource } from '../effects/BossPresenceRenderer';
+import { resolvePortalObjectiveStatusLines } from '../ui/coopDefenseSecondaryObjectiveModel';
 import type {
   CoopDefenseMapConfig,
   ResolvedCoopDefenseMapEventConfig,
@@ -105,6 +106,7 @@ export interface CoopMissionPresentationUiPort {
       snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
       configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
       elapsedMs: number,
+      liveStatus?: ReadonlyMap<string, string>,
     ) => void;
     readonly updateOcclusionFade: (deltaMs: number) => void;
     readonly reset: () => void;
@@ -277,10 +279,13 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
 
     const secondaryObjectivePresentation = this.reads.getSecondaryObjectivePresentationState();
     const carryItems = this.resolveCarryPresentationItems();
+    const portalLinks = this.mapConfig.portalLinks?.length ? this.reads.getPortalLinkState?.() ?? null : null;
     this.ui.secondaryObjectives.sync(
       secondaryObjectivePresentation,
       this.runtime.secondaryObjectiveConfigs,
       elapsedMs,
+      portalLinks ? resolvePortalObjectiveStatusLines(this.mapConfig.portalLinks!, this.runtime.secondaryObjectiveConfigs,
+        portalLinks, elapsedMs) : undefined,
     );
     this.ui.secondaryObjectives.updateOcclusionFade(deltaMs);
 

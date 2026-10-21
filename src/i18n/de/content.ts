@@ -332,5 +332,7 @@ export const deContent = {
   "objective.reward.carry": "BESSERE BELOHNUNG BEI SIEG",
   "objective.status.completed": "ERFÜLLT",
   "objective.status.failed": "GESCHEITERT",
-  "objective.status.hold": "HALTEN"
+  "objective.status.hold": "HALTEN",
+  "objective.status.portalCharging": "PORTAL LÄDT {percent} %",
+  "objective.status.portalOpen": "PORTAL OFFEN"
 } as const;

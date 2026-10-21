@@ -235,8 +235,8 @@ function toSiteStructure(site: ResolvedDawnSite): CoopBaseConfig {
   const placement = resolveDawnSiteStructurePlacement(structure, site.slot.anchor);
   return {
     id: site.baseId,
-    // Site props draw the other structures; the generator keeps its cell surface until its asset lands.
-    ...(site.archetype.portal ? {} : { surface: 'none' as const }),
+    // Site props draw the structures; the portal renderer draws the generator.
+    surface: 'none',
     hpMax: site.tier.hpMax,
     faction: structure.faction,
     role: structure.role,

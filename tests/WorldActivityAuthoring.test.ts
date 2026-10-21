@@ -254,8 +254,9 @@ describe('World-/Activity-Authoring – Partition', () => {
         ...(mapConfig.spawnZones ? ['spawnZones'] : []), 'terrain', 'tracks', 'voidDanger',
       ]);
       for (const base of world.bases) {
+        // `surface` is World presentation of the structure and only present where authored.
         expect(Object.keys(base).sort(), `${world.id}/${base.id}`).toEqual([
-          'anchor', 'faction', 'hpMax', 'id', 'role', 'shape', 'spawnCenter', 'turrets',
+          'anchor', 'faction', 'hpMax', 'id', 'role', 'shape', 'spawnCenter', ...(base.surface ? ['surface'] : []), 'turrets',
         ]);
       }
     }

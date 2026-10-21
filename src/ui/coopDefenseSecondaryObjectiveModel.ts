@@ -110,6 +110,7 @@ function toViewEntry(
   entry: CoopDefenseSecondaryObjectivePresentationEntry,
   config: ResolvedCoopDefenseMapSecondaryObjectiveConfig | undefined,
   tone: SecondaryObjectiveTone,
+  liveStatus: string | undefined,
 ): SecondaryObjectiveViewEntry {
   const title = getSecondaryObjectiveTitle(entry, config);
   return {
@@ -120,9 +121,36 @@ function toViewEntry(
     rewardHint: getSecondaryObjectiveRewardHint(entry, config),
     progressCurrent: Math.max(0, Math.min(entry.progressCurrent, entry.progressTotal)),
     progressTotal: Math.max(1, entry.progressTotal),
-    statusLine: getStatusLine(entry),
+    // A live status of the objective's world (e.g. a charging portal) replaces the bare count while it runs.
+    statusLine: isTerminal(entry.state) ? getStatusLine(entry) : liveStatus ?? getStatusLine(entry),
     terminal: isTerminal(entry.state),
   };
+}
+
+/**
+ * Status of portal generator objectives for the HUD: the charge while the link builds, then that the
+ * flank is open. Waiting and collapsed links add nothing; a fallen generator completes its objective.
+ */
+export function resolvePortalObjectiveStatusLines(
+  links: readonly { readonly id: string; readonly generatorBaseId: string; readonly chargeDurationMs: number }[],
+  configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
+  entries: readonly { readonly id: string; readonly phase: string; readonly chargeStartedAtMs?: number }[] | null,
+  elapsedMs: number,
+): ReadonlyMap<string, string> {
+  const lines = new Map<string, string>();
+  for (const link of links) {
+    const entry = entries?.find((candidate) => candidate.id === link.id);
+    const objective = configs.find((config) => config.type === 'destroy' && config.targets.includes(link.generatorBaseId));
+    if (!entry || !objective) continue;
+    if (entry.phase === 'charging') {
+      const percent = Math.floor(Math.max(0, Math.min(0.99, (elapsedMs - (entry.chargeStartedAtMs ?? elapsedMs))
+        / Math.max(1, link.chargeDurationMs))) * 100);
+      lines.set(objective.id, t('objective.status.portalCharging', { percent }));
+    } else if (entry.phase === 'open') {
+      lines.set(objective.id, t('objective.status.portalOpen'));
+    }
+  }
+  return lines;
 }
 
 /**
@@ -162,6 +190,7 @@ export function buildSecondaryObjectiveViewModel(
   snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
   configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
   elapsedMs: number,
+  liveStatus: ReadonlyMap<string, string> = new Map(),
 ): SecondaryObjectiveViewModel {
   if (!snapshot || snapshot.length === 0) return EMPTY_MODEL;
   const now = Number.isFinite(elapsedMs) ? elapsedMs : 0;
@@ -189,12 +218,12 @@ export function buildSecondaryObjectiveViewModel(
   };
 
   const focus = focusEntry
-    ? toViewEntry(focusEntry, configById.get(focusEntry.objectiveId), toTone(focusEntry))
+    ? toViewEntry(focusEntry, configById.get(focusEntry.objectiveId), toTone(focusEntry), liveStatus.get(focusEntry.objectiveId))
     : null;
   const chips = visible
     .filter((entry) => entry !== focusEntry)
     .slice(0, SECONDARY_OBJECTIVE_MAX_CHIPS)
-    .map((entry) => toViewEntry(entry, configById.get(entry.objectiveId), toTone(entry)));
+    .map((entry) => toViewEntry(entry, configById.get(entry.objectiveId), toTone(entry), liveStatus.get(entry.objectiveId)));
 
   return { focus, chips, signature: buildSignature({ focus, chips }) };
 }

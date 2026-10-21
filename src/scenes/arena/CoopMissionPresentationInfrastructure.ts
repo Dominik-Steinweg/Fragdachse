@@ -29,7 +29,7 @@ import { CoopDefenseObjectiveAnnouncement } from '../../ui/CoopDefenseObjectiveA
 import { CoopDefenseMapEventAnnouncementPresenter } from '../../ui/CoopDefenseMapEventAnnouncementPresenter';
 import { CoopDefenseSecondaryObjectiveHud } from '../../ui/CoopDefenseSecondaryObjectiveHud';
 import { getBaseWorldBounds } from '../../arena/BaseRegistry';
-import { mainObjectiveMarkers, enemyMarkers, secondaryObjectiveMarkers, checkpointMarkers } from '../../effects/markers/sources/CoopMissionMarkerSource';
+import { mainObjectiveMarkers, enemyMarkers, secondaryObjectiveMarkers, checkpointMarkers, portalFlankMarkers } from '../../effects/markers/sources/CoopMissionMarkerSource';
 import type { BaseManager } from '../../entities/BaseManager';
 import type { EnemyManager } from '../../entities/EnemyManager';
 import type { PlayerManager } from '../../entities/PlayerManager';
@@ -260,8 +260,8 @@ export class CoopMissionPresentationInfrastructure {
         },
       },
       secondaryObjectives: {
-        sync: (snapshot, configs, elapsedMs) => {
-          if (!this.destroyed) this.secondaryObjectiveHud?.sync(snapshot, configs, elapsedMs, true);
+        sync: (snapshot, configs, elapsedMs, liveStatus) => {
+          if (!this.destroyed) this.secondaryObjectiveHud?.sync(snapshot, configs, elapsedMs, true, liveStatus);
         },
         updateOcclusionFade: (deltaMs) => {
           if (!this.destroyed) {
@@ -383,8 +383,18 @@ export class CoopMissionPresentationInfrastructure {
               endpoints: resolveCoopMissionPortalEndpoints(mapConfig, metrics),
             } };
           }
-          this.voidPortals ??= new VoidPortalRenderer(this.scene);
-          this.voidPortals.sync(this.voidPortalScenario.scenario, entries, elapsedMs);
+          this.voidPortals ??= new VoidPortalRenderer(this.scene, input.renderers.gpuVfx, input.renderers.lighting ?? null);
+          const bases = input.getBaseManager();
+          const views = this.voidPortals.sync(this.voidPortalScenario.scenario, entries, elapsedMs, (baseId) => {
+            const base = bases?.getBase(baseId);
+            if (!base) return null;
+            const bounds = getBaseWorldBounds(base.spec.region, metrics);
+            return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2,
+              hp: base.getHp(), maxHp: base.getMaxHp(), destroyed: base.isDestroyed() };
+          });
+          input.renderers.markers.coop?.set('portal-links', portalFlankMarkers(views.flatMap(view =>
+            view.phase === 'waiting' || view.phase === 'collapsed' ? [] : [{ id: view.id, exit: view.b, radius: view.radius,
+              phase: view.phase, chargeFraction: view.chargeFraction }])), this.scene.time.now);
         },
         syncBossIntro: (state, now) => {
           if (this.destroyed) return;

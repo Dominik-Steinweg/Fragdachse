@@ -332,5 +332,7 @@ export const enContent = {
   "objective.reward.carry": "BETTER VICTORY REWARD",
   "objective.status.completed": "COMPLETE",
   "objective.status.failed": "FAILED",
-  "objective.status.hold": "HOLDING"
+  "objective.status.hold": "HOLDING",
+  "objective.status.portalCharging": "PORTAL CHARGING {percent} %",
+  "objective.status.portalOpen": "PORTAL OPEN"
 } as const;

@@ -107,6 +107,7 @@
     },
     {
       "id": "portal-generator",
+      "surface": "none",
       "role": "outpost",
       "faction": "hostile",
       "dormant": true,

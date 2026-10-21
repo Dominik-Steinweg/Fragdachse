@@ -105,6 +105,7 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"gpu:MgTransfer","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"gpu:ConstructionOwnershipMote","deviation":"body-over-canopy","finding":"D03"},
   {"id":"gpu:TranslocatorPortal","deviation":"ground-over-actors","finding":"D03"},
+  {"id":"gpu:VoidPortal","deviation":"ground-over-actors","finding":"D03"},
   {"id":"gpu:RocketReturnBurst","deviation":"body-over-canopy","finding":"D03"},
   {"id":"gpu:LeafBlowerGrit","deviation":"material-outside-sun","finding":"D06"},
   {"id":"gpu:LeafBlowerSpray","deviation":"material-outside-sun","finding":"D06"},

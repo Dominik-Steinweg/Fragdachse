@@ -1,0 +1,24 @@
+{
+  "name": "VoidPortal",
+  "contract": {
+    "id": "gpu:VoidPortal",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "VoidPortal",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.1
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionAccent"
+    ]
+  }
+}

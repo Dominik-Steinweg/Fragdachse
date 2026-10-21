@@ -808,6 +808,23 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0.05,
     flickerHz: 2.2,
   },
+  /**
+   * Generator-Portal und Generatorkern: violettes Gefahrenlicht, das die Flanke nachts lesbar macht.
+   * Der Renderer skaliert Intensität und Radius mit dem Aufbau.
+   */
+  voidPortal: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 150,
+    color: 0xd98cff,
+    intensity: 0.85,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 4,
+    flickerAmount: 0.08,
+    flickerHz: 1.8,
+  },
   /** Translocator- und Spawn-Blitz: kurz, hell, kalt. */
   teleportFlash: {
     enabled: true,

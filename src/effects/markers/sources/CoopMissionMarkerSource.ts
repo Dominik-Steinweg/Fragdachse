@@ -105,6 +105,28 @@ export function checkpointMarkers(config: ResolvedCoopDefenseMapMissionProgressC
   });
 }
 
+export interface PortalFlankMarkerTarget {
+  readonly id: string;
+  readonly exit: { readonly x: number; readonly y: number };
+  readonly radius: number;
+  readonly phase: 'charging' | 'open';
+  readonly chargeFraction: number;
+}
+
+/**
+ * The exit of a generator portal is where the extra flank arrives: a world badge with the charge as
+ * progress while it builds, an urgent edge arrow once it is open. A closed link has no marker.
+ */
+export function portalFlankMarkers(links: readonly PortalFlankMarkerTarget[]): MarkerDescriptor[] {
+  return links.map((link): MarkerDescriptor => ({
+    key: `portal:${encodeURIComponent(link.id)}:exit`, kind: 'hazard', glyph: 'portal', state: 'active',
+    x: link.exit.x, y: link.exit.y, targetHalfHeight: link.radius, groundRing: { radiusPx: link.radius },
+    ...(link.phase === 'charging'
+      ? { visibility: 'world-only' as const, progress: link.chargeFraction }
+      : { visibility: 'world-and-edge' as const, urgent: true }),
+  }));
+}
+
 /** One round's projections. First hydration is a baseline; only observed transitions get a local stamp. */
 export class CoopMissionMarkerSource implements MarkerSource {
   readonly id = 'coop-mission';
