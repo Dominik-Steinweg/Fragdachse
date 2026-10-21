@@ -901,6 +901,18 @@
       "visiblePixelSha256": "659d751e6801db4236c2af92f4f16a6d50e8dae3120bc70815287cc801cd5513",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/portal-generator/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/portal-generator/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/portal-generator/sheet.png",
+      "width": 1568,
+      "height": 392,
+      "sourceBytes": 567604,
+      "downloadBytes": 363900,
+      "sourceSha256": "444d7eabc47a9fda13de63f3a6e8be9ce6031b8d85fbb193dc82c258b8f39f65",
+      "sha256": "2d64738fde01b1564910e273d2e8bef1ceb7737de15bd46a108d28315d98906a",
+      "visiblePixelSha256": "67ffcf5371e05028df4e9d25df818c6013b3757311cc8bb1d540dedd2689130c",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/rocket/sheet.png": {
       "file": "assets/sprites/pipeline-v2/rocket/sheet.webp",
       "source": "assets/sprites/pipeline-v2/rocket/sheet.png",
