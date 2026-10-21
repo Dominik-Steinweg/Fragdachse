@@ -1,6 +1,7 @@
 {
   "id": "clearing",
   "world": {
+    "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "clusters": 8, "clusterSize": [1, 3], "minSpacingCells": 10 }] },
     "arenaWidthCells": 140,
     "arenaHeightCells": 96,
     "rockFillRatio": 0,

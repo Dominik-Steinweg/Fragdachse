@@ -3,6 +3,8 @@ import { getPowerUpName } from '../../../../src/i18n/contentPresentation';
 import { array, at, object } from '../../shared/json';
 import { button, element, heading, numberField, selectField, type EditorEnvironment } from '../ui';
 import { mapMetrics, type MapObject } from './objects';
+import { REACTIVE_PROP_KINDS } from '../../../../src/config/reactiveProps/reactivePropKinds';
+import { uniqueId } from '../../shared/json';
 
 const powerUpOptions = Object.keys(TIMED_POWERUP_PEDESTAL_CONFIGS).map(value => ({ value, label: getPowerUpName(value, 'de') }));
 
@@ -65,6 +67,51 @@ export function powerUpControls(env: EditorEnvironment, item: MapObject): HTMLEl
   }
   if (!linked) box.append(button('Power-Up löschen', () => {
     env.session.splice(['powerUps'], Number(path[1]), 1); env.session.selection = null; env.changed();
+  }, 'danger'));
+  return box;
+}
+
+const BARREL = 'explosive_barrel';
+const barrelVariants = [{ value: '', label: 'Standard der Kind-Registry' },
+  ...(REACTIVE_PROP_KINDS.get(BARREL)?.visual.variantIds ?? []).map(value => ({ value, label: value === 'toxic' ? 'Radioaktiv (giftgrün)' : value === 'rusted' ? 'Rostfass' : value }))];
+
+/** Fass-Anker auf festen Zellen und die seeded Streuung der Map. */
+export function addReactivePropControls(env: EditorEnvironment): HTMLElement {
+  const box = element('div'), draft = env.session.draft, scatter = array(object(draft.reactiveProps).scatter);
+  box.append(heading('Explosive Fässer'), button('Fass-Anker hinzufügen', () => {
+    const metrics = mapMetrics(env.session.draft);
+    let id = '';
+    env.session.transact('Fass-Anker anlegen', next => {
+      const props = object(next.reactiveProps ??= {}); const anchors = (props.anchors ??= []) as unknown[];
+      id = uniqueId(array(anchors), 'barrel');
+      anchors.push({ id, kind: BARREL, gridX: Math.floor(metrics.gridCols / 2), gridY: Math.floor(metrics.gridRows / 2) });
+    });
+    env.session.selection = `prop:${env.session.key(['reactiveProps', 'anchors'], array(object(env.session.draft.reactiveProps).anchors).length - 1)}`;
+    env.changed();
+  }));
+  if (scatter.length > 0) {
+    box.append(numberField(env, 'Gestreute Gruppen', ['reactiveProps', 'scatter', 0, 'clusters'], { min: 0, max: 64 }),
+      numberField(env, 'Mindestabstand (Zellen)', ['reactiveProps', 'scatter', 0, 'minSpacingCells'], { min: 2, max: 64 }),
+      element('p', 'muted', 'Gruppen aus 1–3 Fässern auf freiem Boden; Begehbarkeit, Basen, Gleise und Podeste bleiben frei. Positionen zeigt die Vorschau.'),
+      button('Streuung entfernen', () => { env.session.change(['reactiveProps', 'scatter'], undefined); env.changed(); }, 'danger'));
+  } else {
+    box.append(button('Seeded Streuung aktivieren', () => {
+      env.session.transact('Fass-Streuung anlegen', next => {
+        object(next.reactiveProps ??= {}).scatter = [{ kind: BARREL, clusters: 4, clusterSize: [1, 3], minSpacingCells: 10 }];
+      }); env.changed();
+    }));
+  }
+  return box;
+}
+
+export function reactivePropControls(env: EditorEnvironment, item: MapObject): HTMLElement {
+  const box = element('div'), value = object(at(env.session.draft, item.path));
+  box.append(selectField('Variante', String(value.variant ?? ''), barrelVariants, next => {
+    env.session.change([...item.path, 'variant'], next || undefined); env.changed();
+  }), numberField(env, 'X (Zelle)', [...item.path, 'gridX']), numberField(env, 'Y (Zelle)', [...item.path, 'gridY']),
+  element('p', 'muted', 'Der Generator hält die Zelle felsfrei; auf Basis, Gleis oder Podest lehnt er den Anker ab.'),
+  button('Fass löschen', () => {
+    env.session.splice(['reactiveProps', 'anchors'], Number(item.path[2]), 1); env.session.selection = null; env.changed();
   }, 'danger'));
   return box;
 }

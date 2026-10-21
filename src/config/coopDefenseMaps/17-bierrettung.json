@@ -33,6 +33,7 @@
   ],
   "rockFillRatio": 0.16,
   "balanceReferenceDurationSec": 230,
+  "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "clusters": 5, "clusterSize": [1, 3], "minSpacingCells": 10 }] },
   "objective": "destroy-hostile-bases",
   "bases": [
     {

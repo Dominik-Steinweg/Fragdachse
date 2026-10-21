@@ -12,14 +12,18 @@ import { getReactivePropVariantOverride } from './ReactivePropVariantOverride';
 
 const GLOW_TEXTURE = 'reactive_prop_glow';
 const SHARD_TEXTURE = 'reactive_prop_shard';
+const RING_TEXTURE = 'reactive_prop_warning_ring';
 const SHARD_COUNT = 7;
 const SHARD_LIFETIME_MS = 650;
 /** Brand sitzt auf dem Deckel, nicht auf dem Boden daneben. */
-const BURN_BODY_PX = 22;
+const BURN_BODY_PX = 18;
+/** Flammen züngeln aus dem Deckel nach oben, statt das Schild zu überdecken. */
+const BURN_OFFSET_Y = -5;
 
 interface PropVisual {
   sprite: Phaser.GameObjects.Image;
   glow: Phaser.GameObjects.Image | null;
+  ring: Phaser.GameObjects.Image | null;
   burn: EntityBurnRenderer | null;
   textureKey: string;
   lastProgress: number;
@@ -52,6 +56,7 @@ export class ReactivePropRenderer {
       [0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [0.65, 'rgba(255,255,255,0.16)'], [1, 'rgba(255,255,255,0)'],
     ]);
     ensureShardTexture(scene);
+    ensureRingTexture(scene);
   }
 
   sync(runtime: ReactivePropRuntime, nowMs: number): void {
@@ -95,7 +100,7 @@ export class ReactivePropRenderer {
     if (!visual) {
       visual = {
         sprite: this.scene.add.image(x, y, textureKey).setOrigin(0.5).setDepth(DEPTH.ROCKS + 0.2),
-        glow: null, burn: null, textureKey, lastProgress: state.progress, flashUntil: 0, seenAlive: false,
+        glow: null, ring: null, burn: null, textureKey, lastProgress: state.progress, flashUntil: 0, seenAlive: false,
       };
       this.props.set(state.index, visual);
     }
@@ -109,12 +114,16 @@ export class ReactivePropRenderer {
       visual.flashUntil = nowMs + REACTIVE_PROP_VISUAL.hitFlashMs;
     }
     visual.lastProgress = state.progress;
-    if (nowMs < visual.flashUntil) {
-      visual.sprite.setTint(REACTIVE_PROP_VISUAL.hitFlashTint).setTintMode(Phaser.TintModes.ADD);
-    } else if (visualState.warning > 0) {
-      visual.sprite.setTint(scaleColor(REACTIVE_PROP_VISUAL.warningTint, visualState.warning)).setTintMode(Phaser.TintModes.ADD);
+    if (nowMs < visual.flashUntil) visual.sprite.setTint(REACTIVE_PROP_VISUAL.hitFlashTint).setTintMode(Phaser.TintModes.ADD);
+    else visual.sprite.clearTint();
+    // Telegraph über der Lightmap: ein roter Ring, der sich mit sinkenden HP zusammenzieht.
+    if (visualState.warning > 0) {
+      visual.ring ??= this.scene.add.image(x, y, RING_TEXTURE).setDepth(DEPTH_LIGHTING + 0.1)
+        .setTint(REACTIVE_PROP_VISUAL.warningColor);
+      visual.ring.setVisible(true).setPosition(x, y).setDisplaySize(size * visualState.warningScale, size * visualState.warningScale)
+        .setAlpha(visualState.warning);
     } else {
-      visual.sprite.clearTint();
+      visual.ring?.setVisible(false);
     }
 
     if (visualState.burnStacks > 0) {
@@ -122,7 +131,7 @@ export class ReactivePropRenderer {
         visual.burn = new EntityBurnRenderer(this.scene, this.burnGpu);
         visual.burn.setLightingSystem(this.lighting, `reactive-prop-burn:${state.index}`);
       }
-      visual.burn.sync(x, y - 2, BURN_BODY_PX, visualState.burnStacks, true, 'normal');
+      visual.burn.sync(x, y + BURN_OFFSET_Y, BURN_BODY_PX, visualState.burnStacks, true, 'normal');
     } else if (visual.burn) {
       visual.burn.destroy();
       visual.burn = null;
@@ -136,8 +145,10 @@ export class ReactivePropRenderer {
       }
       // Schwaches Eigenleuchten bei Tag, kräftig bei Nacht; langsam „atmend“ wie Strahlung.
       const breathe = 0.86 + 0.14 * Math.sin(nowMs / 1000 * Math.PI * 2 * 0.45 + state.index);
-      visual.glow.setPosition(x, y).setTint(glow.color).setDisplaySize(size * 0.9, size * 0.9)
-        .setAlpha(emissiveAlpha(glow.intensity * (0.35 + 0.65 * artificial) * breathe));
+      // Kleiner als das Fass: der Rand bleibt bei Nacht sichtbar; brennend tritt das Gift zurück.
+      const burning = visualState.burnStacks > 0 ? 0.45 : 1;
+      visual.glow.setPosition(x, y).setTint(glow.color).setDisplaySize(size * 0.72, size * 0.72)
+        .setAlpha(emissiveAlpha(glow.intensity * (0.3 + 0.55 * artificial) * breathe * burning));
       if (this.lighting) {
         this.lighting.setLight(lightKey, 'reactivePropGlow', x, y, {
           radiusPx: glow.radiusPx, intensity: glow.intensity * breathe, color: glow.color,
@@ -180,6 +191,7 @@ export class ReactivePropRenderer {
   private disposeVisual(visual: PropVisual): void {
     visual.sprite.destroy();
     visual.glow?.destroy();
+    visual.ring?.destroy();
     visual.burn?.destroy();
   }
 
@@ -189,9 +201,13 @@ export class ReactivePropRenderer {
   }
 }
 
-function scaleColor(color: number, factor: number): number {
-  const f = Math.max(0, Math.min(1, factor));
-  return (Math.round(((color >> 16) & 0xff) * f) << 16) | (Math.round(((color >> 8) & 0xff) * f) << 8) | Math.round((color & 0xff) * f);
+function ensureRingTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(RING_TEXTURE)) return;
+  const g = scene.make.graphics({ x: 0, y: 0 }, false);
+  g.lineStyle(7, 0xffffff, 0.35).strokeCircle(32, 32, 27);
+  g.lineStyle(3, 0xffffff, 1).strokeCircle(32, 32, 27);
+  g.generateTexture(RING_TEXTURE, 64, 64);
+  g.destroy();
 }
 
 function ensureShardTexture(scene: Phaser.Scene): void {

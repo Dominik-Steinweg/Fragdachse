@@ -27,6 +27,7 @@
     }
   ],
   "balanceReferenceDurationSec": 120,
+  "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "clusters": 3, "clusterSize": [1, 3], "minSpacingCells": 10 }] },
   "objective": "repel-assault",
   "bases": [],
   "powerUps": [],

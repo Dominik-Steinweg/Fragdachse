@@ -32,6 +32,11 @@ const policy: Rule = {
     corridors: { $items: { id: true, radiusCells: true, points: { $items: point, $mutable: true } }, $mutable: true, $id: 'id' } },
   water: { $items: point, $mutable: true }, waterAreas: { $items: rect, $mutable: true },
   rockWalls: { $items: { ...rect as object, id: true }, $mutable: true, $id: 'id' },
+  reactiveProps: {
+    anchors: { $items: { ...point as object, id: true, kind: true, variant: true }, $mutable: true, $id: 'id' },
+    scatter: { $items: { kind: true, clusters: true, minSpacingCells: true, variant: true,
+      clusterSize: { $items: true, $mutable: false } }, $mutable: true },
+  },
   tutorialAnchor: point, tutorialSteps: { $items: { anchor: point }, $mutable: false, $id: 'id' },
   persistentBase: { anchor: point },
   bases: { $items: { anchor: { kind: true, gridX: true, gridY: true, dxCells: true, dyCells: true, edgeInsetCells: true },

@@ -52,7 +52,7 @@
           "rusted": { "textureKey": "reactive_prop_barrel_rusted", "glow": null },
           "toxic": {
             "textureKey": "reactive_prop_barrel_toxic",
-            "glow": { "color": "#7dff3a", "radiusPx": 44, "intensity": 0.75 }
+            "glow": { "color": "#7dff3a", "radiusPx": 44, "intensity": 0.6 }
           }
         },
         "defaultVariant": "rusted",

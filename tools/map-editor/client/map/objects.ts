@@ -23,6 +23,7 @@ export const LAYERS: Record<string, { label: string; color: string }> = {
   mission: { label: 'Mission / Checkpoints', color: '#ce91e8' }, corridors: { label: 'Korridore', color: '#c4d897' },
   walls: { label: 'Felswände', color: '#e89973' }, tutorial: { label: 'Tutorial-Flächen', color: '#edcd66' }, spawns: { label: 'Spawngebiete', color: '#f3768f' },
   fronts: { label: 'Aktive Spawnfronten', color: '#60d8ed' },
+  props: { label: 'Explosive Fässer', color: '#ff6a3d' },
 };
 export interface MapObject {
   id: string; label: string; path: Path; layer: string;
@@ -44,6 +45,17 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft, g
     const x = typeof fixed === 'number' ? fixed : current?.layout.tracks[0]?.gridX;
     items.push({ id: 'tracks', label: draft.trackMode === 'void-fire' ? 'Void-Korridor' : 'Gleise', path: ['trackPosition'], layer: 'tracks', kind: 'track', x: x ?? Math.floor(metrics.gridCols / 2), y: 0, w: 2, h: metrics.gridRows, hidden: x === undefined });
   }
+  array(object(draft.reactiveProps).anchors).forEach((anchor, i) => {
+    const variant = anchor.variant ? ` · ${String(anchor.variant)}` : '';
+    items.push({ id: `prop:${session.key(['reactiveProps', 'anchors'], i)}`, label: `Fass · ${String(anchor.id)}${variant}`,
+      path: ['reactiveProps', 'anchors', i], layer: 'props', kind: 'point', x: Number(anchor.gridX), y: Number(anchor.gridY), w: 1, h: 1, radius: .5 });
+  });
+  // Seeded scatter is only known after generation; the preview shows it read-only.
+  (current?.layout.reactiveProps ?? []).forEach((cell, i) => {
+    if (cell.anchorId) return;
+    items.push({ id: `prop-scatter:${i}`, label: 'Gestreutes Fass (Vorschau, Seed-abhängig)', path: ['reactiveProps', 'scatter'], layer: 'props', kind: 'point',
+      x: cell.gridX, y: cell.gridY, w: 1, h: 1, radius: .5, readonly: true });
+  });
   array(draft.powerUps).forEach((p, i) => {
     const anchor = p.anchor ? object(p.anchor) : current?.layout.powerUpPedestals.find(pedestal => pedestal.id === i + 1 && !pedestal.linkedBaseId);
     items.push({ id: `powerup:${session.key(['powerUps'], i)}`, label: `${getPowerUpName(String(p.defId), 'de')} · ${i + 1}${p.anchor ? '' : ' (automatisch)'}`, path: ['powerUps', i, 'anchor'], powerUpPath: ['powerUps', i], layer: 'powerups', kind: 'powerup', x: Number(anchor?.gridX ?? Math.floor(metrics.gridCols / 2)), y: Number(anchor?.gridY ?? Math.floor(metrics.gridRows / 2)), w: 1, h: 1, hidden: !anchor });

@@ -7,7 +7,7 @@ import { array, at, clone, object, set, uniqueId, type JsonObject, type Path } f
 import { button, confirmEdit, element, heading, numberField, propertySelect, type EditorEnvironment } from '../ui';
 import { LAYERS, mapObjects, type MapObject } from './objects';
 import { MapCanvas, type DrawTool, type Rect } from './MapCanvas';
-import { addPowerUpControls, powerUpControls, trackControls } from './ContentControls';
+import { addPowerUpControls, addReactivePropControls, powerUpControls, reactivePropControls, trackControls } from './ContentControls';
 import { fireFrontControls } from './FireFrontControls';
 import { addZone, deleteZone, isZoneReferenced, renameZone } from '../../shared/spawns';
 
@@ -81,7 +81,7 @@ export class MapView {
       for (const [key, label, fallback, min] of fields) box.append(numberField(env, label, ['rockField', key], { min, step: .01, fallback, optional: fallback !== undefined }));
       box.append(button('Felsfeld einschließlich Korridoren entfernen', async () => { if (await confirmEdit('Felsfeld und seine Korridore aus dem Entwurf entfernen?')) { env.session.change(['rockField'], undefined); env.changed(); } }, 'danger'));
     } else box.append(element('p', 'muted', 'Ein erster Korridor legt ein organisches Felsfeld an: Radius 3, Varianz 0,6, Wanderung 1 und Wegpunktstreuung 1. Die Werte sind anschließend bearbeitbar.'));
-    box.append(trackControls(env, mapObjects(env.session, draft, this.canvas.previewResult).find(item => item.kind === 'track')), addPowerUpControls(env));
+    box.append(trackControls(env, mapObjects(env.session, draft, this.canvas.previewResult).find(item => item.kind === 'track')), addPowerUpControls(env), addReactivePropControls(env));
     return box;
   }
   private objectProperties(item: MapObject): HTMLElement {
@@ -92,6 +92,11 @@ export class MapView {
       const sources = element('ul');
       for (const source of item.sources ?? []) sources.append(element('li', '', source.label));
       box.append(sources); return box;
+    }
+    if (item.layer === 'props') {
+      box.append(item.readonly ? element('p', 'muted', 'Von der Streuung gesetzt; die Position hängt vom Seed ab. Feste Fässer über „Fass-Anker hinzufügen“.')
+        : reactivePropControls(env, item));
+      return box;
     }
     if (item.readonly) { box.append(element('p', 'muted', 'Diese Missionsvorgabe wird in V1 angezeigt und geprüft; ihre Funktion bleibt unverändert.')); return box; }
     if (item.kind === 'track') { box.append(trackControls(env, item)); return box; }

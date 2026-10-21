@@ -9,6 +9,7 @@
     { "id": "titan-grave", "gridX": 0, "gridY": 14, "widthCells": 8, "heightCells": 10 }
   ],
   "timeOfDay": "22:30",
+  "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "clusters": 3, "clusterSize": [1, 3], "minSpacingCells": 10 }] },
   "objective": "defeat-boss",
   "rockFillRatio": 0.2,
   "trackPosition": "left",

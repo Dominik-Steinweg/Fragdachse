@@ -55,7 +55,8 @@ export interface ReactivePropKindConfig {
 export interface ReactivePropScatterSpec {
   readonly kind: string;
   readonly clusters: number;
-  readonly clusterSize: readonly [number, number];
+  /** [min, max] Fässer je Gruppe; der Validator verlangt genau zwei Werte. */
+  readonly clusterSize: readonly number[];
   readonly minSpacingCells: number;
   readonly variant?: string;
 }

@@ -23,6 +23,7 @@
     "repeatAfterExitMs": 20000
   }],
   "balanceReferenceDurationSec": 145,
+  "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "clusters": 5, "clusterSize": [1, 3], "minSpacingCells": 10 }] },
   "objective": "defeat-boss",
   "bases": [
     {

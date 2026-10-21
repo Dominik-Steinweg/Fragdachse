@@ -1,7 +1,7 @@
 {
   "owner": "effects/reactiveProps/ReactivePropRenderer.ts",
   "notes": [
-    "Reaktive Map-Objekte: Fass-Sprite über Felsen und unter Figuren, Giftschein als Emission über der Lightmap, Blechsplitter beim Abgang."
+    "Reaktive Map-Objekte: Fass-Sprite über Felsen und unter Figuren, roter Telegraph-Ring und Giftschein über der Lightmap, Blechsplitter beim Abgang."
   ],
   "source": {
     "blends": [
@@ -12,6 +12,13 @@
       {
         "key": "syncProp/visual/setDepth/0",
         "expression": "DEPTH.ROCKS + 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "syncProp/this.scene.add/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.1",
         "blends": [
           "NORMAL"
         ]
@@ -54,6 +61,28 @@
       "source": {
         "selector": "syncProp/visual/setDepth/0",
         "expression": "DEPTH.ROCKS + 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/reactiveProps/ReactivePropRenderer.ts:syncProp/this.scene.add/setDepth/0",
+      "owner": "effects/reactiveProps/ReactivePropRenderer.ts",
+      "component": "syncProp/this.scene.add/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncProp/this.scene.add/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.1"
       }
     },
     {
