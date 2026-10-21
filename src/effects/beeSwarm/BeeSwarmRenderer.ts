@@ -1,5 +1,7 @@
 import type * as Phaser from 'phaser';
 import type { GameAudioSystem } from '../../audio/GameAudioSystem';
+import { emissiveAlpha } from '../EmissiveScale';
+import type { LightingSystem } from '../LightingSystem';
 import type { SyncedBeeSwarm } from '../../types';
 import { BeeSwarmGpuLayer, type BeeGpuInstance } from '../gpu/BeeSwarmGpuLayer';
 import { BEE_KIND } from '../gpu/BeeSwarmShader';
@@ -10,6 +12,14 @@ export const BEES_PER_SWARM = { high: 90, medium: 64, low: 40 } as const;
 const MAX_BUZZ_LOOPS = 2;
 const BUZZ_MARGIN_PX = 220;
 const STING_SOUND_GAP_MS = 140;
+/** Hive light: reaches from the skep out to its swarm, within these bounds. */
+const HIVE_LIGHT_MIN_RADIUS = 170;
+const HIVE_LIGHT_MAX_RADIUS = 680;
+const HIVE_LIGHT_SWARM_MARGIN = 170;
+/** Length of the light rays streaming out of the skep, in px. */
+const HIVE_RAY_LENGTH = 64;
+
+interface HiveLight { level: number; radius: number }
 
 export type BeeSwarmAudio = Pick<GameAudioSystem, 'startLoop' | 'updateLoopPosition' | 'stopLoop' | 'playSound'>;
 
@@ -37,11 +47,13 @@ export class BeeSwarmRenderer {
   private readonly loops = new Map<number, string>();
   private readonly releases = new Set<number>();
   private readonly stings = new Map<number, number>();
+  private readonly hiveLights = new Map<number, HiveLight>();
   private readonly phases = new Map<number, SyncedBeeSwarm['phase']>();
   private lastTimeMs: number | null = null;
   private lastStingSoundAt = -Infinity;
 
-  constructor(private readonly scene: Phaser.Scene, private readonly audio: BeeSwarmAudio | null) {
+  constructor(private readonly scene: Phaser.Scene, private readonly audio: BeeSwarmAudio | null,
+    private readonly lighting: LightingSystem | null = null) {
     this.layer = new BeeSwarmGpuLayer(scene);
   }
 
@@ -53,9 +65,10 @@ export class BeeSwarmRenderer {
       beesPerSwarm: BEES_PER_SWARM[frame.quality], targetPosition: frame.targetPosition,
     }, this.bees);
     const camera = this.scene.cameras.main;
-    this.layer.setFrame(frame.timeMs / 1000, 1 / Math.max(.1, camera.zoom), frame.shadowStrength);
+    this.layer.setFrame(frame.timeMs / 1000, 1 / Math.max(.1, camera.zoom), frame.shadowStrength, emissiveAlpha(1));
     this.layer.begin();
     const g = this.gpu;
+    this.syncHiveLights(frame, dt, g);
     for (let i = 0; i < count; i++) {
       const bee = this.bees[i];
       g.x = bee.x; g.y = bee.y; g.heading = bee.heading; g.wing = bee.wing; g.size = bee.size; g.alpha = bee.alpha;
@@ -69,7 +82,46 @@ export class BeeSwarmRenderer {
     this.syncAudio(frame);
   }
 
+  /**
+   * A struck hive glows from the inside: honey light streams out of the skep (rays on the GPU, above
+   * the light map) and a hive light reaches out to the swarm, so the area where the bees are active
+   * is lit, also at night. It rises in the anticipation, holds while the swarm is out and fades
+   * once the bees are home.
+   */
+  private syncHiveLights(frame: BeeSwarmRenderFrame, dt: number, g: BeeGpuInstance): void {
+    const swarms = new Map(frame.swarms.map(swarm => [swarm.hiveIndex, swarm]));
+    for (const hive of frame.hives.values()) {
+      const swarm = swarms.get(hive.index);
+      const target = hive.phase === 'triggered' ? .55 + .45 * hive.progress
+        : swarm ? (swarm.phase === 'returning' ? .55 : 1) : 0;
+      const light = this.hiveLights.get(hive.index) ?? { level: 0, radius: HIVE_LIGHT_MIN_RADIUS };
+      const rate = target > light.level ? 6 : 1.4;
+      light.level += (target - light.level) * (1 - Math.exp(-dt * rate));
+      const reach = swarm ? Math.hypot(swarm.x - hive.centerX, swarm.y - hive.centerY) + HIVE_LIGHT_SWARM_MARGIN : 0;
+      const wanted = Math.min(HIVE_LIGHT_MAX_RADIUS, Math.max(HIVE_LIGHT_MIN_RADIUS, reach));
+      light.radius += (wanted - light.radius) * (1 - Math.exp(-dt * 3));
+      const key = `bee-hive-light:${hive.index}`;
+      if (light.level < .02) {
+        this.hiveLights.delete(hive.index);
+        this.lighting?.releaseLight(key);
+        continue;
+      }
+      this.hiveLights.set(hive.index, light);
+      this.lighting?.setLight(key, 'beeHiveGlow', hive.centerX, hive.centerY,
+        { radiusPx: light.radius, intensity: .95 * light.level });
+      g.x = hive.centerX; g.y = hive.centerY; g.heading = hive.rotation + Math.PI / 2; g.wing = 0;
+      g.size = HIVE_RAY_LENGTH; g.alpha = light.level; g.r = 1; g.g = .78; g.b = .36; g.hostile = 0;
+      g.kind = BEE_KIND.glow; g.blur = 0; g.altitude = 0; g.seed = hive.index * 7.31;
+      this.layer.add(g);
+    }
+    for (const [index] of this.hiveLights) {
+      if (!frame.hives.has(index)) { this.hiveLights.delete(index); this.lighting?.releaseLight(`bee-hive-light:${index}`); }
+    }
+  }
+
   destroy(): void {
+    for (const index of this.hiveLights.keys()) this.lighting?.releaseLight(`bee-hive-light:${index}`, { immediate: true });
+    this.hiveLights.clear();
     for (const handle of this.loops.values()) this.audio?.stopLoop(handle);
     this.loops.clear();
     this.flock.clear();

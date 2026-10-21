@@ -10,6 +10,10 @@ const MAX_SPEED = 520;
 /** Where a hive's bees come and go, and its replicated state. */
 export interface BeeHivePresentation {
   readonly index: number;
+  /** Drawn skep centre and rotation; the light streams out of the hive from here. */
+  readonly centerX: number;
+  readonly centerY: number;
+  readonly rotation: number;
   readonly entranceX: number;
   readonly entranceY: number;
   readonly phase: ReactivePropPhase;

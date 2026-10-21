@@ -678,6 +678,23 @@ export const LIGHT_PRESETS = {
    * Radioaktives Fass: kleiner, ruhiger Giftschein. Verdeckt nicht – das eigene Hindernis des
    * Fasses würde ihn sonst schlucken.
    */
+  /**
+   * Struck bee skep: warm honey light streams out of the hive while its swarm is active; the owner
+   * widens the radius to reach the swarm. Not occluded – the skep's own obstacle would swallow it.
+   */
+  beeHiveGlow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 220,
+    color: 0xffc65a,
+    intensity: 0.95,
+    durationMs: 0,
+    decayExponent: 1.2,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0.08,
+    flickerHz: 1.6,
+  },
   reactivePropGlow: {
     enabled: true,
     shape: 'radial',

@@ -1,7 +1,7 @@
 {
   "owner": "effects/gpu/BeeSwarmGpuLayer.ts",
   "notes": [
-    "Bees of reactive hives drawn analytically (no texture): soft shadow dots on the ground below actors, bees and faint swarm veils in the low flight band above the ground fog and under the crowns, lit like the ground (birds use the same band)."
+    "Bees of reactive hives drawn analytically (no texture): soft shadow dots on the ground below actors, bees and faint swarm veils in the low flight band above the ground fog and under the crowns, lit like the ground (birds use the same band). A struck hive streams honey light out of the skep in an emissive pass above the light map."
   ],
   "gpuLayers": [
     {
@@ -37,6 +37,24 @@
       ],
       "profiles": [
         "K"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "beeSwarm:glow",
+      "owner": "effects/gpu/BeeSwarmGpuLayer.ts",
+      "component": "glow",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.57
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
       ],
       "role": "effect"
     }

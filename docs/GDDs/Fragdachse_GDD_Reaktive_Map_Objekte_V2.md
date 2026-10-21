@@ -27,6 +27,7 @@ zu taktischen Werkzeugen: Wer zuerst trifft, setzt die Wirkung gegen die Gegner 
 | O1 | Optik: Riesenbovist mit Rissmuster, der zusammensackt und sich wieder füllt. Geflochtener Strohkorb auf Holzbock, von oben an konzentrischen Ringen lesbar. Beide entstehen in Blender. |
 | O2 | Die Bienen sind kein Asset, sondern ein prozeduraler GPU-Effekt. Ihre Körperlänge ist realistisch: 3–4 px, also etwa 10 cm. |
 | V1 | Aus V1: Jeder Treffer löst aus, auch durch Gegner, außer Nahkampfbissen. Die Wirkung gehört dem Auslöser und trifft nur dessen Gegner, nie Teammates und nie ihn selbst. Löst in Coop ein Gegner aus, richtet sie sich gegen die Spieler. |
+| L1 | Nachtrag: Ein getroffener Korb beleuchtet den Bereich, in dem seine Bienen aktiv sind. Das Licht strahlt aus dem Korb heraus. |
 
 Claude hat außerdem entschieden (umkehrbare Defaults):
 
@@ -89,6 +90,10 @@ Der Map-Editor wählt das Kind beim Setzen eines Ankers. Jedes Kind hat einen ei
   - 90/64/40 Bienen je Schwarm je nach Qualitätsstufe (User-Rückmeldung: der Schwarm muss groß und gut sichtbar sein), Wolkenradius etwa 50 px mit dichtem Kern;
   - ein warmer Flügel-Schleier lässt dichte Schwärme als eine Wolke lesen;
   - Bewegung: Jede Biene folgt ihrem eigenen Orbit um das geglättete Schwarmzentrum, Taucher stoßen auf das Ziel herab, neue Schwärme quellen aus dem Flugloch, heimkehrende strömen hinein.
+- **Korblicht (L1):** Ein getroffener Korb leuchtet von innen.
+  - Warmes Honiglicht im Lichtsystem (Preset `beeHiveGlow`, ohne Verdeckung) mit Mittelpunkt im Korb. Sein Radius reicht bis zum Schwarm, mindestens etwa 170 px und höchstens etwa 680 px. So ist der Bereich, in dem die Bienen jagen, auch nachts beleuchtet.
+  - Über der Lichtkarte zieht ein emissiver GPU-Pass flackernde Strahlen durch die Strohritzen, am hellsten aus dem Flugloch.
+  - Das Licht steigt im Vorlauf an und hält, solange der Schwarm draußen ist. Beim Rückflug wird es schwächer und erlischt weich, wenn die Bienen heimgekehrt sind. Bereite Körbe leuchten nicht.
 - **One-Shots** spielen nur bei einem beobachteten Übergang, nie beim Late Join.
 - **Audio:** Rezepte im Audio-Studio. Bis zur Freigabe durch den User laufen Platzhalter. Die Rezepte:
 

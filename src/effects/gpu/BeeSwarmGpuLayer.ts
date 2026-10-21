@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DEPTH } from '../../config';
+import { DEPTH, DEPTH_LIGHTING } from '../../config';
 import type { ShaderWarmupProbe } from '../../graphics/ShaderWarmupProbe';
 import { CHARACTER_SHADOW_CONFIG } from '../ShadowConfig';
 import { registerGraphicsObject } from '../EffectUtils';
@@ -7,8 +7,12 @@ import { BEE_SWARM_FRAGMENT, BEE_SWARM_VERTEX } from './BeeSwarmShader';
 
 /** Bounded batch: two draws per frame for every bee on screen (hives and swarms). */
 export const BEE_GPU_CAPACITY = 1024;
-/** Soft shadow dots on the ground; bees in the low flight band, lit like the ground, under the crowns. */
-export const BEE_PASS_DEPTHS = [CHARACTER_SHADOW_CONFIG.depth - 0.005, DEPTH.GROUND_FOG_COMPOSITE + 1.8] as const;
+/**
+ * Soft shadow dots on the ground; bees in the low flight band, lit like the ground, under the
+ * crowns; the light streaming out of a struck hive above the light map.
+ */
+export const BEE_PASS_DEPTHS = [CHARACTER_SHADOW_CONFIG.depth - 0.005, DEPTH.GROUND_FOG_COMPOSITE + 1.8,
+  DEPTH_LIGHTING + 0.07] as const;
 const VERTICES = 6, WORDS = 16;
 const CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
 
@@ -26,6 +30,7 @@ export class BeeSwarmGpuLayer {
   private time = 0;
   private pixel = 1;
   private shadow = 1;
+  private emissive = 1;
   private readonly passes: { image: Phaser.GameObjects.Image; batch: BeeBatchPort }[] = [];
 
   constructor(scene: Phaser.Scene) {
@@ -33,7 +38,7 @@ export class BeeSwarmGpuLayer {
     if (!renderer?.gl) return;
     for (const [pass, depth] of BEE_PASS_DEPTHS.entries()) {
       const image = scene.add.image(0, 0, '__WHITE').setDepth(depth).setVisible(false);
-      image.name = `bees-${['shadow', 'flight'][pass]}`;
+      image.name = `bees-${['shadow', 'flight', 'glow'][pass]}`;
       registerGraphicsObject(scene, 'beeSwarms', image);
       const batch = createBeeBatch(renderer, image, pass, this);
       const manager = renderer.renderNodes;
@@ -71,9 +76,9 @@ export class BeeSwarmGpuLayer {
     this.version++;
     for (const { image } of this.passes) image.setVisible(this.count > 0);
   }
-  /** Layer clock in seconds, world px per screen px (antialiasing width) and the shadow strength. */
-  setFrame(timeSeconds: number, worldPxPerScreenPx: number, shadowStrength: number): void {
-    this.time = timeSeconds; this.pixel = worldPxPerScreenPx; this.shadow = shadowStrength;
+  /** Layer clock in seconds, world px per screen px (antialiasing width), shadow and emissive strength. */
+  setFrame(timeSeconds: number, worldPxPerScreenPx: number, shadowStrength: number, emissive: number): void {
+    this.time = timeSeconds; this.pixel = worldPxPerScreenPx; this.shadow = shadowStrength; this.emissive = emissive;
   }
 
   /** Shader warmup: links the program and primes both passes with one empty instance. */
@@ -92,6 +97,7 @@ export class BeeSwarmGpuLayer {
   get clock(): number { return this.time; }
   get pixelSize(): number { return this.pixel; }
   get shadowStrength(): number { return this.shadow; }
+  get emissiveScale(): number { return this.emissive; }
 }
 
 /** Links the bee program during the loading barrier, so the first swarm never stalls the frame. */
@@ -106,7 +112,7 @@ export function createBeeSwarmShaderProbe(scene: Phaser.Scene): ShaderWarmupProb
 
 interface BeeGpuLayerFrame {
   readonly instanceData: Float32Array; readonly size: number; readonly uploadVersion: number;
-  readonly clock: number; readonly pixelSize: number; readonly shadowStrength: number;
+  readonly clock: number; readonly pixelSize: number; readonly shadowStrength: number; readonly emissiveScale: number;
 }
 interface BeeBatchPort { run(context: Phaser.Renderer.WebGL.DrawingContext, preparing?: boolean): boolean; dispose(): void }
 // Lazy like SpawnGpuLayer: importing presentation must also work in headless runtime tests.
@@ -152,6 +158,7 @@ function createBeeBatch(renderer: Phaser.Renderer.WebGL.WebGLRenderer, image: Ph
         program.setUniform('uTime', frame.clock);
         program.setUniform('uPixel', frame.pixelSize);
         program.setUniform('uShadow', frame.shadowStrength);
+        program.setUniform('uEmissive', frame.emissiveScale);
         program.setUniform('uAlpha', image.alpha);
         program.applyUniforms(suite.program);
         renderer.drawElements(context, [], suite.program, suite.vao, instances * VERTICES, 0, this.topology);

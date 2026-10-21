@@ -343,6 +343,7 @@ export class WorldPresentationFrameBinding {
         // The entrance faces the sprite's south, about 10 px from the skep centre.
         const reach = 10;
         this.beeHives.set(state.index, { index: state.index, phase: state.phase, progress: state.progress,
+          centerX: position.x + pose.offsetX, centerY: position.y + pose.offsetY, rotation: pose.rotation,
           entranceX: position.x + pose.offsetX - reach * Math.sin(pose.rotation),
           entranceY: position.y + pose.offsetY + reach * Math.cos(pose.rotation) });
       });
@@ -352,7 +353,7 @@ export class WorldPresentationFrameBinding {
       this.beeSwarmRenderer = null;
       return;
     }
-    this.beeSwarmRenderer ??= new BeeSwarmRenderer(this.input.scene, ports.audio);
+    this.beeSwarmRenderer ??= new BeeSwarmRenderer(this.input.scene, ports.audio, this.input.lighting);
     const players = this.input.getPlayers();
     this.beeSwarmRenderer.sync({
       swarms: ports.hostSwarms() ?? this.latestBeeSwarms, hives: this.beeHives, syncNow: this.input.getSynchronizedNow(),

@@ -12,8 +12,10 @@
  * Pass 0 shadow (ground, material): one soft dot per bee, offset by its altitude.
  * Pass 1 bees   (low flight band, material, lit like the ground): veils first, then bees with
  *               striped body, dark head, shimmering wing blur, glint and a short motion streak.
+ * Pass 2 glow   (above the light map, emissive): honey light streaming out of a struck hive in
+ *               flickering rays through the straw, strongest at the entrance (kind 2 only).
  */
-export const BEE_KIND = { bee: 0, veil: 1 } as const;
+export const BEE_KIND = { bee: 0, veil: 1, glow: 2 } as const;
 
 export const BEE_SWARM_VERTEX = `
 #pragma phaserTemplate(shaderName)
@@ -33,7 +35,12 @@ void main() {
   float kind = inParam.x;
   vec2 centre = inGeom.xy;
   vec2 local;
-  if (uPass < 0.5) {
+  // The glow kind draws only in the glow pass, and the glow pass draws nothing else.
+  if ((uPass > 1.5) != (kind > 1.5)) { gl_Position = vec4(0.0, 0.0, -2.0, 1.0); return; }
+  if (uPass > 1.5) {
+    local = inGeom.zw * inBee.z;
+    vLocal = local;
+  } else if (uPass < 0.5) {
     // Shadows: veils cast none; the dot falls away from the sun with the flight altitude.
     if (kind > 0.5) { gl_Position = vec4(0.0, 0.0, -2.0, 1.0); return; }
     float extent = inBee.z * 1.1;
@@ -65,6 +72,7 @@ uniform float uPixel;
 uniform float uTime;
 uniform float uShadow;
 uniform float uAlpha;
+uniform float uEmissive;
 varying vec2 vLocal;
 varying vec4 vBee;
 varying vec4 vColor;
@@ -78,6 +86,30 @@ vec4 over(vec4 dst, vec3 rgb, float a) { return vec4(rgb * a + dst.rgb * (1.0 - 
 
 void main() {
   float alpha = vBee.w * uAlpha;
+  if (uPass > 1.5) {
+    // Light streaming out of the skep: a warm core, flickering rays through the straw gaps and a
+    // brighter beam out of the entrance (heading). Additive (premultiplied, alpha 0).
+    float r = length(vLocal) / vBee.z;
+    if (r >= 1.0) discard;
+    float angle = atan(vLocal.y, vLocal.x);
+    float t = uTime;
+    float rays = 0.0;
+    for (int k = 0; k < 3; k++) {
+      float n = 9.0 + float(k) * 4.0;
+      float phase = vParam.w + float(k) * 1.7 + t * (0.35 + 0.15 * float(k));
+      rays += pow(max(0.0, sin(angle * n + phase + 0.6 * sin(t * 1.3 + float(k)))), 6.0) / 3.0;
+    }
+    float flicker = 0.85 + 0.15 * sin(t * 7.3 + vParam.w) * sin(t * 3.1);
+    float entrance = pow(max(0.0, cos(angle - vBee.x)), 10.0);
+    // The skep (radius ~0.25) glows softly through the straw; the rays start at its edge.
+    float body = smoothstep(0.3, 0.08, r);
+    float out_ = smoothstep(0.14, 0.3, r) * (1.0 - smoothstep(0.3, 1.0, r));
+    float reach = out_ * (0.4 * rays + 0.85 * entrance) + 0.3 * body;
+    float a = reach * alpha * flicker * uEmissive;
+    if (a < 0.003) discard;
+    gl_FragColor = vec4(vColor.rgb * a, 0.0);
+    return;
+  }
   if (uPass < 0.5) {
     float r = vBee.z * 0.42;
     float a = exp(-dot(vLocal, vLocal) / (r * r)) * 0.34 * alpha * uShadow;
