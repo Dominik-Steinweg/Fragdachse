@@ -433,7 +433,8 @@ export class AmbientWildlifeBirds {
   private waypoint(a: WildlifeAnimal): void {
     const bird = a.bird!, t = TUNING.owl, f = this.port.frame, n = bird.flights;
     const angle = this.rand(a.homeX, a.homeY, 3500 + n * 3) * TAU;
-    const radius = t.territory * CELL_SIZE * (.25 + .75 * Math.sqrt(this.rand(a.homeX, a.homeY, 3501 + n * 3)));
+    // Waypoints lie far apart: an owl crosses the map instead of lingering over one place.
+    const radius = t.territory * CELL_SIZE * (.5 + .5 * Math.sqrt(this.rand(a.homeX, a.homeY, 3501 + n * 3)));
     bird.targetX = clamp(a.homeX + Math.cos(angle) * radius, f.offsetX + 96, f.offsetX + f.width - 96);
     bird.targetY = clamp(a.homeY + Math.sin(angle) * radius, f.offsetY + 96, f.offsetY + f.height - 96);
   }
@@ -472,7 +473,7 @@ export class AmbientWildlifeBirds {
       bird.phase = 'circle'; a.phaseTime = 0;
       bird.orbitX = bird.targetX; bird.orbitY = bird.targetY;
       bird.orbitSign = this.rand(a.homeX, a.homeY, 3601 + bird.flights) < .5 ? -1 : 1;
-      bird.orbitTime = (.8 + this.rand(a.homeX, a.homeY, 3602 + bird.flights)) * TAU * radius / t.cruiseSpeed;
+      bird.orbitTime = (.5 + .4 * this.rand(a.homeX, a.homeY, 3602 + bird.flights)) * TAU * radius / t.cruiseSpeed;
     } else if (roll < t.circleChance + t.diveChance && this.startDive(a)) {
       bird.cues |= BIRD_CUE.DIVE;
     } else this.waypoint(a);
@@ -576,14 +577,15 @@ export function birdDrawScale(altitude: number): number {
 export interface BirdLayerWeights { ground: number; low: number; high: number }
 const smoothRange = (from: number, to: number, x: number): number => smooth((x - from) / (to - from));
 /**
- * Ground (under fog), low (above the lightmap, under crowns) and high (above crowns). The upper copy
- * is complete before the lower one fades, so coverage never dips; at most two copies are drawn.
+ * Ground (under the fog), low (above the fog, lit like the ground, under crowns) and high (above
+ * crowns). The upper copy reaches full strength before the lower one fades, so coverage never dips;
+ * its slow rise is what lets a climbing bird leave the fog gradually. At most two copies are drawn.
  */
 export function writeBirdLayerWeights(altitude: number, out: BirdLayerWeights): BirdLayerWeights {
-  const [c0, c1, c2] = TUNING.birdFlight.crownBand;
+  const [c0, c1, c2] = TUNING.birdFlight.crownBand, [f0, f1] = TUNING.birdFlight.fogLift;
   const h = Number.isFinite(altitude) ? Math.max(0, altitude) : 0;
-  out.ground = 1 - smoothRange(2, 4, h);
-  out.low = smoothRange(0, 2, h) * (1 - smoothRange(c1, c2, h));
+  out.ground = 1 - smoothRange(f0, f1, h);
+  out.low = smoothRange(0, f0, h) * (1 - smoothRange(c1, c2, h));
   out.high = smoothRange(c0, c1, h);
   return out;
 }

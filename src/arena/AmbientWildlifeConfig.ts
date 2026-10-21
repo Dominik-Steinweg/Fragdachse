@@ -55,27 +55,34 @@ export const AMBIENT_WILDLIFE = {
   butterflyColors: [0xefc96b, 0x8cc5eb, 0xc69ee0, 0xf2e7c8, 0xe69b67],
   // Birds. Speeds px/s, heights px above ground, spot and hop ranges in cells around the roost tree.
   // Sizes are a little above true scale so a flock still reads at play distance.
-  // `speed` is the walking pace on the ground (sparrow flocks stand and peck).
-  sparrow: { size: 7.2, speed: 0, fleeSpeed: 165, cruiseSpeed: 120, alertRadius: 112, turnRate: 6, maxCount: 18,
-    occupancy: .45, flockMin: 4, flockMax: 9, spread: 9, cruiseHeight: 92, climbRate: 80, flapHz: 8,
+  // `speed` is the walking pace on the ground (sparrow flocks stand and peck). Sparrows and magpies
+  // cruise below the crowns, ravens and owls above them. `beat` is the projected wing-span loss at
+  // the ends of a stroke: small for the slow, deep beats of large birds.
+  sparrow: { size: 7.2, speed: 0, fleeSpeed: 150, cruiseSpeed: 110, alertRadius: 112, turnRate: 6, maxCount: 18,
+    occupancy: .45, flockMin: 4, flockMax: 9, spread: 9, cruiseHeight: 34, climbRate: 70, flapHz: 7, beat: .3,
     spotCount: 6, spotRange: [2.5, 7], hopRange: [3, 8], calmSeconds: [25, 70] },
   sparrowShore: { spots: 2, range: 12, chance: .35, drinkSeconds: [6, 14], standOff: 13, lateralSpacing: 4.4 },
-  magpie: { size: 16, speed: 16, fleeSpeed: 140, cruiseSpeed: 105, alertRadius: 104, turnRate: 5.5, maxCount: 10,
-    occupancy: .15, cruiseHeight: 104, climbRate: 64, flapHz: 5.5,
-    spotCount: 6, spotRange: [4, 10], hopRange: [5, 12], calmSeconds: [20, 55],
+  // Each flock member flies its own path: it chases its slot in the loose formation with its own
+  // speed and response, so the flock never moves as one rigid body.
+  sparrowMembers: { formationSpread: 2.4, wander: 3.2, response: 3.2, accel: 5, speedVariation: .14, turnRate: 9 },
+  magpie: { size: 16, speed: 16, fleeSpeed: 120, cruiseSpeed: 92, alertRadius: 104, turnRate: 4, maxCount: 10,
+    occupancy: .15, cruiseHeight: 38, climbRate: 50, flapHz: 3.1, beat: .22,
+    spotCount: 6, spotRange: [8, 22], hopRange: [10, 26], calmSeconds: [20, 55],
     roamRadius: 80, walkSeconds: [1.2, 3], pauseSeconds: [.8, 2.4] },
-  raven: { size: 22, speed: 14, fleeSpeed: 130, cruiseSpeed: 100, alertRadius: 136, turnRate: 4.5, maxCount: 6,
-    occupancy: .08, cruiseHeight: 118, climbRate: 56, flapHz: 3.4,
-    spotCount: 6, spotRange: [5, 14], hopRange: [6, 16], calmSeconds: [25, 70],
+  raven: { size: 24, speed: 14, fleeSpeed: 108, cruiseSpeed: 82, alertRadius: 136, turnRate: 2.6, maxCount: 6,
+    occupancy: .08, cruiseHeight: 118, climbRate: 40, flapHz: 2.1, beat: .16,
+    spotCount: 6, spotRange: [8, 24], hopRange: [12, 30], calmSeconds: [25, 70],
     roamRadius: 104, walkSeconds: [1.6, 3.6], pauseSeconds: [1, 3] },
-  owl: { size: 13, speed: 85, fleeSpeed: 125, cruiseSpeed: 85, alertRadius: 88, turnRate: 1.4, maxCount: 6,
-    occupancy: .06, cruiseHeight: 124, climbRate: 52, flapHz: 2.6, territory: 18,
-    circleChance: .35, diveChance: .25, mantleSeconds: [.8, 1.6], climbSeconds: 2.4, veerSeconds: 2.5 },
+  owl: { size: 13, speed: 88, fleeSpeed: 125, cruiseSpeed: 88, alertRadius: 88, turnRate: 1.4, maxCount: 6,
+    occupancy: .06, cruiseHeight: 124, climbRate: 52, flapHz: 2.6, beat: .2, territory: 36,
+    circleChance: .12, diveChance: .15, mantleSeconds: [.5, 1], climbSeconds: 2.4, veerSeconds: 2.5 },
   owlBrownShare: .7,
   birdFlight: {
     // Below c0 a bird flies under tree crowns, above c2 over them. Inside the band it rises out of
     // (or sinks into) the leaves; flights never level off inside it.
     crownBand: [44, 76, 84], emergeHeight: 40, emergeSeconds: 1.4,
+    // Rising from the ground the bird leaves the ground fog gradually over these heights.
+    fogLift: [16, 22],
     takeoffSeconds: .55, landingRadius: 90, alertCooldownSeconds: 1.2, frameInset: 8,
   },
   // World minutes; each bird picks its own moment inside the window.

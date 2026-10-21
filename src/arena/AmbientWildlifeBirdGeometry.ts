@@ -51,6 +51,8 @@ interface BirdShape {
   readonly root: readonly [x: number, y: number];
   /** Right wing (+y) from the shoulder over the tip back to the trailing root. */
   readonly wing: readonly number[];
+  /** Smoothed wing outline for the flight shadow when the drawn edge is scalloped or fingered. */
+  readonly shadowWing?: readonly number[];
   /** Right half of the tail from its root to the tip on the axis. */
   readonly tail: readonly number[];
 }
@@ -60,16 +62,22 @@ const SHAPES: Record<BirdKind, BirdShape> = {
     wing: [.14, .09, .12, .4, .02, .74, -.1, .8, -.2, .62, -.22, .3, -.2, .09], tail: [-.26, .08, -.5, .11, -.47, 0] },
   magpie: { beak: .44, head: [.27, .085], neck: .2, root: [.01, .07],
     wing: [.16, .07, .15, .3, .07, .56, -.06, .63, -.17, .56, -.19, .3, -.13, .07], tail: [-.1, .05, -.35, .07, -.55, .05, -.63, 0] },
-  raven: { beak: .5, head: [.28, .1], neck: .18, root: [-.01, .08],
-    wing: [.14, .08, .12, .5, .04, .86, -.06, 1.04, -.16, .9, -.22, .5, -.16, .08], tail: [-.15, .07, -.36, .1, -.44, 0] },
+  raven: { beak: .54, head: [.3, .12], neck: .2, root: [-.02, .11],
+    wing: [.14, .1, .17, .3, .18, .5, .13, .68, .06, .84, -.02, .88, -.12, .88, -.2, .84, -.25, .68, -.26, .48, -.25, .3, -.2, .12],
+    shadowWing: [.14, .1, .18, .5, .06, .84, .04, 1.12, -.08, 1.17, -.19, 1.08, -.25, .68, -.25, .3, -.2, .12],
+    tail: [-.2, .09, -.42, .13, -.5, 0] },
   owl: { beak: .5, head: [.27, .21], neck: .12, root: [-.02, .12],
-    wing: [.16, .12, .22, .35, .22, .6, .16, .85, .06, 1.04, -.06, 1.13, -.18, 1.1, -.27, .98, -.31, .75, -.29, .45, -.22, .12],
+    wing: [.16, .12, .24, .3, .28, .48, .25, .62, .17, .8, .07, .96,
+      .01, 1.06, -.04, 1.03, -.08, 1.12, -.12, 1.08, -.16, 1.12, -.2, 1.07, -.24, 1.07, -.27, 1,
+      -.31, .92, -.29, .86, -.33, .78, -.31, .72, -.34, .64, -.32, .58, -.34, .5, -.32, .44, -.33, .36,
+      -.3, .3, -.3, .22, -.26, .16, -.22, .12],
+    shadowWing: [.16, .12, .26, .45, .17, .8, .02, 1.05, -.12, 1.12, -.26, 1.04, -.32, .75, -.32, .4, -.22, .12],
     tail: [-.25, .12, -.42, .1, -.45, 0] },
 };
 
 const OWL_COLORS = [
-  { back: 0x6a4f36, dark: 0x3f2e20, pale: 0xc6b08c },
-  { back: 0x6b675e, dark: 0x3e3b35, pale: 0xbdb6a6 },
+  { back: 0x6a4f36, coverts: 0x7b5b3d, flight: 0x58463a, dark: 0x34261a, pale: 0xd4c09a },
+  { back: 0x6b675e, coverts: 0x78736a, flight: 0x5a5752, dark: 0x35332e, pale: 0xc8c1b0 },
 ] as const;
 
 /** Convex-or-star polygon in units of `length`, fanned from its first point; `side` mirrors y. */
@@ -151,48 +159,71 @@ function drawMagpie(mesh: WildlifeMesh, cb: number, length: number): void {
 }
 
 function drawRaven(mesh: WildlifeMesh, cb: number, length: number): void {
-  const shape = SHAPES.raven;
-  contactShadow(mesh, cb, length, .52, .3);
-  mesh.fill(0x111216, 1, 1); fan(mesh, mirroredTail(shape), length, cb + TAIL);
-  mesh.fill(0x2b2e4a, .35, 1); stroke(mesh, cb + TAIL, length, -.18, 0, -.4, 0, .05);
-  mesh.fill(0x111216, 1, 1); oval(mesh, cb + BODY, length, .04, 0, .48, .23);
+  const shape = SHAPES.raven, black = 0x0f1014, gloss = 0x272b42, sheen = 0x353a58;
+  contactShadow(mesh, cb, length, .6, .4);
+  // Wedge tail with a faint central gloss.
+  mesh.fill(black, 1, 1); fan(mesh, mirroredTail(shape), length, cb + TAIL);
+  mesh.fill(gloss, .3, 1); fan(mesh, [-.22, .04, -.44, .06, -.48, 0, -.44, -.06, -.22, -.04], length, cb + TAIL);
+  // Deep chest and broad shoulders narrowing to the rump: a bird's mass, never a plain stroke.
+  mesh.fill(black, 1, 1); oval(mesh, cb + BODY, length, .06, 0, .5, .36, 16); oval(mesh, cb + BODY, length, -.14, 0, .36, .26, 14);
   for (const side of [-1, 1]) {
     const wing = cb + (side < 0 ? WING_L : WING_R);
-    mesh.fill(0x121318, 1, 1); fan(mesh, shape.wing, length, wing, side);
-    // Separated primaries: the fingered hand that identifies a raven from above.
-    for (let f = 0; f < 5; f++) {
-      const x = .03 - f * .05;
-      fan(mesh, [x + .02, .84, x - .025, 1.1 - f * .02, x - .045, 1.06 - f * .02, x - .03, .84], length, wing, side);
+    mesh.fill(0x111216, 1, 1); fan(mesh, shape.wing, length, wing, side);
+    // Fingered hand: six separated primaries, splayed slightly outwards.
+    for (let f = 0; f < 6; f++) {
+      const x = .04 - f * .042, tip = 1.06 + Math.sin(f / 5 * Math.PI) * .06, lean = (x + .06) * .12;
+      fan(mesh, [x + .018, .84, x + .006 + lean, tip, x - .02 + lean, tip - .02, x - .024, .84], length, wing, side);
     }
-    mesh.fill(0x2b2e4a, .22, 1); fan(mesh, [.12, .1, .1, .42, -.1, .44, -.14, .1], length, wing, side);
+    // Glossy coverts and feather edges give the black wing its form.
+    mesh.fill(gloss, .24, 1); fan(mesh, [.14, .12, .16, .32, .15, .5, .02, .56, -.1, .5, -.14, .3, -.12, .12], length, wing, side);
+    mesh.fill(sheen, .35, 1);
+    for (const y of [.24, .38, .52]) stroke(mesh, wing, length, .12, y * side, -.16, (y + .02) * side, .016);
+    mesh.fill(0x24262f, .6, 1);
+    for (const y of [.6, .7, .78]) stroke(mesh, wing, length, .08, y * side, -.2, (y + .03) * side, .012);
   }
-  mesh.fill(0x2b2e4a, .2, 1); oval(mesh, cb + BODY, length, .06, 0, .3, .08);
-  mesh.fill(0x111216, 1, 1); oval(mesh, cb + HEAD, length, .28, 0, .2, .18);
-  mesh.fill(0x18191d, 1, 1);
-  mesh.use(cb + HEAD); mesh.triangle(.35 * length, .05 * length, shape.beak * length, 0, .35 * length, -.05 * length);
-  mesh.fill(0x3a3d55, .4, 1); stroke(mesh, cb + HEAD, length, .37, 0, .47, 0, .015);
+  // Mantle gloss and the shoulder highlight that catch the light from above.
+  mesh.fill(gloss, .3, 1); oval(mesh, cb + BODY, length, .04, 0, .36, .16, 12);
+  mesh.fill(sheen, .22, 1); oval(mesh, cb + BODY, length, .12, 0, .2, .07, 10);
+  // Large head and a heavy, slightly hooked bill.
+  mesh.fill(black, 1, 1); oval(mesh, cb + HEAD, length, .3, 0, .26, .24, 16);
+  mesh.fill(gloss, .3, 1); oval(mesh, cb + HEAD, length, .31, -.02, .14, .09, 10);
+  mesh.fill(0x16171c, 1, 1); fan(mesh, [.38, .055, .47, .035, shape.beak, 0, .47, -.035, .38, -.055], length, cb + HEAD);
+  mesh.fill(0x464a63, .45, 1); stroke(mesh, cb + HEAD, length, .4, 0, .5, 0, .014);
 }
 
 function drawOwl(mesh: WildlifeMesh, cb: number, length: number, colorIndex: number): void {
   const shape = SHAPES.owl, c = OWL_COLORS[colorIndex] ?? OWL_COLORS[0];
   contactShadow(mesh, cb, length, .62, .5);
-  mesh.fill(c.back, 1, 1); fan(mesh, mirroredTail(shape), length, cb + TAIL);
+  mesh.fill(c.flight, 1, 1); fan(mesh, mirroredTail(shape), length, cb + TAIL);
   mesh.fill(c.dark, .4, 1);
   for (const x of [-.3, -.36, -.42]) stroke(mesh, cb + TAIL, length, x, .09, x, -.09, .02);
   mesh.fill(c.back, 1, 1); oval(mesh, cb + BODY, length, 0, 0, .62, .48);
   for (const side of [-1, 1]) {
     const wing = cb + (side < 0 ? WING_L : WING_R);
-    mesh.fill(c.back, 1, 1); fan(mesh, shape.wing, length, wing, side);
-    // Darker hand with fine bars across the flight feathers; pale spots on the coverts.
-    mesh.fill(c.dark, .35, 1);
-    fan(mesh, [.14, .78, .16, .85, .06, 1.04, -.06, 1.13, -.18, 1.1, -.27, .98, -.3, .8], length, wing, side);
-    mesh.fill(c.dark, .32, 1);
-    for (const y of [.5, .62, .74, .86, .98]) stroke(mesh, wing, length, .18 - (y - .5) * .25, y * side, -.27 + (y - .5) * .12, (y + .03) * side, .022);
-    mesh.fill(c.pale, .2, 1);
-    for (const y of [.56, .68, .8, .92]) stroke(mesh, wing, length, .1 - (y - .5) * .2, (y + .05) * side, -.05 - (y - .5) * .2, (y + .06) * side, .016);
-    mesh.fill(c.pale, .8, 1);
-    oval(mesh, wing, length, .08, .2 * side, .07, .04, 8); oval(mesh, wing, length, -.06, .26 * side, .06, .035, 8);
-    oval(mesh, wing, length, .1, .36 * side, .06, .035, 8); oval(mesh, wing, length, -.02, .42 * side, .05, .03, 8);
+    // Flight feathers: scalloped secondaries, rounded separated primaries.
+    mesh.fill(c.flight, 1, 1); fan(mesh, shape.wing, length, wing, side);
+    // Secondaries point backwards: shafts run chordwise, their bars run along the span.
+    mesh.fill(c.dark, .22, 1);
+    for (const y of [.2, .28, .36, .44, .52, .6]) stroke(mesh, wing, length, -.12, y * side, -.31, (y + .01) * side, .012);
+    mesh.fill(c.dark, .42, 1);
+    for (const x of [-.19, -.25]) stroke(mesh, wing, length, x, .16 * side, x - .02, .66 * side, .024);
+    // Primaries fan out from the wrist; bars cross them.
+    mesh.fill(c.dark, .25, 1);
+    for (const [tx, ty] of [[.04, 1.02], [-.04, 1.05], [-.12, 1.06], [-.2, 1.04], [-.26, .98]])
+      stroke(mesh, wing, length, .06, .74 * side, tx, ty * side, .012);
+    mesh.fill(c.dark, .4, 1);
+    for (const y of [.82, .92, 1]) stroke(mesh, wing, length, .14 - (y - .8) * .6, y * side, -.27 + (y - .8) * .2, (y + .02) * side, .022);
+    mesh.fill(c.pale, .25, 1); stroke(mesh, wing, length, -.3, .2 * side, -.32, .9 * side, .014);
+    // Coverts: the warmer, lighter arm with dark primary coverts at the wrist and rows of pale spots.
+    mesh.fill(c.coverts, 1, 1);
+    fan(mesh, [.16, .12, .24, .3, .28, .48, .25, .62, .18, .74, .04, .7, -.06, .6, -.12, .44, -.14, .28, -.12, .16], length, wing, side);
+    mesh.fill(c.dark, .5, 1); fan(mesh, [.25, .6, .18, .76, .08, .8, .1, .66, .19, .56], length, wing, side);
+    mesh.fill(c.dark, .3, 1);
+    stroke(mesh, wing, length, -.12, .16 * side, -.14, .44 * side, .02); stroke(mesh, wing, length, -.14, .44 * side, .04, .7 * side, .02);
+    // Scattered pale spots of different sizes, not a regular grid.
+    mesh.fill(c.pale, .6, 1);
+    for (const [x, y, w] of [[.12, .21, .05], [-.01, .26, .035], [.15, .35, .04], [.04, .4, .03], [.17, .5, .035], [.06, .55, .025], [-.07, .44, .025]])
+      oval(mesh, wing, length, x, y * side, w, w * .6, 8);
   }
   mesh.fill(c.dark, .25, 1); oval(mesh, cb + BODY, length, -.04, 0, .34, .16);
   mesh.fill(c.pale, .85, 1);
@@ -203,7 +234,7 @@ function drawOwl(mesh: WildlifeMesh, cb: number, length: number, colorIndex: num
   mesh.fill(c.dark, .4, 1);
   oval(mesh, cb + HEAD, length, .28, .09, .07, .04, 8); oval(mesh, cb + HEAD, length, .28, -.09, .07, .04, 8);
   oval(mesh, cb + HEAD, length, .37, 0, .05, .035, 8); oval(mesh, cb + HEAD, length, .2, 0, .06, .04, 8);
-  mesh.fill(c.pale, .5, 1); stroke(mesh, cb + HEAD, length, .44, 0, .16, 0, .03);
+  mesh.fill(c.pale, .18, 1); stroke(mesh, cb + HEAD, length, .42, 0, .2, 0, .02);
   mesh.fill(0xb9ad86, .85, 1);
   mesh.use(cb + HEAD); mesh.triangle(.46 * length, .025 * length, shape.beak * length, 0, .46 * length, -.025 * length);
 }
@@ -214,12 +245,13 @@ function drawFlightShadow(mesh: WildlifeMesh, cb: number, length: number, shape:
   const add = (x: number, y: number, channel: number): void => { points.push(x, y); channels.push(cb + channel); };
   // Star-shaped around the body centre in every pose: beak, wing, tail beyond its fanning root, tip.
   // The head's sides (an owl's look-around) and the tail root (it fans in flight) would fold the fan.
+  const wing = shape.shadowWing ?? shape.wing;
   add(shape.beak, 0, HEAD);
-  for (let i = 0; i < shape.wing.length; i += 2) add(shape.wing[i], shape.wing[i + 1], WING_R);
+  for (let i = 0; i < wing.length; i += 2) add(wing[i], wing[i + 1], WING_R);
   for (let i = 2; i < shape.tail.length - 2; i += 2) add(shape.tail[i], shape.tail[i + 1], TAIL);
   add(shape.tail[shape.tail.length - 2], 0, TAIL);
   for (let i = shape.tail.length - 4; i >= 2; i -= 2) add(shape.tail[i], -shape.tail[i + 1], TAIL);
-  for (let i = shape.wing.length - 2; i >= 0; i -= 2) add(shape.wing[i], -shape.wing[i + 1], WING_L);
+  for (let i = wing.length - 2; i >= 0; i -= 2) add(wing[i], -wing[i + 1], WING_L);
   mesh.fill(0x05090c, .55, 1);
   const center = mesh.vertex(0, 0, cb + BODY), count = channels.length;
   const inner = channels.map((channel, i) => mesh.vertex(points[i * 2] * length, points[i * 2 + 1] * length, channel));
@@ -241,8 +273,9 @@ function setPart(pose: WildlifePose, k: number, c: number, s: number, tx: number
 function cruiseFlap(kind: BirdKind, time: number, phase: number): number {
   switch (kind) {
     case 'sparrow': return smooth((Math.sin(time * 2.1 + phase) + .35) * 3);
-    case 'magpie': return smooth((Math.sin(time * 1.3 + phase) + .2) * 2);
-    case 'raven': return smooth((Math.sin(time * .7 + phase) + .5) * 2);
+    // Magpies alternate short bouts of beats with glides; ravens mostly glide with slow, deep bouts.
+    case 'magpie': return smooth((Math.sin(time * 1 + phase) + .1) * 2);
+    case 'raven': return smooth((Math.sin(time * .45 + phase) - .15) * 2.5);
     case 'owl': return smooth((Math.sin(time * TAU / 3.7 + phase) - .25) * 3);
   }
 }
@@ -260,7 +293,7 @@ function writeWing(pose: WildlifePose, kind: BirdKind, shape: BirdShape, length:
   const inner = side * b > 0;
   // A sparrow's bounding flight pulls the wings in between bursts of beats.
   const bound = kind === 'sparrow' ? 1 - .6 * open * (1 - drive) : 1;
-  const span = (.45 + .55 * open) * bound * (1 - flap * .3 * beat * beat) * (1 - Math.abs(b) * (inner ? .3 : .08));
+  const span = (.45 + .55 * open) * bound * (1 - flap * TUNING[kind].beat * beat * beat) * (1 - Math.abs(b) * (inner ? .3 : .08));
   const chord = .35 + .65 * open, fold = smooth(1 - open), angle = side * Math.PI / 2 * fold;
   const cw = Math.cos(angle), sw = Math.sin(angle);
   // Keep the shoulder in place: t = P' - R(S P), with the folded shoulder slightly back and inward.
@@ -312,10 +345,12 @@ function flockVisual(animal: WildlifeAnimal): WildlifeVisual {
   const appearance = animal.appearance, length = appearance.length, count = appearance.count, spread = appearance.spread;
   const mesh = new WildlifeMesh();
   mesh.rotated = true;
-  const v = animal.variation;
+  const v = animal.variation, m = TUNING.sparrowMembers;
   const order = new Float64Array(count), size = new Float64Array(count), base = new Float64Array(count);
   const radius = new Float64Array(count), phase = new Float64Array(count), peckRate = new Float64Array(count);
   const hopRate = new Float64Array(count), drinkRate = new Float64Array(count), jitter = new Float64Array(count);
+  const pace = new Float64Array(count), response = new Float64Array(count), beatRate = new Float64Array(count);
+  const drift = new Float64Array(count);
   for (let i = 0; i < count; i++) {
     order[i] = frac(i * .618 + v);
     size[i] = .92 + frac(i * .37 + v * 1.7) * .16;
@@ -326,26 +361,38 @@ function flockVisual(animal: WildlifeAnimal): WildlifeVisual {
     hopRate[i] = .35 + frac(i * .47 + v * 2.3) * .4;
     drinkRate[i] = 1 / (2.6 + frac(i * .53 + v) * .8);
     jitter[i] = frac(i * .43 + v * 5.7) - .5;
+    pace[i] = 1 + (frac(i * .61 + v * 1.3) - .5) * 2 * m.speedVariation;
+    response[i] = m.response * (.75 + frac(i * .83 + v) * .5);
+    beatRate[i] = .85 + frac(i * .29 + v * 4.1) * .35;
+    drift[i] = .6 + frac(i * .77 + v * 2.9) * .7;
   }
+  // Each member's own flight (presentation only): world position, velocity, heading and wing-beat phase.
+  const px = new Float64Array(count), py = new Float64Array(count), vx = new Float64Array(count), vy = new Float64Array(count);
+  const heading = new Float64Array(count), beats = new Float64Array(count);
+  let lastTime = Number.NaN;
   for (let i = 0; i < count * PARTS; i++) mesh.pose();
   for (let i = 0; i < count; i++) drawSparrow(mesh, i * PARTS, length, frac(i * .53 + v * 2.3) < .5);
-  const shape = SHAPES.sparrow;
-  const turnRate = TUNING.sparrow.turnRate, vs = TUNING.visualScale, shore = TUNING.sparrowShore;
+  const shape = SHAPES.sparrow, t = TUNING.sparrow, vs = TUNING.visualScale, shore = TUNING.sparrowShore;
+  const separation = length * vs * 1.1;
   return {
     animal, mesh,
     sample: (time: number) => {
       const bird = animal.bird!, p = mesh.poses, ds = birdDrawScale(bird.altitude);
+      // After a gap (first frame, back in view) members start on their slots instead of chasing them.
+      const elapsed = time - lastTime, reset = !(elapsed >= 0 && elapsed <= .25), dt = reset ? 0 : Math.min(elapsed, .05);
+      lastTime = time;
       const cosA = Math.cos(animal.angle), sinA = Math.sin(animal.angle);
       const cf = Math.cos(bird.facing), sf = Math.sin(bird.facing);
+      const flockVx = cosA * animal.speed, flockVy = sinA * animal.speed;
       const drinking = bird.originSpot >= 0 && bird.spots[bird.originSpot * 4 + 3] === 1;
       for (let i = 0; i < count; i++) {
         const lift = smooth(bird.lift * 1.6 - .6 * order[i]);
         // Ground slot relative to the formation anchor, in mesh units, world-aligned.
-        let gx: number, gy: number, heading: number, peck = 0, hop = 0;
+        let gx: number, gy: number, groundHeading: number, peck = 0, hop = 0;
         if (drinking) {
           const lateral = (i - (count - 1) / 2) * shore.lateralSpacing + jitter[i] * .6, depth = -Math.abs(jitter[i]) * 2;
           gx = cf * depth - sf * lateral; gy = sf * depth + cf * lateral;
-          heading = bird.facing + jitter[i] * .5;
+          groundHeading = bird.facing + jitter[i] * .5;
           const u = frac(time * drinkRate[i] + phase[i]);
           peck = u < .34 ? Math.min(1, Math.sin(Math.PI * u / .34) * 1.6) : 0;
         } else {
@@ -355,28 +402,56 @@ function flockVisual(animal: WildlifeAnimal): WildlifeVisual {
           hop = u > .82 ? Math.sin(Math.PI * (u - .82) / .18) : 0;
           gx = cf * sx - sf * sy + Math.cos(.9 * s + i) * 1.6;
           gy = sf * sx + cf * sy + Math.sin(1.3 * s + 2 * i) * 1.2;
-          heading = Math.atan2(1.3 * Math.cos(1.3 * s + 2 * i) * 1.2, -.9 * Math.sin(.9 * s + i) * 1.6);
+          groundHeading = Math.atan2(1.3 * Math.cos(1.3 * s + 2 * i) * 1.2, -.9 * Math.sin(.9 * s + i) * 1.6);
           if (!hop) peck = pulse(frac(time * peckRate[i] + phase[i]), .18);
         }
         const groundX = bird.originX + gx * vs, groundY = bird.originY + gy * vs;
-        // Loose flight slot behind the leader's heading, with a slight wobble.
-        const fx = Math.cos(base[i]) * radius[i] * 1.26 + Math.sin(time * 1.7 + i) * 1.0;
-        const fy = Math.sin(base[i]) * radius[i] * 1.8 + Math.cos(time * 1.3 + 2 * i) * 1.0;
-        const flightX = animal.x + (cosA * fx - sinA * fy) * ds, flightY = animal.y + (sinA * fx + cosA * fy) * ds;
-        const wx = groundX + (flightX - groundX) * lift, wy = groundY + (flightY - groundY) * lift;
-        const memberHeading = heading + angleDelta(heading, animal.angle + Math.sin(time * 1.1 + i * 1.7) * .12) * lift;
-        const dx = (wx - animal.x) / ds, dy = (wy - animal.y) / ds;
+        // A loose formation: every member keeps its own slot and drifts inside it at its own pace.
+        const fx = Math.cos(base[i]) * radius[i] * m.formationSpread * .7 + Math.sin(time * drift[i] + i * 1.3) * m.wander;
+        const fy = Math.sin(base[i]) * radius[i] * m.formationSpread + Math.cos(time * drift[i] * 1.3 + i * 2.1) * m.wander;
+        const slotX = animal.x + (cosA * fx - sinA * fy) * ds, slotY = animal.y + (sinA * fx + cosA * fy) * ds;
+        const targetX = groundX + (slotX - groundX) * lift, targetY = groundY + (slotY - groundY) * lift;
+        const toGround = Math.hypot(px[i] - groundX, py[i] - groundY);
+        // A member stays airborne until it has reached its own spot, then folds its wings there.
+        const airborne = !reset && (lift > 0 || toGround > 1.5);
+        if (!airborne) {
+          px[i] = reset ? targetX : groundX; py[i] = reset ? targetY : groundY;
+          vx[i] = reset ? flockVx * lift : 0; vy[i] = reset ? flockVy * lift : 0;
+        } else {
+          // Chase the slot: the flock's own motion plus a spring, capped by this member's speed and acceleration.
+          let wantX = flockVx * lift + (targetX - px[i]) * response[i], wantY = flockVy * lift + (targetY - py[i]) * response[i];
+          // Airborne members keep a little personal space instead of sliding through each other.
+          for (let j = 0; j < count; j++) {
+            if (j === i) continue;
+            const ox = px[i] - px[j], oy = py[i] - py[j], d = Math.hypot(ox, oy);
+            if (d > 0 && d < separation) { wantX += ox / d * (separation - d) * 8 * lift; wantY += oy / d * (separation - d) * 8 * lift; }
+          }
+          const limit = t.fleeSpeed * 1.25 * pace[i], want = Math.hypot(wantX, wantY);
+          if (want > limit) { wantX *= limit / want; wantY *= limit / want; }
+          const blend = Math.min(1, dt * m.accel);
+          vx[i] += (wantX - vx[i]) * blend; vy[i] += (wantY - vy[i]) * blend;
+          px[i] += vx[i] * dt; py[i] += vy[i] * dt;
+        }
+        const speed = Math.hypot(vx[i], vy[i]);
+        const open = airborne ? Math.max(lift, clamp(toGround / 14, 0, 1)) : reset ? lift : 0;
+        const wanted = open > 0 && speed > 6 ? Math.atan2(vy[i], vx[i]) : open > .5 ? animal.angle : groundHeading;
+        const delta = angleDelta(heading[i], wanted);
+        const turn = reset ? delta : clamp(delta, -m.turnRate * dt, m.turnRate * dt);
+        heading[i] += turn;
+        if (open > 0) beats[i] += dt * t.flapHz * TAU * beatRate[i];
+        const bank = dt > 0 ? turn / dt / m.turnRate : 0;
+        // Members brake with beats while settling onto their spot.
+        const forced = Math.max(bird.flap, airborne && lift < 1 && toGround < 30 ? 1 : 0);
+        const dx = (px[i] - animal.x) / ds, dy = (py[i] - animal.y) / ds;
         const lx = cosA * dx + sinA * dy, ly = -sinA * dx + cosA * dy;
-        const theta = memberHeading - animal.angle, c = Math.cos(theta), s = Math.sin(theta), k = size[i];
-        const cb = i * PARTS;
-        const bank = animal.turnSpeed / turnRate, beat = animal.animation + i * .9, rhythm = time + i * .31;
-        const hopScale = 1 + .08 * hop;
-        setPart(p[cb + SHADOW], k, c, s, lx, ly, 0, 0, 1 - lift, 1 - lift);
+        const theta = heading[i] - animal.angle, c = Math.cos(theta), s = Math.sin(theta), k = size[i];
+        const cb = i * PARTS, hopScale = 1 + .08 * hop, rhythm = time + i * 1.7;
+        setPart(p[cb + SHADOW], k, c, s, lx, ly, 0, 0, 1 - open, 1 - open);
         setPart(p[cb + BODY], k, c, s, lx, ly, 0, 0, hopScale, hopScale);
-        setPart(p[cb + TAIL], k, c, s, lx, ly, 0, 0, 1, 1 + .3 * lift);
-        setPart(p[cb + HEAD], k, c, s, lx, ly, (drinking ? .12 : .1) * length * peck, 0, 1 - .15 * peck, 1);
-        writeWing(p[cb + WING_R], 'sparrow', shape, length, 1, lift, bird.flap * lift, beat, rhythm, animal.phaseOffset, bank, k, c, s, lx, ly);
-        writeWing(p[cb + WING_L], 'sparrow', shape, length, -1, lift, bird.flap * lift, beat, rhythm, animal.phaseOffset, bank, k, c, s, lx, ly);
+        setPart(p[cb + TAIL], k, c, s, lx, ly, 0, 0, 1, 1 + .3 * open);
+        setPart(p[cb + HEAD], k, c, s, lx, ly, (drinking ? .12 : .1) * length * peck * (1 - open), 0, 1 - .15 * peck * (1 - open), 1);
+        writeWing(p[cb + WING_R], 'sparrow', shape, length, 1, open, forced * open, beats[i], rhythm, animal.phaseOffset, bank, k, c, s, lx, ly);
+        writeWing(p[cb + WING_L], 'sparrow', shape, length, -1, open, forced * open, beats[i], rhythm, animal.phaseOffset, bank, k, c, s, lx, ly);
       }
     },
   };
@@ -391,9 +466,10 @@ function withPresence(visual: WildlifeVisual): BirdVisual {
   shadowMesh.poses = visual.mesh.poses;
   for (let i = 0; i < animal.appearance.count; i++) drawFlightShadow(shadowMesh, i * PARTS, length, shape);
   let span = 0;
-  for (let i = 1; i < shape.wing.length; i += 2) span = Math.max(span, shape.wing[i]);
-  // Raven fingers reach a little beyond the outline's tip; a flock spreads out in flight.
-  const reach = flock ? animal.appearance.spread * 2 + 3 + length : (span + .1) * length;
+  for (const wing of [shape.wing, shape.shadowWing ?? shape.wing]) for (let i = 1; i < wing.length; i += 2) span = Math.max(span, wing[i]);
+  // A flock spreads out in flight and members lag behind their slots for a moment.
+  const m = TUNING.sparrowMembers;
+  const reach = flock ? animal.appearance.spread * m.formationSpread * 1.3 + m.wander + length + 12 : (span + .1) * length;
   const presence: BirdPresence = { ground: 0, low: 0, high: 0, tint: 0xffffff, scale: TUNING.visualScale,
     radius: reach * TUNING.visualScale, shadowX: 0, shadowY: 0, shadowAlpha: 0 };
   const bird = { ...visual, presence, reach } as BirdVisual & { shadow: BirdShadowVisual };

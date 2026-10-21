@@ -85,10 +85,19 @@ Mitglied. Gefaltete Flügel schwenken um die Schulter nach hinten, Kanäle trage
 
 Der Renderer sampelt jeden Vogel einmal pro Frame und gibt die Lage an bis zu zwei von vier Ebenen
 (`BIRD_LAYER_DEPTHS`): Boden unter dem Nebel, Flugschatten im Figurenschattenband, niedriger Flug
-unter den Kronen, hoher Flug über den Kronen. Die Gewichte überblenden nach Höhe, die obere Kopie
-ist vollständig, bevor die untere verschwindet (`writeBirdLayerWeights`). Im Kronenband steigt ein
-Vogel aus den Blättern oder sinkt hinein; Reiseflughöhen liegen nie im Band. Flugebenen erhalten
-`resolveCanopyTint` als reine Multiplikation. Der Flugschatten teilt die animierten Posen des
+zwischen Nebel-Composite und Sonnenpass (gleiche Sonnen-, Wolken- und Lichtkartenbeleuchtung wie
+am Boden, unter den Kronen), hoher Flug über den Kronen. Die Gewichte überblenden nach Höhe, die
+obere Kopie ist vollständig, bevor die untere verschwindet (`writeBirdLayerWeights`); beim Abheben
+löst sich der Vogel dadurch über `fogLift` allmählich aus dem Nebel. Spatzen und Elstern fliegen
+unter den Kronen, Raben und Eulen darüber. Im Kronenband steigt ein Vogel aus den Blättern oder
+sinkt hinein; Reiseflughöhen liegen nie im Band. Der hohe Flug erhält `resolveCanopyTint` als
+reine Multiplikation.
+
+Spatzenschwärme fliegen nicht als starre Formation: Jedes Mitglied verfolgt seinen Platz im lockeren
+Verband mit eigener Geschwindigkeit, Trägheit, Kurs, Abstand zu den anderen und eigenem
+Flügelschlag (`sparrowMembers`). Beim Landen fliegt jedes Mitglied zu seinem eigenen Bodenplatz,
+bremst dort und faltet erst dann die Flügel. Dieser Zustand gehört der Darstellung und beginnt nach
+einer Sichtlücke wieder auf den Plätzen. Der Flugschatten teilt die animierten Posen des
 Körpers, ist ein überlappungsfreier Fächer und folgt bei Tag der Sonne, nachts schwach dem Mond
 (`projectBirdShadow`). Präsentationszustand liegt am Renderer, nie am Tier.
 

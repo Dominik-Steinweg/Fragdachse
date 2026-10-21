@@ -31,15 +31,17 @@ function transformed(mesh: { xy: number[]; channels: number[]; poses: WildlifePo
 }
 
 describe('bird rendering', () => {
-  it('draws grounded birds under the fog, flight shadows under fog and crowns, flight above the lightmap', () => {
+  it('draws grounded birds under the fog, flight shadows and low flight lit like the ground, high flight above crowns', () => {
     const harness = wildlifeScene();
     const renderer = new AmbientWildlifeRenderer(harness.scene, frame, layout);
     const depth = (name: string) => harness.scene.objects.find((o: any) => o.name === name).depth;
     expect(depth('ambient-wildlife-birds-ground')).toBe(BIRD_LAYER_DEPTHS.ground);
     expect(BIRD_LAYER_DEPTHS.ground).toBeLessThan(DEPTH.GROUND_FOG);
     expect(depth('ambient-wildlife-bird-shadows')).toBeLessThan(DEPTH.GROUND_FOG_COMPOSITE);
-    expect(depth('ambient-wildlife-birds-low')).toBeGreaterThan(DEPTH_LIGHTING + .001);
-    expect(depth('ambient-wildlife-birds-low')).toBeLessThan(DEPTH.CANOPY);
+    // Low flight: above the fog composite, below the sun/cloud pass (PROJECTILES - .5) and the lightmap.
+    expect(depth('ambient-wildlife-birds-low')).toBeGreaterThan(DEPTH.GROUND_FOG_COMPOSITE);
+    expect(depth('ambient-wildlife-birds-low')).toBeLessThan(DEPTH.PROJECTILES - .5);
+    expect(depth('ambient-wildlife-birds-low')).toBeLessThan(DEPTH_LIGHTING);
     expect(depth('ambient-wildlife-birds-high')).toBeGreaterThan(DEPTH.CANOPY);
     expect(depth('ambient-wildlife-birds-high')).toBeLessThan(DEPTH.LOCAL_UI);
     renderer.destroy();

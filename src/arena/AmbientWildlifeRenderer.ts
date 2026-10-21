@@ -21,13 +21,14 @@ let nextLightOwner = 0;
 
 /**
  * Bird bands: grounded birds under the ground fog; projected flight shadows in the figure-shadow band
- * (under fog and crowns); low flight above the lightmap but under crowns; high flight above crowns and
- * below bombers. Both flight bands lie above the lightmap and take the canopy tint instead.
+ * (under fog and crowns); low flight just above the fog but below the sun/cloud pass, so it keeps the
+ * ground's sun, cloud and lightmap lighting under the crowns; high flight above crowns and below
+ * bombers, where only the canopy tint lights it.
  */
 export const BIRD_LAYER_DEPTHS = {
   ground: DEPTH.GROUND_FOG - .005,
   shadows: CHARACTER_SHADOW_CONFIG.depth - .005,
-  low: DEPTH.CANOPY - .24,
+  low: DEPTH.GROUND_FOG_COMPOSITE + 1.8,
   high: DEPTH.CANOPY + .3,
 } as const;
 
@@ -84,7 +85,7 @@ export class AmbientWildlifeRenderer {
           out.x += p.shadowX; out.y += p.shadowY;
         } }),
       createAmbientWildlifeLayer(scene, this.birds, BIRD_LAYER_DEPTHS.low, 'ambient-wildlife-birds-low',
-        { project: (v, out) => place(v, out, v.presence.low, v.presence.tint) }),
+        { project: (v, out) => place(v, out, v.presence.low, 0xffffff) }),
       createAmbientWildlifeLayer(scene, this.birds, BIRD_LAYER_DEPTHS.high, 'ambient-wildlife-birds-high',
         { project: (v, out) => place(v, out, v.presence.high, v.presence.tint) }),
     ];
@@ -131,8 +132,8 @@ export class AmbientWildlifeRenderer {
       }
       writeBirdLayerWeights(bird.altitude, this.weights);
       p.ground = this.weights.ground; p.low = this.weights.low; p.high = this.weights.high;
-      // Above the lightmap, birds darken exactly like tree crowns; the tint only multiplies.
-      p.tint = p.low + p.high > 0 && lighting?.resolveCanopyTint ? lighting.resolveCanopyTint(a.x, a.y) : 0xffffff;
+      // Above the crowns, birds darken exactly like tree crowns; the tint only multiplies.
+      p.tint = p.high > 0 && lighting?.resolveCanopyTint ? lighting.resolveCanopyTint(a.x, a.y) : 0xffffff;
       v.sample(this.visualTime);
     }
   }

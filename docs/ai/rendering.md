@@ -366,10 +366,11 @@ Die Depth-Reihenfolge ist Teil des Beleuchtungsvertrags:
   verbraucht; weißer Vertex-Tint verhindert einen zweiten Kronen-Tint.
 - Glühwürmchen bleiben emissiv über der Lichtkarte; ihre Nebeldämpfung gehört ihrem Material.
 - Vögel am Boden liegen bei den Landtieren unter dem Bodennebel, ihre Flugschatten im Band der
-  Figurenschatten (unter Nebel und Kronen). Fliegende Vögel liegen über der Lichtkarte: niedrig unter
-  den Kronen, hoch über den Kronen und unter Bombern, jeweils mit dem Kronen-Tint des Lichtsystems,
-  der nur abdunkelt. Ein Vogel wird einmal pro Frame gesampelt und je nach Höhe in höchstens zwei
-  dieser Ebenen platziert; die obere Kopie ist vollständig, bevor die untere ausblendet.
+  Figurenschatten (unter Nebel und Kronen). Niedriger Flug liegt über dem Nebel-Composite, aber unter
+  Sonnenpass und Lichtkarte: Er wird wie der Boden beleuchtet, sonst springt die Farbe beim Abheben.
+  Hoher Flug liegt über den Kronen und unter Bombern und erhält den nur abdunkelnden Kronen-Tint.
+  Ein Vogel wird einmal pro Frame gesampelt und je nach Höhe in höchstens zwei dieser Ebenen
+  platziert; die obere Kopie ist vollständig, bevor die untere ausblendet.
 
 Maßgeblich sind [DEPTH](../../src/config.ts), [WorldSunComposite](../../src/effects/sunlight/WorldSunComposite.ts),
 [FogGpuField](../../src/effects/groundFog/FogGpuField.ts) und
