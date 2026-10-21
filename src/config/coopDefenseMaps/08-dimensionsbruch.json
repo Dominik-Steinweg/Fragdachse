@@ -112,7 +112,7 @@
       "faction": "hostile",
       "dormant": true,
       "hpMax": 3000,
-      "anchor": {"kind": "grid", "gridX": 19, "gridY": 6},
+      "anchor": {"kind": "grid", "gridX": 23, "gridY": 13},
       "shape": {
         "kind": "cells",
         "cells": [
@@ -124,7 +124,7 @@
     }
   ],
   "siteClearings": [
-    {"id": "portal-generator-site", "gridX": 20, "gridY": 7, "radiusCells": 5, "structureBaseId": "portal-generator"}
+    {"id": "portal-generator-site", "gridX": 24, "gridY": 14, "radiusCells": 5, "structureBaseId": "portal-generator"}
   ],
   "portalAnchors": [
     {"id": "flank-entry", "gridX": 25, "gridY": 9, "radiusCells": 3},

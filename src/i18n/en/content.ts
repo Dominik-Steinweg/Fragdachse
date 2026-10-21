@@ -162,7 +162,7 @@ export const enContent = {
   "map.secondaryObjective.carry-supply-beer.reward": "EACH BOTTLE: EPIC DROP GUARANTEE ON VICTORY · REGEN",
   "map.secondaryObjective.destroy-brutbomben-front.title": "DESTROY BROOD NESTS",
   "map.secondaryObjective.destroy-brutbomben-front.reward": "LESS EXTRA PRESSURE · BONUS XP",
-  "map.secondaryObjective.destroy-portal-generator.title": "DESTROY THE PORTAL GENERATOR",
+  "map.secondaryObjective.destroy-portal-generator.title": "DESTROY GENERATOR",
   "map.secondaryObjective.destroy-portal-generator.reward": "CLOSES THE PORTAL FLANK · BONUS XP",
   "map.secondaryObjective.hold-dimension-bastion.title": "HOLD THE BASTION",
   "map.secondaryObjective.hold-dimension-bastion.reward": "THE BASTION IS REPAIRED",
@@ -333,6 +333,6 @@ export const enContent = {
   "objective.status.completed": "COMPLETE",
   "objective.status.failed": "FAILED",
   "objective.status.hold": "HOLDING",
-  "objective.status.portalCharging": "PORTAL CHARGING {percent} %",
+  "objective.status.portalCharging": "PORTAL {percent} %",
   "objective.status.portalOpen": "PORTAL OPEN"
 } as const;

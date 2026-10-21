@@ -29,7 +29,7 @@ Danach kann niemand mehr das Portal benutzen, weder Gegner noch Spieler.
 
 ## Kampagne – Map 08 „Dimensionsbruch“
 
-- Generator im Nordwesten (19/6, 3000 HP).
+- Generator im Westen (23/13, 3000 HP), in einer ruhigen Tasche südlich der Hauptroute der West-oben-Welle.
 - Eingang bei 25/9, Ausgang hinter der Basis bei 100/18.
 - Nebenziel `destroy-portal-generator` (gleichzeitig mit dem Halten der Bastion).
 - Wachtrupp `portal-guard` aus der Zone West-oben.
@@ -71,6 +71,7 @@ Danach kann niemand mehr das Portal benutzen, weder Gegner noch Spieler.
 | PG-6 | 2026-10-21 | Der Dawn-Ausgang nutzt freie, schon validierte Bergungsplätze statt neuer Template-Anker. Der Eingang rückt näher an den Generator, bis seine Lichtung trocken ist. |
 | PG-7 | 2026-10-21 | Dawn-Belohnung 20 / 35 / 50 Schrott, Expansionskosten ab Bedrohung 3 neu kalibriert (Nutzer: „kleine Belohnung + neu kalibrieren“). |
 | PG-8 | 2026-10-21 | Generator-Asset: Konzept A „Resonanzkessel“ (Nutzer). |
+| PG-9 | 2026-10-21 | Map 08: Generator von 19/6 nach 23/13 verschoben. Auf 19/6 stand er direkt auf der Route der West-oben-Welle, allein war er nicht erreichbar. Der Eingang bleibt an der Route bei 25/9. Der HUD-Titel heißt „GENERATOR ZERSTÖREN“, der Status „PORTAL NN %“ bzw. „PORTAL OFFEN“, damit nichts gekürzt wird (Nutzer: „Lage + HUD-Titel anpassen“). |
 
 ## Offen
 

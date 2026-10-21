@@ -162,7 +162,7 @@ export const deContent = {
   "map.secondaryObjective.carry-supply-beer.reward": "JE FLASCHE: EPISCHE GARANTIE BEI SIEG · REGEN",
   "map.secondaryObjective.destroy-brutbomben-front.title": "BRUTNESTER ZERSTÖREN",
   "map.secondaryObjective.destroy-brutbomben-front.reward": "WENIGER ZUSATZDRUCK · BONUS-XP",
-  "map.secondaryObjective.destroy-portal-generator.title": "PORTAL-GENERATOR ZERSTÖREN",
+  "map.secondaryObjective.destroy-portal-generator.title": "GENERATOR ZERSTÖREN",
   "map.secondaryObjective.destroy-portal-generator.reward": "SCHLIESST DIE PORTALFLANKE · BONUS-XP",
   "map.secondaryObjective.hold-dimension-bastion.title": "BASTION HALTEN",
   "map.secondaryObjective.hold-dimension-bastion.reward": "DIE BASTION WIRD REPARIERT",
@@ -333,6 +333,6 @@ export const deContent = {
   "objective.status.completed": "ERFÜLLT",
   "objective.status.failed": "GESCHEITERT",
   "objective.status.hold": "HALTEN",
-  "objective.status.portalCharging": "PORTAL LÄDT {percent} %",
+  "objective.status.portalCharging": "PORTAL {percent} %",
   "objective.status.portalOpen": "PORTAL OFFEN"
 } as const;
