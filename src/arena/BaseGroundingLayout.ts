@@ -22,10 +22,13 @@ const DIRECTIONS = [
   { x: 0, y: 1, rotation: 0 },
   { x: -1, y: 0, rotation: Math.PI / 2 },
 ] as const;
-const CLUSTER_SPACING = CELL_SIZE * 1.35;
+/** Nests stay well apart; most edges show only the apron (BaseGroundingField). */
+const CLUSTER_SPACING = CELL_SIZE * 1.8;
+/** Share of the spaced candidates that actually carry a nest. */
+const CLUSTER_CHANCE = 0.9;
 const GRAVEL_VARIANTS = ['edge-a', 'edge-b', 'edge-c'] as const;
 /** Share of the edges without a nest that still carry a loose gravel deposit. */
-const LOOSE_GRAVEL_CHANCE = 0.3;
+const LOOSE_GRAVEL_CHANCE = 0.2;
 
 /** Coordinate-local variation: independent of entity IDs, faction, cell order and peer RNG. */
 function sample(x: number, y: number, salt: number): number {
@@ -113,7 +116,7 @@ export function buildBaseGroundingLayout(
     const { cell, cellIndex, side } = candidate;
     const normal = DIRECTIONS[side];
     const random = (salt: number) => sample(cell.gridX, cell.gridY, side * 16 + salt);
-    const isCluster = clusters.has(candidate);
+    const isCluster = clusters.has(candidate) && random(22) < CLUSTER_CHANCE;
     const cx = metrics.offsetX + (cell.gridX + 0.5) * CELL_SIZE;
     const cy = metrics.offsetY + (cell.gridY + 0.5) * CELL_SIZE;
     const atEdge = (outward: number, along: number) => ({
@@ -127,9 +130,9 @@ export function buildBaseGroundingLayout(
       result.push({
         cellIndex, kind: 'gravel', asset: GRAVEL_VARIANTS[Math.floor(random(3) * GRAVEL_VARIANTS.length)],
         ...atEdge((isCluster ? 4 : 5) + (random(17) - 0.5) * 3, candidate.along + (random(18) - 0.5) * 6),
-        width: isCluster ? 36 + random(5) * 8 : 23 + random(5) * 8,
-        height: isCluster ? 16 + random(6) * 4 : 10 + random(6) * 4,
-        rotation: turn(19, 0.35), alpha: isCluster ? 0.86 : 0.62 + random(7) * 0.12,
+        width: isCluster ? 30 + random(5) * 8 : 20 + random(5) * 6,
+        height: isCluster ? 13 + random(6) * 4 : 9 + random(6) * 3,
+        rotation: turn(19, 0.35), alpha: isCluster ? 0.72 : 0.48 + random(7) * 0.1,
       });
     }
     if (!isCluster) continue;
@@ -138,17 +141,17 @@ export function buildBaseGroundingLayout(
     result.push({
       cellIndex, kind: 'gravel', asset: 'scatter',
       ...atEdge(8, candidate.along - (random(4) - 0.5) * 7),
-      width: 24 + random(7) * 5, height: 13 + random(6) * 3,
-      rotation: turn(20, 0.6), alpha: 0.5, tint: 0xb9ad9a,
+      width: 22 + random(7) * 5, height: 12 + random(6) * 3,
+      rotation: turn(20, 0.6), alpha: 0.32, tint: 0xb9ad9a,
     });
 
     result.push({
       cellIndex, kind: 'cluster', asset: random(8) < 0.5 ? 'corner-a' : 'corner-b',
-      ...atEdge(2, candidate.along), width: 28 + random(9) * 6, height: 21 + random(10) * 5,
-      rotation: turn(21, 0.4), alpha: 0.94,
+      ...atEdge(2, candidate.along), width: 22 + random(9) * 6, height: 17 + random(10) * 4,
+      rotation: turn(21, 0.4), alpha: 0.88,
     });
-    // Size and opacity decrease outward: one medium stone, then one isolated small pebble.
-    for (let tier = 0; tier < 2; tier++) {
+    // Size and opacity decrease outward: one medium stone, sometimes one isolated small pebble.
+    for (let tier = 0; tier < (random(16) < 0.5 ? 1 : 2); tier++) {
       const size = tier === 0 ? 5 + random(11) * 2 : 2.5 + random(12) * 1.5;
       result.push({
         cellIndex, kind: 'pebble', asset: 'pebble-a',

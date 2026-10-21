@@ -10,6 +10,21 @@ import { readGroundMaterialSamples } from './GroundMaterialSamples';
 
 let nextApronId = 0;
 
+export interface BaseGroundingStyle {
+  /** Hostile bases sit on darker, void-stained ground. */
+  readonly hostile?: boolean;
+}
+
+/** Stones and gravel take on the tone of the ground they lie in; hostile ground is darker. */
+const FRIENDLY_TINT = 0xc4baa8;
+const HOSTILE_TINT = 0x80787f;
+const HOSTILE_APRON_BRIGHTNESS = 0.72;
+
+function multiplyColours(a: number, b: number): number {
+  const channel = (shift: number) => Math.round(((a >> shift) & 0xff) * ((b >> shift) & 0xff) / 255) << shift;
+  return channel(16) | channel(8) | channel(0);
+}
+
 /** The shared ground materials, once the World's materials are loaded. */
 function readApronMaterials(scene: Phaser.Scene): BaseApronMaterials | null {
   const textures = scene.textures;
@@ -29,22 +44,28 @@ export class BaseGroundingRenderer {
   private apron: Phaser.GameObjects.Image | null = null;
   private apronKey: string | null = null;
 
-  constructor(private readonly scene: Phaser.Scene, cells: readonly BaseVisualCell[], metrics: WorldMetrics) {
-    this.createApron(cells, metrics);
+  constructor(
+    private readonly scene: Phaser.Scene,
+    cells: readonly BaseVisualCell[],
+    metrics: WorldMetrics,
+    style: BaseGroundingStyle = {},
+  ) {
+    this.createApron(cells, metrics, style.hostile ? HOSTILE_APRON_BRIGHTNESS : 1);
+    const groundTint = style.hostile ? HOSTILE_TINT : FRIENDLY_TINT;
     for (const placement of buildBaseGroundingLayout(cells, metrics)) {
       const image = scene.add.image(placement.x, placement.y, baseGroundingTextureKey(placement.asset))
         .setDisplaySize(placement.width, placement.height)
         .setRotation(placement.rotation)
         .setAlpha(placement.alpha)
         .setDepth(DEPTH.BASE_GROUNDING - (placement.kind === 'gravel' ? 0.06 : 0));
-      if (placement.tint !== undefined) image.setTint(placement.tint);
+      image.setTint(placement.tint === undefined ? groundTint : multiplyColours(placement.tint, groundTint));
       let images = this.imagesByCell.get(placement.cellIndex);
       if (!images) this.imagesByCell.set(placement.cellIndex, images = []);
       images.push(image);
     }
   }
 
-  private createApron(cells: readonly BaseVisualCell[], metrics: WorldMetrics): void {
+  private createApron(cells: readonly BaseVisualCell[], metrics: WorldMetrics, brightness: number): void {
     const materials = readApronMaterials(this.scene);
     const raster = getBaseApronRaster(cells, metrics);
     if (!materials || !raster) return;
@@ -52,7 +73,7 @@ export class BaseGroundingRenderer {
     const texture = this.scene.textures.createCanvas(key, raster.width, raster.height);
     if (!texture) return;
     const pixels = texture.context.createImageData(raster.width, raster.height);
-    writeBaseApron(pixels.data, raster, cells, metrics, materials);
+    writeBaseApron(pixels.data, raster, cells, metrics, materials, brightness);
     texture.context.putImageData(pixels, 0, 0);
     texture.refresh();
     this.apronKey = key;

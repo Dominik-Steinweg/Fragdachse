@@ -19,10 +19,11 @@ Soil canvases follow the cropped aspect ratio; compact clusters use square canva
 It does not create replacement procedural art.
 
 Since 2026-10-21 the ground right at the plates is the procedural apron in
-`src/arena/BaseGroundingField.ts`: a narrow band of compacted gravel fines from the same gravel
-material as the base sites, with loose stones and a seam into the real grass blades. On top of it
-the gravel fringes (`edge-a/b/c`), the fine aggregate (`scatter`), the stone nests
-(`corner-a` / `corner-b`) and `pebble-a` keep their earlier composition, each piece turned and
-shifted a little (`src/arena/BaseGroundingLayout.ts`). The soil stains `soil-a` / `soil-b` read
-as unrealistic pale ovals; they stay here for reference but are `"active": false` in
-`prompts.json` and no longer exported.
+`src/arena/BaseGroundingField.ts`: a narrow, quiet band of trodden earth with gravel fines worked
+in, a few loose stones and a seam into the real grass blades; hostile bases sit on a darker
+variant. On top of it the gravel fringes (`edge-a/b/c`), the fine aggregate (`scatter`), the stone
+nests (`corner-a` / `corner-b`) and `pebble-a` keep their earlier roles, but sparser, each piece
+turned and shifted a little and tinted towards the ground it lies in
+(`src/arena/BaseGroundingLayout.ts`, `BaseGroundingRenderer.ts`). The soil stains `soil-a` /
+`soil-b` read as unrealistic pale ovals; they stay here for reference but are `"active": false`
+in `prompts.json` and no longer exported.

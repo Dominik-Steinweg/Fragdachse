@@ -20,28 +20,32 @@ export interface BaseApronRaster {
 }
 
 /**
- * Foundation gravel around a base: compacted fines of the same crushed gravel as the base sites,
- * with a little soil worked in, loose stones on top, a narrow width that wanders from grass right
- * at the plates to a short spill, and a seam that frays into the actual grass blades. World pixels.
+ * Foundation ground around a base: trodden earth with gravel fines worked in, a few loose stones,
+ * a narrow width that wanders from grass right at the plates to a short spill, and a seam that
+ * frays into the actual grass blades. Kept quiet: it embeds the plates, it does not frame them.
+ * World pixels.
  */
 export const BASE_APRON_CONFIG = {
   /** Apron width beyond the footprint, before the edge warp; often none, never a wide ring. */
-  minWidthPx: -5,
-  maxWidthPx: 13,
+  minWidthPx: -2,
+  maxWidthPx: 16,
   /** Two-dimensional meander of the apron edge. */
   edgeWarpPx: 5,
   /** Density ramp of the outer edge; the grass seam works within it. */
-  seamPx: 8,
+  seamPx: 9,
+  /** Highest opacity outside the footprint: the ground below still shows a little. */
+  maxCover: 0.9,
   /** Contact shade right at the plates. */
   contactPx: 3,
-  contactShade: 0.28,
-  /** Compacted fines: the gravel material, partly desaturated, darkened and mixed with soil. */
-  finesDesaturate: 0.45,
-  finesGain: 0.66,
-  finesSoil: 0.25,
-  /** Loose stones of the same gravel, lighter than the fines between them. */
+  contactShade: 0.22,
+  /** Earth and gravel fines between the stones: soil with a share of desaturated gravel. */
+  finesDesaturate: 0.3,
+  finesGain: 0.84,
+  finesSoil: 0.55,
+  /** Loose stones of the same gravel, few and only a little lighter than the ground. */
+  stoneThreshold: 0.62,
   gravelDesaturate: 0.4,
-  gravelGain: 0.92,
+  gravelGain: 0.82,
   /** Loose gravel beyond the apron edge. */
   scatterPx: 5,
 } as const;
@@ -91,6 +95,8 @@ export function writeBaseApron(
   cells: readonly BaseVisualCell[],
   metrics: Pick<WorldMetrics, 'offsetX' | 'offsetY'>,
   materials: BaseApronMaterials,
+  /** Overall brightness; hostile bases sit on darker, void-stained ground. */
+  brightness = 1,
 ): void {
   data.fill(0);
   const C = BASE_APRON_CONFIG;
@@ -143,7 +149,7 @@ export function writeBaseApron(
         const level = .5 + (width - warped) / C.seamPx * .5;
         const blade = grassHeight.data[heightRow + groundMaterialPhase(Math.floor(x), grassHeight.width)] / 255;
         const tuft = noise(x, y, 5, 5) * .45 + noise(x, y, 13, 6) * .55;
-        cover = smooth((level - (blade * .5 + tuft * .5)) / .07 + .5);
+        cover = smooth((level - (blade * .5 + tuft * .5)) / .07 + .5) * C.maxCover;
       }
       // Loose stones: dense at the plates, thinning across the apron, a few beyond it.
       const g = (gravelRow + groundMaterialPhase(Math.floor(x), gravel.width)) * 4;
@@ -153,7 +159,7 @@ export function writeBaseApron(
       const across = inside ? 0 : clamp01(warped / Math.max(4, width + C.scatterPx));
       // Stones lie in drifts: broad patches where they gather, plain fines in between.
       const drift = noise(x, y, 23, 8) * .65 + noise(x, y, 9, 10) * .35;
-      const threshold = .5 + across * .6 + (.5 - drift) * .9;
+      const threshold = C.stoneThreshold + across * .6 + (.5 - drift) * .9;
       let stoneAlpha = smooth((stone - threshold) / .12 + .5);
       if (!inside && warped > width + C.scatterPx) stoneAlpha = 0;
       const alpha = stoneAlpha + cover * (1 - stoneAlpha);
@@ -164,7 +170,7 @@ export function writeBaseApron(
       const tone = C.finesGain * (.92 + .16 * noise(x, y, 37, 9));
       const grey = luma * 255, stoneDesaturate = C.gravelDesaturate, fineDesaturate = C.finesDesaturate;
       const contact = inside ? 1 - C.contactShade : 1 - C.contactShade * (1 - smooth(distance / C.contactPx));
-      const stoneGain = C.gravelGain * stoneAlpha, normalize = contact / alpha;
+      const stoneGain = C.gravelGain * stoneAlpha, normalize = contact * brightness / alpha;
       const fineGain = cover * (1 - stoneAlpha) * tone * (1 - C.finesSoil);
       const soilGain = cover * (1 - stoneAlpha) * tone * C.finesSoil;
       const out = (py * raster.width + px) * 4;
