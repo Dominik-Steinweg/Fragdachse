@@ -1,0 +1,42 @@
+{
+  "id": "explosive-crate",
+  "label": "Dynamite crate",
+  "category": "construction",
+  "gameIds": [
+    "explosive_crate"
+  ],
+  "reference": "scripts/asset-pipeline/references/explosive-crate-draft.png",
+  "targetSize": 20,
+  "sourceSizes": [
+    40
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Small open plank crate seen from above, 16 by 13 px inside the 20 px canvas, filled edge to edge with red dynamite sticks",
+    "colors": "One large red field of paper sticks inside a warm stained timber rim, a pale twine band and four dark iron corners",
+    "anatomy": "0.5 by 0.42 m crate of 30 mm boards; one tight layer of six 58 mm sticks with crimped tan ends along its length; the same crate model stacks in the Dawn cache. Ground and carried state share this sprite."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "bridge-explosives",
+  "model": {
+    "kind": "crate"
+  },
+  "orthoScale": 0.625,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png",
+    "wood": "art/poc/pipeline-v2/textures/watchtower-weathered-timber-v4.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Stained crate timber, red paper sticks, matte iron",
+      "textureStrength": 0.94,
+      "formShadowStrength": 0.44
+    }
+  },
+  "clips": []
+}

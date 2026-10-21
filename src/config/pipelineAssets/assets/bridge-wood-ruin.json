@@ -1,0 +1,37 @@
+{
+  "id": "bridge-wood-ruin",
+  "category": "construction",
+  "gameIds": [
+    "bridge_wood_ruin"
+  ],
+  "revision": "bridge-kit-v2",
+  "variant": "standard",
+  "sourceSize": 448,
+  "textureKey": "construction_bridge_wood_ruin",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_bridge_wood_ruin_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/bridge-wood-ruin/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/bridge-wood-ruin/sheet.png",
+  "layout": {
+    "frameWidth": 448,
+    "frameHeight": 448,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 452,
+    "height": 452
+  },
+  "hashes": {
+    "idle": "b7a80213305c9afe19348c7f0be287c37224e5e060b417be245b7277be764532",
+    "sheet": "3e4ccbe667fe912b9e662499a6581bfe6ea463e2de1312093d9a0295c4823a5b"
+  }
+}

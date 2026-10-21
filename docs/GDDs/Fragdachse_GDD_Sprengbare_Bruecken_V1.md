@@ -42,6 +42,10 @@ nachts leichter verteidigen; der eigene Weg zu Sites jenseits des Flusses fällt
   verlieren nur 35 % ihrer maximalen HP. Explosion: 112 px, 140 Schaden nur gegen Gegner.
 - **Shift:** Kandidat nur, wenn in der Runde Sprengstoff existiert, sonst bleiben Brücken normaler Boden
   (Shift bleibt Eingraben). Reichweite 56 px um das Deck.
+- **Darstellung:** Blender-Bausatz der Asset-Pipeline V2 (`bridge-wood`, `bridge-wood-ruin`,
+  `explosive-crate`, `bridge-charge`, `demolition-cache`). Die Brücke ist ein 6×4-Zellen-Master je
+  Zustand; das Spiel schneidet ihn entlang der Zellgrenzen in Decks jeder authored Länge und Breite
+  (`src/effects/bridge/BridgeKit.ts`). Holz wie der Wachturm (gleiche Albedo und Oberflächen).
 
 ## Entscheidungslog (Claude, reversible Defaults)
 
@@ -58,10 +62,12 @@ nachts leichter verteidigen; der eigene Weg zu Sites jenseits des Flusses fällt
 | 2026-10-21 | Lager: eine Kiste je Template-Brücke, Ziel = alle Brücken, Tiers 1–3 mit 15/25/35 Schrott und Angriffswelle (18/30/44) nach 3 s | Lager ist umkämpft und belohnt vollständiges Sprengen nur leicht; der eigentliche Lohn ist die leichtere Nacht |
 | 2026-10-21 | Neues Template `riverbend` (140×96): U-Fluss um die Basis (West, Nord, Ost), nach Süden offen, drei Brücken; alle Sites jenseits des Flusses | ohne Brücken bleibt nur der lange Weg um die Flussenden; tagsüber sind die Brücken der kurze Weg zu den Sites |
 | 2026-10-21 | `pondland`: Kanal vom Ostteich zum Südrand mit einer Brücke | östliche Angreifer haben zwei Wege um den Teich, nach dem Sprengen nur noch den nördlichen |
+| 2026-10-21 | Brücken als Bausatz statt eines Sprites je Größe: ein Master je Zustand, Schnitte nur auf Zellgrenzen (Bohlenfugen, Geländerstöße mit Eisenlaschen, Steinfugen bei y = −1/0/1), Mittelzellen je Brücke per Seed | beliebige authored Größen ohne neue Renders; Abnutzung hängt nur vom Abstand zur Mittellinie ab, daher passen alle Zellen aneinander |
+| 2026-10-21 | Licht des Bausatzes: Key und Fill zehnfach weiter weg entlang ihrer Richtung (gleicher Winkel, gleiche Weichheit und Helligkeit im Drehpunkt) | sonst wären West- und Ostende unterschiedlich hell und Schnitte sichtbar |
+| 2026-10-21 | Dynamitkiste als offene Kiste mit roten Stangen, Ladung als vergrößertes Bündel (4 Stangen à 0,6 m), Lager mit Plane, Zünder und Zündschnurrolle | kleine Props brauchen ein großes klares Symbol; die Zündschnur endet am Funkenpunkt des Renderers |
 
 ## Offene Punkte
 
 - Shift-Plakette und Marker überlagern sich am Brückenende (Marker-Layout).
-- HQ-Blender-Asset nicht gebaut; Deck und Ruine nutzen Materialtexturen aus ComfyUI (`tools/source-art/bridge-*`).
 - Dawn-Nacht im Dev-Szenario nicht live angesehen (`dawnSkip` verweigerte nach Teleports); Erreichbarkeit aller Fronten
   und Sites mit gesprengten Brücken sichern `test:stress:dawn` und der Sweep.

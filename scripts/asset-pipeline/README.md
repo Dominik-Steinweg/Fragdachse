@@ -242,6 +242,17 @@ Die Kategorie `weapon` verwendet [recipes_v2/held-weapon.py](recipes_v2/held-wea
 
 Neue Konstruktionen erzeugen genau eine passende Materialvariante (`standard`). Fell- und Formstärke werden in Vorschau-Iterationen abgestimmt; die historischen Varianten `calm`/`rich` bleiben lesbar. Zusätzliche Varianten werden nur bei ausdrücklichem Vergleichsauftrag authoriert.
 
+## Bausätze für zusammengesetzte Bauten
+
+Die sprengbaren Brücken haben keine feste Größe. [bridge-wood.py](recipes_v2/bridge-wood.py) rendert
+daher je Zustand einen 6×4-Zellen-Master (`bridge-wood`, `bridge-wood-ruin`), den
+`src/effects/bridge/BridgeKit.ts` entlang der Zellgrenzen zu Decks jeder authored Länge und Breite
+zusammensetzt. Solche Rezepte halten an jeder Schnittlinie eine echte Fuge, verteilen Abnutzung
+gleichmäßig entlang der Schnittachse und rücken Key und Fill über `distant_lights` aus
+[bridge_parts.py](bridge_parts.py) entlang ihrer Richtung weiter weg, damit Zellen von beiden Enden
+gleich hell sind. Ein Asset deklariert nur Texturen, die seine Teile tatsächlich verwenden; nicht
+benutzte Bilder fehlen nach dem Speichern im Blend und der Prüfer lehnt es ab.
+
 ## Form-Modus
 
 Die Authoring-Schleife hat drei Stufen: **Form → Animation im Entwurf → Endqualität**.

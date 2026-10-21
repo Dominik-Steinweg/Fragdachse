@@ -1,13 +1,14 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
+import { getPipelineAsset } from '../../config/pipelineAssets';
 import { getBridgeChargePoint, getBridgeDeckWorldRect, type BridgeWorldOrigin } from '../../arena/BridgeGeometry';
 import { BRIDGE_DEMOLITION_RULES } from '../../config/bridges';
 import type { ArenaBridge } from '../../types';
 import type { BridgeRuntimeState } from '../../world/WorldBridgeRuntime';
 import { ensureCanvasTexture, registerGraphicsObject } from '../EffectUtils';
 import { BridgeDestructionFx } from './BridgeDestructionFx';
-import { ensureBridgeDeckTexture, ensureBridgeRuinTexture, ensureBridgeShadowTexture,
-  resolveBridgeMaterials } from './BridgeTextures';
+import { BRIDGE_PIPELINE_ASSET_IDS, bridgeTextureSize, ensureBridgeDeckTexture, ensureBridgeRuinTexture, ensureBridgeShadowTexture,
+  resolveBridgeKitMasters } from './BridgeTextures';
 
 interface BridgeView {
   readonly bridge: ArenaBridge;
@@ -27,28 +28,15 @@ export interface BridgeRendererCues {
   readonly onFuseCue?: (x: number, y: number, cue: 'lit' | 'final') => void;
 }
 
-const CHARGE_KEY = 'bridge-charge-bundle';
+/** The charge's fuse ends where the spark burns, +12/-10 px from its centre. */
+const CHARGE_DISPLAY_SIZE = 32;
 const SPARK_KEY = 'bridge-fuse-spark';
 /** Above the light map like other danger telegraphs, below the canopy. */
 const TELEGRAPH_DEPTH = 19.7;
 const FINAL_WARNING_MS = 1600;
 let nextTextureOwner = 0;
 
-function ensureChargeTextures(textures: Phaser.Textures.TextureManager): void {
-  ensureCanvasTexture(textures, CHARGE_KEY, 28, 22, ctx => {
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(4, 6, 22, 14);
-    for (let i = 0; i < 3; i++) {
-      const y = 4 + i * 5;
-      ctx.fillStyle = '#7d2a1f'; ctx.fillRect(3, y, 20, 5);
-      ctx.fillStyle = 'rgba(255,214,170,0.25)'; ctx.fillRect(3, y, 20, 1);
-      ctx.fillStyle = '#c9b48d'; ctx.fillRect(2, y + 1, 2, 3); ctx.fillRect(22, y + 1, 2, 3);
-    }
-    // Twine around the bundle and the coiled fuse leading off the top.
-    ctx.fillStyle = '#b39a6b'; ctx.fillRect(8, 3, 2, 16); ctx.fillRect(16, 3, 2, 16);
-    ctx.strokeStyle = '#3b3027'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(13, 4); ctx.bezierCurveTo(14, 0, 20, 1, 22, 2); ctx.bezierCurveTo(25, 3, 26, 1, 26, 1); ctx.stroke();
-  });
+function ensureSparkTexture(textures: Phaser.Textures.TextureManager): void {
   ensureCanvasTexture(textures, SPARK_KEY, 32, 32, ctx => {
     const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 15);
     gradient.addColorStop(0, 'rgba(255,250,220,1)');
@@ -74,15 +62,16 @@ export class BridgeRenderer {
   constructor(private readonly scene: Phaser.Scene, bridges: readonly ArenaBridge[], private readonly origin: BridgeWorldOrigin,
     private readonly cues: BridgeRendererCues = {}) {
     this.fx = new BridgeDestructionFx(scene);
-    ensureChargeTextures(scene.textures);
-    const materials = resolveBridgeMaterials(scene.textures);
+    ensureSparkTexture(scene.textures);
+    const chargeKey = getPipelineAsset(BRIDGE_PIPELINE_ASSET_IDS.charge).textureKey;
+    const masters = resolveBridgeKitMasters(scene.textures);
     const owner = nextTextureOwner++;
     for (const bridge of bridges) {
       const deckKey = `bridge-deck-${owner}-${bridge.id}`;
       const ruinKey = `bridge-ruin-${owner}-${bridge.id}`;
       const shadowKey = `bridge-shadow-${owner}-${bridge.id}`;
-      ensureBridgeDeckTexture(scene.textures, deckKey, bridge.spanCells, bridge.deckWidthCells, bridge.id, materials);
-      ensureBridgeRuinTexture(scene.textures, ruinKey, bridge.spanCells, bridge.deckWidthCells, bridge.id, materials);
+      ensureBridgeDeckTexture(scene.textures, deckKey, bridge.spanCells, bridge.deckWidthCells, bridge.id, masters);
+      ensureBridgeRuinTexture(scene.textures, ruinKey, bridge.spanCells, bridge.deckWidthCells, bridge.id, masters);
       ensureBridgeShadowTexture(scene.textures, shadowKey, bridge.spanCells, bridge.deckWidthCells);
       this.textureKeys.push(deckKey, ruinKey, shadowKey);
       const rect = getBridgeDeckWorldRect(bridge, origin);
@@ -90,10 +79,15 @@ export class BridgeRenderer {
       const rotation = bridge.axis === 'horizontal' ? 0 : Math.PI / 2;
       // The deck stands a little above the river; its contact shadow darkens the water around it.
       const shadow = scene.add.image(cx + 2, cy + 3, shadowKey).setRotation(rotation).setDepth(DEPTH.WATER + .38).setAlpha(.55);
-      const deck = scene.add.image(cx, cy, deckKey).setRotation(rotation).setDepth(DEPTH.WATER + .4);
-      const ruin = scene.add.image(cx, cy, ruinKey).setRotation(rotation).setDepth(DEPTH.WATER + .4).setVisible(false);
+      // Kit textures are assembled at the master's resolution and shown at display size.
+      const size = bridgeTextureSize(bridge.spanCells, bridge.deckWidthCells);
+      const deck = scene.add.image(cx, cy, deckKey).setDisplaySize(size.width, size.height).setRotation(rotation)
+        .setDepth(DEPTH.WATER + .4);
+      const ruin = scene.add.image(cx, cy, ruinKey).setDisplaySize(size.width, size.height).setRotation(rotation)
+        .setDepth(DEPTH.WATER + .4).setVisible(false);
       const point = getBridgeChargePoint(bridge, origin);
-      const charge = scene.add.image(point.x, point.y, CHARGE_KEY).setDepth(DEPTH.WATER + .42).setVisible(false);
+      const charge = scene.add.image(point.x, point.y, chargeKey).setDisplaySize(CHARGE_DISPLAY_SIZE, CHARGE_DISPLAY_SIZE)
+        .setDepth(DEPTH.WATER + .42).setVisible(false);
       const spark = scene.add.image(point.x + 12, point.y - 10, SPARK_KEY).setDepth(TELEGRAPH_DEPTH)
         .setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
       const telegraph = scene.add.graphics().setDepth(TELEGRAPH_DEPTH).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);

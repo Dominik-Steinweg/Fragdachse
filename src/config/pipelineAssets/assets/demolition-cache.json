@@ -1,0 +1,37 @@
+{
+  "id": "demolition-cache",
+  "category": "construction",
+  "gameIds": [
+    "dawn_demolition_cache"
+  ],
+  "revision": "bridge-kit-v2",
+  "variant": "standard",
+  "sourceSize": 192,
+  "textureKey": "construction_dawn_demolition_cache",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_dawn_demolition_cache_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/demolition-cache/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/demolition-cache/sheet.png",
+  "layout": {
+    "frameWidth": 192,
+    "frameHeight": 192,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 196,
+    "height": 196
+  },
+  "hashes": {
+    "idle": "1590eae53766a35d0c5894cea5b48370d6d628c167cd067d72481df0e33b557f",
+    "sheet": "485537d7e1584a71d746f90e1ee09ce9875b5cefb8fa1d720903a2bc8cf8fece"
+  }
+}

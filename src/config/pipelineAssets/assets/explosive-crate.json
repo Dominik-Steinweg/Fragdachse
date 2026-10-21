@@ -1,0 +1,37 @@
+{
+  "id": "explosive-crate",
+  "category": "construction",
+  "gameIds": [
+    "explosive_crate"
+  ],
+  "revision": "bridge-kit-v2",
+  "variant": "standard",
+  "sourceSize": 40,
+  "textureKey": "construction_explosive_crate",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_explosive_crate_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/explosive-crate/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/explosive-crate/sheet.png",
+  "layout": {
+    "frameWidth": 40,
+    "frameHeight": 40,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 44,
+    "height": 44
+  },
+  "hashes": {
+    "idle": "09fe1a25009b29d70d14fd7db19720eac594f6549792ae2745febc80c15e59d0",
+    "sheet": "e99b49836a739322b186ac354532025e1ee57422d00ecc43e60665118ddd3c67"
+  }
+}

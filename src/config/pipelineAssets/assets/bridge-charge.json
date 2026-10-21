@@ -1,0 +1,37 @@
+{
+  "id": "bridge-charge",
+  "category": "construction",
+  "gameIds": [
+    "bridge_charge"
+  ],
+  "revision": "bridge-kit-v3",
+  "variant": "standard",
+  "sourceSize": 64,
+  "textureKey": "construction_bridge_charge",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_bridge_charge_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/bridge-charge/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/bridge-charge/sheet.png",
+  "layout": {
+    "frameWidth": 64,
+    "frameHeight": 64,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 68,
+    "height": 68
+  },
+  "hashes": {
+    "idle": "09bc3efb8bd0318ea50d652e91eca9888fd64fd7b0c9e0e2a0d4b683951ea027",
+    "sheet": "a0186c7234a6f7ad7c89b2cecd93cfd3a16e8f6cd07d51d8f373faf4318e2f6f"
+  }
+}

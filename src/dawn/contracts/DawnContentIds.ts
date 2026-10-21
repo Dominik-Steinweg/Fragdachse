@@ -32,7 +32,7 @@ export const DAWN_M3_ASSET_KEYS = {
     ? `construction_dawn_wreck_t${tier}` : `construction_dawn_wreck_${variant}_t${tier}`,
   broodNest: 'construction_dawn_broodnest',
   supplyCapsule: 'construction_dawn_supply_capsule',
-  /** Sprengstofflager; bis zum HQ-Asset zeichnet die Darstellung eine prozedurale Textur unter diesem Key. */
+  /** Sprengstofflager (Pipeline-Asset `demolition-cache`). */
   demolitionCache: 'construction_dawn_demolition_cache',
   supplyCrate: 'dawn_supply_crate',
   supplyCrateCarried: 'dawn_supply_crate_carried',
