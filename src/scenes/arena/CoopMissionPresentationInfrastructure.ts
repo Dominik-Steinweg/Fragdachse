@@ -1,5 +1,6 @@
 import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import { WaterSurfaceModel } from '../../arena/WaterSurfaceModel';
+import { ExplosiveCrateRenderer } from '../../effects/bridge/ExplosiveCrateRenderer';
 import { DawnSitePropRenderer } from '../../arena/DawnSitePropRenderer';
 import { DawnSiteDecalRenderer } from '../../arena/DawnSiteDecalRenderer';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
@@ -51,6 +52,8 @@ export interface CoopMissionPresentationInfrastructureInput {
   readonly renderers: RendererBundle;
   readonly getBaseManager: () => BaseManager | null;
   readonly getEnemyManager: () => EnemyManager | null;
+  /** Standing bridges of the World, for demolition markers; absent without bridges. */
+  readonly getStandingBridges?: () => readonly import('../../effects/markers/sources/CoopMissionMarkerSource').BridgeMarkerTarget[];
 }
 
 /**
@@ -81,8 +84,10 @@ export class CoopMissionPresentationInfrastructure {
   private krakenPondVoid: KrakenPondVoid | null = null;
   private krakenStage = 0;
   private abyssCameo: AbyssCameoRenderer | null = null;
+  private readonly explosiveCrates: ExplosiveCrateRenderer;
 
   constructor(private readonly scene: Phaser.Scene) {
+    this.explosiveCrates = new ExplosiveCrateRenderer(scene);
     this.objectiveAnnouncements = new CoopDefenseObjectiveAnnouncement(scene);
     this.objectiveAnnouncements.build();
     this.mapEventAnnouncementPresenter = new CoopDefenseMapEventAnnouncementPresenter(
@@ -294,7 +299,7 @@ export class CoopMissionPresentationInfrastructure {
                 const base = input.getBaseManager()?.getBase(id);
                 return base ? { ...getBaseWorldBounds(base.spec.region, metrics),
                   dormant: base.isDormant(), destroyed: base.isDestroyed() } : null;
-              }), snapshot, this.scene.time.now, elapsedMs);
+              }, input.getStandingBridges?.() ?? []), snapshot, this.scene.time.now, elapsedMs);
           }
         },
         syncMortarStrikes: (strikes, nowMs) => {
@@ -305,10 +310,13 @@ export class CoopMissionPresentationInfrastructure {
         },
         syncCoopDefenseCarry: (items) => {
           if (this.destroyed) return;
-          // Dawn supply sites carry crates; every other carry objective keeps the campaign bottle.
+          // Explosives are dynamite crates wherever they come from; Dawn supply sites carry their own
+          // crates; every other carry objective keeps the campaign bottle.
+          this.explosiveCrates.sync(items.filter(item => item.item === 'explosive'));
+          const cargo = items.filter(item => item.item !== 'explosive');
           const props = this.dawnSiteProps;
-          input.renderers.beer.syncCoopDefenseCarry(props ? items.filter(item => !props.ownsObjective(item.objectiveId)) : items);
-          props?.syncCrates(items.filter(item => props.ownsObjective(item.objectiveId)));
+          input.renderers.beer.syncCoopDefenseCarry(props ? cargo.filter(item => !props.ownsObjective(item.objectiveId)) : cargo);
+          props?.syncCrates(cargo.filter(item => props.ownsObjective(item.objectiveId)));
         },
         syncEnemyDashVisual: (enemy) => {
           if (!this.destroyed) input.clientUpdate.syncEnemyDashVisual(enemy);
@@ -421,6 +429,7 @@ export class CoopMissionPresentationInfrastructure {
       // the HUD objects, matching the previous shutdown order.
       this.destroyWorldSpace(this.uiInput);
     }
+    this.explosiveCrates.destroy();
     this.destroyed = true;
     this.ui = null;
     this.uiInput = null;
@@ -462,6 +471,7 @@ export class CoopMissionPresentationInfrastructure {
     this.abyssCameo?.destroy(); this.abyssCameo = null;
     this.krakenResidency?.destroy(); this.krakenResidency = null;
     input.renderers.beer.syncCoopDefenseCarry([]);
+    this.explosiveCrates.sync([]);
     input.clientUpdate.resetEnemyDashVisuals();
     input.renderers.encounterTelegraph.destroy();
     input.renderers.bossIntro.clear();
@@ -477,6 +487,7 @@ export class CoopMissionPresentationInfrastructure {
     this.clearDawnSites();
     if (this.worldSpaceDestroyed) return;
     input.renderers.beer.syncCoopDefenseCarry([]);
+    this.explosiveCrates.sync([]);
     input.clientUpdate.resetEnemyDashVisuals();
     input.renderers.encounterTelegraph.clear();
     input.renderers.bossIntro.clear();

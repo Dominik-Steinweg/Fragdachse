@@ -11,7 +11,7 @@ import {
 } from '../src/arena/BridgeGeometry';
 import { CELL_SIZE, getArenaMetricsProfile } from '../src/config';
 import { normalizeCoopDefenseBridges } from '../src/config/coopDefenseBridges';
-import { getCoopDefenseMapConfig, type CoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, normalizeCoopDefenseMapConfig, type CoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import {
   toAuthoredScenario,
   toCoopDefenseMapConfig,
@@ -146,5 +146,33 @@ describe('bridge generation', () => {
     const world = toWorldDefinition(withBridge);
     expect(world.terrain.bridges).toEqual([MAP_12_BRIDGE]);
     expect(toWorldGenerationConfig(world).bridges).toEqual([MAP_12_BRIDGE]);
+  });
+});
+
+describe('explosive carry authoring', () => {
+  const raw = (extra: object) => ({
+    mapId: 'explosive-authoring', arenaWidthCells: 44, arenaHeightCells: 34, timeOfDay: '12:00',
+    rockFillRatio: 0, treeCount: 0, trackMode: 'none', balanceReferenceDurationSec: 60, objective: 'survive',
+    surviveDurationSec: 60, respawnsPerPlayer: 1, bases: [], powerUps: [], encounters: [], persistentSpawns: [], mapEvents: [],
+    waterAreas: [{ gridX: 20, gridY: 0, widthCells: 4, heightCells: 26 }],
+    bridges: [{ id: 'river-bridge', axis: 'horizontal', gridX: 20, gridY: 12, spanCells: 4, deckWidthCells: 3 }],
+    secondaryObjectives: [{ id: 'demolition', type: 'carry', start: { type: 'time', atMs: 0 }, targets: [], targetGoal: 1,
+      carry: { item: 'explosive', spawnZone: { gridX: 30, gridY: 12, widthCells: 2, heightCells: 2 }, itemCount: 2 } }],
+    ...extra,
+  }) as unknown as Parameters<typeof normalizeCoopDefenseMapConfig>[0];
+
+  it('plants explosives on bridges instead of delivering them', () => {
+    const normalized = normalizeCoopDefenseMapConfig(raw({}));
+    expect(normalized.secondaryObjectives?.[0]?.carry).toEqual({
+      item: 'explosive', spawnZone: { gridX: 30, gridY: 12, widthCells: 2, heightCells: 2 }, itemCount: 2 });
+    expect(() => normalizeCoopDefenseMapConfig(raw({ bridges: [] }))).toThrow(/needs bridges/);
+    expect(() => normalizeCoopDefenseMapConfig(raw({ secondaryObjectives: [{ id: 'demolition', type: 'carry',
+      start: { type: 'time', atMs: 0 }, targets: [], targetGoal: 2,
+      carry: { item: 'explosive', spawnZone: { gridX: 30, gridY: 12, widthCells: 2, heightCells: 2 }, itemCount: 2 } }] })))
+      .toThrow(/exceeds the bridge count/);
+    expect(() => normalizeCoopDefenseMapConfig(raw({ secondaryObjectives: [{ id: 'demolition', type: 'carry',
+      start: { type: 'time', atMs: 0 }, targets: [], targetGoal: 1,
+      carry: { item: 'explosive', spawnZone: { gridX: 30, gridY: 12, widthCells: 2, heightCells: 2 },
+        deliveryZone: { gridX: 2, gridY: 2, widthCells: 2, heightCells: 2 } } }] }))).toThrow(/planted on bridges/);
   });
 });

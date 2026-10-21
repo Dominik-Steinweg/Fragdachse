@@ -970,6 +970,7 @@ export class NetworkBridge {
   private dashHandler: DashHandler | null = null;
   private burrowHandler: BurrowHandler | null = null;
   private structureOccupancyHandler: ((id: string, request: import('../systems/StructureOccupancySystem').StructureOccupancyRequest) => boolean) | null = null;
+  private bridgeChargeHandler: ((id: string, request: { readonly bridgeId: string }) => boolean) | null = null;
   private turretControlHandler: ((id: string, request: import('../types').TurretControlRequest) => boolean) | null = null;
   private shootingRangeHandler: ((id: string, request: import('../shootingRange/ShootingRangeContracts').ShootingRangeRequest) => boolean) | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
@@ -1911,6 +1912,22 @@ export class NetworkBridge {
       if (request.action !== 'enter' && request.action !== 'exit') return false;
       if (request.action === 'exit' && (!Number.isSafeInteger(request.revision) || request.revision <= 0)) return false;
       return this.structureOccupancyHandler?.(caller.id, request) ?? false;
+    });
+  }
+
+  sendBridgeChargeRequest(request: { readonly bridgeId: string }): void {
+    if (this.getWorldActionRevision() === null) return;
+    if (isHost()) { this.bridgeChargeHandler?.(myPlayer().id, request); return; }
+    this.sendWorldRpc('bridge-charge', { bridgeId: request.bridgeId });
+  }
+
+  registerBridgeChargeHandler(handler: typeof this.bridgeChargeHandler): void {
+    this.bridgeChargeHandler = handler;
+    this.registerHostRpcHandler('bridge-charge', (data: unknown, caller: PlayerState): boolean => {
+      if (!isHost() || !this.acceptsWorldRpc(data) || !data || typeof data !== 'object') return false;
+      const { bridgeId } = data as { bridgeId?: unknown };
+      if (typeof bridgeId !== 'string' || bridgeId.length === 0 || bridgeId.length > 64) return false;
+      return this.bridgeChargeHandler?.(caller.id, { bridgeId }) ?? false;
     });
   }
 

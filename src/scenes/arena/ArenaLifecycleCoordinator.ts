@@ -796,6 +796,12 @@ export class ArenaLifecycleCoordinator {
       renderers,
       getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
       getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
+      getStandingBridges: () => {
+        const bridges = this.worldGameplay?.bridges;
+        if (!bridges) return [];
+        return bridges.getBridges().filter(entry => bridges.isStanding(entry.id))
+          .map(entry => ({ id: entry.id, bounds: bridges.getDeckRect(entry.id)! }));
+      },
     }) ?? null;
     this.coopMissionPorts = createArenaCoopMissionPorts({
       getStructureOccupancyState: id => this.worldPlayerGameplayRuntime?.getStructureOccupancyState(id),

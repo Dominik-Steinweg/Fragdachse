@@ -337,6 +337,7 @@ export class CoopMissionComposition {
       getConnectedPlayerIds: this.options.getConnectedPlayerIds,
       getSpectatorIds: this.options.getSpectatorIds,
       isPlayerBurrowed: this.options.isPlayerBurrowed,
+      resolveDryPoint: (x, y) => this.options.getCollisionWater?.()?.resolveDryPoint(x, y, 8) ?? { x, y },
       publishMissionProgress: this.options.publishMissionProgress,
       onObjectiveCompleted: objectiveId => {
         dawn?.onObjectiveCompleted(objectiveId);

@@ -160,6 +160,8 @@ export class InputSystem {
   setupLobbyMenuProvider(provider: NonNullable<InputSystem['lobbyMenuProvider']>): void { this.lobbyMenuProvider = provider; }
   private getShootingRange: (() => ShootingRangeWorldBinding | null) | null = null;
   setupShootingRangeProvider(provider: () => ShootingRangeWorldBinding | null): void { this.getShootingRange = provider; }
+  private bridgeChargeProvider: ((player: { x: number; y: number }, worldRevision: number) => WorldInteractionCandidate[]) | null = null;
+  setupBridgeChargeProvider(provider: NonNullable<InputSystem['bridgeChargeProvider']>): void { this.bridgeChargeProvider = provider; }
   private previousTurretRevision: number | null = null;
   private previousStructureRevision: number | null = null;
 
@@ -216,6 +218,7 @@ export class InputSystem {
           request: { control, action, session: state.session }, worldRevision });
       }
     }
+    candidates.push(...this.bridgeChargeProvider?.(sprite, worldRevision) ?? []);
     return candidates;
   }
   /** Called by presentation after input; the next key edge consumes exactly this displayed choice. */
@@ -258,6 +261,7 @@ export class InputSystem {
       ? { action: 'enter', structureId: candidate.structureId }
       : { action: 'exit', structureId: candidate.structureId, revision: candidate.exitRevision });
     else if (candidate.kind === 'lobby-menu') this.lobbyMenuProvider?.open(candidate.menu);
+    else if (candidate.kind === 'bridge-charge') this.bridge.sendBridgeChargeRequest({ bridgeId: candidate.bridgeId });
     else this.bridge.sendShootingRangeRequest(candidate.request);
   }
   private rocketMagazineId: number | null = null;

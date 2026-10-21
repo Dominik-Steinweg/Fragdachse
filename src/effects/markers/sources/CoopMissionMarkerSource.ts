@@ -34,11 +34,18 @@ export function enemyMarkers(enemies: readonly EnemyMarkerTarget[]): MarkerDescr
   });
 }
 
+/** A standing bridge an explosive can still be planted on. */
+export interface BridgeMarkerTarget {
+  readonly id: string;
+  readonly bounds: MarkerTargetBounds;
+}
+
 export function secondaryObjectiveMarkers(
   snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
   configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
   carry: readonly SyncedCoopDefenseCarryItem[], origin: Origin,
   boundsFor: (id: string) => MarkerTargetBounds | null,
+  standingBridges: readonly BridgeMarkerTarget[] = [],
 ): MarkerDescriptor[] {
   const out: MarkerDescriptor[] = [];
   for (const entry of snapshot ?? []) {
@@ -67,7 +74,14 @@ export function secondaryObjectiveMarkers(
           // The existing Carry runtime uses a 16px item body, independent of the bottle sprite.
           targetHalfHeight: 8, bundleKey: `${group}:carry` });
       }
-      if (config.carry && isCarryDeliveryZoneMarked(carry, entry.objectiveId)) {
+      // Explosives replace the delivery zone with the bridges they can still bring down.
+      if (config.carry?.item === 'explosive' && isCarryDeliveryZoneMarked(carry, entry.objectiveId)) {
+        for (const target of standingBridges) {
+          out.push({ ...common, key: `mission:${encodeURIComponent(config.id)}:bridge:${target.id}`, kind: 'delivery', glyph: 'timebomb',
+            ...pose(target.bounds), groundRing: { radiusPx: Math.max(target.bounds.width, target.bounds.height) / 2 }, bundleKey: `${group}:delivery` });
+        }
+      }
+      if (config.carry?.deliveryZone && isCarryDeliveryZoneMarked(carry, entry.objectiveId)) {
         const z = config.carry.deliveryZone;
         const bounds = { x: origin.offsetX + z.gridX * CELL_SIZE, y: origin.offsetY + z.gridY * CELL_SIZE,
           width: z.widthCells * CELL_SIZE, height: z.heightCells * CELL_SIZE };

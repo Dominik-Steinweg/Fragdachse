@@ -2425,6 +2425,8 @@ export interface SyncedCoopDefenseCarryItem {
   y: number;
   holderId: string | null;
   state: CoopDefenseCarryItemState;
+  /** Present only for explosive cargo (planted on bridges); absent means ordinary cargo. */
+  item?: 'explosive';
 }
 
 export type SyncedCoopDefenseCarryState = SyncedCoopDefenseCarryItem[];

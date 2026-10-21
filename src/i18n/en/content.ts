@@ -326,9 +326,11 @@ export const enContent = {
   "objective.fallback.destroy": "DESTROY TARGETS",
   "objective.fallback.hold": "HOLD THE POSITION",
   "objective.fallback.carry": "RECOVER THE CARGO",
+  "objective.fallback.demolition": "BLOW THE BRIDGE",
   "objective.reward.destroy": "LESS ENEMY PRESSURE · BONUS XP",
   "objective.reward.hold": "REINFORCEMENTS FOR THE REST OF THE MAP",
   "objective.reward.carry": "BETTER VICTORY REWARD",
+  "objective.reward.demolition": "ENEMIES MUST TAKE DETOURS",
   "objective.status.completed": "COMPLETE",
   "objective.status.failed": "FAILED",
   "objective.status.hold": "HOLDING"

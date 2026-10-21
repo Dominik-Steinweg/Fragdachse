@@ -72,7 +72,8 @@ export function getSecondaryObjectiveTitle(
 ): string {
   return resolveSecondaryObjectiveTitle(entry.objectiveId, getLocale())
     ?? (entry.type === 'destroy' ? t('objective.fallback.destroy')
-      : entry.type === 'hold' ? t('objective.fallback.hold') : t('objective.fallback.carry'));
+      : entry.type === 'hold' ? t('objective.fallback.hold')
+        : config?.carry?.item === 'explosive' ? t('objective.fallback.demolition') : t('objective.fallback.carry'));
 }
 
 export function getSecondaryObjectiveRewardHint(
@@ -81,7 +82,8 @@ export function getSecondaryObjectiveRewardHint(
 ): string {
   return resolveSecondaryObjectiveReward(entry.objectiveId, getLocale())
     ?? (entry.type === 'destroy' ? t('objective.reward.destroy')
-      : entry.type === 'hold' ? t('objective.reward.hold') : t('objective.reward.carry'));
+      : entry.type === 'hold' ? t('objective.reward.hold')
+        : config?.carry?.item === 'explosive' ? t('objective.reward.demolition') : t('objective.reward.carry'));
 }
 
 /** Zielreferenzen einer Mission; die Weltmarkierung löst sie lokal gegen den BaseManager auf. */

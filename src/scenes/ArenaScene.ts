@@ -159,6 +159,7 @@ import type { ActivityDescriptor } from '../world/ActivityDescriptor';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
 import type { WorldPresentationRequirement } from '../world/WorldPresentation';
 import { lobbyBuildingCandidates, lobbyMenuBlockedLabel, lobbyMenuDenial, type LobbyMenuAccessState } from '../systems/LobbyBuildingInteraction';
+import { bridgeChargeCandidates } from '../systems/BridgeInteraction';
 import type { LobbyMenu } from '../config/authoring/lobbyBuildings';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import { toArenaMetricsProfile } from '../world/WorldMetrics';
@@ -1385,6 +1386,18 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.arenaRuntime.initialize();
     inputSystem.setupShootingRangeProvider(() => this.arenaRuntime.getShootingRange());
+    inputSystem.setupBridgeChargeProvider((player, worldRevision) => {
+      const bridges = this.arenaRuntime.getWorldBridgeRuntime();
+      const metrics = this.arenaRuntime.getWorldMetrics();
+      if (!bridges || !metrics || bridge.getLocalWorldParticipation() !== 'interactive') return [];
+      const localId = bridge.getLocalPlayerId();
+      const explosives = this.arenaRuntime.getCarryItems().filter(item => item.item === 'explosive');
+      return bridgeChargeCandidates({
+        bridges: bridges.getBridges(), readState: id => bridges.getState(id), origin: metrics, player, worldRevision,
+        carryingExplosive: explosives.some(item => item.holderId === localId),
+        explosivesInPlay: explosives.length > 0,
+      });
+    });
     inputSystem.setupLobbyMenuProvider({
       candidates: () => {
         const world = this.arenaRuntime.getWorldDescriptor();

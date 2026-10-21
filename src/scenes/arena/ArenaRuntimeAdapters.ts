@@ -102,6 +102,9 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
         bridges: runtime?.getBridges().map((entry) => ({ id: entry.id, ...runtime.getState(entry.id) })) ?? [],
         alive: flow.getWorldCombatCore()?.isAlive(bridge.getLocalPlayerId()) ?? false,
         enemies: flow.getWorldEnemyManager()?.getAllEnemies().length ?? 0,
+        carry: flow.getCoopMissionRuntime()?.coopDefenseCarrySystem?.getSnapshot() ?? [],
+        objectives: bridge.getCoopDefenseSecondaryObjectivePresentationState(),
+        local: (() => { const p = players.getPlayer(bridge.getLocalPlayerId()); return p ? { x: p.x, y: p.y } : null; })(),
         nav: flow.getCoopMissionRuntime()?.flowFieldCoordinator?.getDiagnostics() ?? null,
       };
     },

@@ -27,6 +27,7 @@ export type WorldInteractionCandidate = InteractionCandidate & {
   | { readonly kind: 'turret'; readonly turret: AutomatedTurret }
   | { readonly kind: 'lobby-menu'; readonly menu: LobbyMenu }
   | { readonly kind: 'shooting-range'; readonly request: ShootingRangeRequest }
+  | { readonly kind: 'bridge-charge'; readonly bridgeId: string }
 );
 
 /** Presentation-only focus: a selectable candidate or the exit of the object the player occupies. */

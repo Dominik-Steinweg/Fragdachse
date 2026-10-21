@@ -51,6 +51,8 @@ export interface CoopMissionObjectiveCompositionOptions {
   readonly getConnectedPlayerIds: () => readonly string[];
   readonly getSpectatorIds: () => readonly string[];
   readonly isPlayerBurrowed: (playerId: string) => boolean;
+  /** Nearest dry point under World collision water; carried items never rest in a river. */
+  readonly resolveDryPoint?: (x: number, y: number) => { x: number; y: number };
   readonly publishMissionProgress: (state: CoopDefenseMissionProgressPresentationState | null) => void;
   readonly broadcastCarryDeliveredFx: (x: number, y: number) => void;
   readonly patchBarrierCells: (changes: readonly { gridX: number; gridY: number; occupied: boolean }[]) => void;
@@ -199,6 +201,7 @@ export class CoopMissionObjectiveComposition {
           runtime.coopDefenseSecondaryObjectiveSystem?.reportCarryDelivered(objectiveId, itemId) ?? false
         ),
         onDeliveredFx: (x, y) => this.options.broadcastCarryDeliveredFx(x, y),
+        resolveDropPoint: this.options.resolveDryPoint,
       })
       : null;
     const roundState = this.options.isHost

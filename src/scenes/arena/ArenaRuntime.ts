@@ -670,6 +670,13 @@ export class ArenaRuntime {
     });
   }
   getTurretDefinitions() { return this.flow.getWorldCombatGameplayBinding()?.getTurretDefinitions() ?? []; }
+  getWorldBridgeRuntime() { return this.flow.getWorldBridgeRuntime(); }
+  /** Carry items as this peer knows them: host owner snapshot or the replicated slice. */
+  getCarryItems(): readonly import('../../types').SyncedCoopDefenseCarryItem[] {
+    return bridge.isHost()
+      ? this.flow.getCoopMissionRuntime()?.coopDefenseCarrySystem?.getSnapshot() ?? []
+      : bridge.getLatestGameState()?.coopDefenseCarry ?? [];
+  }
   getTurretControlState(playerId: string) { return this.flow.getWorldPlayerGameplayRuntime()?.getTurretControlState(playerId); }
 
   getWorldLayout(): ArenaLayout | null {

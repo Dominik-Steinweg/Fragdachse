@@ -8,7 +8,7 @@ export const BRIDGE_DEMOLITION_RULES = {
   /** Burning fuse between planting and the collapse. */
   fuseMs: 5000,
   /** Shift range around the deck rectangle, in px. */
-  interactRangePx: 40,
+  interactRangePx: 56,
   /** Enemy-only blast around the charge point. */
   blastRadiusPx: 112,
   blastDamage: 140,

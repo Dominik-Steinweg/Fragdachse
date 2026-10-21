@@ -13,6 +13,8 @@ import { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
 import { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
 import { WorldBridgeRuntime, type WorldBridgeHostPort } from '../../world/WorldBridgeRuntime';
 import { BridgeRenderer } from '../../effects/bridge/BridgeRenderer';
+import { nearestBridgeDeckPoint } from '../../arena/BridgeGeometry';
+import { resolveBridgeChargeDenial } from '../../systems/BridgeDemolitionRules';
 import { BRIDGE_COLLAPSE_KILLER_ID, BRIDGE_COLLAPSE_SOURCE_ID, BRIDGE_DEMOLITION_RULES } from '../../config/bridges';
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID } from '../../config';
 import {
@@ -197,7 +199,7 @@ export function composeWorldBridges(
       // Ordinary thermal burst: dynamite, not a faction weapon.
       bridge.broadcastExplosionEffect(x, y, blastRadiusPx, undefined, 'default', undefined, BRIDGE_COLLAPSE_SOURCE_ID);
     },
-    relocateGroundItems: () => { /* Ground items exist with explosive cargo (carry); nothing to move yet. */ },
+    relocateGroundItems: (deck) => flow.getCoopMissionRuntime()?.coopDefenseCarrySystem?.relocateGroundItems(deck),
   } : undefined;
   const runtime = new WorldBridgeRuntime({
     bridges,
@@ -208,11 +210,41 @@ export function composeWorldBridges(
   });
   gameplay.bridges = runtime;
   worldRuntime.bind(runtime);
+  if (host) {
+    // Planting re-checks the shared rule on the host before the explosive is used up.
+    bridge.registerBridgeChargeHandler((playerId, request) => {
+      const target = runtime.getBridge(request.bridgeId);
+      const state = runtime.getState(request.bridgeId);
+      const player = ctx.playerManager.getPlayer(playerId);
+      if (!target || !state || !player || bridge.isArenaCountdownActive()) return false;
+      const carry = flow.getCoopMissionRuntime()?.coopDefenseCarrySystem ?? null;
+      const capabilities = flow.getPlayerCapabilities(playerId);
+      const point = nearestBridgeDeckPoint(target, world.metrics, player.x, player.y);
+      const denial = resolveBridgeChargeDenial({
+        phase: state.phase,
+        carryingExplosive: carry?.isCarrying(playerId, 'explosive') ?? false,
+        distancePx: Math.hypot(point.x - player.x, point.y - player.y),
+        allowed: bridge.getWorldParticipation(playerId) === 'interactive'
+          && capabilities.canInteract && capabilities.canUseMissionActions
+          && combatSystem.isAlive(playerId)
+          && !(gameplay.player?.isBurrowed(playerId) ?? false)
+          && !gameplay.player?.getStructureOccupancyState(playerId)
+          && !gameplay.player?.getTurretControlState(playerId),
+      });
+      if (denial || !carry?.consumeCarried(playerId, 'explosive')) return false;
+      return runtime.charge(request.bridgeId, playerId) === 'charged';
+    });
+    worldRuntime.bind({ destroy: () => bridge.registerBridgeChargeHandler(null) });
+  }
   if (presentation) {
-    const renderer = new BridgeRenderer(scene, bridges, world.metrics);
+    const renderer = new BridgeRenderer(scene, bridges, world.metrics, {
+      onFuseCue: (x, y) => ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y, undefined, 0.7),
+    });
     worldRuntime.bind({
       update: () => {
-        if (renderer.sync((id) => runtime.getState(id))) renderers.shadow.setCollapsedBridges(runtime.getCollapsedIds());
+        if (renderer.sync((id) => runtime.getState(id), bridge.getSynchronizedNow())) {
+          renderers.shadow.setCollapsedBridges(runtime.getCollapsedIds());
+        }
       },
       destroy: () => {
         renderer.destroy();

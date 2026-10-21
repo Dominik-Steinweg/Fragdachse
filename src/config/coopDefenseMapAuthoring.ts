@@ -283,12 +283,28 @@ export function getCoopDefenseMapObjectiveZoneWorldRect(
 }
 
 /** Carry-specific data; unlike Destroy/Hold it contains no dormant base references. */
-export interface CoopDefenseMapCarryConfig {
+interface CoopDefenseMapCarryConfigBase {
   readonly spawnZone: CoopDefenseMapObjectiveZoneConfig;
-  readonly deliveryZone: CoopDefenseMapObjectiveZoneConfig;
-  /** Number of independently transportable bottles spawned when the objective activates. */
+  /** Number of independently transportable items spawned when the objective activates. */
   readonly itemCount?: number;
 }
+
+/** Cargo (bottles, crates) counts when it reaches the delivery zone. */
+export interface CoopDefenseMapCargoCarryConfig extends CoopDefenseMapCarryConfigBase {
+  readonly item?: 'cargo';
+  readonly deliveryZone: CoopDefenseMapObjectiveZoneConfig;
+}
+
+/**
+ * Explosives count when a carrier plants them on a standing bridge (Shift at the deck); they
+ * have no delivery zone. The World must author at least as many bridges as the target goal.
+ */
+export interface CoopDefenseMapExplosiveCarryConfig extends CoopDefenseMapCarryConfigBase {
+  readonly item: 'explosive';
+  readonly deliveryZone?: undefined;
+}
+
+export type CoopDefenseMapCarryConfig = CoopDefenseMapCargoCarryConfig | CoopDefenseMapExplosiveCarryConfig;
 
 /** Authored immediate team reward; resolved values keep B11 balancing data-driven. */
 export interface CoopDefenseMapTeamBuffRewardConfig {
@@ -1223,11 +1239,11 @@ export function resolveCoopDefenseMapSecondaryObjectives(
 }
 
 function cloneCarryConfig(config: CoopDefenseMapCarryConfig): CoopDefenseMapCarryConfig {
-  return {
-    spawnZone: { ...config.spawnZone },
-    deliveryZone: { ...config.deliveryZone },
-    ...(config.itemCount === undefined ? {} : { itemCount: config.itemCount }),
-  };
+  const itemCount = config.itemCount === undefined ? {} : { itemCount: config.itemCount };
+  return config.item === 'explosive'
+    ? { item: 'explosive', spawnZone: { ...config.spawnZone }, ...itemCount }
+    : { ...(config.item === undefined ? {} : { item: config.item }), spawnZone: { ...config.spawnZone },
+      deliveryZone: { ...config.deliveryZone }, ...itemCount };
 }
 
 /** Exakte XP-Untergrenze aus endlichem Map-Inhalt; persistenter Druck ist darin nicht enthalten. */
@@ -1430,6 +1446,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     bridges: mapConfig.bridges, spawnZones, krakenHabitat,
     bases, persistentBase, rockWalls, missionProgress, trackMode, trackPosition,
   }, water ?? [], arenaWidthCells, arenaHeightCells);
+  validateExplosiveCarryBridges(mapConfig.mapId, secondaryObjectives, bridges);
   validateWaterSpawnAreas(mapConfig.mapId, encounters, water);
   const normalizedPersistentSpawns = normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases, zonesById);
   validateSpawnZoneUse(mapConfig.mapId, spawnZones, encounters, normalizedPersistentSpawns, boss, water);
@@ -2048,9 +2065,17 @@ function normalizeCarryConfig(
     throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} needs carry zones`);
   }
 
+  if (carry.item !== undefined && carry.item !== 'cargo' && carry.item !== 'explosive') {
+    throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} item must be cargo or explosive`);
+  }
   const spawnZone = normalizeCarryZone(mapId, objectiveId, 'spawnZone', carry.spawnZone, context);
-  const deliveryZone = normalizeCarryZone(mapId, objectiveId, 'deliveryZone', carry.deliveryZone, context);
-  if (zonesOverlap(spawnZone, deliveryZone)) {
+  const explosive = carry.item === 'explosive';
+  if (explosive && carry.deliveryZone !== undefined) {
+    throw new Error(`[coopDefenseMaps] Explosive carry objective ${mapId}:${objectiveId} is planted on bridges, not delivered`);
+  }
+  const deliveryZone = explosive ? undefined
+    : normalizeCarryZone(mapId, objectiveId, 'deliveryZone', (carry as CoopDefenseMapCargoCarryConfig).deliveryZone, context);
+  if (deliveryZone && zonesOverlap(spawnZone, deliveryZone)) {
     throw new Error(`[coopDefenseMaps] Carry secondary objective ${mapId}:${objectiveId} zones must not overlap`);
   }
 
@@ -2067,11 +2092,25 @@ function normalizeCarryConfig(
     );
   }
 
-  return {
-    spawnZone,
-    deliveryZone,
-    itemCount: authoredItemCount,
-  };
+  return deliveryZone
+    ? { spawnZone, deliveryZone, itemCount: authoredItemCount }
+    : { item: 'explosive', spawnZone, itemCount: authoredItemCount };
+}
+
+/** Explosive carry needs bridges to plant on; validated once both are normalized. */
+function validateExplosiveCarryBridges(
+  mapId: string,
+  objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[] | undefined,
+  bridges: readonly import('../types').ArenaBridge[] | undefined,
+): void {
+  for (const objective of objectives ?? []) {
+    if (objective.carry?.item !== 'explosive') continue;
+    const count = bridges?.length ?? 0;
+    if (count === 0) throw new Error(`[coopDefenseMaps] Explosive carry objective ${mapId}:${objective.id} needs bridges`);
+    if ((objective.targetGoal ?? objective.carry.itemCount ?? 1) > count) {
+      throw new Error(`[coopDefenseMaps] Explosive carry objective ${mapId}:${objective.id} targetGoal exceeds the bridge count`);
+    }
+  }
 }
 
 function normalizeCarryZone(

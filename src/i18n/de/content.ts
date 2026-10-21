@@ -326,9 +326,11 @@ export const deContent = {
   "objective.fallback.destroy": "ZIELE ZERSTÖREN",
   "objective.fallback.hold": "STELLUNG HALTEN",
   "objective.fallback.carry": "FRACHT BERGEN",
+  "objective.fallback.demolition": "BRÜCKE SPRENGEN",
   "objective.reward.destroy": "WENIGER GEGNERDRUCK · BONUS-XP",
   "objective.reward.hold": "VERSTÄRKUNG FÜR DEN REST DER MAP",
   "objective.reward.carry": "BESSERE BELOHNUNG BEI SIEG",
+  "objective.reward.demolition": "GEGNER MÜSSEN UMWEGE NEHMEN",
   "objective.status.completed": "ERFÜLLT",
   "objective.status.failed": "GESCHEITERT",
   "objective.status.hold": "HALTEN"
