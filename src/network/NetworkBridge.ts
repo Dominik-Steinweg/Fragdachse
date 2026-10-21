@@ -114,6 +114,8 @@ import {
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
 import { EMPTY_FIRE_CONTROL_SNAPSHOT, type FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import { encodeFireControlSnapshot, decodeFireControlSnapshot } from './fireControlSnapshotCodec';
+import { decodePortalLinkState, encodePortalLinkState } from './coopPortalLinkCodec';
+import type { PortalLinkStateEntry } from '../systems/portal/PortalLinkSystem';
 import { EMPTY_BOMBER_SQUADRON_SNAPSHOT, type BomberSquadronSnapshot } from '../systems/bomberSquadron/BomberSquadronSnapshot';
 import { encodeBomberSquadronSnapshot, decodeBomberSquadronSnapshot } from './bomberSquadronSnapshotCodec';
 import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
@@ -258,6 +260,7 @@ const KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION = 'cso'; // global reliable: Obj
 const KEY_COOP_MISSION_PROGRESS_PRESENTATION = 'cmp'; // global reliable: route/checkpoint snapshot | null
 const KEY_COOP_SPAWN_ZONE_ALERTS = 'csz'; // global reliable: SyncedSpawnZoneAlert[] | null
 const KEY_COOP_SPAWN_PLACES = 'csp'; // global reliable: SyncedSpawnPlaceState | null
+const KEY_COOP_PORTAL_LINKS = 'cpl'; // global reliable: WirePortalLinkState | null (generator portal lifecycle)
 const MAX_COOP_SPAWN_PLACE_IDS = 64;
 const MAX_COOP_SPAWN_ZONE_ALERTS = 16;
 const MAX_COOP_ENCOUNTER_ZONES = 64;
@@ -882,6 +885,11 @@ export class NetworkBridge {
     raw: unknown;
     expectedRoundRevision: number | null;
     value: CoopDefenseMissionProgressPresentationState | null;
+  } | null = null;
+  private portalLinkCache: {
+    raw: unknown;
+    expectedRoundRevision: number | null;
+    value: readonly PortalLinkStateEntry[] | null;
   } | null = null;
   /**
    * Reliable Map-Event-Snapshots werden vom HUD pro Frame gelesen. Der Transport behält bei
@@ -2571,6 +2579,25 @@ export class NetworkBridge {
       ? sanitized
       : null;
     this.missionProgressPresentationCache = { raw, expectedRoundRevision, value };
+    return value;
+  }
+
+  /** Host-only: lifecycle of the generator portal links; null outside a mission with links. */
+  publishCoopDefensePortalLinkState(entries: readonly PortalLinkStateEntry[] | null): void {
+    if (!isHost()) return;
+    const roundRevision = this.getActiveRoundRevision();
+    setState(KEY_COOP_PORTAL_LINKS, entries && roundRevision !== null
+      ? encodePortalLinkState(roundRevision, entries) : null, true);
+  }
+
+  /** Portal links of the current round; a foreign round or malformed snapshot reads as null. */
+  getCoopDefensePortalLinkState(): readonly PortalLinkStateEntry[] | null {
+    const raw = getState(KEY_COOP_PORTAL_LINKS) as unknown;
+    const expectedRoundRevision = this.getActiveRoundRevision();
+    const cached = this.portalLinkCache;
+    if (cached && cached.raw === raw && cached.expectedRoundRevision === expectedRoundRevision) return cached.value;
+    const value = decodePortalLinkState(raw, expectedRoundRevision);
+    this.portalLinkCache = { raw, expectedRoundRevision, value };
     return value;
   }
 

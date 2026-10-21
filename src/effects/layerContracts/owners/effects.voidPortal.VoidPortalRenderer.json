@@ -1,0 +1,75 @@
+{
+  "owner": "effects/voidPortal/VoidPortalRenderer.ts",
+  "notes": [
+    "Draft generator portals (M3): apertures share the translocator aperture depth, implosions the additive transfer flash depth."
+  ],
+  "source": {
+    "blends": [
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.graphics/setDepth/0",
+        "expression": "DEPTH_FX - 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playCollapse/g/setDepth/0",
+        "expression": "DEPTH_FX",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/voidPortal/VoidPortalRenderer.ts:module/this.graphics/setDepth/0",
+      "owner": "effects/voidPortal/VoidPortalRenderer.ts",
+      "component": "module/this.graphics/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        24.8
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.graphics/setDepth/0",
+        "expression": "DEPTH_FX - 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/voidPortal/VoidPortalRenderer.ts:playCollapse/g/setDepth/0",
+      "owner": "effects/voidPortal/VoidPortalRenderer.ts",
+      "component": "playCollapse/g/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playCollapse/g/setDepth/0",
+        "expression": "DEPTH_FX"
+      }
+    }
+  ]
+}

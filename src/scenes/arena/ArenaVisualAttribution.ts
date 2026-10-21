@@ -90,7 +90,7 @@ export const GRAPHICS_FAMILIES = {
   powerUpEffects: ['PowerUpRenderer'],
   projectileShapes: ['ProjectilePresentationRuntime', 'TracerBounceDebugOverlay'],
   captureObjectiveEffects: ['CaptureTheBeerRenderer'],
-  teleportEffects: ['TranslocatorTeleportRenderer'],
+  teleportEffects: ['TranslocatorTeleportRenderer', 'VoidPortalRenderer'],
   tongueLash: ['TongueLashRenderer'],
   restHealTendrils: ['RestHealGpuLayer'],
   turretWebs: ['TurretWebGpuLayer'],

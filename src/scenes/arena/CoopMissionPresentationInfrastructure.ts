@@ -15,6 +15,10 @@ import { KrakenEggFlightView, KrakenRenderer, KrakenSpineFlightView, type Kraken
 import { KrakenIntroRenderer } from '../../effects/kraken/KrakenIntroRenderer';
 import { KrakenPondVoid } from '../../effects/kraken/KrakenPondVoid';
 import { AbyssCameoRenderer } from '../../effects/kraken/AbyssCameoRenderer';
+import { VoidPortalRenderer, type VoidPortalScenario } from '../../effects/voidPortal/VoidPortalRenderer';
+import { resolveCoopDefensePortalLink } from '../../config/coopDefensePortalLinks';
+import type { CoopDefenseMapConfig } from '../../config/coopDefenseMapAuthoring';
+import { resolveCoopMissionPortalEndpoints } from '../../activity/CoopMissionPortalComposition';
 import { KRAKEN_RISE_INTRO } from '../../config/bossIntros';
 import { KRAKEN_BOSS_DEFAULTS } from '../../config/krakenBoss';
 import * as Phaser from 'phaser';
@@ -81,6 +85,8 @@ export class CoopMissionPresentationInfrastructure {
   private krakenPondVoid: KrakenPondVoid | null = null;
   private krakenStage = 0;
   private abyssCameo: AbyssCameoRenderer | null = null;
+  private voidPortals: VoidPortalRenderer | null = null;
+  private voidPortalScenario: { readonly mapConfig: CoopDefenseMapConfig; readonly scenario: VoidPortalScenario } | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.objectiveAnnouncements = new CoopDefenseObjectiveAnnouncement(scene);
@@ -363,6 +369,18 @@ export class CoopMissionPresentationInfrastructure {
           if (config && !this.abyssCameo) this.abyssCameo = new AbyssCameoRenderer(this.scene);
           this.abyssCameo?.sync(config, elapsedMs, input.getWorldMetrics?.() ?? null);
         },
+        syncPortalLinks: (mapConfig, entries, elapsedMs) => {
+          const metrics = input.getWorldMetrics?.();
+          if (this.destroyed || !metrics) return;
+          if (this.voidPortalScenario?.mapConfig !== mapConfig) {
+            this.voidPortalScenario = { mapConfig, scenario: {
+              links: (mapConfig.portalLinks ?? []).map(resolveCoopDefensePortalLink),
+              endpoints: resolveCoopMissionPortalEndpoints(mapConfig, metrics),
+            } };
+          }
+          this.voidPortals ??= new VoidPortalRenderer(this.scene);
+          this.voidPortals.sync(this.voidPortalScenario.scenario, entries, elapsedMs);
+        },
         syncBossIntro: (state, now) => {
           if (this.destroyed) return;
           if (state?.preset === 'kraken-rise' && now >= state.startedAtMs
@@ -460,6 +478,7 @@ export class CoopMissionPresentationInfrastructure {
     this.kraken?.destroy(); this.kraken = null; this.krakenIntro?.destroy(); this.krakenIntro = null;
     this.krakenPondVoid?.destroy(); this.krakenPondVoid = null;
     this.abyssCameo?.destroy(); this.abyssCameo = null;
+    this.voidPortals?.destroy(); this.voidPortals = null; this.voidPortalScenario = null;
     this.krakenResidency?.destroy(); this.krakenResidency = null;
     input.renderers.beer.syncCoopDefenseCarry([]);
     input.clientUpdate.resetEnemyDashVisuals();
@@ -484,6 +503,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.voidHunterSparks.clear();
     input.renderers.voidRift.clear();
     this.kraken?.clear(); this.krakenIntro?.clear(); this.krakenPondVoid?.clear(); this.krakenResidency?.setPhase('dead'); this.krakenStage = 0; this.abyssCameo?.hide();
+    this.voidPortals?.hide();
     input.renderers.voidMeteorIntro.clear();
     this.announcedBossIntroKey = null;
     input.renderers.markers.releaseRound();

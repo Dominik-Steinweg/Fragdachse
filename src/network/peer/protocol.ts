@@ -33,7 +33,8 @@
 // Void danger zones: encounter state names World spawn zones (fronts may be empty) and the
 // required csz key announces spawn zones about to release enemies.
 // Spawn places: the required csp key names spawn zones in use or still to come and lapsed dormant objectives.
-export const PEER_PROTOCOL_VERSION = 41;
+// Portal generators: the cpl key carries the charge/open/collapse lifecycle of generator portal links.
+export const PEER_PROTOCOL_VERSION = 42;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

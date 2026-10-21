@@ -913,6 +913,8 @@ export class ArenaLifecycleCoordinator {
       getGameAudioSystem: () => this.ctx.gameAudioSystem,
       getLightingSystem: () => this.renderers.lighting,
       getPlayerWorldRuntime: () => this.worldRuntime?.players ?? null,
+      getPortalSourcePort: () => this.worldPlayerGameplayRuntime?.getPortalSourcePort() ?? null,
+      publishPortalLinkState: (entries) => bridge.publishCoopDefensePortalLinkState(entries),
       train: this.coopTrainPort,
       isHost: () => bridge.isHost(),
       getHumanPlayerCount: () => Math.max(
@@ -1872,6 +1874,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
+    bridge.publishCoopDefensePortalLinkState(null);
     // Der Seed steht vor der Komposition fest: Dawn-Plaene und Layout derselben Runde teilen ihn.
     const seed = this.nextScenarioSeed ?? Date.now();
     this.nextScenarioSeed = null;
@@ -2253,6 +2256,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
+    bridge.publishCoopDefensePortalLinkState(null);
   }
 
   /** Publiziert den bestehenden Wire-Vertrag eines angewendeten, aktuellen Coop-Abschlusses. */
@@ -2364,6 +2368,7 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
+    bridge.publishCoopDefensePortalLinkState(null);
     bridge.publishRoundState(null);
     bridge.publishRoundResults([]);
     bridge.publishCoopDefenseRespawnBudgetState(null);
@@ -3224,6 +3229,7 @@ export class ArenaLifecycleCoordinator {
     }
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
+    bridge.publishCoopDefensePortalLinkState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     // Die World-Gameplay-Owner sind mit ihrer `WorldRuntime` bereits zerstoert; hier faellt nur
     // noch die Flow-Referenz auf die vergangene Instanz.
