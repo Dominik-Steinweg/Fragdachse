@@ -432,9 +432,9 @@
         ]
       },
       "tiers": [
-        { "tier": 1, "hpMax": 2400, "scrapReward": 0, "visualKey": "dawn-site-portal-generator-t1", "assaultBudget": 40 },
-        { "tier": 2, "hpMax": 3600, "scrapReward": 0, "visualKey": "dawn-site-portal-generator-t2", "assaultBudget": 64 },
-        { "tier": 3, "hpMax": 5000, "scrapReward": 0, "visualKey": "dawn-site-portal-generator-t3", "assaultBudget": 96 }
+        { "tier": 1, "hpMax": 2400, "scrapReward": 20, "visualKey": "dawn-site-portal-generator-t1", "assaultBudget": 40 },
+        { "tier": 2, "hpMax": 3600, "scrapReward": 35, "visualKey": "dawn-site-portal-generator-t2", "assaultBudget": 64 },
+        { "tier": 3, "hpMax": 5000, "scrapReward": 50, "visualKey": "dawn-site-portal-generator-t3", "assaultBudget": 96 }
       ],
       "assaultDelayMs": 0
     }
