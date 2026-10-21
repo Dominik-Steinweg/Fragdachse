@@ -399,7 +399,7 @@ describe('Lobby exit gates local Arena work', () => {
     for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
       'hostPublishDawnRoundScrap',
       'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseSpawnZoneAlerts', 'publishCoopDefenseSpawnPlaceState', 'publishCoopDefenseMapEventPresentationState',
-      'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
+      'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState', 'publishCoopDefensePortalLinkState',
       'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'publishRoundState'] as const) {
       vi.spyOn(bridge, method).mockImplementation(() => {});
     }

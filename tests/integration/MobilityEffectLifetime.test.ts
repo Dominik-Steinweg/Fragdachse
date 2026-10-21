@@ -8,7 +8,7 @@ vi.mock('phaser', async () => ({
 const bridgeMock = vi.hoisted(() => ({
   isHost: () => false, registerTrainBurrowSparksHandler: vi.fn(),
   publishCoopDefenseSecondaryObjectivePresentationState() {},
-  publishCoopDefenseMissionProgressPresentationState() {}, publishCoopDefenseMapEventPresentationState() {},
+  publishCoopDefenseMissionProgressPresentationState() {}, publishCoopDefensePortalLinkState() {}, publishCoopDefenseMapEventPresentationState() {},
 }));
 vi.mock('../../src/network/bridge', () => ({ bridge: bridgeMock }));
 vi.mock('../../src/scenes/arena/rendererWorldTeardown', () => ({

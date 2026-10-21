@@ -15,7 +15,7 @@ const bridgeMock = vi.hoisted(() => ({
   getConnectedPlayers: () => [], getLocalPlayerId: () => 'headless',
   getPlayerHeldItemId: () => null, getPlayerInput: () => null, flushEffects() {},
   publishCoopDefenseSecondaryObjectivePresentationState() {},
-  publishCoopDefenseMissionProgressPresentationState() {}, publishCoopDefenseMapEventPresentationState() {},
+  publishCoopDefenseMissionProgressPresentationState() {}, publishCoopDefensePortalLinkState() {}, publishCoopDefenseMapEventPresentationState() {},
 }));
 vi.mock('../../src/network/bridge', () => ({ bridge: bridgeMock }));
 vi.mock('../../src/scenes/arena/rendererWorldTeardown', () => ({

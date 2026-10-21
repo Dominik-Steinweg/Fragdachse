@@ -2585,7 +2585,7 @@ export class NetworkBridge {
   /** Host-only: lifecycle of the generator portal links; null outside a mission with links. */
   publishCoopDefensePortalLinkState(entries: readonly PortalLinkStateEntry[] | null): void {
     if (!isHost()) return;
-    const roundRevision = this.getActiveRoundRevision();
+    const roundRevision = entries ? this.getActiveRoundRevision() : null;
     setState(KEY_COOP_PORTAL_LINKS, entries && roundRevision !== null
       ? encodePortalLinkState(roundRevision, entries) : null, true);
   }

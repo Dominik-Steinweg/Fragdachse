@@ -222,7 +222,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     vi.spyOn(tracker, 'isRecordingEnabled').mockReturnValue(true);
     for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
       'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseSpawnZoneAlerts', 'publishCoopDefenseSpawnPlaceState', 'publishCoopDefenseMapEventPresentationState',
-      'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
+      'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState', 'publishCoopDefensePortalLinkState',
       'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'hostPublishDawnRoundScrap'] as const) {
       vi.spyOn(bridge, method).mockImplementation(() => {});
     }
@@ -284,7 +284,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     let roundState: any = null;
     for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
       'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseSpawnZoneAlerts', 'publishCoopDefenseSpawnPlaceState', 'publishCoopDefenseMapEventPresentationState',
-      'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
+      'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState', 'publishCoopDefensePortalLinkState',
       'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'hostPublishDawnRoundScrap', 'hostStartRoundParticipants'] as const) {
       vi.spyOn(bridge, method).mockImplementation(() => {});
     }
@@ -332,7 +332,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       const { flow, setPhase } = fixture(host);
       setPhase('ARENA'); flow.resolveConfiguredCoopDefenseMapConfig = () => getCoopDefenseMapConfig(DEFAULT_COOP_DEFENSE_MAP_ID);
       for (const key of ['publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseSpawnZoneAlerts', 'publishCoopDefenseSpawnPlaceState', 'publishCoopDefenseMapEventPresentationState',
-        'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
+        'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState', 'publishCoopDefensePortalLinkState',
         'publishRoundState', 'publishRoundResults'] as const) vi.spyOn(bridge, key).mockImplementation(() => {});
       flow.hostDiscardRound();
       expect(bridge.getGamePhase()).toBe(allowed ? 'LOBBY' : 'ARENA');
@@ -347,7 +347,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       setPhase('ARENA');
       flow.resolveConfiguredCoopDefenseMapConfig = () => getCoopDefenseMapConfig('performance-exit-test');
       for (const key of ['publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseSpawnZoneAlerts', 'publishCoopDefenseSpawnPlaceState', 'publishCoopDefenseMapEventPresentationState',
-        'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
+        'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState', 'publishCoopDefensePortalLinkState',
         'publishRoundState', 'publishRoundResults'] as const) vi.spyOn(bridge, key).mockImplementation(() => {});
       flow.hostDiscardRound(); flow.hostDiscardRound();
       expect(bridge.getGamePhase()).toBe('LOBBY');
