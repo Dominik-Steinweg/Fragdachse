@@ -134,12 +134,13 @@ describe('fire-control portals in the shared portal look', () => {
     const ends = shared.submit.mock.calls.at(-1)![1];
     expect(shared.submit.mock.calls.at(-1)![0]).toBe('fire-control');
     expect(ends.map((end: { radius: number }) => end.radius)).toEqual([13, 23]);
-    expect(ends[0]).toMatchObject({ partner: { x: 500, y: 300 }, ellipse: { angle: 0.5 } });
-    expect(ends[1]).toMatchObject({ partner: { x: 100, y: 120 }, flow: 'out', ground: 1 });
+    expect(ends[0]).toMatchObject({ partner: { x: 500, y: 300 }, ellipse: { angle: 0.5 }, link: 'out' });
+    expect(ends[1]).toMatchObject({ partner: { x: 100, y: 120 }, flow: 'out', link: 'in', ground: 1 });
     renderer.update({ deployments: [portal(2050)] } as any, 2060);
     renderer.update({ deployments: [portal(2050)] } as any, 2080);
-    expect(shared.playTransfer).toHaveBeenCalledTimes(1);
-    expect(shared.playTransfer.mock.calls[0][0]).toMatchObject({ x: 500, y: 300, side: 'exit', dirX: Math.cos(0.5), dirY: Math.sin(0.5) });
+    // One shot: swallowed at the muzzle, released at the exit along the barrel.
+    expect(shared.playTransfer.mock.calls.map(call => call[0].side)).toEqual(['enter', 'exit']);
+    expect(shared.playTransfer.mock.calls[1][0]).toMatchObject({ x: 500, y: 300, dirX: Math.cos(0.5), dirY: Math.sin(0.5) });
     renderer.destroy();
     expect(shared.clear).toHaveBeenCalledWith('fire-control');
   });

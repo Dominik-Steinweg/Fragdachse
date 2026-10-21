@@ -22,8 +22,7 @@ export const PORTAL_PARTICLE_WORDS = 16;
 const CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
 
 export const enum PortalApertureKind { Portal = 0, ReleaseWave = 1, Collapse = 2, SwallowFlare = 3 }
-export const enum PortalMoteKind { SpiralIn = 0, SpiralOut = 1, Direction = 2, Swallow = 3, Release = 4,
-  CometOut = 5, CometIn = 6, Collapse = 7 }
+export const enum PortalMoteKind { SpiralIn = 0, SpiralOut = 1, LinkOut = 2, LinkIn = 3, Swallow = 4, Release = 5, Collapse = 6 }
 
 export interface PortalApertureInstance {
   x: number; y: number; radius: number; extent: number;

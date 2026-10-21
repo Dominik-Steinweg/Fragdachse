@@ -65,8 +65,8 @@ export class VoidPortalTransitionTracker {
 const OPEN_MS = 400;
 
 /**
- * Both ends of a generator link in the shared portal look. Charging ends are still forming; once
- * open, the entry draws matter in and the exit releases it, which reads as the flank's direction.
+ * Both ends of a generator link in the shared portal look. Charging ends are still forming. The
+ * link works both ways, so neither end shows a preferred direction; transfers do.
  */
 export function voidPortalEndViews(view: VoidPortalLinkView): PortalEndView[] {
   const charging = view.phase === 'charging';
@@ -74,7 +74,7 @@ export function voidPortalEndViews(view: VoidPortalLinkView): PortalEndView[] {
   const common = { radius: view.radius, style: 'void' as const, open: 1 - (1 - open) ** 3, ground: 1,
     ...(charging ? { charge: view.chargeFraction } : {}) };
   return [
-    { ...common, key: `${view.id}:a`, x: view.a.x, y: view.a.y, partner: view.b, flow: 'in' },
-    { ...common, key: `${view.id}:b`, x: view.b.x, y: view.b.y, partner: view.a, flow: 'out' },
+    { ...common, key: `${view.id}:a`, x: view.a.x, y: view.a.y, partner: view.b },
+    { ...common, key: `${view.id}:b`, x: view.b.x, y: view.b.y, partner: view.a },
   ];
 }

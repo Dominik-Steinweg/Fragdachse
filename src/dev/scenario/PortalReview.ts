@@ -95,9 +95,9 @@ class PortalReview {
     const flash = Math.max(0, 1 - (now - this.fcFlashAt) / 220);
     const fcOpen = Math.min(1, age / 400);
     views.push({ key: 'fc:exit', x: this.fcExit.x, y: this.fcExit.y, radius: 23, style: 'fire-control', open: fcOpen,
-      partner: this.fcEntries[0], ground: 1, meter: 1 - ((age / 20000) % 1), flash, flow: 'out' });
+      partner: this.fcEntries[0], ground: 1, meter: 1 - ((age / 20000) % 1), flash, flow: 'out', link: 'in' });
     this.fcEntries.forEach((entry, index) => views.push({ key: `fc:entry:${index}`, x: entry.x, y: entry.y, radius: 13,
-      style: 'fire-control', open: fcOpen, partner: this.fcExit, ground: 0, particles: 0.5, flash: index === 0 ? flash : 0,
+      style: 'fire-control', open: fcOpen, partner: this.fcExit, ground: 0, particles: 0.5, flash: index === 0 ? flash : 0, link: 'out',
       ellipse: { angle: entry.angle, aspect: 1.6 }, intensity: index === 1 ? 0.45 : 1, pulse: index === 1 }));
     this.portals.submit(OWNER, views);
   }

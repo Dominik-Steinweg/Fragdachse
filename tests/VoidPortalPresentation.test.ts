@@ -60,10 +60,12 @@ describe('Generator portals in the shared portal look', () => {
   const view = (phase: 'charging' | 'open', chargeFraction: number, openAgeMs = 0): VoidPortalLinkView => ({
     id: 'flank', a: { x: 10, y: 20 }, b: { x: 900, y: 40 }, radius: 28, phase, chargeFraction, openAgeMs });
 
-  it('forms both ends while charging and points each at its partner', () => {
+  it('forms both ends while charging and links each to its partner', () => {
     const [entry, exit] = voidPortalEndViews(view('charging', 0.4));
-    expect(entry).toMatchObject({ key: 'flank:a', style: 'void', charge: 0.4, partner: { x: 900, y: 40 }, flow: 'in' });
-    expect(exit).toMatchObject({ key: 'flank:b', charge: 0.4, partner: { x: 10, y: 20 }, flow: 'out' });
+    expect(entry).toMatchObject({ key: 'flank:a', style: 'void', charge: 0.4, partner: { x: 900, y: 40 } });
+    expect(exit).toMatchObject({ key: 'flank:b', charge: 0.4, partner: { x: 10, y: 20 } });
+    // The link works both ways, so neither end prefers a direction.
+    expect([entry.flow, entry.link, exit.flow, exit.link]).toEqual([undefined, undefined, undefined, undefined]);
   });
 
   it('opens without a charge and shows the far side once open', () => {

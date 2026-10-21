@@ -34,6 +34,11 @@ export interface PortalEndView {
   readonly particles?: number;
   /** Ambient motes spiral into the throat (default) or out of it (one-way exits). */
   readonly flow?: 'in' | 'out';
+  /**
+   * Link stream toward and from the partner. Two-way portals show both (default); one-way
+   * portals only the way things actually travel.
+   */
+  readonly link?: 'both' | 'out' | 'in';
 }
 
 /** A transfer through a portal, seen at one end. `dir` is the world travel direction (unit). */

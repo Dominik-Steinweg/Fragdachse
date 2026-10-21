@@ -15,10 +15,15 @@ export type PortalLightingPort = Pick<LightingSystem, 'setLight' | 'releaseLight
 
 /** Ambient motes per end at full density, by graphics quality. */
 const AMBIENT_MOTES = { high: 18, medium: 11, low: 5 } as const;
-const DIRECTION_MOTES = { high: 5, medium: 3, low: 1 } as const;
+/** Link motes per end and flow (out toward the partner, in from it). */
+const LINK_MOTES = { high: 7, medium: 4, low: 2 } as const;
 const BURST_MOTES = { high: 16, medium: 10, low: 5 } as const;
 const TIME_WRAP_S = 1000;
-const SWALLOW_S = 0.42, RELEASE_S = 0.55, COMET_S = 0.36, COLLAPSE_S = 0.5;
+const SWALLOW_S = 0.42, RELEASE_S = 0.55, COLLAPSE_S = 0.5;
+/** A transfer holds the link fully active this long, then it relaxes back to idle. */
+const LINK_HOLD_S = 0.18, LINK_RISE_S = 0.07, LINK_FALL_S = 0.5;
+/** At full activity link motes run this much faster than idle ones. */
+const LINK_RUSH = 2.6;
 const MAX_EVENTS = 96;
 
 type Quality = keyof typeof AMBIENT_MOTES;
@@ -32,6 +37,13 @@ interface PortalEvent {
   readonly reach: number;
   readonly seed: number;
 }
+/** Per-end link stream: phases advance with activity, so motes speed up without jumping. */
+interface LinkState {
+  phaseOut: number; phaseIn: number;
+  activityOut: number; activityIn: number;
+  kickOut: number; kickIn: number;
+  seen: boolean;
+}
 
 /**
  * The one portal presentation of a World. Translocator pairs, fire-control portals and generator
@@ -43,6 +55,8 @@ export class PortalPresentation {
   private readonly layer: PortalGpuLayer;
   private readonly owners = new Map<string, readonly PortalEndView[]>();
   private readonly events: PortalEvent[] = [];
+  private readonly links = new Map<string, LinkState>();
+  private lastRenderS: number | null = null;
   private readonly lightKeys = new Set<string>();
   private readonly seenLights = new Set<string>();
   private readonly view = createVisibleWorldView();
@@ -87,6 +101,7 @@ export class PortalPresentation {
   clearAll(): void {
     this.owners.clear();
     this.events.length = 0;
+    this.links.clear();
     this.releaseLights();
   }
 
@@ -103,6 +118,9 @@ export class PortalPresentation {
     const strength = Math.max(0.05, Math.min(1, event.strength ?? 1));
     this.pushEvent(event.side === 'enter' ? 'swallow' : 'release', event.x, event.y, event.radius,
       dirX, dirY, style.rim, style.hot, strength, 0);
+    // The end's link stream turns into comets: out of the entry, into the exit.
+    const link = this.linkAt(event.x, event.y);
+    if (link) link[event.side === 'enter' ? 'kickOut' : 'kickIn'] = this.clockS();
     this.pulseLight(event.x, event.y, style, event.radius, strength * (event.side === 'exit' ? 1 : 0.7));
   }
 
@@ -205,12 +223,18 @@ export class PortalPresentation {
     const visible = (x: number, y: number, extent: number) => !view
       || (x + extent >= view.x && y + extent >= view.y && x - extent <= view.right && y - extent <= view.bottom);
     this.seenLights.clear();
+    const clock = this.clockS();
+    const dt = this.lastRenderS === null ? 0 : Math.max(0, Math.min(0.1, clock - this.lastRenderS));
+    this.lastRenderS = clock;
+    for (const link of this.links.values()) link.seen = false;
     for (const [owner, ends] of this.owners) {
       for (const end of ends) {
-        this.light(owner, end);
-        if (visible(end.x, end.y, end.radius * 4 + 16)) this.drawEnd(end, quality);
+        const link = this.advanceLink(this.linkState(`${owner}:${end.key}`), clock, dt);
+        this.light(owner, end, link);
+        if (visible(end.x, end.y, end.radius * 6 + 16)) this.drawEnd(end, quality, link);
       }
     }
+    for (const [key, link] of this.links) if (!link.seen) this.links.delete(key);
     for (let i = this.events.length - 1; i >= 0; i--) {
       const event = this.events[i];
       let age = t - event.t0;
@@ -226,7 +250,7 @@ export class PortalPresentation {
     }
   }
 
-  private drawEnd(end: PortalEndView, quality: Quality): void {
+  private drawEnd(end: PortalEndView, quality: Quality, link: LinkState): void {
     const style = PORTAL_STYLES[end.style];
     const seed = seedOf(end.key);
     const toPartner = end.partner ? { x: end.partner.x - end.x, y: end.partner.y - end.y } : { x: 0, y: 0 };
@@ -255,12 +279,59 @@ export class PortalPresentation {
     m.kind = end.flow === 'out' ? PortalMoteKind.SpiralOut : PortalMoteKind.SpiralIn;
     m.dx = 0; m.dy = 0; m.strength = 0.85 * intensity;
     for (let i = 0; i < ambient; i++) { m.seed = seed * 0.37 + i * 13.17; this.layer.addMote(m); }
+    // The connection: motes stream between the ends in both directions (or the portal's one way);
+    // a transfer turns this end's stream into comets and lets it relax back.
     const dir = charging ? null : portalPartnerDirection(end);
     if (!dir) return;
-    m.kind = PortalMoteKind.Direction; m.dx = dir.x; m.dy = dir.y; m.radius = end.radius;
-    m.strength = 0.75 * intensity; m.size *= 0.85;
-    const directed = Math.max(1, Math.round(DIRECTION_MOTES[quality] * density));
-    for (let i = 0; i < directed; i++) { m.seed = seed * 0.61 + i * 29.3 + 400; this.layer.addMote(m); }
+    const flows = end.link ?? 'both';
+    const count = Math.max(1, Math.round(LINK_MOTES[quality] * Math.max(0.5, density)));
+    m.dx = dir.x; m.dy = dir.y; m.radius = end.radius; m.size *= 1.05;
+    for (const [kind, phase, activity, salt] of [
+      [PortalMoteKind.LinkOut, link.phaseOut, link.activityOut, 400],
+      [PortalMoteKind.LinkIn, link.phaseIn, link.activityIn, 700],
+    ] as const) {
+      if ((kind === PortalMoteKind.LinkOut ? flows === 'in' : flows === 'out')) continue;
+      m.kind = kind; m.t0 = phase; m.life = 1 + LINK_RUSH * activity; m.reach = activity;
+      m.strength = intensity * (0.9 + 0.5 * activity);
+      for (let i = 0; i < count; i++) { m.seed = seed * 0.61 + i * 29.3 + salt; this.layer.addMote(m); }
+    }
+  }
+
+  private clockS(): number { return this.scene.time.now / 1000; }
+
+  private linkState(key: string): LinkState {
+    let link = this.links.get(key);
+    if (!link) {
+      link = { phaseOut: 0, phaseIn: 0, activityOut: 0, activityIn: 0, kickOut: -Infinity, kickIn: -Infinity, seen: true };
+      this.links.set(key, link);
+    }
+    return link;
+  }
+
+  /** Activity eases toward 1 while a transfer is fresh and back to 0 after it; phases follow. */
+  private advanceLink(link: LinkState, clock: number, dt: number): LinkState {
+    const ease = (activity: number, kick: number) => {
+      const target = clock - kick < LINK_HOLD_S ? 1 : 0;
+      const tau = target > activity ? LINK_RISE_S : LINK_FALL_S;
+      return activity + (target - activity) * (1 - Math.exp(-dt / tau));
+    };
+    link.activityOut = ease(link.activityOut, link.kickOut);
+    link.activityIn = ease(link.activityIn, link.kickIn);
+    link.phaseOut += dt * (1 + LINK_RUSH * link.activityOut);
+    link.phaseIn += dt * (1 + LINK_RUSH * link.activityIn);
+    link.seen = true;
+    return link;
+  }
+
+  /** The link state of the end at a point, for transfers reported by position. */
+  private linkAt(x: number, y: number): LinkState | null {
+    let best: { owner: string; end: PortalEndView } | null = null, bestDistance = Infinity;
+    for (const [owner, ends] of this.owners) {
+      const end = findPortalEndAt(ends, x, y);
+      const distance = end ? Math.hypot(end.x - x, end.y - y) : Infinity;
+      if (end && distance < bestDistance) { best = { owner, end }; bestDistance = distance; }
+    }
+    return best ? this.linkState(`${best.owner}:${best.end.key}`) : null;
   }
 
   private drawEvent(event: PortalEvent, quality: Quality): void {
@@ -294,20 +365,10 @@ export class PortalPresentation {
     } else {
       for (let i = 0; i < count; i++) { m.seed = event.seed + i * 3.7; this.layer.addMote(m); }
     }
-    if (!directed || event.kind === 'collapse') return;
-    // The comet carries the direction: it leaves the entry toward the exit and arrives at the
-    // exit from the entry's side.
-    m.kind = event.kind === 'swallow' ? PortalMoteKind.CometOut : PortalMoteKind.CometIn;
-    m.dx = event.kind === 'swallow' ? event.dirX : -event.dirX;
-    m.dy = event.kind === 'swallow' ? event.dirY : -event.dirY;
-    m.life = event.kind === 'swallow' ? COMET_S : COMET_S * 0.8;
-    m.t0 = event.kind === 'swallow' ? event.t0 + SWALLOW_S * 0.35 : event.t0 - COMET_S * 0.8 * 0.15;
-    m.size = Math.max(1.4, m.size * 0.8);
-    m.strength = event.strength;
-    for (let i = 0; i < (quality === 'low' ? 1 : 3); i++) { m.seed = event.seed + 900 + i * 5.1; this.layer.addMote(m); }
+
   }
 
-  private light(owner: string, end: PortalEndView): void {
+  private light(owner: string, end: PortalEndView, link: LinkState): void {
     if (!this.lighting) return;
     const style = PORTAL_STYLES[end.style];
     const charging = end.charge !== undefined;
@@ -317,7 +378,8 @@ export class PortalPresentation {
     this.lightKeys.add(key);
     this.seenLights.add(key);
     this.lighting.setLight(key, 'portal', end.x, end.y, {
-      color: style.light, radiusPx: Math.max(60, end.radius * 4.2), intensity: 0.8 * presence * (1 + (end.flash ?? 0) * 0.6),
+      color: style.light, radiusPx: Math.max(60, end.radius * 4.2),
+      intensity: 0.8 * presence * (1 + (end.flash ?? 0) * 0.6 + Math.max(link.activityOut, link.activityIn) * 0.35),
     });
   }
 

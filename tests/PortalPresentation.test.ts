@@ -4,7 +4,7 @@ vi.mock('phaser', () => ({
 }));
 vi.mock('../src/effects/EffectUtils', () => ({ mixColors: (color: number) => color, registerGraphicsObject: () => {} }));
 vi.mock('../src/graphics/GraphicsQuality', () => ({ getGraphicsQualityProfile: () => ({ level: 'high' }) }));
-import { PortalApertureKind, PortalGpuLayer, type PortalApertureInstance } from '../src/effects/gpu/PortalGpuLayer';
+import { PortalApertureKind, PortalGpuLayer, PortalMoteKind, type PortalApertureInstance, type PortalMoteInstance } from '../src/effects/gpu/PortalGpuLayer';
 import { PortalPresentation } from '../src/effects/portal/PortalPresentation';
 import type { PortalEndView } from '../src/effects/portal/PortalViews';
 import { TerrainColorSnapshot } from '../src/arena/TerrainColorSnapshot';
@@ -20,10 +20,11 @@ function setup() {
   const lighting = { setLight: vi.fn(), releaseLight: vi.fn(), pulse: vi.fn(), getArtificialLightFactor: () => 0 };
   const apertures: PortalApertureInstance[] = [];
   vi.spyOn(PortalGpuLayer.prototype, 'addAperture').mockImplementation(instance => { apertures.push({ ...instance }); return true; });
-  const motes = vi.spyOn(PortalGpuLayer.prototype, 'addMote').mockImplementation(() => true);
+  const moteList: PortalMoteInstance[] = [];
+  const motes = vi.spyOn(PortalGpuLayer.prototype, 'addMote').mockImplementation(instance => { moteList.push({ ...instance }); return true; });
   const presentation = new PortalPresentation(scene as never, lighting as never);
-  const frame = () => { apertures.length = 0; motes.mockClear(); render(); };
-  return { scene, lighting, presentation, apertures, motes, frame };
+  const frame = () => { apertures.length = 0; moteList.length = 0; motes.mockClear(); render(); };
+  return { scene, lighting, presentation, apertures, motes, moteList, frame };
 }
 
 const pairEnds = (): PortalEndView[] => [
@@ -94,5 +95,33 @@ describe('shared portal presentation', () => {
     expect(w.scene.textures.remove).not.toHaveBeenCalled();
     w.presentation.destroy(); w.presentation.destroy();
     expect(w.scene.textures.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('streams link motes both ways and turns the used end into comets that relax back', () => {
+    const w = setup();
+    w.presentation.submit('translocator', pairEnds());
+    const activity = (x: number, kind: PortalMoteKind) =>
+      Math.max(...w.moteList.filter(m => m.x === x && m.kind === kind).map(m => m.reach));
+    w.frame();
+    // Idle: a two-way portal links out and in at both ends, all calm.
+    expect(activity(100, PortalMoteKind.LinkOut)).toBe(0);
+    expect(activity(400, PortalMoteKind.LinkIn)).toBe(0);
+    w.presentation.playFlashAt(100, 100, 0x4fb4ff, 'start');
+    w.presentation.playFlashAt(400, 100, 0x4fb4ff, 'end');
+    for (let i = 0; i < 6; i++) { w.scene.time.now += 16; w.frame(); }
+    expect(activity(100, PortalMoteKind.LinkOut)).toBeGreaterThan(0.6);
+    expect(activity(400, PortalMoteKind.LinkIn)).toBeGreaterThan(0.6);
+    expect(activity(100, PortalMoteKind.LinkIn)).toBe(0);
+    for (let i = 0; i < 150; i++) { w.scene.time.now += 16; w.frame(); }
+    expect(activity(100, PortalMoteKind.LinkOut)).toBeLessThan(0.05);
+  });
+
+  it('shows only the travelled way on one-way portals', () => {
+    const w = setup();
+    w.presentation.submit('fire-control', [{ key: 'muzzle', x: 100, y: 100, radius: 13, style: 'fire-control', open: 1,
+      partner: { x: 400, y: 100 }, link: 'out' }]);
+    w.frame();
+    expect(w.moteList.some(m => m.kind === PortalMoteKind.LinkOut)).toBe(true);
+    expect(w.moteList.some(m => m.kind === PortalMoteKind.LinkIn)).toBe(false);
   });
 });

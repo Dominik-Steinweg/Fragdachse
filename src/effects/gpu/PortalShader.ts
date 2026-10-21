@@ -140,21 +140,6 @@ vec4 aperture(vec2 p) {
     float wisp = vnoise(vec2(a * 2.0 + uTime * 0.8, rn * 6.0 - uTime * 1.6) + seed);
     rgb += vRim * smoothstep(0.8, 1.0, arms) * smoothstep(0.35, 0.85, wisp) * rn * (1.0 - rn) * 1.5 * (1.0 - charging);
   }
-  if (dlen > 1.0 && charging < 0.5) {
-    // Direction wake: very faint flowing chevrons toward the partner, fading within a few radii.
-    float along = dot(p, dir), across = dot(p, vec2(-dir.y, dir.x));
-    float L = R * 3.4;
-    float u = (along - Ro) / L;
-    if (u > 0.0 && u < 1.0) {
-      float w = mix(R * 0.38, R * 0.05, u);
-      float band = exp(-across * across / (w * w));
-      // Chevrons pointing at the partner travel toward it.
-      float stripe = fract(along * 0.06 - abs(across) * 0.045 - uTime * 0.9);
-      float chevron = exp(-pow((stripe - 0.5) / 0.15, 2.0)) * exp(-across * across / (w * w * 0.8));
-      float tail = pow(1.0 - u, 1.5) * smoothstep(0.0, 0.08, u);
-      rgb += vRim * tail * (band * 0.1 + chevron * 0.75) * (0.9 + uNight * 0.2);
-    }
-  }
   if (meter >= 0.0) {
     // Remaining lifetime, clockwise from the top, just outside the rim.
     float on = step(fract((wa + 1.5707963) / TAU), meter);
@@ -224,7 +209,9 @@ varying vec3 vRim, vHot;
 varying float vAlpha, vHotMix;
 ${COMMON}
 vec2 rot(vec2 v, float a) { float c = cos(a), s = sin(a); return vec2(c * v.x - s * v.y, s * v.x + c * v.y); }
-// Position (xy) and alpha (z) of one mote at time t; w = core heat.
+// Position (xy) and alpha (z) of one mote at time t; w = core heat. Link motes (2, 3) run on their
+// end's integrated link phase instead of the clock; 'life' is then their phase rate and 'reach'
+// the end's link activity.
 vec4 mote(float t, float R, float kind, float seed, float t0, vec2 d, float life, float reach) {
   float h1 = hash11(seed), h2 = hash11(seed + 17.0), h3 = hash11(seed + 41.0);
   if (kind < 1.5) {
@@ -237,18 +224,32 @@ vec4 mote(float t, float R, float kind, float seed, float t0, vec2 d, float life
     float alpha = smoothstep(0.0, 0.2, u) * (1.0 - smoothstep(0.8, 1.0, u));
     return vec4(radius * vec2(cos(angle), sin(angle)), alpha, v);
   }
-  if (kind < 2.5) {
-    // Direction motes drift from the rim toward the partner and fade within a few radii.
-    float period = mix(2.4, 3.6, h1);
+  if (kind < 3.5) {
+    // Link motes stream along the connection: out (2) leaves the rim toward the partner, in (3)
+    // arrives from the partner's side and sinks into the throat. A transfer through this end
+    // raises its activity: the stream speeds up, tightens into a beam and stretches into comets.
+    float act = reach;
+    float period = mix(2.2, 3.2, h1);
     float u = fract(t / period + h2);
-    vec2 dd = rot(d, (h3 - 0.5) * 0.8 * (1.0 - 0.5 * u));
-    float dist = R * 0.95 + u * R * mix(1.8, 3.0, h1);
-    vec2 side = vec2(-dd.y, dd.x) * sin(u * 5.0 + seed) * R * 0.07;
-    return vec4(dd * dist + side, smoothstep(0.0, 0.12, u) * pow(1.0 - u, 1.3) * 0.85, 0.45);
+    float span = R * mix(mix(2.4, 3.6, h1), mix(4.4, 5.8, h1), act);
+    float spread = (h3 - 0.5) * mix(0.55, 0.1, act);
+    float along, alpha;
+    if (kind < 2.5) {
+      along = R * 0.9 + u * span;
+      alpha = smoothstep(0.0, 0.1, u) * pow(1.0 - u, 1.2);
+      spread *= 1.0 - 0.4 * u;
+    } else {
+      along = R * 0.2 + (1.0 - u) * (span + R * 0.7);
+      alpha = smoothstep(0.0, 0.25, u) * (1.0 - smoothstep(0.82, 1.0, u));
+      spread *= 0.6 + 0.4 * u;
+    }
+    vec2 dd = rot(d, spread);
+    vec2 side = vec2(-dd.y, dd.x) * sin(u * 5.0 + seed) * R * 0.06 * (1.0 - act);
+    return vec4(dd * along + side, alpha * mix(1.3, 1.65, act), mix(0.55, 1.0, act));
   }
   float age = (t - t0) / max(life, 0.01);
   if (age < 0.0 || age > 1.0) return vec4(0.0, 0.0, -1.0, 0.0);
-  if (kind < 3.5) {
+  if (kind < 4.5) {
     // Swallow: motes converge into the throat with a slight swirl.
     float r0 = R * mix(1.05, 2.0, h1);
     float e = age * age * (3.0 - 2.0 * age);
@@ -256,22 +257,12 @@ vec4 mote(float t, float R, float kind, float seed, float t0, vec2 d, float life
     vec2 pos = rot(start * (1.0 - e), e * 1.3);
     return vec4(pos, sin(age * 3.14159) * 1.1, e);
   }
-  if (kind < 4.5) {
+  if (kind < 5.5) {
     // Release: motes leave the exit in a cone along the travel direction and decelerate.
     vec2 dd = rot(d, (h2 - 0.5) * 2.3);
     float e = 1.0 - pow(1.0 - age, 2.6);
     float dist = R * mix(0.15, 0.35, h3) + e * R * mix(1.1, 2.7, h1);
     return vec4(dd * dist, pow(1.0 - age, 1.4) * 1.1, 1.0 - age);
-  }
-  if (kind < 5.5) {
-    // Departing comet: leaves the rim toward the partner.
-    float e = 1.0 - pow(1.0 - age, 2.0);
-    return vec4(d * (R * 0.6 + e * R * mix(2.6, 3.4, h1)), pow(1.0 - age, 1.2) * 1.3, 1.0);
-  }
-  if (kind < 6.5) {
-    // Arriving comet: comes in over the rim from the partner side into the throat.
-    float e = age * age;
-    return vec4(d * R * mix(3.2, 0.1, e), smoothstep(0.0, 0.2, age) * (1.0 - smoothstep(0.8, 1.0, age)) * 1.3, 1.0);
   }
   // Collapse: everything within the pull radius is drawn in.
   float r0 = mix(R * 0.8, max(reach, R * 1.2), h1);
@@ -284,12 +275,15 @@ void main() {
   float R = inMote.x, kind = inMote.y, seed = inMote.z, t0 = inMote.w;
   vec2 d = inDir.xy; float strength = inDir.z, size = inDir.w;
   float life = inColor.z, reach = inColor.w;
-  vec4 m = mote(uTime, R, kind, seed, t0, d, life, reach);
-  vec4 m2 = mote(uTime + 0.016, R, kind, seed, t0, d, life, reach);
+  bool link = kind > 1.5 && kind < 3.5;
+  // Link motes advance on their end's phase; the derivative uses that phase's own rate.
+  float t = link ? t0 : uTime, dt = link ? life * 0.016 : 0.016;
+  vec4 m = mote(t, R, kind, seed, t0, d, life, reach);
+  vec4 m2 = mote(t + dt, R, kind, seed, t0, d, life, reach);
   vec2 vel = (m2.xy - m.xy) / 0.016;
   float speed = length(vel);
   vec2 ax = speed > 0.001 ? vel / speed : vec2(1.0, 0.0);
-  float stretch = kind > 4.5 && kind < 6.5 ? 5.5 : 1.0 + clamp(speed * 0.006, 0.0, 2.2);
+  float stretch = 1.0 + clamp(speed * 0.006, 0.0, 2.2) + (link ? reach * 4.5 : 0.0);
   vec2 offset = ax * corner.x * size * stretch + vec2(-ax.y, ax.x) * corner.y * size;
   float alive = m.z < 0.0 ? 0.0 : 1.0;
   vec3 p = uViewMatrix * vec3(centre + m.xy + offset * alive, 1.0);

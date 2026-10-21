@@ -198,18 +198,21 @@ export class FireControlRenderer {
         const previous = this.transports.get(key), current = entry.lastTransportAt ?? -1;
         this.transports.set(key, current);
         if (previous !== undefined && previous !== current && entry.mode === 'portal' && age < FLASH_MS) {
+          const dirX = Math.cos(entry.angle), dirY = Math.sin(entry.angle);
+          this.sharedPortals?.playTransfer({ x: entry.x, y: entry.y, radius: ENTRY_RADIUS, style: 'fire-control',
+            side: 'enter', dirX, dirY, strength: 0.3 });
           this.sharedPortals?.playTransfer({ x: d.x, y: d.y, radius: EXIT_RADIUS, style: 'fire-control',
-            side: 'exit', dirX: Math.cos(entry.angle), dirY: Math.sin(entry.angle), strength: 0.4 });
+            side: 'exit', dirX, dirY, strength: 0.4 });
         }
         // Waiting muzzles breathe dimly, local fire closes them almost completely.
         portalEnds.push({ key: `fc:${key}`, x: entry.x, y: entry.y, radius: ENTRY_RADIUS, style: 'fire-control',
-          open: open * (entry.mode === 'local' ? 0.6 : 1), partner: exit, ground: 0, particles: 0.45, flash: f,
+          open: open * (entry.mode === 'local' ? 0.6 : 1), partner: exit, ground: 0, particles: 0.45, flash: f, link: 'out',
           ellipse: { angle: entry.angle, aspect: ENTRY_ASPECT },
           intensity: entry.mode === 'portal' ? 1 : entry.mode === 'waiting' ? 0.5 : 0.18, pulse: entry.mode === 'waiting' });
       }
       const source = d.entries.find(entry => entry.mode === 'portal') ?? d.entries[0];
       portalEnds.push({ key: `fc:${id}:exit`, x: d.x, y: d.y, radius: EXIT_RADIUS, style: 'fire-control', open,
-        partner: source ? { x: source.x, y: source.y } : null, ground: 1, flow: 'out', flash,
+        partner: source ? { x: source.x, y: source.y } : null, ground: 1, flow: 'out', link: 'in', flash,
         meter: clamp((d.expiresAt-now)/Math.max(1,d.expiresAt-d.startedAt)) });
     }
     for (const key of this.transports.keys()) if (!liveTransports.has(key)) this.transports.delete(key);
