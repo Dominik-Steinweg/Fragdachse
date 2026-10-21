@@ -6,7 +6,7 @@ import { DAWN_UNLOCK_AFTER_MAP_ID } from '../../dawn/rules/DawnUnlock';
 import { getDawnPhaseStartMs, resolveDawnPhase } from '../../dawn/rules/DawnPhase';
 import type { DawnPhaseId, DawnSchedule } from '../../config/dawn/dawnContent';
 import type { DevScenario } from './config';
-import { setDevDawnNightModifier } from './dawnNightModifier';
+import { setDevDawnNightModifier, setDevDawnTemplateId } from './dawnNightModifier';
 
 /** Called only after the dev entry has replaced browser storage, before the Ready commit. */
 export function prepareScenarioProgram(config: DevScenario): void {
@@ -15,6 +15,7 @@ export function prepareScenarioProgram(config: DevScenario): void {
     throw new Error('Isolated dev host required');
   }
   setDevDawnNightModifier(config.dawn?.nightModifier);
+  setDevDawnTemplateId(config.dawn?.templateId);
   if (config.dawn) {
     markStoredCoopDefenseMapCompleted(DAWN_UNLOCK_AFTER_MAP_ID);
     if (!updateStoredDawnProgress(draft => { draft.expansionLevel = config.dawn!.threat - 1; })) {

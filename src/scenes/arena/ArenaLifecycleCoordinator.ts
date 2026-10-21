@@ -7,7 +7,7 @@ import { type PersistentBaseHealthReward } from '../../persistentBase/Persistent
 import { resolveDawnExpansionCoreHpBonus } from '../../dawn/economy/DawnExpansionRewards';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
-import { getDevDawnNightModifier } from '../../dev/scenario/dawnNightModifier';
+import { getDevDawnNightModifier, getDevDawnTemplateId } from '../../dev/scenario/dawnNightModifier';
 import { isDawnPortalGeneratorForced } from '../../dawn/debug/dawnDebugOverrides';
 import { resolveDawnNightEnvironment } from '../../dawn/resolution/DawnNightModifierResolution';
 import { isLocalScenarioBotPeer } from '../../network/peer/LocalScenarioSession';
@@ -799,6 +799,12 @@ export class ArenaLifecycleCoordinator {
       renderers,
       getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
       getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
+      getStandingBridges: () => {
+        const bridges = this.worldGameplay?.bridges;
+        if (!bridges) return [];
+        return bridges.getBridges().filter(entry => bridges.isStanding(entry.id))
+          .map(entry => ({ id: entry.id, bounds: bridges.getDeckRect(entry.id)! }));
+      },
     }) ?? null;
     this.coopMissionPorts = createArenaCoopMissionPorts({
       getStructureOccupancyState: id => this.worldPlayerGameplayRuntime?.getStructureOccupancyState(id),
@@ -868,6 +874,7 @@ export class ArenaLifecycleCoordinator {
         if (!this.worldGeometryBinding) throw new Error('Navigation requires materialized World geometry');
         return this.worldGeometryBinding.snapshotMovementGeometry();
       },
+      getCollisionWater: () => this.worldGeometryBinding?.getCollisionWater() ?? null,
       getNavigationObstacleIntegrity: (enemy, id) => {
         const materialization = this.worldRuntime?.materialization;
           if (!materialization) return null;
@@ -1277,6 +1284,9 @@ export class ArenaLifecycleCoordinator {
   getWorldTargetingRuntime(): WorldTargetingRuntime | null { return this.worldGameplay?.targeting ?? null; }
   getWorldGeometryBinding(): WorldGeometryBinding | null { return this.worldGeometryBinding; }
   getWorldTrainRuntime(): WorldTrainRuntime | null { return this.worldTrainRuntime; }
+  getWorldBridgeRuntime(): import('../../world/WorldBridgeRuntime').WorldBridgeRuntime | null {
+    return this.worldGameplay?.bridges ?? null;
+  }
   getWorldProjectileRuntime(): WorldProjectileRuntime | null { return this.worldGameplay?.projectiles ?? null; }
   getWorldObjectMutationRuntime(): import('../../world/WorldObjectMutationRuntime').WorldObjectMutationRuntime | null {
     return this.worldGameplay?.worldMutation ?? null;
@@ -3916,6 +3926,7 @@ function composeHostDawnRoundPlans(seed: number): DawnRoundPlans {
     threat: resolveDawnThreat(dawn.expansionLevel),
     dayNumber: dawn.stats.roundsPlayed + 1,
     nightModifier: isDevScenarioMode() ? getDevDawnNightModifier() : undefined,
+    templateId: isDevScenarioMode() ? getDevDawnTemplateId() : undefined,
     scrapScanner: freezeDawnInfrastructure(dawn).scrapScanner > 0,
     forcePortalGenerator: isDawnPortalGeneratorForced(),
   });

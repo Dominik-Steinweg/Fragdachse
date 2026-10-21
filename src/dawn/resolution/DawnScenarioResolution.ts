@@ -5,6 +5,7 @@ import {
   normalizeCoopDefenseMapConfig,
   type CoopBaseConfig,
   type CoopDefenseMapAuthoringConfig,
+  type CoopDefenseMapCarryConfig,
   type CoopDefenseMapConfig,
   type CoopDefenseMapEncounterConfig,
   type CoopDefenseMapObjectiveZoneConfig,
@@ -179,6 +180,17 @@ export function resolveDawnSites(worldPlan: DawnWorldPlan): readonly ResolvedDaw
 type DawnWorldAuthoring = Pick<CoopDefenseMapAuthoringConfig, 'mapId' | 'bases' | 'siteClearings' | 'portalAnchors'>
   & DawnArenaTemplate['world'];
 
+/**
+ * Carry-Zonen einer Site. Versorgung: Kisten erscheinen unter der Kapsel und werden am Basiskern
+ * abgegeben. Sprengstofflager: je Brücke des Templates eine Dynamitkiste, angebracht an Brücken.
+ */
+export function resolveDawnSiteCarry(template: DawnArenaTemplate, site: ResolvedDawnSite): CoopDefenseMapCarryConfig {
+  const supply = resolveDawnSupplyCarry(template, site);
+  return site.archetype.carryItem === 'explosive'
+    ? { item: 'explosive', spawnZone: supply.spawnZone, itemCount: Math.max(1, template.world.bridges?.length ?? 0) }
+    : supply;
+}
+
 /** Kisten erscheinen unter der Kapsel in der Lichtung; abgegeben wird am Basiskern. */
 export function resolveDawnSupplyCarry(template: DawnArenaTemplate, site: ResolvedDawnSite) {
   const width = template.world.arenaWidthCells ?? Number.MAX_SAFE_INTEGER;
@@ -322,7 +334,7 @@ function composeActivityAuthoring(
         : { start: { type: 'site-activated', siteId: site.siteId } as const, expiresAt: siteClosesAt }),
       // Versorgung: die Kapsel ist Kulisse, Ziel sind die Kisten (Carry-Zonen statt Basis-Targets).
       ...(site.archetype.objectiveType === 'carry'
-        ? { targets: [], carry: resolveDawnSupplyCarry(template, site) }
+        ? { targets: [], carry: resolveDawnSiteCarry(template, site) }
         : { targets: [site.baseId] }),
       ...(site.archetype.objectiveType === 'hold'
         ? {

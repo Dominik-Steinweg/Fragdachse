@@ -258,6 +258,7 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/GaussRenderer.ts:createVisual/core/configureAdditiveImage/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/GaussRenderer.ts:createVisual/arcEmitter/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/GrenadeRenderer.ts:createVisual/glow/configureAdditiveImage/0","deviation":"emission-under-lightmap","finding":"D10"},
+  {"id":"cpu:effects/bridge/BridgeRenderer.ts:module/flier/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/GrenadeRenderer.ts:createVisual/body/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/GrenadeRenderer.ts:createVisual/detail/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/GrenadeRenderer.ts:spawnFirePuff/puff/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},

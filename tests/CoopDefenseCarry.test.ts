@@ -234,3 +234,64 @@ describe('B7 Carry map validation', () => {
     expect(normalized.secondaryObjectives?.[0].rewards).toEqual({ itemMetaRewardOnComplete: true });
   });
 });
+
+describe('Explosive carry (bridge demolition)', () => {
+  const explosive = {
+    id: 'demolition',
+    type: 'carry',
+    start: { type: 'time', atMs: 0 },
+    targets: [],
+    targetGoal: 1,
+    carry: { item: 'explosive', spawnZone: { gridX: 0, gridY: 0, widthCells: 1, heightCells: 1 }, itemCount: 2 },
+  } satisfies ResolvedCoopDefenseMapSecondaryObjectiveConfig;
+
+  function makeExplosiveRound(resolveDropPoint?: (x: number, y: number) => { x: number; y: number }) {
+    const players = [makePlayer('p1')];
+    const playerManager = { getAllPlayers: () => players, getPlayer: (id: string) => players.find((player) => player.id === id) };
+    let carrySystem!: CoopDefenseCarrySystem;
+    const objectiveSystem = new CoopDefenseSecondaryObjectiveSystem([explosive], {
+      onObjectiveActivated: (objectiveId) => carrySystem.activateObjective(objectiveId),
+      onObjectiveCompleted: (objectiveId) => carrySystem.completeObjective(objectiveId),
+    });
+    carrySystem = new CoopDefenseCarrySystem([explosive], playerManager, {
+      onDelivered: (objectiveId, itemId) => objectiveSystem.reportCarryDelivered(objectiveId, itemId),
+      resolveDropPoint,
+    });
+    objectiveSystem.hostUpdate(0, false);
+    return { players, carrySystem, objectiveSystem };
+  }
+
+  it('marks explosives in the snapshot, never delivers them and consumes them on planting', () => {
+    const { players, carrySystem, objectiveSystem } = makeExplosiveRound();
+    expect(carrySystem.getSnapshot().map((item) => [item.id, item.item])).toEqual([
+      ['demolition:charge-0', 'explosive'], ['demolition:charge-1', 'explosive']]);
+    expect(carrySystem.hasItems('explosive')).toBe(true);
+    const crate = carrySystem.getSnapshot()[0]!;
+    players[0]!.setPosition(crate.x, crate.y);
+    carrySystem.hostUpdate(true);
+    expect(carrySystem.isCarrying('p1', 'explosive')).toBe(true);
+    // Walking anywhere never "delivers" an explosive.
+    players[0]!.setPosition(5000, 5000);
+    carrySystem.hostUpdate(true);
+    expect(carrySystem.isCarrying('p1', 'explosive')).toBe(true);
+    expect(carrySystem.consumeCarried('p1', 'cargo')).toBeNull();
+    expect(carrySystem.consumeCarried('p1', 'explosive')).toEqual({ itemId: crate.id, objectiveId: 'demolition' });
+    // The goal of one bridge is met; the spare crate leaves with the completed objective.
+    expect(objectiveSystem.getObjectiveState('demolition')).toBe('completed');
+    expect(carrySystem.getSnapshot()).toEqual([]);
+    expect(carrySystem.consumeCarried('p1', 'explosive')).toBeNull();
+  });
+
+  it('moves dropped and lying explosives out of collision water', () => {
+    const dry = (x: number, y: number) => ({ x: x + 100, y });
+    const { players, carrySystem } = makeExplosiveRound(dry);
+    const crate = carrySystem.getSnapshot()[0]!;
+    players[0]!.setPosition(crate.x, crate.y);
+    carrySystem.hostUpdate(true);
+    carrySystem.dropForPlayer('p1', 40, 40);
+    expect(carrySystem.getSnapshot().find((item) => item.id === crate.id)).toMatchObject({ x: 140, y: 40, state: 'dropped' });
+    const lying = carrySystem.getSnapshot().find((item) => item.id !== crate.id)!;
+    carrySystem.relocateGroundItems({ x: lying.x - 1, y: lying.y - 1, width: 2, height: 2 });
+    expect(carrySystem.getSnapshot().find((item) => item.id === lying.id)!.x).toBe(lying.x + 100);
+  });
+});

@@ -32,6 +32,8 @@ export const DAWN_PIPELINE_ASSETS = [
   DAWN_M3_ASSET_KEYS.broodNest, DAWN_M3_ASSET_KEYS.supplyCapsule, DAWN_M3_ASSET_KEYS.supplyCrate,
   DAWN_M3_ASSET_KEYS.supplyCrateCarried,
   ...[1, 2, 3].map(DAWN_M3_ASSET_KEYS.scrapHeap), ...[1, 2, 3].map(DAWN_M3_ASSET_KEYS.scavengerCamp),
+  // Shared with the bridge kit catalog; its runtime texture key is DAWN_M3_ASSET_KEYS.demolitionCache.
+  'demolition-cache',
 ].map(getPipelineAsset);
 
 /** Ground decals under the site props (Art Direction V1, lossless 512 px runtime exports). */

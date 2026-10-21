@@ -6,9 +6,11 @@ export type ArenaMapGridChangeReason =
   | 'placeable_added'
   | 'placeable_removed'
   | 'placeable_expired'
-  | 'placeables_batch_removed';
+  | 'placeables_batch_removed'
+  /** A bridge deck turned back into water; consumers that cache movement geometry resync. */
+  | 'bridge_collapsed';
 
-export type ArenaMapGridChangeSource = 'static_rock' | 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal';
+export type ArenaMapGridChangeSource = 'static_rock' | 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal' | 'bridge';
 
 export interface ArenaMapGridChangedEvent {
   readonly reason: ArenaMapGridChangeReason;

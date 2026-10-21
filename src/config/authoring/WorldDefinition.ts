@@ -125,6 +125,8 @@ export interface WorldMetricsDefinition {
 
 export interface WorldTerrainDefinition {
   readonly water?: readonly import('../../types').WaterCell[];
+  /** Authored bridges across `water`; their state lives in the World runtime. */
+  readonly bridges?: readonly import('../../types').ArenaBridge[];
   readonly rockFillRatio?: number;
   readonly treeCount?: number;
   readonly treeGroves?: import('../coopDefenseMapAuthoring').CoopDefenseMapTreeGrovesConfig;

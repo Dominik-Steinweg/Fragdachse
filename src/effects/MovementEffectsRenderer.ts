@@ -121,6 +121,8 @@ export class MovementEffectsRenderer {
   }
 
   setTerrainColorSnapshot(snapshot: TerrainColorSnapshot | null): void { this.terrain = snapshot; }
+  /** The shared snapshot, so World features that change the ground (bridge decks) can restamp it. */
+  getTerrainColorSnapshot(): TerrainColorSnapshot | null { return this.terrain; }
 
   /** Other ground-contact VFX share this world-owned material snapshot, including retained worlds. */
   sampleGroundColor(x: number, y: number): number { return this.terrain?.sample(x, y) ?? 0x939080; }

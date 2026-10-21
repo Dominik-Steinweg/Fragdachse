@@ -207,16 +207,35 @@ describe('Dawn M3 site archetypes in composition', () => {
     for (const threat of [1, 2, 6]) {
       for (const plans of plansFor(threat)) {
         for (const site of plans.world.sites) expect(getDawnSiteArchetype(site.archetypeId).minThreat ?? 1).toBeLessThanOrEqual(threat);
-        // The portal generator is one extra site of its own step, never one of the ordinary picks.
-        const ids = plans.world.sites.map(site => site.archetypeId).filter(id => !getDawnSiteArchetype(id).portal);
+        // Portal generators and demolition caches come from their own steps, never from the ordinary picks.
+        const ids = plans.world.sites.map(site => site.archetypeId)
+          .filter(id => !getDawnSiteArchetype(id).portal && id !== 'demolition-cache');
         const eligible = new Set(['wreck', 'extractor', 'brood-nest', 'supply', 'scrap-heaps', 'scavenger']
           .filter(id => (getDawnSiteArchetype(id).minThreat ?? 1) <= threat));
         if (ids.length <= eligible.size) expect(new Set(ids).size).toBe(ids.length);
       }
     }
     const seen = new Set(plansFor(6).flatMap(plans => plans.world.sites.map(site => site.archetypeId))
-      .filter(id => !getDawnSiteArchetype(id).portal));
+      .filter(id => !getDawnSiteArchetype(id).portal && id !== 'demolition-cache'));
     expect([...seen].sort()).toEqual(['brood-nest', 'extractor', 'scavenger', 'scrap-heaps', 'supply', 'wreck']);
+  });
+
+  it('plans exactly one demolition cache on arenas with bridges and none elsewhere', () => {
+    let withBridges = 0;
+    for (const threat of [1, 6]) {
+      for (const plans of plansFor(threat)) {
+        const template = getDawnArenaTemplate(plans.world.templateId);
+        const caches = plans.world.sites.filter(site => site.archetypeId === 'demolition-cache');
+        const bridges = template.world.bridges?.length ?? 0;
+        expect(caches.length, template.id).toBe(bridges > 0 ? 1 : 0);
+        if (bridges > 0) {
+          withBridges++;
+          const slot = template.salvageSlots.find(entry => entry.id === caches[0]!.slotId)!;
+          expect(slot.band).not.toBe('far');
+        }
+      }
+    }
+    expect(withBridges).toBeGreaterThan(0);
   });
 
   it('hides scrap heaps from navigation unless the host owns the scrap scanner', () => {

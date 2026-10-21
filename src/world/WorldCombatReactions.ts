@@ -1,5 +1,6 @@
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../config';
+import { BRIDGE_COLLAPSE_SOURCE_ID } from '../config/bridges';
 import type { KillSourceContext } from '../combat/WorldCombatCore';
 import type { WorldCombatNetworkPort } from './WorldCombatGameplayBinding';
 import type { CombatDamageKind } from '../types';
@@ -101,9 +102,10 @@ export class WorldCombatReactions {
       }
     }
     const allowDrop = o.isActivityActive() && !o.isCoopMission();
-    if (sourceId === 'environment.watchtower_collapse') {
+    if (sourceId === 'environment.watchtower_collapse' || sourceId === BRIDGE_COLLAPSE_SOURCE_ID) {
+      // Environmental falls carry no killer name; the source label tells the story.
       if (victimProfile) o.network.effects.broadcastKillEvent({
-        killerId, killerName: '', killerColor: 0x9b7653, sourceId,
+        killerId, killerName: '', killerColor: sourceId === BRIDGE_COLLAPSE_SOURCE_ID ? 0x6f8f9b : 0x9b7653, sourceId,
         victimId, victimName: victimProfile.name, victimColor: victimProfile.colorHex,
       });
       return;

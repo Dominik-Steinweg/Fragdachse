@@ -437,6 +437,59 @@
         { "tier": 3, "hpMax": 5000, "scrapReward": 50, "visualKey": "dawn-site-portal-generator-t3", "assaultBudget": 96 }
       ],
       "assaultDelayMs": 0
+    },
+    {
+      "id": "demolition-cache",
+      "objectiveType": "carry",
+      "carryItem": "explosive",
+      "selectionWeight": 0,
+      "clearingRadiusCells": 4,
+      "structure": {
+        "role": "outpost",
+        "faction": "friendly",
+        "cells": [
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 0,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          }
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "hpMax": 1200,
+          "scrapReward": 0,
+          "visualKey": "dawn-site-demolition-cache-t1",
+          "assaultBudget": 18
+        },
+        {
+          "tier": 2,
+          "hpMax": 1600,
+          "scrapReward": 0,
+          "visualKey": "dawn-site-demolition-cache-t2",
+          "assaultBudget": 30
+        },
+        {
+          "tier": 3,
+          "hpMax": 2000,
+          "scrapReward": 0,
+          "visualKey": "dawn-site-demolition-cache-t3",
+          "assaultBudget": 44
+        }
+      ],
+      "assaultDelayMs": 3000
     }
   ]
 }

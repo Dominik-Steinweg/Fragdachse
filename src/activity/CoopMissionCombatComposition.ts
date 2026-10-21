@@ -63,6 +63,8 @@ export interface CoopMissionCombatCompositionOptions {
   readonly krakenPorts?: CoopMissionKrakenPorts;
   readonly combatScope?: import('../combat/CombatScope').CombatScope;
   readonly geometryProvider?: () => import('../systems/navigation/NavigationGeometry').NavigationGeometrySnapshot;
+  /** World collision water (authored water minus standing bridge decks); absent in isolated tests. */
+  readonly getCollisionWater?: () => WaterGeometry | null;
   readonly scene: Phaser.Scene;
   /** Already validated against the current WorldDefinition; mapConfig is only its adapter. */
   readonly activity: CoopMissionActivityConfiguration;
@@ -127,7 +129,8 @@ export class CoopMissionCombatComposition {
   private createEnemyManager(): EnemyManager {
     const enemyManager = new EnemyManager(this.options.scene, this.options.enemyConfigs);
     enemyManager.setWorldMetrics(this.options.worldMetrics);
-    enemyManager.setWaterGeometry(new WaterGeometry(this.options.layout.water ?? [], this.options.worldMetrics));
+    if (this.options.getCollisionWater) enemyManager.setWaterGeometryProvider(this.options.getCollisionWater);
+    else enemyManager.setWaterGeometry(new WaterGeometry(this.options.layout.water ?? [], this.options.worldMetrics));
     enemyManager.setVisualSink(this.options.visualSink);
     enemyManager.setLightingSystem(this.options.lighting);
     enemyManager.setEntityBurnGpuController(this.options.entityBurnGpuController);

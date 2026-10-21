@@ -11,6 +11,13 @@ import { CAPTURE_THE_BEER_MODE } from '../../gameModes';
 import { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
 import { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
 import { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
+import { WorldBridgeRuntime, type WorldBridgeHostPort } from '../../world/WorldBridgeRuntime';
+import { BridgeRenderer } from '../../effects/bridge/BridgeRenderer';
+import { stampBridgeTerrainColor } from '../../effects/bridge/BridgeTerrainColor';
+import { nearestBridgeDeckPoint } from '../../arena/BridgeGeometry';
+import { resolveBridgeChargeDenial } from '../../systems/BridgeDemolitionRules';
+import { BRIDGE_COLLAPSE_KILLER_ID, BRIDGE_COLLAPSE_SOURCE_ID, BRIDGE_DEMOLITION_RULES } from '../../config/bridges';
+import { COOP_DEFENSE_BASE_TURRET_OWNER_ID } from '../../config';
 import {
   WorldSupportGameplayRuntime,
 } from '../../world/WorldSupportGameplayRuntime';
@@ -128,6 +135,133 @@ export function composeWorldGeometry(
   worldRuntime.bind(targetingRuntime);
   
   // Eine Basisaenderung trifft alle Felder gemeinsam: Der Coordinator verschickt den Patch
+}
+
+/**
+ * Authored bridges of this World: the state owner on every peer (writer on the host, projection
+ * on clients) and their presentation. Worlds without bridges get neither.
+ */
+export function composeWorldBridges(
+  input: ArenaWorldGameplayCompositionInput,
+  gameplay: ArenaWorldGameplay,
+): void {
+  const { scene, ctx, renderers, flow, worldRuntime, world, layout, presentation } = input;
+  const bridges = layout.bridges ?? [];
+  if (bridges.length === 0) return;
+  const geometry = gameplay.geometry;
+  const combatSystem = gameplay.combatSystem;
+  if (!geometry || !combatSystem) throw new Error('[ArenaWorldComposition] Bridges need World geometry and combat');
+  const enemies = () => (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager) ?? null;
+  const inside = (deck: { x: number; y: number; width: number; height: number }, x: number, y: number) => (
+    x >= deck.x && x < deck.x + deck.width && y >= deck.y && y < deck.y + deck.height
+  );
+  // A planter who left still earns the kills for the team, like a base turret.
+  const credit = (playerId: string | null) => (
+    playerId && bridge.getConnectedPlayers().some((profile) => profile.id === playerId)
+      ? playerId : COOP_DEFENSE_BASE_TURRET_OWNER_ID
+  );
+  const host: WorldBridgeHostPort | undefined = bridge.isHost() ? {
+    now: () => bridge.getSynchronizedNow(),
+    isFuseClockRunning: () => flow.isActivityActive(),
+    listDeckVictims: (deck) => {
+      const players = ctx.playerManager.getAllPlayers()
+        .filter((player) => combatSystem.isAlive(player.id) && inside(deck, player.x, player.y))
+        .map((player) => player.id);
+      const ordinary: string[] = [];
+      const bosses: string[] = [];
+      enemies()?.forEachEnemy((enemy) => {
+        if (!enemy.sprite.active || !inside(deck, enemy.sprite.x, enemy.sprite.y)) return;
+        // Swimmers stay afloat; burrowed or submerged bodies are not on the planks.
+        if (enemy.isAmphibious() || enemy.isBurrowed() || enemy.isSubmerged()) return;
+        (enemy.isBoss() || enemy.isKrakenLandBody() ? bosses : ordinary).push(enemy.id);
+      });
+      return { players, enemies: ordinary, bosses };
+    },
+    killPlayer: (playerId) => combatSystem.killPlayer(playerId, BRIDGE_COLLAPSE_SOURCE_ID, BRIDGE_COLLAPSE_KILLER_ID),
+    killEnemy: (enemyId, creditTo, x, y) => {
+      const enemy = enemies()?.getEnemy(enemyId);
+      if (!enemy) return;
+      const revivedAlly = enemy.faction === 'allied';
+      combatSystem.applyDamage(enemyId, Math.max(9999, enemy.getHp()), true, credit(creditTo),
+        BRIDGE_COLLAPSE_SOURCE_ID, { sourceX: x, sourceY: y }, { allowTeamDamage: revivedAlly });
+    },
+    damageBoss: (enemyId, fraction, creditTo, x, y) => {
+      const enemy = enemies()?.getEnemy(enemyId);
+      if (!enemy) return;
+      combatSystem.applyDamage(enemyId, Math.ceil(enemy.getMaxHp() * fraction), true, credit(creditTo),
+        BRIDGE_COLLAPSE_SOURCE_ID, { sourceX: x, sourceY: y });
+    },
+    detonate: (x, y, creditTo) => {
+      const { blastRadiusPx, blastDamage } = BRIDGE_DEMOLITION_RULES;
+      combatSystem.applyAoeDamage(x, y, blastRadiusPx, blastDamage, credit(creditTo), false, {
+        sourceId: BRIDGE_COLLAPSE_SOURCE_ID, damageKind: 'explosion',
+      });
+      ctx.hostPhysics.applyRadialImpulse(x, y, blastRadiusPx, 260);
+      // Ordinary thermal burst: dynamite, not a faction weapon.
+      bridge.broadcastExplosionEffect(x, y, blastRadiusPx, undefined, 'default', undefined, BRIDGE_COLLAPSE_SOURCE_ID);
+    },
+    relocateGroundItems: (deck) => flow.getCoopMissionRuntime()?.coopDefenseCarrySystem?.relocateGroundItems(deck),
+  } : undefined;
+  const runtime = new WorldBridgeRuntime({
+    bridges,
+    origin: world.metrics,
+    geometry,
+    host,
+    onDestroy: (destroyed) => { if (gameplay.bridges === destroyed) gameplay.bridges = null; },
+  });
+  gameplay.bridges = runtime;
+  worldRuntime.bind(runtime);
+  if (host) {
+    // Planting re-checks the shared rule on the host before the explosive is used up.
+    bridge.registerBridgeChargeHandler((playerId, request) => {
+      const target = runtime.getBridge(request.bridgeId);
+      const state = runtime.getState(request.bridgeId);
+      const player = ctx.playerManager.getPlayer(playerId);
+      if (!target || !state || !player || bridge.isArenaCountdownActive()) return false;
+      const carry = flow.getCoopMissionRuntime()?.coopDefenseCarrySystem ?? null;
+      const capabilities = flow.getPlayerCapabilities(playerId);
+      const point = nearestBridgeDeckPoint(target, world.metrics, player.x, player.y);
+      const denial = resolveBridgeChargeDenial({
+        phase: state.phase,
+        carryingExplosive: carry?.isCarrying(playerId, 'explosive') ?? false,
+        distancePx: Math.hypot(point.x - player.x, point.y - player.y),
+        allowed: bridge.getWorldParticipation(playerId) === 'interactive'
+          && capabilities.canInteract && capabilities.canUseMissionActions
+          && combatSystem.isAlive(playerId)
+          && !(gameplay.player?.isBurrowed(playerId) ?? false)
+          && !gameplay.player?.getStructureOccupancyState(playerId)
+          && !gameplay.player?.getTurretControlState(playerId),
+      });
+      if (denial || !carry?.consumeCarried(playerId, 'explosive')) return false;
+      // The badger throws the charge onto the deck from where it stands.
+      return runtime.charge(request.bridgeId, playerId, { x: player.x, y: player.y }) === 'charged';
+    });
+    worldRuntime.bind({ destroy: () => bridge.registerBridgeChargeHandler(null) });
+  }
+  if (presentation) {
+    const renderer = new BridgeRenderer(scene, bridges, world.metrics, {
+      onFuseCue: (x, y, cue) => cue === 'thrown'
+        ? ctx.gameAudioSystem.playSound('shot_throw', x, y, undefined, 0.8)
+        : ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y, undefined, 0.7),
+    });
+    let stampedSnapshot: unknown = null;
+    worldRuntime.bind({
+      update: () => {
+        const collapseChanged = renderer.sync((id) => runtime.getState(id), bridge.getSynchronizedNow());
+        if (collapseChanged) renderers.shadow.setCollapsedBridges(runtime.getCollapsedIds());
+        // The terrain colour snapshot arrives asynchronously after the World and bakes authored water.
+        const snapshot = renderers.movement.getTerrainColorSnapshot();
+        if (snapshot && (collapseChanged || snapshot !== stampedSnapshot)) {
+          stampBridgeTerrainColor(snapshot, bridges, world.metrics, runtime.getCollapsedIds());
+          stampedSnapshot = snapshot;
+        }
+      },
+      destroy: () => {
+        renderer.destroy();
+        renderers.shadow.setCollapsedBridges(new Set());
+      },
+    });
+  }
 }
 
 /** Der World-Zug: Renderer auf jedem Peer, autoritative Steuerung beim Host. */

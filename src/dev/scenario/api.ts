@@ -1,4 +1,5 @@
 import { runWatchtowerReview, releaseWatchtowerReview } from './WatchtowerReview';
+import { runBridgeReview, releaseBridgeReview, runBridgeCommand } from './BridgeReview';
 import { runInspectorUltimatesReview, inspectorUltimatesStatus, releaseInspectorUltimatesReview } from './InspectorUltimatesReview';
 import type { DevScenarioController } from './controller';
 import { parseScenario, type GridPoint } from './config';
@@ -67,6 +68,8 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       return reloadKrakenDraftAssets(c.source);
     case 'krakenReloadAssets': return reloadKrakenDraftAssets();
     case 'watchtowerReview': return runWatchtowerReview(controller, c);
+    case 'bridgeReview': return runBridgeReview(controller, c);
+    case 'bridge': return runBridgeCommand(controller, c);
     case 'inspectorUltimates': return runInspectorUltimatesReview(controller, c);
     case 'krakenReview': return controller.arrangeKrakenReview(c);
     case 'armageddonReview': {
@@ -318,6 +321,7 @@ export function installScenarioApi(controller: DevScenarioController) {
     stopDraftPolling();
     active = false;
     releaseWatchtowerReview(controller);
+    releaseBridgeReview(controller);
     releaseInspectorUltimatesReview(controller);
     for (const check of waiters) check();
     if (window.devScenario === api) delete window.devScenario;

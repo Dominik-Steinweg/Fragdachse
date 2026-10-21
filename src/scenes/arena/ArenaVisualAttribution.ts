@@ -84,6 +84,7 @@ export const GRAPHICS_FAMILIES = {
     'AttackDroneRenderer',
     'BomberSquadronRenderer',
     'DroneNavLightRenderer',
+    'BridgeRenderer',
   ],
   encounterTelegraphs: ['CoopDefenseEncounterTelegraphRenderer'],
   bossIntro: ['BossIntroGraveyardRenderer', 'GraveFireflySwarm', 'VoidRiftIntroRenderer', 'VoidMeteorIntroRenderer'],

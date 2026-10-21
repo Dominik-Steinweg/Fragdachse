@@ -34,7 +34,7 @@ describe('Coop marker adapters', () => {
   });
   it('leaves an objective that another source marks to that source, even when it starts by time', () => {
     expect(secondaryObjectiveMarkers([entry], [config], [], origin, () => bounds)).toHaveLength(1);
-    expect(secondaryObjectiveMarkers([entry], [config], [], origin, () => bounds, new Set(['a']))).toEqual([]);
+    expect(secondaryObjectiveMarkers([entry], [config], [], origin, () => bounds, [], new Set(['a']))).toEqual([]);
   });
   it('keeps carry-holder and delivery selection semantics, deriving the green ring from the authored zone', () => {
     const carryConfig = { ...config, type: 'carry' as const, targets: [], carry: {

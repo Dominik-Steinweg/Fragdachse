@@ -35,7 +35,9 @@ const SITE_GLYPHS = new Set<string>(MARKER_GLYPH_IDS);
 const siteGlyph = (archetypeId: string): MarkerGlyphId => {
   const glyph = `site-${archetypeId}`;
   if (SITE_GLYPHS.has(glyph)) return glyph as MarkerGlyphId;
-  return archetypeId === 'scavenger' ? 'scavenger' : archetypeId === 'portal-generator' ? 'portal' : 'site-wreck';
+  return archetypeId === 'scavenger' ? 'scavenger'
+    : archetypeId === 'portal-generator' ? 'portal'
+      : archetypeId === 'demolition-cache' ? 'timebomb' : 'site-wreck';
 };
 const tierOf = (tier: number): 1 | 2 | 3 | undefined => tier === 1 || tier === 2 || tier === 3 ? tier : undefined;
 

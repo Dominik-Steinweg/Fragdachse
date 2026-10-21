@@ -77,6 +77,7 @@ export interface CoopMissionCompositionOptions {
   readonly getKrakenPorts?: () => import('./CoopMissionKrakenComposition').CoopMissionKrakenPorts;
   readonly getCombatScope?: () => import('../combat/CombatScope').CombatScope;
   readonly getNavigationGeometry?: () => import('../systems/navigation/NavigationGeometry').NavigationGeometrySnapshot;
+  readonly getCollisionWater?: () => import('../arena/WaterGeometry').WaterGeometry | null;
   readonly getNavigationObstacleIntegrity?: (enemy: import('../entities/EnemyEntity').EnemyEntity, id: string) => number | null;
   readonly scene: Phaser.Scene;
   readonly getWorld: () => WorldRuntimeContext | null;
@@ -217,6 +218,7 @@ export class CoopMissionComposition {
       getBase: (baseId) => baseManager?.getBase(baseId) ?? null,
       obstacleCellProvider,
       geometryProvider: this.options.getNavigationGeometry,
+      getCollisionWater: this.options.getCollisionWater,
       barrierCells: missionProgressConfig?.barriers.flatMap((barrier) => barrier.cells) ?? [],
       nextGenerationId: this.options.nextGenerationId,
       visualSink: this.options.visualSink,
@@ -341,6 +343,7 @@ export class CoopMissionComposition {
       getConnectedPlayerIds: this.options.getConnectedPlayerIds,
       getSpectatorIds: this.options.getSpectatorIds,
       isPlayerBurrowed: this.options.isPlayerBurrowed,
+      resolveDryPoint: (x, y) => this.options.getCollisionWater?.()?.resolveDryPoint(x, y, 8) ?? { x, y },
       publishMissionProgress: this.options.publishMissionProgress,
       onObjectiveCompleted: objectiveId => {
         dawn?.onObjectiveCompleted(objectiveId);

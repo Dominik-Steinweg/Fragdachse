@@ -57,24 +57,24 @@ export const AMBIENT_WILDLIFE = {
   // Sizes are a little above true scale so a flock still reads at play distance.
   // `speed` is the walking pace on the ground (sparrow flocks stand and peck). Sparrows and magpies
   // cruise below the crowns, ravens and owls above them. `beat` is the projected wing-span loss at
-  // the ends of a stroke: small for the slow, deep beats of large birds.
+  // the ends of a stroke, `handFlex` how far the hand folds back on the upstroke (radians).
   sparrow: { size: 7.2, speed: 0, fleeSpeed: 150, cruiseSpeed: 110, alertRadius: 112, turnRate: 6, maxCount: 18,
-    occupancy: .45, flockMin: 4, flockMax: 9, spread: 9, cruiseHeight: 34, climbRate: 70, flapHz: 7, beat: .3,
+    occupancy: .45, flockMin: 4, flockMax: 9, spread: 9, cruiseHeight: 34, climbRate: 70, flapHz: 7, beat: .2, handFlex: .4,
     spotCount: 6, spotRange: [2.5, 7], hopRange: [3, 8], calmSeconds: [25, 70] },
   sparrowShore: { spots: 2, range: 12, chance: .35, drinkSeconds: [6, 14], standOff: 13, lateralSpacing: 4.4 },
   // Each flock member flies its own path: it chases its slot in the loose formation with its own
   // speed and response, so the flock never moves as one rigid body.
   sparrowMembers: { formationSpread: 2.4, wander: 3.2, response: 3.2, accel: 5, speedVariation: .14, turnRate: 9 },
   magpie: { size: 16, speed: 16, fleeSpeed: 120, cruiseSpeed: 92, alertRadius: 104, turnRate: 4, maxCount: 10,
-    occupancy: .15, cruiseHeight: 38, climbRate: 50, flapHz: 3.1, beat: .22,
+    occupancy: .15, cruiseHeight: 38, climbRate: 50, flapHz: 3.1, beat: .12, handFlex: .5,
     spotCount: 6, spotRange: [8, 22], hopRange: [10, 26], calmSeconds: [20, 55],
     roamRadius: 80, walkSeconds: [1.2, 3], pauseSeconds: [.8, 2.4] },
   raven: { size: 24, speed: 14, fleeSpeed: 108, cruiseSpeed: 82, alertRadius: 136, turnRate: 2.6, maxCount: 6,
-    occupancy: .08, cruiseHeight: 118, climbRate: 40, flapHz: 2.1, beat: .16,
+    occupancy: .08, cruiseHeight: 118, climbRate: 40, flapHz: 1.7, beat: .07, handFlex: .55,
     spotCount: 6, spotRange: [8, 24], hopRange: [12, 30], calmSeconds: [25, 70],
     roamRadius: 104, walkSeconds: [1.6, 3.6], pauseSeconds: [1, 3] },
   owl: { size: 13, speed: 88, fleeSpeed: 125, cruiseSpeed: 88, alertRadius: 88, turnRate: 1.4, maxCount: 6,
-    occupancy: .06, cruiseHeight: 124, climbRate: 52, flapHz: 2.6, beat: .2, territory: 36,
+    occupancy: .06, cruiseHeight: 124, climbRate: 52, flapHz: 2.4, beat: .08, handFlex: .6, territory: 36,
     circleChance: .12, diveChance: .15, mantleSeconds: [.5, 1], climbSeconds: 2.4, veerSeconds: 2.5 },
   owlBrownShare: .7,
   birdFlight: {

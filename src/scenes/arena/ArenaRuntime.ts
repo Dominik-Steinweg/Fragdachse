@@ -262,6 +262,7 @@ export class ArenaRuntime {
       getWorldMutationRuntime: () => this.flow.getWorldObjectMutationRuntime(),
       getProjectileRuntime: () => this.flow.getWorldProjectileRuntime(),
       getGeometryBinding: () => this.flow.getWorldGeometryBinding(),
+      getBridgeRuntime: () => this.flow.getWorldBridgeRuntime(),
     });
     this.hostUpdate.setPlayerFramePort({
       getPlayerGameplayRuntime: () => this.flow.getWorldPlayerGameplayRuntime(),
@@ -280,6 +281,7 @@ export class ArenaRuntime {
     });
     this.clientUpdate.setWorldFramePort({
       getShootingRange: () => this.flow.getShootingRange(),
+      getBridgeRuntime: () => this.flow.getWorldBridgeRuntime(),
       getWorldRuntime: () => this.flow.getWorldRuntime(),
       getTargetingRuntime: () => this.flow.getWorldTargetingRuntime(),
     });
@@ -668,6 +670,13 @@ export class ArenaRuntime {
     });
   }
   getTurretDefinitions() { return this.flow.getWorldCombatGameplayBinding()?.getTurretDefinitions() ?? []; }
+  getWorldBridgeRuntime() { return this.flow.getWorldBridgeRuntime(); }
+  /** Carry items as this peer knows them: host owner snapshot or the replicated slice. */
+  getCarryItems(): readonly import('../../types').SyncedCoopDefenseCarryItem[] {
+    return bridge.isHost()
+      ? this.flow.getCoopMissionRuntime()?.coopDefenseCarrySystem?.getSnapshot() ?? []
+      : bridge.getLatestGameState()?.coopDefenseCarry ?? [];
+  }
   getTurretControlState(playerId: string) { return this.flow.getWorldPlayerGameplayRuntime()?.getTurretControlState(playerId); }
 
   getWorldLayout(): ArenaLayout | null {

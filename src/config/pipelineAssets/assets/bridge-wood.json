@@ -1,0 +1,37 @@
+{
+  "id": "bridge-wood",
+  "category": "construction",
+  "gameIds": [
+    "bridge_wood"
+  ],
+  "revision": "bridge-kit-v4",
+  "variant": "standard",
+  "sourceSize": 704,
+  "textureKey": "construction_bridge_wood",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_bridge_wood_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/bridge-wood/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/bridge-wood/sheet.png",
+  "layout": {
+    "frameWidth": 704,
+    "frameHeight": 704,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 708,
+    "height": 708
+  },
+  "hashes": {
+    "idle": "3fa27ad8559005213fa77366dbdad0dc21f71730fe7046d2c0b8f8ad2c2ebc94",
+    "sheet": "c3f6040c55cf2bdc21112e8f6a7d90672b2a0cc8e48789a090268af26cb00952"
+  }
+}
