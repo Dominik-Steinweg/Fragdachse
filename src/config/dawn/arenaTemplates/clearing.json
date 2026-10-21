@@ -1,6 +1,7 @@
 {
   "id": "clearing",
   "world": {
+    "reactiveProps": { "scatter": [{ "kind": "bee_hive", "placement": "chokepoints", "clusters": 3, "clusterSize": [1, 1], "minSpacingCells": 16 }] },
     "arenaWidthCells": 140,
     "arenaHeightCells": 96,
     "rockFillRatio": 0,

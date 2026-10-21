@@ -1,6 +1,7 @@
 {
   "id": "pondland",
   "world": {
+    "reactiveProps": { "scatter": [{ "kind": "spore_puffball", "placement": "chokepoints", "clusters": 3, "clusterSize": [1, 2], "minSpacingCells": 12 }] },
     "arenaWidthCells": 150,
     "arenaHeightCells": 100,
     "rockFillRatio": 0.055,

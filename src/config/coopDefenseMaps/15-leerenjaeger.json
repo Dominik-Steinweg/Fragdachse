@@ -1,4 +1,5 @@
 {
+  "reactiveProps": { "scatter": [{ "kind": "spore_puffball", "placement": "chokepoints", "clusters": 3, "clusterSize": [1, 2], "minSpacingCells": 12, "variant": "void" }] },
   "mapId": "15",
   "arenaWidthCells": 100,
   "arenaHeightCells": 44,

@@ -1,4 +1,5 @@
 {
+  "reactiveProps": { "scatter": [{ "kind": "bee_hive", "placement": "chokepoints", "clusters": 2, "clusterSize": [1, 1], "minSpacingCells": 16 }] },
   "mapId": "17",
   "arenaWidthCells": 112,
   "arenaHeightCells": 43,

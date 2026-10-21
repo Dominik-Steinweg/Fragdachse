@@ -11,6 +11,7 @@ import type { PreviewResult } from '../preview/generate';
 import type { CoopBaseConfig } from '../../../../src/config/coopDefenseMapAuthoring';
 import { at, array, object, set, type JsonObject, type Path } from '../../shared/json';
 import type { MapDocumentSession } from '../document/MapDocumentSession';
+import { reactivePropKindLabel } from './reactivePropLabels';
 import { activeSpawnFronts, FRONT_LABELS, type SpawnFrontSource } from '../../shared/spawns';
 import type { SpawnFront } from '../../../../src/types';
 import { isEditableFireFront } from '../../shared/editPolicy';
@@ -23,7 +24,7 @@ export const LAYERS: Record<string, { label: string; color: string }> = {
   mission: { label: 'Mission / Checkpoints', color: '#ce91e8' }, corridors: { label: 'Korridore', color: '#c4d897' },
   walls: { label: 'Felswände', color: '#e89973' }, tutorial: { label: 'Tutorial-Flächen', color: '#edcd66' }, spawns: { label: 'Spawngebiete', color: '#f3768f' },
   fronts: { label: 'Aktive Spawnfronten', color: '#60d8ed' },
-  props: { label: 'Explosive Fässer', color: '#ff6a3d' },
+  props: { label: 'Reaktive Map-Objekte', color: '#ff6a3d' },
 };
 export interface MapObject {
   id: string; label: string; path: Path; layer: string;
@@ -47,13 +48,13 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft, g
   }
   array(object(draft.reactiveProps).anchors).forEach((anchor, i) => {
     const variant = anchor.variant ? ` · ${String(anchor.variant)}` : '';
-    items.push({ id: `prop:${session.key(['reactiveProps', 'anchors'], i)}`, label: `Fass · ${String(anchor.id)}${variant}`,
+    items.push({ id: `prop:${session.key(['reactiveProps', 'anchors'], i)}`, label: `${reactivePropKindLabel(anchor.kind)} · ${String(anchor.id)}${variant}`,
       path: ['reactiveProps', 'anchors', i], layer: 'props', kind: 'point', x: Number(anchor.gridX), y: Number(anchor.gridY), w: 1, h: 1, radius: .5 });
   });
   // Seeded scatter is only known after generation; the preview shows it read-only.
   (current?.layout.reactiveProps ?? []).forEach((cell, i) => {
     if (cell.anchorId) return;
-    items.push({ id: `prop-scatter:${i}`, label: 'Gestreutes Fass (Vorschau, Seed-abhängig)', path: ['reactiveProps', 'scatter'], layer: 'props', kind: 'point',
+    items.push({ id: `prop-scatter:${i}`, label: `Gestreut: ${reactivePropKindLabel(cell.kind)} (Vorschau, Seed-abhängig)`, path: ['reactiveProps', 'scatter'], layer: 'props', kind: 'point',
       x: cell.gridX, y: cell.gridY, w: 1, h: 1, radius: .5, readonly: true });
   });
   array(draft.powerUps).forEach((p, i) => {

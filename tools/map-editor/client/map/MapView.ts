@@ -94,7 +94,7 @@ export class MapView {
       box.append(sources); return box;
     }
     if (item.layer === 'props') {
-      box.append(item.readonly ? element('p', 'muted', 'Von der Streuung gesetzt; die Position hängt vom Seed ab. Feste Fässer über „Fass-Anker hinzufügen“.')
+      box.append(item.readonly ? element('p', 'muted', 'Von der Streuung gesetzt; die Position hängt vom Seed ab. Feste Objekte über „Anker hinzufügen“.')
         : reactivePropControls(env, item));
       return box;
     }
