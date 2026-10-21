@@ -2077,6 +2077,23 @@ export interface TurretDamageBuff {
 export type AttackDronePhase = 'catchup' | 'patrol' | 'gun' | 'bomb_approach' | 'bomb_run' | 'returning' | 'servicing' | 'docked';
 
 /** Presentation projection only; all flight and attack decisions belong to the host. */
+/**
+ * One bee swarm of a reactive hive (slice `sw`). The swarm is one agent; peers derive the
+ * individual bees from id, phase and centre. `stingSequence` counts stings for local feedback.
+ */
+export interface SyncedBeeSwarm {
+  readonly id: number;
+  readonly hiveIndex: number;
+  readonly phase: 'hunting' | 'dispersed' | 'returning';
+  readonly phaseStartedAt: number;
+  readonly releasedAt: number;
+  readonly x: number;
+  readonly y: number;
+  readonly target: { readonly kind: 'player' | 'enemy'; readonly id: string } | null;
+  readonly hostile: boolean;
+  readonly stingSequence: number;
+}
+
 export interface SyncedAttackDrone {
   readonly id: string;
   readonly stationId: number;

@@ -22,6 +22,7 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import { WorldMgTurretBinding } from './WorldMgTurretBinding';
 import { resolveMgTurretStats } from '../config/mgTurret';
 import { WorldAttackDroneBinding } from './WorldAttackDroneBinding';
+import { WorldBeeSwarmBinding } from './WorldBeeSwarmBinding';
 import { WorldBomberSquadronBinding, readBomberAimTargets } from './WorldBomberSquadronBinding';
 import type { RemoteControlSource } from '../systems/CoopDefenseItemRuntimeSystem';
 import type { MgOwner } from '../systems/MgAttritionRuntime';
@@ -332,6 +333,8 @@ interface CachedProjectileBaseGeometry {
 /** Owns the World binding graph for combat, physics, projectile, turret and decoy systems. */
 export class WorldCombatGameplayBinding implements WorldScopedBinding {
   readonly attackDrone: WorldAttackDroneBinding | null;
+  /** Host: bee swarms released by reactive hives. */
+  readonly beeSwarm: WorldBeeSwarmBinding | null;
   readonly mgTurret: WorldMgTurretBinding | null;
   readonly systems: WorldCombatGameplaySystems | null;
   readonly fireControl: FireControlRuntime | null;
@@ -415,6 +418,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       injector: options.getEnergyInjectorSystem, remoteSources: () => this.getOffensiveConstructionSources(),
       explosionFx: (x, y, radius, sourceId) => options.network.effects.broadcastExplosionEffect(x, y, radius, 0xffae57, 'rocket', undefined, sourceId),
     }) : null;
+    this.beeSwarm = options.network.authority.isHost() ? new WorldBeeSwarmBinding({
+      combat: options.combatSystem, players: options.playerManager, enemies: options.getEnemyManager, fire: options.fireSystem,
+      isPlayerHuntable: id => options.getWorldParticipation(id) === 'interactive'
+        && !(options.getPlayerCombatIntegration()?.state.isBurrowed(id) ?? false),
+    }) : null;
     this.mgTurret = playerCombat && options.network.authority.isHost() ? new WorldMgTurretBinding({
       combat: options.combatSystem, getEnemies: options.getEnemyManager, bases: options.baseManager,
       getMutation: options.getWorldMutation,
@@ -491,6 +499,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.systems?.plasmaSwarmReaction.clear();
     this.mgTurret?.clear();
     this.attackDrone?.clearActivity();
+    this.beeSwarm?.clearActivity();
     this.mgOwnerGroups.clear();
     this.turretBaseFaces.clear();
   }
@@ -507,6 +516,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.destroyed = true;
     this.mgTurret?.destroy();
     this.attackDrone?.destroy();
+    this.beeSwarm?.destroy();
     this.bomberSquadron?.destroy();
     this.projectileBaseGeometry.length = 0;
     this.projectileBaseGeometryGeneration = -1;

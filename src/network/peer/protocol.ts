@@ -36,7 +36,9 @@
 // Bridges: required bg game-state slice (charged/collapsed bridges), World layout bridges.
 // Portal generators: the cpl key carries the charge/open/collapse lifecycle of generator portal links.
 // Reactive props: the required rp key carries explosive-barrel phases (index, phase code, progress byte).
-export const PEER_PROTOCOL_VERSION = 44;
+// Recharging reactive props: rp carries recharge phases and progress; required sw slice (bee swarms of
+// hives, one entry per swarm); sc carries the puffball dust styles.
+export const PEER_PROTOCOL_VERSION = 45;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

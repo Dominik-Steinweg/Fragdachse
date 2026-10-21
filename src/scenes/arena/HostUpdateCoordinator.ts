@@ -445,6 +445,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     if (!countdownActive) this.plagueBinding?.advance(now);
     if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.advanceMgTurrets(now);
     if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.advanceAttackDrones(now, delta);
+    if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.beeSwarm?.advance(now);
     if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.advanceBomberSquadron(now);
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
     if (!countdownActive) this.smokeBinding?.refresh(now);
@@ -536,6 +537,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         switch (effect.kind) {
           case 'explosion': this.pendingStandaloneExplosions.push(effect.request); break;
           case 'dot_zone': this.releaseReactiveSporeCloud(effect); break;
+          case 'swarm': this.combatFramePort?.getCombatGameplayBinding()?.beeSwarm?.release(effect); break;
         }
       }
     }
@@ -1259,6 +1261,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       guardianSpirits,
       repairDrones,
       attackDrones: this.combatFramePort?.getCombatGameplayBinding()?.attackDrone?.system.getSnapshot() ?? [],
+      beeSwarms: this.combatFramePort?.getCombatGameplayBinding()?.beeSwarm?.getSnapshot() ?? [],
       attackDroneBombs: this.combatFramePort?.getCombatGameplayBinding()?.attackDrone?.getBombSnapshot() ?? [],
       slimeTrail,
       burningGround,

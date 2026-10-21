@@ -10,7 +10,8 @@ import { isVoiceChecksum, VOICE_EVENTS } from '../voice/VoicePackage';
 import type { VoicePlayback } from '../voice/VoiceDirector';
 import { encodeBurrowEarthbreak, decodeBurrowEarthbreak } from './burrowEarthbreakCodec';
 import { encodeAttackDrones, decodeAttackDrones, encodeAttackDroneBombs, decodeAttackDroneBombs } from './attackDroneSnapshotCodec';
-import type { SyncedAttackDrone, SyncedAttackDroneBomb } from '../types';
+import { decodeBeeSwarms, encodeBeeSwarms } from './beeSwarmSnapshotCodec';
+import type { SyncedAttackDrone, SyncedAttackDroneBomb, SyncedBeeSwarm } from '../types';
 import { isPlasmaBurnerPulseEvent } from '../combat/plasmaBurner/PlasmaBurnerContracts';
 import { sanitizePersistentBaseLayoutEdit, type PersistentBaseLayoutEdit, type PersistentBaseLayoutEditResult } from '../persistentBase/PersistentBaseLayoutEdit';
 import { isPersistentBaseAreaStage, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
@@ -433,6 +434,8 @@ export interface GameState extends KrakenSnapshotPatch {
   repairDrones: SyncedRepairDrone[];
   attackDrones?: SyncedAttackDrone[];
   attackDroneBombs?: SyncedAttackDroneBomb[];
+  /** Bee swarms of reactive hives (`sw`); an absent delta key means no swarm. */
+  beeSwarms?: SyncedBeeSwarm[];
   slimeTrail: SyncedSlimeTrailSnapshot;
   targetVulnerabilities: SyncedTargetVulnerability[];
   ak47StrategicTargets: SyncedAk47StrategicTarget[];
@@ -486,6 +489,8 @@ interface OutboundGameState extends KrakenSnapshotPatch {
   repairDrones: SyncedRepairDrone[];
   attackDrones?: SyncedAttackDrone[];
   attackDroneBombs?: SyncedAttackDroneBomb[];
+  /** Bee swarms of reactive hives (`sw`); an absent delta key means no swarm. */
+  beeSwarms?: SyncedBeeSwarm[];
   slimeTrail: SyncedSlimeTrailSnapshot;
   targetVulnerabilities: SyncedTargetVulnerability[];
   ak47StrategicTargets: SyncedAk47StrategicTarget[];
@@ -3478,6 +3483,7 @@ export class NetworkBridge {
     if (state.repairDrones.length > 0) payload.rd = state.repairDrones;
     if (state.attackDrones?.length) payload.ad = encodeAttackDrones(state.attackDrones);
     if (state.attackDroneBombs?.length) payload.adb = encodeAttackDroneBombs(state.attackDroneBombs);
+    if (state.beeSwarms?.length) payload.sw = encodeBeeSwarms(state.beeSwarms);
     if (state.slimeTrail.cells.length > 0 || state.slimeTrail.affectedEnemies.length > 0) {
       payload.sl = encodeSlimeTrailSnapshot(state.slimeTrail);
     }
@@ -3600,6 +3606,7 @@ export class NetworkBridge {
       rd: state.repairDrones,
       ad: encodeAttackDrones(state.attackDrones ?? []),
       adb: encodeAttackDroneBombs(state.attackDroneBombs ?? []),
+      sw: encodeBeeSwarms(state.beeSwarms ?? []),
       sl: encodeSlimeTrailSnapshot(state.slimeTrail),
       vu: encodeTargetVulnerabilities(state.targetVulnerabilities),
       st: state.ak47StrategicTargets,
@@ -3762,6 +3769,7 @@ export class NetworkBridge {
       repairDrones: (raw.rd as SyncedRepairDrone[] | undefined) ?? [],
       attackDrones: decodeAttackDrones(raw.ad),
       attackDroneBombs: decodeAttackDroneBombs(raw.adb),
+      beeSwarms: decodeBeeSwarms(raw.sw),
       slimeTrail: decodeSlimeTrailSnapshot(raw.sl),
       targetVulnerabilities: decodeTargetVulnerabilities(raw.vu),
       ak47StrategicTargets: (raw.st as SyncedAk47StrategicTarget[] | undefined) ?? [],
