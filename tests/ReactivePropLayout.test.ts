@@ -71,4 +71,24 @@ describe('reactive prop placement', () => {
       anchors: [], scatter, rng: rng(5) });
     expect(result.kind === 'placed' && result.cells.length).toBeGreaterThan(0);
   });
+
+  it('puts strategic groups beside the chokepoint of an enemy route, keeping the route open', () => {
+    // A wall across the arena with one three-cell gap; enemies come from the west edge to a goal in the east.
+    const cols = 40, rows = 21;
+    const blocked = Array.from({ length: rows }, (_, gy) => Array.from({ length: cols }, (_, gx) => gx === 20 && (gy < 9 || gy > 11)));
+    const west = Array.from({ length: rows }, (_, gy) => ({ gridX: 1, gridY: gy }));
+    const result = placeReactiveProps({ cols, rows, blocked, isReserved: () => false, anchors: [],
+      scatter: [{ kind: 'explosive_barrel', placement: 'chokepoints', clusters: 1, clusterSize: [2, 2], minSpacingCells: 8 }],
+      routes: { sourceGroups: [west], goals: [{ gridX: 37, gridY: 10 }] }, rng: rng(9) });
+    expect(result.kind).toBe('placed');
+    if (result.kind !== 'placed') return;
+    expect(result.cells.length).toBeGreaterThan(0);
+    for (const cell of result.cells) {
+      // At the wall next to the gap, never inside it.
+      expect(Math.abs(cell.gridX - 20)).toBeLessThanOrEqual(4);
+      expect(cell.gridX).not.toBe(20);
+    }
+    for (let gy = 9; gy <= 11; gy++) expect(blocked[gy][20]).toBe(false);
+    expect(connected(blocked)).toBe(true);
+  });
 });

@@ -403,7 +403,8 @@ export function composeWorldCombatGameplay(
     projectileRuntime.getPresentationRuntime(),
   );
   const reactiveProps = worldRuntime.materialization?.reactiveProps;
-  if (reactiveProps) worldRuntime.presentationFrame?.bindReactiveProps(reactiveProps, input.renderers?.entityBurnGpu ?? null);
+  if (reactiveProps) worldRuntime.presentationFrame?.bindReactiveProps(reactiveProps, input.renderers?.entityBurnGpu ?? null,
+    (id, attack, now, visible) => ctx.effectSystem.syncEnemyZone(id, attack, now, visible));
   worldRuntime.presentationFrame?.bindBomberSquadron(() => bridge.getBomberSquadronSnapshot(), {
     // Same warm carpet burst as the attack-drone bombs; it is derived locally, never broadcast.
     explode: (x, y, radius) => ctx.effectSystem.playExplosionEffect(x, y, radius, 0xffae57, 'rocket'),

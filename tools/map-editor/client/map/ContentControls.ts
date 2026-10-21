@@ -90,14 +90,18 @@ export function addReactivePropControls(env: EditorEnvironment): HTMLElement {
     env.changed();
   }));
   if (scatter.length > 0) {
-    box.append(numberField(env, 'Gestreute Gruppen', ['reactiveProps', 'scatter', 0, 'clusters'], { min: 0, max: 64 }),
+    box.append(selectField('Platzierung', String(scatter[0].placement ?? 'open'), [
+      { value: 'chokepoints', label: 'Strategisch: Engstellen auf Gegnerrouten' },
+      { value: 'open', label: 'Frei auf offenem Boden' },
+    ], value => { env.session.change(['reactiveProps', 'scatter', 0, 'placement'], value === 'open' ? undefined : value); env.changed(); }),
+    numberField(env, 'Gruppen', ['reactiveProps', 'scatter', 0, 'clusters'], { min: 0, max: 64 }),
       numberField(env, 'Mindestabstand (Zellen)', ['reactiveProps', 'scatter', 0, 'minSpacingCells'], { min: 2, max: 64 }),
-      element('p', 'muted', 'Gruppen aus 1–3 Fässern auf freiem Boden; Begehbarkeit, Basen, Gleise und Podeste bleiben frei. Positionen zeigt die Vorschau.'),
+      element('p', 'muted', 'Strategisch: 2–3 Fässer an der Wand neben Engstellen zwischen Spawnquellen und Basis; die Route bleibt mindestens drei Zellen breit. Frei: Gruppen auf offenem Boden. Positionen hängen vom Seed ab und zeigt die Vorschau.'),
       button('Streuung entfernen', () => { env.session.change(['reactiveProps', 'scatter'], undefined); env.changed(); }, 'danger'));
   } else {
-    box.append(button('Seeded Streuung aktivieren', () => {
+    box.append(button('Strategische Fässer aktivieren', () => {
       env.session.transact('Fass-Streuung anlegen', next => {
-        object(next.reactiveProps ??= {}).scatter = [{ kind: BARREL, clusters: 4, clusterSize: [1, 3], minSpacingCells: 10 }];
+        object(next.reactiveProps ??= {}).scatter = [{ kind: BARREL, placement: 'chokepoints', clusters: 3, clusterSize: [2, 3], minSpacingCells: 12 }];
       }); env.changed();
     }));
   }

@@ -7,12 +7,13 @@ import { emissiveAlpha } from '../EmissiveScale';
 import type { EntityBurnGpuController } from '../EntityBurnGpuController';
 import { EntityBurnRenderer } from '../EntityBurnRenderer';
 import type { LightingSystem } from '../LightingSystem';
-import { REACTIVE_PROP_VISUAL, resolveReactivePropVisual } from './ReactivePropVisualModel';
+import type { EnemyZoneAttack } from '../EnemyClawRenderer';
+import { REACTIVE_PROP_VISUAL, resolveReactivePropPose, resolveReactivePropVisual, resolveReactivePropWarning,
+  type ReactivePropPose } from './ReactivePropVisualModel';
 import { getReactivePropVariantOverride } from './ReactivePropVariantOverride';
 
 const GLOW_TEXTURE = 'reactive_prop_glow';
 const SHARD_TEXTURE = 'reactive_prop_shard';
-const RING_TEXTURE = 'reactive_prop_warning_ring';
 const SHARD_COUNT = 7;
 const SHARD_LIFETIME_MS = 650;
 /** Brand sitzt auf dem Deckel, nicht auf dem Boden daneben. */
@@ -20,11 +21,19 @@ const BURN_BODY_PX = 18;
 /** Flammen züngeln aus dem Deckel nach oben, statt das Schild zu überdecken. */
 const BURN_OFFSET_Y = -5;
 
+/** Gefahrenzone im gemeinsamen Gegner-Angriffsmuster (rote, sich füllende Fläche bis zum Treffer). */
+export type ReactivePropZoneSink = (id: string, attack: EnemyZoneAttack | null, now: number, visible: boolean) => void;
+
 interface PropVisual {
   sprite: Phaser.GameObjects.Image;
   glow: Phaser.GameObjects.Image | null;
-  ring: Phaser.GameObjects.Image | null;
   burn: EntityBurnRenderer | null;
+  pose: ReactivePropPose;
+  zone: EnemyZoneAttack | null;
+  zoneRevision: number;
+  /** Seit wann der replizierte Zustand (Phase + Anteil) unverändert gilt, synchronisierte Uhr. */
+  observedKey: string;
+  observedSince: number;
   textureKey: string;
   lastProgress: number;
   flashUntil: number;
@@ -51,20 +60,21 @@ export class ReactivePropRenderer {
     private readonly scene: Phaser.Scene,
     private readonly lighting: LightingSystem | null,
     private readonly burnGpu: EntityBurnGpuController | null,
+    private readonly zoneSink: ReactivePropZoneSink | null = null,
   ) {
     fillRadialGradientTexture(scene.textures, GLOW_TEXTURE, 64, [
       [0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.6)'], [0.65, 'rgba(255,255,255,0.16)'], [1, 'rgba(255,255,255,0)'],
     ]);
     ensureShardTexture(scene);
-    ensureRingTexture(scene);
   }
 
-  sync(runtime: ReactivePropRuntime, nowMs: number): void {
+  /** `nowMs` ist die lokale Darstellungsuhr, `syncNow` die synchronisierte Uhr der Angriffs-Telegraphen. */
+  sync(runtime: ReactivePropRuntime, cells: readonly import('../../types').ReactivePropCell[], nowMs: number, syncNow: number): void {
     if (this.destroyed) return;
     const artificial = this.lighting?.getArtificialLightFactor() ?? 0;
     runtime.forEachPresentationState(state => {
       const position = runtime.getPosition(state.obstacleId);
-      if (position) this.syncProp(state, position.x, position.y, nowMs, artificial);
+      if (position) this.syncProp(state, cells, position.x, position.y, nowMs, syncNow, artificial);
     });
     this.advanceShards(nowMs);
   }
@@ -74,20 +84,22 @@ export class ReactivePropRenderer {
     this.destroyed = true;
     for (const key of this.lightKeys) this.lighting?.releaseLight(key, { immediate: true });
     this.lightKeys.clear();
-    for (const visual of this.props.values()) this.disposeVisual(visual);
+    for (const [index, visual] of this.props) { this.disposeVisual(visual); this.releaseZone(index, visual); }
     this.props.clear();
     for (const shard of this.shards) shard.image.destroy();
     this.shards.length = 0;
   }
 
-  private syncProp(state: ReactivePropPresentationState, x: number, y: number, nowMs: number, artificial: number): void {
-    const visualState = resolveReactivePropVisual(state.phase, state.progress, nowMs);
+  private syncProp(state: ReactivePropPresentationState, cells: readonly import('../../types').ReactivePropCell[],
+    cellX: number, cellY: number, nowMs: number, syncNow: number, artificial: number): void {
+    const visualState = resolveReactivePropVisual(state.phase, state.progress);
     let visual = this.props.get(state.index);
     const lightKey = `reactive-prop:${state.index}`;
     if (!visualState.visible) {
       if (visual) {
-        if (visual.seenAlive) this.playDestruction(visual, x, y, nowMs);
+        if (visual.seenAlive) this.playDestruction(visual, cellX + visual.pose.offsetX, cellY + visual.pose.offsetY, nowMs);
         this.disposeVisual(visual);
+        this.releaseZone(state.index, visual);
         this.props.delete(state.index);
       }
       this.releaseLight(lightKey);
@@ -98,12 +110,14 @@ export class ReactivePropRenderer {
     const textureKey = this.scene.textures.exists(variant.textureKey)
       ? variant.textureKey : ensurePlaceholderTexture(this.scene, variantId);
     if (!visual) {
+      const pose = resolveReactivePropPose(state.index, cells);
       visual = {
-        sprite: this.scene.add.image(x, y, textureKey).setOrigin(0.5).setDepth(DEPTH.ROCKS + 0.2),
-        glow: null, ring: null, burn: null, textureKey, lastProgress: state.progress, flashUntil: 0, seenAlive: false,
+        sprite: this.scene.add.image(cellX, cellY, textureKey).setOrigin(0.5).setDepth(DEPTH.ROCKS + 0.2).setRotation(pose.rotation),
+        glow: null, burn: null, pose, zone: null, zoneRevision: 0, observedKey: '', observedSince: syncNow, textureKey, lastProgress: state.progress, flashUntil: 0, seenAlive: false,
       };
       this.props.set(state.index, visual);
     }
+    const x = cellX + visual.pose.offsetX, y = cellY + visual.pose.offsetY;
     visual.seenAlive = true;
     if (visual.textureKey !== textureKey) { visual.sprite.setTexture(textureKey); visual.textureKey = textureKey; }
     const size = state.kind.visual.displaySizePx;
@@ -116,15 +130,7 @@ export class ReactivePropRenderer {
     visual.lastProgress = state.progress;
     if (nowMs < visual.flashUntil) visual.sprite.setTint(REACTIVE_PROP_VISUAL.hitFlashTint).setTintMode(Phaser.TintModes.ADD);
     else visual.sprite.clearTint();
-    // Telegraph über der Lightmap: ein roter Ring, der sich mit sinkenden HP zusammenzieht.
-    if (visualState.warning > 0) {
-      visual.ring ??= this.scene.add.image(x, y, RING_TEXTURE).setDepth(DEPTH_LIGHTING + 0.1)
-        .setTint(REACTIVE_PROP_VISUAL.warningColor);
-      visual.ring.setVisible(true).setPosition(x, y).setDisplaySize(size * visualState.warningScale, size * visualState.warningScale)
-        .setAlpha(visualState.warning);
-    } else {
-      visual.ring?.setVisible(false);
-    }
+    this.syncZone(state, visual, cellX, cellY, syncNow);
 
     if (visualState.burnStacks > 0) {
       if (!visual.burn) {
@@ -188,10 +194,40 @@ export class ReactivePropRenderer {
     }
   }
 
+  /**
+   * Die bekannte rote Gefahrenzone der Gegner-Angriffe über dem Explosionsradius: Sie füllt sich bis
+   * zum geschätzten Knall. Verschiebt ein neuer Treffer den Knall, wird sie neu angesetzt.
+   */
+  private syncZone(state: ReactivePropPresentationState, visual: PropVisual, x: number, y: number, syncNow: number): void {
+    if (!this.zoneSink) return;
+    const observedKey = `${state.phase}:${state.progress}`;
+    if (visual.observedKey !== observedKey) { visual.observedKey = observedKey; visual.observedSince = syncNow; }
+    const warning = resolveReactivePropWarning(state.kind, state.phase, state.progress, visual.observedSince);
+    if (!warning) {
+      if (visual.zone && syncNow >= visual.zone.endsAt) this.releaseZone(state.index, visual);
+      else if (visual.zone) this.zoneSink(`reactive-prop:${state.index}`, visual.zone, syncNow, true);
+      return;
+    }
+    const c = REACTIVE_PROP_VISUAL;
+    if (!visual.zone || Math.abs(visual.zone.hitAt - warning.hitAt) > c.retimeToleranceMs) {
+      visual.zone = {
+        attackId: `reactive-prop:${state.index}:${++visual.zoneRevision}`, x, y, radius: state.kind.effect.explosion.radius,
+        startedAt: warning.hitAt - warning.durationMs, strikeAt: warning.hitAt - c.strikeLeadMs,
+        hitAt: warning.hitAt, endsAt: warning.hitAt + c.lingerMs,
+      };
+    }
+    this.zoneSink(`reactive-prop:${state.index}`, visual.zone, syncNow, true);
+  }
+
+  private releaseZone(index: number, visual: PropVisual): void {
+    if (!visual.zone) return;
+    visual.zone = null;
+    this.zoneSink?.(`reactive-prop:${index}`, null, 0, false);
+  }
+
   private disposeVisual(visual: PropVisual): void {
     visual.sprite.destroy();
     visual.glow?.destroy();
-    visual.ring?.destroy();
     visual.burn?.destroy();
   }
 
@@ -201,14 +237,6 @@ export class ReactivePropRenderer {
   }
 }
 
-function ensureRingTexture(scene: Phaser.Scene): void {
-  if (scene.textures.exists(RING_TEXTURE)) return;
-  const g = scene.make.graphics({ x: 0, y: 0 }, false);
-  g.lineStyle(7, 0xffffff, 0.35).strokeCircle(32, 32, 27);
-  g.lineStyle(3, 0xffffff, 1).strokeCircle(32, 32, 27);
-  g.generateTexture(RING_TEXTURE, 64, 64);
-  g.destroy();
-}
 
 function ensureShardTexture(scene: Phaser.Scene): void {
   if (scene.textures.exists(SHARD_TEXTURE)) return;

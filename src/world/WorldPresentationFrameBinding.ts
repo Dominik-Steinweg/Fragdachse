@@ -1,5 +1,6 @@
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
-import { ReactivePropRenderer } from '../effects/reactiveProps/ReactivePropRenderer';
+import { ReactivePropRenderer, type ReactivePropZoneSink } from '../effects/reactiveProps/ReactivePropRenderer';
+import { resolveReactivePropPose } from '../effects/reactiveProps/ReactivePropVisualModel';
 import type { ReactivePropRuntime } from './reactiveProps/ReactivePropRuntime';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { FireControlRenderer, type FireControlOriginalVisual } from '../effects/fireControl/FireControlRenderer';
@@ -283,14 +284,16 @@ export class WorldPresentationFrameBinding {
 
   private reactiveProps: ReactivePropRuntime | null = null;
   private reactivePropBurnGpu: EntityBurnGpuController | null = null;
+  private reactivePropZoneSink: ReactivePropZoneSink | null = null;
   private reactivePropRenderer: ReactivePropRenderer | null = null;
 
-  /** Bound once by World composition; the frame owner owns the barrel sprites, glow and burn. */
-  bindReactiveProps(runtime: ReactivePropRuntime, burnGpu: EntityBurnGpuController | null): void {
+  /** Bound once by World composition; the frame owner owns the barrel sprites, glow, burn and warning zone. */
+  bindReactiveProps(runtime: ReactivePropRuntime, burnGpu: EntityBurnGpuController | null, zoneSink: ReactivePropZoneSink | null): void {
     if (this.destroyed) return;
     if (this.reactiveProps) throw new Error('Reactive prop presentation is already bound');
     this.reactiveProps = runtime;
     this.reactivePropBurnGpu = burnGpu;
+    this.reactivePropZoneSink = zoneSink;
   }
 
   private syncReactiveProps(showWorld: boolean): void {
@@ -299,17 +302,23 @@ export class WorldPresentationFrameBinding {
       this.reactivePropRenderer = null;
       return;
     }
-    this.reactivePropRenderer ??= new ReactivePropRenderer(this.input.scene, this.input.lighting, this.reactivePropBurnGpu);
-    this.reactivePropRenderer.sync(this.reactiveProps, this.input.scene.time.now);
+    this.reactivePropRenderer ??= new ReactivePropRenderer(this.input.scene, this.input.lighting, this.reactivePropBurnGpu,
+      this.reactivePropZoneSink);
+    this.reactivePropRenderer.sync(this.reactiveProps, this.input.getWorldLayout()?.reactiveProps ?? [],
+      this.input.scene.time.now, this.input.getSynchronizedNow());
   }
 
   private *reactivePropShadowCells(): Iterable<{ index: number; x: number; y: number; alive: boolean }> {
     const runtime = this.reactiveProps;
     if (!runtime) return;
     const cells: { index: number; x: number; y: number; alive: boolean }[] = [];
+    const layoutCells = this.input.getWorldLayout()?.reactiveProps ?? [];
     runtime.forEachPresentationState(state => {
       const position = runtime.getPosition(state.obstacleId);
-      if (position) cells.push({ index: state.index, x: position.x, y: position.y, alive: state.phase !== 'destroyed' });
+      if (!position) return;
+      // The contact shadow sits under the drawn barrel, including its group pose.
+      const pose = resolveReactivePropPose(state.index, layoutCells);
+      cells.push({ index: state.index, x: position.x + pose.offsetX, y: position.y + pose.offsetY, alive: state.phase !== 'destroyed' });
     });
     yield* cells;
   }
@@ -1005,7 +1014,7 @@ export class WorldPresentationFrameBinding {
     this.bomberSquadron?.destroy(); this.bomberSquadron = null;
     this.bomberSquadronSnapshot = null; this.bomberSquadronEffects = null;
     this.reactivePropRenderer?.destroy(); this.reactivePropRenderer = null;
-    this.reactiveProps = null; this.reactivePropBurnGpu = null;
+    this.reactiveProps = null; this.reactivePropBurnGpu = null; this.reactivePropZoneSink = null;
     this.cancelRenderRelease();
     this.releasedView = null;
     this.sunlightOwner?.destroy();this.sunlightOwner=null;

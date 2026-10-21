@@ -7,7 +7,7 @@
     { "id": "west-mid", "gridX": 0, "gridY": 15, "widthCells": 8, "heightCells": 12 }
   ],
   "timeOfDay": "18:45",
-  "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "clusters": 5, "clusterSize": [1, 3], "minSpacingCells": 10 }] },
+  "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "placement": "chokepoints", "clusters": 3, "clusterSize": [2, 3], "minSpacingCells": 12 }] },
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.4,
   "mapEvents": [],

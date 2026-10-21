@@ -69,7 +69,7 @@
   },
   "trackMode": "none",
   "trackPosition": "center",
-  "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "clusters": 9, "clusterSize": [1, 3], "minSpacingCells": 10 }] },
+  "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "placement": "chokepoints", "clusters": 4, "clusterSize": [2, 3], "minSpacingCells": 12 }] },
   "objective": "advance",
   "respawnsPerPlayer": 3,
   "enemyTargeting": "players",

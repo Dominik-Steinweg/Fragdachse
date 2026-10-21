@@ -20,7 +20,6 @@
   }],
   "surviveDurationSec": 120,
   "balanceReferenceDurationSec": 120,
-  "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "clusters": 4, "clusterSize": [1, 3], "minSpacingCells": 10 }] },
   "objective": "survive",
   "respawnsPerPlayer": 2,
   "bases": [],

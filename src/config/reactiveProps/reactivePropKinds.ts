@@ -52,8 +52,12 @@ export interface ReactivePropKindConfig {
   };
 }
 
+/** `open`: freier Boden; `chokepoints`: neben Engstellen auf den Gegnerrouten (strategisch). */
+export type ReactivePropScatterPlacement = 'open' | 'chokepoints';
+
 export interface ReactivePropScatterSpec {
   readonly kind: string;
+  readonly placement?: ReactivePropScatterPlacement;
   readonly clusters: number;
   /** [min, max] Fässer je Gruppe; der Validator verlangt genau zwei Werte. */
   readonly clusterSize: readonly number[];
@@ -226,7 +230,8 @@ function parseKind(id: string, raw: unknown): ReactivePropKindConfig {
 export function parseReactivePropScatterSpec(raw: unknown, field: string,
   kinds: ReadonlyMap<string, ReactivePropKindConfig> = REACTIVE_PROP_KINDS): ReactivePropScatterSpec {
   const value = record(raw, field);
-  known(value, field, ['kind', 'clusters', 'clusterSize', 'minSpacingCells', 'variant']);
+  known(value, field, ['kind', 'placement', 'clusters', 'clusterSize', 'minSpacingCells', 'variant']);
+  if (value.placement !== undefined && value.placement !== 'open' && value.placement !== 'chokepoints') fail(`${field}.placement`);
   const kind = kinds.get(string(value.kind, `${field}.kind`)) ?? fail(`${field}.kind`);
   const clusterSize = range(value.clusterSize, `${field}.clusterSize`, true);
   if (clusterSize[0] < 1 || clusterSize[1] > 6) fail(`${field}.clusterSize`);
@@ -234,6 +239,7 @@ export function parseReactivePropScatterSpec(raw: unknown, field: string,
   if (variant !== undefined && !kind.visual.variantIds.includes(variant)) fail(`${field}.variant`);
   return Object.freeze({
     kind: kind.id,
+    ...(value.placement === 'chokepoints' ? { placement: 'chokepoints' as const } : {}),
     clusters: integer(value.clusters, `${field}.clusters`, 0, 64),
     clusterSize,
     minSpacingCells: integer(value.minSpacingCells, `${field}.minSpacingCells`, 2, 64),

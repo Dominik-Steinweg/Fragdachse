@@ -17,7 +17,6 @@
   "trackMode": "none",
   "mapEvents": [],
   "balanceReferenceDurationSec": 180,
-  "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "clusters": 4, "clusterSize": [1, 3], "minSpacingCells": 10 }] },
   "objective": "repel-assault",
   "bases": [],
   "persistentBase": {

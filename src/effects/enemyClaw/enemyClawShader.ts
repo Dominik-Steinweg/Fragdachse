@@ -70,8 +70,10 @@ vec4 telegraph(float gain) {
   float r = length(vLocal);
   float rn = r / range;
   if (rn >= 1.0) return vec4(0.0);
+  // A full circle (round zone) has no flanks: neither a fade nor a seam behind its axis.
+  bool full = halfArc >= PI - 0.001;
   float an = abs(atan(vLocal.y, vLocal.x)) / max(halfArc, 0.001);
-  if (an >= 1.0) return vec4(0.0);
+  if (!full && an >= 1.0) return vec4(0.0);
 
   float charge = clamp((uTime - vTiming.x) / max(1.0, vTiming.z - vTiming.x), 0.0, 1.0);
   float strike = smoothstep(vTiming.y, vTiming.z, uTime);
@@ -80,7 +82,7 @@ vec4 telegraph(float gain) {
 
   // The attacker's body covers the hub; flanks and far end fall off over a wide band.
   float hub = smoothstep(0.08, 0.4, rn);
-  float flank = 1.0 - smoothstep(0.4, 1.0, an);
+  float flank = full ? 1.0 : 1.0 - smoothstep(0.4, 1.0, an);
   float reach = 1.0 - smoothstep(0.55, 1.0, rn);
   float mask = hub * flank * reach;
 

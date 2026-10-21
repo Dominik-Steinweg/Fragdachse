@@ -609,7 +609,7 @@ export class ArenaGenerator {
       }
       const reactiveProps = reactivePropAnchors.length + reactivePropScatter.length === 0 ? [] : this.placeReactiveProps(
         blocked, trackCols, powerUpPedestals, groundHazardZones, reactivePropKeepClear,
-        reactivePropAnchors, reactivePropScatter, coopBaseSpecs, seed + attempt,
+        reactivePropAnchors, reactivePropScatter, coopBaseSpecs, seed + attempt, coopMapConfig,
       );
       if (typeof reactiveProps === 'string') {
         failedAttempt(`Reaktive Map-Objekte: ${reactiveProps}`);
@@ -869,6 +869,33 @@ export class ArenaGenerator {
     const baseCells = new Set<number>(bases.flatMap((base) => (
       base.cells.map((cell) => this.cellKey(cell.gridX, cell.gridY))
     )));
+    const sourceGroups = this.resolveSpawnSourceGroups(blocked, mapConfig, bases, baseCells);
+    if (includeStructures) {
+      for (const base of bases) {
+        const neighbours: { gridX: number; gridY: number }[] = [];
+        for (const cell of base.cells) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const gridX = cell.gridX + dx, gridY = cell.gridY + dy;
+          if (gridX >= 0 && gridX < this.metrics.gridCols && gridY >= 0 && gridY < this.metrics.gridRows
+            && !blocked[gridY][gridX] && !baseCells.has(this.cellKey(gridX, gridY))) neighbours.push({ gridX, gridY });
+        }
+        sourceGroups.push(neighbours);
+      }
+    }
+
+    return sourceGroups.map((sources) => sources.length > 0
+      && this.canReachTrackSafeGoal(sources, targetCells, blocked, trackCells));
+  }
+
+  /**
+   * Authored enemy spawn sources (encounter areas and fronts, persistent spawns, boss) as walkable
+   * cell groups, in a stable order. Route checks and strategic prop placement share this rule.
+   */
+  private resolveSpawnSourceGroups(
+    blocked: boolean[][],
+    mapConfig: ArenaGenerationMapConfig,
+    bases: readonly BaseSpec[],
+    baseCells: ReadonlySet<number>,
+  ): Array<Array<{ gridX: number; gridY: number }>> {
     const sourceGroups: Array<Array<{ gridX: number; gridY: number }>> = [];
     const fronts = new Set<SpawnFront>();
     for (const encounter of mapConfig.encounters ?? []) {
@@ -907,20 +934,7 @@ export class ArenaGenerator {
     for (const front of fronts) {
       sourceGroups.push(this.getSpawnFrontCells(front, blocked, baseCells, bases));
     }
-    if (includeStructures) {
-      for (const base of bases) {
-        const neighbours: { gridX: number; gridY: number }[] = [];
-        for (const cell of base.cells) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-          const gridX = cell.gridX + dx, gridY = cell.gridY + dy;
-          if (gridX >= 0 && gridX < this.metrics.gridCols && gridY >= 0 && gridY < this.metrics.gridRows
-            && !blocked[gridY][gridX] && !baseCells.has(this.cellKey(gridX, gridY))) neighbours.push({ gridX, gridY });
-        }
-        sourceGroups.push(neighbours);
-      }
-    }
-
-    return sourceGroups.map((sources) => sources.length > 0
-      && this.canReachTrackSafeGoal(sources, targetCells, blocked, trackCells));
+    return sourceGroups;
   }
 
   private getFriendlyBaseGoalCells(
@@ -2464,6 +2478,7 @@ export class ArenaGenerator {
     scatter: readonly ReactivePropScatterSpec[],
     coopBaseSpecs: readonly BaseSpec[] | undefined,
     attemptSeed: number,
+    mapConfig?: ArenaGenerationMapConfig,
   ): ReactivePropCell[] | string {
     const reserved = new Set<string>();
     for (const { gridX, gridY } of pedestals) {
@@ -2488,9 +2503,28 @@ export class ArenaGenerator {
       },
       anchors,
       scatter,
+      ...(mapConfig && scatter.some(spec => spec.placement === 'chokepoints')
+        ? { routes: this.resolveReactivePropRoutes(blocked, mapConfig, coopBaseSpecs ?? []) } : {}),
       rng: this.makePrng((attemptSeed ^ 0x5bd1e995) >>> 0),
     });
     return result.kind === 'placed' ? result.cells : result.reason;
+  }
+
+  /**
+   * Gegnerrouten für strategische Fässer: dieselben Spawnquellen wie die Routenprüfung, Ziel ist die
+   * eigene Basis; ohne Basis die Missionsziele (Checkpoints, Startbereich).
+   */
+  private resolveReactivePropRoutes(blocked: boolean[][], mapConfig: ArenaGenerationMapConfig, bases: readonly BaseSpec[]) {
+    const cols = this.metrics.gridCols;
+    const baseCells = new Set<number>(bases.flatMap(base => base.cells.map(cell => this.cellKey(cell.gridX, cell.gridY))));
+    const goals = [...this.getFriendlyBaseGoalCells(blocked, bases)].map(key => ({ gridX: key % cols, gridY: Math.floor(key / cols) }));
+    if (goals.length === 0) {
+      const mission = mapConfig.missionProgress;
+      for (const point of [...(mission?.checkpoints ?? []), ...(mission?.startArea ? [mission.startArea] : [])]) {
+        if (!blocked[point.gridY]?.[point.gridX]) goals.push({ gridX: point.gridX, gridY: point.gridY });
+      }
+    }
+    return { sourceGroups: this.resolveSpawnSourceGroups(blocked, mapConfig, bases, baseCells), goals };
   }
 
   private makeDecalPrng(seed: number): () => number {

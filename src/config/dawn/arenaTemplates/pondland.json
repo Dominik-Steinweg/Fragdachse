@@ -1,7 +1,6 @@
 {
   "id": "pondland",
   "world": {
-    "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "clusters": 8, "clusterSize": [1, 3], "minSpacingCells": 10 }] },
     "arenaWidthCells": 150,
     "arenaHeightCells": 100,
     "rockFillRatio": 0.055,

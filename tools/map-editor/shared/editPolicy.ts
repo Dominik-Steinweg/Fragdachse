@@ -34,7 +34,7 @@ const policy: Rule = {
   rockWalls: { $items: { ...rect as object, id: true }, $mutable: true, $id: 'id' },
   reactiveProps: {
     anchors: { $items: { ...point as object, id: true, kind: true, variant: true }, $mutable: true, $id: 'id' },
-    scatter: { $items: { kind: true, clusters: true, minSpacingCells: true, variant: true,
+    scatter: { $items: { kind: true, placement: true, clusters: true, minSpacingCells: true, variant: true,
       clusterSize: { $items: true, $mutable: false } }, $mutable: true },
   },
   tutorialAnchor: point, tutorialSteps: { $items: { anchor: point }, $mutable: false, $id: 'id' },
