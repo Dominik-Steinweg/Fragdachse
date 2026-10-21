@@ -59,11 +59,11 @@ export const AMBIENT_WILDLIFE = {
     occupancy: .45, flockMin: 4, flockMax: 9, spread: 9, cruiseHeight: 92, climbRate: 80, flapHz: 8,
     spotCount: 6, spotRange: [2.5, 7], hopRange: [3, 8], calmSeconds: [25, 70] },
   sparrowShore: { spots: 2, range: 12, chance: .35, drinkSeconds: [6, 14], standOff: 13, lateralSpacing: 4.4 },
-  magpie: { size: 14, speed: 16, fleeSpeed: 140, cruiseSpeed: 105, alertRadius: 104, turnRate: 4, maxCount: 10,
+  magpie: { size: 14, speed: 16, fleeSpeed: 140, cruiseSpeed: 105, alertRadius: 104, turnRate: 5.5, maxCount: 10,
     occupancy: .15, cruiseHeight: 104, climbRate: 64, flapHz: 5.5,
     spotCount: 6, spotRange: [4, 10], hopRange: [5, 12], calmSeconds: [20, 55],
     roamRadius: 80, walkSeconds: [1.2, 3], pauseSeconds: [.8, 2.4] },
-  raven: { size: 20, speed: 14, fleeSpeed: 130, cruiseSpeed: 100, alertRadius: 136, turnRate: 3, maxCount: 6,
+  raven: { size: 20, speed: 14, fleeSpeed: 130, cruiseSpeed: 100, alertRadius: 136, turnRate: 4.5, maxCount: 6,
     occupancy: .08, cruiseHeight: 118, climbRate: 56, flapHz: 3.4,
     spotCount: 6, spotRange: [5, 14], hopRange: [6, 16], calmSeconds: [25, 70],
     roamRadius: 104, walkSeconds: [1.6, 3.6], pauseSeconds: [1, 3] },
@@ -72,8 +72,9 @@ export const AMBIENT_WILDLIFE = {
     circleChance: .35, diveChance: .25, mantleSeconds: [.8, 1.6], climbSeconds: 2.4, veerSeconds: 2.5 },
   owlBrownShare: .7,
   birdFlight: {
-    // Below c0 a bird passes under tree crowns, above c2 over them; the band is crossed only in the open.
-    crownBand: [56, 62, 66], crownLookaheadSeconds: .4, emergeHeight: 44, emergeSeconds: 1.4,
+    // Below c0 a bird flies under tree crowns, above c2 over them. Inside the band it rises out of
+    // (or sinks into) the leaves; flights never level off inside it.
+    crownBand: [44, 76, 84], emergeHeight: 40, emergeSeconds: 1.4,
     takeoffSeconds: .55, landingRadius: 90, alertCooldownSeconds: 1.2, frameInset: 8,
   },
   // World minutes; each bird picks its own moment inside the window.

@@ -139,7 +139,7 @@ export class AmbientWildlifeModel {
       x: frame.offsetX + (c.gridX + .5) * CELL_SIZE, y: frame.offsetY + (c.gridY + .5) * CELL_SIZE,
     }));
     layout.trees.forEach((c, i) => this.trunks.set(trunkKey(c.gridX, c.gridY), this.trees[i]));
-    // Cells whose centre lies under a crown: birds neither land there nor change height band above them.
+    // Cells whose centre lies under a crown: birds never stand there, so a grounded bird is always visible.
     const crownReach = CANOPY_RADIUS + 8, crownCells = Math.ceil(crownReach / CELL_SIZE);
     for (const c of layout.trees) for (let dy = -crownCells; dy <= crownCells; dy++) for (let dx = -crownCells; dx <= crownCells; dx++)
       if (Math.hypot(dx, dy) * CELL_SIZE <= crownReach) mark(c.gridX + dx, c.gridY + dy, CROWN);
@@ -252,8 +252,6 @@ export class AmbientWildlifeModel {
     this.birds = new AmbientWildlifeBirds({
       seed: layout.seed, frame,
       isGround: (x, y, radius) => this.footprint(x, y, radius, 0, WATER | ROCK | CROWN, true),
-      underCrown: (x, y) => (this.flagsAt(Math.floor((x - frame.offsetX) / CELL_SIZE),
-        Math.floor((y - frame.offsetY) / CELL_SIZE)) & CROWN) !== 0,
       isWaterCell: (gx, gy) => (this.flagsAt(gx, gy) & WATER) !== 0,
       isOpenLandCell: (gx, gy) => gx >= 0 && gy >= 0 && gx < this.cols && gy < this.rows
         && (this.flagsAt(gx, gy) & (WATER | ROCK | CROWN)) === 0 && !this.tracks.has(gx),

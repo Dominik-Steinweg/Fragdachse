@@ -2,6 +2,9 @@ import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
 import { fireflyGlowStrength, snakeTongueExtension, writeFishMemberPose, writeSnakeBodyPose } from './AmbientWildlifeAppearance';
 import type { WildlifeAnimal } from './AmbientWildlifeModel';
 
+/** A channel's local transform: scale, then rotation (c, s), then translation. */
+export interface WildlifePose { x: number; y: number; sx: number; sy: number; c: number; s: number }
+
 /** Wildlife-local retained mesh. Topology, ellipse samples and line thickness are built once. */
 export class WildlifeMesh {
   xy: number[] = [];
@@ -11,7 +14,10 @@ export class WildlifeMesh {
   opacityPower: number[] = [];
   indices: number[] = [];
   // Each channel is a local translation and scale, reused at every animation sample.
-  readonly poses: { x: number; y: number; sx: number; sy: number }[] = [];
+  // A bird's flight shadow shares the animated poses of its body mesh.
+  poses: WildlifePose[] = [];
+  /** Channels carry rotations (bird heads, flock members); only then does the layer apply them. */
+  rotated = false;
   private channel = 0;
   private color = 0;
   private fillAlpha = 1;
@@ -25,7 +31,7 @@ export class WildlifeMesh {
 
   pose(x = 0, y = 0, sx = 1, sy = 1): number {
     this.channel = this.poses.length;
-    this.poses.push({ x, y, sx, sy });
+    this.poses.push({ x, y, sx, sy, c: 1, s: 0 });
     return this.channel;
   }
 
@@ -281,6 +287,7 @@ function fishVisual(animal: WildlifeAnimal): WildlifeVisual {
 
 /** Called during ArenaBuilder's covered World construction, never on visibility changes. */
 export function prepareWildlifeVisual(animal: WildlifeAnimal): WildlifeVisual {
+  if (animal.bird) throw new Error(`Birds are prepared with their layers and shadows: ${animal.kind}`);
   return animal.kind === 'butterfly' ? butterflyVisual(animal)
     : animal.kind === 'moth' ? mothVisual(animal)
     : animal.kind === 'firefly' ? fireflyVisual(animal)

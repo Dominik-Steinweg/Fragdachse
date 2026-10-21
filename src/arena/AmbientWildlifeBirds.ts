@@ -1,4 +1,4 @@
-import { CANOPY_RADIUS, CELL_SIZE } from '../config';
+import { CELL_SIZE } from '../config';
 import type { ChunkWorldFrame, ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { hashSeededCell01 } from './CellHash';
 import { AMBIENT_WILDLIFE as TUNING } from './AmbientWildlifeConfig';
@@ -43,6 +43,8 @@ export interface WildlifeBirdState {
   /** Ground anchor of the formation: the take-off point, then the landing spot. */
   originX: number;
   originY: number;
+  /** Spot of that anchor (-1 = none); a shore spot lines the flock up along the water. */
+  originSpot: number;
   /** World facing of the ground formation (towards the water at a shore spot). */
   facing: number;
   orbitX: number;
@@ -62,7 +64,6 @@ export interface BirdWorldPort {
   readonly frame: ChunkWorldFrame;
   /** Open ground: no water, rock, track or tree crown anywhere inside the radius. */
   isGround(x: number, y: number, radius: number): boolean;
-  underCrown(x: number, y: number): boolean;
   isWaterCell(gx: number, gy: number): boolean;
   isOpenLandCell(gx: number, gy: number): boolean;
   /** Nearest alarming body or remembered impulse around (x, y), written into `out`. */
@@ -79,6 +80,13 @@ const angleDelta = (from: number, to: number): number => Math.atan2(Math.sin(to 
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 const smooth = (t: number): number => { const c = clamp(t, 0, 1); return c * c * (3 - 2 * c); };
 const lerp = (range: readonly [number, number], t: number): number => range[0] + (range[1] - range[0]) * t;
+
+/** Level flight stays clear of the crown band: under the crowns or over them, never half inside. */
+function levelHeight(height: number): number {
+  const [c0, , c2] = TUNING.birdFlight.crownBand;
+  if (height <= c0 - 4 || height >= c2 + 4) return height;
+  return height < (c0 + c2) / 2 ? c0 - 4 : c2 + 4;
+}
 
 export function isGroundedBird(bird: WildlifeBirdState): boolean {
   return bird.phase === 'forage' || bird.phase === 'drink' || bird.phase === 'mantle';
@@ -115,7 +123,7 @@ export class AmbientWildlifeBirds {
     if (kind !== 'owl' && spots.length < 8) return false;
     const bird: WildlifeBirdState = { phase: 'hidden', altitude: 0, lift: 0, wings: 0, flap: 0, gait: 0,
       walking: false, steps: 0, stepTime: 0, targetX: tree.x, targetY: tree.y, targetHeight: 0, landFrom: 1,
-      spot: -1, flights: 0, originX: tree.x, originY: tree.y, facing: 0, orbitX: 0, orbitY: 0, orbitSign: 1,
+      spot: -1, flights: 0, originX: tree.x, originY: tree.y, originSpot: -1, facing: 0, orbitX: 0, orbitY: 0, orbitSign: 1,
       orbitTime: 0, veerTime: 0, veerX: 0, veerY: 0, cues: 0, spots };
     // Every bird starts inside its roost; the first update settles it for the current time of day.
     add({ kind, x: tree.x, y: tree.y, variation: this.rand(tree.x, tree.y, salt + 4),
@@ -275,7 +283,7 @@ export class AmbientWildlifeBirds {
   private groundAt(a: WildlifeAnimal, spot: number): void {
     const bird = a.bird!, s = bird.spots, i = spot * 4;
     a.x = s[i]; a.y = s[i + 1];
-    bird.spot = spot; bird.facing = s[i + 2]; bird.originX = a.x; bird.originY = a.y;
+    bird.spot = spot; bird.facing = s[i + 2]; bird.originX = a.x; bird.originY = a.y; bird.originSpot = spot;
     bird.phase = s[i + 3] ? 'drink' : 'forage';
     bird.altitude = bird.lift = bird.wings = bird.flap = 0; bird.walking = false; bird.stepTime = 0;
     a.calmTime = this.calmSeconds(a);
@@ -297,7 +305,7 @@ export class AmbientWildlifeBirds {
     }
     bird.targetX = x; bird.targetY = y; bird.spot = spot; bird.flights++;
     bird.phase = 'flight'; a.phaseTime = 0; a.fleeing = alarmed;
-    bird.targetHeight = spot < 0 ? t.cruiseHeight : clamp(Math.hypot(x - a.x, y - a.y) * .25, 24, t.cruiseHeight);
+    bird.targetHeight = levelHeight(spot < 0 ? t.cruiseHeight : clamp(Math.hypot(x - a.x, y - a.y) * .25, 24, t.cruiseHeight));
   }
 
   private flyToSpot(a: WildlifeAnimal, alarmed: boolean): void {
@@ -379,14 +387,15 @@ export class AmbientWildlifeBirds {
       if (dist < flight.landingRadius && bird.lift >= .999) {
         bird.phase = 'landing'; a.phaseTime = 0; bird.landFrom = Math.max(1, dist);
         bird.targetHeight = Math.max(bird.altitude, 1);
-        bird.originX = bird.targetX; bird.originY = bird.targetY; bird.facing = bird.spots[bird.spot * 4 + 2];
+        bird.originX = bird.targetX; bird.originY = bird.targetY; bird.originSpot = bird.spot;
+        bird.facing = bird.spots[bird.spot * 4 + 2];
         return;
       }
     } else if (dist < 12) {
       bird.phase = 'roost'; a.phaseTime = 0;
       return;
     }
-    this.steer(a, Math.atan2(dy, dx), a.fleeing ? t.fleeSpeed : t.cruiseSpeed, bird.targetHeight, dt, false);
+    this.steer(a, Math.atan2(dy, dx), a.fleeing ? t.fleeSpeed : t.cruiseSpeed, bird.targetHeight, dt);
   }
 
   private landing(a: WildlifeAnimal, dt: number): void {
@@ -397,7 +406,7 @@ export class AmbientWildlifeBirds {
     bird.lift = smooth(k * 1.5);
     // Approach speed shrinks with distance and the turn rate, so the turning circle always fits the spot.
     const approach = clamp(dist * Math.min(1.8, t.turnRate * .7), 6, t.cruiseSpeed);
-    this.steer(a, Math.atan2(dy, dx), approach, bird.targetHeight * Math.pow(k, 1.2), dt, false, 3);
+    this.steer(a, Math.atan2(dy, dx), approach, bird.targetHeight * Math.pow(k, 1.2), dt, 3);
     const late = a.phaseTime > 6 && dist < 12;
     if ((dist < 2.5 && bird.altitude < 1.5) || late) {
       if (!this.port.isGround(bird.targetX, bird.targetY, bird.spots[bird.spot * 4 + 3] ? 2 : a.appearance.footprint)) {
@@ -413,7 +422,7 @@ export class AmbientWildlifeBirds {
     const bird = a.bird!;
     // Sink into the own crown while fading; the crown hides the bird from above.
     this.steer(a, Math.atan2(a.homeY - a.y, a.homeX - a.x), Math.min(30, Math.hypot(a.homeX - a.x, a.homeY - a.y) * 2),
-      TUNING.birdFlight.emergeHeight - 12, dt, true, 1.6);
+      TUNING.birdFlight.emergeHeight - 12, dt, 1.6);
     a.opacity = Math.max(0, a.opacity - dt / TUNING.birdFlight.emergeSeconds);
     if (a.opacity > 0) return;
     if (!a.diurnalActive) { this.hide(a); return; }
@@ -454,7 +463,7 @@ export class AmbientWildlifeBirds {
     const veering = this.veer(a, dt);
     const dx = bird.targetX - a.x, dy = bird.targetY - a.y;
     const desired = veering ? Math.atan2(a.y - bird.veerY, a.x - bird.veerX) : Math.atan2(dy, dx);
-    this.steer(a, desired, veering ? t.fleeSpeed : t.cruiseSpeed, t.cruiseHeight, dt, false);
+    this.steer(a, desired, veering ? t.fleeSpeed : t.cruiseSpeed, t.cruiseHeight, dt);
     if (veering || Math.hypot(dx, dy) >= 48) return;
     const roll = this.rand(a.homeX, a.homeY, 3600 + bird.flights);
     bird.flights++;
@@ -476,7 +485,7 @@ export class AmbientWildlifeBirds {
     if (this.veer(a, dt)) { this.waypoint(a); this.startPatrol(a); return; }
     const dx = a.x - bird.orbitX, dy = a.y - bird.orbitY, rc = this.orbitRadius();
     const desired = Math.atan2(dy, dx) + bird.orbitSign * (Math.PI / 2 + .8 * clamp((Math.hypot(dx, dy) - rc) / rc, -1, 1));
-    this.steer(a, desired, t.cruiseSpeed, t.cruiseHeight, dt, false);
+    this.steer(a, desired, t.cruiseSpeed, t.cruiseHeight, dt);
     bird.orbitTime -= dt;
     if (bird.orbitTime <= 0) { this.waypoint(a); this.startPatrol(a); }
   }
@@ -501,7 +510,7 @@ export class AmbientWildlifeBirds {
     if (this.port.findThreat(a, a.x, a.y, false, this.threat)) { this.startClimb(a, true); return; }
     const dx = bird.targetX - a.x, dy = bird.targetY - a.y, dist = Math.hypot(dx, dy);
     const approach = clamp(dist * Math.min(1.8, t.turnRate * .7), 6, t.cruiseSpeed * .6);
-    this.steer(a, Math.atan2(dy, dx), approach, 0, dt, false, 3);
+    this.steer(a, Math.atan2(dy, dx), approach, 0, dt, 3);
     if (dist < 4 && bird.altitude < 1) {
       if (!this.port.isGround(a.x, a.y, a.appearance.footprint)) { this.startClimb(a, false); return; }
       bird.phase = 'mantle'; a.phaseTime = 0; bird.altitude = 0; a.speed = 0; a.turnSpeed = 0;
@@ -527,34 +536,21 @@ export class AmbientWildlifeBirds {
   private climb(a: WildlifeAnimal, dt: number): void {
     const bird = a.bird!, t = TUNING.owl;
     this.steer(a, Math.atan2(bird.targetY - a.y, bird.targetX - a.x), a.fleeing ? t.fleeSpeed : t.cruiseSpeed,
-      t.cruiseHeight, dt, false);
+      t.cruiseHeight, dt);
     if (a.phaseTime >= t.climbSeconds && bird.altitude > t.cruiseHeight * .8) { a.fleeing = false; this.startPatrol(a); }
   }
 
-  /**
-   * Shared flight: bounded turning, speed reduced while facing away from the course, frame clamp.
-   * Crown rule: over a foreign crown the bird keeps below or above the crown band, so it never
-   * pops from under the leaves to above them; only over its own roost may it sink through.
-   */
-  private steer(a: WildlifeAnimal, desired: number, speed: number, height: number, dt: number,
-    ownRoost: boolean, descent = 1.4): void {
-    const bird = a.bird!, t = TUNING[a.kind as BirdKind], flight = TUNING.birdFlight;
+  /** Shared flight: bounded turning, speed reduced while facing away from the course, frame clamp. */
+  private steer(a: WildlifeAnimal, desired: number, speed: number, height: number, dt: number, descent = 1.4): void {
+    const bird = a.bird!, t = TUNING[a.kind as BirdKind], inset = TUNING.birdFlight.frameInset;
     this.port.turnToward(a, desired, dt);
-    const target = speed * Math.max(.3, Math.cos(angleDelta(a.angle, desired)));
+    // Right after take-off a bird springs up and turns on the spot instead of flying at its threat.
+    const launch = bird.phase === 'flight' && a.phaseTime < .8 && bird.altitude < 30;
+    const target = speed * Math.max(launch ? .04 : .3, Math.cos(angleDelta(a.angle, desired)));
     a.speed += (target - a.speed) * Math.min(1, dt * 2.5);
-    const f = this.port.frame, inset = flight.frameInset;
+    const f = this.port.frame;
     a.x = clamp(a.x + Math.cos(a.angle) * a.speed * dt, f.offsetX + inset, f.offsetX + f.width - inset);
     a.y = clamp(a.y + Math.sin(a.angle) * a.speed * dt, f.offsetY + inset, f.offsetY + f.height - inset);
-    const band = flight.crownBand;
-    const homing = bird.phase === 'flight' && bird.spot < 0;
-    const nearRoost = ownRoost || (homing && Math.hypot(a.x - a.homeX, a.y - a.homeY) < CANOPY_RADIUS + 16);
-    if (!nearRoost) {
-      const ahead = a.speed * flight.crownLookaheadSeconds;
-      if (this.port.underCrown(a.x, a.y)
-        || this.port.underCrown(a.x + Math.cos(a.angle) * ahead, a.y + Math.sin(a.angle) * ahead)) {
-        height = bird.altitude < band[1] ? Math.min(height, band[0] - 2) : Math.max(height, band[2] + 2);
-      }
-    }
     bird.altitude = Math.max(0, bird.altitude + clamp(height - bird.altitude, -t.climbRate * descent * dt, t.climbRate * dt));
   }
 
@@ -569,4 +565,25 @@ export class AmbientWildlifeBirds {
     bird.flap += clamp((forced ? 1 : 0) - bird.flap, -dt * 2, dt * 6);
     if (!grounded) a.animation += dt * t.flapHz * TAU;
   }
+}
+
+/** Altitude above which a bird reads at its largest; draw scale grows up to 22 % on the way. */
+const DRAW_SCALE_HEIGHT = 120;
+export function birdDrawScale(altitude: number): number {
+  return TUNING.visualScale * (1 + .22 * clamp(altitude / DRAW_SCALE_HEIGHT, 0, 1));
+}
+
+export interface BirdLayerWeights { ground: number; low: number; high: number }
+const smoothRange = (from: number, to: number, x: number): number => smooth((x - from) / (to - from));
+/**
+ * Ground (under fog), low (above the lightmap, under crowns) and high (above crowns). The upper copy
+ * is complete before the lower one fades, so coverage never dips; at most two copies are drawn.
+ */
+export function writeBirdLayerWeights(altitude: number, out: BirdLayerWeights): BirdLayerWeights {
+  const [c0, c1, c2] = TUNING.birdFlight.crownBand;
+  const h = Number.isFinite(altitude) ? Math.max(0, altitude) : 0;
+  out.ground = 1 - smoothRange(2, 4, h);
+  out.low = smoothRange(0, 2, h) * (1 - smoothRange(c1, c2, h));
+  out.high = smoothRange(c0, c1, h);
+  return out;
 }
