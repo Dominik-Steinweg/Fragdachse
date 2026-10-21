@@ -1,0 +1,286 @@
+{
+  "name": "reactive-bees",
+  "description": "Straw skep on test map 00: a few bees at the entrance, a hit shakes it, the swarm pours out, hunts two zombies in turn, flies home and the skep recharges.",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "board": {
+    "columns": 4,
+    "tileWidth": 420
+  },
+  "hud": false,
+  "scenario": {
+    "classId": "inspector_gadachs",
+    "seed": 12345,
+    "weapon1": "GLOCK",
+    "player": "$player",
+    "mapId": "0"
+  },
+  "times": [
+    {
+      "id": "day",
+      "timeOfDay": 720,
+      "label": "12:00"
+    },
+    {
+      "id": "night",
+      "timeOfDay": 1320,
+      "label": "22:00"
+    }
+  ],
+  "layouts": [
+    {
+      "id": "map00",
+      "scenario": {
+        "mapId": "0"
+      }
+    }
+  ],
+  "vars": {
+    "player": {
+      "gridX": 25,
+      "gridY": 55.5
+    },
+    "hive": {
+      "gridX": 31.5,
+      "gridY": 55.5
+    },
+    "field": {
+      "gridX": 34,
+      "gridY": 55.5
+    }
+  },
+  "setup": [
+    {
+      "op": "camera",
+      "at": "$hive",
+      "zoom": 3
+    },
+    {
+      "op": "spawn",
+      "kind": "zombie-badger",
+      "at": {
+        "gridX": 36,
+        "gridY": 53
+      },
+      "pinned": true,
+      "name": "z1"
+    },
+    {
+      "op": "spawn",
+      "kind": "zombie-badger",
+      "at": {
+        "gridX": 38,
+        "gridY": 57
+      },
+      "pinned": true,
+      "name": "z2"
+    },
+    {
+      "op": "settle"
+    }
+  ],
+  "shots": [
+    {
+      "id": "idle",
+      "label": "Korb bereit",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 400
+        }
+      ],
+      "crops": [
+        {
+          "of": "$hive",
+          "size": [
+            140,
+            120
+          ],
+          "scale": 3,
+          "label": "bereit"
+        }
+      ]
+    },
+    {
+      "id": "shake",
+      "label": "Treffer: Vorlauf",
+      "do": [
+        {
+          "op": "mark"
+        },
+        {
+          "action": "fire",
+          "slot": "weapon1"
+        },
+        {
+          "op": "until",
+          "expr": "window.devScenario.status().reactiveProps.some(p => p.kind === 'bee_hive' && p.phase === 'triggered')",
+          "maxFrames": 90
+        },
+        {
+          "op": "step",
+          "frames": 8
+        }
+      ],
+      "crops": [
+        {
+          "of": "$hive",
+          "size": [
+            140,
+            120
+          ],
+          "scale": 3,
+          "label": "Vorlauf"
+        }
+      ]
+    },
+    {
+      "id": "release",
+      "label": "Ausschwärmen",
+      "do": [
+        {
+          "op": "until",
+          "expr": "window.devScenario.status().reactiveProps.some(p => p.kind === 'bee_hive' && p.phase === 'recharging')",
+          "maxFrames": 60
+        },
+        {
+          "op": "step",
+          "frames": 18
+        }
+      ],
+      "crops": [
+        {
+          "of": "$hive",
+          "size": [
+            160,
+            140
+          ],
+          "scale": 3,
+          "label": "Ausschwärmen"
+        }
+      ]
+    },
+    {
+      "id": "hunt",
+      "label": "Jagd",
+      "do": [
+        {
+          "op": "camera",
+          "at": "$field",
+          "zoom": 2
+        },
+        {
+          "op": "ms",
+          "ms": 900
+        }
+      ],
+      "crops": [
+        {
+          "of": "$field",
+          "size": [
+            320,
+            240
+          ],
+          "scale": 3,
+          "label": "Jagd"
+        }
+      ]
+    },
+    {
+      "id": "sting",
+      "label": "Stiche",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 1500
+        }
+      ],
+      "crops": [
+        {
+          "of": "$field",
+          "size": [
+            320,
+            240
+          ],
+          "scale": 3,
+          "label": "Stiche"
+        }
+      ]
+    },
+    {
+      "id": "next",
+      "label": "Nächstes Ziel",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 2200
+        }
+      ],
+      "crops": [
+        {
+          "of": "$field",
+          "size": [
+            320,
+            240
+          ],
+          "scale": 3,
+          "label": "nächstes Ziel"
+        }
+      ]
+    },
+    {
+      "id": "home",
+      "label": "Rückflug",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 3400
+        }
+      ],
+      "crops": [
+        {
+          "of": "$hive",
+          "size": [
+            220,
+            180
+          ],
+          "scale": 3,
+          "label": "Rückflug"
+        }
+      ]
+    },
+    {
+      "id": "ready",
+      "label": "Wieder bereit",
+      "do": [
+        {
+          "op": "camera",
+          "at": "$hive",
+          "zoom": 3
+        },
+        {
+          "op": "until",
+          "expr": "window.devScenario.status().reactiveProps.some(p => p.kind === 'bee_hive' && p.phase === 'idle')",
+          "maxFrames": 900
+        },
+        {
+          "op": "ms",
+          "ms": 300
+        }
+      ],
+      "crops": [
+        {
+          "of": "$hive",
+          "size": [
+            140,
+            120
+          ],
+          "scale": 3,
+          "label": "bereit"
+        }
+      ]
+    }
+  ]
+}

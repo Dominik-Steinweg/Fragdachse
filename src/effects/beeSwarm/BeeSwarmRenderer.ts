@@ -6,7 +6,7 @@ import { BEE_KIND } from '../gpu/BeeSwarmShader';
 import { BeeFlockModel, type BeeHivePresentation, type BeeInstance } from './BeeFlockModel';
 
 /** Bees per swarm by graphics quality; the host simulation does not depend on it. */
-export const BEES_PER_SWARM = { high: 32, medium: 22, low: 14 } as const;
+export const BEES_PER_SWARM = { high: 90, medium: 64, low: 40 } as const;
 const MAX_BUZZ_LOOPS = 2;
 const BUZZ_MARGIN_PX = 220;
 const STING_SOUND_GAP_MS = 140;
@@ -60,7 +60,7 @@ export class BeeSwarmRenderer {
       const bee = this.bees[i];
       g.x = bee.x; g.y = bee.y; g.heading = bee.heading; g.wing = bee.wing; g.size = bee.size; g.alpha = bee.alpha;
       // Honey gold with a little variation per bee; veils carry their own tint in the shader.
-      g.r = .93 - .08 * bee.tone; g.g = .68 - .1 * bee.tone; g.b = .16 + .04 * bee.tone;
+      g.r = .99 - .06 * bee.tone; g.g = .78 - .1 * bee.tone; g.b = .22 + .04 * bee.tone;
       g.hostile = bee.hostile ? 1 : 0; g.kind = bee.veil ? BEE_KIND.veil : BEE_KIND.bee;
       g.blur = bee.blur; g.altitude = bee.altitude; g.seed = bee.seed;
       if (!this.layer.add(g)) break;

@@ -111,6 +111,8 @@ export interface WorldPresentationRenderWork {
 /** Ports of the bee presentation: game audio and drawn enemy positions (dive targets). */
 export interface BeeSwarmPorts {
   readonly audio: BeeSwarmAudio | null;
+  /** Host: swarms straight from the host owner (the host never reads its own replicated slice). */
+  readonly hostSwarms: () => readonly SyncedBeeSwarm[] | null;
   readonly enemyPosition: (id: string) => { x: number; y: number } | null;
 }
 
@@ -345,7 +347,7 @@ export class WorldPresentationFrameBinding {
           entranceY: position.y + pose.offsetY + reach * Math.cos(pose.rotation) });
       });
     }
-    if (!ports || (this.beeHives.size === 0 && this.latestBeeSwarms.length === 0)) {
+    if (!ports || (this.beeHives.size === 0 && (ports.hostSwarms() ?? this.latestBeeSwarms).length === 0)) {
       this.beeSwarmRenderer?.destroy();
       this.beeSwarmRenderer = null;
       return;
@@ -353,7 +355,7 @@ export class WorldPresentationFrameBinding {
     this.beeSwarmRenderer ??= new BeeSwarmRenderer(this.input.scene, ports.audio);
     const players = this.input.getPlayers();
     this.beeSwarmRenderer.sync({
-      swarms: this.latestBeeSwarms, hives: this.beeHives, syncNow: this.input.getSynchronizedNow(),
+      swarms: ports.hostSwarms() ?? this.latestBeeSwarms, hives: this.beeHives, syncNow: this.input.getSynchronizedNow(),
       timeMs: this.input.scene.time.now, quality: getGraphicsQualityController(this.input.scene)?.getLevel() ?? 'high',
       shadowStrength: Math.max(.15, 1 - this.input.lighting.getArtificialLightFactor()),
       targetPosition: (kind, id) => {

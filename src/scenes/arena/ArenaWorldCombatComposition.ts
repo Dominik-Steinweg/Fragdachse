@@ -412,6 +412,7 @@ export function composeWorldCombatGameplay(
     (id, attack, now, visible) => ctx.effectSystem.syncEnemyZone(id, attack, now, visible));
   if (reactiveProps) worldRuntime.presentationFrame?.bindBeeSwarms({
     audio: ctx.gameAudioSystem,
+    hostSwarms: () => combatGameplayBinding.beeSwarm?.getSnapshot() ?? null,
     enemyPosition: id => {
       const enemy = (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager)?.getEnemy(id);
       return enemy?.sprite.active ? { x: enemy.sprite.x, y: enemy.sprite.y } : null;

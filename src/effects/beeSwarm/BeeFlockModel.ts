@@ -3,7 +3,8 @@ import type { ReactivePropPhase } from '../../world/reactiveProps/ReactivePropRu
 
 /** Body length of a bee in world px (about 10 cm at the arena scale). */
 export const BEE_BODY_PX = 3.6;
-const SWARM_RADIUS_PX = 36;
+/** Visual cloud radius; a dense core with stragglers out to the edge reads as one big swarm. */
+const SWARM_RADIUS_PX = 50;
 const MAX_SPEED = 520;
 
 /** Where a hive's bees come and go, and its replicated state. */
@@ -182,11 +183,11 @@ export class BeeFlockModel {
     for (const hive of frame.hives.values()) {
       if (out.has(hive.index)) continue;
       const agitated = hive.phase === 'triggered';
-      const count = hive.phase === 'idle' ? 3 : agitated ? 7
-        : hive.phase === 'recharging' ? (hive.progress > .95 ? 3 : hive.progress > .85 ? 2 : hive.progress > .7 ? 1 : 0) : 0;
+      const count = hive.phase === 'idle' ? 7 : agitated ? 18
+        : hive.phase === 'recharging' ? Math.round(7 * Math.max(0, (hive.progress - .6) / .4)) : 0;
       for (let i = 0; i < count; i++) {
         const seed = hive.index * 977 + i * 31.7;
-        const orbit = (agitated ? 7 : 5) + (agitated ? 9 : 5) * rnd(seed, 1);
+        const orbit = (agitated ? 7 : 5) + (agitated ? 12 : 8) * rnd(seed, 1);
         const omega = (agitated ? 5 : 2.2) * (1 + rnd(seed, 2)) * (i % 2 ? -1 : 1);
         const angle = omega * frame.time + rnd(seed, 3) * Math.PI * 2;
         const x = hive.entranceX + Math.cos(angle) * orbit + Math.sin(frame.time * 3.1 + seed) * 1.5;

@@ -86,11 +86,11 @@ void main() {
     return;
   }
   if (vParam.x > 0.5) {
-    // Veil: a faint dark-gold shimmer of many wings, only noticeable in dense swarms.
+    // Veil: the warm shimmer of many wings, so a dense swarm reads as one cloud from afar.
     float d = length(vLocal) / vBee.z;
-    float a = exp(-d * d * 2.6) * 0.11 * alpha;
+    float a = exp(-d * d * 2.4) * 0.16 * alpha;
     if (a < 0.003) discard;
-    vec3 tint = mix(vec3(0.34, 0.26, 0.09), vec3(0.42, 0.24, 0.52), vColor.a);
+    vec3 tint = mix(vec3(0.62, 0.5, 0.2), vec3(0.5, 0.32, 0.62), vColor.a);
     gl_FragColor = vec4(tint * a, a);
     return;
   }
@@ -117,10 +117,11 @@ void main() {
 
   // Abdomen with dark bands, thorax, head.
   float abdomen = ellipse(p, vec2(-0.55, 0.0), vec2(1.25, 0.8));
-  float bands = smoothstep(0.38, 0.62, fract((p.x + 1.95) * 1.15));
+  // Narrow dark bands on bright gold: at 3-4 px a bee must still read as a bright speck.
+  float bands = smoothstep(0.58, 0.74, fract((p.x + 1.95) * 1.15));
   vec3 gold = vColor.rgb;
   vec3 dark = vec3(0.1, 0.07, 0.035);
-  vec3 abdomenColor = mix(gold, dark, bands * 0.85);
+  vec3 abdomenColor = mix(gold, dark, bands * 0.78);
   float thorax = ellipse(p, vec2(0.62, 0.0), vec2(0.62, 0.6));
   float head = ellipse(p, vec2(1.32, 0.0), vec2(0.42, 0.42));
   // Soft top light: brighter crown, darker flanks.

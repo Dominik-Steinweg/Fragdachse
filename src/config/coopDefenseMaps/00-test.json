@@ -357,7 +357,10 @@
       { "id": "row-b1", "kind": "explosive_barrel", "gridX": 21, "gridY": 52, "variant": "toxic" },
       { "id": "row-b2", "kind": "explosive_barrel", "gridX": 23, "gridY": 53, "variant": "toxic" },
       { "id": "row-b3", "kind": "explosive_barrel", "gridX": 25, "gridY": 54, "variant": "toxic" },
-      { "id": "single-c", "kind": "explosive_barrel", "gridX": 36, "gridY": 56 }
+      { "id": "single-c", "kind": "explosive_barrel", "gridX": 36, "gridY": 56 },
+      { "id": "spore-p1", "kind": "spore_puffball", "gridX": 16, "gridY": 52 },
+      { "id": "spore-p2", "kind": "spore_puffball", "gridX": 44, "gridY": 52, "variant": "void" },
+      { "id": "hive-h1", "kind": "bee_hive", "gridX": 31, "gridY": 55 }
     ]
   },
   "objective": "survive",
