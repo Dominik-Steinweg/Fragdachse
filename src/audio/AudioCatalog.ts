@@ -81,6 +81,7 @@ const SHIPPED_AUDIO_FILES = new Set([
   'sfx_explosion_energy_injector.ogg',
   'sfx_explosion_time_bubble.ogg',
   'sfx_explosion_timebomb.ogg',
+  'sfx_explosion_explosive_barrel.ogg',
   "sfx_bfg_charge.ogg",
   "sfx_alien_cone_charge.ogg",
   "sfx_alien_cone_pulse.ogg",
@@ -148,6 +149,7 @@ const EXPLOSION_ASSETS = {
   sfx_explosion_energy_injector: './assets/sounds/sfx_explosion_energy_injector.ogg',
   sfx_explosion_time_bubble: './assets/sounds/sfx_explosion_time_bubble.ogg',
   sfx_explosion_timebomb: './assets/sounds/sfx_explosion_timebomb.ogg',
+  sfx_explosion_explosive_barrel: './assets/sounds/sfx_explosion_explosive_barrel.ogg',
   sfx_explosion_he:             './assets/sounds/sfx_explosion_rocket.ogg',//done (he + rocket getauscht)
   sfx_explosion_smoke:          './assets/sounds/sfx_explosion_smoke.ogg',
   sfx_explosion_holy:           './assets/sounds/sfx_explosion_holy.ogg',//done
@@ -297,6 +299,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_explosion_energy_injector: 0.5,
   sfx_explosion_time_bubble: 1.0,
   sfx_explosion_timebomb: 0.5,
+  sfx_explosion_explosive_barrel: 0.55,
   // Shot Sounds
   shot_ak47:               0.6,
   shot_asmd_primary:       0.3,

@@ -5,6 +5,7 @@ import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades
 import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
 import { DAWN_BOMBER_SHADOW_TEXTURE, DAWN_PIPELINE_ASSETS, preloadDawnDecalAssets, preloadDawnNightAssets } from '../assets/DawnAssets';
+import { REACTIVE_PROP_PIPELINE_ASSETS } from '../assets/ReactivePropAssets';
 import { resolveScheduledAirstrikeRuns, type ScheduledAirstrikeRun } from '../systems/AirstrikeRun';
 import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
 import { preloadPowerUpAssets, assertPowerUpAssetsReady } from '../assets/PowerUpAssets';
@@ -415,7 +416,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadPersistentBaseGravelAssets(this.load);
     preloadRockMossAssets(this.load);
     preloadRockVegetationMask(this.load);
-    preloadTurretVisualAssets(this.load, DAWN_PIPELINE_ASSETS);
+    preloadTurretVisualAssets(this.load, [...DAWN_PIPELINE_ASSETS, ...REACTIVE_PROP_PIPELINE_ASSETS]);
     preloadDawnDecalAssets(this.load);
     preloadDawnNightAssets(this.load);
     preloadCanopyAssets(this.load);

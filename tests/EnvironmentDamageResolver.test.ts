@@ -128,3 +128,25 @@ describe('radial environment damage', () => {
     expect(result.damagedRockIndices).toEqual([1]);
   });
 });
+
+describe('reactive props in radial environment damage', () => {
+  it('damages full-damage targets even when the weapon does no rock damage, and only those', () => {
+    const sink = createSink([{ x: 0, y: 0, hp: 100 }, { x: 10, y: 0, hp: 100 }]);
+    const result = applyRadialEnvironmentDamage({
+      ...sink,
+      isFullDamageTarget: index => index === 1,
+      hasFullDamageTargets: () => true,
+    }, { x: 0, y: 0, radius: 50, damage: 40, rockDamageMult: 0 }, 'p1');
+    expect(sink.rocks[0].hp).toBe(100);
+    expect(sink.rocks[1].hp).toBeLessThan(100);
+    expect(result.damagedRockIndices).toEqual([1]);
+  });
+
+  it('applies the full radial damage to full-damage targets instead of the rock multiplier', () => {
+    const sink = createSink([{ x: 0, y: 0, hp: 100 }, { x: 0, y: 0, hp: 100 }]);
+    applyRadialEnvironmentDamage({ ...sink, isFullDamageTarget: index => index === 1, hasFullDamageTargets: () => true },
+      { x: 0, y: 0, radius: 50, damage: 40, rockDamageMult: 0.25 }, 'p1');
+    expect(sink.rocks[0].hp).toBe(90);
+    expect(sink.rocks[1].hp).toBe(60);
+  });
+});

@@ -458,7 +458,7 @@ export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'ro
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'mortar' | 'default' | 'meteor' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop' | 'time_bubble_release' | 'asmd_combo' | 'firestarter_combo';
+export type ExplosionVisualStyle = 'mortar' | 'default' | 'meteor' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop' | 'time_bubble_release' | 'asmd_combo' | 'firestarter_combo' | 'barrel';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {

@@ -1141,6 +1141,8 @@ export class EffectSystem implements EnemyVisualSink {
       this.cameraFeedback?.request(impactExceptional({ sourceX: x, sourceY: y }));
     } else if (isEnergy) {
       this.cameraFeedback?.request(impactLight({ sourceX: x, sourceY: y }));
+    } else if (visualStyle === 'barrel') {
+      this.cameraFeedback?.request(impactMedium({ sourceX: x, sourceY: y }));
     } else if (isNuke && !this.visualFeedback?.hasActiveNukeSequence()) {
       // Der Einschlag der Nuke gehört zur Choreografie. Nur wenn die nicht läuft (`low`),
       // springt der Einzeleffekt als Rückfallebene ein – sonst schlüge er doppelt zu.

@@ -49,6 +49,11 @@ export const EXPLOSION_VISUAL_PROFILES = {
     family: 'cascade', layering: 'ordinary', countScale: 1.3, lifeScale: 1.2, bodyScale: 1.35,
     smokeScale: 1.5, chunkScale: 1.25, upwardEmbers: false,
   },
+  // Explosives Fass: schwerer Feuerball, dunkler Ölrauch, viele Blechbrocken, aufsteigende Funken.
+  barrel: {
+    family: 'standard', layering: 'ordinary', countScale: 1.3, lifeScale: 1.12, bodyScale: 1.2,
+    smokeScale: 1.55, chunkScale: 1.5, upwardEmbers: true,
+  },
   rocket: {
     family: 'standard', layering: 'ordinary', countScale: 1.15, lifeScale: 0.95, bodyScale: 1.05,
     smokeScale: 1, chunkScale: 1.1, upwardEmbers: false,
@@ -119,6 +124,7 @@ export function isThermalExplosionStyle(style: ExplosionVisualStyle): boolean {
     || style === 'he_cluster_shard'
     || style === 'he_demolition_shard'
     || style === 'rocket'
+    || style === 'barrel'
     || style === 'mini_rocket'
     || style === 'mini_rocket_cascade'
     || style === 'train'

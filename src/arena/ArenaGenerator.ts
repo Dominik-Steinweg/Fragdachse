@@ -611,8 +611,8 @@ export class ArenaGenerator {
         blocked, trackCols, powerUpPedestals, groundHazardZones, reactivePropKeepClear,
         reactivePropAnchors, reactivePropScatter, coopBaseSpecs, seed + attempt,
       );
-      if (reactiveProps === null) {
-        failedAttempt('Reaktive Map-Objekte blockieren begehbare Flächen');
+      if (typeof reactiveProps === 'string') {
+        failedAttempt(`Reaktive Map-Objekte: ${reactiveProps}`);
         continue;
       }
       const decals = this.generateDecals(
@@ -2453,7 +2453,7 @@ export class ArenaGenerator {
     };
   }
 
-  /** Platziert Fass-Anker und gestreute Gruppen; `null` verwirft diesen Generierungsversuch. */
+  /** Platziert Fass-Anker und gestreute Gruppen; ein Grund verwirft diesen Generierungsversuch. */
   private placeReactiveProps(
     blocked: boolean[][],
     trackCols: ReadonlySet<number>,
@@ -2464,7 +2464,7 @@ export class ArenaGenerator {
     scatter: readonly ReactivePropScatterSpec[],
     coopBaseSpecs: readonly BaseSpec[] | undefined,
     attemptSeed: number,
-  ): ReactivePropCell[] | null {
+  ): ReactivePropCell[] | string {
     const reserved = new Set<string>();
     for (const { gridX, gridY } of pedestals) {
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) reserved.add(`${gridX + dx}_${gridY + dy}`);
@@ -2491,7 +2491,7 @@ export class ArenaGenerator {
       scatter,
       rng: this.makePrng((attemptSeed ^ 0x5bd1e995) >>> 0),
     });
-    return result.kind === 'placed' ? result.cells : null;
+    return result.kind === 'placed' ? result.cells : result.reason;
   }
 
   private makeDecalPrng(seed: number): () => number {

@@ -1,0 +1,58 @@
+{
+  "name": "reactive-barrels",
+  "description": "Explosive barrels on the map 04 meadow: idle at 2x and 1x, a pistol hit ignites the single barrel, the red warning pulse, its explosion and the chain into the three-barrel cluster, then burning ground. Layouts force the rusted or toxic variant locally.",
+  "viewport": { "width": 1280, "height": 720 },
+  "board": { "columns": 4, "tileWidth": 420 },
+  "hud": false,
+  "scenario": {
+    "classId": "inspector_gadachs",
+    "seed": 12345,
+    "weapon1": "GLOCK",
+    "player": "$player"
+  },
+  "times": [
+    { "id": "day", "timeOfDay": 720, "label": "12:00" },
+    { "id": "night", "timeOfDay": 1320, "label": "22:00" }
+  ],
+  "layouts": [
+    { "id": "rusted", "scenario": { "mapId": "4" }, "vars": { "variant": "rusted" } },
+    { "id": "toxic", "scenario": { "mapId": "4" }, "vars": { "variant": "toxic" } }
+  ],
+  "vars": {
+    "player": { "gridX": 47, "gridY": 25 },
+    "view": { "gridX": 41, "gridY": 29.5 },
+    "single": { "gridX": 42.5, "gridY": 31.5 },
+    "cluster": { "gridX": 39, "gridY": 31 }
+  },
+  "setup": [
+    { "action": "reactivePropVariant", "variant": "$variant" },
+    { "op": "camera", "at": "$view", "zoom": 2 },
+    { "op": "settle" }
+  ],
+  "shots": [
+    { "id": "idle-2x", "label": "Ruhe, Zoom 2", "do": [],
+      "crops": [{ "of": "$cluster", "size": [220, 160], "scale": 2, "label": "Gruppe" }] },
+    { "id": "idle-1x", "label": "Ruhe, Spielgröße", "do": [{ "op": "camera", "at": "$view", "zoom": 1 }],
+      "crops": [{ "of": "$cluster", "size": [120, 90], "scale": 4, "label": "1x" }] },
+    { "id": "burning", "label": "Pistolentreffer: brennt", "do": [
+      { "op": "camera", "at": "$single", "zoom": 2 },
+      { "action": "fire", "slot": "weapon1" },
+      { "op": "until", "expr": "window.devScenario.status().reactiveProps.some(p => p.phase === 'primed')", "maxFrames": 120 },
+      { "op": "ms", "ms": 700 },
+      { "op": "camera", "at": "$view", "zoom": 2 }
+    ], "crops": [{ "of": "$single", "size": [140, 140], "scale": 3, "label": "brennt" }] },
+    { "id": "warning", "label": "Warnpuls (<25 % HP)", "do": [
+      { "op": "until", "expr": "window.devScenario.status().reactiveProps.some(p => p.phase === 'primed' && p.progress < 0.22)", "maxFrames": 600 }
+    ], "crops": [{ "of": "$single", "size": [140, 140], "scale": 3, "label": "Warnung" }] },
+    { "id": "explosion", "label": "Explosion", "do": [
+      { "op": "mark" },
+      { "op": "until", "expr": "host.explosionsSinceMark.length > 0", "maxFrames": 600 },
+      { "op": "step", "frames": 5 }
+    ] },
+    { "id": "chain", "label": "Kettenreaktion", "do": [
+      { "op": "until", "expr": "host.explosionsSinceMark.length > 1", "maxFrames": 240, "optional": true },
+      { "op": "step", "frames": 6 }
+    ] },
+    { "id": "aftermath", "label": "Brennender Boden", "do": [{ "op": "ms", "ms": 1100 }] }
+  ]
+}

@@ -41,7 +41,8 @@ def bung(c, name, x, y, flange_r, steel, plug):
 def rusted(c, shell_top):
     """One large flame placard instead of small details: it must read at 27 px."""
     paint = surface(c, 'Oxide red drum paint', (172, 50, 34), .55)
-    lid = surface(c, 'Sun-faded red lid', (180, 58, 38), .6)
+    # Rust lives in the procedural wear (chips, edge abrasion, corrosion streaks), not in decals.
+    lid = surface(c, 'Sun-faded red lid', (176, 56, 36), .82)
     chime = surface(c, 'Worn chime with bare rust', (120, 70, 42), .9)
     label = surface(c, 'Hazard placard', (232, 220, 190), .3)
     mark = surface(c, 'Charcoal flame print', (36, 28, 26), .08)
@@ -65,7 +66,7 @@ def toxic(c, shell_top):
     plug = surface(c, 'Dark bung plug', (58, 60, 54), .2)
     sludge = surface(c, 'Toxic sludge body', (64, 178, 34), 0, .9)
     core = surface(c, 'Toxic glowing core', (136, 255, 60), 0, 1.7)
-    froth = surface(c, 'Toxic froth highlight', (196, 255, 132), 0, 2.4)
+    froth = surface(c, 'Toxic froth highlight', (150, 236, 92), 0, 1.0)
     c.cylinder('Drum shell', (0, 0, shell_top - .42), .47, .84, paint, 72)
     torus(c, 'Rolled top chime', (0, 0, shell_top + .012), .462, .042, chime)
     # Torn lid: an outer lid ring with jagged flaps peeled up around the opening.
@@ -90,14 +91,20 @@ def toxic(c, shell_top):
     torus(c, 'Embossed lid ring', (0, 0, shell_top + .02), .37, .014, lid)
     bung(c, 'Vent bung', -.28, -.2, .055, steel, plug)
     c.cylinder('Toxic sludge pool', (.01, -.01, shell_top), .31, .02, sludge, 48)
-    blob(c, 'Toxic glowing core', (.03, .0, shell_top + .006), (.17, .15, .012), core, .4)
-    for i, (x, y, s) in enumerate([(.06, .05, .05), (-.08, -.04, .035), (.1, -.1, .028), (-.03, .11, .024)]):
-        blob(c, f'Sludge bubble {i}', (x, y, shell_top + .008), (s, s, s * .4), froth)
-    # Two tongues of sludge spill over the chime; they break the circle slightly.
-    for i, (a, length) in enumerate([(3.6, .16), (5.95, .11)]):
-        r = .43
-        blob(c, f'Sludge spill {i}', (r * math.cos(a), r * math.sin(a), shell_top + .045),
-             (length * .5, .028, .018), sludge, a)
+    blob(c, 'Toxic glowing core', (.03, .0, shell_top + .006), (.13, .115, .012), core, .4)
+    for i, (x, y, s) in enumerate([(.07, .06, .032), (-.09, -.05, .024), (.11, -.09, .018)]):
+        blob(c, f'Sludge bubble {i}', (x, y, shell_top + .008), (s, s, s * .35), froth)
+    # One irregular drip runs from the pool over the lid ring and the chime edge.
+    drip = surface(c, 'Toxic drip', (62, 168, 32), 0, .55)
+    for i, (a, reach, width) in enumerate([(3.6, .48, .03)]):
+        outline = []
+        for k in range(9):
+            t = k / 8
+            r = .24 + (reach - .24) * t
+            w = width * (1 - .55 * t) * (1 + .25 * math.sin(7 * t + i))
+            outline.append((r, w))
+        tongue = [(r, w) for r, w in outline] + [(r, -w * (1 + .2 * math.cos(5 * r))) for r, w in reversed(outline)]
+        placed(c, f'Sludge spill {i}', (0, 0, shell_top + .03), tongue, .05, drip, .012, (0, 0, a))
 
 
 def build(c, spec):

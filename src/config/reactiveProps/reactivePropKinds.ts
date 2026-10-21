@@ -91,7 +91,7 @@ const range = (value: unknown, field: string, integers: boolean): readonly [numb
 };
 
 /** Explosionen dieser Kinds verwenden nur Felder, die Fässer heute brauchen; Rest wird abgelehnt. */
-const EXPLOSION_STYLES = ['default', 'rocket', 'mortar', 'meteor'] as const;
+const EXPLOSION_STYLES = ['barrel', 'default', 'rocket', 'mortar', 'meteor'] as const;
 
 function parseExplosion(raw: unknown, field: string, sourceId: string): ProjectileExplosionConfig {
   const value = record(raw, field);

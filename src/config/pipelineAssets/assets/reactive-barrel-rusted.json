@@ -1,0 +1,35 @@
+{
+  "id": "reactive-barrel-rusted",
+  "category": "powerup",
+  "gameIds": [],
+  "revision": "barrel-r3",
+  "variant": "standard",
+  "sourceSize": 128,
+  "textureKey": "reactive_prop_barrel_rusted",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "reactive_prop_barrel_rusted_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/reactive-barrel-rusted/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/reactive-barrel-rusted/sheet.png",
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 132,
+    "height": 132
+  },
+  "hashes": {
+    "idle": "7dd356d0c81e6f85f1fbb5d178aaf5d198152dc930940f2cbef8bbbdb2da1d46",
+    "sheet": "c9d8690e0b3557033f129568ad47fac255e7c9cb0ddd7321799f6431e0c59819"
+  }
+}

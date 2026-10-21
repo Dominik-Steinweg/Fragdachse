@@ -576,7 +576,8 @@ export class RockVisualHelper {
     // Keep layout.rocks dense: iterating consumers treat it as RockCell[] without holes.
     const rocks = this.currentLayout.rocks;
     // Slots reaktiver Map-Objekte tragen deren echte Zelle, nie die des Placeables.
-    const { firstReactivePropId, firstRuntimeObstacleId } = this.arenaResult.obstacleIds;
+    const firstReactivePropId = this.arenaResult.obstacleIds?.firstReactivePropId ?? 0;
+    const firstRuntimeObstacleId = this.arenaResult.obstacleIds?.firstRuntimeObstacleId ?? 0;
     const props = this.currentLayout.reactiveProps ?? [];
     while (rocks.length < rock.id) {
       const prop = rocks.length >= firstReactivePropId && rocks.length < firstRuntimeObstacleId

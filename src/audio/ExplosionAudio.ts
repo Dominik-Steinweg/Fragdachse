@@ -31,8 +31,7 @@ export const EXPLOSION_AUDIO = {
   'environment.airstrike': 'sfx_airstrike_explosion',
   'environment.decoy_explosion': 'sfx_explosion_decoy',
   'environment.rock_collapse': 'sfx_explosion_rock_collapse',
-  // Explosives Fass: vorerst die HE-Aufnahme, bis eine eigene Blech-Explosion existiert.
-  'environment.explosive_barrel': 'sfx_explosion_he',
+  'environment.explosive_barrel': 'sfx_explosion_explosive_barrel',
   'environment.base_destruction': 'sfx_explosion_base_destruction',
   'weapon.shotgun_lightning': 'sfx_explosion_shotgun_lightning',
   ENERGY_INJECTOR: 'sfx_explosion_energy_injector',
@@ -67,6 +66,7 @@ export const EXPLOSION_AUDIO_SUBSTITUTES: Partial<Record<AudioAssetKey, AudioAss
   sfx_explosion_energy_injector: 'sfx_explosion_he',
   sfx_explosion_time_bubble: 'sfx_explosion_he',
   sfx_explosion_timebomb: 'sfx_explosion_he',
+  sfx_explosion_explosive_barrel: 'sfx_explosion_he',
 };
 
 export function resolveExplosionAudio(sourceId: string, chargeDamage?: number): { key: AudioAssetKey; scale: number } | undefined {

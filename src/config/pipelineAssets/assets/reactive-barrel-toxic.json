@@ -1,0 +1,35 @@
+{
+  "id": "reactive-barrel-toxic",
+  "category": "powerup",
+  "gameIds": [],
+  "revision": "barrel-r3",
+  "variant": "standard",
+  "sourceSize": 128,
+  "textureKey": "reactive_prop_barrel_toxic",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "reactive_prop_barrel_toxic_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/reactive-barrel-toxic/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/reactive-barrel-toxic/sheet.png",
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 132,
+    "height": 132
+  },
+  "hashes": {
+    "idle": "56d579b8cf521bc8fcf48845ab5853b7519029fae5aa7420b0268e964b068aad",
+    "sheet": "41dc3b4c7eb161f82567ed2d77c4ab7e5996b0f9d61986d2b8736d4141be249f"
+  }
+}

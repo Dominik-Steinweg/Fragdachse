@@ -21,6 +21,14 @@
     "repeatAfterExitMs": 30000
   }],
   "balanceReferenceDurationSec": 120,
+  "reactiveProps": {
+    "anchors": [
+      { "id": "meadow-west-1", "kind": "explosive_barrel", "gridX": 38, "gridY": 30 },
+      { "id": "meadow-west-2", "kind": "explosive_barrel", "gridX": 39, "gridY": 30 },
+      { "id": "meadow-west-3", "kind": "explosive_barrel", "gridX": 38, "gridY": 31 },
+      { "id": "meadow-west-4", "kind": "explosive_barrel", "gridX": 42, "gridY": 31 }
+    ]
+  },
   "objective": "repel-assault",
   "bases": [
     {

@@ -21,7 +21,7 @@
           "rockDamageMult": 1,
           "trainDamageMult": 1,
           "baseDamageMult": 1,
-          "visualStyle": "rocket",
+          "visualStyle": "barrel",
           "color": "#ff7a2e",
           "groundFire": {
             "type": "fire",
