@@ -38,7 +38,7 @@ function fixture(){
  const shadow={setCharacterSunlight:vi.fn(),setCharacterShadowsSuppressed:vi.fn(),setSunPath:vi.fn(),setCanopyShadows:vi.fn(),setFormationShadows:vi.fn()};
  let vegetation:unknown;const ground={setVegetationLight:vi.fn((s:any)=>{vegetation=s?.quality?.vegetationForm?s:undefined;})};
  const targets={ground,rocks:{setFormationOptions:vi.fn(),setSunTime:vi.fn(),getFormationReceiver:()=>null,getFormationCoverage:()=>null,setSurfaceLights:vi.fn(),setMoonLight:vi.fn()},
-  rockOverlays:{setFormationReceiver:vi.fn(),setEcologyTuning:vi.fn(),setVoidFlora:vi.fn(),collectVoidGlowPoints:vi.fn((out:number[])=>{out.length=0;return 0;}),collectVoidColonies:vi.fn((out:unknown[])=>{out.length=0;return 0;})},canopies:[],
+  rockOverlays:{setFormationReceiver:vi.fn(),setEcologyTuning:vi.fn(),setVoidFlora:vi.fn(),syncVoidRevision:vi.fn(()=>1),collectVoidGlowPoints:vi.fn((out:number[])=>{out.length=0;return 0;}),collectVoidColonies:vi.fn((out:unknown[])=>{out.length=0;return 0;})},canopies:[],
   water:{isPrepared:()=>true,getPreparedMasks:()=>[],setSunlight:vi.fn(),setNightLight:vi.fn(),setVoidStain:vi.fn(),getPresentationTime:()=>0},wildlife:{setSunlight:vi.fn(),clearLights:vi.fn()},
   lighting,shadow,postFx:{setSunGrade:vi.fn()},fog:{tuning:{opacity:.5,detail:.65},setWoodlandLight:vi.fn(),setVoidHaze:vi.fn(),carriesVoidHaze:false},
   layout:{seed:12345,rocks:[],trees:[],dirt:[],water:[],tracks:[],decals:[],powerUpPedestals:[]},

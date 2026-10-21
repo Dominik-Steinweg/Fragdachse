@@ -139,6 +139,9 @@ export class RockOverlayStreamer {
   private readonly ecologyIndex: ArenaPointBucketIndex<EcologyColony>;
   private readonly ecologyTuning = { ...ROCK_ECOLOGY_DEFAULTS };
   private readonly ecologyByAnchor = new Map<number, EcologyColony[]>();
+  /** Anchors carrying void colonies, in ecology order; standing state is compared per frame. */
+  private voidAnchors: VoidAnchor[] = [];
+  private voidRevision = nextVoidRevision();
   private ecologyRadius = 0;
   private ecologyHeight: ((x: number, y: number) => number) | undefined;
   private readonly vegetationCandidates: RockVegetationPlacement[] = [];
@@ -295,6 +298,7 @@ export class RockOverlayStreamer {
     }
     this.anchorRockIds.clear();
     for (const [id, cell] of this.ecologyCells) this.anchorRockIds.set(rockCellKey(cell), id);
+    this.rebuildVoidAnchors();
   }
 
   /**
@@ -341,14 +345,25 @@ export class RockOverlayStreamer {
     this.refreshAll();
   }
 
+  /**
+   * Revision of the void colonies on standing rocks. Changes when the ecology is rebuilt or a void
+   * anchor's rock falls or returns; callers re-collect only then.
+   */
+  syncVoidRevision(): number {
+    for (const anchor of this.voidAnchors) {
+      const standing = this.rockVisualStates[anchor.rockId]?.active === true;
+      if (standing !== anchor.standing) { anchor.standing = standing; this.voidRevision = nextVoidRevision(); }
+    }
+    return this.voidRevision;
+  }
+
   /** Void colonies on standing rocks, for their self-lit veins and spores. */
   collectVoidColonies(out: EcologyColony[]): number {
     out.length = 0;
     if (!this.voidFlora) return 0;
-    for (const [anchor, group] of this.ecologyByAnchor) {
-      const id = this.anchorRockIds.get(anchor);
-      if (id === undefined || this.rockVisualStates[id]?.active !== true) continue;
-      for (const colony of group) if (colony.void) out.push(colony);
+    for (const anchor of this.voidAnchors) {
+      if (this.rockVisualStates[anchor.rockId]?.active !== true) continue;
+      for (const colony of anchor.colonies) out.push(colony);
     }
     return out.length;
   }
@@ -360,14 +375,27 @@ export class RockOverlayStreamer {
   collectVoidGlowPoints(out: number[]): number {
     out.length = 0;
     if (!this.voidFlora) return 0;
-    for (const [anchor, group] of this.ecologyByAnchor) {
-      const id = this.anchorRockIds.get(anchor);
-      if (id === undefined || this.rockVisualStates[id]?.active !== true) continue;
-      let x = 0, y = 0, n = 0, amount = 0;
-      for (const colony of group) if (colony.void) { x += colony.worldX; y += colony.worldY; amount = colony.voidAmount ?? 1; n++; }
-      if (n) out.push(x / n, y / n, amount);
+    for (const anchor of this.voidAnchors) {
+      if (this.rockVisualStates[anchor.rockId]?.active !== true) continue;
+      out.push(anchor.x, anchor.y, anchor.amount);
     }
     return out.length / 3;
+  }
+
+  private rebuildVoidAnchors(): void {
+    this.voidAnchors = [];
+    this.voidRevision = nextVoidRevision();
+    if (!this.voidFlora) return;
+    for (const [key, group] of this.ecologyByAnchor) {
+      const rockId = this.anchorRockIds.get(key);
+      if (rockId === undefined) continue;
+      const colonies: EcologyColony[] = [];
+      let x = 0, y = 0, amount = 0;
+      for (const colony of group) if (colony.void) { x += colony.worldX; y += colony.worldY; amount = colony.voidAmount ?? 1; colonies.push(colony); }
+      if (!colonies.length) continue;
+      this.voidAnchors.push({ rockId, colonies, x: x / colonies.length, y: y / colonies.length, amount,
+        standing: this.rockVisualStates[rockId]?.active === true });
+    }
   }
 
   setFormationReceiver(provider: FormationReceiverProvider | null): void {
@@ -504,7 +532,7 @@ export class RockOverlayStreamer {
     this.rockIndex.clear();
     this.sourceIndex.clear();
     this.mossIndex.clear();
-    this.ecology.length=0; this.ecologyIndex.clear(); this.ecologyByAnchor.clear(); this.ecologyHeight=undefined;
+    this.ecology.length=0; this.ecologyIndex.clear(); this.ecologyByAnchor.clear(); this.voidAnchors=[]; this.ecologyHeight=undefined;
     this.ecologyCells.clear(); this.ecologyCellKeys.clear();
     this.rockDecalIndex.clear();
   }
@@ -913,4 +941,19 @@ export function isRockDecalVisible(decal: DecalCell, activeCellKeys: ReadonlySet
   if ((decal.surface ?? 'ground') !== 'rock') return false;
   if (isEnclosedRockDecal(decal.textureKey)) return true;
   return activeCellKeys.has(rockCellKey(decal));
+}
+
+interface VoidAnchor {
+  readonly rockId: number;
+  readonly colonies: readonly EcologyColony[];
+  readonly x: number;
+  readonly y: number;
+  readonly amount: number;
+  standing: boolean;
+}
+
+/** Revisions are unique across streamers, so a rebuilt World never repeats its predecessor's value. */
+let voidRevisionCounter = 0;
+function nextVoidRevision(): number {
+  return ++voidRevisionCounter;
 }

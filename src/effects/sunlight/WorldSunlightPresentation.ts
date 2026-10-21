@@ -186,6 +186,9 @@ export class WorldSunlightPresentation {
  /** Flat x/y pairs of void lily colonies of the current woodland layout. */
  private readonly voidPondPoints:number[]=[];
  private readonly voidRockPoints:number[]=[];
+ /** Rock-overlay void revision the collected rock points/colonies belong to; -1 forces a collect. */
+ private voidRockRevision=-1;
+ private voidRockEmission:VoidFloraEmission|null=null;
  /** Night input of wet surfaces (water, blood): weight follows the lamps' own dusk curve, lamps are pulled per area. */
  readonly waterNight={night:0,lights:(x:number,y:number,width:number,height:number,out:SurfaceLightFrame)=>
   this.targets.lighting.sampleSurfaceLights(x,y,width,height,out,getGraphicsQualityProfile(this.scene).sunlight.surfaceLights)};
@@ -259,7 +262,12 @@ export class WorldSunlightPresentation {
   this.syncWoodland(targets);
   this.syncVoidPresence();
   this.voidCreep?.setAlerts(this.activityDanger?.alerts??[]);
-  targets.rockOverlays?.collectVoidGlowPoints(this.voidRockPoints);
+  const voidRevision=targets.rockOverlays?.syncVoidRevision()??-1;
+  const voidRocksChanged=voidRevision===-1||voidRevision!==this.voidRockRevision;
+  if(voidRocksChanged){
+   if(targets.rockOverlays)targets.rockOverlays.collectVoidGlowPoints(this.voidRockPoints);else this.voidRockPoints.length=0;
+   this.voidRockRevision=voidRevision;
+  }
   this.voidGlow?.update(this.scene.cameras.main,this.voidPondPoints,this.voidRockPoints,this.lastSceneTime/1000);
   {
     const artificial=targets.lighting.getArtificialLightFactor(),quality=getGraphicsQualityProfile(this.scene).sunlight;
@@ -272,7 +280,10 @@ export class WorldSunlightPresentation {
       quality.voidCreepRocks?targets.rocks?.getFormationCoverage()??null:null)??null);
   }
   if(this.voidEmission){
-    if(targets.rockOverlays){targets.rockOverlays.collectVoidColonies(this.voidRockColonies);this.voidEmission.setRockColonies(this.voidRockColonies);}
+    if(targets.rockOverlays&&(voidRocksChanged||this.voidRockEmission!==this.voidEmission)){
+     targets.rockOverlays.collectVoidColonies(this.voidRockColonies);this.voidEmission.setRockColonies(this.voidRockColonies);
+     this.voidRockEmission=this.voidEmission;
+    }
     // Veins and spores appear with the lamps' own dusk curve, fully at night.
     const artificial=targets.lighting.getArtificialLightFactor();
     this.voidEmission.update(Math.max(0,Math.min(1,(artificial-.1)/.6)),targets.water?.getPresentationTime()??this.lastSceneTime/1000);
