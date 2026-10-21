@@ -44,7 +44,7 @@ Explosionen von Gegnern zünden sie trotzdem. Spieler spawnen nie direkt neben e
 | Explosion | Radius 150 px, 85 → 20 Schaden, Knockback 1500, `selfDamageMult` 0.25, Felsschaden 1 |
 | Brennender Boden | Radius 64 px, 3 Schaden/Tick, 3,5 s, Nachbrand 2 s × 0,5 |
 | Feuerbrocken | 10 Brocken, Suchradius 150 px, Flug 450 ms, Boden 3 s |
-| Streuung PvP | 6 Gruppen à 1–3 Fässer, Mindestabstand 9 Zellen |
+| Streuung PvP | DM/TDM 4, CTB 6 Gruppen à 1–3 Fässer, Mindestabstand 9 Zellen |
 | Streuung Kampagne/Dawn | 3–9 Gruppen je nach Kartenfläche, Mindestabstand 10 Zellen |
 
 ## 5. Platzierung

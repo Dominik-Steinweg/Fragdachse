@@ -109,8 +109,8 @@ export class ReactivePropRenderer {
     const size = state.kind.visual.displaySizePx;
     visual.sprite.setPosition(x, y).setDisplaySize(size, size);
 
-    // Treffer heben das Blech kurz an; der rote Puls ist der Telegraph vor der Explosion.
-    if ((state.phase === 'idle' || state.phase === 'primed') && state.progress < visual.lastProgress - 0.005) {
+    // Echte Treffer heben das Blech kurz an; Brand-Ticks nicht.
+    if ((state.phase === 'idle' || state.phase === 'primed') && state.progress < visual.lastProgress - REACTIVE_PROP_VISUAL.hitFlashMinDrop) {
       visual.flashUntil = nowMs + REACTIVE_PROP_VISUAL.hitFlashMs;
     }
     visual.lastProgress = state.progress;

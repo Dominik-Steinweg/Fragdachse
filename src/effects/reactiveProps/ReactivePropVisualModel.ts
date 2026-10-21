@@ -21,7 +21,9 @@ export const REACTIVE_PROP_VISUAL = Object.freeze({
   warningScale: { far: 1.75, near: 1.12 },
   warningColor: 0xff2a14,
   hitFlashMs: 90,
-  hitFlashTint: 0x5c5c5c,
+  hitFlashTint: 0x3c3c3c,
+  /** Kleinere HP-Sprünge sind Brand-Ticks und blitzen nicht (15 HP/s ≙ 6 % je 250-ms-Tick). */
+  hitFlashMinDrop: 0.08,
 });
 
 export function resolveReactivePropVisual(phase: ReactivePropPhase, progress: number, nowMs: number): ReactivePropVisualState {
