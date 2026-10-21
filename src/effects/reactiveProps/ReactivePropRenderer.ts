@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_LIGHTING } from '../../config';
-import { resolveReactivePropVariant } from '../../config/reactiveProps/reactivePropKinds';
+import { isExplosiveReactivePropKind, resolveReactivePropVariant } from '../../config/reactiveProps/reactivePropKinds';
 import type { ReactivePropPresentationState, ReactivePropRuntime } from '../../world/reactiveProps/ReactivePropRuntime';
 import { fillRadialGradientTexture } from '../EffectUtils';
 import { emissiveAlpha } from '../EmissiveScale';
@@ -92,7 +92,7 @@ export class ReactivePropRenderer {
 
   private syncProp(state: ReactivePropPresentationState, cells: readonly import('../../types').ReactivePropCell[],
     cellX: number, cellY: number, nowMs: number, syncNow: number, artificial: number): void {
-    const visualState = resolveReactivePropVisual(state.phase, state.progress);
+    const visualState = resolveReactivePropVisual(state.phase, state.progress, state.kind.visual.presentation);
     let visual = this.props.get(state.index);
     const lightKey = `reactive-prop:${state.index}`;
     if (!visualState.visible) {
@@ -199,10 +199,11 @@ export class ReactivePropRenderer {
    * zum geschätzten Knall. Verschiebt ein neuer Treffer den Knall, wird sie neu angesetzt.
    */
   private syncZone(state: ReactivePropPresentationState, visual: PropVisual, x: number, y: number, syncNow: number): void {
-    if (!this.zoneSink) return;
+    const kind = state.kind;
+    if (!this.zoneSink || !isExplosiveReactivePropKind(kind)) return;
     const observedKey = `${state.phase}:${state.progress}`;
     if (visual.observedKey !== observedKey) { visual.observedKey = observedKey; visual.observedSince = syncNow; }
-    const warning = resolveReactivePropWarning(state.kind, state.phase, state.progress, visual.observedSince);
+    const warning = resolveReactivePropWarning(kind, state.phase, state.progress, visual.observedSince);
     if (!warning) {
       if (visual.zone && syncNow >= visual.zone.endsAt) this.releaseZone(state.index, visual);
       else if (visual.zone) this.zoneSink(`reactive-prop:${state.index}`, visual.zone, syncNow, true);
@@ -211,7 +212,7 @@ export class ReactivePropRenderer {
     const c = REACTIVE_PROP_VISUAL;
     if (!visual.zone || Math.abs(visual.zone.hitAt - warning.hitAt) > c.retimeToleranceMs) {
       visual.zone = {
-        attackId: `reactive-prop:${state.index}:${++visual.zoneRevision}`, x, y, radius: state.kind.effect.explosion.radius,
+        attackId: `reactive-prop:${state.index}:${++visual.zoneRevision}`, x, y, radius: kind.effect.explosion.radius,
         startedAt: warning.hitAt - warning.durationMs, strikeAt: warning.hitAt - c.strikeLeadMs,
         hitAt: warning.hitAt, endsAt: warning.hitAt + c.lingerMs,
       };

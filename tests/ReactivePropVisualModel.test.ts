@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CELL_SIZE } from '../src/config';
-import { getReactivePropKind } from '../src/config/reactiveProps/reactivePropKinds';
+import { getExplosiveReactivePropKind } from '../src/config/reactiveProps/reactivePropKinds';
 import {
   REACTIVE_PROP_VISUAL, resolveReactivePropPoses, resolveReactivePropWarning,
 } from '../src/effects/reactiveProps/ReactivePropVisualModel';
@@ -43,7 +43,7 @@ describe('ReactivePropVisualModel', () => {
   });
 
   it('holds the announced blast time between burn ticks and pulls it forward on a real hit', () => {
-    const kind = getReactivePropKind('explosive_barrel');
+    const kind = getExplosiveReactivePropKind('explosive_barrel');
     const perHp = 1000 / kind.priming.selfDamagePerSecond;
     const tickHp = kind.priming.selfDamagePerSecond * 0.25;
     const first = resolveReactivePropWarning(kind, 'primed', 10 / kind.integrity.maxHp, 5_000);

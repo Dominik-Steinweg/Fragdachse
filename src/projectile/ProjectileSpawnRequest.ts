@@ -324,6 +324,26 @@ export function provenanceFromCombatSource(
   };
 }
 
+/**
+ * Combat-Source einer Folgewirkung ohne Projektil (Sporenwolke, Bienenstich), die einem bereits
+ * erfassten Auslöser gehört. Ursprung und authored Quelle beschreiben die Wirkung selbst; Waffenslot,
+ * Korrelation und persönliche Ursprünge des Auslösers entfallen, Teamschaden ist immer aus.
+ */
+export function combatSourceForFollowUpEffect(
+  source: import('../combat/CombatScope').CombatSource,
+  details: { readonly authoredSourceId: string; readonly origin: import('../types').CombatDamageKind; readonly parentEffectId: string },
+): import('../combat/CombatScope').CombatSource {
+  return {
+    gameplaySource: source.gameplaySource,
+    ...(source.actor ? { actor: source.actor } : {}),
+    attribution: source.attribution,
+    allegiance: { ...source.allegiance, allowTeamDamage: false },
+    authoredSourceId: details.authoredSourceId,
+    origin: details.origin,
+    lineage: { parentEffectId: details.parentEffectId },
+  };
+}
+
 // ── Interaction ───────────────────────────────────────────────────────────────
 
 /**

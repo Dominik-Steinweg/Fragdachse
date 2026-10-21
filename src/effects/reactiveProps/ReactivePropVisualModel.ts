@@ -1,5 +1,5 @@
 import { CELL_SIZE } from '../../config';
-import type { ReactivePropKindConfig } from '../../config/reactiveProps/reactivePropKinds';
+import type { ExplosiveReactivePropKind, ReactivePropPresentation } from '../../config/reactiveProps/reactivePropKinds';
 import type { ReactivePropCell } from '../../types';
 import type { ReactivePropPhase } from '../../world/reactiveProps/ReactivePropRuntime';
 
@@ -35,9 +35,12 @@ export const REACTIVE_PROP_VISUAL = Object.freeze({
   maxOffsetPx: 7,
 });
 
-export function resolveReactivePropVisual(phase: ReactivePropPhase, progress: number): ReactivePropVisualState {
+export function resolveReactivePropVisual(phase: ReactivePropPhase, progress: number,
+  presentation: ReactivePropPresentation = 'barrel'): ReactivePropVisualState {
   const c = REACTIVE_PROP_VISUAL;
   if (phase === 'destroyed') return { visible: false, burnStacks: 0 };
+  // Nur das Fass brennt; Bovist und Korb zeigen ihren Zustand über die Blender-Clips.
+  if (presentation !== 'barrel') return { visible: true, burnStacks: 0 };
   if (phase === 'idle' || phase === 'recharging') return { visible: true, burnStacks: 0 };
   if (phase === 'triggered') return { visible: true, burnStacks: c.maxBurnStacks };
   const damage = 1 - Math.max(0, Math.min(1, progress));
@@ -50,7 +53,7 @@ export function resolveReactivePropVisual(phase: ReactivePropPhase, progress: nu
  * `progressSince`, dem Zeitpunkt, seit dem dieser Anteil gilt: So bleibt die Schätzung zwischen
  * den Brand-Ticks stehen, und nur echte Treffer verkürzen sie (dann setzt der Renderer neu an).
  */
-export function resolveReactivePropWarning(kind: ReactivePropKindConfig, phase: ReactivePropPhase, progress: number,
+export function resolveReactivePropWarning(kind: ExplosiveReactivePropKind, phase: ReactivePropPhase, progress: number,
   progressSince: number): { readonly hitAt: number; readonly durationMs: number } | null {
   const c = REACTIVE_PROP_VISUAL;
   const durationMs = c.warningBelow * kind.integrity.maxHp / kind.priming.selfDamagePerSecond * 1000 + kind.effect.fuseMs;

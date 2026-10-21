@@ -96,7 +96,10 @@ Explosionen von Gegnern zünden sie trotzdem. Spieler spawnen nie direkt neben e
 - Replikation: Slice `rp` (Phase und Fortschrittsbyte je Objekt), Protokoll 44; Layout über
   Generator-Version 16. Die Phase `recharging` ist im Drahtformat bereits belegt.
 
-## 8. Geplante Erweiterungen (nicht umgesetzt)
+## 8. Erweiterungen
+
+Pilzsporen und Bienenstock beschreibt [V2](Fragdachse_GDD_Reaktive_Map_Objekte_V2.md) (Riesenbovist, Strohkorb).
+Die ursprüngliche Planung:
 
 | Objekt | Auslöser | Wirkung | Danach |
 |---|---|---|---|

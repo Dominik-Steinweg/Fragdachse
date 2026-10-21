@@ -48,6 +48,7 @@
       },
       "afterEffect": { "kind": "destroyed" },
       "visual": {
+        "presentation": "barrel",
         "variants": {
           "rusted": { "textureKey": "reactive_prop_barrel_rusted", "glow": null },
           "toxic": {
@@ -56,6 +57,71 @@
           }
         },
         "defaultVariant": "rusted",
+        "displaySizePx": 32
+      }
+    },
+    "spore_puffball": {
+      "obstacleClass": "high",
+      "integrity": { "mode": "indestructible" },
+      "damage": { "factor": 1 },
+      "priming": { "kind": "none" },
+      "trigger": { "on": "hit", "minDamage": 1 },
+      "effect": {
+        "kind": "dot_zone",
+        "sourceId": "environment.spore_puffball",
+        "anticipationMs": 250,
+        "radius": 100,
+        "durationMs": 5000,
+        "damagePerTick": 4,
+        "tickIntervalMs": 500,
+        "slowFraction": 0.4,
+        "slowDurationMs": 700
+      },
+      "afterEffect": { "kind": "recharge", "rechargeMs": 15000 },
+      "visual": {
+        "presentation": "puffball",
+        "variants": {
+          "meadow": { "textureKey": "reactive_prop_puffball_meadow", "glow": null },
+          "void": {
+            "textureKey": "reactive_prop_puffball_void",
+            "glow": { "color": "#b46cff", "radiusPx": 34, "intensity": 0.35 }
+          }
+        },
+        "defaultVariant": "meadow",
+        "displaySizePx": 32
+      }
+    },
+    "bee_hive": {
+      "obstacleClass": "high",
+      "integrity": { "mode": "indestructible" },
+      "damage": { "factor": 1 },
+      "priming": { "kind": "none" },
+      "trigger": { "on": "hit", "minDamage": 1 },
+      "effect": {
+        "kind": "swarm",
+        "sourceId": "environment.bee_hive",
+        "anticipationMs": 300,
+        "durationMs": 7000,
+        "speedPxPerSec": 230,
+        "acquireRadiusPx": 420,
+        "leashRadiusPx": 720,
+        "swarmRadiusPx": 36,
+        "stingReachPx": 14,
+        "stingDamage": 3,
+        "stingIntervalMs": 400,
+        "stingsPerTarget": 4,
+        "maxTargetMs": 2200,
+        "idleGraceMs": 1200,
+        "dispersalMs": 900,
+        "maxReturnMs": 4000
+      },
+      "afterEffect": { "kind": "recharge", "rechargeMs": 15000 },
+      "visual": {
+        "presentation": "hive",
+        "variants": {
+          "straw": { "textureKey": "reactive_prop_bee_hive_straw", "glow": null }
+        },
+        "defaultVariant": "straw",
         "displaySizePx": 32
       }
     }
