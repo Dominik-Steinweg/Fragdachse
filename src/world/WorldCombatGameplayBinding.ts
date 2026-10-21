@@ -1136,7 +1136,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     hostPhysics.setWalkingSpeedMultiplierResolver((playerId, nowMs) => o.decoySystem.getStealthSpeedMultiplier(playerId)
       * (1 + (o.getPlayerCombatIntegration()?.utility.getTranslocatorMoveSpeedBonus?.(playerId, nowMs) ?? 0))
-      * (1 + (o.getPlayerCombatIntegration()?.utility.getStinkMoveSpeedBonus?.(playerId, nowMs) ?? 0)));
+      * (1 + (o.getPlayerCombatIntegration()?.utility.getStinkMoveSpeedBonus?.(playerId, nowMs) ?? 0))
+      // Spore slow; part of the predicted walking speed, so client prediction follows it.
+      * o.combatSystem.getPlayerMovementFactor(playerId, nowMs));
     hostPhysics.setDashRangeMultiplierResolver((playerId) => 1 + (o.getPlayerCombatIntegration()?.modifier.getPercentageStat(playerId, 'player.dashRange') ?? 0));
     hostPhysics.setDashRecoveryDurationResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.dashRecovery', DASH_T2_S) ?? DASH_T2_S);
     hostPhysics.setDashImpactDamageResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.dashImpactDamage', 0) ?? 0);

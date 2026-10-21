@@ -7,7 +7,7 @@ interface StoredEnemySlow {
   readonly state: EnemySlowState;
 }
 
-/** The World-local writer for target-bound Enemy slow and independent hit stagger. */
+/** The World-local writer for target-bound slows (Enemies and Players) and independent Enemy hit stagger. */
 export class EnemyMovementStatusSystem implements CombatMovementStatusPort {
   private readonly states = new Map<string, StoredEnemySlow>();
   private readonly hitStaggers = new Map<string, { readonly target: CombatTargetRef; readonly expiresAt: number }>();
@@ -30,7 +30,7 @@ export class EnemyMovementStatusSystem implements CombatMovementStatusPort {
   }
 
   applySlow(request: Parameters<CombatMovementStatusPort['applySlow']>[0]): boolean {
-    if (request.target.kind !== 'enemy'
+    if ((request.target.kind !== 'enemy' && request.target.kind !== 'player')
       || !Number.isFinite(request.factor)
       || !Number.isFinite(request.durationMs)
       || !Number.isFinite(request.nowMs)

@@ -161,6 +161,19 @@ describe('P5 canonical status owners', () => {
     expect(owner.getMovementFactor(enemy('e1', 2), 1_000)).toBe(1);
   });
 
+  it('merges a Player slow by the same rule and binds it to the life it hit', () => {
+    const owner = new EnemyMovementStatusSystem();
+    const life = player('p1');
+    owner.applySlow({ target: life, source: source('e1'), factor: 0.6, durationMs: 700, nowMs: 0 });
+    owner.applySlow({ target: life, source: source('e2'), factor: 0.9, durationMs: 1_000, nowMs: 200 });
+    expect(owner.getMovementFactor(life, 500)).toBe(0.6);
+    expect(owner.getMovementFactor(life, 1_200)).toBe(1);
+    // A new life is another target: the slow of the old life never carries over.
+    expect(owner.getMovementFactor(player('p1', 2), 500)).toBe(1);
+    owner.prune(500, target => target.instance.lifeRevision === 2);
+    expect(owner.getMovementFactor(life, 500)).toBe(1);
+  });
+
   it('scales hit stagger with weight and one base duration, including disable and immunity', () => {
     const base = 90;
     const duration = (factor: number, tuning = base) => resolveEnemyHitStaggerDuration('direct', factor, tuning);

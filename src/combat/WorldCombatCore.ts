@@ -109,7 +109,7 @@ import {
 } from '../combat/ProjectileCombatContractAdapter';
 import type { ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
 import { applyCombatDamage, applyCombatSupport, resolveCombatDamageModifiers, type CombatResolutionContext } from '../combat/CombatResolution';
-import { resolveCombatRelationship } from '../combat/CombatRelationshipPolicy';
+import { isPlayerSideCombatSource, resolveCombatRelationship } from '../combat/CombatRelationshipPolicy';
 import type {
   CombatDamageBasis,
   CombatDamageRequest,
@@ -171,6 +171,9 @@ interface AoeDamageOptions {
   selfDamageMult?: number;
   enemySlowFraction?: number;
   enemySlowDurationMs?: number;
+  /** Walking slow for damaged players (e.g. a spore cloud owned by an enemy); dash stays unaffected. */
+  playerSlowFraction?: number;
+  playerSlowDurationMs?: number;
   skipEnemies?: boolean;
   /** Explosionen können ihr direkt getroffenes Primärziel ausdrücklich ausnehmen. */
   excludeTargetId?: string;
@@ -588,6 +591,15 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   observeEnemyDamageCommitted(observer: (outcome: TargetDamageAppliedOutcome, x: number, y: number, now: number) => void): () => void {
     this.enemyDamageCommittedObservers.add(observer);
     return () => { this.enemyDamageCommittedObservers.delete(observer); };
+  }
+  private readonly radialExplosionObservers = new Set<(x: number, y: number, radius: number, now: number) => void>();
+  /** Host: every committed radial explosion, independent of presentation (e.g. bees scatter from it). */
+  observeRadialExplosions(observer: (x: number, y: number, radius: number, now: number) => void): () => void {
+    this.radialExplosionObservers.add(observer);
+    return () => { this.radialExplosionObservers.delete(observer); };
+  }
+  private notifyRadialExplosion(x: number, y: number, radius: number): void {
+    for (const observer of this.radialExplosionObservers) observer(x, y, radius, this.hostFrameNowMs);
   }
   private reactionGeneration = 0;
 
@@ -1822,14 +1834,18 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     damage = options?.damageBasis?.amount ?? damage;
     if (damageKind === 'explosion' && (!options?.category || options.category === 'explosion')) {
       this.bubbleChargePort?.observeExplosion(x, y, radius, damage, this.hostFrameNowMs, options?.damageFalloff);
+      this.notifyRadialExplosion(x, y, radius);
     }
     const runtimeMultiplier = derivedFrom || options?.damageBasis ? 1 : this.getPlayerRuntimeDamageMultiplier(ownerId, sourceSlot);
     const runtimeDamage = damage * runtimeMultiplier;
     const runtimeFalloff = options?.damageFalloff
       ? { ...options.damageFalloff, minDamage: options.damageFalloff.minDamage * runtimeMultiplier }
       : undefined;
-    // Only enemy-actor sources may stand in for a removed enemy; turret/world sources keep their path.
-    const sourceFaction = options?.source?.actor?.kind === 'enemy' ? options.source.allegiance.factionId : undefined;
+    // Only enemy sources may stand in for a removed enemy; turret/world sources keep their path. Sources
+    // captured from projectiles carry no actor, so the allegiance kind decides (a pod triggered by an
+    // enemy that died since must still hurt players, not hostile enemies).
+    const sourceKind = options?.source?.actor?.kind ?? options?.source?.allegiance.kind;
+    const sourceFaction = sourceKind === 'enemy' ? options?.source?.allegiance.factionId : undefined;
     const attackerFactionFallback = sourceFaction === 'hostile' || sourceFaction === 'allied' ? sourceFaction : undefined;
     for (const player of this.playerManager.getAllPlayers()) {
       if (options?.excludeTargetId === player.id) continue;
@@ -1854,6 +1870,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       const category = options?.category ?? (damageKind === 'ground' ? 'damage_over_time' : 'explosion');
       if (this.shouldBlockWithShield(player.id, category, roundedDamage, x, y)) continue;
+      if (player.id !== ownerId && (options?.playerSlowFraction ?? 0) > 0 && (options?.playerSlowDurationMs ?? 0) > 0) {
+        this.applyPlayerSlowAtHostTime(player.id, options?.playerSlowFraction ?? 0, options?.playerSlowDurationMs ?? 0);
+      }
       const outcome = this.applyDamage(player.id, roundedDamage, false, ownerId, options?.sourceId ?? 'weapon.grenade', {
         sourceX: x,
         sourceY: y,
@@ -1914,6 +1933,26 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
   }
 
+  /** Walking factor of a player's current life (spore slow); 1 without a slow. */
+  getPlayerMovementFactor(playerId: string, now: number): number {
+    const target = this.resolveCurrentCombatantTarget(playerId);
+    return target?.kind === 'player' ? (this.movementStatus?.getMovementFactor(target, now) ?? 1) : 1;
+  }
+
+  /** Same merge rule as the enemy slow; bound to the player's life, so death and respawn drop it. */
+  private applyPlayerSlowAtHostTime(playerId: string, slowFraction: number, durationMs: number): void {
+    if (slowFraction <= 0 || durationMs <= 0) return;
+    const target = this.resolveCurrentCombatantTarget(playerId);
+    if (target?.kind !== 'player') return;
+    this.movementStatus?.applySlow({
+      target,
+      source: this.createLegacyMutationSource(undefined, 'status.player-slow', 'support'),
+      factor: 1 - slowFraction,
+      durationMs,
+      nowMs: this.hostFrameNowMs,
+    });
+  }
+
   /** Passive movement projection; expiry cleanup belongs to the explicit status advance. */
   getEnemyMovementFactor(enemyId: string, now: number): number {
     const target = this.enemyManager?.getCombatTargetRef(enemyId);
@@ -1965,6 +2004,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     if (effect.rocketSupport) effect = this.captureRocketExplosionDamage(effect, ownerId, sourceSlot);
     this.bubbleChargePort?.observeExplosion(x, y, effect.radius, effect.maxDamage,
       this.hostFrameNowMs, resolveProjectileExplosionFalloff(effect));
+    this.notifyRadialExplosion(x, y, effect.radius);
     const damagedTargetKeys: string[] = [];
     const damagePlayers = effect.damageTarget === undefined
       || effect.damageTarget === 'all'
@@ -2483,8 +2523,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const allegiance = source.allegiance;
     if (ownerId && allegiance.ownerId === ownerId) return false;
     const hostile = allegiance.factionId === 'hostile' || allegiance.ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID;
-    const playerSide = (allegiance.kind ?? source.actor?.kind ?? source.gameplaySource.kind) === 'player' || allegiance.factionId === 'allied'
-      || allegiance.ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID;
+    const playerSide = isPlayerSideCombatSource(source);
     if (faction) return faction === 'hostile' ? !hostile : !playerSide;
     if (!ownerId) return true;
     const targetHostile = ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID
@@ -5146,6 +5185,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     if (this.isCurrentCombatantTarget(target) && this.isAlive(String(target.id))) this.stunStatus?.apply(target, durationMs, now);
   }
   getZeusTarget(id: string): CombatTargetRef | null { return this.resolveCurrentCombatantTarget(id); }
+  /** The current life/generation of a player or enemy, for host effects that track targets over time. */
+  getCurrentCombatantTarget(id: string): CombatTargetRef | null { return this.resolveCurrentCombatantTarget(id); }
   captureZeusDamageMultiplier(ownerId: string, now: number): number {
     return (this.loadoutManager?.getDamageMultiplier(ownerId, now) ?? 1) * (this.powerUpSystem?.getDamageMultiplier(ownerId) ?? 1);
   }
