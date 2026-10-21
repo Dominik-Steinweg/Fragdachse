@@ -3,7 +3,7 @@ import type { ArenaTrackColumnSpec } from './ArenaVisualFactory';
 import type { ChunkWorldFrame } from './chunks/ArenaChunkGrid';
 import type { ChunkBakeRegion } from './chunks/ChunkedRenderSurface';
 import type { GroundMaterialSamples } from './GroundMaterialSamples';
-import { writeTrackBallast } from './TrackGravelField';
+import { trackBallastMaterials, writeTrackBallast } from './TrackGravelField';
 import type { TerrainSnapshotMaterialSource } from './TerrainSnapshotMaterial';
 
 let nextCanvasId = 0;
@@ -25,6 +25,7 @@ export class TrackGravelLayer {
   ) {
     this.snapshotSource = { kind: 'track', seed, columns, frame, materials: {
       dirt: materials.dirt, gravel: materials.gravel, grassHeight: materials.grassHeight,
+      sleeperWood: materials.sleeperWood,
     } };
     const key = `__track_ballast_${nextCanvasId++}`;
     const texture = scene.textures.createCanvas(key, size, size);
@@ -50,7 +51,7 @@ export class TrackGravelLayer {
     const gravel = this.materials.gravel;
     if (!gravel) return null;
     writeTrackBallast(this.pixels.data, this.pixels.width, this.seed, this.columns, this.frame, region,
-      { gravel, soil: this.materials.dirt });
+      trackBallastMaterials(this.materials, gravel));
     return this.pixels;
   }
 

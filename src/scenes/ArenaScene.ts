@@ -14,6 +14,7 @@ import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/Wood
 import { preloadCharacterMeshAssets, assertCharacterMeshAssetsReady } from '../assets/CharacterMeshAssets';
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { preloadRockBase } from '../arena/RockBaseConfig';
+import { TRACK_RAIL_TEXTURE } from '../arena/TrackGravelConfig';
 import { PersistentBaseEditorScene } from './PersistentBaseEditorScene';
 import { PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
@@ -397,7 +398,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadRadialWheelAssets(this.load);
     preloadGroundMaterials(this.load);
     this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
-    this.load.image('bg_tracks', './assets/sprites/BahnstreckeSchienen.png');
+    this.load.image(TRACK_RAIL_TEXTURE.key, TRACK_RAIL_TEXTURE.path);
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     preloadRockBase(this.load);
     preloadWoodlandAssets(this);

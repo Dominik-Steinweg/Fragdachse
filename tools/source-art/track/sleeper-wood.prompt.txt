@@ -1,0 +1,6 @@
+Model: ComfyUI FLUX.2 klein 4B (distilled), seed 1001546131, 4 steps, 1024x1024.
+Post: comfy skill `post.py seamless` (default band), then Lanczos to 256x256
+-> public/assets/sprites/sleeper_wood_material.png. Only its luminance is used: TrackGravelField
+tints every sleeper between creosote-dark and weathered wood and samples a random window per sleeper.
+
+Seamless tileable top-down albedo texture of old weathered wooden railway sleeper wood, seen straight from above, long wood grain running strictly horizontally from left to right, dark grey-brown creosote-stained oak, sun-bleached silvery grey on the upper surface with dark brown tar in deep cracks, a few long drying cracks and splits along the grain, subtle knots, worn but dense and solid, fine grain detail, flat even diffuse light, no shadows, no vignette, no planks edges, no nails, fills the whole frame, realistic material photo scan style, muted desaturated colours

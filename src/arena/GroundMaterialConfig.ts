@@ -11,6 +11,8 @@ export const BANK_MATERIAL_WET_KEY = 'bank_material_wet';
 /** Persistent-Base gravel: grey crushed gravel, mixed with a sandier gravel (DirtSurfaceField). */
 export const GRAVEL_MATERIAL_KEY = 'gravel_material';
 export const GRAVEL_MATERIAL_ALT_KEY = 'gravel_material_alt';
+/** Weathered railway sleeper wood, grain along x; sampled per sleeper by TrackGravelField. */
+export const SLEEPER_WOOD_MATERIAL_KEY = 'sleeper_wood_material';
 /** Low-frequency Multiply map over grass, soil and tufts (scripts/generate-ground-macro.mjs). */
 export const GROUND_MACRO_KEY = 'ground_macro';
 /** Stretch of the macro map. 512 x 5.5 = 2816 px shares no small multiple with the 1024 px
@@ -25,6 +27,7 @@ export function preloadGroundMaterials(load: Phaser.Loader.LoaderPlugin): void {
   load.image(BANK_MATERIAL_WET_KEY, './assets/sprites/bank_material_wet.png');
   load.image(GRAVEL_MATERIAL_KEY, './assets/sprites/gravel_material.png');
   load.image(GRAVEL_MATERIAL_ALT_KEY, './assets/sprites/gravel_material_alt.png');
+  load.image(SLEEPER_WOOD_MATERIAL_KEY, './assets/sprites/sleeper_wood_material.png');
   load.image(GROUND_MACRO_KEY, './assets/sprites/ground_macro.png');
 }
 

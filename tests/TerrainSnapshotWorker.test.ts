@@ -7,7 +7,7 @@ import { TerrainSnapshotWorkerClient } from '../src/arena/TerrainSnapshotWorkerC
 import { TerrainSnapshotStaging } from '../src/arena/TerrainSnapshotStaging';
 import { DirtSurfaceLayer } from '../src/arena/DirtSurfaceLayer';
 import { DirtSurfaceField } from '../src/arena/DirtSurfaceField';
-import { writeTrackBallast } from '../src/arena/TrackGravelField';
+import { trackBallastMaterials, writeTrackBallast } from '../src/arena/TrackGravelField';
 import { TERRAIN_SNAPSHOT_SCALE } from '../src/arena/TerrainColorSnapshotBuilder';
 import { terrainSnapshotTexel } from '../src/arena/TerrainSnapshotSampling';
 import type { TerrainSnapshotRequest, TerrainSnapshotResult } from '../src/arena/TerrainSnapshotWorker';
@@ -56,7 +56,7 @@ describe('terrain snapshot sampling and worker lifetime', () => {
       field.write(sparse, side, x, y, side, side);
       if (input.kind === 'soil') soil.writeSurface(full, side, x, y, side, materials);
       else writeTrackBallast(full, side, input.seed, input.columns, frame, { worldX: x, worldY: y, size: side },
-        { gravel: texture, soil: texture });
+        trackBallastMaterials(materials, texture));
       let compared = 0;
       for (let py = 0; py < side; py++) for (let px = 0; px < side; px++) {
         const index = (py * side + px) * 4;

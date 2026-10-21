@@ -1,5 +1,5 @@
 import { DirtSurfaceField } from './DirtSurfaceField';
-import { writeTrackBallast } from './TrackGravelField';
+import { trackBallastMaterials, writeTrackBallast } from './TrackGravelField';
 import type { GroundMaterialSamples } from './GroundMaterialSamples';
 import type { DirtCell, WaterCell } from '../types';
 import type { ChunkWorldFrame } from './chunks/ArenaChunkGrid';
@@ -8,7 +8,8 @@ import { ROCK_OVERLAY_CHUNK_SIZE } from './RockOverlayRegions';
 
 export type TerrainSnapshotMaterialSource = {
   readonly seed: number; readonly frame: ChunkWorldFrame; readonly materials: GroundMaterialSamples;
-} & ({ readonly kind: 'soil'; readonly dirt: readonly DirtCell[]; readonly water: readonly WaterCell[] }
+} & ({ readonly kind: 'soil'; readonly dirt: readonly DirtCell[]; readonly water: readonly WaterCell[];
+    readonly tracks?: readonly ArenaTrackColumnSpec[] }
   | { readonly kind: 'track'; readonly columns: readonly ArenaTrackColumnSpec[] });
 
 /** Pure worker-side counterpart of the native material bakes. Buffers are bounded
@@ -17,7 +18,8 @@ export class TerrainSnapshotMaterial {
   private readonly soil: DirtSurfaceField | null;
   private readonly tile = new Uint8ClampedArray(ROCK_OVERLAY_CHUNK_SIZE ** 2 * 4);
   constructor(private readonly source: TerrainSnapshotMaterialSource) {
-    this.soil = source.kind === 'soil' ? new DirtSurfaceField(source.seed, source.dirt, source.frame, source.water) : null;
+    this.soil = source.kind === 'soil'
+      ? new DirtSurfaceField(source.seed, source.dirt, source.frame, source.water, source.tracks) : null;
   }
   /** Full-resolution visible chunk: same field, no sparse snapshot sampling. */
   writeNative(data:Uint8ClampedArray,side:number,x:number,y:number):void {
@@ -32,7 +34,7 @@ export class TerrainSnapshotMaterial {
       else if (source.kind === 'track' && source.materials.gravel) {
         writeTrackBallast(tile, size, source.seed, source.columns, source.frame,
           { worldX: worldX + x, worldY: worldY + y, size },
-          { gravel: source.materials.gravel, soil: source.materials.dirt }, true);
+          trackBallastMaterials(source.materials, source.materials.gravel), true);
       } else tile.fill(0);
       for (let row = 0; row < Math.min(size, side - y); row++) {
         data.set(tile.subarray(row * size * 4, (row * size + Math.min(size, side - x)) * 4), ((y + row) * side + x) * 4);
