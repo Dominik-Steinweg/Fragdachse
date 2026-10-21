@@ -62,6 +62,6 @@ nachts leichter verteidigen; der eigene Weg zu Sites jenseits des Flusses fällt
 ## Offene Punkte
 
 - Shift-Plakette und Marker überlagern sich am Brückenende (Marker-Layout).
-- HQ-Asset (Blender) für Deck, Widerlager, Ruine, Kiste und Ladung; die Draft-Ruine ist zu unscheinbar.
+- HQ-Blender-Asset nicht gebaut; Deck und Ruine nutzen Materialtexturen aus ComfyUI (`tools/source-art/bridge-*`).
 - Dawn-Nacht im Dev-Szenario nicht live angesehen (`dawnSkip` verweigerte nach Teleports); Erreichbarkeit aller Fronten
   und Sites mit gesprengten Brücken sichern `test:stress:dawn` und der Sweep.
