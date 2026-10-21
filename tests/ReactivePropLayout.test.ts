@@ -35,7 +35,7 @@ describe('reactive prop placement', () => {
     const place = () => {
       const blocked = grid(40, 21, 20);
       const result = placeReactiveProps({ cols: 40, rows: 21, blocked, isReserved: () => false,
-        isConnected: connected, anchors: [], scatter, rng: rng(7) });
+        anchors: [], scatter, rng: rng(7) });
       return { result, blocked };
     };
     const a = place(), b = place();
@@ -49,18 +49,26 @@ describe('reactive prop placement', () => {
   it('keeps scattered props off reserved cells and on open ground', () => {
     const blocked = grid(40, 21);
     const result = placeReactiveProps({ cols: 40, rows: 21, blocked, isReserved: gx => gx < 20,
-      isConnected: connected, anchors: [], scatter, rng: rng(3) });
+      anchors: [], scatter, rng: rng(3) });
     expect(result.kind).toBe('placed');
     if (result.kind === 'placed') for (const cell of result.cells) expect(cell.gridX).toBeGreaterThanOrEqual(21);
   });
 
   it('places authored anchors first and retries when an anchor would seal a passage', () => {
     const open = placeReactiveProps({ cols: 40, rows: 21, blocked: grid(40, 21), isReserved: () => false,
-      isConnected: connected, anchors: [{ id: 'a', kind: 'explosive_barrel', gridX: 5, gridY: 5, variant: 'toxic' }],
+      anchors: [{ id: 'a', kind: 'explosive_barrel', gridX: 5, gridY: 5, variant: 'toxic' }],
       scatter: [], rng: rng(1) });
     expect(open).toEqual({ kind: 'placed', cells: [{ kind: 'explosive_barrel', gridX: 5, gridY: 5, anchorId: 'a', variant: 'toxic' }] });
     const sealing = placeReactiveProps({ cols: 40, rows: 21, blocked: grid(40, 21, 20), isReserved: () => false,
-      isConnected: connected, anchors: [{ id: 'gap', kind: 'explosive_barrel', gridX: 20, gridY: 10 }], scatter: [], rng: rng(1) });
+      anchors: [{ id: 'gap', kind: 'explosive_barrel', gridX: 20, gridY: 10 }], scatter: [], rng: rng(1) });
     expect(sealing.kind).toBe('retry');
+  });
+
+  it('still scatters when walkable space is already split (closed gates, islands)', () => {
+    const blocked = grid(40, 21, 20);
+    blocked[10][20] = true; // the wall is now closed: two separate halves before any barrel
+    const result = placeReactiveProps({ cols: 40, rows: 21, blocked, isReserved: () => false,
+      anchors: [], scatter, rng: rng(5) });
+    expect(result.kind === 'placed' && result.cells.length).toBeGreaterThan(0);
   });
 });

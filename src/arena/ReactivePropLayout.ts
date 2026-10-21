@@ -17,7 +17,6 @@ export interface ReactivePropPlacementInput {
   readonly blocked: boolean[][];
   /** Zellen, auf denen kein Objekt stehen darf (Basis, Gleis, Podest, Spawnkern …). */
   readonly isReserved: (gridX: number, gridY: number) => boolean;
-  readonly isConnected: (blocked: boolean[][]) => boolean;
   readonly anchors: readonly ReactivePropAnchor[];
   readonly scatter: readonly ReactivePropScatterSpec[];
   /** Eigener Zufallsstrom: die Platzierung verschiebt keine Fels-, Baum- oder Decal-Folge. */
@@ -34,13 +33,14 @@ const EDGE_MARGIN_CELLS = 2;
 /**
  * Setzt reaktive Map-Objekte in ein bereits konnektives Layout.
  *
- * Authored Anker stehen auf ihrer Zelle (der Generator hält sie wie Lichtungen frei); verletzt
- * ein Anker eine Reservierung, ist das ein Authoring-Fehler. Gestreute Gruppen stehen auf freiem
- * Boden: ihr 3×3-Umfeld ist frei von Hindernissen, und jede Gruppe muss die Begehbarkeit erhalten
- * – sonst wird sie zurückgenommen und an anderer Stelle versucht.
+ * Authored Anker stehen auf ihrer Zelle (der Generator hält sie wie Lichtungen frei); sie dürfen
+ * die begehbare Fläche nicht in mehr Teile zerlegen, als sie schon hatte (geschlossene Missionstore
+ * und Wasser können sie bereits teilen). Gestreute Gruppen stehen auf freiem Boden: Um jede Gruppe
+ * liegt ein vollständig freier Ring, über den jeder Weg sie umgehen kann – sie trennen nie etwas ab.
  */
 export function placeReactiveProps(input: ReactivePropPlacementInput): ReactivePropPlacementResult {
   const { blocked, rng } = input;
+  const componentsBefore = input.anchors.length > 0 ? countWalkableComponents(blocked) : 0;
   const cells: ReactivePropCell[] = [];
   const taken = new Set<number>();
   const key = (gx: number, gy: number) => gy * input.cols + gx;
@@ -63,7 +63,7 @@ export function placeReactiveProps(input: ReactivePropPlacementInput): ReactiveP
       ...(anchor.variant ? { variant: anchor.variant } : {}),
     });
   }
-  if (input.anchors.length > 0 && !input.isConnected(blocked)) {
+  if (input.anchors.length > 0 && countWalkableComponents(blocked) > componentsBefore) {
     return { kind: 'retry', reason: 'Authored Fässer schneiden begehbare Flächen ab' };
   }
 
@@ -108,12 +108,8 @@ export function placeReactiveProps(input: ReactivePropPlacementInput): ReactiveP
           own.add(key(next.gridX, next.gridY));
           group.push(next);
         }
-        for (const cell of group) blocked[cell.gridY][cell.gridX] = true;
-        if (!input.isConnected(blocked)) {
-          for (const cell of group) blocked[cell.gridY][cell.gridX] = false;
-          continue;
-        }
         for (const cell of group) {
+          blocked[cell.gridY][cell.gridX] = true;
           taken.add(key(cell.gridX, cell.gridY));
           cells.push({ kind: spec.kind, gridX: cell.gridX, gridY: cell.gridY, ...(spec.variant ? { variant: spec.variant } : {}) });
         }
@@ -123,4 +119,30 @@ export function placeReactiveProps(input: ReactivePropPlacementInput): ReactiveP
     }
   }
   return { kind: 'placed', cells };
+}
+
+/** Zusammenhängende begehbare Flächen (4er-Nachbarschaft). */
+function countWalkableComponents(blocked: readonly boolean[][]): number {
+  const rows = blocked.length, cols = rows ? blocked[0].length : 0;
+  const seen = new Uint8Array(rows * cols);
+  const stack: number[] = [];
+  let components = 0;
+  for (let start = 0; start < rows * cols; start++) {
+    if (seen[start] || blocked[Math.floor(start / cols)][start % cols]) continue;
+    components++;
+    seen[start] = 1;
+    stack.push(start);
+    while (stack.length) {
+      const cell = stack.pop()!;
+      const x = cell % cols, y = Math.floor(cell / cols);
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const next = ny * cols + nx;
+        if (seen[next] || blocked[ny][nx]) continue;
+        seen[next] = 1;
+        stack.push(next);
+      }
+    }
+  }
+  return components;
 }

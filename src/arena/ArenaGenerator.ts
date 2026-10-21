@@ -2486,7 +2486,6 @@ export class ArenaGenerator {
           || this.isCaptureTheBeerBaseCell(gridX, gridY)
           || this.isReservedBaseObstacleCell(gridX, gridY, coopBaseSpecs);
       },
-      isConnected: (grid) => this.isConnected(grid),
       anchors,
       scatter,
       rng: this.makePrng((attemptSeed ^ 0x5bd1e995) >>> 0),
