@@ -298,6 +298,24 @@ GPU-seitigen Fragment-zu-Staub-Morph und einer spaet beschleunigenden Release-Be
 Silhouette stammen weiterhin aus dem replizierten Texture-/Frame-Snapshot und dessen lokal
 analysierten Chunks; einzelne Fragmentzustaende werden nicht repliziert.
 
+## Portale
+
+Alle Portale teilen eine Darstellung: Translokator-Paare, Feuerleit-Ausgänge und Mündungsportale,
+Generator-Portale und die Landepunkt-Vorschau. Ihre Owner leiten je Frame `PortalEndView`s aus
+repliziertem oder lokalem Zustand ab und reichen sie unter einem eigenen Owner-Schlüssel an die
+World-weite [PortalPresentation](../../src/effects/portal/PortalPresentation.ts) im `RendererBundle`
+(`submit`/`clear`). Diese besitzt den GPU-Layer ([PortalGpuLayer](../../src/effects/gpu/PortalGpuLayer.ts),
+Bodenmaterial unter den Figuren, Leuchtrand und Partikel über der Lightmap), Teleport- und
+Kollaps-Ereignisse, die Portal-Lichter und die Zielansicht aus dem Terrain-Farb-Snapshot.
+
+- Ein Anwendungsfall wählt nur einen Stil aus [PortalStyle](../../src/effects/portal/PortalStyle.ts)
+  und befüllt die Ansicht (Partner, Öffnung, Lebens- oder Ladeanzeige); Form, Bewegung, Partikel und
+  Transfer-Effekt bleiben gemeinsam. Neue Portalarten bauen keinen eigenen Portal-Renderer.
+- Teleport-RPCs tragen nur Punkt und Farbe. Richtung und Stil ergeben sich aus dem dort
+  eingereichten Ende und seinem Partner (`playFlashAt`); ein Punkt ohne Ende bleibt ungerichtet.
+- Die Darstellung entscheidet nichts: Übertritt, Gates und Kollaps-Wirkung gehören dem Transport
+  (siehe [gameplay.md](gameplay.md)).
+
 ## Große World-Flächen
 
 Statische World-Flächen werden über Chunking und Streaming resident gehalten. [ChunkedRenderSurface.ts](../../src/arena/chunks/ChunkedRenderSurface.ts), [GroundSurfaceStreamer.ts](../../src/arena/chunks/GroundSurfaceStreamer.ts) und [RockOverlayStreamer.ts](../../src/arena/chunks/RockOverlayStreamer.ts) begrenzen sichtbare Arbeit, recyceln Ressourcen und veröffentlichen neu gebackene Flächen atomar.

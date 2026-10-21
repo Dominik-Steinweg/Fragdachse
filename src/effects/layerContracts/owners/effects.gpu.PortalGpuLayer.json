@@ -1,0 +1,113 @@
+{
+  "owner": "effects/gpu/PortalGpuLayer.ts",
+  "gpuLayers": [
+    {
+      "id": "portal:material",
+      "owner": "effects/gpu/PortalGpuLayer.ts",
+      "component": "material",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.3
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "portal:emissive",
+      "owner": "effects/gpu/PortalGpuLayer.ts",
+      "component": "emissive",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "portal:particles",
+      "owner": "effects/gpu/PortalGpuLayer.ts",
+      "component": "particles",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.62
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "portal-preview:material",
+      "owner": "effects/gpu/PortalGpuLayer.ts",
+      "component": "preview-material",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        98.96
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui"
+    },
+    {
+      "id": "portal-preview:emissive",
+      "owner": "effects/gpu/PortalGpuLayer.ts",
+      "component": "preview-emissive",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        98.98
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui"
+    },
+    {
+      "id": "portal-preview:particles",
+      "owner": "effects/gpu/PortalGpuLayer.ts",
+      "component": "preview-particles",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        98.99
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui"
+    }
+  ]
+}

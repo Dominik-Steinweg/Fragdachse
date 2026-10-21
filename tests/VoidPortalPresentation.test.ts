@@ -5,6 +5,7 @@ import {
 } from '../src/effects/voidPortal/PortalGeneratorAssets';
 import { portalFlankMarkers } from '../src/effects/markers/sources/CoopMissionMarkerSource';
 import { buildSecondaryObjectiveViewModel, resolvePortalObjectiveStatusLines } from '../src/ui/coopDefenseSecondaryObjectiveModel';
+import { voidPortalEndViews, type VoidPortalLinkView } from '../src/effects/voidPortal/VoidPortalModel';
 
 describe('Portal objective status in the HUD', () => {
   const link = { id: 'flank', generatorBaseId: 'gen', chargeDurationMs: 60_000 };
@@ -52,5 +53,25 @@ describe('Portal generator presentation contract', () => {
     expect(charging.urgent).toBeUndefined();
     expect(open).toMatchObject({ visibility: 'world-and-edge', urgent: true });
     expect(open.progress).toBeUndefined();
+  });
+});
+
+describe('Generator portals in the shared portal look', () => {
+  const view = (phase: 'charging' | 'open', chargeFraction: number, openAgeMs = 0): VoidPortalLinkView => ({
+    id: 'flank', a: { x: 10, y: 20 }, b: { x: 900, y: 40 }, radius: 28, phase, chargeFraction, openAgeMs });
+
+  it('forms both ends while charging and links each to its partner', () => {
+    const [entry, exit] = voidPortalEndViews(view('charging', 0.4));
+    expect(entry).toMatchObject({ key: 'flank:a', style: 'void', charge: 0.4, partner: { x: 900, y: 40 } });
+    expect(exit).toMatchObject({ key: 'flank:b', charge: 0.4, partner: { x: 10, y: 20 } });
+    // The link works both ways, so neither end prefers a direction.
+    expect([entry.flow, entry.link, exit.flow, exit.link]).toEqual([undefined, undefined, undefined, undefined]);
+  });
+
+  it('opens without a charge and shows the far side once open', () => {
+    const [entry] = voidPortalEndViews(view('open', 1, 0));
+    expect(entry.charge).toBeUndefined();
+    expect(entry.open).toBe(0);
+    expect(voidPortalEndViews(view('open', 1, 400))[0]).toMatchObject({ open: 1, ground: 1 });
   });
 });

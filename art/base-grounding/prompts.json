@@ -49,14 +49,14 @@
       "name": "soil-a",
       "source": "source/soil-a.png",
       "runtime": "../../../public/assets/sprites/base-grounding/soil-a.png",
-      "active": true,
+      "active": false,
       "prompt": "Generate a transparent game decal PNG: one elongated asymmetrical smudge with two tapering fingers of FLAT warm gray-brown dust and compacted earth. Directly overhead, no raised surfaces, no rocks, no gravel, no pebbles, no rim, no outlines. Looks like a translucent matte watercolor soil stain fading into nothing; NOT a floating cloud. Broad muted taupe-brown mottling, very little detail. Only center has moderate opacity. A broad soft irregular transition fades gradually outward to actual zero alpha over the outer 20% of the shape, like an airbrushed textured stamp with broken edges. No cast shadow, no halo, no lighting gradient. Genuinely transparent RGBA background, no painted checkerboard. Centered with generous fully transparent space all around. For blending a gray concrete building into beige gravel terrain in a top-down game."
     },
     {
       "name": "soil-b",
       "source": "source/soil-b.png",
       "runtime": "../../../public/assets/sprites/base-grounding/soil-b.png",
-      "active": true,
+      "active": false,
       "prompt": "Generate a transparent game decal PNG: two unequal softly connected lobes with a narrow gap in one side of FLAT warm gray-brown dust and compacted earth. Directly overhead, no raised surfaces, no rocks, no gravel, no pebbles, no rim, no outlines. Looks like a translucent matte watercolor soil stain fading into nothing; NOT a floating cloud. Broad muted taupe-brown mottling, very little detail. Only center has moderate opacity. A broad soft irregular transition fades gradually outward to actual zero alpha over the outer 20% of the shape, like an airbrushed textured stamp with broken edges. No cast shadow, no halo, no lighting gradient. Genuinely transparent RGBA background, no painted checkerboard. Centered with generous fully transparent space all around. For blending a gray concrete building into beige gravel terrain in a top-down game."
     },
     {

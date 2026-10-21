@@ -1,4 +1,5 @@
 import { MortarStrikeRenderer } from '../../effects/MortarStrikeRenderer';
+import { PortalPresentation } from '../../effects/portal/PortalPresentation';
 import { FirestarterRenderer } from '../../effects/FirestarterRenderer';
 import { ShieldChargerRenderer } from '../../effects/ShieldChargerRenderer';
 import { AlienConeRenderer } from '../../effects/AlienConeRenderer';
@@ -179,6 +180,8 @@ export interface RendererBundle {
   // World-scoped presentation renderers: created when a World is built and cleared on World teardown.
   train:               TrainRenderer | null;
   translocatorTeleport: TranslocatorTeleportRenderer | null;
+  /** One portal look for translocator, fire-control and generator portals; cleared per World. */
+  portals: PortalPresentation;
   mortarStrike: MortarStrikeRenderer;
   firestarter: FirestarterRenderer;
   shieldCharger: ShieldChargerRenderer;
@@ -481,6 +484,8 @@ export function* createRendererBundleSteps(
   mortarStrike.registerGpuVfx(gpuVfx);
   cleanup.push(() => mortarStrike.destroy());
   yield 'renderers/mortarStrike';
+  const portals = new PortalPresentation(scene, lighting);
+  cleanup.push(() => portals.destroy());
   const voidMeteorIntro = new VoidMeteorIntroRenderer(scene, lighting);
   voidMeteorIntro.registerGpuVfx(gpuVfx);
   cleanup.push(() => voidMeteorIntro.destroy());
@@ -533,6 +538,7 @@ export function* createRendererBundleSteps(
     explosionGpu,
     train: null,
     translocatorTeleport: null,
+    portals,
     mortarStrike,
     firestarter,
     shieldCharger,

@@ -58,6 +58,7 @@ export const AMBIENT_WILDLIFE = {
   // `speed` is the walking pace on the ground (sparrow flocks stand and peck). Sparrows and magpies
   // cruise below the crowns, ravens and owls above them. `beat` is the projected wing-span loss at
   // the ends of a stroke, `handFlex` how far the hand folds back on the upstroke (radians).
+  // `maxCount: 0` takes a kind out of the game without shifting the seeded rolls of the others.
   sparrow: { size: 7.2, speed: 0, fleeSpeed: 150, cruiseSpeed: 110, alertRadius: 112, turnRate: 6, maxCount: 18,
     occupancy: .45, flockMin: 4, flockMax: 9, spread: 9, cruiseHeight: 34, climbRate: 70, flapHz: 7, beat: .2, handFlex: .4,
     spotCount: 6, spotRange: [2.5, 7], hopRange: [3, 8], calmSeconds: [25, 70] },
@@ -69,7 +70,8 @@ export const AMBIENT_WILDLIFE = {
     occupancy: .15, cruiseHeight: 38, climbRate: 50, flapHz: 3.1, beat: .12, handFlex: .5,
     spotCount: 6, spotRange: [8, 22], hopRange: [10, 26], calmSeconds: [20, 55],
     roamRadius: 80, walkSeconds: [1.2, 3], pauseSeconds: [.8, 2.4] },
-  raven: { size: 24, speed: 14, fleeSpeed: 108, cruiseSpeed: 82, alertRadius: 136, turnRate: 2.6, maxCount: 6,
+  // Ravens are paused: they drew too much attention next to the other animals.
+  raven: { size: 24, speed: 14, fleeSpeed: 108, cruiseSpeed: 82, alertRadius: 136, turnRate: 2.6, maxCount: 0,
     occupancy: .08, cruiseHeight: 118, climbRate: 40, flapHz: 1.7, beat: .07, handFlex: .55,
     spotCount: 6, spotRange: [8, 24], hopRange: [12, 30], calmSeconds: [25, 70],
     roamRadius: 104, walkSeconds: [1.6, 3.6], pauseSeconds: [1, 3] },

@@ -85,7 +85,10 @@ class WildlifeLab extends Phaser.Scene {
       button.addEventListener('click', action);
       this.disposers.push(() => button.removeEventListener('click', action));
     };
-    for (const kind of KINDS) bind(kind, () => this.focus(kind));
+    for (const kind of KINDS) {
+      document.getElementById(kind)!.hidden = AMBIENT_WILDLIFE[kind].maxCount === 0;
+      bind(kind, () => this.focus(kind));
+    }
     let transparentCanopies = false;
     document.getElementById('canopies')!.textContent = 'Baumkronen: normal';
     bind('canopies', () => {

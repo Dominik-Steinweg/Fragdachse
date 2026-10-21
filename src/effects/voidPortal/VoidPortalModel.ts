@@ -1,6 +1,7 @@
 import type { ResolvedCoopDefensePortalLinkConfig } from '../../config/coopDefensePortalLinks';
 import type { PortalLinkEndpoints, PortalLinkPhase, PortalLinkStateEntry } from '../../systems/portal/PortalLinkSystem';
 import type { PortalPoint } from '../../systems/PortalTraversal';
+import type { PortalEndView } from '../portal/PortalViews';
 
 /** Renderer-free view of one generator portal link at a mission time. */
 export interface VoidPortalLinkView {
@@ -59,4 +60,21 @@ export class VoidPortalTransitionTracker {
   }
 
   reset(): void { this.previous = null; }
+}
+
+const OPEN_MS = 400;
+
+/**
+ * Both ends of a generator link in the shared portal look. Charging ends are still forming. The
+ * link works both ways, so neither end shows a preferred direction; transfers do.
+ */
+export function voidPortalEndViews(view: VoidPortalLinkView): PortalEndView[] {
+  const charging = view.phase === 'charging';
+  const open = charging ? 1 : Math.min(1, view.openAgeMs / OPEN_MS);
+  const common = { radius: view.radius, style: 'void' as const, open: 1 - (1 - open) ** 3, ground: 1,
+    ...(charging ? { charge: view.chargeFraction } : {}) };
+  return [
+    { ...common, key: `${view.id}:a`, x: view.a.x, y: view.a.y, partner: view.b },
+    { ...common, key: `${view.id}:b`, x: view.b.x, y: view.b.y, partner: view.a },
+  ];
 }

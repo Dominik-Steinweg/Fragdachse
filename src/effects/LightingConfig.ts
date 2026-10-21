@@ -842,6 +842,23 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0.08,
     flickerHz: 1.8,
   },
+  /**
+   * Gemeinsames Dauerlicht aller Portale (Translokator, Feuerleitung, Generator-Portale). Farbe,
+   * Radius und Stärke setzt die Portal-Darstellung je Stil und Öffnung.
+   */
+  portal: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 110,
+    color: 0xc8e8ff,
+    intensity: 0.75,
+    durationMs: 0,
+    decayExponent: 1.2,
+    occludes: false,
+    priority: 4,
+    flickerAmount: 0.05,
+    flickerHz: 1.6,
+  },
   /** Translocator- und Spawn-Blitz: kurz, hell, kalt. */
   teleportFlash: {
     enabled: true,

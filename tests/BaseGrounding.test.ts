@@ -10,6 +10,7 @@ vi.mock('../src/arena/BaseAccentGlowTexture', () => ({
 import { CELL_SIZE, VOID_PALETTE } from '../src/config';
 import { buildBaseGroundingLayout } from '../src/arena/BaseGroundingLayout';
 import { BASE_GROUNDING_ASSETS } from '../src/arena/BaseGroundingConfig';
+import { getBaseApronRaster, writeBaseApron } from '../src/arena/BaseGroundingField';
 import { BaseEntity } from '../src/entities/BaseEntity';
 import type { BaseSpec } from '../src/arena/BaseRegistry';
 import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
@@ -24,14 +25,24 @@ const cells = [
 const metrics = resolveCoopDefenseWorldMetrics(20, 20);
 
 describe('Base foundation layout', () => {
-  it('composes the active generated palette, including gravel and earth, across varied footprints', () => {
+  it('composes stones and gravel, without soil stains, as separated nests across varied footprints', () => {
     const variedCells = Array.from({ length: 16 }, (_, index) => ({ gridX: index * 4, gridY: (index % 3) * 4 }));
     const layout = buildBaseGroundingLayout(variedCells, metrics);
     const used = new Set(layout.map((item) => item.asset));
     expect([...used].sort()).toEqual([...BASE_GROUNDING_ASSETS].sort());
-    for (const cluster of layout.filter((item) => item.kind === 'cluster')) {
+    const clusters = layout.filter((item) => item.kind === 'cluster');
+    // Nests are an accent, not an outline: far fewer than the exposed edges.
+    expect(clusters.length).toBeGreaterThan(0);
+    expect(clusters.length).toBeLessThan(variedCells.length * 4 / 3);
+    for (const cluster of clusters) {
       expect(layout.some((item) => item.cellIndex === cluster.cellIndex && item.kind === 'gravel'
         && item.asset.startsWith('edge-') && Math.hypot(item.x - cluster.x, item.y - cluster.y) < CELL_SIZE / 2)).toBe(true);
+    }
+    for (const pebble of layout.filter((item) => item.kind === 'pebble')) {
+      const nest = clusters.find((cluster) => cluster.cellIndex === pebble.cellIndex);
+      expect(nest).toBeDefined();
+      expect(pebble.width).toBeLessThan(nest!.width);
+      expect(pebble.alpha).toBeLessThan(nest!.alpha);
     }
   });
 
@@ -45,32 +56,31 @@ describe('Base foundation layout', () => {
       .toEqual(layout);
   });
 
-  it('decorates exposed edges of concave and disconnected footprints, with bounded overhang', () => {
-    const layout = buildBaseGroundingLayout(cells, metrics);
-    for (const [cellIndex, cell] of cells.entries()) {
-      const neighbors = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-      const exposed = neighbors.filter(([dx, dy]) => !cells.some((other) =>
-        other.gridX === cell.gridX + dx && other.gridY === cell.gridY + dy));
-      const cx = metrics.offsetX + (cell.gridX + 0.5) * CELL_SIZE;
-      const cy = metrics.offsetY + (cell.gridY + 0.5) * CELL_SIZE;
-      for (const item of layout.filter((placement) => placement.cellIndex === cellIndex)) {
+  it('places decorations outside exposed edges of concave and disconnected footprints, within a cell of them', () => {
+    const footprints = [cells, Array.from({ length: 16 }, (_, i) => ({ gridX: 2 + (i % 4), gridY: 2 + Math.floor(i / 4) }))];
+    for (const footprint of footprints) {
+      const layout = buildBaseGroundingLayout(footprint, metrics);
+      for (const item of layout) {
+        const cell = footprint[item.cellIndex];
+        const cx = metrics.offsetX + (cell.gridX + 0.5) * CELL_SIZE;
+        const cy = metrics.offsetY + (cell.gridY + 0.5) * CELL_SIZE;
         const dx = item.x - cx;
         const dy = item.y - cy;
         const normal = Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
-        expect(exposed).toContainEqual(normal);
+        expect(footprint.some((other) => other.gridX === cell.gridX + normal[0] && other.gridY === cell.gridY + normal[1])).toBe(false);
         const halfX = (Math.abs(Math.cos(item.rotation)) * item.width + Math.abs(Math.sin(item.rotation)) * item.height) / 2;
         const halfY = (Math.abs(Math.sin(item.rotation)) * item.width + Math.abs(Math.cos(item.rotation)) * item.height) / 2;
-        expect(Math.abs(item.x - cx) + halfX).toBeLessThanOrEqual(CELL_SIZE);
-        expect(Math.abs(item.y - cy) + halfY).toBeLessThanOrEqual(CELL_SIZE);
+        expect(Math.abs(dx) + halfX).toBeLessThanOrEqual(CELL_SIZE * 1.5);
+        expect(Math.abs(dy) + halfY).toBeLessThanOrEqual(CELL_SIZE * 1.5);
       }
     }
     expect(buildBaseGroundingLayout([], metrics)).toEqual([]);
   });
 
-  it('leaves gaps between stone nests and grades smaller stones outward over connecting earth', () => {
-    const layout = buildBaseGroundingLayout(cells, metrics);
-    const clusters = layout.filter((item) => item.kind === 'cluster');
-    expect(clusters.length).toBeGreaterThan(0);
+  it('leaves gaps between stone nests', () => {
+    const block = Array.from({ length: 36 }, (_, i) => ({ gridX: 2 + (i % 6), gridY: 2 + Math.floor(i / 6) }));
+    const clusters = buildBaseGroundingLayout(block, metrics).filter((item) => item.kind === 'cluster');
+    expect(clusters.length).toBeGreaterThan(1);
     for (let i = 0; i < clusters.length; i++) {
       for (let j = i + 1; j < clusters.length; j++) {
         const a = clusters[i], b = clusters[j];
@@ -78,20 +88,59 @@ describe('Base foundation layout', () => {
         expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(reach);
       }
     }
-    expect(layout.filter((item) => item.kind === 'soil').length).toBeGreaterThan(clusters.length);
-    for (const item of layout.filter((placement) => placement.kind === 'pebble')) {
-      const cell = cells[item.cellIndex];
-      const cx = metrics.offsetX + (cell.gridX + 0.5) * CELL_SIZE;
-      const cy = metrics.offsetY + (cell.gridY + 0.5) * CELL_SIZE;
-      const distance = Math.max(Math.abs(item.x - cx), Math.abs(item.y - cy));
-      const nearer = layout.filter((other) => other.cellIndex === item.cellIndex && (other.kind === 'cluster' || other.kind === 'pebble')
-        && Math.max(Math.abs(other.x - cx), Math.abs(other.y - cy)) < distance);
-      expect(nearer.length).toBeGreaterThan(0);
-      for (const other of nearer) {
-        expect(item.width).toBeLessThan(other.width);
-        expect(item.alpha).toBeLessThan(other.alpha);
+  });
+});
+
+describe('Base foundation apron', () => {
+  const material = (salt: number) => ({ width: 64, height: 64,
+    rgba: Uint8ClampedArray.from({ length: 64 * 64 * 4 }, (_, i) => i % 4 === 3 ? 255 : (Math.imul(i + salt, 2654435761) >>> 24)) });
+  const materials = { soil: material(1), gravel: material(2),
+    grassHeight: { width: 64, height: 64, data: Uint8Array.from({ length: 4096 }, (_, i) => Math.imul(i, 2654435761) >>> 24) } };
+  const apron = (footprint: typeof cells, frame: { offsetX: number; offsetY: number } = metrics) => {
+    const raster = getBaseApronRaster(footprint, frame)!;
+    const data = new Uint8ClampedArray(raster.width * raster.height * 4);
+    writeBaseApron(data, raster, footprint, frame, materials);
+    return { raster, data };
+  };
+
+  it('is a pure function of the footprint and the World frame', () => {
+    const { raster, data } = apron(cells);
+    expect(apron([...cells].reverse()).data).toEqual(data);
+    const moved = apron(cells, { offsetX: metrics.offsetX + 64, offsetY: metrics.offsetY - 32 });
+    expect(moved.raster.worldX - raster.worldX).toBe(64);
+    expect(moved.data).toEqual(data);
+    expect(getBaseApronRaster([], metrics)).toBeNull();
+  });
+
+  it('keeps the foundation under the footprint and ends within its reach', () => {
+    const { raster, data } = apron(cells);
+    const alphaAt = (worldX: number, worldY: number) =>
+      data[((Math.floor(worldY) - raster.worldY) * raster.width + Math.floor(worldX) - raster.worldX) * 4 + 3];
+    for (const cell of cells) {
+      for (let y = 2; y < CELL_SIZE; y += 6) for (let x = 2; x < CELL_SIZE; x += 6) {
+        expect(alphaAt(metrics.offsetX + cell.gridX * CELL_SIZE + x, metrics.offsetY + cell.gridY * CELL_SIZE + y)).toBe(255);
       }
     }
+    for (let x = 0; x < raster.width; x++) {
+      expect(data[x * 4 + 3]).toBe(0);
+      expect(data[((raster.height - 1) * raster.width + x) * 4 + 3]).toBe(0);
+    }
+  });
+
+  it('wanders between grass at the plates and a wide trodden patch along a long edge', () => {
+    const strip = Array.from({ length: 16 }, (_, i) => ({ gridX: 2 + i, gridY: 4 }));
+    const { raster, data } = apron(strip);
+    const edgeY = metrics.offsetY + 4 * CELL_SIZE;
+    const covered = (distance: number) => Array.from({ length: 16 * CELL_SIZE / 4 }, (_, i) => {
+      const x = metrics.offsetX + 2 * CELL_SIZE + i * 4 - raster.worldX, y = edgeY - distance - raster.worldY;
+      return data[(y * raster.width + x) * 4 + 3];
+    });
+    const near = covered(6), far = covered(16);
+    // Grass reaches the plates in places, trodden ground runs out further in others.
+    expect(near.some((alpha) => alpha === 0)).toBe(true);
+    expect(near.some((alpha) => alpha > 200)).toBe(true);
+    expect(far.some((alpha) => alpha > 200)).toBe(true);
+    expect(near.filter((alpha) => alpha > 200).length).toBeGreaterThan(far.filter((alpha) => alpha > 200).length);
   });
 });
 
@@ -140,7 +189,7 @@ describe('Base foundation ownership', () => {
   it.each([
     ['friendly', 'main'], ['hostile', 'main'], ['friendly', 'outpost'], ['hostile', 'outpost'],
   ] as const)('follows %s %s cells through staggered destruction and reset', (faction, role) => {
-    const { base, grounding, accents, scene } = setup(faction, role);
+    const { base, grounding, accents, scene, images } = setup(faction, role);
     const original = grounding();
     const initialAccents = accents();
     expect(initialAccents.length).toBeGreaterThan(0);
@@ -157,9 +206,13 @@ describe('Base foundation ownership', () => {
     expect(initialAccents.every(image => !image.active)).toBe(true);
     expect(scene.events.listenerCount('postupdate')).toBe(0);
     expect(original.every((image) => image.active)).toBe(true);
+    const apron = images.filter((image) => image.key.startsWith('__base_apron_'));
+    expect(apron).toHaveLength(1);
     base.destroyCellVisual(0);
     const placements = buildBaseGroundingLayout(cells, metrics);
     original.forEach((image, index) => expect(image.active).toBe(placements[index].cellIndex !== 0));
+    // The trodden foundation stays while single cells fall.
+    expect(apron[0].active).toBe(true);
     base.clearActivityOverlay();
     expect(original.every((image) => !image.active)).toBe(true);
     expect(grounding().slice(original.length).every((image) => image.active)).toBe(true);
@@ -167,6 +220,7 @@ describe('Base foundation ownership', () => {
     base.destroy();
     base.destroy();
     expect(grounding().every((image) => !image.active)).toBe(true);
+    expect(images.filter((image) => image.key.startsWith('__base_apron_')).every((image) => !image.active)).toBe(true);
     expect(accents().every(image => !image.active)).toBe(true);
     expect(scene.events.eventNames()).toEqual([]);
   });

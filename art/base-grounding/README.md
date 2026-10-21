@@ -18,12 +18,12 @@ alpha, resamples with aspect ratio preserved, and adds a four-pixel transparent 
 Soil canvases follow the cropped aspect ratio; compact clusters use square canvases.
 It does not create replacement procedural art.
 
-The active palette uses `soil-a` and `soil-b` as softly fading earth beneath separated
-`corner-a` / `corner-b` stone nests. `pebble-a` supplies the medium and small outer stones.
-The three gravel fringes (`edge-a/b/c`) and `scatter` complement those nests as separate,
-irregular deposits. Sparse smaller deposits appear between nests; no texture is laid along
-every exposed edge. All nine generated assets are active. The soil uses a warmer, darker
-multiply tint and stronger opacity to remain legible on the actual pale gravel terrain.
-Its generated alpha still feathers the transition; fine aggregate sits above it, below stones.
-Runtime placement in `src/arena/BaseGroundingLayout.ts` follows exposed cell edges, favors
-corners, and spaces nests apart. Neutral lighting permits rotation below the existing shadows.
+Since 2026-10-21 the ground right at the plates is the procedural apron in
+`src/arena/BaseGroundingField.ts`: a narrow, quiet band of trodden earth with gravel fines worked
+in, a few loose stones and a seam into the real grass blades; hostile bases sit on a darker
+variant. On top of it the gravel fringes (`edge-a/b/c`), the fine aggregate (`scatter`), the stone
+nests (`corner-a` / `corner-b`) and `pebble-a` keep their earlier roles, but sparser, each piece
+turned and shifted a little and tinted towards the ground it lies in
+(`src/arena/BaseGroundingLayout.ts`, `BaseGroundingRenderer.ts`). The soil stains `soil-a` /
+`soil-b` read as unrealistic pale ovals; they stay here for reference but are `"active": false`
+in `prompts.json` and no longer exported.

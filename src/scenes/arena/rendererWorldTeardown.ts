@@ -9,6 +9,7 @@ import type { RendererBundle } from './RendererBundle';
  */
 export function resetRenderersForWorldGameplayTeardown(bundle: RendererBundle): void {
   bundle.translocatorTeleport?.destroy();
+  bundle.portals.clearAll();
   bundle.movement.clear();
   bundle.turretAnimations.clear();
   bundle.interactions.clear();
@@ -70,6 +71,7 @@ export function resetRenderersForWorldPresentationTeardown(
   if (!preserveAuthoredPresentation) bundle.leafBlower.setTerrainColorSnapshot(null);
   if (!preserveAuthoredPresentation) bundle.movement.setTerrainColorSnapshot(null);
   if (!preserveAuthoredPresentation) bundle.burrowGpu.setTerrainColorSnapshot(null);
+  if (!preserveAuthoredPresentation) bundle.portals.setTerrainColorSnapshot(null);
   bundle.beer.clear();
   if (preserveAuthoredPresentation) bundle.shadow.clearDynamicShadows();
   else bundle.shadow.clear();

@@ -16,6 +16,7 @@ import type { DecalCell, TrackCell, TreeCell } from '../types';
 import { CANOPY_TEXTURE_KEYS } from './CanopyConfig';
 import { DECAL_SIZE, ROCK_DECAL_SIZE as ROCK_DECAL_DISPLAY_SIZE } from './DecalConfig';
 import { hashCell01 } from './CellHash';
+import { TRACK_RAIL_TEXTURE } from './TrackGravelConfig';
 import { RockGridIndex } from './RockGridIndex';
 import { ROCK_MOSS_MASK_TEXTURE_KEY } from './RockMossConfig';
 import { ROCK_BASE_TEXTURE_KEY } from './RockBaseConfig';
@@ -284,8 +285,10 @@ export class ArenaVisualFactory {
         column.y + column.height / 2,
         column.width,
         column.height,
-        'bg_tracks',
+        TRACK_RAIL_TEXTURE.key,
       );
+      // Rails only, at twice the world resolution; sleepers and ballast are baked into the ground.
+      tileSprite.setTileScale(1 / TRACK_RAIL_TEXTURE.scale);
       tileSprite.setDepth(DEPTH.TRACKS);
       result.push(tileSprite);
     }

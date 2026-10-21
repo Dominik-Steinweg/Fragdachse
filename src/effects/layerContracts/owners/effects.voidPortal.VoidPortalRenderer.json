@@ -5,8 +5,7 @@
   ],
   "source": {
     "blends": [
-      "Phaser.BlendModes.ADD",
-      "makeAdditive"
+      "Phaser.BlendModes.ADD"
     ],
     "cameras": [],
     "sites": [
@@ -34,13 +33,6 @@
       {
         "key": "syncGenerator/flow/setDepth/0",
         "expression": "DEPTH_LIGHTING + 0.08",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "playCollapse/g/setDepth/0",
-        "expression": "DEPTH_FX",
         "blends": [
           "ADD"
         ]
@@ -135,28 +127,6 @@
       "source": {
         "selector": "syncGenerator/flow/setDepth/0",
         "expression": "DEPTH_LIGHTING + 0.08"
-      }
-    },
-    {
-      "id": "cpu:effects/voidPortal/VoidPortalRenderer.ts:playCollapse/g/setDepth/0",
-      "owner": "effects/voidPortal/VoidPortalRenderer.ts",
-      "component": "playCollapse/g/setDepth/0",
-      "height": "body",
-      "lighting": "emissive",
-      "camera": "world",
-      "depths": [
-        25
-      ],
-      "blends": [
-        "ADD"
-      ],
-      "profiles": [
-        "H"
-      ],
-      "role": "effect",
-      "source": {
-        "selector": "playCollapse/g/setDepth/0",
-        "expression": "DEPTH_FX"
       }
     }
   ]

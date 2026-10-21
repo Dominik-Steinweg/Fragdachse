@@ -219,7 +219,7 @@ export class GroundSurfaceStreamer {
     this.scratch.preallocate('dirt', scratchSize);
     this.dirtLayer = this.dirtCells.length > 0 || this.waterCells.length > 0
       ? new DirtSurfaceLayer(options.scene, options.layout.seed, this.dirtCells, this.frame, scratchSize,
-        this.getGroundMaterials(), this.waterCells)
+        this.getGroundMaterials(), this.waterCells, trackColumns)
       : null;
     this.scratch.preallocate('groundCover', scratchSize);
     this.scratch.preallocate('groundDecal', scratchSize);

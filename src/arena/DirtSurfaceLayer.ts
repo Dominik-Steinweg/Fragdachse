@@ -5,6 +5,7 @@ import { DirtSurfaceField } from './DirtSurfaceField';
 import type { GroundMaterialSamples } from './GroundMaterialSamples';
 import type { ChunkWorldFrame } from './chunks/ArenaChunkGrid';
 import type { ChunkBakeRegion } from './chunks/ChunkedRenderSurface';
+import type { ArenaTrackColumnSpec } from './ArenaVisualFactory';
 import type { TerrainSnapshotMaterialSource } from './TerrainSnapshotMaterial';
 
 let nextId = 0;
@@ -22,12 +23,12 @@ export class DirtSurfaceLayer {
 
   constructor(private readonly scene: Phaser.Scene, seed: number, dirt: readonly DirtCell[],
     frame: ChunkWorldFrame, size: number, private readonly materials: GroundMaterialSamples,
-    water: readonly WaterCell[] = []) {
-    this.snapshotSource = { kind: 'soil', seed, dirt, water, frame, materials: {
+    water: readonly WaterCell[] = [], tracks: readonly ArenaTrackColumnSpec[] = []) {
+    this.snapshotSource = { kind: 'soil', seed, dirt, water, tracks, frame, materials: {
       dirt: materials.dirt, dirtAlt: materials.dirtAlt, bank: materials.bank, bankWet: materials.bankWet,
       grassHeight: materials.grassHeight,
     } };
-    this.field = new DirtSurfaceField(seed, dirt, frame, water);
+    this.field = new DirtSurfaceField(seed, dirt, frame, water, tracks);
     const key = `__dirt_surface_${nextId++}`;
     const surface = scene.textures.createCanvas(key, size, size);
     if (!surface) throw new Error('[DirtSurfaceLayer] Could not allocate soil surface.');

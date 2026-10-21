@@ -173,7 +173,7 @@ export class BaseEntity {
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
     if (this.spec.surface !== 'none') {
       this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
-      this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics);
+      this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics, { hostile });
       this.accentGlow = new BaseAccentGlowRenderer(this.scene, this.cellImages, cellTexture);
     }
 

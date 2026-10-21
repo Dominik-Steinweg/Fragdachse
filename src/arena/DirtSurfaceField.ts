@@ -5,6 +5,7 @@ import { hashSeededCell01 } from './CellHash';
 import type { ChunkWorldFrame } from './chunks/ArenaChunkGrid';
 import { groundMaterialPhase } from './GroundMaterialConfig';
 import type { GroundMaterialSamples } from './GroundMaterialSamples';
+import type { ArenaTrackColumnSpec } from './ArenaVisualFactory';
 
 const RADIUS = CELL_SIZE * .8;
 /** Summed amplitude of the three world-fixed warp octaves in density(). */
@@ -62,6 +63,15 @@ const BANK_FIELD_CAP = 72;
 const BANK_RING = Math.ceil((BANK_MAX + 4 + BANK_WASH_PX + BANK_WARP_PX + BANK_STEP) / CELL_SIZE);
 /** Maximum visual reach of the riverbank beyond a water cell. No gameplay geometry changes. */
 export const WATER_BANK_REACH_PX = BANK_RING * CELL_SIZE;
+/**
+ * Verge beside a railway bed, measured outward from the column edge: from soil hidden under the
+ * ballast foot (grass grows right up to the bed) to a worn strip of bare soil. Most of the line
+ * keeps a narrow verge; the wide stretches are long and gradual.
+ */
+const VERGE_MIN_PX = -6;
+const VERGE_MAX_PX = 40;
+/** Density ramp of the verge contour; the grass seam band of soil() works on top of it. */
+const VERGE_SOFT_PX = 16;
 /** Seeded value-noise lattice; wraps after LATTICE periods, i.e. far beyond the visible scale. */
 const LATTICE = 256;
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
@@ -86,9 +96,11 @@ export class DirtSurfaceField {
   private readonly water: Uint8Array | null;
   private readonly bankZone: Uint8Array | null;
   private bankGrid = new Float32Array(0);
+  /** Frame-local railway columns whose margin soil is replaced by the analytic verge. */
+  private readonly verges: readonly { gridX: number; center: number; halfWidth: number; top: number; bottom: number }[];
 
   constructor(seed: number, dirt: readonly DirtCell[], readonly frame: ChunkWorldFrame,
-    water: readonly WaterCell[] = []) {
+    water: readonly WaterCell[] = [], tracks: readonly ArenaTrackColumnSpec[] = []) {
     this.cols = Math.max(1, Math.ceil(frame.width / CELL_SIZE));
     this.rows = Math.max(1, Math.ceil(frame.height / CELL_SIZE));
     this.occupied = new Uint8Array(this.cols * this.rows);
@@ -108,6 +120,25 @@ export class DirtSurfaceField {
         if (this.occupied[this.index(x + dx, y + dy)]) any = true; else all = false;
       }
       this.zone[y * this.cols + x] = all ? 2 : any ? 1 : 0;
+    }
+    // The soil cells of a track column and its one-cell margin give way to the analytic verge
+    // (vergeDensity). The zones above still see them, so the verge is evaluated there.
+    this.verges = tracks.map((column) => ({
+      gridX: Math.round((column.x - frame.offsetX) / CELL_SIZE),
+      center: column.x - frame.offsetX + column.width / 2,
+      halfWidth: column.width / 2,
+      top: column.y - frame.offsetY,
+      bottom: column.y - frame.offsetY + column.height,
+    }));
+    for (const verge of this.verges) {
+      const firstRow = Math.max(0, Math.floor(verge.top / CELL_SIZE));
+      const lastRow = Math.min(this.rows - 1, Math.ceil(verge.bottom / CELL_SIZE) - 1);
+      const cells = Math.round(verge.halfWidth * 2 / CELL_SIZE);
+      for (let y = firstRow; y <= lastRow; y++) {
+        for (let x = verge.gridX - 1; x <= verge.gridX + cells; x++) {
+          if (x >= 0 && x < this.cols) this.occupied[y * this.cols + x] = 0;
+        }
+      }
     }
     const wet = new Uint8Array(this.occupied.length);
     let anyWater = false;
@@ -168,7 +199,32 @@ export class DirtSurfaceField {
       + (this.noise(x, y, 9, 7) - .5) * 4;
     const v = y + (this.noise(x, y, 97, 3) - .5) * 24 + (this.noise(x, y, 33, 4) - .5) * 14
       + (this.noise(x, y, 11, 8) - .5) * 4;
-    return this.occupancy(u, v);
+    const occupancy = this.occupancy(u, v);
+    return this.verges.length ? Math.max(occupancy, this.vergeDensity(x, y)) : occupancy;
+  }
+
+  /**
+   * Soil beside and below a railway bed. The bed itself stays soil; outward, the contour runs
+   * parallel to the line at a width that wanders slowly between grass at the ballast foot and a
+   * worn strip. Only the across-track position is warped, so the edge never folds back.
+   */
+  private vergeDensity(x: number, y: number): number {
+    let best = 0;
+    for (const verge of this.verges) {
+      const reach = verge.halfWidth + VERGE_MAX_PX + VERGE_SOFT_PX;
+      if (Math.abs(x - verge.center) > reach + 12 || y < verge.top - reach || y > verge.bottom + reach) continue;
+      const side = x < verge.center ? 0 : 1;
+      const lane = (verge.gridX * 2 + side) * 997;
+      const wobble = (this.noise(x, y, 23, 41) - .5) * 9 + (this.noise(x, y, 7, 42) - .5) * 3;
+      const across = Math.abs(x + wobble - verge.center) - verge.halfWidth;
+      // Beyond the ends of a column the verge rounds off; along it only the lateral distance counts.
+      const along = Math.max(verge.top - y, y - verge.bottom);
+      const outward = along > 0 ? Math.max(across, along) : across;
+      const wide = this.noise(lane, y, 211, 43) * .65 + this.noise(lane, y, 67, 44) * .35;
+      const width = VERGE_MIN_PX + (VERGE_MAX_PX - VERGE_MIN_PX) * Math.pow(smooth(clamp01(wide * 1.25 - .12)), 1.7);
+      best = Math.max(best, clamp01(.5 + (width - outward) / VERGE_SOFT_PX * .5));
+    }
+    return best;
   }
 
   private band(x: number, y: number): number {

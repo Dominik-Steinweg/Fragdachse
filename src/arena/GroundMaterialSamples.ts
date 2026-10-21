@@ -1,7 +1,7 @@
 import type * as Phaser from 'phaser';
 import {
   BANK_MATERIAL_KEY, BANK_MATERIAL_WET_KEY, DIRT_MATERIAL_ALT_KEY, DIRT_MATERIAL_KEY, GRASS_MATERIAL_KEY,
-  GRAVEL_MATERIAL_ALT_KEY, GRAVEL_MATERIAL_KEY,
+  GRAVEL_MATERIAL_ALT_KEY, GRAVEL_MATERIAL_KEY, SLEEPER_WOOD_MATERIAL_KEY,
 } from './GroundMaterialConfig';
 
 /** CPU copy of a seamless material at native world scale (straight RGBA). */
@@ -28,6 +28,8 @@ export interface GroundMaterialSamples {
   /** Optional Persistent-Base gravel and its sandier admixture. */
   readonly gravel?: GroundMaterialPixels;
   readonly gravelAlt?: GroundMaterialPixels;
+  /** Optional railway sleeper wood; without it TrackGravelField keeps a plain wood tone. */
+  readonly sleeperWood?: GroundMaterialPixels;
   readonly grassHeight: GrassHeightMap;
 }
 
@@ -118,6 +120,7 @@ export function readGroundMaterialSamples(scene: Phaser.Scene): GroundMaterialSa
     bankWet: readPixels(scene, BANK_MATERIAL_WET_KEY).pixels,
     gravel: readPixels(scene, GRAVEL_MATERIAL_KEY).pixels,
     gravelAlt: readPixels(scene, GRAVEL_MATERIAL_ALT_KEY).pixels,
+    sleeperWood: scene.textures.exists(SLEEPER_WOOD_MATERIAL_KEY) ? readPixels(scene, SLEEPER_WOOD_MATERIAL_KEY).pixels : undefined,
     grassHeight: deriveGrassHeight(readPixels(scene, GRASS_MATERIAL_KEY).pixels),
   };
   cache.set(grassSource, samples);

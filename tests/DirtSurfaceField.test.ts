@@ -93,4 +93,26 @@ describe('World soil surface', () => {
     new DirtSurfaceField(17, dirt, frame).writeSurface(reference, 256, frame.offsetX, frame.offsetY, 256, plain);
     assert.deepEqual(bare, reference);
   });
+
+  it('replaces the straight soil margin of a railway with a verge that wanders along the line', () => {
+    const tall = { ...frame, height: 2048 };
+    const column = { x: tall.offsetX + 6 * CELL_SIZE, y: tall.offsetY, width: 2 * CELL_SIZE, height: tall.height };
+    // The generator's soil: both track cells plus a one-cell margin on either side.
+    const rows = tall.height / CELL_SIZE;
+    const railway = Array.from({ length: rows }, (_, gridY) => [5, 6, 7, 8].map(gridX => ({ gridX, gridY }))).flat();
+    const plain = new DirtSurfaceField(17, railway, tall);
+    const field = new DirtSurfaceField(17, [...railway].reverse(), tall, [], [column]);
+    const outside = (distance: number) => Array.from({ length: rows * 4 }, (_, i) =>
+      field.coverageAt(column.x - distance, tall.offsetY + 4 + i * 8));
+    // Below the bed the ground stays soil.
+    for (let y = 0; y < tall.height; y += 16) expect(field.coverageAt(column.x + column.width / 2, tall.offsetY + y + .5)).toBe(1);
+    // The old margin was soil all along the line; the verge alternates soil and grass there.
+    const margin = outside(CELL_SIZE / 2);
+    expect(Array.from({ length: rows }, (_, i) => plain.coverageAt(column.x - CELL_SIZE / 2, tall.offsetY + i * CELL_SIZE + 16))
+      .every(value => value > .5)).toBe(true);
+    expect(margin.some(value => value > .9)).toBe(true);
+    expect(margin.some(value => value < .1)).toBe(true);
+    // Beyond the verge's widest reach the grass is untouched.
+    expect(outside(2.2 * CELL_SIZE).every(value => value === 0)).toBe(true);
+  });
 });

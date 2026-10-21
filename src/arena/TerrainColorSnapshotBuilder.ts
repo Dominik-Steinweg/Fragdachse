@@ -13,6 +13,7 @@ import type { ArenaLayout, GameMode } from '../types';
 import { ArenaVisualFactory } from './ArenaVisualFactory';
 import { resolveArenaBackgroundSpec } from './ArenaBackground';
 import { GROUND_MACRO_KEY, GROUND_MACRO_TILE_SCALE } from './GroundMaterialConfig';
+import { TRACK_RAIL_TEXTURE } from './TrackGravelConfig';
 import type { ArenaBuilderResult, RockWorldFrame } from './ArenaBuilder';
 import type { GroundSurfaceStreamer, GroundSnapshotRegion } from './chunks/GroundSurfaceStreamer';
 import { TerrainColorSnapshot } from './TerrainColorSnapshot';
@@ -312,9 +313,12 @@ export class TerrainColorSnapshotBuilder {
       const right = Math.min(column.x + column.width, region.worldX + region.width);
       const bottom = Math.min(column.y + column.height, region.worldY + region.height);
       if (right <= left || bottom <= top) continue;
-      this.scratch.repeat('bg_tracks', undefined, left, top, right - left, bottom - top, {
-        tilePositionX: getTerrainTexturePhase(left, column.x, 64),
-        tilePositionY: getTerrainTexturePhase(top, column.y, 32),
+      const scale = 1 / TRACK_RAIL_TEXTURE.scale;
+      this.scratch.repeat(TRACK_RAIL_TEXTURE.key, undefined, left, top, right - left, bottom - top, {
+        tileScaleX: scale,
+        tileScaleY: scale,
+        tilePositionX: getTerrainTexturePhase(left, column.x, TRACK_RAIL_TEXTURE.width * scale) / scale,
+        tilePositionY: getTerrainTexturePhase(top, column.y, TRACK_RAIL_TEXTURE.height * scale) / scale,
       } as SnapshotRepeatConfig);
     }
   }

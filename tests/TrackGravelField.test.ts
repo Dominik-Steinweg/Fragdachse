@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getTrackBallastProfile, writeTrackBallast } from '../src/arena/TrackGravelField';
+import { getTrackBallastProfile, writeTrackBallast, type TrackBallastMaterials } from '../src/arena/TrackGravelField';
 import { TRACK_BALLAST_REACH_PX, TRACK_GRAVEL_CONFIG as CONFIG } from '../src/arena/TrackGravelConfig';
 
 const FRAME = { offsetX: 37, offsetY: 19, width: 512, height: 512 };
@@ -17,15 +17,16 @@ function material(salt: number) {
   }
   return { width: size, height: size, rgba };
 }
-const MATERIALS = { gravel: material(1), soil: material(2) };
+const grassHeight = { width: 64, height: 64, data: Uint8Array.from({ length: 64 * 64 }, (_, i) => (Math.imul(i, 2654435761) >>> 24)) };
+const MATERIALS: TrackBallastMaterials = { gravel: material(1), soil: material(2), wood: material(3), grassHeight };
 
-function bed(x: number, y: number, size: number, columns = COLUMNS, frame = FRAME, seed = 17) {
+function bed(x: number, y: number, size: number, columns = COLUMNS, frame = FRAME, seed = 17, materials = MATERIALS) {
   const pixels = new Uint8ClampedArray(size * size * 4);
-  writeTrackBallast(pixels, size, seed, columns, frame, { worldX: x, worldY: y, size }, MATERIALS);
+  writeTrackBallast(pixels, size, seed, columns, frame, { worldX: x, worldY: y, size }, materials);
   return pixels;
 }
 
-describe('railway ballast bed', () => {
+describe('railway bed', () => {
   it('is stable across input order and rebuilds, but varies by world seed', () => {
     const first = bed(FRAME.offsetX, FRAME.offsetY, 256);
     expect(bed(FRAME.offsetX, FRAME.offsetY, 256, [...COLUMNS].reverse())).toEqual(first);
@@ -42,24 +43,29 @@ describe('railway ballast bed', () => {
       .toEqual(bed(FRAME.offsetX, FRAME.offsetY, 256));
   });
 
-  it('keeps independent continuous edges within the configured core and shoulder reach', () => {
+  it('keeps independent continuous edges within the configured crest, slope and spill', () => {
     let asymmetric = false;
+    const crestBase = CONFIG.sleeperEndJitterPx / 2;
     for (const seed of [0, 1, 17, 999]) {
       for (let y = -16; y < 512; y += 0.5) {
         const profile = getTrackBallastProfile(seed, 3, y);
-        const cores = [CONFIG.sleeperLeftPx - profile.coreLeft, profile.coreRight - CONFIG.sleeperRightPx];
-        const shoulders = [profile.coreLeft - profile.shoulderLeft, profile.shoulderRight - profile.coreRight];
-        for (const reach of cores) {
-          expect(reach).toBeGreaterThanOrEqual(CONFIG.minCoreOverhangPx);
-          expect(reach).toBeLessThanOrEqual(CONFIG.maxCoreOverhangPx);
+        const crests = [CONFIG.sleeperLeftPx - crestBase - profile.crestLeft, profile.crestRight - CONFIG.sleeperRightPx - crestBase];
+        const slopes = [profile.crestLeft - profile.footLeft, profile.footRight - profile.crestRight];
+        for (const reach of crests) {
+          expect(reach).toBeGreaterThanOrEqual(CONFIG.minCrestOverhangPx);
+          expect(reach).toBeLessThanOrEqual(CONFIG.maxCrestOverhangPx);
         }
-        for (const reach of shoulders) {
-          expect(reach).toBeGreaterThanOrEqual(CONFIG.minShoulderPx);
-          expect(reach).toBeLessThanOrEqual(CONFIG.maxShoulderPx);
+        for (const reach of slopes) {
+          expect(reach).toBeGreaterThanOrEqual(CONFIG.minSlopePx);
+          expect(reach).toBeLessThanOrEqual(CONFIG.maxSlopePx);
         }
-        asymmetric ||= Math.abs(shoulders[0] - shoulders[1]) > 0.5;
+        for (const spill of [profile.spillLeft, profile.spillRight]) {
+          expect(spill).toBeGreaterThanOrEqual(0);
+          expect(spill).toBeLessThanOrEqual(CONFIG.maxSpillPx);
+        }
+        asymmetric ||= Math.abs(slopes[0] - slopes[1]) > 0.5;
         const adjacent = getTrackBallastProfile(seed, 3, y + 0.00001);
-        expect(Math.abs(profile.shoulderLeft - adjacent.shoulderLeft)).toBeLessThan(0.001);
+        expect(Math.abs(profile.footLeft - adjacent.footLeft)).toBeLessThan(0.001);
       }
     }
     expect(asymmetric).toBe(true);
@@ -84,8 +90,8 @@ describe('railway ballast bed', () => {
     const pixels = new Uint8ClampedArray(256 * 256 * 4);
     const alpha = (x: number, y: number) => pixels[(y * 256 + x) * 4 + 3];
     writeTrackBallast(pixels, 256, 17, shorter, FRAME, region, MATERIALS);
-    // Column x = 96; the sleepers span x 102..154 in this region.
-    for (let x = 102; x < 154; x += 1) expect(alpha(x, 24)).toBeGreaterThan(0);
+    // Column x = 96; the sleepers span x 102..154 in this region and sit on an opaque crest.
+    for (let x = 102; x < 154; x += 1) expect(alpha(x, 24)).toBe(255);
     expect(alpha(96 - TRACK_BALLAST_REACH_PX - 1, 24)).toBe(0);
     expect(alpha(96 + 64 + TRACK_BALLAST_REACH_PX + 1, 24)).toBe(0);
     expect(alpha(128, 0)).toBe(0);
@@ -94,5 +100,33 @@ describe('railway ballast bed', () => {
     writeTrackBallast(pixels, 256, 17, [...shorter, { ...shorter[0], x: shorter[0].x + 32 }], FRAME, region, MATERIALS);
     expect(alpha(150, 24)).toBeGreaterThanOrEqual(alone);
     expect(alpha(180, 24)).toBeGreaterThan(0);
+  });
+
+  it('varies sleeper by sleeper instead of repeating one tile along the line', () => {
+    const pixels = bed(FRAME.offsetX + 96, FRAME.offsetY, 64);
+    const row = (y: number) => pixels.slice(y * 64 * 4, (y + 1) * 64 * 4);
+    let repeats = 0;
+    for (let y = 0; y + CONFIG.sleeperPitchPx < 64; y += 1) {
+      if (row(y).every((value, i) => value === row(y + CONFIG.sleeperPitchPx)[i])) repeats++;
+    }
+    expect(repeats).toBe(0);
+  });
+
+  it('lets grass reclaim only the foot of the bed, never its crest, and works without optional materials', () => {
+    const withGrass = bed(FRAME.offsetX, FRAME.offsetY, 256);
+    const bare = bed(FRAME.offsetX, FRAME.offsetY, 256, COLUMNS, FRAME, 17, { ...MATERIALS, grassHeight: undefined });
+    let reclaimed = 0;
+    for (let y = 0; y < 256; y++) {
+      for (let x = 0; x < 256; x++) {
+        const i = (y * 256 + x) * 4 + 3;
+        expect(withGrass[i]).toBeLessThanOrEqual(bare[i]);
+        if (withGrass[i] < bare[i]) reclaimed++;
+        const railX = FRAME.offsetX + x + 0.5 - COLUMNS[0].x;
+        if (railX > CONFIG.sleeperLeftPx && railX < CONFIG.sleeperRightPx) expect(withGrass[i]).toBe(bare[i]);
+      }
+    }
+    expect(reclaimed).toBeGreaterThan(0);
+    const plain = bed(FRAME.offsetX, FRAME.offsetY, 128, COLUMNS, FRAME, 17, { gravel: MATERIALS.gravel, soil: MATERIALS.soil });
+    expect(plain.some(value => value > 0)).toBe(true);
   });
 });
