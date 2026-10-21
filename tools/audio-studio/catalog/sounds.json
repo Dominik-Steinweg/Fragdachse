@@ -14456,6 +14456,348 @@
         "conflicts": []
       },
       "orphaned": false
+    },
+    "sfx_wildlife_magpie_chatter": {
+      "name": "Wildtiere – Elster schackert",
+      "category": "wildlife",
+      "intent": "A single Eurasian magpie alarm chatter as it takes off: a harsh rapid rattle.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one Eurasian magpie alarm call: a harsh rapid 'chak-chak-chak' rattle lasting about one second, outdoor field recording at mid distance, no other birds, no music.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Wiedergabe oneshot als Produktionsvorgabe: AmbientWildlifeAudio spielt positionsgebundene Einzelsounds, begrenzt auf Vögel in Kameranähe.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_wildlife_magpie_chatter",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_wildlife_magpie_chatter.ogg",
+        "asset_path": "./assets/sounds/sfx_wildlife_magpie_chatter.ogg",
+        "filename": "sfx_wildlife_magpie_chatter.ogg",
+        "volume": 0.3,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_wildlife_magpie_chatter"
+        ],
+        "usages": [
+          {
+            "path": "src/arena/AmbientWildlifeAudio.ts",
+            "line": 22,
+            "kind": "unknown",
+            "excerpt": "magpie: { key: 'sfx_wildlife_magpie_chatter', seconds: [25, 60], phases: ['forage'] },"
+          },
+          {
+            "path": "src/arena/AmbientWildlifeAudio.ts",
+            "line": 83,
+            "kind": "unknown",
+            "excerpt": "if (alarmed && kind === 'magpie') return this.play(port, 'sfx_wildlife_magpie_chatter', a, 1);"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_wildlife_owl_hoot": {
+      "name": "Wildtiere – Waldkauz ruft",
+      "category": "wildlife",
+      "intent": "A tawny owl's night call: a long soft hoo, a pause, then a quavering hu-hu-hooo, distant in a dark wood.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, a tawny owl at night: a long soft 'hooo', a short pause, then a quavering 'hu-hu-hooo', distant woodland with quiet natural reverb, no insects, no wind, no music.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 4,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Wiedergabe oneshot als Produktionsvorgabe: AmbientWildlifeAudio spielt positionsgebundene Einzelsounds, begrenzt auf Vögel in Kameranähe.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_wildlife_owl_hoot",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_wildlife_owl_hoot.ogg",
+        "asset_path": "./assets/sounds/sfx_wildlife_owl_hoot.ogg",
+        "filename": "sfx_wildlife_owl_hoot.ogg",
+        "volume": 0.3,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_wildlife_owl_hoot"
+        ],
+        "usages": [
+          {
+            "path": "src/arena/AmbientWildlifeAudio.ts",
+            "line": 24,
+            "kind": "unknown",
+            "excerpt": "owl: { key: 'sfx_wildlife_owl_hoot', seconds: [14, 40], phases: ['patrol', 'circle'] },"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_wildlife_raven_croak": {
+      "name": "Wildtiere – Rabe krächzt",
+      "category": "wildlife",
+      "intent": "A common raven's deep hollow croak, once or twice, resonant and a little distant.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, one common raven calling: a deep resonant hollow 'kronk' croak repeated twice, outdoor field recording at some distance with a little natural air, no other birds, no music.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Wiedergabe oneshot als Produktionsvorgabe: AmbientWildlifeAudio spielt positionsgebundene Einzelsounds, begrenzt auf Vögel in Kameranähe.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_wildlife_raven_croak",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_wildlife_raven_croak.ogg",
+        "asset_path": "./assets/sounds/sfx_wildlife_raven_croak.ogg",
+        "filename": "sfx_wildlife_raven_croak.ogg",
+        "volume": 0.35,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_wildlife_raven_croak"
+        ],
+        "usages": [
+          {
+            "path": "src/arena/AmbientWildlifeAudio.ts",
+            "line": 23,
+            "kind": "unknown",
+            "excerpt": "raven: { key: 'sfx_wildlife_raven_croak', seconds: [18, 45], phases: ['forage', 'flight', 'landing'] },"
+          },
+          {
+            "path": "src/arena/AmbientWildlifeAudio.ts",
+            "line": 84,
+            "kind": "unknown",
+            "excerpt": "if (alarmed && kind === 'raven' && hashCell01(a.bird!.flights, 0, 4200) < .3) return this.play(port, 'sfx_wildlife_raven_croak', a, 1);"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_wildlife_sparrow_chirp": {
+      "name": "Wildtiere – Spatzen tschilpen",
+      "category": "wildlife",
+      "intent": "Two or three short house sparrow cheeps from birds pecking on the ground; natural and unobtrusive under gameplay.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, two or three short house sparrow 'cheep' chirps from a small group feeding on the ground, natural outdoor field recording, close to mid distance, no other birds, no wind noise, no music.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Wiedergabe oneshot als Produktionsvorgabe: AmbientWildlifeAudio spielt positionsgebundene Einzelsounds, begrenzt auf Vögel in Kameranähe.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_wildlife_sparrow_chirp",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_wildlife_sparrow_chirp.ogg",
+        "asset_path": "./assets/sounds/sfx_wildlife_sparrow_chirp.ogg",
+        "filename": "sfx_wildlife_sparrow_chirp.ogg",
+        "volume": 0.25,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_wildlife_sparrow_chirp"
+        ],
+        "usages": [
+          {
+            "path": "src/arena/AmbientWildlifeAudio.ts",
+            "line": 21,
+            "kind": "unknown",
+            "excerpt": "sparrow: { key: 'sfx_wildlife_sparrow_chirp', seconds: [6, 16], phases: ['forage', 'drink'] },"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_wildlife_sparrow_flush": {
+      "name": "Wildtiere – Spatzenschwarm fliegt auf",
+      "category": "wildlife",
+      "intent": "A small flock of house sparrows bursting up from the ground at once: dense soft wing flutter, a quick rise and fade, no calls.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, a small flock of house sparrows bursting into flight from the ground: dense soft feathery wing flutter of many small overlapping wingbeats, a quick rise and fade within one second, outdoor field recording at short distance, no bird calls, no music.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Wiedergabe oneshot als Produktionsvorgabe: AmbientWildlifeAudio spielt positionsgebundene Einzelsounds, begrenzt auf Vögel in Kameranähe.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_wildlife_sparrow_flush",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_wildlife_sparrow_flush.ogg",
+        "asset_path": "./assets/sounds/sfx_wildlife_sparrow_flush.ogg",
+        "filename": "sfx_wildlife_sparrow_flush.ogg",
+        "volume": 0.4,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_wildlife_sparrow_flush"
+        ],
+        "usages": [
+          {
+            "path": "src/arena/AmbientWildlifeAudio.ts",
+            "line": 81,
+            "kind": "unknown",
+            "excerpt": "if (kind === 'sparrow') return this.play(port, 'sfx_wildlife_sparrow_flush', a, .55 + .45 * Math.min(1, a.appearance.count / 9));"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
+    },
+    "sfx_wildlife_wing_flap": {
+      "name": "Wildtiere – Krähenvogel fliegt auf",
+      "category": "wildlife",
+      "intent": "A single large black bird taking off: three or four heavy soft wingbeats with a feathery whoosh, no call.",
+      "musical_identity": "",
+      "playback": "oneshot",
+      "prompt": {
+        "text": "TrackType: SFX, a single crow-sized bird taking off from the ground: three or four heavy soft wingbeats with a feathery whoosh, close outdoor recording, no vocalisation, no music.",
+        "source": "claude",
+        "preserve_on_sync": true
+      },
+      "generation_defaults": {
+        "model": "medium",
+        "duration_seconds": 2,
+        "candidate_count": 4,
+        "steps": 8,
+        "cfg_scale": 1.0
+      },
+      "processing": {
+        "profile": "gentle",
+        "overrides": {}
+      },
+      "notes": "Wiedergabe oneshot als Produktionsvorgabe: AmbientWildlifeAudio spielt positionsgebundene Einzelsounds, begrenzt auf Vögel in Kameranähe.",
+      "needs_revision": false,
+      "copy_notice": null,
+      "suggested_changes": [],
+      "repository": {
+        "key": "sfx_wildlife_wing_flap",
+        "kind": "sfx",
+        "music_role": null,
+        "editable": true,
+        "target_path": "public/assets/sounds/sfx_wildlife_wing_flap.ogg",
+        "asset_path": "./assets/sounds/sfx_wildlife_wing_flap.ogg",
+        "filename": "sfx_wildlife_wing_flap.ogg",
+        "volume": 0.3,
+        "shipped": false,
+        "exists": false,
+        "file_hash": null,
+        "file_error": null,
+        "shared_keys": [
+          "sfx_wildlife_wing_flap"
+        ],
+        "usages": [
+          {
+            "path": "src/arena/AmbientWildlifeAudio.ts",
+            "line": 85,
+            "kind": "unknown",
+            "excerpt": "return this.play(port, 'sfx_wildlife_wing_flap', a, kind === 'raven' ? 1 : .8);"
+          }
+        ],
+        "playback": "unknown",
+        "conflicts": []
+      },
+      "orphaned": false
     }
   }
 }

@@ -16,9 +16,18 @@ export function wildlifeFogCover(x: number, y: number, state: SunCloudState): nu
   return Number.isFinite(alpha) ? Math.min(.55, t.fogMaxCover, alpha) : 0;
 }
 
-export type WildlifeKind = 'butterfly' | 'moth' | 'firefly' | 'snake' | 'fish';
+export const BIRD_KINDS = ['sparrow', 'magpie', 'raven', 'owl'] as const;
+export const WILDLIFE_KINDS = ['butterfly', 'moth', 'firefly', 'snake', 'fish', ...BIRD_KINDS] as const;
+export type WildlifeKind = typeof WILDLIFE_KINDS[number];
+export type BirdKind = typeof BIRD_KINDS[number];
 export function isWingedInsect(kind: WildlifeKind): kind is 'butterfly' | 'moth' | 'firefly' {
   return kind === 'butterfly' || kind === 'moth' || kind === 'firefly';
+}
+export function isBird(kind: WildlifeKind): kind is BirdKind {
+  return kind === 'sparrow' || kind === 'magpie' || kind === 'raven' || kind === 'owl';
+}
+export function isCorvid(kind: WildlifeKind): kind is 'magpie' | 'raven' {
+  return kind === 'magpie' || kind === 'raven';
 }
 
 /** Shared pulse for the visible halo and its illumination of the ground. */
@@ -64,6 +73,7 @@ export function createWildlifeAppearance(kind: WildlifeKind, sizeRoll: number, c
       groupIndex, count: group.minCount + Math.floor(sizeRoll * (group.maxCount - group.minCount + 1)),
       spread: group.spread, footprint };
   }
+  if (isBird(kind)) return birdAppearance(kind, sizeRoll, colorRoll);
   const colors = kind === 'moth' ? TUNING.mothColors : TUNING.butterflyColors;
   return { length: TUNING[kind].size, widthScale: 1, colorIndex: Math.floor(colorRoll * colors.length),
     groupIndex: 0, count: 1, spread: 0,
@@ -110,3 +120,25 @@ export function writeFishMemberPose(appearance: WildlifeAppearance, animation: n
   out.y = Math.sin(angle) * radius + Math.sin(animation * .42 + index) * .7;
   out.length = appearance.length * (.92 + ((index * .37 + variation) % 1) * .16);
 }
+
+/**
+ * Birds: `length` is beak to tail tip in mesh units. A sparrow flock is one animal whose members
+ * share its appearance; the footprint covers the whole grounded formation including hops and pecks.
+ */
+function birdAppearance(kind: BirdKind, sizeRoll: number, colorRoll: number): WildlifeAppearance {
+  const tuning = TUNING[kind];
+  if (kind === 'sparrow') {
+    const t = TUNING.sparrow;
+    const count = t.flockMin + Math.min(t.flockMax - t.flockMin, Math.floor(sizeRoll * (t.flockMax - t.flockMin + 1)));
+    const spread = t.spread * Math.sqrt(count / 6);
+    return { length: t.size, widthScale: 1, colorIndex: 0, groupIndex: 0, count, spread,
+      footprint: (spread + SPARROW_WANDER + t.size * .6) * TUNING.visualScale + 1 };
+  }
+  const length = tuning.size * (.94 + sizeRoll * .12);
+  const colorIndex = kind === 'owl' ? Number(colorRoll >= TUNING.owlBrownShare) : 0;
+  return { length, widthScale: 1, colorIndex, groupIndex: 0, count: 1, spread: 0,
+    footprint: length * .62 * TUNING.visualScale + 2 };
+}
+
+/** Largest offset of a foraging sparrow from its formation slot (wander loop plus a hop). */
+export const SPARROW_WANDER = 2.6;

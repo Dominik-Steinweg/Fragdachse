@@ -66,6 +66,60 @@ Punkte zur Laufzeit entfernt (`pathDetailThreshold = 1`). Die neue Darstellung h
 vorbereitete Kontur vor. Der Vergleich bei voller Pfadauflösung prüft die Flächen je Farbe
 gegen den bisherigen Renderer; unterschiedliche Dreiecksdiagonalen verändern die Kontur nicht.
 
+## Störungen (alle Arten)
+
+Seit 21.10.2026 gilt eine Störregel für alle Tiere. Bewegte Körper (dargestellte Spieler und Gegner,
+gemessen bis zur Körperkante) und gemerkte Impulse (Schüsse, zerstörerische Explosionen) alarmieren.
+Die Reichweite ergibt sich aus `alertRadius` und dem Impulstyp (`disturbance` in
+[AmbientWildlifeConfig](../src/arena/AmbientWildlifeConfig.ts)). Gegner werden über
+`EnemyManager.forEachEnemy` ohne Allokation gelesen, auf Sicht plus Rand begrenzt und pro Frame in ein
+grobes Bucket-Grid kompaktiert. Explosionen erreichen Nebel und Wildlife über
+`EffectSystem.bindExplosionObserver`. Alles bleibt lokale Präsentation ohne Netzwerkzustand.
+
+## Vögel
+
+Spatzenschwärme, Elstern, Raben und Waldkäuze verwenden denselben Triangle-Batch. Jeder Vogel hat
+Kanäle für Kontaktschatten, Körper, Schwanz, Kopf und beide Flügel; ein Schwarm wiederholt sie je
+Mitglied. Gefaltete Flügel schwenken um die Schulter nach hinten, Kanäle tragen dafür eine Rotation
+(`WildlifeMesh.rotated`). Der bestehende Pfad ohne Rotation bleibt unverändert.
+
+Der Renderer sampelt jeden Vogel einmal pro Frame und gibt die Lage an bis zu zwei von vier Ebenen
+(`BIRD_LAYER_DEPTHS`): Boden unter dem Nebel, Flugschatten im Figurenschattenband, niedriger Flug
+zwischen Nebel-Composite und Sonnenpass (gleiche Sonnen-, Wolken- und Lichtkartenbeleuchtung wie
+am Boden, unter den Kronen), hoher Flug über den Kronen. Die Gewichte überblenden nach Höhe, die
+obere Kopie ist vollständig, bevor die untere verschwindet (`writeBirdLayerWeights`); beim Abheben
+löst sich der Vogel dadurch über `fogLift` allmählich aus dem Nebel. Spatzen und Elstern fliegen
+unter den Kronen, Raben und Eulen darüber. Im Kronenband steigt ein Vogel aus den Blättern oder
+sinkt hinein; Reiseflughöhen liegen nie im Band. Der hohe Flug erhält `resolveCanopyTint` als
+reine Multiplikation.
+
+Spatzenschwärme fliegen nicht als starre Formation: Jedes Mitglied verfolgt seinen Platz im lockeren
+Verband mit eigener Geschwindigkeit, Trägheit, Kurs, Abstand zu den anderen und eigenem
+Flügelschlag (`sparrowMembers`). Beim Landen fliegt jedes Mitglied zu seinem eigenen Bodenplatz,
+bremst dort und faltet erst dann die Flügel. Dieser Zustand gehört der Darstellung und beginnt nach
+einer Sichtlücke wieder auf den Plätzen. Der Flugschatten teilt die animierten Posen des
+Körpers, ist ein überlappungsfreier Fächer und folgt bei Tag der Sonne, nachts schwach dem Mond
+(`projectBirdShadow`). Präsentationszustand liegt am Renderer, nie am Tier.
+
+Ton: [AmbientWildlifeAudio](../src/arena/AmbientWildlifeAudio.ts) liest die einmaligen Signale des
+Modells. Die IDs stehen in [audio-sounds.md](audio-sounds.md).
+
+### Messung am 21.10.2026
+
+Modell-Update allein, isolierter Vitest-Lauf auf Node, 600 Frames nach 120 Warmup-Frames,
+synthetische Karte 8320 × 3200 mit 400 Bäumen und Teich (113 Schmetterlinge, 90 Motten,
+34 Glühwürmchen, 96 Schlangen, 14 Fischgruppen; mit Vögeln zusätzlich 18 Spatzenschwärme,
+10 Elstern, 6 Raben, 6 Eulen), Sicht 1920 × 1080:
+
+| Messgröße | `main` cc28b186 | mit Vögeln |
+| --- | ---: | ---: |
+| Aufbau unter der Ladeabdeckung | 8,2 ms | 20,6 ms |
+| Update ohne Störer, Tag | 0,140 ms | 0,161 ms |
+| Update mit 300 bewegten Körpern in Sicht | 0,809 ms (nur als Spieler übergeben) | 0,290 ms |
+
+Darstellungs- und GPU-Kosten wurden nicht gemessen; die Sichtprüfung erfolgte im Wildlife-Labor und
+im Dev-Szenario auf Map 1 (Tag und Nacht). Einzelwerte schwanken mit JIT und Last.
+
 ## Reproduktion und Prüfung
 
 ```powershell

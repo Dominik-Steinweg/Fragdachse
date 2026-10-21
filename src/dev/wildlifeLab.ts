@@ -3,14 +3,29 @@ const cameraView=createVisibleWorldView();
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { createArenaBackground } from '../arena/ArenaBackgroundRenderer';
 import * as Phaser from 'phaser';
-import { CANOPY_RADIUS, CELL_SIZE, DEPTH, TRUNK_RADIUS } from '../config';
+import { CANOPY_RADIUS, CELL_SIZE, DEPTH, DEPTH_LIGHTING, TRUNK_RADIUS } from '../config';
 import { buildLobbyWorldLayout, LOBBY_WORLD_HEIGHT_CELLS, LOBBY_WORLD_WIDTH_CELLS } from '../arena/LobbyWorldLayout';
 import { AmbientWildlifeRenderer } from '../arena/AmbientWildlifeRenderer';
 import type { WildlifeAnimal, WildlifeKind } from '../arena/AmbientWildlifeModel';
 import { WaterSurfaceRenderer } from '../arena/WaterSurfaceRenderer';
 import { AMBIENT_WILDLIFE } from '../arena/AmbientWildlifeConfig';
+import { isBird } from '../arena/AmbientWildlifeAppearance';
+import type { BirdPhase } from '../arena/AmbientWildlifeBirds';
+import { createSunPath, resolveSunPath } from '../effects/sunlight/SunPath';
+import type { SunTuning } from '../effects/sunlight/SunTuning';
 import type { ArenaLayout } from '../types';
 import map00 from '../config/coopDefenseMaps/00-test.json';
+
+/** Lab times of day; the night tint approximates the lightmap's ambient, not the production lighting. */
+const TIMES = [
+  { label: '12:00', minutes: 12 * 60, ambient: 0xffffff },
+  { label: '19:40', minutes: 19 * 60 + 40, ambient: 0xb8a690 },
+  { label: '00:00', minutes: 0, ambient: 0x4a5670 },
+] as const;
+const KINDS = ['butterfly', 'snake', 'fish', 'sparrow', 'magpie', 'raven', 'owl'] as const;
+const BIRD_PHASES: Record<BirdPhase, string> = { hidden: 'Schlafplatz', emerge: 'Ausflug', forage: 'Futtersuche',
+  drink: 'Trinken', flight: 'Flug', landing: 'Landung', roost: 'Heimkehr', patrol: 'Patrouille', circle: 'Kreisen',
+  dive: 'Sturzflug', mantle: 'Beute', climb: 'Steigflug' };
 
 /** Standalone manual fixture using production models/renderers, without game debug hooks. */
 class WildlifeLab extends Phaser.Scene {
@@ -18,14 +33,18 @@ class WildlifeLab extends Phaser.Scene {
   private water!: WaterSurfaceRenderer;
   private actor!: Phaser.GameObjects.Image;
   private shotMarker!: Phaser.GameObjects.Arc;
+  private darkness!: Phaser.GameObjects.Rectangle;
   private shotTime = 0;
   private target: WildlifeAnimal | undefined;
   private fixture = 0;
+  private timeIndex = 0;
+  private enemy = false;
   private kind: WildlifeKind = 'butterfly';
   private approachTime = -1;
   private approachX = 0;
   private approachY = 0;
   private disposers: (() => void)[] = [];
+  private readonly sunPath = createSunPath();
 
   preload(): void {
     preloadGroundMaterials(this.load);
@@ -36,7 +55,8 @@ class WildlifeLab extends Phaser.Scene {
   create(): void {
     const layout: ArenaLayout = this.fixture === 0 ? buildLobbyWorldLayout() : {
       seed: 183, rocks: [], dirt: [], tracks: [], powerUpPedestals: [],
-      trees: [{ gridX: 51, gridY: 10 }, { gridX: 54, gridY: 24 }], water: map00.water,
+      trees: [{ gridX: 51, gridY: 10 }, { gridX: 54, gridY: 24 }, { gridX: 20, gridY: 40 }, { gridX: 90, gridY: 30 }],
+      water: map00.water,
     };
     const width = this.fixture === 0 ? LOBBY_WORLD_WIDTH_CELLS * CELL_SIZE : 4096;
     const height = this.fixture === 0 ? LOBBY_WORLD_HEIGHT_CELLS * CELL_SIZE : 2048;
@@ -52,6 +72,9 @@ class WildlifeLab extends Phaser.Scene {
     this.wildlife = new AmbientWildlifeRenderer(this, frame, layout);
     this.actor = this.add.image(0, 0, 'wildlife-badger').setDisplaySize(48, 48).setDepth(DEPTH.PLAYERS).setVisible(false);
     this.shotMarker = this.add.circle(0, 0, 4, 0xffdb85).setDepth(DEPTH.PLAYERS).setVisible(false);
+    // Lab stand-in for the lightmap: everything below it darkens, flying birds above it carry their tint.
+    this.darkness = this.add.rectangle(0, 0, 8, 8, 0xffffff).setOrigin(0).setScrollFactor(0)
+      .setDepth(DEPTH_LIGHTING).setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.shotTime = 0;
     this.approachTime = -1;
     this.cameras.main.setBounds(0, 0, width, height).setZoom(1);
@@ -62,7 +85,7 @@ class WildlifeLab extends Phaser.Scene {
       button.addEventListener('click', action);
       this.disposers.push(() => button.removeEventListener('click', action));
     };
-    for (const kind of ['butterfly', 'snake', 'fish'] as const) bind(kind, () => this.focus(kind));
+    for (const kind of KINDS) bind(kind, () => this.focus(kind));
     let transparentCanopies = false;
     document.getElementById('canopies')!.textContent = 'Baumkronen: normal';
     bind('canopies', () => {
@@ -85,15 +108,21 @@ class WildlifeLab extends Phaser.Scene {
       this.actor.setPosition(this.approachX, this.approachY).setVisible(true).setAngle(90);
     });
     bind('clear', () => { this.actor.setVisible(false); this.approachTime = -1; });
-    bind('shot', () => {
-      if (!this.target) return;
-      const x = this.target.x - AMBIENT_WILDLIFE[this.kind].alertRadius * .7, y = this.target.y + 10;
-      this.wildlife.notifyShot(x, y);
-      this.shotMarker.setPosition(x, y).setVisible(true).setAlpha(1);
-      this.shotTime = 1;
+    bind('shot', () => this.impulse('shot'));
+    bind('explosion', () => this.impulse('explosion'));
+    bind('enemy', () => {
+      this.enemy = !this.enemy;
+      document.getElementById('enemy')!.textContent = `Störer: ${this.enemy ? 'großer Gegner' : 'Spieler'}`;
+      this.actor.setTint(this.enemy ? 0xc06060 : 0xffffff).setDisplaySize(this.enemy ? 96 : 48, this.enemy ? 96 : 48);
+    });
+    document.getElementById('time')!.textContent = `Tageszeit: ${TIMES[this.timeIndex].label}`;
+    bind('time', () => {
+      this.timeIndex = (this.timeIndex + 1) % TIMES.length;
+      document.getElementById('time')!.textContent = `Tageszeit: ${TIMES[this.timeIndex].label}`;
     });
     bind('zoom', () => {
-      const zoom = this.cameras.main.zoom === 1 ? 3 : 1;
+      const steps = [1, 3, 6, 12], current = steps.indexOf(this.cameras.main.zoom);
+      const zoom = steps[(current + 1) % steps.length];
       this.cameras.main.setZoom(zoom);
       if (this.target) this.cameras.main.centerOn(this.target.x, this.target.y);
       document.getElementById('zoom')!.textContent = `Zoom ${zoom * 100} %`;
@@ -107,29 +136,48 @@ class WildlifeLab extends Phaser.Scene {
     this.focus(this.kind);
   }
 
+  private impulse(kind: 'shot' | 'explosion'): void {
+    if (!this.target) return;
+    const x = this.target.x - AMBIENT_WILDLIFE[this.kind].alertRadius * (kind === 'shot' ? .7 : 1.6), y = this.target.y + 10;
+    this.wildlife.notifyImpulse(kind, x, y, kind === 'explosion' ? 64 : 0);
+    this.shotMarker.setPosition(x, y).setVisible(true).setAlpha(1).setRadius(kind === 'shot' ? 4 : 18)
+      .setFillStyle(kind === 'shot' ? 0xffdb85 : 0xff8a4a);
+    this.shotTime = 1;
+  }
+
   private focus(kind: WildlifeKind): void {
     this.kind = kind;
-    this.target = this.wildlife.model.animals.find(a => a.kind === kind);
+    const animals = this.wildlife.model.animals.filter(a => a.kind === kind);
+    this.target = animals.find(a => a.opacity > 0) ?? animals[0];
     this.actor.setVisible(false); this.approachTime = -1;
     if (this.target) this.cameras.main.centerOn(this.target.x, this.target.y);
   }
 
   update(_time: number, delta: number): void {
+    const time = TIMES[this.timeIndex];
     this.shotTime = Math.max(0, this.shotTime - Math.min(delta / 1000, .05));
     this.shotMarker.setVisible(this.shotTime > 0).setAlpha(this.shotTime);
     if (this.approachTime >= 0) {
       this.approachTime += Math.min(delta / 1000, .05);
       this.actor.setPosition(this.approachX + Math.min(this.approachTime, 1.2) * 45, this.approachY);
     }
-    const players = this.actor.visible ? [{ id: 'probe', x: this.actor.x, y: this.actor.y }] : [];
+    const movers = this.actor.visible
+      ? [{ id: this.enemy ? 'enemy' : 'probe', x: this.actor.x, y: this.actor.y, radius: this.enemy ? 24 : 0 }] : [];
     const view = getVisibleWorldView(this.cameras.main,cameraView);
+    this.darkness.setSize(this.scale.width, this.scale.height).setFillStyle(time.ambient);
+    this.wildlife.setSunlight({ tuning: {} as SunTuning, timeSec: 0, strength: 0,
+      sunPath: resolveSunPath(time.minutes, null, this.sunPath) });
     this.water.prepareMasks();
     this.water.updateResidency(view);
-    this.wildlife.update(delta, players, view);
+    this.wildlife.update(delta, movers, view, time.minutes,
+      { setLight: () => {}, releaseLight: () => {}, resolveCanopyTint: () => time.ambient });
+    // Birds leave the frame quickly; keep the selected one in view.
+    if (this.target && isBird(this.target.kind) && this.target.opacity > 0) this.cameras.main.centerOn(this.target.x, this.target.y);
     const animals = this.wildlife.model.animals;
-    const counts = (['butterfly', 'snake', 'fish'] as const).map(kind => animals.filter(a => a.kind === kind).length);
+    const count = (kind: WildlifeKind) => animals.filter(a => a.kind === kind).length;
     const solitary = animals.filter(a => a.kind === 'fish' && a.appearance.count === 1).length;
     const fishTotal = animals.reduce((sum, a) => sum + (a.kind === 'fish' ? a.appearance.count : 0), 0);
+    const sparrows = animals.reduce((sum, a) => sum + (a.kind === 'sparrow' ? a.appearance.count : 0), 0);
     let variant = '';
     if (this.target?.kind === 'snake') {
       const style = this.target.appearance;
@@ -137,12 +185,16 @@ class WildlifeLab extends Phaser.Scene {
     } else if (this.target?.kind === 'fish') {
       const style = this.target.appearance;
       variant = ` · ${AMBIENT_WILDLIFE.fishGroups[style.groupIndex].name}: ${style.count} ${style.count === 1 ? 'Fisch' : 'Fische'} · ${AMBIENT_WILDLIFE.fishColors[style.colorIndex].name}`;
+    } else if (this.target?.bird) {
+      const bird = this.target.bird;
+      variant = ` · ${BIRD_PHASES[bird.phase]} · Höhe ${bird.altitude.toFixed(0)} px${this.target.kind === 'sparrow' ? ` · ${this.target.appearance.count} Spatzen` : ''}`;
     }
     const phases = { swimming: 'Schwimmen', fleeing: 'Flucht', diving: 'Abtauchen', hidden: 'Untergetaucht', emerging: 'Auftauchen' };
     const phase = this.target?.kind === 'fish' ? ` · ${phases[this.target.fishPhase]} · Sichtbarkeit ${Math.round(this.target.opacity * 100)} %`
-      : this.target ? ` · ${this.target.resting ? 'Ruhe · Flügel still' : this.target.fleeing ? 'Flucht' : 'Unterwegs'}` : '';
+      : this.target && !this.target.bird ? ` · ${this.target.resting ? 'Ruhe · Flügel still' : this.target.fleeing ? 'Flucht' : 'Unterwegs'}`
+        : this.target?.fleeing ? ' · Flucht' : '';
     const position = this.target ? ` · Tierposition ${this.target.x.toFixed(1)}, ${this.target.y.toFixed(1)}` : ' · Kein passender Lebensraum';
-    document.getElementById('status')!.textContent = `${counts[0]} Schmetterlinge · ${counts[1]} Schlangen · ${counts[2] - solitary} Fischschwärme · ${solitary} ${solitary === 1 ? 'Einzelfisch' : 'Einzelfische'} (${fishTotal} Fische gesamt)${variant}${phase}${position}`;
+    document.getElementById('status')!.textContent = `${count('butterfly')} Schmetterlinge · ${count('snake')} Schlangen · ${count('fish') - solitary} Fischschwärme · ${solitary} ${solitary === 1 ? 'Einzelfisch' : 'Einzelfische'} (${fishTotal} Fische) · ${count('sparrow')} Spatzenschwärme (${sparrows}) · ${count('magpie')} Elstern · ${count('raven')} Raben · ${count('owl')} Eulen${variant}${phase}${position}`;
   }
 }
 

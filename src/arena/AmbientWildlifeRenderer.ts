@@ -3,16 +3,35 @@ import { DEPTH, DEPTH_LIGHTING } from '../config';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 import { LIGHT_PRESETS } from '../effects/LightingConfig';
 import type { LightingSystem } from '../effects/LightingSystem';
+import { CHARACTER_SHADOW_CONFIG } from '../effects/ShadowConfig';
 import type { SunCloudState } from '../effects/sunlight/cloudShadow';
+import { DEFAULT_TIME_OF_DAY_MINUTES } from '../effects/TimeOfDay';
 import type { ArenaLayout } from '../types';
 import type { ChunkWorldFrame, ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { prepareWildlifeVisuals } from './AmbientWildlifeGeometry';
+import { prepareBirdVisuals, projectBirdShadow, type BirdVisual } from './AmbientWildlifeBirdGeometry';
+import { birdDrawScale, writeBirdLayerWeights } from './AmbientWildlifeBirds';
 import { fireflyGlowStrength } from './AmbientWildlifeAppearance';
-import { createAmbientWildlifeLayer, type AmbientWildlifeLayer } from './AmbientWildlifeLayer';
-import { AmbientWildlifeModel, type WildlifeAnimal, type WildlifePlayer } from './AmbientWildlifeModel';
+import { AmbientWildlifeAudio, type WildlifeAudioPort } from './AmbientWildlifeAudio';
+import { createAmbientWildlifeLayer, type AmbientWildlifeLayer, type WildlifeLayerProjection } from './AmbientWildlifeLayer';
+import { AmbientWildlifeModel, type WildlifeAnimal, type WildlifeImpulseKind, type WildlifeMover } from './AmbientWildlifeModel';
 
-type WildlifeLighting = Pick<LightingSystem, 'setLight' | 'releaseLight'>;
+type WildlifeLighting = Pick<LightingSystem, 'setLight' | 'releaseLight'> & Partial<Pick<LightingSystem, 'resolveCanopyTint'>>;
 let nextLightOwner = 0;
+
+/**
+ * Bird bands: grounded birds under the ground fog; projected flight shadows in the figure-shadow band
+ * (under fog and crowns); low flight just above the fog but below the sun/cloud pass, so it keeps the
+ * ground's sun, cloud and lightmap lighting under the crowns; high flight above crowns and below
+ * bombers, where only the canopy tint lights it.
+ */
+export const BIRD_LAYER_DEPTHS = {
+  ground: DEPTH.GROUND_FOG - .005,
+  shadows: CHARACTER_SHADOW_CONFIG.depth - .005,
+  low: DEPTH.GROUND_FOG_COMPOSITE + 1.8,
+  high: DEPTH.CANOPY + .3,
+} as const;
+
 
 /** World-owned cosmetic presentation, following the existing lighting clock. */
 export class AmbientWildlifeRenderer {
@@ -20,6 +39,12 @@ export class AmbientWildlifeRenderer {
   private readonly ground: AmbientWildlifeLayer;
   private readonly fish: AmbientWildlifeLayer;
   private readonly fireflies: AmbientWildlifeLayer;
+  private readonly birds: readonly BirdVisual[];
+  private readonly birdLayers: readonly AmbientWildlifeLayer[];
+  private readonly audio: AmbientWildlifeAudio;
+  private readonly weights = { ground: 0, low: 0, high: 0 };
+  private readonly moonBase = { weight: 0, cover: 0 };
+  private readonly shadow = { x: 0, y: 0, alpha: 0 };
   private destroyed = false;
   private visualTime = 0;
   private lighting: WildlifeLighting | null = null;
@@ -33,7 +58,7 @@ export class AmbientWildlifeRenderer {
       .map((animal, i) => ({ animal, key: `wildlife:${lightOwner}:${i}`, active: false }));
     // ArenaBuilder constructs this under the existing loading veil. Allocate every mesh
     // and bounded output buffer here, including animals outside the initial viewport.
-    const visuals = prepareWildlifeVisuals(this.model.animals);
+    const visuals = prepareWildlifeVisuals(this.model.animals.filter(a => !a.bird));
     this.ground = createAmbientWildlifeLayer(scene, visuals.filter(v => v.animal.kind !== 'fish' && v.animal.kind !== 'firefly'),
       DEPTH.GROUND_FOG - .01, 'ambient-wildlife-land');
     this.fish = createAmbientWildlifeLayer(scene, visuals.filter(v => v.animal.kind === 'fish'),
@@ -44,6 +69,28 @@ export class AmbientWildlifeRenderer {
     registerGraphicsObject(scene, 'ambientWildlife', this.ground);
     registerGraphicsObject(scene, 'ambientWildlife', this.fish);
     registerGraphicsObject(scene, 'ambientWildlife', this.fireflies);
+    // Every bird is sampled once per frame by `updateBirds`; its layers only place the copy they draw.
+    this.birds = prepareBirdVisuals(this.model.animals);
+    const place = (v: BirdVisual, out: WildlifeLayerProjection, weight: number, tint: number): void => {
+      out.x = v.animal.x; out.y = v.animal.y; out.angle = v.animal.angle;
+      out.scale = v.presence.scale; out.radius = v.presence.radius; out.weight = weight; out.tint = tint;
+    };
+    this.birdLayers = [
+      createAmbientWildlifeLayer(scene, this.birds, BIRD_LAYER_DEPTHS.ground, 'ambient-wildlife-birds-ground',
+        { project: (v, out) => place(v, out, v.presence.ground, 0xffffff) }),
+      createAmbientWildlifeLayer(scene, this.birds.map(v => v.shadow), BIRD_LAYER_DEPTHS.shadows, 'ambient-wildlife-bird-shadows',
+        { project: (s, out) => {
+          const p = s.owner.presence;
+          place(s.owner, out, p.shadowAlpha, 0xffffff);
+          out.x += p.shadowX; out.y += p.shadowY;
+        } }),
+      createAmbientWildlifeLayer(scene, this.birds, BIRD_LAYER_DEPTHS.low, 'ambient-wildlife-birds-low',
+        { project: (v, out) => place(v, out, v.presence.low, 0xffffff) }),
+      createAmbientWildlifeLayer(scene, this.birds, BIRD_LAYER_DEPTHS.high, 'ambient-wildlife-birds-high',
+        { project: (v, out) => place(v, out, v.presence.high, v.presence.tint) }),
+    ];
+    for (const layer of this.birdLayers) registerGraphicsObject(scene, 'ambientWildlife', layer);
+    this.audio = new AmbientWildlifeAudio(this.model.animals);
   }
 
   /** Borrow the active World atmosphere; depths also remain valid during a terrain handoff. */
@@ -52,19 +99,49 @@ export class AmbientWildlifeRenderer {
     this.sunlight = state;
   }
 
-  update(deltaMs: number, players: readonly WildlifePlayer[], view: ChunkWorldRect, timeOfDayMinutes?: number,
-    lighting?: WildlifeLighting): void {
+  update(deltaMs: number, movers: readonly WildlifeMover[], view: ChunkWorldRect, timeOfDayMinutes?: number,
+    lighting?: WildlifeLighting, audio?: WildlifeAudioPort): void {
     if (this.destroyed) return;
     this.visualTime += Math.max(0, Math.min(deltaMs / 1000, .05));
-    this.model.update(deltaMs, players, view, timeOfDayMinutes);
+    this.model.update(deltaMs, movers, view, timeOfDayMinutes);
     this.ground.updatePose(view, this.visualTime);
     this.fish.updatePose(view, this.visualTime);
     this.fireflies.updatePose(view, this.visualTime, this.sunlight);
+    this.updateBirds(view, timeOfDayMinutes ?? DEFAULT_TIME_OF_DAY_MINUTES, lighting);
+    for (const layer of this.birdLayers) layer.updatePose(view, this.visualTime);
+    this.audio.update(deltaMs, view, audio);
     if (lighting && lighting !== this.lighting) {
       this.clearLights();
       this.lighting = lighting;
     }
     this.syncFireflyLights(view);
+  }
+
+  /** Cull, weigh, tint and shadow each bird, then sample its pose once for all of its layers. */
+  private updateBirds(view: ChunkWorldRect, minutes: number, lighting: WildlifeLighting | undefined): void {
+    for (const v of this.birds) {
+      const a = v.animal, bird = a.bird!, p = v.presence;
+      p.scale = birdDrawScale(bird.altitude);
+      p.radius = v.reach * p.scale + 2;
+      this.projectShadow(v, minutes);
+      const reach = p.radius + Math.abs(p.shadowX) + Math.abs(p.shadowY);
+      if (a.opacity <= .005 || a.x < view.x - reach || a.y < view.y - reach
+        || a.x > view.x + view.width + reach || a.y > view.y + view.height + reach) {
+        p.ground = p.low = p.high = p.shadowAlpha = 0;
+        continue;
+      }
+      writeBirdLayerWeights(bird.altitude, this.weights);
+      p.ground = this.weights.ground; p.low = this.weights.low; p.high = this.weights.high;
+      // Above the crowns, birds darken exactly like tree crowns; the tint only multiplies.
+      p.tint = p.high > 0 && lighting?.resolveCanopyTint ? lighting.resolveCanopyTint(a.x, a.y) : 0xffffff;
+      v.sample(this.visualTime);
+    }
+  }
+
+  private projectShadow(v: BirdVisual, minutes: number): void {
+    const p = v.presence, a = v.animal;
+    projectBirdShadow(a.bird!.altitude, a.x, a.y, this.sunlight, minutes, this.shadow, this.moonBase);
+    p.shadowX = this.shadow.x; p.shadowY = this.shadow.y; p.shadowAlpha = this.shadow.alpha;
   }
 
   private syncFireflyLights(view: ChunkWorldRect): void {
@@ -91,8 +168,8 @@ export class AmbientWildlifeRenderer {
     this.lighting = null;
   }
 
-  notifyShot(x: number, y: number): void {
-    if (!this.destroyed) this.model.notifyShot(x, y);
+  notifyImpulse(kind: WildlifeImpulseKind, x: number, y: number, radius?: number): void {
+    if (!this.destroyed) this.model.notifyImpulse(kind, x, y, radius);
   }
 
   destroy(): void {
@@ -101,6 +178,8 @@ export class AmbientWildlifeRenderer {
     this.sunlight = undefined;
     this.clearLights();
     this.fireflyLights.length = 0;
-    this.ground.destroy(); this.fish.destroy(); this.fireflies.destroy(); this.model.destroy();
+    this.ground.destroy(); this.fish.destroy(); this.fireflies.destroy();
+    for (const layer of this.birdLayers) layer.destroy();
+    this.model.destroy();
   }
 }
