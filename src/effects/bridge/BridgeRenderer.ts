@@ -6,10 +6,12 @@ import type { ArenaBridge } from '../../types';
 import type { BridgeRuntimeState } from '../../world/WorldBridgeRuntime';
 import { ensureCanvasTexture, registerGraphicsObject } from '../EffectUtils';
 import { BridgeDestructionFx } from './BridgeDestructionFx';
-import { ensureBridgeDeckTexture, ensureBridgeRuinTexture } from './BridgeTextures';
+import { ensureBridgeDeckTexture, ensureBridgeRuinTexture, ensureBridgeShadowTexture,
+  resolveBridgeMaterials } from './BridgeTextures';
 
 interface BridgeView {
   readonly bridge: ArenaBridge;
+  readonly shadow: Phaser.GameObjects.Image;
   readonly deck: Phaser.GameObjects.Image;
   readonly ruin: Phaser.GameObjects.Image;
   readonly charge: Phaser.GameObjects.Image;
@@ -73,16 +75,21 @@ export class BridgeRenderer {
     private readonly cues: BridgeRendererCues = {}) {
     this.fx = new BridgeDestructionFx(scene);
     ensureChargeTextures(scene.textures);
+    const materials = resolveBridgeMaterials(scene.textures);
     const owner = nextTextureOwner++;
     for (const bridge of bridges) {
       const deckKey = `bridge-deck-${owner}-${bridge.id}`;
       const ruinKey = `bridge-ruin-${owner}-${bridge.id}`;
-      ensureBridgeDeckTexture(scene.textures, deckKey, bridge.spanCells, bridge.deckWidthCells, bridge.id);
-      ensureBridgeRuinTexture(scene.textures, ruinKey, bridge.spanCells, bridge.deckWidthCells, bridge.id);
-      this.textureKeys.push(deckKey, ruinKey);
+      const shadowKey = `bridge-shadow-${owner}-${bridge.id}`;
+      ensureBridgeDeckTexture(scene.textures, deckKey, bridge.spanCells, bridge.deckWidthCells, bridge.id, materials);
+      ensureBridgeRuinTexture(scene.textures, ruinKey, bridge.spanCells, bridge.deckWidthCells, bridge.id, materials);
+      ensureBridgeShadowTexture(scene.textures, shadowKey, bridge.spanCells, bridge.deckWidthCells);
+      this.textureKeys.push(deckKey, ruinKey, shadowKey);
       const rect = getBridgeDeckWorldRect(bridge, origin);
       const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
       const rotation = bridge.axis === 'horizontal' ? 0 : Math.PI / 2;
+      // The deck stands a little above the river; its contact shadow darkens the water around it.
+      const shadow = scene.add.image(cx + 2, cy + 3, shadowKey).setRotation(rotation).setDepth(DEPTH.WATER + .38).setAlpha(.55);
       const deck = scene.add.image(cx, cy, deckKey).setRotation(rotation).setDepth(DEPTH.WATER + .4);
       const ruin = scene.add.image(cx, cy, ruinKey).setRotation(rotation).setDepth(DEPTH.WATER + .4).setVisible(false);
       const point = getBridgeChargePoint(bridge, origin);
@@ -91,7 +98,7 @@ export class BridgeRenderer {
         .setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
       const telegraph = scene.add.graphics().setDepth(TELEGRAPH_DEPTH).setBlendMode(Phaser.BlendModes.ADD).setVisible(false);
       registerGraphicsObject(scene, 'objectiveMarkers', telegraph);
-      this.views.push({ bridge, deck, ruin, charge, spark, telegraph, phase: null, warned: false });
+      this.views.push({ bridge, shadow, deck, ruin, charge, spark, telegraph, phase: null, warned: false });
     }
   }
 
@@ -112,6 +119,7 @@ export class BridgeRenderer {
       if (phase === 'charged' && view.phase !== null) this.cues.onFuseCue?.(point.x, point.y, 'lit');
       if (collapsed !== (view.phase === 'collapsed')) collapseChanged = true;
       view.deck.setVisible(!collapsed);
+      view.shadow.setVisible(!collapsed);
       view.ruin.setVisible(collapsed);
       view.charge.setVisible(phase === 'charged');
       view.spark.setVisible(phase === 'charged');
@@ -163,7 +171,7 @@ export class BridgeRenderer {
     this.destroyed = true;
     this.fx.destroy();
     for (const view of this.views) {
-      view.deck.destroy(); view.ruin.destroy(); view.charge.destroy(); view.spark.destroy(); view.telegraph.destroy();
+      view.shadow.destroy(); view.deck.destroy(); view.ruin.destroy(); view.charge.destroy(); view.spark.destroy(); view.telegraph.destroy();
     }
     this.views.length = 0;
     for (const key of this.textureKeys) this.scene.textures.remove(key);

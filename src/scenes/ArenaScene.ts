@@ -3,6 +3,7 @@ import { getRenderScale } from '../graphics/RenderResolution';
 import { createMarkerCameraTransform } from '../effects/markers/MarkerLayoutModel';
 import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades';
 import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
+import { preloadBridgeAssets } from '../effects/bridge/BridgeTextures';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
 import { DAWN_BOMBER_SHADOW_TEXTURE, DAWN_PIPELINE_ASSETS, preloadDawnDecalAssets, preloadDawnNightAssets } from '../assets/DawnAssets';
 import { resolveScheduledAirstrikeRuns, type ScheduledAirstrikeRun } from '../systems/AirstrikeRun';
@@ -436,6 +437,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadAttackDroneAssets(this.load);
     preloadBomberSquadronAssets(this.load);
     preloadWatchtowerAssets(this.load);
+    preloadBridgeAssets(this.load);
     preloadRepairDroneAssets(this.load);
     // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
     // ueber die Einfaerbung), deshalb wird jeder Key nur einmal in die Ladeschlange gestellt.
