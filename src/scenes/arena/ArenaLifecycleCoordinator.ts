@@ -468,6 +468,7 @@ export class ArenaLifecycleCoordinator {
         },
         movementEffects: this.renderers.movement,
         burrowEffects: this.renderers.burrowGpu,
+        portals: this.renderers.portals,
         healthBars: this.renderers.healthBars,
         healthBarScope: this.worldRuntime,
         enemyEyes: this.renderers.enemyEyes,
@@ -3123,8 +3124,7 @@ export class ArenaLifecycleCoordinator {
     }
 
     // World-/Activity-renderers are owned by WorldTrainRuntime.
-    this.renderers.translocatorTeleport = presentation ? new TranslocatorTeleportRenderer(this.scene, this.renderers.gpuVfx) : null;
-    this.renderers.translocatorTeleport?.setLightingSystem(this.renderers.lighting);
+    this.renderers.translocatorTeleport = presentation ? new TranslocatorTeleportRenderer(this.renderers.portals) : null;
     // Uhrzeit vor dem Schattenaufbau setzen: zur Nacht hin werden die statischen
     // Sonnenschatten zu kurzen, blassen Mondschatten abgeschwächt.
     const timeOfDayMinutes = roundState?.timeOfDayMinutes
@@ -3707,6 +3707,7 @@ export class ArenaLifecycleCoordinator {
       this.renderers.leafBlower.setTerrainColorSnapshot(snapshot);
       this.renderers.movement.setTerrainColorSnapshot(snapshot);
       this.renderers.burrowGpu.setTerrainColorSnapshot(snapshot);
+      this.renderers.portals.setTerrainColorSnapshot(snapshot);
       this.terrainSnapshotReady = true;
     }).catch((error: unknown) => {
       if (settled || !isCurrent()) return;

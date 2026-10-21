@@ -391,7 +391,7 @@ export class CoopMissionPresentationInfrastructure {
               endpoints: resolveCoopMissionPortalEndpoints(mapConfig, metrics),
             } };
           }
-          this.voidPortals ??= new VoidPortalRenderer(this.scene, input.renderers.gpuVfx, input.renderers.lighting ?? null);
+          this.voidPortals ??= new VoidPortalRenderer(this.scene, input.renderers.gpuVfx, input.renderers.lighting ?? null, input.renderers.portals);
           const bases = input.getBaseManager();
           const views = this.voidPortals.sync(this.voidPortalScenario.scenario, entries, elapsedMs, (baseId) => {
             const base = bases?.getBase(baseId);

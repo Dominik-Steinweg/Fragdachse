@@ -1,7 +1,8 @@
 export const FIRE_CONTROL_CAPACITY = 512;
 export const FIRE_CONTROL_WORDS = 12;
 export const FIRE_CONTROL_VERTICES = 6;
-export const enum FireControlGpuKind { Exit, Entry, TransferRing, Projector, Filament, ExitFlash, HoloPlate, HoloGenesis }
+/** Values match the shader's kind thresholds; portals themselves use the shared portal layer. */
+export const enum FireControlGpuKind { TransferRing = 2, Projector = 3, Filament = 4, HoloPlate = 6, HoloGenesis = 7 }
 export interface FireControlGpuInstance {
   x: number; y: number; radius: number; angle: number; kind: FireControlGpuKind;
   open: number; remaining: number; flash: number; mode?: number; length?: number; seed?: number;
@@ -21,7 +22,7 @@ export class FireControlPortalGpuStore {
     let p = this.count++ * FIRE_CONTROL_VERTICES * FIRE_CONTROL_WORDS;
     const extent = i.kind === FireControlGpuKind.Filament ? (i.length ?? 1)
       : i.kind === FireControlGpuKind.HoloGenesis ? (i.length ?? 1) + GENESIS_BURST_EXTENT
-      : i.radius * (i.kind === FireControlGpuKind.ExitFlash ? 2.3 : 1.85);
+      : i.radius * 1.85;
     for (let v = 0; v < FIRE_CONTROL_VERTICES; v++) {
       const x = CORNERS[v*2] * extent, y = CORNERS[v*2+1] * extent;
       this.data.set([i.x+x, i.y+y, x, y, i.radius, i.angle, i.kind, i.open,

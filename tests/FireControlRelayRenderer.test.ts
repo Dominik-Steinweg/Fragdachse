@@ -121,3 +121,27 @@ describe('fire-control relay presentation', () => {
     expect(f.plates[1].destroy).toHaveBeenCalledOnce();
   });
 });
+
+describe('fire-control portals in the shared portal look', () => {
+  it('submits the exit and each muzzle portal and releases every newly transported shot once', () => {
+    const shared = { submit: vi.fn(), clear: vi.fn(), playTransfer: vi.fn() };
+    const scene = { textures: { exists: () => false }, load: { spritesheet: vi.fn(), isLoading: () => false, start: vi.fn() } };
+    const renderer = new FireControlRenderer(scene as any, () => undefined, 'A', undefined, undefined, shared as any);
+    const portal = (lastTransportAt?: number) => ({ id: 7, ownerId: 'p1', ownerColor: 0x3dffd0, kind: 'portal' as const,
+      x: 500, y: 300, startedAt: 1000, expiresAt: 21000, localFireRelease: false,
+      entries: [{ sourceId: 'c:1' as never, identityId: 1, mode: 'portal' as const, x: 100, y: 120, angle: 0.5, lastTransportAt }] });
+    renderer.update({ deployments: [portal()] } as any, 2000);
+    const ends = shared.submit.mock.calls.at(-1)![1];
+    expect(shared.submit.mock.calls.at(-1)![0]).toBe('fire-control');
+    expect(ends.map((end: { radius: number }) => end.radius)).toEqual([13, 23]);
+    expect(ends[0]).toMatchObject({ partner: { x: 500, y: 300 }, ellipse: { angle: 0.5 }, link: 'out' });
+    expect(ends[1]).toMatchObject({ partner: { x: 100, y: 120 }, flow: 'out', link: 'in', ground: 1 });
+    renderer.update({ deployments: [portal(2050)] } as any, 2060);
+    renderer.update({ deployments: [portal(2050)] } as any, 2080);
+    // One shot: swallowed at the muzzle, released at the exit along the barrel.
+    expect(shared.playTransfer.mock.calls.map(call => call[0].side)).toEqual(['enter', 'exit']);
+    expect(shared.playTransfer.mock.calls[1][0]).toMatchObject({ x: 500, y: 300, dirX: Math.cos(0.5), dirY: Math.sin(0.5) });
+    renderer.destroy();
+    expect(shared.clear).toHaveBeenCalledWith('fire-control');
+  });
+});

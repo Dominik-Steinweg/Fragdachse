@@ -12,6 +12,8 @@ import { createFireControlPortalGpuLayer } from './FireControlPortalGpuLayer';
 import { FireControlGpuKind as Kind, FireControlPortalGpuStore } from './FireControlPortalGpuStore';
 import { FIRE_CONTROL_RELAY, FIRE_CONTROL_RELAY_SIZE, ensureFireControlRelayAssets, fireControlRelayFrame } from './FireControlRelayAssets';
 import { ensureHoloPlateTexture, HOLO_PLATE_ALPHA, HOLO_PLATE_SIZE, HOLO_PLATE_TEXTURE, HOLO_PLATE_TICK_RADIUS } from './HoloPlateAssets';
+import type { PortalPresentation } from '../portal/PortalPresentation';
+import type { PortalEndView } from '../portal/PortalViews';
 
 /** Optional presentation extension; never changes the replicated/domain contract. */
 export interface FireControlEntryView extends FireControlEntrySnapshot { readonly lastTransportAt?: number }
@@ -46,7 +48,10 @@ const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const EXIT_RADIUS = 23;
 /** Muzzle portal half-height across the firing line; large enough to read next to a 40 px turret. */
 const ENTRY_RADIUS = 13;
+/** Muzzle portals are ellipses across the firing line. */
+const ENTRY_ASPECT = 1.6;
 const FLASH_MS = 220;
+const PORTAL_OWNER = 'fire-control';
 /** The projection beam is brighter while it carries a copy in, then settles to a steady glow. */
 const BEAM_SETTLE_MS = 700;
 /** Beam flare after the copy fires. */
@@ -84,11 +89,14 @@ export class FireControlRenderer {
   private destroyed = false;
   private readonly lightKeys = new Set<string>();
   private readonly touchedLights = new Set<string>();
+  /** Last transport seen per muzzle portal; a newer one releases a shot at the exit. */
+  private readonly transports = new Map<string, number>();
   constructor(private readonly scene: Phaser.Scene,
     private readonly original: (id: number) => FireControlOriginalVisual | undefined,
     public preset: HologramPreset = 'A',
     private readonly lighting?: Pick<LightingSystem, 'setLight' | 'releaseLight'>,
-    private readonly owner?: FireControlOwnerPosition) {
+    private readonly owner?: FireControlOwnerPosition,
+    private readonly sharedPortals?: PortalPresentation) {
     this.layer = createFireControlPortalGpuLayer(scene, this.store);
     ensureFireControlRelayAssets(scene);
     ensureHoloPlateTexture(scene);
@@ -167,6 +175,8 @@ export class FireControlRenderer {
       this.light(`copy:${id}`, v.x, v.y, v.holo ? 34 : 40,
         (v.holo ? 1.8 : 2.4) * v.filter.uniforms.materialize * (1-vanish));
     }
+    const portalEnds: PortalEndView[] = [];
+    const liveTransports = new Set<string>();
     for (const [id, v] of this.portals) {
       if (!livePortals.has(id) && v.removedAt === undefined) {
         v.removedAt = now; v.removedOpen = clamp((now-v.snapshot.startedAt)/400);
@@ -176,25 +186,37 @@ export class FireControlRenderer {
       if (close <= 0) { this.portals.delete(id); continue; }
       const open = (v.removedOpen ?? clamp((now-d.startedAt)/400)) * close;
       let flash = 0;
+      const exit = { x: d.x, y: d.y };
       for (const entry of d.entries) {
+        const key = `${id}:${entry.sourceId}`;
         const age = entry.lastTransportAt === undefined ? Infinity : now-entry.lastTransportAt;
         const f = age >= 0 && entry.mode === 'portal' ? 1-clamp(age/FLASH_MS) : 0;
         flash = Math.max(flash, f);
-        // Mode look (dimmed waiting, contracted dark local) lives in the shader; size stays readable.
-        this.store.add({ x: entry.x, y: entry.y, radius: ENTRY_RADIUS, angle: entry.angle, kind: Kind.Entry,
-          open, remaining: 0, flash: f,
-          mode: entry.mode === 'portal' ? 0 : entry.mode === 'waiting' ? 1 : 2 });
-        // Every source gets its own directed exit burst, so simultaneous shots in different
-        // directions all read at the shared exit.
-        if (f > 0) this.store.add({ x: d.x, y: d.y, radius: EXIT_RADIUS, angle: entry.angle,
-          kind: Kind.ExitFlash, open, remaining: 0, flash: f });
-        this.light(`entry:${id}:${entry.sourceId}`, entry.x, entry.y, 40,
-          open * (entry.mode === 'portal' ? 4.2 + f : entry.mode === 'waiting' ? 1.8 : .4));
+        liveTransports.add(key);
+        // Each newly transported shot leaves the exit along its own firing line. A muzzle first
+        // seen with a past transport (late join) replays nothing.
+        const previous = this.transports.get(key), current = entry.lastTransportAt ?? -1;
+        this.transports.set(key, current);
+        if (previous !== undefined && previous !== current && entry.mode === 'portal' && age < FLASH_MS) {
+          const dirX = Math.cos(entry.angle), dirY = Math.sin(entry.angle);
+          this.sharedPortals?.playTransfer({ x: entry.x, y: entry.y, radius: ENTRY_RADIUS, style: 'fire-control',
+            side: 'enter', dirX, dirY, strength: 0.3 });
+          this.sharedPortals?.playTransfer({ x: d.x, y: d.y, radius: EXIT_RADIUS, style: 'fire-control',
+            side: 'exit', dirX, dirY, strength: 0.4 });
+        }
+        // Waiting muzzles breathe dimly, local fire closes them almost completely.
+        portalEnds.push({ key: `fc:${key}`, x: entry.x, y: entry.y, radius: ENTRY_RADIUS, style: 'fire-control',
+          open: open * (entry.mode === 'local' ? 0.6 : 1), partner: exit, ground: 0, particles: 0.45, flash: f, link: 'out',
+          ellipse: { angle: entry.angle, aspect: ENTRY_ASPECT },
+          intensity: entry.mode === 'portal' ? 1 : entry.mode === 'waiting' ? 0.5 : 0.18, pulse: entry.mode === 'waiting' });
       }
-      this.store.add({ x: d.x, y: d.y, radius: EXIT_RADIUS, angle: 0, kind: Kind.Exit, open,
-        remaining: clamp((d.expiresAt-now)/Math.max(1,d.expiresAt-d.startedAt)), flash });
-      this.light(`exit:${id}`, d.x, d.y, 62, open * (3.2 + flash * 1.5));
+      const source = d.entries.find(entry => entry.mode === 'portal') ?? d.entries[0];
+      portalEnds.push({ key: `fc:${id}:exit`, x: d.x, y: d.y, radius: EXIT_RADIUS, style: 'fire-control', open,
+        partner: source ? { x: source.x, y: source.y } : null, ground: 1, flow: 'out', link: 'in', flash,
+        meter: clamp((d.expiresAt-now)/Math.max(1,d.expiresAt-d.startedAt)) });
     }
+    for (const key of this.transports.keys()) if (!liveTransports.has(key)) this.transports.delete(key);
+    this.sharedPortals?.submit(PORTAL_OWNER, portalEnds);
     const pausedIds = getPausedOriginalIds(snapshot);
     for (const [id, value] of this.paused) {
       if (!pausedIds.has(id) || this.original(id)?.sprite !== value.sprite || value.sprite.isDestroyed) {
@@ -317,6 +339,7 @@ export class FireControlRenderer {
     this.copies.clear(); this.portals.clear(); this.animations.clear(); this.shotAt.clear();
     for (const { sprite, filter } of this.paused.values()) if (!sprite.isDestroyed) sprite.filters?.internal.remove(filter);
     this.paused.clear(); this.store.clear(); this.layer?.destroy();
+    this.sharedPortals?.clear(PORTAL_OWNER); this.transports.clear();
     for (const key of this.lightKeys) this.lighting?.releaseLight(key, { immediate: true });
     this.lightKeys.clear(); this.touchedLights.clear();
   }
