@@ -5,7 +5,8 @@ import * as Phaser from 'phaser';
 vi.mock('phaser', async () => {
   const phaser = (await import('../fakeArenaRenderScene')).createFakePhaserModule();
   return { ...phaser, CANVAS: 1, WEBGL: 2, Math: { ...phaser.Math, DegToRad: (value: number) => value * Math.PI / 180 }, Scene: class {}, GameObjects: { ...phaser.GameObjects, Events: { DESTROY: 'destroy' } },
-    Filters: { Displacement: class {}, ParallelFilters: class {} } };
+    Filters: { Displacement: class {}, ParallelFilters: class {} },
+    Scenes: { Events: { POST_UPDATE: 'postupdate', SHUTDOWN: 'shutdown', PRE_RENDER: 'prerender' } } };
 });
 const bridgeMock = vi.hoisted(() => ({
   isHost: () => false,
@@ -22,6 +23,8 @@ import { CombatGoreGpuRenderer } from '../../src/effects/CombatGoreGpuRenderer';
 import { HoneyBadgerRageRenderer } from '../../src/effects/HoneyBadgerRageRenderer';
 import { PlayerEntity } from '../../src/entities/PlayerEntity';
 import { ULTIMATE_CONFIGS } from '../../src/loadout/LoadoutConfig';
+import { BloodFieldSystem } from '../../src/effects/blood/BloodFieldSystem';
+import { BLOOD_HIT_VFX } from '../../src/config';
 // This headless lifecycle fixture does not create GPU programs.
 vi.mock('../../src/effects/kraken/KrakenShaderWarmup', () => ({
   warmupKrakenShaders: () => Object.assign(() => {}, { isReady: () => true }),
@@ -30,7 +33,8 @@ import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycle
 
 import { healthBarTestScene } from '../healthBarTestScene';
 
-function fixture() {
+/** `field`: the scene's WebGL blood field; without it rage bursts take the Canvas fallback stains. */
+function fixture(field = true) {
   const f = healthBarTestScene();
   f.scene.sys = { renderer: { type: Phaser.CANVAS } };
   f.scene.events = new EventEmitter();
@@ -59,10 +63,14 @@ function fixture() {
   gore.registerGpuVfx({ createSpec: () => ({}), now: () => 1000, spawn: noop,
     quality: { scaleBurst: (_id: number, count: number) => count } } as never);
   effects.setCombatGoreGpuRenderer(gore);
+  const blood = field ? new BloodFieldSystem(f.scene) : null;
+  effects.setBloodField(blood);
   const play = () => effects.playLocalHitEffect({ type: 'hit', x: 100, y: 120,
     targetId: 'enemy-1', totalDamage: 52, hpLost: 52, armorLost: 0,
     isKill: true, isCritical: false, dirX: 1, dirY: 0, seed: 42 });
-  return { ...f, timers, tweens, effects, play, coordinator, clear: () => coordinator.tearDownArena() };
+  /** Advances the scene clock and runs one presentation update of the blood field. */
+  const advance = (ms: number) => { f.scene.time.now += ms; f.scene.events.emit('postupdate'); };
+  return { ...f, timers, tweens, effects, play, advance, blood, coordinator, clear: () => coordinator.tearDownArena() };
 }
 
 function spawnRage(f: ReturnType<typeof fixture>) {
@@ -82,9 +90,9 @@ function spawnRage(f: ReturnType<typeof fixture>) {
   return rage;
 }
 
-describe('blood stain lifetime across Worlds', () => {
+describe('blood lifetime across Worlds', () => {
   it('keeps natural rage arrivals and shared blood fading intact', () => {
-    const f = fixture(); spawnRage(f);
+    const f = fixture(false); spawnRage(f);
     const count = f.cosmetic.length, arrivals = [...f.tweens];
     expect(arrivals.length).toBeGreaterThan(0);
     arrivals.forEach(tween => tween.onComplete?.());
@@ -95,35 +103,41 @@ describe('blood stain lifetime across Worlds', () => {
     expect(stains.every(object => !object.active)).toBe(true);
     f.clear();
   });
-  it('keeps another Scene intact and lets the next World create fresh stains', () => {
+  it('keeps another Scene intact and lets the next World start a fresh field', () => {
     const f = fixture(), other = fixture();
-    other.play(); other.timers.forEach(timer => timer.callback());
-    expect(other.cosmetic.length).toBeGreaterThan(0);
+    other.play();
+    const otherMarks = other.blood!.model.count;
+    expect(otherMarks).toBeGreaterThan(0);
     f.play();
-    const retired = [...f.timers];
+    expect(f.blood!.model.count).toBeGreaterThan(0);
     f.clear(); f.clear();
+    expect(f.blood!.model.count).toBe(0);
+    expect(other.blood!.model.count).toBe(otherMarks);
     f.play();
-    retired.forEach(timer => timer.callback());
-    expect(f.cosmetic).toHaveLength(0);
-    expect(other.cosmetic.every(object => object.active)).toBe(true);
-    f.timers.slice(retired.length).forEach(timer => timer.callback());
-    expect(f.cosmetic.length).toBeGreaterThan(0);
+    expect(f.blood!.model.count).toBeGreaterThan(0);
     f.clear();
-    expect(f.cosmetic.every(object => !object.active)).toBe(true);
-    expect(other.cosmetic.every(object => object.active)).toBe(true);
-    other.tweens.forEach(tween => tween.onComplete?.());
-    expect(other.cosmetic.every(object => !object.active)).toBe(true);
+    expect(other.blood!.model.count).toBe(otherMarks);
   });
-  it('cancels Scene-shutdown arrivals before stale callbacks run', () => {
+  it('releases the field on Scene shutdown', () => {
     const f = fixture(); f.play();
-    expect(f.timers.length).toBeGreaterThan(0);
+    expect(f.blood!.model.count).toBeGreaterThan(0);
     f.scene.events.emit('shutdown');
-    f.timers.forEach(timer => timer.callback());
-    expect(f.cosmetic).toHaveLength(0);
+    expect(f.blood!.model.count).toBe(0);
+    expect(BloodFieldSystem.for(f.scene)).toBeNull();
     f.effects.destroy();
   });
-  it('prevents a retired rage-player tween from materializing new stains after World teardown', () => {
+  it('lets a rage burst pour into the field instead of Canvas stains', () => {
     const f = fixture();
+    spawnRage(f);
+    const count = f.cosmetic.length;
+    f.tweens.forEach(tween => tween.onComplete?.());
+    expect(f.cosmetic.length).toBeLessThanOrEqual(count);
+    expect(f.blood!.model.count).toBeGreaterThan(0);
+    f.clear();
+    expect(f.blood!.model.count).toBe(0);
+  });
+  it('prevents a retired rage-player tween from materializing new stains after World teardown', () => {
+    const f = fixture(false);
     const rage = spawnRage(f);
     expect(f.tweens.length).toBeGreaterThan(0);
     const retired = [...f.tweens], count = f.cosmetic.length;
@@ -136,30 +150,19 @@ describe('blood stain lifetime across Worlds', () => {
     expect(current.every(object => object.active)).toBe(true);
     f.clear(); next.destroy();
   });
-  it('cancels a pending real gore arrival before it can spawn in the next World', () => {
+  it('drops blood still in flight with the World it was shed in', () => {
     const f = fixture(); f.play();
-    expect(f.timers.length).toBeGreaterThan(0);
-    expect(f.cosmetic).toHaveLength(0);
-    const retired = [...f.timers];
+    expect(f.blood!.model.count).toBeGreaterThan(0);
     f.clear();
-    retired.forEach(timer => timer.callback());
-    try { expect(f.cosmetic).toHaveLength(0); }
-    finally { f.cosmetic.forEach(object => object.destroy()); }
+    f.advance(500);
+    expect(f.blood!.model.count).toBe(0);
   });
-  it('releases already materialized blood stains during World teardown', () => {
+  it('lets every mark run out after its lifetime', () => {
     const f = fixture(); f.play();
-    f.timers.forEach(timer => timer.callback());
-    expect(f.cosmetic.length).toBeGreaterThan(0);
-    f.clear();
-    try { expect(f.cosmetic.every(object => !object.active)).toBe(true); }
-    finally { f.cosmetic.forEach(object => object.destroy()); }
-  });
-  it('keeps the normal arrival and fade path', () => {
-    const f = fixture(); f.play();
-    f.timers.forEach(timer => timer.callback());
-    expect(f.cosmetic.length).toBeGreaterThan(0);
-    f.tweens.forEach(tween => tween.onComplete?.());
-    expect(f.cosmetic.every(object => !object.active)).toBe(true);
+    f.advance(100);
+    expect(f.blood!.model.count).toBeGreaterThan(0);
+    f.advance(BLOOD_HIT_VFX.field.maxLifeMs + 1_000);
+    expect(f.blood!.model.count).toBe(0);
     f.clear();
   });
 });

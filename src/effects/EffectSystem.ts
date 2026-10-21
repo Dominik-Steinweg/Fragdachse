@@ -8,7 +8,7 @@ import * as Phaser from 'phaser';
 import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { BLOOD_HIT_VFX, COLORS, VOID_PALETTE, ALLIED_PALETTE, ALLIED_COLOR, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
+import { COLORS, VOID_PALETTE, ALLIED_PALETTE, ALLIED_COLOR, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import {
   TEX_BLOOD_EDGE_BOTTOM,
   TEX_BLOOD_EDGE_LEFT,
@@ -16,9 +16,9 @@ import {
   TEX_BLOOD_EDGE_TOP,
   ensureBloodEdgeTextures,
   ensureBloodHitTextures,
-  scheduleBloodStain as scheduleSharedBloodStain,
   clearBloodStains as clearSceneBloodStains,
 } from './BloodEffectShared';
+import type { BloodFieldSystem } from './blood/BloodFieldSystem';
 import { circleZone, edgeZone, ensureCanvasTexture, makeAdditive, mixColors, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import {
   FLAME_JET_TINTS_COOL,
@@ -72,7 +72,7 @@ import {
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 import { HolyExplosionRenderer } from './HolyExplosionRenderer';
 import { ShockComboExplosionRenderer } from './ShockComboExplosionRenderer';
-import type { BloodStainSink, CombatGoreGpuRenderer } from './CombatGoreGpuRenderer';
+import type { CombatGoreGpuRenderer } from './CombatGoreGpuRenderer';
 import {
   TEX_EXPLOSION_SPARK,
   ensureExplosionEmberTexture,
@@ -94,8 +94,6 @@ const MAX_HITSCAN_LIGHTS = 4;
 
 const TEX_BURROW_DIRT = '__burrow_dirt';
 const TEX_BURROW_DUST = '__burrow_dust';
-// Ground decal beneath every figure, its shadow and claw telegraphs; never drawn over a body.
-const DEPTH_BLOOD_STAIN = DEPTH.PLAYERS - 0.16;
 const DEPTH_DAMAGE_VIGNETTE = DEPTH.OVERLAY - 1;
 
 interface BurrowEmitterVisual {
@@ -163,7 +161,6 @@ export class EffectSystem implements EnemyVisualSink {
   private readonly mobilityEffects = new Set<Phaser.GameObjects.GameObject>();
   private readonly mobilityEffectTimers = new Set<Phaser.Time.TimerEvent>();
   /** Canvas-only timer cancels; WebGL arrivals live in the scene's stain batch. */
-  private readonly bloodStainCancels = new Set<() => void>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
   private plasmaBurnerRenderer: PlasmaBurnerRenderer | null = null;
@@ -230,9 +227,8 @@ export class EffectSystem implements EnemyVisualSink {
   private burrowGpuRenderer: BurrowGpuRenderer | null = null;
   private combatGoreGpuRenderer: CombatGoreGpuRenderer | null = null;
   private playerDeathResolver: ((targetId: string) => boolean) | null = null;
-  private readonly scheduleBloodStainSink: BloodStainSink = (...args) => {
-    this.spawnBloodStain(...args);
-  };
+  private bloodField: BloodFieldSystem | null = null;
+  private bloodColorResolver: ((targetId: string) => number | null) | null = null;
   private texturesGenerated = false;
   private damageVignetteTop:    Phaser.GameObjects.Image | null = null;
   private damageVignetteBottom: Phaser.GameObjects.Image | null = null;
@@ -337,6 +333,16 @@ export class EffectSystem implements EnemyVisualSink {
     this.combatGoreGpuRenderer = renderer;
   }
 
+  /** Persistent blood of hits: pools, spatter, rock and water marks (WebGL). */
+  setBloodField(field: BloodFieldSystem | null): void {
+    this.bloodField = field;
+  }
+
+  /** Blood colour of a hit target from authored data; null keeps the default red. */
+  setBloodColorResolver(resolver: ((targetId: string) => number | null) | null): void {
+    this.bloodColorResolver = resolver;
+  }
+
   /** Resolves player deaths without putting an entity-kind flag on the replicated effect. */
   setPlayerDeathResolver(resolver: ((targetId: string) => boolean) | null): void {
     this.playerDeathResolver = resolver;
@@ -385,6 +391,8 @@ export class EffectSystem implements EnemyVisualSink {
     this.damageVignetteLeft   = null;
     this.damageVignetteRight  = null;
     this.combatGoreGpuRenderer = null;
+    this.bloodField = null;
+    this.bloodColorResolver = null;
     this.burrowGpuRenderer = null;
     this.playerDeathResolver = null;
   }
@@ -569,7 +577,7 @@ export class EffectSystem implements EnemyVisualSink {
 
   private playHitEffect(effect: SyncedHitEffect): void {
     this.ensureTextures();
-    this.combatGoreGpuRenderer?.playHit(effect, this.scheduleBloodStainSink);
+    this.combatGoreGpuRenderer?.playHit(effect, this.bloodField, this.bloodColorResolver?.(effect.targetId) ?? undefined);
 
     if (effect.isCritical) {
       const criticalRing = this.scene.add.circle(effect.x, effect.y, 9, 0xffd15c, 0.2)
@@ -1823,34 +1831,9 @@ export class EffectSystem implements EnemyVisualSink {
     );
   }
 
-  /**
-   * Spawnt den Fleck, sobald sein GPU-Flug landet. Die dauerhafte Decal-Lifecycle bleibt
-   * CPU-seitig im Stain-Batch der Szene; nur Canvas hält dafür noch einen Timer.
-   */
-  private spawnBloodStain(
-    x: number,
-    y: number,
-    scale: number,
-    alpha: number,
-    fadeMs: number,
-    tint: number,
-    rotation: number,
-    flightDelayMs: number,
-  ): void {
-    this.trackBloodStainCancel(scheduleSharedBloodStain(this.scene, flightDelayMs, {
-      x, y, scale, alpha, fadeMs, tint, rotation,
-      depth: DEPTH_BLOOD_STAIN,
-      stainDelayMs: BLOOD_HIT_VFX.stainDelayMs,
-    }, settled => this.bloodStainCancels.delete(settled)));
-  }
-
-  private trackBloodStainCancel(cancel: (() => void) | null): void {
-    if (cancel) this.bloodStainCancels.add(cancel);
-  }
-
+  /** World teardown: the blood field and the Canvas fallback stains of this scene. */
   clearBloodStains(): void {
-    for (const cancel of this.bloodStainCancels) cancel();
-    this.bloodStainCancels.clear();
+    this.bloodField?.clear();
     clearSceneBloodStains(this.scene);
   }
 

@@ -75,7 +75,7 @@ export class DeathLabScene extends Phaser.Scene {
         const effect = fixtureSnapshot(this.settings);
         if (this.settings.layers.gore) this.gore.playHit({ type: 'hit', x: 0, y: 0,
           targetId: effect.targetId, targetColor: effect.targetColor, totalDamage: 40, hpLost: 40,
-          armorLost: 0, isKill: true, dirX: effect.dirX!, dirY: effect.dirY!, seed: effect.seed }, () => {});
+          armorLost: 0, isKill: true, dirX: effect.dirX!, dirY: effect.dirY!, seed: effect.seed });
         this.gore.playDeath(effect, this.settings.fixture === 'player');
         if (this.settings.fixture === 'player' && this.settings.layers.postfx) this.postfx.pulseEvent('localDeath');
       },

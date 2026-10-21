@@ -3,7 +3,7 @@ import { configureGpuLayerCameraTransform } from '../graphics/GpuLayerCameraTran
 import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { DEPTH } from '../config';
 import type { SyncedPowerUpPedestal } from '../types';
-import { POWERUP_DEFS, POWERUP_ITEM_ART, POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS } from './PowerUpConfig';
+import { POWERUP_ITEM_ART, POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS, powerUpWorldColor } from './PowerUpConfig';
 import { POWERUP_TOKEN_KEY } from '../assets/PowerUpAssets';
 
 const TEX_POWERUP_PEDESTAL_GPU = '__powerup_pedestal_gpu';
@@ -194,7 +194,7 @@ export class PowerUpPedestalGpuSystem {
   }
 
   private writeSlot(handle: PedestalGpuHandle, append: boolean): void {
-    const color = POWERUP_DEFS[handle.defId]?.color ?? 0xffffff;
+    const color = powerUpWorldColor(handle.defId);
     const style = MODE_STYLES[handle.mode];
     const phaseMs = (handle.slot * 389) % (style.halfPeriodMs * 2);
 
@@ -372,7 +372,7 @@ function ensurePedestalTexture(scene: Phaser.Scene): void {
     const x = 2 + (index % 4) * (PLINTH_FRAME + 2);
     const y = 168 + Math.floor(index / 4) * (PLINTH_FRAME + 2);
     const defId = baseDefs[index];
-    drawPlinth(ctx, x, y, POWERUP_DEFS[defId]?.color ?? 0xffffff, token);
+    drawPlinth(ctx, x, y, powerUpWorldColor(defId), token);
     texture.add(defId === 'fallback' ? FRAME_FALLBACK_BASE : `base:${defId}`, 0, x, y, PLINTH_FRAME, PLINTH_FRAME);
   }
 

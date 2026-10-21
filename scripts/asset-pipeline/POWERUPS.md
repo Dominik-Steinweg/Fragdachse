@@ -19,8 +19,8 @@ and the existing V2 source archive format. No image generation is used.
   channel radius 0.70 of the half canvas are a runtime contract: the channel glow and the
   pedestal plinth (a larger copy of this layer) are placed on these radii.
 - `recipes_v2/powerup-symbol.py` (since r04) dispatches eight authored models through
-  `powerup_symbol_parts.py`: a medical cross in worn crimson enamel with a healing-light
-  groove; a heater shield with blued steel rim, amber field, spine, brass boss and rivets;
+  `powerup_symbol_parts.py`: a medical cross in worn crimson enamel with a blood-red core
+  groove (all glow stays saturated red, never a white flash); a heater shield with blued steel rim, amber field, spine, brass boss and rivets;
   a three-layer flame with dark translucent edges and hot streaks; a north-east syringe with
   clear barrel, a blue dose filling it up to the needle, steel fittings and needle; a
   gunmetal-housed plasma orb with a hot core and counter-rotating filament webs; the UDamage
@@ -34,9 +34,11 @@ and the existing V2 source archive format. No image generation is used.
   emissive. No black cartoon stroke, ground plane, external drop shadow, mirror metal,
   additional overhead lamp or image-plane projection of the old icon.
 - Loops (`loop: {frames, fps}` per symbol in the catalog) are keyframed on every exported
-  frame and close on frame N: heartbeat glow, shield glint, flickering tongues, a partial
-  plunger stroke that squirts a dose from the needle and draws back up (the column stays
-  tied to the seal; a short stroke keeps the silhouette length), rotating plasma webs with
+  frame and close on frame N: a heartbeat that pumps a red wave from the centre out along the
+  cross over a flowing pattern, shield glint, flickering tongues, a partial plunger stroke that
+  squirts a chunky jet (thick stream, spray puff, droplets) from the needle and draws back up
+  (the column stays tied to the seal; a short stroke keeps the silhouette length; the syringe
+  sits slightly back so the jet fits the canvas), rotating plasma webs with
   core and shell beats, an energy pulse up the hologram rungs with crawling scanlines and
   flicker, gold glint with twinkling gems, a trefoil third-turn with a warning pulse. Silhouettes
   stay stable; motion lives in light and small parts so the game view stays readable.
@@ -100,9 +102,9 @@ without mipmaps. These textures are shared by all pickups. The runtime additiona
 
 ```powershell
 # Read-only source/hash checks; no Blender or file output:
-node scripts/asset-pipeline/powerups-run.mjs --plan --revision powerups-r08
+node scripts/asset-pipeline/powerups-run.mjs --plan --revision powerups-r10
 # Complete render/export/review/archive run:
-node scripts/asset-pipeline/powerups-run.mjs --revision powerups-r08
+node scripts/asset-pipeline/powerups-run.mjs --revision powerups-r10
 ```
 
 Default: `D:/Blender Foundation/Blender 5.2/blender.exe`, headless OPTIX. `--device CPU`
@@ -147,7 +149,7 @@ node scripts/asset-pipeline/import-powerups.mjs D:/Fragdachse-render/<revision> 
 ```
 
 Targets: `public/assets/sprites/pipeline-v2/powerups/<revision>/` and
-`src/assets/manifests/powerups-<revision>.json` (active: `powerups-r07`; switch the import in
+`src/assets/manifests/powerups-<revision>.json` (active: `powerups-r09`; switch the import in
 `src/assets/PowerUpAssets.ts` and remove the previous revision). Existing 16x16*.png icons and active
 registries are never replaced. Filenames carry content hashes and URLs use `?v=sha256`;
 Spur A can resolve logical filenames through A2/A3 publication. Import copies bytes,

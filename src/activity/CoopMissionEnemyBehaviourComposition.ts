@@ -132,6 +132,7 @@ export class CoopMissionEnemyBehaviourComposition {
       runtime.enemyAiTargetCatalog,
       this.options.decoySystem,
       this.options.translocatorProjectilePort,
+      this.options.findSafeEnemyGroundPosition,
     );
     const attack = new CoopDefenseEnemyAttackSystem(
       enemyManager,

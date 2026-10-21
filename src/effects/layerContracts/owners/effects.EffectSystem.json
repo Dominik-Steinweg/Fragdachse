@@ -220,13 +220,6 @@
         ]
       },
       {
-        "key": "spawnBloodStain/depth/depth/0",
-        "expression": "DEPTH_BLOOD_STAIN",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
         "key": "ensureDamageVignette/createEdge/setDepth/0",
         "expression": "DEPTH_DAMAGE_VIGNETTE",
         "blends": [
@@ -911,28 +904,6 @@
       "source": {
         "selector": "playMeleeSwingEffect/gfx/setDepth/0",
         "expression": "DEPTH_FX"
-      }
-    },
-    {
-      "id": "cpu:effects/EffectSystem.ts:spawnBloodStain/depth/depth/0",
-      "owner": "effects/EffectSystem.ts",
-      "component": "spawnBloodStain/depth/depth/0",
-      "height": "ground",
-      "lighting": "material",
-      "camera": "world",
-      "depths": [
-        9.84
-      ],
-      "blends": [
-        "NORMAL"
-      ],
-      "profiles": [
-        "M"
-      ],
-      "role": "effect",
-      "source": {
-        "selector": "spawnBloodStain/depth/depth/0",
-        "expression": "DEPTH_BLOOD_STAIN"
       }
     },
     {

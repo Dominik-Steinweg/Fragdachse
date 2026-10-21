@@ -19,6 +19,14 @@ uniform float uDisturbOn;
 // Void bloom: local centre xy, reached radius z, strength w; plus a luminance pulse.
 uniform vec4 uVoid;
 uniform float uVoidPulse;
+// Dye in the water body (blood clouds): frame-local rect of the borrowed texture, density in B.
+uniform sampler2D uDye;
+uniform vec4 uDyeRect;
+uniform float uDyeOn;
+uniform float uDyeFlip;
+// Optional hue of the dye: colour × presence in RGB, presence in A (same rect); off = the default red.
+uniform sampler2D uDyeHue;
+uniform float uDyeHueOn;
 
 float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -127,6 +135,38 @@ void main() {
   vec3 deep=vec3(.022,.17,.195);
   vec3 color=mix(shallow,deep,colorDepth)*(.90+broad*.18);
   color*=1.0+(grain-.5)*(1.0-depth)*.025;
+  // Dye: blood spreads inside the water body and curls with the pond's own eddies. It tints the
+  // body before every reflection, ripple and glint, so those still play over it. Later body grades
+  // (void bloom, void stain) give way where the dye covers the body.
+  float dyeCover=0.0;
+  if(uDyeOn>.5) {
+    vec2 du=(p-uDyeRect.xy)/uDyeRect.zw;
+    if(du.x>0.0&&du.y>0.0&&du.x<1.0&&du.y<1.0) {
+      du.y=mix(du.y,1.0-du.y,uDyeFlip);
+      if(texture2D(uDye,du).b>.003) {
+        vec2 swirl=vec2(pondNoise(p*.019+eddyA*.7+vec2(t*.05,0.0)),pondNoise(p*.019+eddyB*.7+vec2(0.0,t*.045)+7.3))-.5;
+        vec2 warped=du+swirl*vec2(16.0,mix(16.0,-16.0,uDyeFlip))/uDyeRect.zw;
+        float dye=texture2D(uDye,warped).b;
+        float wisps=pondField(p*.045+swirl*2.4+vec2(t*.03,-t*.024));
+        float cloud=clamp(dye*(.62+.7*wisps),0.0,1.0);
+        float body=smoothstep(0.0,.7,cloud);
+        // Dense blood is a deep, almost opaque crimson; its thin rim scatters a warmer red.
+        vec3 dense=vec3(.27,.012,.028)*mix(1.0,.72,colorDepth);
+        vec3 thin=vec3(.50,.06,.05)*mix(1.0,.8,colorDepth);
+        vec3 blood=mix(thin,dense,smoothstep(.25,.9,cloud));
+        if(uDyeHueOn>.5) {
+          // Keep the red's lightness, take the dye's own hue where it is present.
+          vec4 tint=texture2D(uDyeHue,warped);
+          float share=clamp(tint.a,0.0,1.0);
+          vec3 hue=tint.rgb/max(tint.a,.001);
+          // The authored colour stands for fresh thin blood (lightness .21); darker tones scale it.
+          blood=mix(blood,min(hue*(dot(blood,vec3(.299,.587,.114))/.21),vec3(1.0)),share);
+        }
+        color=mix(color,blood+(color-mix(shallow,deep,colorDepth))*.25,body*.9);
+        dyeCover=body*.9;
+      }
+    }
+  }
   float surfaceMotion=smoothstep(0.0,12.0,shore)*mix(.50,1.0,depth);
   float depthReflection=mix(1.0,.25,colorDepth);
   color+=vec3(.025,.070,.075)*(a-.5)*surfaceMotion*mix(1.0,.65,colorDepth);
@@ -178,7 +218,8 @@ void main() {
     // Ink spreads unevenly: the front is pushed ahead and held back by the pond's own noise.
     float voidDistance=length(p-uVoid.xy)+(pondNoise(p*.0085+vec2(uSeed,17.3))-.5)*130.0+(pondNoise(p*.031+11.0)-.5)*34.0;
     float reached=1.0-smoothstep(uVoid.z-70.0,uVoid.z,voidDistance);
-    float grade=uVoid.w*reached;
+    // Blood in the pond stays visible: the void yields where the dye covers the body.
+    float grade=uVoid.w*reached*(1.0-dyeCover*.9);
     // Deep, saturated void: almost black in the basin, a richer violet over the shelf.
     vec3 voidBody=mix(vec3(.17,.05,.29),vec3(.042,.008,.095),colorDepth)*(.9+broad*.2);
     color=mix(color,voidBody,grade*.94);
