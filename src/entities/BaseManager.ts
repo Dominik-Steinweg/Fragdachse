@@ -20,6 +20,11 @@ import {
   type BaseDestructionHooks,
 } from '../effects/BaseDestructionRenderer';
 import type { WorldMetrics } from '../world/WorldMetrics';
+import type { GroundSurfacePersistentBaseGravelZone } from '../arena/chunks/GroundSurfaceStreamer';
+import {
+  createPersistentBaseGravelCoverage,
+  getPersistentBaseGravelStateKey,
+} from '../arena/PersistentBaseGravelField';
 import type { WorldIntegrityMutationResult } from '../world/WorldIntegrityMutation';
 
 /**
@@ -61,6 +66,7 @@ export class BaseManager {
   private readonly burnRenderer: BaseBurnRenderer | null;
   private readonly worldMetrics: WorldMetrics;
   private activeActivityBinding: BaseActivityBinding | null = null;
+  private persistentBaseGravelKey = 'none';
   private destroyed = false;
   private readonly snapshotSeen = new Set<string>();
   private readonly snapshotById = new Map<string, SyncedBaseState>();
@@ -182,6 +188,21 @@ export class BaseManager {
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+  }
+
+  /**
+   * Mirrors the ground streamer's base-site gravel (same zone, same contract), so the bases'
+   * grounding turns into compacted gravel where they stand on it. Unchanged zones cost nothing.
+   */
+  setPersistentBaseGravel(zone: GroundSurfacePersistentBaseGravelZone | null): void {
+    const key = zone ? getPersistentBaseGravelStateKey(zone.seed, zone.anchor, zone.buildArea) : 'none';
+    if (key === this.persistentBaseGravelKey || !this.presentation) return;
+    this.persistentBaseGravelKey = key;
+    const metrics = this.worldMetrics;
+    const gravel = zone ? createPersistentBaseGravelCoverage(zone, {
+      offsetX: metrics.offsetX, offsetY: metrics.offsetY, width: metrics.widthPx, height: metrics.heightPx,
+    }) : null;
+    for (const entity of this.entities) entity.setGroundGravel(gravel);
   }
 
   /**

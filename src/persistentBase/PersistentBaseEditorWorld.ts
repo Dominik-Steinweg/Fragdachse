@@ -71,12 +71,14 @@ export class PersistentBaseEditorWorld {
     this.background = createArenaBackground(scene, this.size / 2, this.size / 2, viewport.width, viewport.height);
     // Terrain is built once. Personal buildings enter through the normal runtime wall path.
     const layout = this.layout = { seed: this.world.descriptor.seed, rocks: [], trees: [], tracks: [], dirt: [], water: [], decals: [], powerUpPedestals: [] };
+    const gravel = { anchor: site.anchor, buildArea: model.area, seed: layout.seed };
     this.arena = new ArenaBuilder(scene).buildDynamic(layout, { worldMetrics: this.world.metrics, presentation: true,
-      enablePersistentBaseGravel: true, persistentBaseGravel: { anchor: site.anchor, buildArea: model.area, seed: layout.seed } });
+      enablePersistentBaseGravel: true, persistentBaseGravel: gravel });
     this.lighting = new LightingSystem(scene, viewport);
     this.lighting.setTimeOfDay(this.timeOfDay);
     this.lighting.setActive(true);
     this.bases = new BaseManager(scene, this.world.bases, this.world.metrics);
+    this.bases.setPersistentBaseGravel(gravel);
     this.bases.setLightingSystem(this.lighting);
     this.occluders = new LightOccluderIndex({ rocks: () => this.arena.rockPhysicsProxies,
       trunks: () => [], baseCells: () => this.bases.getObstacleRectangles(), baseGeneration: () => this.bases.getObstacleGeneration() });

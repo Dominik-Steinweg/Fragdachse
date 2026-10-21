@@ -277,6 +277,7 @@ export function materializeWorldComposition(
       input.entityBurnGpu,
     )
     : null;
+  baseManager?.setPersistentBaseGravel(input.persistentBaseGravel);
   materialization.setBases(baseManager);
   // A reused terrain presentation belongs to a new World, including its fog history.
   presentation.groundFog?.destroy();

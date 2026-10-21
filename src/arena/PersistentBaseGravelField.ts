@@ -6,6 +6,7 @@ import {
 } from '../persistentBase/PersistentBaseCore';
 import { isCellInsidePersistentBaseZone } from '../persistentBase/PersistentBaseZone';
 import { hashSeededCell01 } from './CellHash';
+import { DirtSurfaceField } from './DirtSurfaceField';
 import {
   getPersistentBaseGravelTextureKey,
   PERSISTENT_BASE_GRAVEL_DECORATION_CONFIG,
@@ -46,6 +47,40 @@ export interface PersistentBaseGravelState {
   readonly cells: readonly PersistentBaseGravelCell[];
   readonly cellKeys: ReadonlySet<string>;
   readonly decorations: readonly PersistentBaseGravelDecoration[];
+}
+
+/** Separates the gravel seam's noise from the soil seam of the same World seed. */
+const PERSISTENT_BASE_GRAVEL_SEED_SALT = 0x6a7e1;
+
+/** Seed of the zone's soil-style surface field; the ground streamer and coverage probes share it. */
+export function getPersistentBaseGravelSurfaceSeed(seed: number): number {
+  return ((seed >>> 0) ^ PERSISTENT_BASE_GRAVEL_SEED_SALT) >>> 0;
+}
+
+/** Where the visible gravel of a zone lies, for decoration that has to sit on it. */
+export interface PersistentBaseGravelCoverage {
+  /** Same key as the zone's ground state; unchanged key, unchanged coverage. */
+  readonly key: string;
+  /** Opacity of the zone's gravel at a world point, 0 (grass) to 1 (solid gravel). */
+  coverageAt(worldX: number, worldY: number): number;
+}
+
+/**
+ * The gravel zone's coverage from the very field the ground streamer bakes it with (same cells,
+ * seed and frame), so a base can match its grounding to the ground below without reading pixels.
+ */
+export function createPersistentBaseGravelCoverage(
+  zone: { readonly seed: number; readonly anchor: PersistentBaseAnchor; readonly buildArea: PersistentBaseBuildArea },
+  frame: PersistentBaseGravelFrame,
+): PersistentBaseGravelCoverage | null {
+  const cells = getPersistentBaseGravelCells(zone.anchor, zone.buildArea,
+    Math.max(0, Math.ceil(frame.width / CELL_SIZE)), Math.max(0, Math.ceil(frame.height / CELL_SIZE)));
+  if (cells.length === 0) return null;
+  const field = new DirtSurfaceField(getPersistentBaseGravelSurfaceSeed(zone.seed), cells, frame);
+  return {
+    key: getPersistentBaseGravelStateKey(zone.seed, zone.anchor, zone.buildArea),
+    coverageAt: (worldX, worldY) => field.coverageAt(worldX, worldY),
+  };
 }
 
 const DECORATION_SALTS = {

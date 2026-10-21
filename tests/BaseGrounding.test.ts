@@ -127,6 +127,32 @@ describe('Base foundation apron', () => {
     }
   });
 
+  it('turns its earth into compacted gravel of the same material where the ground below is gravel', () => {
+    // Pure red soil and neutral grey gravel make any soil share visible as a red bias.
+    const red = { width: 8, height: 8, rgba: Uint8ClampedArray.from({ length: 256 }, (_, i) => [255, 0, 0, 255][i % 4]) };
+    const grey = { width: 8, height: 8, rgba: Uint8ClampedArray.from({ length: 256 }, (_, i) => i % 4 === 3 ? 255 : 120) };
+    const flat = { soil: red, gravel: grey, grassHeight: { width: 8, height: 8, data: new Uint8Array(64).fill(128) } };
+    const raster = getBaseApronRaster(cells, metrics)!;
+    const draw = (coverage?: (x: number, y: number) => number) => {
+      const data = new Uint8ClampedArray(raster.width * raster.height * 4);
+      writeBaseApron(data, raster, cells, metrics, flat, 1, coverage);
+      return data;
+    };
+    const grass = draw(), noGravel = draw(() => 0), gravel = draw(() => 1);
+    expect(noGravel).toEqual(grass);
+    let reddish = 0, lighter = 0;
+    for (let i = 0; i < grass.length; i += 4) {
+      if (grass[i + 3] > 0 && grass[i] > grass[i + 1] + 20) reddish++;
+      if (gravel[i + 3] === 0) continue;
+      // On gravel no soil is worked in: the colour stays neutral.
+      expect(Math.abs(gravel[i] - gravel[i + 1])).toBeLessThanOrEqual(2);
+      expect(gravel[i + 3]).toBeLessThanOrEqual(grass[i + 3]);
+      if (gravel[i + 3] < grass[i + 3]) lighter++;
+    }
+    expect(reddish).toBeGreaterThan(0);
+    expect(lighter).toBeGreaterThan(0);
+  });
+
   it('wanders between grass at the plates and a wide trodden patch along a long edge', () => {
     const strip = Array.from({ length: 16 }, (_, i) => ({ gridX: 2 + i, gridY: 4 }));
     const { raster, data } = apron(strip);
@@ -223,6 +249,25 @@ describe('Base foundation ownership', () => {
     expect(images.filter((image) => image.key.startsWith('__base_apron_')).every((image) => !image.active)).toBe(true);
     expect(accents().every(image => !image.active)).toBe(true);
     expect(scene.events.eventNames()).toEqual([]);
+  });
+
+  it('redraws only the apron when the gravel below changes, and not for the same gravel again', () => {
+    const { base, grounding, images } = setup('friendly', 'main');
+    const aprons = () => images.filter((image) => image.key.startsWith('__base_apron_'));
+    const nests = grounding();
+    expect(aprons()).toHaveLength(1);
+    base.destroyCellVisual(0);
+    const surviving = nests.filter((image) => image.active).length;
+    base.setGroundGravel({ key: 'site-a', coverageAt: () => 1 });
+    expect(aprons()).toHaveLength(2);
+    expect(aprons()[0].active).toBe(false);
+    expect(aprons()[1].active).toBe(true);
+    base.setGroundGravel({ key: 'site-a', coverageAt: () => 1 });
+    expect(aprons()).toHaveLength(2);
+    // Stones of the fallen cell stay gone; no stone is added or restored.
+    expect(grounding()).toHaveLength(nests.length);
+    expect(nests.filter((image) => image.active)).toHaveLength(surviving);
+    base.destroy();
   });
 
   it.each(['friendly', 'hostile'] as const)('creates %s decoration once on activation, and none without presentation', faction => {

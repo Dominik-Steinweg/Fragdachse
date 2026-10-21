@@ -242,6 +242,8 @@ export interface WorldPresentationFrameBindingInput {
   readonly getWorldMetrics: () => WorldMetrics | null;
   readonly getPersistentBaseSite: () => WorldPersistentBaseSite | null;
   readonly getPersistentBaseVisualSite: () => PersistentBaseVisualSite | null;
+  /** The World's bases; their grounding follows the base-site gravel below them. */
+  readonly getBases?: () => BaseManager | null;
   readonly isPersistentBasePlacementOverlayActive: () => boolean;
   readonly persistentBaseVisuals: WorldPresentationPersistentBaseVisuals;
   readonly persistentBasePreview: WorldPresentationPersistentBasePreview;
@@ -930,9 +932,9 @@ export class WorldPresentationFrameBinding {
     const arenaResult = this.input.getArenaResult();
     const layout = this.input.getWorldLayout();
     const visualSite = showWorld ? this.input.getPersistentBaseVisualSite() : null;
-    arenaResult?.groundSurface?.setPersistentBaseGravel(
-      visualSite && layout ? toPersistentBaseGravelZone(visualSite, layout.seed) : null,
-    );
+    const gravel = visualSite && layout ? toPersistentBaseGravelZone(visualSite, layout.seed) : null;
+    arenaResult?.groundSurface?.setPersistentBaseGravel(gravel);
+    this.input.getBases?.()?.setPersistentBaseGravel(gravel);
     this.input.persistentBaseVisuals.sync(
       showWorld ? this.input.getPersistentBaseSite() : null,
       showWorld ? this.input.getWorldMetrics() : null,

@@ -6,6 +6,11 @@ import type { WorldMetrics } from '../../world/WorldMetrics';
 import type { LightingSystem } from '../../effects/LightingSystem';
 import { BASE_LIGHT_COLOR, getBaseLightSpots, createBaseSurfaceImages } from '../../entities/BaseVisuals';
 import { BaseGroundingRenderer } from '../../arena/BaseGroundingRenderer';
+import type { GroundSurfacePersistentBaseGravelZone } from '../../arena/chunks/GroundSurfaceStreamer';
+import {
+  createPersistentBaseGravelCoverage,
+  getPersistentBaseGravelStateKey,
+} from '../../arena/PersistentBaseGravelField';
 import { BaseAccentGlowRenderer } from '../../arena/BaseAccentGlowRenderer';
 
 const PREVIEW_LIGHT_PREFIX = 'persistent-base-preview';
@@ -28,6 +33,8 @@ export class PersistentBasePreviewRenderer {
   sync(
     preview: PersistentBaseVisualSite | null,
     metrics: WorldMetrics | null,
+    /** The site's gravel on the ground, as handed to the ground streamer; the grounding matches it. */
+    gravel: GroundSurfacePersistentBaseGravelZone | null = null,
   ): void {
     const nextKey = preview && metrics
       ? [
@@ -38,6 +45,7 @@ export class PersistentBasePreviewRenderer {
         metrics.offsetY,
         metrics.gridCols,
         metrics.gridRows,
+        gravel ? getPersistentBaseGravelStateKey(gravel.seed, gravel.anchor, gravel.buildArea) : 'grass',
       ].join(':')
       : 'none';
     if (nextKey === this.currentKey) return;
@@ -49,7 +57,11 @@ export class PersistentBasePreviewRenderer {
     const coreCells = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation);
     const surfaceCells = coreCells.filter((cell) => cell.domain === 'base-surface');
     this.cellImages.push(...createBaseSurfaceImages(this.scene, surfaceCells, metrics, 'base'));
-    this.grounding = new BaseGroundingRenderer(this.scene, surfaceCells, metrics);
+    this.grounding = new BaseGroundingRenderer(this.scene, surfaceCells, metrics, {
+      gravel: gravel ? createPersistentBaseGravelCoverage(gravel, {
+        offsetX: metrics.offsetX, offsetY: metrics.offsetY, width: metrics.widthPx, height: metrics.heightPx,
+      }) : null,
+    });
     this.accentGlow = new BaseAccentGlowRenderer(this.scene, this.cellImages);
     const originX = metrics.offsetX + (preview.anchor.gridX - 2) * CELL_SIZE;
     const originY = metrics.offsetY + (preview.anchor.gridY - 2) * CELL_SIZE;
