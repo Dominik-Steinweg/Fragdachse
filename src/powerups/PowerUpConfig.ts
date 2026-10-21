@@ -124,8 +124,9 @@ export const POWERUP_PEDESTAL_CONFIG = {
   announceLeadMs: 5_000,
   edgePaddingCells: 2,
   minSpacingCells: 7,
-  renderBaseRadius: 10,
-  renderInnerRadius: 8,
+  /** Sockel = vergrößerter Pickup-Token; der Kanal fasst genau ein liegendes Item-Token. */
+  renderBaseRadius: 13,
+  renderInnerRadius: 10.3,
   renderCoreRadius: 4,
   renderGlowSize: 72,
 } as const;
@@ -187,8 +188,42 @@ export const POWERUP_RENDER_SIZE = 22;
 
 export const POWERUP_SYMBOL_PULSE = { amplitude: 0.03, periodMs: 2400 } as const;
 
+/**
+ * Gemeinsame Item-Darstellung: Token am Boden, darüber schwebendes Symbol. Alle Längen in
+ * Spieleinheiten; reine Präsentation ohne Gameplay-Wirkung.
+ */
+export const POWERUP_ITEM_ART = {
+  /** Kantenlänge der vorgefilterten Display-Texturen (siehe ensurePowerUpDisplayTexture). */
+  displayTextureSize: 64,
+  /** Token- und Kanalradius relativ zur halben Canvas-Kante. */
+  tokenRadiusRatio: 0.88,
+  channelRadiusRatio: 0.7,
+  /** Das schwebende Symbol ist näher an der Kamera und darf über den Tokenrand ragen. */
+  symbolScale: 1.12,
+  /** Schwebehöhe des Symbols über dem Token und deren Amplitude. */
+  hoverPx: 2.2,
+  hoverAmplitudePx: 0.9,
+  /** Bodenring und Halo als Durchmesser. */
+  ringDiameter: 31,
+  haloDiameter: 30,
+  shadowDiameter: 22,
+  shadowOffset: { x: 1.1, y: 1.7 },
+  /** Symbolschatten auf dem Token: Grundversatz plus Anteil pro Schwebehöhe. */
+  symbolShadow: { x: 0.5, y: 0.8, perHover: 0.42, alpha: 0.42 },
+  revealMs: 460,
+  revealDropPx: 18,
+  collectMs: 260,
+} as const;
+
 /** Pure presentation: identical time/UID gives identical scale, including pause and step. */
 export function powerUpSymbolScale(uid: number, presentationTimeMs: number): number {
   const { amplitude, periodMs } = POWERUP_SYMBOL_PULSE;
   return 1 + amplitude * Math.sin(((presentationTimeMs + uid * 137) % periodMs) / periodMs * Math.PI * 2);
+}
+
+/** Schwebehöhe des Symbols; derselbe Takt wie der Puls, damit Nähe und Größe zusammenpassen. */
+export function powerUpHoverHeight(uid: number, presentationTimeMs: number): number {
+  const { periodMs } = POWERUP_SYMBOL_PULSE;
+  const phase = ((presentationTimeMs + uid * 137) % periodMs) / periodMs * Math.PI * 2;
+  return POWERUP_ITEM_ART.hoverPx + POWERUP_ITEM_ART.hoverAmplitudePx * Math.sin(phase);
 }

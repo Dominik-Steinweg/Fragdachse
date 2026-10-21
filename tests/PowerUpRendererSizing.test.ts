@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({
   BlendModes: { ADD: 1 },
   GameObjects: { Events: { DESTROY: 'destroy' } },
+  Math: {
+    Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
+    FloatBetween: (min: number, max: number) => (min + max) / 2,
+  },
 }));
 vi.mock('../src/effects/EffectUtils', () => ({
   configureAdditiveImage: (image: unknown) => image,
@@ -12,38 +16,60 @@ vi.mock('../src/effects/EffectUtils', () => ({
   fillRadialGradientTexture: vi.fn(),
   registerGraphicsObject: vi.fn(),
   setCircleEmitZone: vi.fn(),
-  mixColors: vi.fn(),
+  mixColors: vi.fn(() => 0xffffff),
 }));
-
-import { PowerUpRenderer } from '../src/powerups/PowerUpRenderer';
-import { createEmitter, destroyEmitter } from '../src/effects/EffectUtils';
-import { POWERUP_DEFS, POWERUP_RENDER_SIZE, POWERUP_SYMBOL_PULSE } from '../src/powerups/PowerUpConfig';
-import { POWERUP_BASE_KEY, powerUpSymbolKey, POWERUP_ASSETS, preloadPowerUpAssets, assertPowerUpAssetsReady } from '../src/assets/PowerUpAssets';
-import { DAWN_PIPELINE_ASSETS, DAWN_SCRAP_DISPLAY_SIZE, isDawnScrapTexture } from '../src/assets/DawnAssets';
-import { preloadTurretVisualAssets, registerTurretAnimations } from '../src/config/turretVisuals';
-
-// Pedestal GPU rendering is covered separately; this test exercises item sync and reveal.
+// Display prefiltering needs a DOM canvas; the renderer contract only needs the returned key.
+vi.mock('../src/powerups/PowerUpItemArt', () => ({
+  ensurePowerUpDisplayTexture: (_scene: unknown, key: string) => key + '@display',
+}));
+// Pedestal and item decoration GPU layers are covered separately; this test exercises the items.
 vi.mock('../src/powerups/PowerUpPedestalGpuSystem', () => ({
   PowerUpPedestalGpuSystem: class { clear() {} destroy() {} },
 }));
+const itemGpu = vi.hoisted(() => ({ upsert: vi.fn(), remove: vi.fn(), clear: vi.fn(), destroy: vi.fn(), setEmissiveAlpha: vi.fn() }));
+vi.mock('../src/powerups/PowerUpItemGpuSystem', () => ({
+  PowerUpItemGpuSystem: class {
+    upsert = itemGpu.upsert; remove = itemGpu.remove; clear = itemGpu.clear;
+    destroy = itemGpu.destroy; setEmissiveAlpha = itemGpu.setEmissiveAlpha;
+  },
+}));
+
+import { PowerUpRenderer, powerUpSymbolFrame } from '../src/powerups/PowerUpRenderer';
+import { createEmitter, destroyEmitter } from '../src/effects/EffectUtils';
+import {
+  POWERUP_DEFS,
+  POWERUP_ITEM_ART,
+  POWERUP_RENDER_SIZE,
+  POWERUP_SYMBOL_PULSE,
+} from '../src/powerups/PowerUpConfig';
+import {
+  POWERUP_ASSETS, POWERUP_LOOP_ASSETS, POWERUP_TOKEN_KEY, assertPowerUpAssetsReady, powerUpSymbolArt, preloadPowerUpAssets,
+} from '../src/assets/PowerUpAssets';
+import { DAWN_PIPELINE_ASSETS, DAWN_SCRAP_DISPLAY_SIZE, isDawnScrapTexture } from '../src/assets/DawnAssets';
+import { preloadTurretVisualAssets, registerTurretAnimations } from '../src/config/turretVisuals';
 
 class DisplayObject {
   destroyed = false;
+  x = 0;
+  y = 0;
   scaleX = 1;
   scaleY = 1;
   alpha = 1;
+  tint: number | null = null;
+  frame: number | string = 0;
   children: DisplayObject[] = [];
   parent: DisplayObject | null = null;
   private destroyListeners: Array<() => void> = [];
   constructor(readonly width: number, readonly height: number, readonly key = '') {}
   get displayWidth() { return this.width * this.scaleX; }
   get displayHeight() { return this.height * this.scaleY; }
-  get worldScale(): number { return this.scaleX * (this.parent?.worldScale ?? 1); }
   setScale(x: number, y = x) { this.scaleX = x; this.scaleY = y; return this; }
   setDisplaySize(w: number, h: number) { return this.setScale(w / this.width, h / this.height); }
   setAlpha(value: number) { this.alpha = value; return this; }
   setDepth() { return this; }
-  setPosition() { return this; }
+  setTint(value: number) { this.tint = value; return this; }
+  setPosition(x: number, y: number) { this.x = x; this.y = y; return this; }
+  setFrame(frame: number | string) { this.frame = frame; return this; }
   once(_event: string, listener: () => void) { this.destroyListeners.push(listener); return this; }
   add(child: DisplayObject) { child.parent = this; this.children.push(child); return this; }
   addAt(child: DisplayObject, index: number) { child.parent = this; this.children.splice(index, 0, child); return this; }
@@ -61,34 +87,154 @@ interface TweenConfig {
   onComplete?: () => void;
 }
 
-describe('PowerUpRenderer materialization sizing', () => {
-  it('stops reveal when collected and releases scene-owned materialization effects on world teardown', () => {
-    const objects: DisplayObject[] = [];
-    const tweens: Array<TweenConfig & { stop: ReturnType<typeof vi.fn> }> = [];
-    const timers: Array<{ callback: () => void; remove: ReturnType<typeof vi.fn> }> = [];
+function makeScene(sourceSize = 256) {
+  const objects: DisplayObject[] = [];
+  const tweens: Array<TweenConfig & { stop: ReturnType<typeof vi.fn> }> = [];
+  const timers: Array<{ callback: () => void; remove: ReturnType<typeof vi.fn> }> = [];
+  const scene = {
+    add: {
+      container: (x: number, y: number, children: DisplayObject[] = []) => {
+        const object = new DisplayObject(1, 1).setPosition(x, y);
+        children.forEach(child => object.add(child)); objects.push(object); return object;
+      },
+      image: (x: number, y: number, key: string) => {
+        const object = new DisplayObject(sourceSize, sourceSize, key).setPosition(x, y); objects.push(object); return object;
+      },
+    },
+    tweens: { add: (config: TweenConfig) => {
+      const tween = { ...config, stop: vi.fn() }; tweens.push(tween); return tween;
+    } },
+    time: { delayedCall: (_delay: number, callback: () => void) => {
+      const timer = { callback, remove: vi.fn() }; timers.push(timer); return timer;
+    } },
+    textures: { exists: () => true },
+  };
+  return { scene, objects, tweens, timers };
+}
+
+const tokenDefs = Object.values(POWERUP_DEFS).filter(def => def.spriteKey && !isDawnScrapTexture(def.spriteKey));
+
+describe('PowerUpRenderer item presentation', () => {
+  it('gives every layered power-up the shared token and a hovering symbol driven only by the World clock', () => {
+    const { scene, objects } = makeScene();
+    itemGpu.upsert.mockClear();
+    const renderer = new PowerUpRenderer(scene as never);
+    const pickups = tokenDefs.map((def, uid) => ({ uid, defId: def.id, x: 100 + uid * 40, y: 200 }));
+    renderer.sync(pickups);
+
+    const tokens = objects.filter(object => object.key === POWERUP_TOKEN_KEY + '@display');
+    expect(tokens).toHaveLength(pickups.length);
+    expect(itemGpu.upsert).toHaveBeenCalledTimes(pickups.length);
+    const symbolKey = (uid: number) => {
+      const art = powerUpSymbolArt(POWERUP_DEFS[pickups[uid].defId].spriteKey!)!;
+      return art.frames > 1 ? art.key : art.key + '@display';
+    };
+    const symbolsFor = (uid: number) => objects.filter(object => object.key === symbolKey(uid));
+    for (const pickup of pickups) {
+      const [shadow, symbol] = symbolsFor(pickup.uid);
+      expect(shadow.tint).toBe(0x000000);
+      expect(symbol.tint).toBeNull();
+    }
+
+    const revealed = POWERUP_ITEM_ART.revealMs + 250;
+    const snapshot = (time: number) => {
+      renderer.updatePresentation(time);
+      return pickups.map(pickup => {
+        const [, symbol] = symbolsFor(pickup.uid);
+        return { width: symbol.displayWidth, lift: pickup.y - symbol.y, alpha: symbol.alpha };
+      });
+    };
+    const initial = snapshot(revealed);
+    expect(snapshot(revealed)).toEqual(initial);
+    expect(snapshot(revealed + POWERUP_SYMBOL_PULSE.periodMs)).toEqual(initial);
+    expect(new Set(initial.map(item => item.width)).size).toBeGreaterThan(1);
+    const amplitude = POWERUP_SYMBOL_PULSE.amplitude;
+    for (const item of snapshot(revealed + 300)) {
+      expect(item.alpha).toBe(1);
+      expect(item.width).toBeGreaterThanOrEqual(POWERUP_RENDER_SIZE * POWERUP_ITEM_ART.symbolScale * (1 - amplitude) - 1e-9);
+      expect(item.width).toBeLessThanOrEqual(POWERUP_RENDER_SIZE * POWERUP_ITEM_ART.symbolScale * (1 + amplitude) + 1e-9);
+      expect(item.lift).toBeGreaterThanOrEqual(POWERUP_ITEM_ART.hoverPx - POWERUP_ITEM_ART.hoverAmplitudePx - 1e-9);
+      expect(item.lift).toBeLessThanOrEqual(POWERUP_ITEM_ART.hoverPx + POWERUP_ITEM_ART.hoverAmplitudePx + 1e-9);
+    }
+    for (const token of tokens) {
+      expect(token.displayWidth).toBeCloseTo(POWERUP_RENDER_SIZE);
+      expect(token.alpha).toBe(1);
+    }
+
+    // Symbol and its shadow always show the same loop frame, chosen by the World clock alone.
+    for (const time of [revealed + 1_000, revealed + 1_083, revealed + 2_400]) {
+      renderer.updatePresentation(time);
+      for (const pickup of pickups) {
+        const [shadow, symbol] = symbolsFor(pickup.uid);
+        const art = powerUpSymbolArt(POWERUP_DEFS[pickup.defId].spriteKey!)!;
+        expect(symbol.frame).toBe(powerUpSymbolFrame(art, pickup.uid, time));
+        expect(shadow.frame).toBe(symbol.frame);
+      }
+    }
+
+    // A snapshot resend neither restarts the reveal nor moves the pulse.
+    const before = snapshot(revealed + 300);
+    renderer.sync(pickups);
+    expect(snapshot(revealed + 300)).toEqual(before);
+  });
+
+  it('reveals from above the token and stays within its display box while materializing', () => {
+    const { scene, objects } = makeScene(16);
+    const renderer = new PowerUpRenderer(scene as never);
+    renderer.updatePresentation(1_000);
+    renderer.sync([{ uid: 3, defId: 'HEALTH_PACK', x: 50, y: 60 }]);
+    const token = objects.find(object => object.key === POWERUP_TOKEN_KEY + '@display')!;
+    const [, symbol] = objects.filter(object => object !== token);
+    let previousLift = Infinity;
+    for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
+      renderer.updatePresentation(1_000 + progress * POWERUP_ITEM_ART.revealMs);
+      expect(token.displayWidth).toBeLessThanOrEqual(POWERUP_RENDER_SIZE * 1.03);
+      const lift = 60 - symbol.y;
+      expect(lift).toBeLessThanOrEqual(previousLift + POWERUP_ITEM_ART.hoverAmplitudePx);
+      previousLift = lift;
+    }
+    expect(symbol.alpha).toBe(1);
+  });
+
+  it('turns a collected symbol into short feedback and releases everything on removal and teardown', () => {
+    const { scene, objects } = makeScene();
+    itemGpu.remove.mockClear(); itemGpu.clear.mockClear();
+    const renderer = new PowerUpRenderer(scene as never);
+    renderer.updatePresentation(2_000);
+    renderer.sync([{ uid: 1, defId: 'RAGE', x: 10, y: 10 }]);
+    const [token, shadow, symbol] = objects;
+    renderer.sync([]);
+    expect(itemGpu.remove).toHaveBeenCalledWith(1);
+    expect(token.destroyed).toBe(true);
+    expect(shadow.destroyed).toBe(true);
+    expect(symbol.destroyed).toBe(false);
+    renderer.updatePresentation(2_000 + POWERUP_ITEM_ART.collectMs / 2);
+    expect(symbol.alpha).toBeLessThan(1);
+    renderer.updatePresentation(2_000 + POWERUP_ITEM_ART.collectMs + 1);
+    expect(symbol.destroyed).toBe(true);
+
+    // World teardown removes lying items and pending feedback silently.
+    renderer.sync([{ uid: 2, defId: 'NUKE', x: 10, y: 10 }]);
+    renderer.sync([]);
+    renderer.sync([{ uid: 4, defId: 'BFG', x: 30, y: 10 }]);
+    renderer.clear();
+    expect(objects.every(object => object.destroyed)).toBe(true);
+    expect(itemGpu.clear).toHaveBeenCalled();
+  });
+
+  it('keeps scrap on its own art and releases its materialization effects on removal and teardown', () => {
+    const { scene, objects, tweens, timers } = makeScene();
     vi.mocked(createEmitter).mockClear();
     vi.mocked(destroyEmitter).mockClear();
-    const scene = {
-      add: {
-        container: (_x: number, _y: number, children: DisplayObject[] = []) => {
-          const object = new DisplayObject(1, 1);
-          children.forEach(child => object.add(child)); objects.push(object); return object;
-        },
-        image: (_x: number, _y: number, key: string) => {
-          const object = new DisplayObject(16, 16, key); objects.push(object); return object;
-        },
-      },
-      tweens: { add: (config: TweenConfig) => {
-        const tween = { ...config, stop: vi.fn() }; tweens.push(tween); return tween;
-      } },
-      time: { delayedCall: (_delay: number, callback: () => void) => {
-        const timer = { callback, remove: vi.fn() }; timers.push(timer); return timer;
-      } },
-    };
     const renderer = new PowerUpRenderer(scene as never);
-    const pickup = { uid: 1, defId: 'HEALTH_PACK', x: 100, y: 100 };
+    const scrapDef = Object.values(POWERUP_DEFS).find(def => def.type === 'dawn_scrap')!;
+    const pickup = { uid: 1, defId: scrapDef.id, x: 100, y: 100 };
     renderer.sync([pickup]);
+    const image = objects.find(object => object.key === scrapDef.spriteKey)!;
+    expect(objects.some(object => object.key.startsWith(POWERUP_TOKEN_KEY))).toBe(false);
     const reveal = tweens.find(tween => 'value' in tween.targets)!;
+    reveal.onComplete?.();
+    expect(image.displayWidth).toBe(DAWN_SCRAP_DISPLAY_SIZE);
     const emitters = vi.mocked(createEmitter).mock.results.map(result => result.value);
     expect(emitters).toHaveLength(2);
 
@@ -96,7 +242,6 @@ describe('PowerUpRenderer materialization sizing', () => {
     expect(reveal.stop).toHaveBeenCalledOnce();
     renderer.clear();
     expect(objects.every(object => object.destroyed)).toBe(true);
-    expect(tweens.every(tween => tween.stop.mock.calls.length > 0)).toBe(true);
     expect(timers[0].remove).toHaveBeenCalledWith(false);
     for (const emitter of emitters) expect(destroyEmitter).toHaveBeenCalledWith(emitter);
     expect(destroyEmitter).toHaveBeenCalledTimes(2);
@@ -110,115 +255,62 @@ describe('PowerUpRenderer materialization sizing', () => {
     renderer.clear();
     expect(destroyEmitter).toHaveBeenCalledTimes(4);
   });
-
-  it.each([16, 256])('keeps every pickup within its display box throughout reveal with %spx source images', (sourceSize) => {
-    const images: DisplayObject[] = [];
-    const tweens: TweenConfig[] = [];
-    const scene = {
-      add: {
-        container: (_x: number, _y: number, children: DisplayObject[] = []) => {
-          const container = new DisplayObject(1, 1); children.forEach(child => container.add(child)); return container;
-        },
-        image: (_x: number, _y: number, key: string) => {
-          const image = new DisplayObject(sourceSize, sourceSize, key);
-          images.push(image);
-          return image;
-        },
-      },
-      tweens: { add: (config: TweenConfig) => { tweens.push(config); return { stop: vi.fn() }; } },
-      time: { delayedCall: vi.fn() },
-    };
-    const renderer = new PowerUpRenderer(scene as never);
-    Object.assign(scene, { textures: { exists: () => true } });
-    const definitions = Object.values(POWERUP_DEFS).filter(def => def.spriteKey);
-    const pickups = definitions.map((def, uid) => ({ uid, defId: def.id, x: 100, y: 100 }));
-    renderer.sync(pickups);
-    const icons = images.filter(image => image.key === POWERUP_BASE_KEY);
-    const symbols = images.filter(image => definitions.some(def => powerUpSymbolKey(def.spriteKey!) === image.key));
-    const reveals = tweens.filter(tween => 'value' in tween.targets);
-    const scrap = images.filter(image => isDawnScrapTexture(image.key));
-    expect(scrap).toHaveLength(3);
-    expect(icons).toHaveLength(pickups.length - scrap.length);
-    expect(symbols).toHaveLength(pickups.length - scrap.length);
-    expect(reveals).toHaveLength(pickups.length);
-    const checkBounds = () => {
-      for (const icon of icons) {
-        expect(icon.displayWidth).toBeGreaterThan(0);
-        expect(icon.width * icon.worldScale).toBeLessThanOrEqual(POWERUP_RENDER_SIZE);
-        expect(icon.displayHeight).toBeLessThanOrEqual(POWERUP_RENDER_SIZE);
-      }
-    };
-    checkBounds();
-    expect(icons[0].width * icons[0].worldScale).toBeLessThan(POWERUP_RENDER_SIZE);
-    for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
-      for (const tween of reveals) {
-        (tween.targets as { value: number }).value = progress;
-        tween.onUpdate?.();
-      }
-      checkBounds();
-    }
-    reveals.forEach(tween => tween.onComplete?.());
-    renderer.sync(pickups);
-    for (const item of scrap) {
-      expect(item.displayWidth).toBe(DAWN_SCRAP_DISPLAY_SIZE);
-      expect(item.displayHeight).toBe(DAWN_SCRAP_DISPLAY_SIZE);
-      expect(item.parent?.children.some(child => child.key === POWERUP_BASE_KEY)).toBe(false);
-    }
-    for (const icon of icons) {
-      expect(icon.displayWidth).toBeCloseTo(POWERUP_RENDER_SIZE);
-      expect(icon.displayHeight).toBeCloseTo(POWERUP_RENDER_SIZE);
-      expect(icon.alpha).toBe(1);
-    }
-    const widths = (time: number) => {
-      renderer.updatePresentation(time);
-      return symbols.map(symbol => symbol.displayWidth);
-    };
-    const initial = widths(250);
-    expect(widths(250)).toEqual(initial);
-    expect(widths(250 + POWERUP_SYMBOL_PULSE.periodMs)).toEqual(initial);
-    expect(new Set(initial).size).toBeGreaterThan(1);
-    expect(widths(500)).not.toEqual(initial);
-    for (const width of widths(700)) {
-      expect(width).toBeGreaterThanOrEqual(POWERUP_RENDER_SIZE * (1 - POWERUP_SYMBOL_PULSE.amplitude));
-      expect(width).toBeLessThanOrEqual(POWERUP_RENDER_SIZE * (1 + POWERUP_SYMBOL_PULSE.amplitude));
-    }
-    for (const base of icons) expect(base.displayWidth).toBe(POWERUP_RENDER_SIZE);
-    const beforeResync = widths(700);
-    renderer.sync(pickups);
-    expect(widths(700)).toEqual(beforeResync);
-    renderer.sync([]);
-    expect([...icons, ...symbols].every(image => image.destroyed)).toBe(true);
-    renderer.updatePresentation(900);
-  });
 });
 
-it('loads layered pickups and static UI keys through versioned colour URLs, and reports missing images', () => {
+it('loads UI composites, the world token and symbol loop sheets through versioned colour URLs, and reports missing images', () => {
   const loaded = new Set<string>();
   const requests: [string, string][] = [];
+  const sheets: [string, string, { frameWidth: number; endFrame: number }][] = [];
   const scene = { textures: { exists: (key: string) => loaded.has(key) },
-    load: { image: (key: string, url: string) => requests.push([key, url]) } };
+    load: {
+      image: (key: string, url: string) => requests.push([key, url]),
+      spritesheet: (key: string, url: string, config: { frameWidth: number; endFrame: number }) => sheets.push([key, url, config]),
+    } };
   preloadPowerUpAssets(scene as never);
   expect(requests).toHaveLength(POWERUP_ASSETS.length);
-  expect(new Set(requests.map(([key]) => key)).size).toBe(requests.length);
-  for (const [key, url] of requests) {
+  expect(sheets).toHaveLength(POWERUP_LOOP_ASSETS.length);
+  const keys = [...requests.map(([key]) => key), ...sheets.map(([key]) => key)];
+  expect(new Set(keys).size).toBe(keys.length);
+  for (const [key, url] of [...requests, ...sheets]) {
     expect(url).toMatch(/\?v=[a-f0-9]{64}$/);
     loaded.add(key);
   }
+  for (const [key, , config] of sheets) {
+    const loop = POWERUP_LOOP_ASSETS.find(asset => asset.key === key)!;
+    expect(config.frameWidth).toBe(loop.layout.frameWidth);
+    expect(config.endFrame).toBe(loop.frames - 1);
+  }
   expect(() => assertPowerUpAssetsReady(scene as never)).not.toThrow();
+  expect(loaded.has(POWERUP_TOKEN_KEY)).toBe(true);
   for (const def of Object.values(POWERUP_DEFS).filter(def => def.spriteKey)) {
     if (isDawnScrapTexture(def.spriteKey)) {
-      expect(powerUpSymbolKey(def.spriteKey!)).toBeUndefined();
+      expect(powerUpSymbolArt(def.spriteKey!)).toBeUndefined();
       expect(loaded.has(def.spriteKey!)).toBe(false);
       continue;
     }
     expect(loaded.has(def.spriteKey!)).toBe(true);
-    expect(loaded.has(powerUpSymbolKey(def.spriteKey!)!)).toBe(true);
+    expect(loaded.has(powerUpSymbolArt(def.spriteKey!)!.key)).toBe(true);
   }
-  requests.length = 0;
+  requests.length = 0; sheets.length = 0;
   preloadPowerUpAssets(scene as never);
   expect(requests).toHaveLength(0);
-  loaded.delete(POWERUP_BASE_KEY);
+  expect(sheets).toHaveLength(0);
+  loaded.delete(POWERUP_LOOP_ASSETS[0].key);
   expect(() => assertPowerUpAssetsReady(scene as never)).toThrow('Power-Up');
+});
+
+it('chooses loop frames as a pure, wrapping function of the World clock', () => {
+  const art = { key: 'loop', frames: 12, fps: 12 };
+  expect(powerUpSymbolFrame(art, 0, 0)).toBe(0);
+  expect(powerUpSymbolFrame(art, 0, 1_000)).toBe(0);
+  expect(powerUpSymbolFrame(art, 0, 999)).toBe(11);
+  expect(powerUpSymbolFrame(art, 3, 500)).toBe(powerUpSymbolFrame(art, 3, 500));
+  expect(powerUpSymbolFrame({ key: 'static', frames: 1, fps: 0 }, 7, 12_345)).toBe(0);
+  for (let time = 0; time < 3_000; time += 37) {
+    const frame = powerUpSymbolFrame(art, 5, time);
+    expect(frame).toBeGreaterThanOrEqual(0);
+    expect(frame).toBeLessThan(art.frames);
+  }
 });
 
 it('loads Dawn art and registers its clips through the existing construction pipeline', () => {

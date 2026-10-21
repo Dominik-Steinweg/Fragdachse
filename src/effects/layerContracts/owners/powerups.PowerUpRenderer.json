@@ -7,14 +7,35 @@
     "cameras": [],
     "sites": [
       {
-        "key": "sync/container/setDepth/0",
+        "key": "createTokenItem/token/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.token",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createTokenItem/symbolShadow/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.symbolShadow",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createTokenItem/symbol/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.symbol",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createLegacyItem/container/setDepth/0",
         "expression": "DEPTH.PLAYERS - 1",
         "blends": [
           "NORMAL"
         ]
       },
       {
-        "key": "sync/itemAura/configureAdditiveImage/0",
+        "key": "createLegacyItem/itemAura/configureAdditiveImage/0",
         "expression": "DEPTH.PLAYERS - 1.2",
         "blends": [
           "ADD"
@@ -46,9 +67,75 @@
   },
   "cpuLayers": [
     {
-      "id": "cpu:powerups/PowerUpRenderer.ts:sync/container/setDepth/0",
+      "id": "cpu:powerups/PowerUpRenderer.ts:createTokenItem/token/setDepth/0",
       "owner": "powerups/PowerUpRenderer.ts",
-      "component": "sync/container/setDepth/0",
+      "component": "createTokenItem/token/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.22
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createTokenItem/token/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.token"
+      }
+    },
+    {
+      "id": "cpu:powerups/PowerUpRenderer.ts:createTokenItem/symbolShadow/setDepth/0",
+      "owner": "powerups/PowerUpRenderer.ts",
+      "component": "createTokenItem/symbolShadow/setDepth/0",
+      "height": "body",
+      "lighting": "mixed",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createTokenItem/symbolShadow/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.symbolShadow"
+      }
+    },
+    {
+      "id": "cpu:powerups/PowerUpRenderer.ts:createTokenItem/symbol/setDepth/0",
+      "owner": "powerups/PowerUpRenderer.ts",
+      "component": "createTokenItem/symbol/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.59
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createTokenItem/symbol/setDepth/0",
+        "expression": "POWERUP_ITEM_DEPTH.symbol"
+      }
+    },
+    {
+      "id": "cpu:powerups/PowerUpRenderer.ts:createLegacyItem/container/setDepth/0",
+      "owner": "powerups/PowerUpRenderer.ts",
+      "component": "createLegacyItem/container/setDepth/0",
       "height": "body",
       "lighting": "material",
       "camera": "world",
@@ -63,14 +150,14 @@
       ],
       "role": "effect",
       "source": {
-        "selector": "sync/container/setDepth/0",
+        "selector": "createLegacyItem/container/setDepth/0",
         "expression": "DEPTH.PLAYERS - 1"
       }
     },
     {
-      "id": "cpu:powerups/PowerUpRenderer.ts:sync/itemAura/configureAdditiveImage/0",
+      "id": "cpu:powerups/PowerUpRenderer.ts:createLegacyItem/itemAura/configureAdditiveImage/0",
       "owner": "powerups/PowerUpRenderer.ts",
-      "component": "sync/itemAura/configureAdditiveImage/0",
+      "component": "createLegacyItem/itemAura/configureAdditiveImage/0",
       "height": "body",
       "lighting": "emissive",
       "camera": "world",
@@ -85,7 +172,7 @@
       ],
       "role": "effect",
       "source": {
-        "selector": "sync/itemAura/configureAdditiveImage/0",
+        "selector": "createLegacyItem/itemAura/configureAdditiveImage/0",
         "expression": "DEPTH.PLAYERS - 1.2"
       }
     },
@@ -155,5 +242,8 @@
         "expression": "DEPTH.PLAYERS - 0.83"
       }
     }
+  ],
+  "notes": [
+    "Power-ups with layered art: lit ground token, self-lit hovering symbol and its contact shadow just above the light map. Scrap and mission pickups keep the legacy single-image path."
   ]
 }

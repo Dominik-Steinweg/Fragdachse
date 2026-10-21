@@ -112,6 +112,83 @@ def build_base(ctx, spec):
     return model(ctx.scene, {'base_meshes': [body]})
 
 
+def lathe(name, profile, slots, materials, segments=96, caps=True):
+    """Turned body from an outer-to-inner (radius, z) profile; slot k colours ring k."""
+    loops = [[(r*math.cos(2*math.pi*i/segments), r*math.sin(2*math.pi*i/segments), z) for i in range(segments)]
+             for r, z in profile]
+    vertices = [p for loop in loops for p in loop]
+    n = segments
+    faces, face_slots = ([tuple(reversed(range(n)))], [slots[0]]) if caps else ([], [])
+    for k in range(len(loops)-1):
+        for i in range(n):
+            faces.append((k*n+i, k*n+(i+1) % n, (k+1)*n+(i+1) % n, (k+1)*n+i))
+            face_slots.append(slots[k])
+    if caps:
+        faces.append(tuple(range((len(loops)-1)*n, len(loops)*n)))
+        face_slots.append(slots[-1])
+    mesh = bpy.data.meshes.new(name); mesh.from_pydata(vertices, [], faces); mesh.update()
+    for material in materials: mesh.materials.append(material)
+    for poly, slot in zip(mesh.polygons, face_slots):
+        poly.material_index = slot
+        poly.use_smooth = True
+    # Turned surfaces stay smooth around the axis; profile corners stay crisp.
+    mesh.set_sharp_from_angle(angle=math.radians(38))
+    ob = bpy.data.objects.new(name, mesh); bpy.context.scene.collection.objects.link(ob)
+    return ob
+
+
+def grimed(ctx, name, color, wear, roughness, bump=.12, grime=.55):
+    """Painted token material plus cavity grime: ambient occlusion darkens grooves and seams."""
+    mat = painted(ctx, name, color, wear, roughness)
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    bs = nodes.get('Principled BSDF')
+    for node in nodes:
+        if node.type == 'BUMP': node.inputs['Strength'].default_value = bump
+    colour = bs.inputs['Base Color'].links[0].from_socket
+    ao = nodes.new('ShaderNodeAmbientOcclusion'); ao.inputs['Distance'].default_value = .09; ao.samples = 8
+    shade = nodes.new('ShaderNodeMapRange')
+    shade.inputs['To Min'].default_value = 1-grime; shade.inputs['To Max'].default_value = 1
+    links.new(ao.outputs['AO'], shade.inputs['Value'])
+    mix = nodes.new('ShaderNodeMixRGB'); mix.blend_type = 'MULTIPLY'; mix.inputs[0].default_value = 1
+    links.new(colour, mix.inputs[1]); links.new(shade.outputs[0], mix.inputs[2])
+    links.new(mix.outputs[0], bs.inputs['Base Color'])
+    return mat
+
+
+def build_token(ctx, spec):
+    """World pickup token: worn bronze lip, dark glass channel for the runtime glow, recessed face.
+
+    Radii follow the runtime art contract on the 2.2 canvas: outer 0.88 and channel 0.70 of the
+    half-canvas. Three brass studs mark the same 120-degree rhythm as the runtime ground ring.
+    """
+    dark = grimed(ctx, 'Dark oiled bronze body', '2F251D', .16, .52)
+    lip = grimed(ctx, 'Hammered worn bronze lip', '7A5A39', .34, .46, bump=.34, grime=.5)
+    glass = grimed(ctx, 'Smoked channel glass', '0E1114', .04, .16, bump=.02, grime=.2)
+    face = grimed(ctx, 'Recessed slate face', '2A3034', .2, .62, bump=.22, grime=.6)
+    brass = grimed(ctx, 'Polished brass stud', 'D2AB6C', .1, .3, grime=.3)
+    half = 1.1
+    outer, channel = .88*half, .70*half
+    profile = [
+        (outer, 0.0), (outer, .07),                 # foot side
+        (outer-.022, .135), (outer-.065, .162),     # broad worn chamfer onto the lip
+        (outer-.115, .158), (outer-.135, .125),     # lip top, inner chamfer
+        (channel+.045, .075),                       # channel outer wall
+        (channel-.04, .075),                        # channel floor (glass)
+        (channel-.06, .118), (channel-.085, .128),  # inner wall and face edge
+        (channel*.55, .112), (channel*.2, .104), (.01, .102),  # gently dished face
+    ]
+    slots = [0, 0, 1, 1, 1, 0, 2, 2, 0, 3, 3, 3, 3]
+    body = lathe('Turned pickup token', profile, slots, [dark, lip, glass, face])
+    studs = []
+    for angle in (90, 210, 330):
+        x, y = (outer-.09)*math.cos(math.radians(angle)), (outer-.09)*math.sin(math.radians(angle))
+        studs.append(ctx.cylinder('Brass lip stud '+str(angle), (x, y, .17), .036, .03, brass, 24))
+    # Engraved turning grooves keep the dish readable from above and collect grime.
+    grooves = [lathe('Engraved face groove '+str(i), [(r+.012, .126 - .02*i), (r, .112 - .02*i), (r-.012, .126 - .02*i)],
+                     [0, 0], [dark], caps=False) for i, r in enumerate((channel*.82, channel*.6))]
+    return model(ctx.scene, {'base_meshes': [body, *grooves, *studs]})
+
+
 def build_symbol(ctx, spec):
     kind = spec['model']['symbol']
     def mat(name, color): return painted(ctx, name, color)

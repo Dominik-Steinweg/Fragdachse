@@ -561,7 +561,8 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     id: GpuVfxEffectId.PowerUpPedestalSpark,
     label: 'powerup.pedestal-spark',
     lane: GpuVfxLaneId.PowerUpPedestal,
-    frame: GpuVfxFrameId.DeathFragment,
+    // Soft point: above the light map a square fragment reads as a pixel artefact.
+    frame: GpuVfxFrameId.DeathGlow,
     importance: 'standard',
     release: 'kill-with-source',
   },
