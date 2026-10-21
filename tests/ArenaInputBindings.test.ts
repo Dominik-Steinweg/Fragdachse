@@ -18,6 +18,7 @@ import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../src/loadout/CoopDefenseLoadoutModifiers';
 import { planFireControlCopies, type FireControlConstructionFacts } from '../src/systems/fireControl/FireControlCopyPlan';
 import { t } from '../src/i18n';
+import { playerCameraZoomFor } from '../src/effects/camera/PlayerCameraZoom';
 
 interface FakeKey {
   isDown: boolean;
@@ -41,6 +42,9 @@ function makeInput(): {
   debugCallback: { current: ((type: 'flowfield_bases' | 'flowfield_players') => void) | null };
   hotkeys: ArenaInputBindingsInput['hotkeys'];
   onFlowFieldDebugHotkey: ReturnType<typeof vi.fn>;
+  scene: ArenaInputBindingsInput['scene'];
+  pointerHandlers: Map<string, (...args: unknown[]) => void>;
+  pointerOff: ReturnType<typeof vi.fn>;
 } {
   const keys: FakeKey[] = [];
   const handlers = new Map<string, HotkeyHandler>();
@@ -186,8 +190,13 @@ function makeInput(): {
     },
   } as unknown as ArenaInputBindingsInput['actions'];
   const onFlowFieldDebugHotkey = vi.fn();
+  const pointerHandlers = new Map<string, (...args: unknown[]) => void>();
+  const pointerOff = vi.fn();
+  const scene = { input: { keyboard, on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    pointerHandlers.set(event, handler);
+  }), off: pointerOff } } as unknown as ArenaInputBindingsInput['scene'];
   const input: ArenaInputBindingsInput = {
-    scene: { input: { keyboard } } as unknown as ArenaInputBindingsInput['scene'],
+    scene,
     inputSystem: inputSystem as unknown as ArenaInputBindingsInput['inputSystem'],
     audioSystem: {} as ArenaInputBindingsInput['audioSystem'],
     actions,
@@ -205,10 +214,36 @@ function makeInput(): {
     debugCallback,
     hotkeys,
     onFlowFieldDebugHotkey,
+    scene,
+    pointerHandlers,
+    pointerOff,
   };
 }
 
 describe('ArenaInputBindings', () => {
+  it('zooms the world camera by wheel only while the World takes input and no screen UI is under the pointer', () => {
+    const { binding, actions, inputSystem, scene, pointerHandlers, pointerOff } = makeInput();
+    vi.mocked(actions.getPlayerCapabilities).mockReturnValue({ canInteract: true, canUseCombat: true } as never);
+    Object.assign(inputSystem, { setAimEnabled: vi.fn(), setInputEnabled: vi.fn(), update: vi.fn() });
+    binding.setup();
+    const wheel = pointerHandlers.get('wheel')!;
+    const zoom = playerCameraZoomFor(scene);
+    const pointer = { event: { deltaMode: 0 } };
+    const frame = { enabled: true, gameplayActive: true, countdownActive: false, uiBlocking: false, diagnosticsArena: false };
+    wheel(pointer, [], 0, -100);
+    expect(zoom.targetZoom).toBe(1);
+    binding.updateFrame({ ...frame, uiBlocking: true });
+    wheel(pointer, [], 0, -100);
+    expect(zoom.targetZoom).toBe(1);
+    binding.updateFrame(frame);
+    wheel(pointer, [{ scrollFactorX: 0 }], 0, -100);
+    expect(zoom.targetZoom).toBe(1);
+    wheel(pointer, [{ scrollFactorX: 1 }], 0, -100);
+    expect(zoom.targetZoom).toBeGreaterThan(1);
+    binding.destroy();
+    expect(pointerOff).toHaveBeenCalledWith('wheel', wheel);
+  });
+
   it.each(['no_fire_sources', 'placement'] as const)('shows ultimate rejection feedback for %s', async reason => {
     const { binding, actions, inputSystem } = makeInput();
     vi.mocked(actions.getPlayerCapabilities).mockReturnValue({ canInteract: true, canUseCombat: true } as never);

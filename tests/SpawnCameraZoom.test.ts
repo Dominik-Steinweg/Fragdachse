@@ -43,7 +43,22 @@ describe('spawn close-up zoom', () => {
     expect(zoom.sample(10_000 + releaseMs)).toBe(1);
   });
 
-  it('drops the close-up at once when cancelled, for example by death', () => {
+  it('closes in on a death and lets the respawn continue from that level without a jump', () => {
+    const zoom = new SpawnCameraZoom();
+    zoom.begin(0, false);
+    zoom.sample(10_000);
+    zoom.death(10_000);
+    expect(zoom.sample(10_000)).toBe(1);
+    const closing = samples(zoom, 10_000, 10_000 + SPAWN_CAMERA_ZOOM.deathMs);
+    closing.forEach((value, i) => { if (i > 0) expect(value).toBeGreaterThanOrEqual(closing[i - 1]); });
+    const held = zoom.sample(30_000);
+    expect(held).toBeCloseTo(SPAWN_CAMERA_ZOOM.cutZoom, 6);
+    zoom.begin(30_000, false);
+    expect(zoom.sample(30_000)).toBeCloseTo(held, 6);
+    expect(zoom.sample(30_000 + pushInMs + dwellMs + releaseMs)).toBe(1);
+  });
+
+  it('drops the close-up at once when cancelled, without a figure to show', () => {
     const zoom = new SpawnCameraZoom();
     zoom.begin(0, true);
     zoom.cancel();
