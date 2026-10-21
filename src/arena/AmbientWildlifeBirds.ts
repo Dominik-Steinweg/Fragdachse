@@ -561,8 +561,13 @@ export class AmbientWildlifeBirds {
     const spread = !grounded || bird.phase === 'mantle' ? 1 : 0;
     bird.wings += clamp(spread - bird.wings, -dt * 5, dt * 5);
     if (bird.phase !== 'landing') bird.lift += clamp((grounded ? 0 : 1) - bird.lift, -dt * 4, dt / TUNING.birdFlight.takeoffSeconds);
-    const forced = !grounded && (bird.targetHeight - bird.altitude > 4 || bird.phase === 'climb'
-      || (bird.phase === 'flight' && a.phaseTime < .8) || a.fleeing);
+    // Small birds beat whenever they climb or flee; ravens and owls only beat their way off the
+    // ground and up, then return to their gliding rhythm even on an alarmed flight.
+    const soaring = a.kind === 'raven' || a.kind === 'owl';
+    const forced = !grounded && (soaring
+      ? (bird.phase === 'flight' && a.phaseTime < 1.2) || (bird.phase === 'climb' && a.phaseTime < 1.6)
+        || (bird.targetHeight - bird.altitude > 30 && a.phaseTime < 3)
+      : bird.targetHeight - bird.altitude > 4 || bird.phase === 'climb' || (bird.phase === 'flight' && a.phaseTime < .8) || a.fleeing);
     bird.flap += clamp((forced ? 1 : 0) - bird.flap, -dt * 2, dt * 6);
     if (!grounded) a.animation += dt * t.flapHz * TAU;
   }
