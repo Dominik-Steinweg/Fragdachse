@@ -12,6 +12,7 @@ import { prepareWildlifeVisuals } from './AmbientWildlifeGeometry';
 import { prepareBirdVisuals, projectBirdShadow, type BirdVisual } from './AmbientWildlifeBirdGeometry';
 import { birdDrawScale, writeBirdLayerWeights } from './AmbientWildlifeBirds';
 import { fireflyGlowStrength } from './AmbientWildlifeAppearance';
+import { AmbientWildlifeAudio, type WildlifeAudioPort } from './AmbientWildlifeAudio';
 import { createAmbientWildlifeLayer, type AmbientWildlifeLayer, type WildlifeLayerProjection } from './AmbientWildlifeLayer';
 import { AmbientWildlifeModel, type WildlifeAnimal, type WildlifeImpulseKind, type WildlifeMover } from './AmbientWildlifeModel';
 
@@ -39,6 +40,7 @@ export class AmbientWildlifeRenderer {
   private readonly fireflies: AmbientWildlifeLayer;
   private readonly birds: readonly BirdVisual[];
   private readonly birdLayers: readonly AmbientWildlifeLayer[];
+  private readonly audio: AmbientWildlifeAudio;
   private readonly weights = { ground: 0, low: 0, high: 0 };
   private readonly moonBase = { weight: 0, cover: 0 };
   private readonly shadow = { x: 0, y: 0, alpha: 0 };
@@ -87,6 +89,7 @@ export class AmbientWildlifeRenderer {
         { project: (v, out) => place(v, out, v.presence.high, v.presence.tint) }),
     ];
     for (const layer of this.birdLayers) registerGraphicsObject(scene, 'ambientWildlife', layer);
+    this.audio = new AmbientWildlifeAudio(this.model.animals);
   }
 
   /** Borrow the active World atmosphere; depths also remain valid during a terrain handoff. */
@@ -96,7 +99,7 @@ export class AmbientWildlifeRenderer {
   }
 
   update(deltaMs: number, movers: readonly WildlifeMover[], view: ChunkWorldRect, timeOfDayMinutes?: number,
-    lighting?: WildlifeLighting): void {
+    lighting?: WildlifeLighting, audio?: WildlifeAudioPort): void {
     if (this.destroyed) return;
     this.visualTime += Math.max(0, Math.min(deltaMs / 1000, .05));
     this.model.update(deltaMs, movers, view, timeOfDayMinutes);
@@ -105,6 +108,7 @@ export class AmbientWildlifeRenderer {
     this.fireflies.updatePose(view, this.visualTime, this.sunlight);
     this.updateBirds(view, timeOfDayMinutes ?? DEFAULT_TIME_OF_DAY_MINUTES, lighting);
     for (const layer of this.birdLayers) layer.updatePose(view, this.visualTime);
+    this.audio.update(deltaMs, view, audio);
     if (lighting && lighting !== this.lighting) {
       this.clearLights();
       this.lighting = lighting;

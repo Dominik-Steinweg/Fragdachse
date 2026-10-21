@@ -33,6 +33,14 @@ Für **jede** ID in der Tabelle lautet der eigene Zielpfad **`public/assets/soun
 | Belohnungsitem ausgewählt | `sfx_item_selected` | Lokal nach erfolgreicher Entscheidung für eines der drei Angebote; ersetzt Menüklick |
 | Tesla aktiviert | `sfx_tesla_activate` | Räumlich über vorhandenen Renderer; replizierte Aktivierungssequenz |
 | Felsen platziert | `sfx_place_rock` | Räumlich über vorhandene Platzierungspfade; bestätigte neue Platzierung |
+| Spatzenschwarm fliegt auf | `sfx_wildlife_sparrow_flush` | Räumlich, lokal; einmal je sichtbarem Schwarmabflug, Lautstärke nach Schwarmgröße |
+| Spatzen tschilpen | `sfx_wildlife_sparrow_chirp` | Räumlich, lokal; gelegentlich bei Spatzen am Boden in Kameranähe |
+| Elster schackert | `sfx_wildlife_magpie_chatter` | Räumlich, lokal; aufgeschreckter Abflug und selten im Leerlauf |
+| Rabe krächzt | `sfx_wildlife_raven_croak` | Räumlich, lokal; gelegentlich am Boden oder im Flug, manchmal beim aufgeschreckten Abflug |
+| Waldkauz ruft | `sfx_wildlife_owl_hoot` | Räumlich, lokal; nachts gelegentlich auf Patrouille oder beim Kreisen |
+| Krähenvogel fliegt auf | `sfx_wildlife_wing_flap` | Räumlich, lokal; ruhiger Abflug von Elster oder Rabe; Eulen fliegen lautlos |
+
+Vogelstimmen sind lokale Präsentation ohne Bridge-Ereignis: [AmbientWildlifeAudio](../src/arena/AmbientWildlifeAudio.ts) liest die einmaligen Signale des Wildlife-Modells, spielt nur für Vögel in Kameranähe, startet höchstens einen Vogelton pro Frame und hält je Sound einen Mindestabstand. Mitspieler hören deshalb nicht zwingend dieselben Vögel.
 
 Die zentrale Pickup-Zuordnung steht in [GameplayAudioFeedback.ts](../src/audio/GameplayAudioFeedback.ts). Reine HUD-Buffs bekommen keinen Pickup-Ton. Direkte Aufnahme und Netzwerk-RPC verwenden denselben erfolgreichen `PowerUpSystem.onPickupCollected`-Abschluss mit Objekt-ID, Definition-ID und Position.
 

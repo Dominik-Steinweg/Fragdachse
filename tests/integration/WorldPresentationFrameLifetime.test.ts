@@ -678,12 +678,12 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     const residency = vi.spyOn(ArenaBuilder, 'updateSurfaceResidency').mockImplementation(() => {});
     try {
       binding.syncSurfaceResidency(true, 0);
-      expect(wildlife.update).toHaveBeenLastCalledWith(0, [], expect.any(Object), 22 * 60, expect.any(Object));
+      expect(wildlife.update).toHaveBeenLastCalledWith(0, [], expect.any(Object), 22 * 60, expect.any(Object), undefined);
       players.push({ id: 'visible', active: true, displayObject: { visible: true, alpha: 1, x: 120, y: 90 } },
         { id: 'hidden', active: true, displayObject: { visible: false, alpha: 1, x: 0, y: 0 } },
         { id: 'absent', active: false, displayObject: null });
       binding.syncSurfaceResidency(true, 25);
-      expect(wildlife.update).toHaveBeenLastCalledWith(25, [{ id: 'visible', x: 120, y: 90, radius: 0 }], expect.any(Object), 22 * 60, expect.any(Object));
+      expect(wildlife.update).toHaveBeenLastCalledWith(25, [{ id: 'visible', x: 120, y: 90, radius: 0 }], expect.any(Object), 22 * 60, expect.any(Object), undefined);
       binding.notifyWildlifeShot('visible');
       binding.notifyWildlifeShot('hidden');
       binding.notifyWildlifeShot('absent');
@@ -707,12 +707,13 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     const wildlife = { update: vi.fn(), notifyImpulse: vi.fn(), clearLights: vi.fn(), destroy: vi.fn() };
     const arena = { wildlife } as unknown as ArenaBuilderResult;
     const observers: ExplosionObserver[] = [];
-    const release = vi.fn();
+    const release = vi.fn(), audio = { playSound: vi.fn() };
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
       getLocalWorldPresentation: () => PREVIEW_PRESENTATION,
       getArenaResult: () => arena,
       getPlayers: () => [],
       explosions: { bindExplosionObserver: observer => { observers.push(observer); return release; } },
+      wildlifeAudio: audio,
     }));
     const enemy = (id: string, x: number, y: number, size: number, visible = true): MovementVisualSource => ({
       readMovementVisualSample: out => { Object.assign(out, { id, x, y, size, visible, isBurrowDash: false }); },
@@ -724,7 +725,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       binding.syncSurfaceResidency(true, 16, { forEachEnemy: visit => enemies.forEach(visit) });
       // Larger bodies alarm from their edge: half the size beyond a player-sized body.
       expect(wildlife.update).toHaveBeenLastCalledWith(16, [{ id: 'wolf', x: 200, y: 100, radius: 16 }],
-        expect.any(Object), 22 * 60, expect.any(Object));
+        expect.any(Object), 22 * 60, expect.any(Object), audio);
       expect(observers).toHaveLength(1);
       observers[0](40, 50, 80, 'default');
       expect(wildlife.notifyImpulse).toHaveBeenCalledExactlyOnceWith('explosion', 40, 50, 80);

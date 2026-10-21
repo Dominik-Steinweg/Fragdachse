@@ -192,6 +192,8 @@ export interface WorldPresentationFrameBindingInput {
   };
   /** Destructive explosions disturb this World's wildlife, independent of the ground fog. */
   readonly explosions?: Pick<EffectSystem, 'bindExplosionObserver'>;
+  /** Positional bird sounds; absent in previews and editors without game audio. */
+  readonly wildlifeAudio?: import('../arena/AmbientWildlifeAudio').WildlifeAudioPort;
   /** Activity moonlight for the World's sun owner (Dawn blood moon); undefined = the World sky. */
   readonly getActivityMoonlight?: () => import('../effects/sunlight/WorldSunlightPresentation').ActivityMoonlight | undefined;
   /** Activity share of the void danger (permanent hazards, presence); null = the World's own. */
@@ -604,7 +606,7 @@ export class WorldPresentationFrameBinding {
     if (wildlife) {
       this.collectWildlifeMovers(worldView, enemies);
       wildlife.update(deltaMs, this.wildlifeMovers, worldView,
-        this.input.lighting.getTimeOfDayMinutes(), this.input.lighting);
+        this.input.lighting.getTimeOfDayMinutes(), this.input.lighting, this.input.wildlifeAudio);
     }
     this.input.shadow.updateStaticResidency(worldView);
   }
