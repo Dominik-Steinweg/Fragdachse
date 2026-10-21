@@ -186,8 +186,8 @@ export class WorldSunlightPresentation {
  /** Flat x/y pairs of void lily colonies of the current woodland layout. */
  private readonly voidPondPoints:number[]=[];
  private readonly voidRockPoints:number[]=[];
- /** Water night input: weight follows the lamps' own dusk curve, lamps are pulled per chunk. */
- private readonly waterNight={night:0,lights:(x:number,y:number,width:number,height:number,out:SurfaceLightFrame)=>
+ /** Night input of wet surfaces (water, blood): weight follows the lamps' own dusk curve, lamps are pulled per area. */
+ readonly waterNight={night:0,lights:(x:number,y:number,width:number,height:number,out:SurfaceLightFrame)=>
   this.targets.lighting.sampleSurfaceLights(x,y,width,height,out,getGraphicsQualityProfile(this.scene).sunlight.surfaceLights)};
  private moonTimeSec=0;
  /**

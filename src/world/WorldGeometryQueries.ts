@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { MuzzleOrigin } from '../config';
-import { CombatGeometry, type ObstacleTraceOptions } from '../systems/CombatGeometry';
+import { CombatGeometry, type ObstacleHitKind, type ObstacleTraceOptions } from '../systems/CombatGeometry';
 import type { ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
 import type { WorldMetrics } from './WorldMetrics';
 
@@ -30,6 +30,12 @@ export interface WorldGeometryQueries {
   ): boolean;
   /** Circle clearance query for mechanics such as Burrow exit placement. */
   isCircleBlocked(x: number, y: number, radius: number): boolean;
+  /**
+   * First obstacle that stops direct fire on the segment, with its entry point. Presentation
+   * traces (blood spray) use it; arena walls and the train are not part of it.
+   */
+  traceDirectFire(startX: number, startY: number, endX: number, endY: number):
+    { readonly x: number; readonly y: number; readonly distance: number; readonly kind: ObstacleHitKind } | null;
   /** Bounded deterministic ground placement. Null means invalid geometry, never a renderer fallback. */
   resolveSafeGroundPoint(x: number, y: number, radius: number): { x: number; y: number } | null;
   resolveSafeGameplayMuzzle(
@@ -179,6 +185,13 @@ export function createWorldGeometryQueries(input: WorldGeometryQueryInput): Worl
     isCircleBlocked: (x, y, radius) => (
       active() ? input.index.isCircleBlocked(x, y, radius) : false
     ),
+    traceDirectFire: (startX, startY, endX, endY) => {
+      if (!active()) return null;
+      const adapter = ensureGeometry();
+      adapter.line.setTo(startX, startY, endX, endY);
+      const hit = adapter.geometry.nearestObstacleHit(adapter.line, { purpose: 'directFire' });
+      return hit ? { x: hit.x, y: hit.y, distance: hit.distance, kind: hit.kind } : null;
+    },
     resolveSafeGameplayMuzzle,
     ...(input.resolveTargetGeometry
       ? { resolveTargetGeometry: (targetId: string, targetType: string) => (

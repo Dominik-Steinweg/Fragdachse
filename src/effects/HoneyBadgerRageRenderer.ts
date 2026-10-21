@@ -3,6 +3,7 @@ import { BLOOD_HIT_VFX, DEPTH } from '../config';
 import { ULTIMATE_CONFIGS, type BuffUltimateConfig } from '../loadout/LoadoutConfig';
 import type { GlowHandle } from '../utils/phaserFx';
 import { TEX_BLOOD_DROPLET, TEX_BLOOD_STREAK, ensureBloodHitTextures, spawnBloodStain } from './BloodEffectShared';
+import { BloodFieldSystem } from './blood/BloodFieldSystem';
 import { circleZone, createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, mixColors } from './EffectUtils';
 
 const TEX_RAGE_AURA_OUTER = '__honey_badger_rage_aura_outer';
@@ -266,19 +267,24 @@ export class HoneyBadgerRageRenderer {
         onComplete: () => {
           if (!this.transient.delete(streak)) return;
           streak.destroy();
-          if (leaveStain) {
-            spawnBloodStain(this.scene, {
-              x: endX,
-              y: endY,
-              scale: Phaser.Math.FloatBetween(0.86, 1.42),
-              alpha: Phaser.Math.FloatBetween(0.34, 0.5),
-              fadeMs: Phaser.Math.Between(7800, 10800),
-              tint,
-              rotation: Phaser.Math.FloatBetween(-Math.PI, Math.PI),
-              depth: DEPTH_RAGE_STAIN,
-              stainDelayMs: BLOOD_HIT_VFX.stainDelayMs,
-            });
+          if (!leaveStain) return;
+          // WebGL: the splash pours into the scene's blood field and merges with nearby pools.
+          const field = BloodFieldSystem.for(this.scene);
+          if (field) {
+            field.pour(endX, endY, Phaser.Math.FloatBetween(40, 110), Phaser.Math.Between(0, 0x7fffffff));
+            return;
           }
+          spawnBloodStain(this.scene, {
+            x: endX,
+            y: endY,
+            scale: Phaser.Math.FloatBetween(0.86, 1.42),
+            alpha: Phaser.Math.FloatBetween(0.34, 0.5),
+            fadeMs: Phaser.Math.Between(7800, 10800),
+            tint,
+            rotation: Phaser.Math.FloatBetween(-Math.PI, Math.PI),
+            depth: DEPTH_RAGE_STAIN,
+            stainDelayMs: BLOOD_HIT_VFX.stainDelayMs,
+          });
         },
       });
     }

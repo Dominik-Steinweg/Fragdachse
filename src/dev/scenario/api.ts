@@ -2,6 +2,7 @@ import { runWatchtowerReview, releaseWatchtowerReview } from './WatchtowerReview
 import { setReactivePropVariantOverride } from '../../effects/reactiveProps/ReactivePropVariantOverride';
 import { runBridgeReview, releaseBridgeReview, runBridgeCommand } from './BridgeReview';
 import { runPortalReview, releasePortalReview } from './PortalReview';
+import { runBloodReview, releaseBloodReview } from './BloodReview';
 import { runInspectorUltimatesReview, inspectorUltimatesStatus, releaseInspectorUltimatesReview } from './InspectorUltimatesReview';
 import type { DevScenarioController } from './controller';
 import { parseScenario, type GridPoint } from './config';
@@ -72,6 +73,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     case 'watchtowerReview': return runWatchtowerReview(controller, c);
     case 'bridgeReview': return runBridgeReview(controller, c);
     case 'portalReview': return runPortalReview(controller, c);
+    case 'bloodReview': return runBloodReview(controller, c);
     case 'bridge': return runBridgeCommand(controller, c);
     case 'inspectorUltimates': return runInspectorUltimatesReview(controller, c);
     case 'krakenReview': return controller.arrangeKrakenReview(c);
@@ -332,6 +334,7 @@ export function installScenarioApi(controller: DevScenarioController) {
     releaseWatchtowerReview(controller);
     releaseBridgeReview(controller);
     releasePortalReview(controller);
+    releaseBloodReview(controller);
     releaseInspectorUltimatesReview(controller);
     for (const check of waiters) check();
     if (window.devScenario === api) delete window.devScenario;

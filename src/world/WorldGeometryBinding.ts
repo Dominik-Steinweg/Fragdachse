@@ -226,6 +226,9 @@ export class WorldGeometryBinding implements WorldScopedBinding {
   /** Current collision water. Placement and spawn rules deliberately keep authored water. */
   getCollisionWater(): WaterGeometry { return this.collisionWater; }
 
+  /** Bridges whose deck has collapsed into the water; the others still stand. */
+  getCollapsedBridgeIds(): ReadonlySet<string> { return this.collapsedBridgeIds; }
+
   /**
    * Projects the bridge owner's state: collapsed decks become collision water again. Host
    * physics, client prediction and the navigation snapshot all read the new instance; the grid

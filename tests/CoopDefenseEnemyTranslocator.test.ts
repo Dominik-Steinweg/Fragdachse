@@ -33,6 +33,7 @@ function createSystem(
   hasClearLineOfFire: (...args: unknown[]) => boolean,
   kind = 'void-stalker',
   catalog: EnemyAiTargetCatalog | null = null,
+  findSafeGround: ((x: number, y: number, radius: number, cells: number) => { x: number; y: number } | null) | null = null,
 ) {
   const enemy = fakeEntity({ id: 'void-stalker-1',
     kind,
@@ -82,7 +83,9 @@ function createSystem(
       catalog,
       undefined,
       translocatorProjectilePort,
+      findSafeGround,
     ),
+    enemy,
     hasClearLineOfFire,
     spawnPuck,
     spawnProjectile,
@@ -135,6 +138,33 @@ describe('Void-Stalker Translocator', () => {
     clear = false;
     f.system.hostUpdate(2 * ability.flightTimeMs + ability.cooldownMs);
     expect(f.combatSystem.applyStructureDamage).toHaveBeenCalledTimes(1);
+  });
+
+  it('lands the whole body on nearby free ground instead of the raw puck point', () => {
+    const findSafeGround = vi.fn(() => ({ x: 776, y: 312 }));
+    const f = createSystem(() => true, 'void-stalker', null, findSafeGround);
+    f.translocatorProjectilePort.getPuckPosition = () => ({ x: 790, y: 300 });
+    f.translocatorProjectilePort.consumePuck = () => true;
+    const ability = getCoopDefenseEnemyConfig('void-stalker').translocator!;
+    f.system.hostUpdate(0);
+    f.system.hostUpdate(ability.flightTimeMs);
+    expect(findSafeGround).toHaveBeenCalledWith(790, 300, 16, expect.any(Number));
+    expect(f.enemy.setPosition).toHaveBeenCalledExactlyOnceWith(776, 312);
+  });
+
+  it('drops the jump when no free ground lies near the puck', () => {
+    const f = createSystem(() => true, 'void-stalker', null, () => null);
+    const consumePuck = vi.fn(() => true);
+    f.translocatorProjectilePort.getPuckPosition = () => ({ x: 790, y: 300 });
+    f.translocatorProjectilePort.consumePuck = consumePuck;
+    const ability = getCoopDefenseEnemyConfig('void-stalker').translocator!;
+    f.system.hostUpdate(0);
+    f.system.hostUpdate(ability.flightTimeMs);
+    expect(consumePuck).toHaveBeenCalledOnce();
+    expect(f.enemy.setPosition).not.toHaveBeenCalled();
+    expect(f.combatSystem.applyDamage).not.toHaveBeenCalled();
+    f.system.hostUpdate(ability.flightTimeMs + 1);
+    expect(f.spawnPuck).toHaveBeenCalledOnce();
   });
 
   it('passes puck radius and safety margin to the path check', () => {

@@ -483,6 +483,7 @@ export class ArenaLifecycleCoordinator {
         isArenaLoading: () => bridge.isArenaLoading(),
         isArenaCountdownActive: () => bridge.isArenaCountdownActive(),
         isLoadingVeilShown: () => this.ctx.arenaCountdown?.isLoading() ?? false,
+        stagesLocalSpawn: !isLobbyWorldDefinitionId(this.worldRuntime.descriptor.definitionId),
         getArenaResult: () => this.worldRuntime?.materialization?.arena ?? null,
         clientWorldPresentation: {
           timeBubble: this.renderers.timeBubble,

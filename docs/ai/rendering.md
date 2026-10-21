@@ -67,7 +67,7 @@ Die World-Kamera trägt World-FX und Camera-Feedback. Eine transparente Clarity-
 
 Camera-Feedback besitzt einen zentralen Owner: [CameraFeedbackController.ts](../../src/effects/camera/CameraFeedbackController.ts) und [CameraFeedbackModel.ts](../../src/effects/camera/CameraFeedbackModel.ts) sammeln, priorisieren, begrenzen und lösen Requests. Gameplay ruft keine direkten Kamera-Shakes auf; der Feedback-Offset verändert nicht die fachliche World- oder Pointer-Geometrie.
 
-Inszenierter Zoom (Boss-Intros über [cameraFocusOverride.ts](../../src/graphics/cameraFocusOverride.ts), Spawn-Nahaufnahme über [SpawnCameraZoom.ts](../../src/effects/camera/SpawnCameraZoom.ts)) multipliziert den Designzoom der Weltkamera. Allein die Kameraverfolgung in [WorldPresentationFrameBinding.ts](../../src/world/WorldPresentationFrameBinding.ts) wendet ihn an: Der größere Faktor gewinnt, Zoomwechsel halten die Mitte des Arena-Ausschnitts fest, die Residency hält währenddessen die ungezoomte Spielansicht vor, und World-Teardown setzt den Zoom zurück. Kameras, die die Verfolgung ersetzen (Dev-Szenario), lesen den angewandten Faktor über `getAppliedStagedZoom`. Bildschirmfeste Ebenen, die Weltpunkte selbst in Designkoordinaten umrechnen, multiplizieren mit dem Zusatzzoom (`camera.zoomX` geteilt durch die Renderskalierung), siehe `resolveRadialFocusFrame` in [radialFocusState.ts](../../src/effects/postfx/radialFocusState.ts).
+Zusatzzoom der Weltkamera multipliziert den Designzoom und ist nie kleiner als 1: Die Standardansicht ist die weiteste Sicht. Der Spieler wählt per Mausrad eine Grundsicht ([PlayerCameraZoom.ts](../../src/effects/camera/PlayerCameraZoom.ts)), Spawn- und Todesnahaufnahme ([SpawnCameraZoom.ts](../../src/effects/camera/SpawnCameraZoom.ts)) setzen darauf auf, ein Boss-Intro ([cameraFocusOverride.ts](../../src/graphics/cameraFocusOverride.ts)) gewinnt nur, wenn es näher heranholt. Allein die Kameraverfolgung in [WorldPresentationFrameBinding.ts](../../src/world/WorldPresentationFrameBinding.ts) wendet den Zoom an. Sie glättet den gezeigten Weltpunkt, nie den geklemmten Ausschnitt; der Ausschnitt entsteht jeden Frame exakt aus Punkt, Zoom und Klemmung, sonst zöge die Kamera am Arenarand nach jeder Zoomänderung nach. Die Residency hält während eines Zooms die Standardansicht vor, World-Teardown setzt den Zoom zurück. Kameras, die die Verfolgung ersetzen (Dev-Szenario), lesen den angewandten Faktor über `getAppliedStagedZoom`. Bildschirmfeste Ebenen, die Weltpunkte selbst in Designkoordinaten umrechnen, multiplizieren mit dem Zusatzzoom (`camera.zoomX` geteilt durch die Renderskalierung), siehe `resolveRadialFocusFrame` in [radialFocusState.ts](../../src/effects/postfx/radialFocusState.ts).
 
 GPU-Fels-/Mauerflächen, Power-Up-Podeste und GPU-VFX verwenden
 [GpuLayerCameraTransform.ts](../../src/graphics/GpuLayerCameraTransform.ts), damit ihre View-Matrix
@@ -167,6 +167,11 @@ Das Feld gehoert zum `WaterSurfaceRenderer` (World-Lifetime, GPU-Ziel erst beim 
 wird vom Wassershader in dessen eigenem Licht schattiert (Himmelsreflex, Sonnenglanz, Schaum als
 Rauschspitze). Overlays zeichnen nur, was ueber der Oberflaeche liegt (Gischt, Nebel, Koerper unter
 Wasser); Spielregeln lesen das Feld nie.
+
+Was ins Wasser faellt, wird Faerbung des Wasserkoerpers statt Decal: Owner leihen dem Renderer ueber
+`WaterSurfaceRenderer.setDye(...)` eine Textur (Dichte in B, optional ein Farbton) ueber einem Weltrechteck;
+der Wassershader faerbt nur den Koerper, vor Reflexen, Wellen und Glanz. Landmarken liegen unter
+`DEPTH.WATER`, damit das Wasser sie verdeckt. Beispiel: das Blutfeld ([BloodFieldSystem.ts](../../src/effects/blood/BloodFieldSystem.ts)).
 
 [ArenaBuilder.ts](../../src/arena/ArenaBuilder.ts) trennt Runtime-/Physik-Proxies von visuellen World-Objekten. Ohne Presentation werden World-Physik, Runtime-Geometrie und notwendige Indizes weiter aufgebaut; nur die visuellen Flächen, Overlays und Streamer entfallen. Renderer beobachten Runtime und werden bei Teardown vollständig gelöst.
 

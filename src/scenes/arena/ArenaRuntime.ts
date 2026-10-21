@@ -1,4 +1,5 @@
 import { getConstructionBounds } from '../../systems/ConstructionGeometry';
+import { createBloodWorldSource } from './BloodWorldSource';
 import type Phaser from 'phaser';
 import { bridge } from '../../network/bridge';
 import { isDiagnosticMapId } from '../../config/coopDefenseMaps';
@@ -226,6 +227,9 @@ export class ArenaRuntime {
     this.weaponBalanceLabPort = createWeaponBalanceLabWorldPort(this.flow, this.ctx.playerManager);
     this.navigationLabPort = createNavigationLabWorldPort(this.flow, this.ctx.playerManager);
     this.devScenarioPort = createDevScenarioWorldPort(this.flow, this.ctx.playerManager, input.rockVisualHelper);
+    // Blood reads the live World's rocks, water, bridges and sky; a new World starts a clean field.
+    input.renderers?.bloodField?.setWorldSource(createBloodWorldSource(this.flow));
+    input.ctx?.effectSystem?.setBloodColorResolver?.(this.resolveBloodColor);
     this.strategicTargetsPort = createArenaStrategicTargetsPort(this.flow);
     this.presentation = createArenaRuntimePresentationPort(
       this.syncWorldCamera.bind(this),
@@ -745,6 +749,20 @@ export class ArenaRuntime {
 
   getScenarioPortalTargets() {
     return { scene: this.scene, portals: this.renderers.portals };
+  }
+
+  /** Authored blood colour of a hit enemy; players and unknown targets bleed the default red. */
+  readonly resolveBloodColor = (targetId: string): number | null => {
+    const kind = this.flow.getWorldEnemyManager()?.getEnemy(targetId)?.kind;
+    return kind ? getCoopDefenseEnemyConfig(kind).bloodColor ?? null : null;
+  };
+
+  getScenarioBloodTargets() {
+    const world = this.flow.getWorldRuntime();
+    return { scene: this.scene, effects: this.ctx.effectSystem, blood: this.renderers.bloodField,
+      resolveBloodColor: this.resolveBloodColor,
+      layout: world?.presentation?.layout ?? null, metrics: world?.context.metrics ?? null,
+      geometry: this.flow.getWorldGeometryBinding() };
   }
 
   getScenarioMeteorTargets() {

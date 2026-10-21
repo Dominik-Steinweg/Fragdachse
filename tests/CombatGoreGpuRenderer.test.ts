@@ -23,6 +23,28 @@ import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { getGpuVfxFrameAnimation, GpuVfxFrameAnimationId } from '../src/effects/gpu/GpuVfxFrameAnimations';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
+import type { BloodHitPort } from '../src/effects/blood/BloodFieldSystem';
+import type { BloodFlightKind } from '../src/effects/blood/BloodMarkPlanner';
+
+interface RecordedFlight { kind: BloodFlightKind; x: number; y: number; travel: number; delayMs: number }
+/** Records landed flights; `maxTravel` stands in for a wall the spray cannot pass. */
+function recordingBlood(maxTravel = Infinity): { port: BloodHitPort; flights: RecordedFlight[]; hits: number } {
+  const record = { flights: [] as RecordedFlight[], hits: 0 } as { port: BloodHitPort; flights: RecordedFlight[]; hits: number };
+  record.port = {
+    beginHit: () => { record.hits++; },
+    endHit: () => {},
+    land: (sx, sy, ex, ey, _over, out) => {
+      const length = Math.hypot(ex - sx, ey - sy), travel = Math.min(length, maxTravel), k = length > 0 ? travel / length : 0;
+      out.x = sx + (ex - sx) * k; out.y = sy + (ey - sy) * k; out.travel = travel;
+      out.surface = travel < length ? 'rockFace' : 'ground'; out.nx = 0; out.ny = 0;
+      return out;
+    },
+    flight: (kind, landing, _sx, _sy, _ratio, _scale, delayMs) => {
+      record.flights.push({ kind, x: landing.x, y: landing.y, travel: landing.travel, delayMs });
+    },
+  };
+  return record;
+}
 
 interface CanvasStats {
   drawCalls: number;
@@ -252,7 +274,7 @@ describe('combat gore gpu renderer', () => {
 
   it('keeps blood deterministic and separates killshot details through the shared lanes', () => {
     const { scene, renderer } = setup();
-    const stains: number[] = [];
+    const blood = recordingBlood();
     const hit = {
       type: 'hit' as const,
       x: 100,
@@ -271,12 +293,13 @@ describe('combat gore gpu renderer', () => {
     const originalCoreEnabled = BLOOD_HIT_VFX.bloodCoreEnabled;
     Object.assign(BLOOD_HIT_VFX, { bloodCoreEnabled: true });
     try {
-      renderer.playHit(hit, (...args) => stains.push(args[7]));
+      renderer.playHit(hit, blood.port);
     } finally {
       Object.assign(BLOOD_HIT_VFX, { bloodCoreEnabled: originalCoreEnabled });
     }
 
-    expect(stains.length).toBeGreaterThan(0);
+    expect(blood.hits).toBe(1);
+    expect(blood.flights.some(flight => flight.kind === 'streak' && flight.delayMs > 0)).toBe(true);
     expect(findFakeLane(scene, 'gore-normal').members.length).toBeGreaterThan(0);
     expect(scene.objects).toHaveLength(0);
   });
@@ -619,8 +642,8 @@ describe('combat gore gpu renderer', () => {
   it('keeps killshot core splashes compact while preserving stronger flight blood and stains', () => {
     const normal = setup();
     const killshot = setup();
-    const normalStains: number[] = [];
-    const killshotStains: number[] = [];
+    const normalBlood = recordingBlood();
+    const killshotBlood = recordingBlood();
     const hit = {
       type: 'hit' as const,
       x: 100,
@@ -641,8 +664,8 @@ describe('combat gore gpu renderer', () => {
     const originalStreakEnabled = BLOOD_HIT_VFX.bloodStreakEnabled;
     Object.assign(BLOOD_HIT_VFX, { bloodCoreEnabled: true, bloodStreakEnabled: true });
     try {
-      normal.renderer.playHit(hit, (...args) => normalStains.push(args[2]));
-      killshot.renderer.playHit({ ...hit, isKill: true }, (...args) => killshotStains.push(args[2]));
+      normal.renderer.playHit(hit, normalBlood.port);
+      killshot.renderer.playHit({ ...hit, isKill: true }, killshotBlood.port);
     } finally {
       Object.assign(BLOOD_HIT_VFX, {
         bloodCoreEnabled: originalCoreEnabled,
@@ -672,9 +695,10 @@ describe('combat gore gpu renderer', () => {
     expect(killshotCoreScale / normalCoreScale).toBeCloseTo(BLOOD_HIT_VFX.coreSplash.killshotScale);
     expect(killshotStreakScale).toBeGreaterThan(normalStreakScale);
     expect(killshotStreakTravel).toBeGreaterThan(normalStreakTravel);
-    expect(killshotStains.length).toBeGreaterThanOrEqual(normalStains.length);
-    expect(killshotStains.length).toBeGreaterThanOrEqual(BLOOD_HIT_VFX.bands.heavy.stainCountMin);
-    expect(killshotStains[0]).toBeGreaterThan(normalStains[0]! * 1.8);
+    const streaks = (flights: RecordedFlight[]) => flights.filter(flight => flight.kind === 'streak');
+    expect(streaks(killshotBlood.flights).length).toBeGreaterThanOrEqual(streaks(normalBlood.flights).length);
+    expect(Math.max(...streaks(killshotBlood.flights).map(f => f.travel)))
+      .toBeGreaterThan(Math.max(...streaks(normalBlood.flights).map(f => f.travel)));
   });
 
   it.each([1, 10, 100])('keeps streaks forward and connected to stain positions at %s damage', (damage) => {
@@ -691,14 +715,15 @@ describe('combat gore gpu renderer', () => {
     try {
       for (const angle of [0, Math.PI / 2, -2.4]) {
         const { renderer, scene } = setup();
-        const stains: Array<{ x: number; y: number }> = [];
+        const blood = recordingBlood();
         const hit = {
           type: 'hit' as const, x: 100, y: 120, targetId: 'enemy-1',
           totalDamage: damage, hpLost: damage, armorLost: 0,
           isKill: damage === 100, isCritical: false,
           dirX: Math.cos(angle), dirY: Math.sin(angle), seed: 42,
         };
-        renderer.playHit(hit, (x, y) => stains.push({ x, y }));
+        renderer.playHit(hit, blood.port);
+        const stains = blood.flights.filter(flight => flight.kind === 'streak');
         const members = findFakeLane(scene, 'gore-normal').members;
         expect(stains.length).toBeGreaterThan(0);
         for (const member of members) {
@@ -723,6 +748,30 @@ describe('combat gore gpu renderer', () => {
       }
     } finally {
       Object.assign(BLOOD_HIT_VFX, flags);
+    }
+  });
+
+  it('ends every flying streak and droplet where the terrain stops it', () => {
+    const { renderer, scene } = setup();
+    const wall = 14;
+    const blood = recordingBlood(wall);
+    const hit = {
+      type: 'hit' as const, x: 100, y: 120, targetId: 'enemy-1', totalDamage: 40, hpLost: 40, armorLost: 0,
+      isKill: true, isCritical: false, dirX: 1, dirY: 0, seed: 7,
+    };
+    const flags = { bloodCoreEnabled: BLOOD_HIT_VFX.bloodCoreEnabled };
+    Object.assign(BLOOD_HIT_VFX, { bloodCoreEnabled: false });
+    try {
+      renderer.playHit(hit, blood.port);
+    } finally {
+      Object.assign(BLOOD_HIT_VFX, flags);
+    }
+    expect(blood.flights.length).toBeGreaterThan(0);
+    for (const flight of blood.flights) expect(flight.travel).toBeLessThanOrEqual(wall + 1e-6);
+    for (const member of findFakeLane(scene, 'gore-normal').members) {
+      // Members start a few px ahead of the body (streak anchor, spawn push); none travels past the wall.
+      const end = evaluateFakeAnimation(member.x, 1) - hit.x;
+      expect(end).toBeLessThanOrEqual(wall + BLOOD_HIT_VFX.spawnPushPx + 1);
     }
   });
 });

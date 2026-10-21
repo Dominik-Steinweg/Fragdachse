@@ -29,6 +29,7 @@ import { WorldLifecycle, type WorldLifecycleSink } from '../../src/world/WorldLi
 import { WorldPresentationBinding } from '../../src/world/WorldPresentationBinding';
 import { WorldPresentationHandoff } from '../../src/world/WorldPresentationHandoff';
 import { getCameraBaseScroll } from '../../src/graphics/cameraBaseScroll';
+import { playerCameraZoomFor } from '../../src/effects/camera/PlayerCameraZoom';
 import { findFakeLane, makeFakeGpuVfxScene } from '../fakeGpuVfxScene';
 import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
 import type { SyncedPlaceableRock } from '../../src/types';
@@ -789,7 +790,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       return { camera, time, scene, centre, run };
     }
 
-    it('schneidet beim Spawn auf die eigene Figur, faehrt auf die Spielansicht zurueck und wiederholt das beim Respawn', () => {
+    it('schneidet beim Spawn auf die Figur, faehrt beim Tod heran und setzt den Respawn dort ohne Sprung an', () => {
       applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
       const { camera, time, scene, centre, run } = zoomableScene();
       const player = { active: true, x: 1500, y: 900 };
@@ -809,15 +810,22 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       expect(camera.useBounds).toBe(true);
       expect(centre().x).toBeCloseTo(1500, 1);
 
+      // Death: the camera closes in on where the figure fell, up to the level the respawn starts at.
       alive = false;
-      run(binding, 3100);
-      expect(camera.zoomX).toBe(1);
+      run(binding, 4500);
+      const deathZoom = camera.zoomX;
+      expect(deathZoom).toBeGreaterThan(1.2);
+      expect(centre().x).toBeCloseTo(1500, 1);
+      expect(centre().y).toBeCloseTo(900, 1);
+      // Respawn elsewhere: a cut to the new spot that continues from the death level.
       Object.assign(player, { x: 3000, y: 1500 });
       alive = true;
-      run(binding, 3116);
-      expect(camera.zoomX).toBeGreaterThan(1);
+      run(binding, 4516);
+      expect(Math.abs(camera.zoomX - deathZoom)).toBeLessThan(0.08);
       expect(centre().x).toBeCloseTo(3000, 3);
       expect(centre().y).toBeCloseTo(1500, 3);
+      run(binding, 7000);
+      expect(camera.zoomX).toBe(1);
 
       // A World handoff during the close-up must not leave the next World zoomed.
       binding.destroy();
@@ -845,6 +853,44 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       }
       expect(settled).toBe(0);
       expect(camera.scrollX).toBe(0);
+    });
+
+    it('inszeniert in der LobbyWorld weder Spawn noch Tod', () => {
+      applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
+      const { camera, scene, run } = zoomableScene();
+      const player = { active: true, x: 1500, y: 900 };
+      let alive = true;
+      const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene, {
+        getLocalPlayerSprite: () => player as never,
+        isLocalPlayerAlive: () => alive,
+        stagesLocalSpawn: false,
+      }));
+      run(binding, 1000);
+      expect(camera.zoomX).toBe(1);
+      alive = false;
+      run(binding, 3000);
+      expect(camera.zoomX).toBe(1);
+    });
+
+    it('zoomt per Mausrad heran und nie weiter heraus als die Standardansicht', () => {
+      applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
+      const { camera, scene, centre, run } = zoomableScene();
+      const player = { active: true, x: 1500, y: 900 };
+      const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene, {
+        getLocalPlayerSprite: () => player as never,
+        isLocalPlayerAlive: () => true,
+        stagesLocalSpawn: false,
+      }));
+      run(binding, 500);
+      const zoom = playerCameraZoomFor(scene);
+      for (let i = 0; i < 4; i++) zoom.nudge(-100);
+      run(binding, 2000);
+      expect(camera.zoomX).toBeGreaterThan(1.3);
+      expect(centre().x).toBeCloseTo(1500, 1);
+      for (let i = 0; i < 20; i++) zoom.nudge(100);
+      run(binding, 4000);
+      expect(camera.zoomX).toBe(1);
+      expect(camera.useBounds).toBe(true);
     });
 
     it('haelt die Nahaufnahme ueber den Countdown und gibt sie erst mit dem Start frei', () => {

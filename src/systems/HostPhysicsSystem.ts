@@ -29,6 +29,9 @@ import {
   type MovementBlockedCell,
 } from './GridCornerAssist';
 
+/** Anliegen an einem Hindernis gilt bei der Impuls-Sweep-Pruefung noch als frei. */
+const ENEMY_IMPULSE_CONTACT_TOLERANCE_PX = 1;
+
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType   = {
   isBurrowed(id: string): boolean;
@@ -119,6 +122,7 @@ export class HostPhysicsSystem {
   private readonly walkingSteps = new Map<string, WalkingStep>();
   private readonly consumeMovementStep = (deltaSeconds: number): void => {
     if (!this.bridge.isHost()) return;
+    this.enemyManager?.forEachEnemy(this.containEnemyImpulseStep);
     for (const player of this.playerManager.getAllPlayers()) {
       const body = player.physicsProxy.body as Phaser.Physics.Arcade.Body | null;
       if (!player.active || !body?.enable) continue;
@@ -364,9 +368,42 @@ export class HostPhysicsSystem {
       collide(body);
     });
   };
+  /**
+   * Arcade loest Felsen nur als Ueberlappung am Schrittende auf. Ein starker Rueckstoss oder
+   * Ausweichschritt traegt einen Gegner so in einem Schritt in oder durch eine Felszelle, und die
+   * Trennung schiebt ihn dann zur falschen Seite hinaus. Waehrend eines solchen Impulses wird der
+   * Schritt deshalb als Sweep geprueft und am letzten freien Punkt angehalten.
+   */
+  private readonly containEnemyImpulseStep = (enemy: EnemyEntity): void => {
+    if (!this.pendingRecoils.has(enemy.id) && !this.enemyDashStates.has(enemy.id)) return;
+    if (!enemy.sprite.active || enemy.isStationary() || this.burrowedEnemies.has(enemy.id)) return;
+    const body = enemy.sprite.body as Phaser.Physics.Arcade.Body | null;
+    if (!body?.enable) return;
+    // Arcade laesst getrennte Koerper exakt anliegen; die Toleranz haelt Kontakt fuer frei.
+    const radius = Math.max(0, body.halfWidth - ENEMY_IMPULSE_CONTACT_TOLERANCE_PX);
+    const water = enemy.usesLandWaterCollision();
+    const toX = body.center.x, toY = body.center.y;
+    if (this.canOccupyCircle(toX, toY, radius, water)) return;
+    const fromX = body.prev.x + body.halfWidth, fromY = body.prev.y + body.halfHeight;
+    // Eine schon vorher ungueltige Pose gehoert der Flowfield-Recovery, nicht diesem Schritt.
+    if (!this.canOccupyCircle(fromX, fromY, radius, water)) return;
+    const steps = Math.max(1, Math.ceil(Math.hypot(toX - fromX, toY - fromY) / Math.max(1, radius * 0.5)));
+    let safeX = fromX, safeY = fromY;
+    for (let step = 1; step < steps; step++) {
+      const x = fromX + (toX - fromX) * step / steps, y = fromY + (toY - fromY) * step / steps;
+      if (!this.canOccupyCircle(x, y, radius, water)) break;
+      safeX = x; safeY = y;
+    }
+    body.position.set(safeX - body.halfWidth, safeY - body.halfHeight);
+    body.updateCenter();
+    body.setVelocity(0, 0);
+    // Der Rest des Impulses wuerde im naechsten Schritt erneut gegen das Hindernis druecken.
+    this.pendingRecoils.delete(enemy.id);
+  };
+
   /** Landing validation reads the same static bodies that block ordinary movement. */
-  canOccupyCircle(x: number, y: number, radius: number): boolean {
-    if (this.waterGeometry?.isCircleBlocked(x, y, radius)) return false;
+  canOccupyCircle(x: number, y: number, radius: number, includeWater = true): boolean {
+    if (includeWater && this.waterGeometry?.isCircleBlocked(x, y, radius)) return false;
     const m = this.worldMetrics;
     if (!m || ![x, y, radius].every(Number.isFinite) || radius < 0
       || x - radius < m.offsetX || y - radius < m.offsetY || x + radius > m.maxX || y + radius > m.maxY) return false;
