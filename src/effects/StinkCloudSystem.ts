@@ -53,9 +53,16 @@ const ELEC_EDGE       = [0xcdefff, 0x9fe8ff, 0xffffff] as const;
 const ELEC_ARC        = 0xbdefff;
 const ELEC_ARC_BRIGHT = 0xffffff;
 
+/** Reactive map-prop zone (puffball): slows the trigger's enemies, deals no environment damage. */
+export interface StinkCloudReactiveZone {
+  readonly slowFraction: number;
+  readonly slowDurationMs: number;
+}
+
 /* ── Damage event (returned to host for WorldCombatCore processing) ── */
 export interface StinkCloudDamageEvent {
   combatSource?: import('../combat/CombatScope').CombatSource;
+  readonly reactive?: StinkCloudReactiveZone;
   readonly cloudId: number;
   readonly kind: 'player-primary' | 'enemy-aura' | 'stationary';
   readonly plague?: PlagueApplication;
@@ -74,6 +81,7 @@ export interface StinkCloudDamageEvent {
 /* ── Host-side active cloud tracking ── */
 interface ActiveStinkCloud {
   combatSource?: import('../combat/CombatScope').CombatSource;
+  reactive?: StinkCloudReactiveZone;
   kind: 'player-primary' | 'enemy-aura' | 'stationary';
   plague?: PlagueApplication;
   id:             number;
@@ -136,7 +144,24 @@ const CLOUD_LIGHT: Record<DamageZoneVisualStyle, {
   spore:    { preset: 'sporeProjectile', color: 0xd9ffb0, radiusScale: 1.5, intensity: 0.5 },
   spore_void: { preset: 'sporeVoidProjectile', color: 0xe9c6ff, radiusScale: 1.5, intensity: 0.65 },
   electric: { preset: 'electricField',  color: 0xcdf1ff, radiusScale: 1.6, intensity: 1.0 },
+  puffball: { preset: 'sporeProjectile', color: 0xfff0c8, radiusScale: 1.3, intensity: 0.28 },
+  puffball_hostile: { preset: 'sporeVoidProjectile', color: 0xe9c6ff, radiusScale: 1.35, intensity: 0.45 },
 };
+
+/** Ground residue and aura tints per style; spore-like styles share the restrained alphas. */
+const GROUND_STYLE: Readonly<Record<DamageZoneVisualStyle, {
+  ground: number; additiveGround: boolean; damage: number; reaction: number; sporeLike: boolean;
+}>> = {
+  stink: { ground: TINT_GROUND_GLOW, additiveGround: false, damage: TINT_DAMAGE_GLOW, reaction: TINT_CHEM_CYAN, sporeLike: false },
+  spore: { ground: 0x5b3818, additiveGround: false, damage: 0xc7d85a, reaction: 0xf0e68c, sporeLike: true },
+  spore_void: { ground: VOID_SPORE_GROUND, additiveGround: true, damage: VOID_SPORE_DAMAGE, reaction: VOID_SPORE_REACTION, sporeLike: true },
+  electric: { ground: ELEC_GROUND, additiveGround: true, damage: ELEC_DAMAGE, reaction: ELEC_REACTION, sporeLike: false },
+  puffball: { ground: 0x5e4a26, additiveGround: false, damage: 0xd9c48c, reaction: 0xf3e6b8, sporeLike: true },
+  puffball_hostile: { ground: 0x3c2c4c, additiveGround: false, damage: 0xa882d0, reaction: 0xeedcff, sporeLike: true },
+};
+
+const PUFFBALL_DUST = [0xe6d8aa, 0xcdb47c, 0xb59a62] as const;
+const PUFFBALL_HOSTILE_DUST = [0xdcc8ea, 0xa883c4, 0x7c6290] as const;
 
 /**
  * Tint-Auswahl der vier Partikelfamilien je Variante. Einmal aufgeloest statt pro Wolke neu
@@ -166,6 +191,18 @@ const PARTICLE_TINTS: Readonly<Record<DamageZoneVisualStyle, StinkCloudParticleT
     accent: [...ELEC_PARTICLE],
     plume:  [...ELEC_PARTICLE],
     edge:   [...ELEC_EDGE],
+  },
+  puffball: {
+    inner:  [...PUFFBALL_DUST],
+    accent: [0xa98a52, 0xcdb47c, 0x8c7444],
+    plume:  [...PUFFBALL_DUST],
+    edge:   [0xeee3c2, 0xd7c48f, 0xbfa36a],
+  },
+  puffball_hostile: {
+    inner:  [...PUFFBALL_HOSTILE_DUST],
+    accent: [0x8e64ad, 0xb48fd0, 0x6c4c84],
+    plume:  [...PUFFBALL_HOSTILE_DUST],
+    edge:   [0xeadcf4, 0xc6a8de, 0x9a7ab4],
   },
 };
 
@@ -250,6 +287,48 @@ export class StinkCloudSystem {
       afterCloudDurationMs,
       afterCloudRadiusFactor,
       afterCloudDamageFactor,
+    });
+    return id;
+  }
+
+  /**
+   * Host-only: spore cloud of a reactive map prop. It belongs to the captured trigger source, ticks
+   * immediately, damages no rocks, trains or bases and outlives its owner's death or burrow.
+   */
+  hostCreateReactiveZone(zone: {
+    readonly ownerId: string; readonly x: number; readonly y: number; readonly radius: number;
+    readonly durationMs: number; readonly damagePerTick: number; readonly tickIntervalMs: number;
+    readonly slowFraction: number; readonly slowDurationMs: number;
+    readonly visualVariant: DamageZoneVisualStyle;
+    readonly combatSource: import('../combat/CombatScope').CombatSource;
+    readonly now: number;
+  }): number {
+    this.hostNow = zone.now;
+    const id = this.nextId++;
+    this.activeZones.push({
+      kind: 'stationary',
+      combatSource: zone.combatSource,
+      reactive: { slowFraction: zone.slowFraction, slowDurationMs: zone.slowDurationMs },
+      id,
+      ownerId: zone.ownerId,
+      ownerColor: 0xffffff,
+      radius: zone.radius,
+      duration: zone.durationMs,
+      damagePerTick: zone.damagePerTick,
+      tickInterval: zone.tickIntervalMs,
+      rockDamageMult: 0,
+      trainDamageMult: 0,
+      baseDamageMult: 0,
+      visualVariant: zone.visualVariant,
+      followOwner: false,
+      x: zone.x,
+      y: zone.y,
+      createdAt: zone.now,
+      // The burst itself is the first tick: damage and slow apply as the dust arrives.
+      lastTickAt: zone.now - zone.tickIntervalMs,
+      afterCloudDurationMs: 0,
+      afterCloudRadiusFactor: 0,
+      afterCloudDamageFactor: 0,
     });
     return id;
   }
@@ -341,6 +420,7 @@ export class StinkCloudSystem {
           damage:          zone.damagePerTick,
           ownerId:         zone.ownerId,
           combatSource: zone.combatSource,
+          ...(zone.reactive ? { reactive: zone.reactive } : {}),
           rockDamageMult:  zone.rockDamageMult,
           trainDamageMult: zone.trainDamageMult,
           baseDamageMult:  zone.baseDamageMult,
@@ -371,10 +451,13 @@ export class StinkCloudSystem {
     return { synced, damageEvents };
   }
 
-  /** Host-only: Deaktiviert sofort alle Wolken eines Spielers. */
+  /**
+   * Host-only: Deaktiviert sofort alle Wolken eines Spielers. Reaktive Sporenwolken gehören dem
+   * Map-Objekt und bleiben stehen, auch wenn ihr Auslöser stirbt oder sich eingräbt.
+   */
   hostDeactivateForPlayer(playerId: string, now = this.hostNow): void {
     for (let i = this.activeZones.length - 1; i >= 0; i--) {
-      if (this.activeZones[i].ownerId === playerId) {
+      if (this.activeZones[i].ownerId === playerId && !this.activeZones[i].reactive) {
         this.endZoneAt(i, 'owner_inactive', now);
       }
     }
@@ -467,27 +550,26 @@ export class StinkCloudSystem {
   // ── Visual Creation ───────────────────────────────────────────────────────
 
   private createVisual(cloud: SyncedStinkCloud): StinkCloudVisual {
-    const isVoidSpore = cloud.visualVariant === 'spore_void';
-    const isSpore = cloud.visualVariant === 'spore' || isVoidSpore;
     const isElectric = cloud.visualVariant === 'electric';
+    const style = GROUND_STYLE[cloud.visualVariant ?? 'stink'];
 
     const groundGlow = this.scene.add.image(cloud.x, cloud.y, TEX_STINK_GROUND)
       // Surface residue must not multiply actor/projectile colours. Cloud volume stays at STINK_DEPTH.
       .setDepth(9.3)
-      .setTint(isElectric ? ELEC_GROUND : isVoidSpore ? VOID_SPORE_GROUND : isSpore ? 0x5b3818 : TINT_GROUND_GLOW)
-      // Elektrofeld glüht additiv statt den Boden abzudunkeln.
-      .setBlendMode(isElectric || isVoidSpore ? Phaser.BlendModes.ADD : Phaser.BlendModes.MULTIPLY)
+      .setTint(style.ground)
+      // Elektrofeld und Void-Sporen glühen additiv statt den Boden abzudunkeln.
+      .setBlendMode(style.additiveGround ? Phaser.BlendModes.ADD : Phaser.BlendModes.MULTIPLY)
       .setAlpha(isElectric ? 0.22 : 0.26);
 
     const damageAura = this.scene.add.image(cloud.x, cloud.y, TEX_STINK_GROUND)
       .setDepth(STINK_DEPTH - 0.08)
-      .setTint(isElectric ? ELEC_DAMAGE : isVoidSpore ? VOID_SPORE_DAMAGE : isSpore ? 0xc7d85a : TINT_DAMAGE_GLOW)
+      .setTint(style.damage)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.18);
 
     const reactionPulse = this.scene.add.image(cloud.x, cloud.y, TEX_STINK_GROUND)
       .setDepth(STINK_DEPTH - 0.04)
-      .setTint(isElectric ? ELEC_REACTION : isVoidSpore ? VOID_SPORE_REACTION : isSpore ? 0xf0e68c : TINT_CHEM_CYAN)
+      .setTint(style.reaction)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0);
 
@@ -525,7 +607,7 @@ export class StinkCloudSystem {
     const alpha  = Phaser.Math.Clamp(cloud.alpha, 0, 1);
     const t      = (this.scene.time.now - visual.birthTime) * 0.001;
     const rScale = radius / REF_RADIUS;
-    const isSpore = cloud.visualVariant === 'spore' || cloud.visualVariant === 'spore_void';
+    const isSpore = GROUND_STYLE[cloud.visualVariant ?? 'stink'].sporeLike;
     const view = getVisibleWorldView(this.scene.cameras.main);
     const visible = alpha > 0.01 && radius > 0
       && x + radius >= view.x && y + radius >= view.y

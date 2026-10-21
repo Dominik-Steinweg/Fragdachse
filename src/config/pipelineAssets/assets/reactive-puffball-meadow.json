@@ -1,0 +1,98 @@
+{
+  "id": "reactive-puffball-meadow",
+  "category": "powerup",
+  "gameIds": [],
+  "revision": "d1",
+  "variant": "standard",
+  "sourceSize": 32,
+  "textureKey": "reactive_prop_puffball_meadow",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "swell",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "end": "free",
+      "next": "burst"
+    },
+    {
+      "name": "burst",
+      "frames": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "start": "free",
+      "end": "free",
+      "next": "refill"
+    },
+    {
+      "name": "refill",
+      "frames": [
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34
+      ],
+      "frameRate": 12,
+      "loop": false,
+      "start": "free",
+      "end": "rest"
+    }
+  ],
+  "sheetTextureKey": "reactive_prop_puffball_meadow_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/reactive-puffball-meadow/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/reactive-puffball-meadow/sheet.png",
+  "layout": {
+    "frameWidth": 32,
+    "frameHeight": 32,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 5,
+    "frameCount": 35,
+    "width": 288,
+    "height": 180
+  },
+  "hashes": {
+    "idle": "05469bcd39c906fdbffb5d8e3e99d767cb7ce380bd257e56cdcd9f180638cf9c",
+    "sheet": "22b7b96eac28343500bd89e2f164d892158db21d42b831211bbf2d39acc11704"
+  }
+}

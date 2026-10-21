@@ -56,6 +56,27 @@ describe('primary stink cloud lifetime', () => {
     } finally { f.destroy(); }
   });
 
+  it('keeps a reactive spore zone of a map prop alive when its trigger dies, with an immediate slowing tick', () => {
+    const f = fixture();
+    try {
+      const source = { gameplaySource: { kind: 'player' as const, id: 'p1' }, attribution: { kind: 'player' as const, id: 'p1' },
+        allegiance: { ownerId: 'p1', kind: 'player' as const, allowTeamDamage: false },
+        authoredSourceId: 'environment.spore_puffball', origin: 'ground' as const };
+      f.cloud.hostCreateReactiveZone({ ownerId: 'p1', x: 40, y: 20, radius: 100, durationMs: 5000, damagePerTick: 4,
+        tickIntervalMs: 500, slowFraction: .4, slowDurationMs: 700, visualVariant: 'puffball', combatSource: source, now: 1000 });
+      const first = f.cloud.hostUpdate(1000, () => null);
+      expect(first.damageEvents).toHaveLength(1);
+      expect(first.damageEvents[0].reactive).toEqual({ slowFraction: .4, slowDurationMs: 700 });
+      expect(first.damageEvents[0].combatSource).toBe(source);
+      expect([first.damageEvents[0].rockDamageMult, first.damageEvents[0].trainDamageMult, first.damageEvents[0].baseDamageMult])
+        .toEqual([0, 0, 0]);
+      // The trigger dying or burrowing ends its own clouds, never the prop's spore cloud.
+      f.cloud.hostDeactivateForPlayer('p1', 1200);
+      expect(f.cloud.hostUpdate(1600, () => null).synced).toHaveLength(1);
+      expect(f.cloud.hostUpdate(6100, () => null).synced).toHaveLength(0);
+    } finally { f.destroy(); }
+  });
+
   it('replicates owner-following independently from stationary cloud ownership', () => {
     const f = fixture();
     try {

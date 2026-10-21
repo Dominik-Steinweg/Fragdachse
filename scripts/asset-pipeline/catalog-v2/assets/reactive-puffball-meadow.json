@@ -1,0 +1,72 @@
+{
+  "id": "reactive-puffball-meadow",
+  "label": "Giant puffball (meadow)",
+  "category": "powerup",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/reactive-puffball-meadow.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "One large round puffball with an areolate cracked dome and two small companions on a thin moss collar; the dome tears into lobes that fold outward.",
+    "colors": "Cream skin with warm brown cracks, olive-brown gleba, green moss collar.",
+    "anatomy": "Rechargeable reactive map prop on one 32 px cell; large puffball diameter about 18 px. Burst shows the spore mass, refill closes the lobes."
+  },
+  "requiredClips": [
+    "swell",
+    "burst",
+    "refill"
+  ],
+  "production": "reference",
+  "recipe": "reactive-puffball",
+  "model": {
+    "variant": "meadow"
+  },
+  "orthoScale": 1.2,
+  "textures": {},
+  "materialSource": "procedural",
+  "materialVariants": {
+    "standard": {
+      "label": "Matte areolate fungal skin, procedural cracks",
+      "textureStrength": 0,
+      "formShadowStrength": 0.8
+    }
+  },
+  "clips": [
+    {
+      "name": "swell",
+      "motion": "puffball_swell",
+      "frameCount": 6,
+      "frameRate": 24,
+      "loop": false,
+      "end": "free",
+      "next": "burst"
+    },
+    {
+      "name": "burst",
+      "motion": "puffball_burst",
+      "frameCount": 12,
+      "frameRate": 24,
+      "loop": false,
+      "start": "free",
+      "end": "free",
+      "next": "refill"
+    },
+    {
+      "name": "refill",
+      "motion": "puffball_refill",
+      "frameCount": 16,
+      "frameRate": 12,
+      "loop": false,
+      "start": "free",
+      "end": "rest"
+    }
+  ]
+}

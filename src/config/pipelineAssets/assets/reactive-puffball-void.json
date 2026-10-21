@@ -1,0 +1,98 @@
+{
+  "id": "reactive-puffball-void",
+  "category": "powerup",
+  "gameIds": [],
+  "revision": "d1",
+  "variant": "standard",
+  "sourceSize": 32,
+  "textureKey": "reactive_prop_puffball_void",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "swell",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "end": "free",
+      "next": "burst"
+    },
+    {
+      "name": "burst",
+      "frames": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "start": "free",
+      "end": "free",
+      "next": "refill"
+    },
+    {
+      "name": "refill",
+      "frames": [
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34
+      ],
+      "frameRate": 12,
+      "loop": false,
+      "start": "free",
+      "end": "rest"
+    }
+  ],
+  "sheetTextureKey": "reactive_prop_puffball_void_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/reactive-puffball-void/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/reactive-puffball-void/sheet.png",
+  "layout": {
+    "frameWidth": 32,
+    "frameHeight": 32,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 5,
+    "frameCount": 35,
+    "width": 288,
+    "height": 180
+  },
+  "hashes": {
+    "idle": "401c27212b8546d3f9ed6a05ee9891748618ff8b06c4b4ec42e979079d563c47",
+    "sheet": "1afdde3d184cc67f2507583068c735b97fc772473722c6d24a461e63fe83082d"
+  }
+}

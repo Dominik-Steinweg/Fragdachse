@@ -655,7 +655,8 @@ export interface ImpactCloudConfig {
 }
 
 /** Visueller Stil einer Schaden-über-Zeit-Fläche (DoT-Zone). */
-export type DamageZoneVisualStyle = 'stink' | 'spore' | 'spore_void' | 'electric';
+/** `puffball*`: spore dust of a reactive map prop, coloured by the side of its trigger. */
+export type DamageZoneVisualStyle = 'stink' | 'spore' | 'spore_void' | 'electric' | 'puffball' | 'puffball_hostile';
 
 /**
  * Generische Konfiguration für eine Schaden-über-Zeit-Fläche, die am Explosions-

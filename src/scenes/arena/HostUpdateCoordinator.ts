@@ -29,6 +29,9 @@ import type { LocalPlayerState }  from './LocalPlayerState';
 import type { RockVisualHelper }  from './RockVisualHelper';
 import type { RendererBundle }    from './RendererBundle';
 import type { PlayerEntity }      from '../../entities/PlayerEntity';
+import { isPlayerSideCombatSource } from '../../combat/CombatRelationshipPolicy';
+import type { StinkCloudDamageEvent, StinkCloudReactiveZone } from '../../effects/StinkCloudSystem';
+import type { ReactivePropEffect } from '../../world/reactiveProps/ReactivePropRuntime';
 import type { HitscanSupportEffect, LoadoutSlot, PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, SupportProjectileImpact, SyncedActiveHudBuff, SyncedReinforcementMatrix, TeamId } from '../../types';
 import type { BaseManager } from '../../entities/BaseManager';
 import { emitArenaMapGridChanged } from './ArenaEvents';
@@ -256,6 +259,34 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
   private get rockRegistry() { return this.worldRuntime?.materialization?.rocks ?? null; }
   private get reactiveProps() { return this.worldRuntime?.materialization?.reactiveProps ?? null; }
+
+  /** Spore cloud of a burst puffball: owned by the captured trigger, coloured by the trigger's side. */
+  private releaseReactiveSporeCloud(effect: Extract<ReactivePropEffect, { kind: 'dot_zone' }>): void {
+    const { config, source } = effect;
+    this.ctx.stinkCloudSystem.hostCreateReactiveZone({
+      ownerId: source.allegiance.ownerId, x: effect.x, y: effect.y, radius: config.radius,
+      durationMs: config.durationMs, damagePerTick: config.damagePerTick, tickIntervalMs: config.tickIntervalMs,
+      slowFraction: config.slowFraction, slowDurationMs: config.slowDurationMs,
+      visualVariant: isPlayerSideCombatSource(source) ? 'puffball' : 'puffball_hostile',
+      combatSource: source, now: effect.at,
+    });
+  }
+
+  /**
+   * Reactive spore tick: only the trigger's enemies, an explicit basis (no weapon buffs of the
+   * trigger), a walking slow, and no environment damage – it never triggers other reactive props.
+   */
+  private applyReactiveSporeTick(ev: StinkCloudDamageEvent, reactive: StinkCloudReactiveZone): void {
+    const source = ev.combatSource;
+    if (!source) return;
+    this.ctx.getWorldCombatCore()!.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
+      category: 'damage_over_time', damageKind: 'ground', source, sourceId: source.authoredSourceId,
+      damageBasis: { kind: 'source-resolved', amount: ev.damage, sourceFactors: [] },
+      baseDamageMult: 0, allowCritical: false,
+      enemySlowFraction: reactive.slowFraction, enemySlowDurationMs: reactive.slowDurationMs,
+      playerSlowFraction: reactive.slowFraction, playerSlowDurationMs: reactive.slowDurationMs,
+    });
+  }
   private get worldMutation() { return this.worldFramePort?.getWorldMutationRuntime() ?? null; }
   private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
   private get world() { return this.worldRuntime?.context ?? null; }
@@ -504,6 +535,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       for (const effect of this.reactiveProps?.hostAdvance(now) ?? []) {
         switch (effect.kind) {
           case 'explosion': this.pendingStandaloneExplosions.push(effect.request); break;
+          case 'dot_zone': this.releaseReactiveSporeCloud(effect); break;
         }
       }
     }
@@ -669,6 +701,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
 
     for (const ev of stinkDmg) {
+      if (ev.reactive) { this.applyReactiveSporeTick(ev, ev.reactive); continue; }
       this.plagueBinding?.applyPrimaryContact(ev, now);
       const hitStructures = this.ctx.getWorldCombatCore()!.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
         category: 'damage_over_time',

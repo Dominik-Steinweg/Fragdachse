@@ -11,6 +11,9 @@ const PALETTES: Record<DamageZoneVisualStyle, readonly [number, number, number]>
   spore: [0x586023, 0xb5bc42, 0xf0e97f],
   spore_void: [0x3a1a58, 0x9d35ee, 0xd887ff],
   electric: [0x0d2b45, 0x3aa8e0, 0x9fe8ff],
+  // Dry spore dust: warm umber to pale ochre; the hostile cloud turns dusky violet.
+  puffball: [0x4a3a1e, 0xa08852, 0xe6d8aa],
+  puffball_hostile: [0x2e1f3c, 0x7c6290, 0xdcc8ea],
 };
 const DETAIL = { high: 2, medium: 1, low: 0 };
 function rgb(color: number): readonly number[] {

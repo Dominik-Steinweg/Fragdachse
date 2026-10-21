@@ -67,6 +67,15 @@ function isAdditiveVariant(variant: DamageZoneVisualStyle): boolean {
   return variant === 'electric' || variant === 'spore_void';
 }
 
+/** Spore dust of a burst puffball: opens with radial jets instead of the gas exhale. */
+function isDustVariant(variant: DamageZoneVisualStyle): boolean {
+  return variant === 'puffball' || variant === 'puffball_hostile';
+}
+
+/** Matches the seven dome lobes of the puffball asset, so the jets leave through its tears. */
+const DUST_JETS = 7;
+const DUST_JET_OFFSET = -Math.PI / 2 + .21 + Math.PI / DUST_JETS;
+
 interface StinkCloudEmission {
   readonly id: number;
   readonly variant: DamageZoneVisualStyle;
@@ -97,6 +106,8 @@ export class StinkCloudGpuParticles {
   /** Parallel zur Map, damit der Emissions-Tick ohne Iterator-Allokation laeuft. */
   private readonly activeClouds: StinkCloudEmission[] = [];
   private readonly burstSpec: GpuVfxSpawnSpec;
+  /** Dust is matter, not light: the puffball burst draws on the normal lane. */
+  private readonly dustBurstSpec: GpuVfxSpawnSpec;
   /** Ein Spawn-Spec je Familie; die Lane wird je Wolkenvariante umgeschrieben. */
   private readonly specs: Record<StinkParticleFamily, GpuVfxSpawnSpec>;
 
@@ -106,6 +117,9 @@ export class StinkCloudGpuParticles {
     this.burstSpec.scaleStart = .22 * 40 / 56;
     this.burstSpec.scaleEnd = .78 * 40 / 56;
     this.burstSpec.alphaEnd = 0;
+    this.dustBurstSpec = system.createSpec(GpuVfxEffectId.StinkInner);
+    this.dustBurstSpec.lane = GpuVfxLaneId.StinkNormal;
+    this.dustBurstSpec.alphaEnd = 0;
     this.specs = {
       inner:  system.createSpec(FAMILY_SPECS.inner.effect),
       plume:  system.createSpec(FAMILY_SPECS.plume.effect),
@@ -206,7 +220,8 @@ export class StinkCloudGpuParticles {
       if (!emission.visible) continue;
       if (emission.burstPending) {
         emission.burstPending = false;
-        this.emitBurst(emission, nowMs);
+        if (isDustVariant(emission.variant)) this.emitDustBurst(emission, nowMs);
+        else this.emitBurst(emission, nowMs);
       }
       for (let f = 0; f < FAMILY_ORDER.length; f += 1) {
         this.emitFamily(emission, FAMILY_ORDER[f], deltaMs, nowMs);
@@ -228,6 +243,48 @@ export class StinkCloudGpuParticles {
       spec.rotation = angle;
       spec.alphaStart = .24 * emission.alpha;
       spec.tint = pickGpuVfxTint(emission.tints.edge);
+      this.system.spawn(spec, emission.source, nowMs);
+    }
+  }
+
+  /** Seven fast jets through the torn lobes, then a slow billow that settles into the cloud. */
+  private emitDustBurst(emission: StinkCloudEmission, nowMs: number): void {
+    const spec = this.dustBurstSpec;
+    const radius = Math.max(emission.radius, 24);
+    const perJet = this.system.quality.scaleDiscreteBurst(spec.effect, 7);
+    for (let jet = 0; jet < DUST_JETS; jet++) {
+      const base = DUST_JET_OFFSET + jet * Math.PI * 2 / DUST_JETS;
+      for (let i = 0; i < perJet; i++) {
+        const angle = base + Phaser.Math.FloatBetween(-.16, .16);
+        const speed = radius * Phaser.Math.FloatBetween(1.3, 2.5);
+        const start = Phaser.Math.FloatBetween(4, 12);
+        spec.x = emission.x + Math.cos(angle) * start;
+        spec.y = emission.y + Math.sin(angle) * start;
+        spec.vx = Math.cos(angle) * speed;
+        spec.vy = Math.sin(angle) * speed;
+        spec.lifeMs = Phaser.Math.FloatBetween(520, 980);
+        spec.scaleStart = Phaser.Math.FloatBetween(.16, .24);
+        spec.scaleEnd = Phaser.Math.FloatBetween(.62, .9);
+        spec.rotation = angle;
+        spec.alphaStart = .62;
+        spec.tint = pickGpuVfxTint(emission.tints.inner);
+        this.system.spawn(spec, emission.source, nowMs);
+      }
+    }
+    const billow = this.system.quality.scaleDiscreteBurst(spec.effect, 26);
+    for (let i = 0; i < billow; i++) {
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const speed = radius * Phaser.Math.FloatBetween(.35, 1.0);
+      spec.x = emission.x + Math.cos(angle) * 6;
+      spec.y = emission.y + Math.sin(angle) * 6;
+      spec.vx = Math.cos(angle) * speed;
+      spec.vy = Math.sin(angle) * speed;
+      spec.lifeMs = Phaser.Math.FloatBetween(1300, 2400);
+      spec.scaleStart = Phaser.Math.FloatBetween(.3, .45);
+      spec.scaleEnd = Phaser.Math.FloatBetween(1.2, 1.7);
+      spec.rotation = angle;
+      spec.alphaStart = .42;
+      spec.tint = pickGpuVfxTint(emission.tints.plume);
       this.system.spawn(spec, emission.source, nowMs);
     }
   }

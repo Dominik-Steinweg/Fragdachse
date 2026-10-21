@@ -1,0 +1,55 @@
+{
+  "id": "reactive-bee-hive",
+  "label": "Straw bee skep",
+  "category": "powerup",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/reactive-bee-hive.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Round straw skep of stacked coils (concentric rings from above) with dark cane bindings on a square plank stand; low entrance and landing board to the south.",
+    "colors": "Golden straw with a sun-bleached crown, dark split-cane ties, weathered grey-brown planks.",
+    "anatomy": "Rechargeable reactive map prop on one 32 px cell; skep diameter about 21 px, stand about 25 px."
+  },
+  "requiredClips": [
+    "shake",
+    "release"
+  ],
+  "production": "reference",
+  "recipe": "reactive-bee-hive",
+  "model": {},
+  "orthoScale": 1.2,
+  "textures": {},
+  "materialSource": "procedural",
+  "materialVariants": {
+    "standard": {
+      "label": "Matte straw and weathered wood",
+      "textureStrength": 0,
+      "formShadowStrength": 0.8
+    }
+  },
+  "clips": [
+    {
+      "name": "shake",
+      "motion": "hive_shake",
+      "frameCount": 8,
+      "frameRate": 24,
+      "loop": true
+    },
+    {
+      "name": "release",
+      "motion": "hive_release",
+      "frameCount": 10,
+      "frameRate": 24,
+      "loop": false
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "id": "reactive-bee-hive",
+  "category": "powerup",
+  "gameIds": [],
+  "revision": "d1",
+  "variant": "standard",
+  "sourceSize": 32,
+  "textureKey": "reactive_prop_bee_hive_straw",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "shake",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "frameRate": 24,
+      "loop": true
+    },
+    {
+      "name": "release",
+      "frames": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "frameRate": 24,
+      "loop": false
+    }
+  ],
+  "sheetTextureKey": "reactive_prop_bee_hive_straw_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/reactive-bee-hive/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/reactive-bee-hive/sheet.png",
+  "layout": {
+    "frameWidth": 32,
+    "frameHeight": 32,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 3,
+    "frameCount": 19,
+    "width": 288,
+    "height": 108
+  },
+  "hashes": {
+    "idle": "16dd7e1910eb792661eec45b47e5f80912a4337e4955e5f00d2def1cf8fa1d58",
+    "sheet": "4fc7e3a51652069e47818bdfb32d899bfcc1c93b2957b37e1a7011d9fcf035f9"
+  }
+}
