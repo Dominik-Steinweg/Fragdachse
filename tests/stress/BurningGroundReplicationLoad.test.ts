@@ -32,9 +32,10 @@ import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
  * Wire load of the burning-ground slice `fg` in the Map 16 burn clearing (both authored void
  * sweeps with their warning bands), then a flamethrower painting short-lived cells. Drives the
  * real FireSystem and hazard handler. The binary slice is compared with the previous wire form
- * (JSON tuples with host ids, the whole warning band every tick), reproduced here as `legacy`.
- * Sizes are the slice's JSON text plus a raw-deflate estimate per tick; host time includes
- * JSON.stringify and client time JSON.parse, as on the peer envelope. Run: npm run test:stress.
+ * (JSON tuples with host ids, the whole warning band every tick), reproduced here as `legacy` for
+ * its bytes only; its timings are not those of the former bridge code. Sizes are the slice's JSON
+ * text plus a raw-deflate estimate per tick; host time includes JSON.stringify and client time
+ * JSON.parse, as on the peer envelope. Run: npm run test:stress.
  */
 type Slice = Record<string, unknown>;
 type Tuple = [number, number, number, number, number, number];
@@ -97,12 +98,12 @@ function account(total: Totals, json: string, slice: Slice): void {
   total.deflate += deflateRawSync(Buffer.from(json)).length;
 }
 
-function summarize(total: Totals) {
+function summarize(total: Totals, timed: boolean) {
   const seconds = total.ticks / NET_TICK_RATE_HZ;
   return { cellsBytesPerSec: Math.round(total.cells / seconds), warningBytesPerSec: Math.round(total.warnings / seconds),
     rawBytesPerSec: Math.round(total.raw / seconds), deflateBytesPerSec: Math.round(total.deflate / seconds),
-    peakTickBytes: total.peak, hostMsPerTick: +(total.hostMs / total.ticks).toFixed(4),
-    clientMsPerTick: +(total.clientMs / total.ticks).toFixed(4) };
+    peakTickBytes: total.peak,
+    ...(timed ? { hostMsPerTick: +(total.hostMs / total.ticks).toFixed(4), clientMsPerTick: +(total.clientMs / total.ticks).toFixed(4) } : {}) };
 }
 
 describe('burning ground replication load', () => {
@@ -175,55 +176,44 @@ describe('burning ground replication load', () => {
       // Complete slice of the permanent burn clearing once the flamethrower cells have expired.
       frameTime += 5_000;
       ground = fire.hostUpdate(now()).ground;
-      const full = { legacy: { encodeMs: [] as number[], decodeMs: [] as number[], json: '' },
-        binary: { encodeMs: [] as number[], reencodeMs: [] as number[], decodeMs: [] as number[], unchangedMs: [] as number[],
-          json: '' } };
+      const legacyJson = JSON.stringify(legacyPublisher()(ground, true));
+      const timings = { encode: [] as number[], reencode: [] as number[], decode: [] as number[], unchanged: [] as number[] };
+      let json = '';
       const journal = new GroundFireChangeJournal();
       for (let run = 0; run < 25; run++) {
+        // Cold: a fresh publisher converts every cell; then one journaled change with cached wire forms.
         let started = performance.now();
-        full.legacy.json = JSON.stringify(legacyPublisher()({ cells: [...ground.cells] }, true));
-        full.legacy.encodeMs.push(performance.now() - started);
-        started = performance.now();
-        const tuples = (JSON.parse(full.legacy.json) as { f: Tuple[] }).f;
-        tuples.map(([id, gridX, gridY, expiresAt, intensity]) => ({ id, gridX, gridY, expiresAt, intensity })).filter(cell => cell.expiresAt > at);
-        full.legacy.decodeMs.push(performance.now() - started);
-
-        started = performance.now();
-        const warm = new BurningGroundPublisher(now);
-        full.binary.json = JSON.stringify(warm.publishComplete(ground));
-        full.binary.encodeMs.push(performance.now() - started);
-        // Warm: one journaled cell change since the previous complete slice; other wire forms are cached.
+        const publisher = new BurningGroundPublisher(now);
+        json = JSON.stringify(publisher.publishComplete(ground));
+        timings.encode.push(performance.now() - started);
         const changed = [...ground.cells], refreshed = { ...changed[run], intensity: changed[run].intensity + 1 };
         changed[run] = refreshed;
         journal.record(changed, { base: ground.cells, removed: [], upserts: [refreshed] });
         started = performance.now();
-        JSON.stringify(warm.publishComplete({ cells: changed }));
-        full.binary.reencodeMs.push(performance.now() - started);
+        JSON.stringify(publisher.publishComplete({ cells: changed }));
+        timings.reencode.push(performance.now() - started);
         const fresh = new BurningGroundReceiver();
         started = performance.now();
-        const decoded = fresh.merge(JSON.parse(full.binary.json), { cells: [] }, now());
-        full.binary.decodeMs.push(performance.now() - started);
+        const decoded = fresh.merge(JSON.parse(json), { cells: [] }, now());
+        timings.decode.push(performance.now() - started);
         started = performance.now();
-        const repeated = fresh.merge(JSON.parse(full.binary.json), decoded, now());
-        full.binary.unchangedMs.push(performance.now() - started);
+        const repeated = fresh.merge(JSON.parse(json), decoded, now());
+        timings.unchanged.push(performance.now() - started);
         expect(repeated.cells).toBe(decoded.cells);
         expect(cellKeys(decoded, now())).toEqual(cellKeys(ground, now()));
       }
-      const fullReport = (json: string, encodeMs: number[], decodeMs: number[]) => ({ rawBytes: json.length,
-        deflateBytes: deflateRawSync(Buffer.from(json)).length, hostEncodeMs: +median(encodeMs).toFixed(3),
-        clientDecodeMs: +median(decodeMs).toFixed(3) });
+      const sizes = (text: string) => ({ rawBytes: text.length, deflateBytes: deflateRawSync(Buffer.from(text)).length });
       const report = {
         peakWarnings,
-        phases: Object.fromEntries([...totals].map(([key, total]) => [key, summarize(total)])),
-        full: { permanentCells: ground.cells.length,
-          legacy: fullReport(full.legacy.json, full.legacy.encodeMs, full.legacy.decodeMs),
-          binary: { ...fullReport(full.binary.json, full.binary.encodeMs, full.binary.decodeMs),
-            hostReencodeMs: +median(full.binary.reencodeMs).toFixed(3),
-            clientUnchangedMs: +median(full.binary.unchangedMs).toFixed(3) } },
+        phases: Object.fromEntries([...totals].map(([key, total]) => [key, summarize(total, key.endsWith('binary'))])),
+        full: { permanentCells: ground.cells.length, legacy: sizes(legacyJson),
+          binary: { ...sizes(json), hostColdEncodeMs: +median(timings.encode).toFixed(3),
+            hostReencodeMs: +median(timings.reencode).toFixed(3), clientDecodeMs: +median(timings.decode).toFixed(3),
+            clientUnchangedMs: +median(timings.unchanged).toFixed(3) } },
       };
       console.log(JSON.stringify(report, null, 1));
       expect(ground.cells.length).toBeGreaterThan(1_000);
-      expect(full.binary.json.length * 10).toBeLessThan(full.legacy.json.length);
+      expect(json.length * 10).toBeLessThan(legacyJson.length);
     } finally {
       director.reset(); fire.destroyAll(); vi.restoreAllMocks();
       applyArenaMetricsForMode('deathmatch', 'LOBBY');

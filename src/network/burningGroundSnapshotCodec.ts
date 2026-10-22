@@ -179,16 +179,18 @@ function base64ToBytes(encoded: unknown): Uint8Array {
 
 interface Bounds { minX: number; minY: number; width: number; height: number }
 
-function boundsOf(keys: Iterable<number>): Bounds | null {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const key of keys) {
-    const x = keyX(key), y = keyY(key);
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
+class BoundsBuilder {
+  minX = Infinity; minY = Infinity; maxX = -Infinity; maxY = -Infinity;
+  add(x: number, y: number): void {
+    if (x < this.minX) this.minX = x;
+    if (x > this.maxX) this.maxX = x;
+    if (y < this.minY) this.minY = y;
+    if (y > this.maxY) this.maxY = y;
   }
-  return minX === Infinity ? null : { minX, minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+  build(): Bounds | null {
+    return this.minX === Infinity ? null
+      : { minX: this.minX, minY: this.minY, width: this.maxX - this.minX + 1, height: this.maxY - this.minY + 1 };
+  }
 }
 
 function writeBounds(writer: ByteWriter, bounds: Bounds): void {
@@ -207,11 +209,40 @@ function readBounds(reader: ByteReader): Bounds {
 const linearIndex = (key: number, bounds: Bounds) => (keyY(key) - bounds.minY) * bounds.width + keyX(key) - bounds.minX;
 const cellIndex = (cell: BurningGroundWireCell, bounds: Bounds) => (cell.gridY - bounds.minY) * bounds.width + cell.gridX - bounds.minX;
 
-/** Counts entries per style of ascending keys: [style, count] pairs. */
-function styleSections(keys: readonly number[]): [number, number][] {
+/**
+ * Style-major, row-major order without duplicate keys. A stable counting sort by column, then by
+ * style and row, stays linear for a surface of thousands of cells in ignition order.
+ */
+function sortCells(cells: readonly BurningGroundWireCell[], bounds: Bounds): BurningGroundWireCell[] {
+  let sorted: BurningGroundWireCell[];
+  if (bounds.width > 65_536 || bounds.height > 65_536) {
+    sorted = [...cells].sort((left, right) => left.key - right.key);
+  } else {
+    const byColumn = countingSort(cells, bounds.width, cell => cell.gridX - bounds.minX);
+    sorted = countingSort(byColumn, STYLE_LIMIT * bounds.height, cell => cell.style * bounds.height + cell.gridY - bounds.minY);
+  }
+  let unique = 0;
+  for (let index = 0; index < sorted.length; index++) {
+    if (unique === 0 || sorted[unique - 1].key !== sorted[index].key) sorted[unique++] = sorted[index];
+  }
+  sorted.length = unique;
+  return sorted;
+}
+
+function countingSort<T>(items: readonly T[], buckets: number, bucketOf: (item: T) => number): T[] {
+  const next = new Uint32Array(buckets + 1);
+  for (const item of items) next[bucketOf(item) + 1]++;
+  for (let bucket = 1; bucket <= buckets; bucket++) next[bucket] += next[bucket - 1];
+  const sorted = new Array<T>(items.length);
+  for (const item of items) sorted[next[bucketOf(item)]++] = item;
+  return sorted;
+}
+
+/** [style, count] pairs of consecutive equal styles. */
+function styleSections(count: number, styleAt: (index: number) => number): [number, number][] {
   const sections: [number, number][] = [];
-  for (const key of keys) {
-    const style = keyStyle(key);
+  for (let index = 0; index < count; index++) {
+    const style = styleAt(index);
     const last = sections[sections.length - 1];
     if (last?.[0] === style) last[1]++;
     else sections.push([style, 1]);
@@ -232,17 +263,22 @@ const isCellStyle = (style: number) => encodeGroundFireVisualStyle(decodeGroundF
  * Inputs need no particular order; of duplicate keys only one entry is kept.
  */
 export function encodeBurningGroundCells(upserts: readonly BurningGroundWireCell[], removals: Iterable<number> = []): string {
-  const cells = [...upserts].sort((left, right) => left.key - right.key)
-    .filter((cell, index, sorted) => index === 0 || sorted[index - 1].key !== cell.key);
   const removedKeys = Array.from(Float64Array.from(removals).sort())
     .filter((key, index, sorted) => index === 0 || sorted[index - 1] !== key);
+  const builder = new BoundsBuilder();
+  for (const cell of upserts) builder.add(cell.gridX, cell.gridY);
+  for (const key of removedKeys) builder.add(keyX(key), keyY(key));
+  const bounds = builder.build();
   const writer = new ByteWriter();
   writer.byte(FORMAT);
-  const upsertKeys = cells.map(cell => cell.key);
-  const upsertSections = styleSections(upsertKeys), removalSections = styleSections(removedKeys);
+  if (!bounds) {
+    writer.uint(0); writer.uint(0);
+    return writer.toBase64();
+  }
+  const cells = sortCells(upserts, bounds);
+  const upsertSections = styleSections(cells.length, index => cells[index].style);
+  const removalSections = styleSections(removedKeys.length, index => keyStyle(removedKeys[index]));
   writer.uint(upsertSections.length); writer.uint(removalSections.length);
-  const bounds = boundsOf([...upsertKeys, ...removedKeys]);
-  if (!bounds) return writer.toBase64();
   writeBounds(writer, bounds);
 
   let next = 0, prevFinite = 0;
@@ -352,12 +388,13 @@ export function decodeBurningGroundCells(encoded: unknown): DecodedBurningGround
 export function encodeGroundWarnings(entries: readonly GroundWarningEntry[]): string {
   const sorted = [...entries].sort((left, right) => left.key - right.key)
     .filter((entry, index, list) => index === 0 || list[index - 1].key !== entry.key);
-  const keys = sorted.map(entry => entry.key);
-  const sections = styleSections(keys);
+  const sections = styleSections(sorted.length, index => keyStyle(sorted[index].key));
   const writer = new ByteWriter();
   writer.byte(FORMAT);
   writer.uint(sections.length);
-  const bounds = boundsOf(keys);
+  const builder = new BoundsBuilder();
+  for (const { key } of sorted) builder.add(keyX(key), keyY(key));
+  const bounds = builder.build();
   if (!bounds) return writer.toBase64();
   writeBounds(writer, bounds);
   let next = 0, previousAt = 0;
