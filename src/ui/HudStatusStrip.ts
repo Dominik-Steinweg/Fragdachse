@@ -10,8 +10,9 @@ import * as Phaser from 'phaser';
 import { toCssColor } from '../config';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 import { LivingBarEffect, type LivingBarPalette } from './LivingBarEffect';
-import { HUD_TEXT_MUTED, HUD_TEXT_PRIMARY, hudTextStyle, ensureHudFillTexture } from './HudCard';
-import { HUD_DIVIDER_SOURCE, HUD_FRAME_TEXTURE, HUD_STRIP_SOURCE } from './HudFrameAssets';
+import { HUD_TEXT_MUTED, HUD_TEXT_PRIMARY, hudTextStyle } from './HudCard';
+import { BarSdfView } from '../effects/bars/BarSdfView';
+import { HUD_DIVIDER_SOURCE, HUD_FRAME_TEXTURE, HUD_STRIP_SOURCE, HUD_TONES } from './HudFrameAssets';
 
 const SCALE = 0.5;
 const SRC = HUD_STRIP_SOURCE;
@@ -40,8 +41,8 @@ interface FieldVisual {
   readonly label: Phaser.GameObjects.Text;
   readonly value: Phaser.GameObjects.Text;
   readonly barGroup: Phaser.GameObjects.Container | null;
-  readonly barBg: Phaser.GameObjects.Image | null;
-  readonly barFill: Phaser.GameObjects.Image | null;
+  /** Recessed train channel and its red fill, one SDF view. */
+  readonly bar: BarSdfView | null;
   readonly barEffect: LivingBarEffect | null;
   width: number;
   lastBarWidth: number;
@@ -123,26 +124,26 @@ export class HudStatusStrip {
       .setOrigin(0, 0.5);
     const container = this.scene.add.container(0, this.contentY(), [label]);
     let barGroup: Phaser.GameObjects.Container | null = null;
-    let barBg: Phaser.GameObjects.Image | null = null;
-    let barFill: Phaser.GameObjects.Image | null = null;
+    let bar: BarSdfView | null = null;
     let barEffect: LivingBarEffect | null = null;
     if (id === 'train') {
-      barBg = this.scene.add.image(0, 0, ensureHudFillTexture(this.scene, 'neutral'))
-        .setOrigin(0, 0.5).setDisplaySize(BAR_W, BAR_H).setTint(0x2a2f33).setAlpha(0.9);
-      barFill = this.scene.add.image(0, 0, ensureHudFillTexture(this.scene, 'red')).setOrigin(0, 0.5)
-        .setDisplaySize(BAR_W, BAR_H);
+      bar = new BarSdfView(this.scene, 0, -BAR_H / 2, BAR_W, BAR_H, {
+        radius: BAR_H / 2, palette: HUD_TONES.red.fill, gloss: 0.14, edge: 0.5, shade: 0.22,
+        trough: { top: 0x101417, bottom: 0x22282b, alpha: 0.9, border: 0x05080a, borderAlpha: 0.55, borderWidth: 1, shadow: 2 },
+      });
       // Eigene Gruppe: Der Balkeneffekt ist an seine Konstruktionsposition gebunden und
       // wandert so mit, wenn sich die Beschriftung davor ändert.
-      barGroup = this.scene.add.container(0, 0, [barBg, barFill]);
+      barGroup = this.scene.add.container(0, 0, bar.objects);
       container.add(barGroup);
       barEffect = new LivingBarEffect(this.scene, barGroup, 0, -BAR_H / 2, BAR_W, BAR_H, TRAIN_PALETTE, {
-        glowTarget: barFill, scrollFactor: 0, startActive: false,
+        glowTarget: bar.fill, scrollFactor: 0, startActive: false,
+        clipShape: { kind: 'roundedRect', x: 0, y: -BAR_H / 2, width: BAR_W, height: BAR_H, radius: BAR_H / 2 },
       });
     }
     container.add(value);
     container.setVisible(false);
     this.root.add(container);
-    return { container, label, value, barGroup, barBg, barFill, barEffect, width: 0, lastBarWidth: -1 };
+    return { container, label, value, barGroup, bar, barEffect, width: 0, lastBarWidth: -1 };
   }
 
   private contentY(): number {
@@ -157,13 +158,13 @@ export class HudStatusStrip {
     const labelW = field.label ? visual.label.width + LABEL_GAP : 0;
     visual.label.setVisible(field.label.length > 0);
     let x = labelW;
-    const hasBar = field.bar !== undefined && visual.barFill !== null;
+    const hasBar = field.bar !== undefined && visual.bar !== null;
     visual.barGroup?.setVisible(hasBar);
     if (hasBar) {
       visual.barGroup!.setX(x);
       const fillW = Math.round(BAR_W * Phaser.Math.Clamp(field.bar!, 0, 1));
       if (fillW !== visual.lastBarWidth) {
-        visual.barFill!.setCrop(0, 0, (visual.barFill!.frame.width * fillW) / BAR_W, visual.barFill!.frame.height);
+        visual.bar!.setSpan(0, BAR_W * Phaser.Math.Clamp(field.bar!, 0, 1));
         visual.barEffect?.setFilledWidth(fillW);
         visual.lastBarWidth = fillW;
       }

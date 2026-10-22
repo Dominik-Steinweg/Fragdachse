@@ -1015,8 +1015,7 @@ describe('WorldRuntime – dedizierter Slot fuer den Frame-Binding', () => {
 describe('Detach-Reihenfolge – FrameBinding faellt vor dem Handoff, der Handoff vor dem Runtime-Teardown', () => {
   it('releases live HP bindings before a static handoff and isolates a later World', () => {
     const { scene } = healthBarTestScene();
-    const renderer = new WorldHealthBarRenderer(scene, () => 0, HEALTH_BAR_TUNING,
-      { prewarmEnemyViews: 0, maxFreeViews: 2 });
+    const renderer = new WorldHealthBarRenderer(scene, () => 0, HEALTH_BAR_TUNING);
     const owner = runtime();
     renderer.openWorld(owner);
     const old = renderer.bind(enemyHealthBarStyle(true, 40), 100, 100, 0, 0)!;

@@ -107,3 +107,14 @@ export function healthBarTestScene() {
   } };
   return { scene, rectangles, cosmetic };
 }
+
+/** Decoded world bars as the GPU layer would draw them (world units, only visible layers). */
+export function drawnHealthBars(renderer: import('../src/effects/health/WorldHealthBarRenderer').WorldHealthBarRenderer) {
+  return renderer.getLayers().filter(layer => layer.visible).flatMap(layer => layer.bars.map(bar => ({
+    family: layer.family, depth: layer.drawDepth,
+    x: bar.x + bar.width / 2, y: bar.y + bar.height / 2, left: bar.x, width: bar.width, height: bar.height,
+    hpWidth: bar.a0, trailWidth: bar.a1, trailVisible: bar.a1 > bar.a0 + 1e-9,
+    color: ((bar.c0 & 255) << 16) | (bar.c0 & 0xff00) | ((bar.c0 >>> 16) & 255),
+    alpha: bar.alpha, backingAlpha: (bar.c2 >>> 24) / 255, border: (bar.c3 >>> 24) > 0,
+  })));
+}

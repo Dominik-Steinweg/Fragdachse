@@ -1,103 +1,53 @@
 import { describe, expect, it } from 'vitest';
-import { buildRoundedRectClipBands, type LivingBarRoundedClip, type LivingClipRect } from '../src/effects/living/livingClipGeometry';
+import { resolveLivingClip, type LivingBarRoundedClip } from '../src/effects/living/livingClipGeometry';
 
 const node: LivingBarRoundedClip = { kind: 'roundedRect', x: -22, y: -22, width: 44, height: 44, radius: 10 };
-
-function inside(shape: LivingBarRoundedClip, x: number, y: number): boolean {
-  const r = Math.max(0, Math.min(shape.radius, shape.width / 2, shape.height / 2));
-  const dx = Math.max(shape.x + r - x, 0, x - (shape.x + shape.width - r));
-  const dy = Math.max(shape.y + r - y, 0, y - (shape.y + shape.height - r));
-  return dx * dx + dy * dy <= r * r + 1e-7;
-}
-
-function expectInscribed(shape: LivingBarRoundedClip, fill: LivingClipRect) {
-  const bands = buildRoundedRectClipBands(shape, fill);
-  for (const band of bands) {
-    expect(band.width).toBeGreaterThan(0);
-    expect(band.height).toBeGreaterThan(0);
-    for (const x of [band.x, band.x + band.width]) {
-      for (const y of [band.y, band.y + band.height]) {
-        expect(inside(shape, x, y)).toBe(true);
-        expect(x).toBeGreaterThanOrEqual(fill.x);
-        expect(x).toBeLessThanOrEqual(fill.x + fill.width);
-        expect(y).toBeGreaterThanOrEqual(fill.y);
-        expect(y).toBeLessThanOrEqual(fill.y + fill.height);
-      }
-    }
-  }
-  for (let i = 1; i < bands.length; i++) {
-    expect(bands[i].y).toBeGreaterThanOrEqual(bands[i - 1].y + bands[i - 1].height - 1e-10);
-  }
-  return bands;
-}
+const button: LivingBarRoundedClip = { ...node, x: -93, y: -20, width: 186, height: 40, radius: 12 };
 
 describe('rounded living fill geometry', () => {
-  it('inscribes full nodes and inset button faces without covering transparent corners', () => {
-    for (const shape of [node, { ...node, x: -93, y: -20, width: 186, height: 40, radius: 12 }]) {
-      expect(expectInscribed(shape, shape).length).toBeGreaterThan(0);
+  it('masks full nodes and inset button faces with their own contour', () => {
+    for (const shape of [node, button]) {
+      expect(resolveLivingClip(shape, shape)).toEqual({
+        clip: { x: shape.x, y: shape.y, width: shape.width, height: shape.height, radius: shape.radius },
+        fill: { x: shape.x, y: shape.y, width: shape.width, height: shape.height },
+      });
     }
   });
 
   it('keeps the upper edge of a half-filled node straight and full-width', () => {
-    const bands = expectInscribed(node, { x: -22, y: 0, width: 44, height: 22 });
-    expect(bands[0].x).toBe(-22);
-    expect(bands[0].y).toBe(0);
-    expect(bands[0].width).toBe(44);
-    expect(bands.at(-1)!.width).toBeLessThan(44);
+    // The contour keeps its rounded lower corners; the fill edge is a separate, straight mask.
+    expect(resolveLivingClip(node, { x: -22, y: 0, width: 44, height: 22 })).toEqual({
+      clip: { x: -22, y: -22, width: 44, height: 44, radius: 10 },
+      fill: { x: -22, y: 0, width: 44, height: 22 },
+    });
   });
 
-  it('covers all four rounded corners to subpixel depth for full and partial fills', () => {
-    for (const shape of [node, { ...node, x: -93, y: -20, width: 186, height: 40, radius: 12 }]) {
-      for (const height of [shape.height, shape.height / 2, 1]) {
-        const fill = { ...shape, y: shape.y + shape.height - height, height };
-        const bands = expectInscribed(shape, fill);
-        for (const sideX of [-1, 1]) {
-          for (const sideY of [-1, 1]) {
-            const cx = shape.x + (sideX < 0 ? shape.radius : shape.width - shape.radius);
-            const cy = shape.y + (sideY < 0 ? shape.radius : shape.height - shape.radius);
-            for (let degrees = 0; degrees <= 90; degrees += 1) {
-              const angle = degrees * Math.PI / 180;
-              // Probe half a pixel inside the true arc, independent of the chosen band count.
-              const x = cx + sideX * (shape.radius - 0.5) * Math.cos(angle);
-              const y = cy + sideY * (shape.radius - 0.5) * Math.sin(angle);
-              if (y < fill.y || y > fill.y + fill.height) continue;
-              expect(bands.some(band => x >= band.x - 1e-10 && x <= band.x + band.width + 1e-10
-                && y >= band.y - 1e-10 && y <= band.y + band.height + 1e-10)).toBe(true);
-            }
-          }
-        }
-      }
-    }
-  });
-
-  it('bounds the geometry cost even for oversized UI shapes', () => {
-    const shape = { ...node, width: 10000, height: 10000, radius: 5000 };
-    expect(expectInscribed(shape, shape).length).toBeLessThan(256);
-  });
-
-  it('handles small fills and horizontal cropping against the original shape', () => {
+  it('crops fills against the original shape in both directions', () => {
+    expect(resolveLivingClip(node, { x: -40, y: 10, width: 30, height: 100 })!.fill)
+      .toEqual({ x: -22, y: 10, width: 12, height: 12 });
     for (const height of [0.001, 1, 4, 11, 22, 43, 44]) {
       for (const width of [0.001, 4, 12, 22, 44]) {
-        expectInscribed(node, { x: -22, y: 22 - height, width, height });
+        const resolved = resolveLivingClip(node, { x: -22, y: 22 - height, width, height })!;
+        const expected = { x: -22, y: 22 - height, width, height };
+        for (const key of ['x', 'y', 'width', 'height'] as const) expect(resolved.fill[key]).toBeCloseTo(expected[key], 9);
+        expect(resolved.clip.radius).toBe(10);
       }
     }
-    expect(expectInscribed(node, { x: -22, y: 21, width: 44, height: 1 }).length).toBeGreaterThan(0);
   });
 
   it('clamps oversized radii and supports a rectangle without rounding', () => {
-    expectInscribed({ ...node, radius: 100 }, node);
-    expect(buildRoundedRectClipBands({ ...node, radius: 0 }, node)).toEqual([
-      { x: -22, y: -22, width: 44, height: 44 },
-    ]);
-    expect(buildRoundedRectClipBands({ ...node, radius: -10 }, node)).toEqual(
-      buildRoundedRectClipBands({ ...node, radius: 0 }, node));
+    expect(resolveLivingClip({ ...node, radius: 100 }, node)!.clip.radius).toBe(22);
+    expect(resolveLivingClip({ ...button, radius: 100 }, button)!.clip.radius).toBe(20);
+    expect(resolveLivingClip({ ...node, radius: 0 }, node)!.clip.radius).toBe(0);
+    expect(resolveLivingClip({ ...node, radius: -10 }, node)!.clip.radius).toBe(0);
   });
 
-  it('produces no bands for empty, disjoint or non-finite geometry', () => {
+  it('produces nothing for empty, disjoint or non-finite geometry', () => {
     for (const fill of [{ ...node, width: 0 }, { ...node, height: -1 },
       { ...node, x: 100 }, { ...node, y: NaN }, { ...node, width: Infinity }]) {
-      expect(buildRoundedRectClipBands(node, fill)).toEqual([]);
+      expect(resolveLivingClip(node, fill)).toBeNull();
     }
-    expect(buildRoundedRectClipBands({ ...node, radius: NaN }, node)).toEqual([]);
+    expect(resolveLivingClip({ ...node, radius: NaN }, node)).toBeNull();
+    expect(resolveLivingClip({ ...node, width: 0 }, node)).toBeNull();
   });
 });

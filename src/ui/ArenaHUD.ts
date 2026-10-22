@@ -28,9 +28,9 @@ import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentB
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import {
   type LivingBarPalette,
-  rgbStr, createGradientTexture,
   ensureLivingBarTextures, LivingBarEffect,
 } from './LivingBarEffect';
+import { BarSdfView, type BarSdfTroughStyle } from '../effects/bars/BarSdfView';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import { registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import { FONT_MONO } from './uiTheme';
@@ -87,10 +87,19 @@ const PAL_WPN:  BarPalette = { dark: COLORS.GREY_5,  mid: COLORS.GREY_4,  light:
 const PAL_UTIL: BarPalette = { dark: 0x8a4018,  mid: 0xd97030,  light: 0xf0a048 };
 
 const COL_HP_TRAIL = COLORS.RED_1;
-const COL_BAR_BG   = COLORS.GREY_9;
-const COL_BAR_BG2  = COLORS.GREY_8;
 const COL_BORDER   = COLORS.GREY_6;
 const COL_DIVIDER  = COLORS.GREY_7;
+
+/**
+ * Shared bar SDF: a recessed channel (darker under its lip, lighter towards the lower edge), a
+ * thin border ring and the fill one unit inside it. Corners are softly rounded, not pills.
+ */
+const BAR_RADIUS = 3;
+const BAR_INSET = 1;
+const HUD_BAR_TROUGH: BarSdfTroughStyle = {
+  top: COLORS.GREY_10, bottom: COLORS.GREY_8, alpha: 0.96, border: COL_BORDER, borderWidth: 1, shadow: 3,
+};
+const HUD_BAR_SHADING = { gloss: 0.15, edge: 0.55, shade: 0.24 } as const;
 
 // Texture key for the separate adrenaline gain burst. Bar energy uses LivingBarEffect directly.
 const TEX_PARTICLE   = '_hud_particle';
@@ -117,21 +126,6 @@ function paletteFromColor(base: number): BarPalette {
   };
 }
 
-function makeBgTexture(scene: Phaser.Scene, key: string, width: number, height: number): void {
-  if (scene.textures.exists(key)) scene.textures.remove(key);
-  const ct = scene.textures.createCanvas(key, width, height)!;
-  const ctx = ct.context;
-  const grad = ctx.createLinearGradient(0, 0, 0, height);
-  grad.addColorStop(0, rgbStr(COL_BAR_BG2));
-  grad.addColorStop(1, rgbStr(COL_BAR_BG));
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, width, height);
-  // Inner shadow line at top
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.fillRect(0, 0, width, 1);
-  ct.refresh();
-}
-
 function makeRadialTexture(scene: Phaser.Scene, key: string, size: number, colorStops: [number, string][]): void {
   if (scene.textures.exists(key)) return;
   const ct = scene.textures.createCanvas(key, size, size)!;
@@ -150,16 +144,15 @@ interface BarBundle {
   layout: BarLayout;
   panelBg?:     Phaser.GameObjects.Rectangle;
   label:        Phaser.GameObjects.Text;
-  bgImg:        Phaser.GameObjects.Image;
-  trail?:       Phaser.GameObjects.Rectangle;
+  /** Trough, trail and gradient fill: one SDF view, two batched Images. */
+  bar:          BarSdfView;
+  /** The fill Image of `bar`; its alpha footprint is the filled part (glow target). */
   fgImg:        Phaser.GameObjects.Image;
   // Shared GPU field; this remains visible while the bar is energized.
   idleEffect:   LivingBarEffect;
-  border:       Phaser.GameObjects.Rectangle;
   valueText?:   Phaser.GameObjects.Text;
   highlight?:   Phaser.GameObjects.Rectangle;
   palette:      BarPalette;
-  texKey:       string;
   prevFrac:     number;
   currentFrac:  number;
   renderedWidth: number;
@@ -178,7 +171,6 @@ interface BarLayout {
   readonly panelHeight: number;
   readonly totalHeight: number;
   readonly gap: number;
-  readonly backgroundTextureKey: string;
 }
 
 function getMainBarLayout(): BarLayout {
@@ -192,7 +184,6 @@ function getMainBarLayout(): BarLayout {
     panelHeight: 38,
     totalHeight: 34,
     gap: 12,
-    backgroundTextureKey: '_hud_bar_bg',
   };
 }
 
@@ -306,7 +297,7 @@ export class ArenaHUD {
   private adrTickMarks: Phaser.GameObjects.Rectangle[] = [];
   private weapon2AdrCost = 0;
   private w2Insufficient = false;
-  private w2RedOverlay!: Phaser.GameObjects.Rectangle;
+  private w2RedOverlay!: BarSdfView;
 
   constructor(
     private scene: Phaser.Scene,
@@ -320,16 +311,7 @@ export class ArenaHUD {
 
   private ensureTextures(): void {
     const s = this.scene;
-    makeBgTexture(s, '_hud_bar_bg', barWidth, BAR_H);
     ensureLivingBarTextures(s);
-
-    // Bar gradient textures
-    createGradientTexture(s, '_hud_hp',   PAL_HP,   barWidth, BAR_H);
-    createGradientTexture(s, '_hud_arm',  PAL_ARM,  barWidth, BAR_H);
-    createGradientTexture(s, '_hud_adr',  PAL_ADR,  barWidth, BAR_H);
-    createGradientTexture(s, '_hud_ult',  PAL_ULT,  barWidth, BAR_H);
-    createGradientTexture(s, '_hud_wpn',  PAL_WPN,  barWidth, BAR_H);
-    createGradientTexture(s, '_hud_util', PAL_UTIL, barWidth, BAR_H);
 
     // Adrenaline burst particle (16x16 radial glow)
     makeRadialTexture(s, TEX_PARTICLE, 16, [
@@ -358,21 +340,25 @@ export class ArenaHUD {
     c.add(this.divider(DIV2_Y));
 
     // Bars
-    this.hp   = this.createBar(HP_LBL_Y,  HP_BAR_Y,  t('ui.hud.hp'),        PAL_HP,   '_hud_hp',   { trail: true, value: true });
-    this.armor = this.createBar(ARM_LBL_Y, ARM_BAR_Y, t('ui.hud.armor'), PAL_ARM,  '_hud_arm',  { trail: true, value: true, trailColor: ARMOR_COLOR });
-    this.adr  = this.createBar(ADR_LBL_Y, ADR_BAR_Y, t('ui.hud.adrenaline'), PAL_ADR,  '_hud_adr');
-    this.ult  = this.createBar(ULT_LBL_Y, ULT_BAR_Y, t('ui.loadout.ultimate'), PAL_ULT,  '_hud_ult', { value: true });
+    this.hp   = this.createBar(HP_LBL_Y,  HP_BAR_Y,  t('ui.hud.hp'),        PAL_HP,   { trail: true, value: true });
+    this.armor = this.createBar(ARM_LBL_Y, ARM_BAR_Y, t('ui.hud.armor'), PAL_ARM,  { trail: true, value: true, trailColor: ARMOR_COLOR });
+    this.adr  = this.createBar(ADR_LBL_Y, ADR_BAR_Y, t('ui.hud.adrenaline'), PAL_ADR);
+    this.ult  = this.createBar(ULT_LBL_Y, ULT_BAR_Y, t('ui.loadout.ultimate'), PAL_ULT,  { value: true });
     this.ult.valueText!.setY(ULT_BAR_Y + BAR_H / 2).setOrigin(1, 0.5).setFontSize(12).setStroke('#000000', 2);
-    this.w1   = this.createBar(W1_LBL_Y,  W1_BAR_Y,  t('ui.loadout.weapon1'), PAL_WPN,  '_hud_wpn',  { highlight: true });
-    this.w2   = this.createBar(W2_LBL_Y,  W2_BAR_Y,  t('ui.loadout.weapon2'), PAL_WPN,  '_hud_wpn',  { highlight: true });
-    this.util = this.createBar(UT_LBL_Y,  UT_BAR_Y,  t('ui.loadout.utility'), PAL_UTIL, '_hud_util', { highlight: true });
+    this.w1   = this.createBar(W1_LBL_Y,  W1_BAR_Y,  t('ui.loadout.weapon1'), PAL_WPN,  { highlight: true });
+    this.w2   = this.createBar(W2_LBL_Y,  W2_BAR_Y,  t('ui.loadout.weapon2'), PAL_WPN,  { highlight: true });
+    this.util = this.createBar(UT_LBL_Y,  UT_BAR_Y,  t('ui.loadout.utility'), PAL_UTIL, { highlight: true });
     this.syncUltimateThresholdMarks([]);
 
     // Red overlay on weapon 2 bar — shown when adrenaline is insufficient
-    this.w2RedOverlay = this.scene.add.rectangle(BAR_X, W2_BAR_Y, barWidth, BAR_H, COLORS.RED_3)
-      .setOrigin(0, 0).setScrollFactor(0).setAlpha(0);
-    registerGraphicsObject(this.scene, 'gameplayHud', this.w2RedOverlay);
-    c.add(this.w2RedOverlay);
+    // Same contour as the bar beneath it, so the warning tint never shows square corners.
+    this.w2RedOverlay = new BarSdfView(this.scene, BAR_X, W2_BAR_Y, barWidth, BAR_H, {
+      radius: BAR_RADIUS, palette: { dark: COLORS.RED_3, mid: COLORS.RED_3, light: COLORS.RED_3 },
+      gloss: 0, edge: 0, shade: 0, scrollFactor: 0,
+    }).setSpan(0, barWidth);
+    this.w2RedOverlay.fill.setAlpha(0);
+    registerGraphicsObject(this.scene, 'gameplayHud', this.w2RedOverlay.fill);
+    c.add(this.w2RedOverlay.fill);
 
     // Adrenaline burst particle emitter (intense, for hit-gain + syringe)
     this.adrBurstEmitter = this.scene.add.particles(0, 0, TEX_PARTICLE, {
@@ -398,7 +384,6 @@ export class ArenaHUD {
     barY:      number,
     labelText: string,
     palette:   BarPalette,
-    texKey:    string,
     opts?:     {
       trail?: boolean;
       value?: boolean;
@@ -437,36 +422,21 @@ export class ArenaHUD {
       .setScrollFactor(0);
     c.add(label);
 
-    // Background
-    const bgImg = s.add.image(layout.x, barY, layout.backgroundTextureKey)
-      .setOrigin(0, 0).setScrollFactor(0);
-    c.add(bgImg);
+    // Trough with border ring, delayed trail and gradient fill (shared bar SDF)
+    const bar = new BarSdfView(s, layout.x, barY, layout.width, layout.height, {
+      radius: BAR_RADIUS, palette, trough: HUD_BAR_TROUGH, inset: BAR_INSET, scrollFactor: 0,
+      trail: opts?.trail ? (opts.trailColor ?? COL_HP_TRAIL) : undefined, ...HUD_BAR_SHADING,
+    }).setSpan(0, layout.width);
+    if (opts?.trail) bar.trailWidth = layout.width;
+    c.add(bar.objects);
 
-    // HP trail
-    let trail: Phaser.GameObjects.Rectangle | undefined;
-    if (opts?.trail) {
-      trail = s.add.rectangle(layout.x, barY, layout.width, layout.height, opts.trailColor ?? COL_HP_TRAIL)
-        .setOrigin(0, 0).setScrollFactor(0);
-      c.add(trail);
-    }
-
-    // Foreground gradient (cropped)
-    const fgImg = s.add.image(layout.x, barY, texKey)
-      .setOrigin(0, 0).setScrollFactor(0);
-    fgImg.setCrop(0, 0, layout.width, layout.height);
-    c.add(fgImg);
-
-    // Idle breathing effect (shared LivingBarEffect)
+    // Idle breathing effect (shared LivingBarEffect), kept inside the border ring
     const idlePal: LivingBarPalette = { dark: palette.dark, mid: palette.mid, light: palette.light };
-    const idleEffect = new LivingBarEffect(s, c, layout.x, barY, layout.width, layout.height, idlePal,
-      { glowTarget: fgImg, scrollFactor: 0 });
-
-    // Border
-    const border = s.add.rectangle(layout.x, barY, layout.width, layout.height)
-      .setOrigin(0, 0).setScrollFactor(0)
-      .setStrokeStyle(1, COL_BORDER)
-      .setFillStyle(0x000000, 0);
-    c.add(border);
+    const idleEffect = new LivingBarEffect(s, c, layout.x, barY, layout.width, layout.height, idlePal, {
+      glowTarget: bar.fill, scrollFactor: 0,
+      clipShape: { kind: 'roundedRect', x: layout.x + BAR_INSET, y: barY + BAR_INSET,
+        width: layout.width - BAR_INSET * 2, height: layout.height - BAR_INSET * 2, radius: BAR_RADIUS - BAR_INSET },
+    });
 
     // Value text
     let valueText: Phaser.GameObjects.Text | undefined;
@@ -489,15 +459,12 @@ export class ArenaHUD {
       layout,
       panelBg,
       label,
-      bgImg,
-      trail,
-      fgImg,
+      bar,
+      fgImg: bar.fill,
       idleEffect,
-      border,
       valueText,
       highlight,
       palette,
-      texKey,
       prevFrac: 1,
       currentFrac: 1,
       renderedWidth: layout.width,
@@ -670,7 +637,7 @@ export class ArenaHUD {
     this.wasSyringeActive = false;
     this.wasTemporaryUtilitySelected = false;
     this.w2Insufficient = false;
-    this.w2RedOverlay.setAlpha(0);
+    this.w2RedOverlay.fill.setAlpha(0);
     for (const mark of this.adrTickMarks) mark.destroy();
     this.adrTickMarks = [];
     this.weapon2AdrCost = 0;
@@ -767,8 +734,8 @@ export class ArenaHUD {
       trailDelay?.remove();
       setTrailDelay(this.scene.time.delayedCall(400, () => {
         this.scene.tweens.add({
-          targets: bundle.trail,
-          width: bundle.layout.width * frac,
+          targets: bundle.bar,
+          trailWidth: bundle.layout.width * frac,
           duration: 600,
           ease: 'Power2',
         });
@@ -777,7 +744,7 @@ export class ArenaHUD {
       this.flashBorder(bundle, COLORS.RED_2);
       this.shakeBar(bundle);
     } else if (frac > prev + 0.005) {
-      if (bundle.trail) bundle.trail.width = bundle.layout.width * frac;
+      bundle.bar.trailWidth = bundle.layout.width * frac;
       this.flashBar(bundle);
     }
 
@@ -828,17 +795,17 @@ export class ArenaHUD {
     if (insufficient === this.w2Insufficient) return;
     this.w2Insufficient = insufficient;
     if (insufficient) {
-      this.scene.tweens.killTweensOf(this.w2RedOverlay);
+      this.scene.tweens.killTweensOf(this.w2RedOverlay.fill);
       this.scene.tweens.add({
-        targets: this.w2RedOverlay,
+        targets: this.w2RedOverlay.fill,
         alpha: 0.45,
         duration: 200,
         ease: 'Quad.easeOut',
       });
     } else {
-      this.scene.tweens.killTweensOf(this.w2RedOverlay);
+      this.scene.tweens.killTweensOf(this.w2RedOverlay.fill);
       this.scene.tweens.add({
-        targets: this.w2RedOverlay,
+        targets: this.w2RedOverlay.fill,
         alpha: 0,
         duration: 300,
         ease: 'Quad.easeIn',
@@ -1042,7 +1009,8 @@ export class ArenaHUD {
     const w = Math.max(0, Math.round(bundle.layout.width * frac));
     if (bundle.renderedWidth === w && Math.abs(bundle.currentFrac - frac) < 0.0001) return;
 
-    bundle.fgImg.setCrop(0, 0, w, bundle.layout.height);
+    // The SDF fill edge is antialiased, so it follows the exact fraction instead of whole pixels.
+    bundle.bar.setSpan(0, bundle.layout.width * frac);
     bundle.currentFrac = frac;
     bundle.renderedWidth = w;
 
@@ -1055,38 +1023,31 @@ export class ArenaHUD {
 
   /** Quick flash effect on bar (border highlight). */
   private flashBar(bundle: BarBundle): void {
-    bundle.border.setStrokeStyle(2, bundle.palette.light);
+    bundle.bar.setBorder(bundle.palette.light, 2);
     this.scene.tweens.add({
-      targets: bundle.border,
-      alpha: { from: 1, to: 0.6 },
+      targets: bundle.bar,
+      borderAlpha: { from: 1, to: 0.6 },
       duration: 150,
       yoyo: true,
-      onComplete: () => {
-        bundle.border.setStrokeStyle(1, COL_BORDER);
-        bundle.border.setAlpha(1);
-      },
+      onComplete: () => bundle.bar.resetBorder(),
     });
   }
 
   /** Flash border with a specific color (damage). */
   private flashBorder(bundle: BarBundle, flashColor: number): void {
-    bundle.border.setStrokeStyle(2, flashColor);
+    bundle.bar.setBorder(flashColor, 2);
     this.scene.tweens.add({
-      targets: bundle.border,
-      alpha: { from: 1, to: 0.5 },
+      targets: bundle.bar,
+      borderAlpha: { from: 1, to: 0.5 },
       duration: 100,
       yoyo: true,
-      onComplete: () => {
-        bundle.border.setStrokeStyle(1, COL_BORDER);
-        bundle.border.setAlpha(1);
-      },
+      onComplete: () => bundle.bar.resetBorder(),
     });
   }
 
   /** Shake bar elements horizontally. */
   private shakeBar(bundle: BarBundle): void {
-    const targets = [bundle.bgImg, bundle.fgImg, bundle.border, bundle.trail]
-      .filter((target): target is NonNullable<typeof target> => Boolean(target));
+    const targets = bundle.bar.objects;
     const origX = bundle.layout.x;
     this.scene.tweens.add({
       targets,

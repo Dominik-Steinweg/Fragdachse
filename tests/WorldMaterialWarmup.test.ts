@@ -4,12 +4,14 @@ vi.mock('../src/graphics/compileShaderPrograms',()=>({beginShaderPrograms:(_r:an
 vi.mock('phaser',()=>({Filters:{Controller:class{}},Renderer:{Events:{SET_PARALLEL_TEXTURE_UNITS:'units',RESIZE:'resize'},WebGL:{
  ProgramManager:class{ name='';setBaseShader(name:string){this.name=name;} },RenderNodes:{
  BaseFilterShader:class{programManager:any;constructor(name:string){this.programManager={name};}},
+ RenderNode:class{constructor(public name:string,public manager:any){}},
+ BatchHandler:class{programManager:any;constructor(_manager:any,config:any){this.programManager={programs:{},name:config.shaderName};}},
  BatchHandlerQuadSingle:class{
   programManager={programs:{},name:'',currentConfig:{additions:[{additions:{fragmentProcess:'fragColor = applyTint(fragColor);'}}] as any[]},addAddition(addition:any){this.name=addition.name;}};
   vertexBufferLayout={buffer:{}};indexBuffer={};updateTextureCount(){}resize(){}
   finalizeTextureCount(n:number){expect(n).toBe(1);}constructor(public manager:any){}
  }
-}}},GameObjects:{Shader:class{
+}}},GameObjects:{Components:{TransformMatrix:class{}},Shader:class{
  renderNode:any;
  constructor(scene:any,config:any){this.renderNode={manager:scene.sys.renderer.renderNodes,
   vertexBufferLayout:{buffer:{}},programManager:{programs:{},name:config.shaderName}};}
@@ -22,7 +24,7 @@ it('primes the real material and first-player keys, releases private probe resou
  renderer.renderNodes={renderer,off:vi.fn()};const scene={sys:{renderer}};
  const finish=warmupWorldMaterials(scene as never);
  expect(state.managers.map(m=>m.name)).toEqual(['CanopySunlightMaterialV9Batched','VegetationVolumeR18','RockFoliageSingleCoverage',
-  'CharacterMaterial21eV2','FragdachseWaterSurfaceSunlight','FragdachseStatusRing','FragdachseStatusRingFill','WorldMoonSky','RockPenetration','RockShadowPolar','VoidCreepGround','VoidCreepRock','VoidCreepGlow','VoidSporeMotes']);
+  'CharacterMaterial21eV2','FragdachseWaterSurfaceSunlight','FragdachseStatusRing','FragdachseStatusRingFill','WorldMoonSky','RockPenetration','RockShadowPolar','VoidCreepGround','VoidCreepRock','VoidCreepGlow','VoidSporeMotes','BAR_SDF']);
  expect(renderer.deleteBuffer).toHaveBeenCalledTimes(18);expect(state.shaderDestroyed).toHaveBeenCalledTimes(10);
  expect(renderer.off).toHaveBeenCalledTimes(4);expect(renderer.renderNodes.off).toHaveBeenCalledTimes(4);
  expect(state.finish).not.toHaveBeenCalled();finish();expect(state.finish).toHaveBeenCalledOnce();
