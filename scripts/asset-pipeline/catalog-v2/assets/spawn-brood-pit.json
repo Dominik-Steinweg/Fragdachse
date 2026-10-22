@@ -286,6 +286,87 @@
         "saturation": 1.0,
         "value": 0.55,
         "tint": 0.4
+      },
+      "Dark leathery hide": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.35,
+        "edgewear": 0.05,
+        "saturation": 0.3,
+        "value": 0.5,
+        "tint": 0.6
+      },
+      "Wet violet gum": {
+        "family": "dawnPaint",
+        "scale": 0.45,
+        "grime": 0.08,
+        "edgewear": 0.0,
+        "saturation": 1.0,
+        "value": 0.95,
+        "tint": 0.3
+      },
+      "Monster tongue": {
+        "family": "dawnPaint",
+        "scale": 0.45,
+        "grime": 0.06,
+        "edgewear": 0.0,
+        "saturation": 0.9,
+        "value": 1.15,
+        "tint": 0.35
+      },
+      "Yellowed monster tooth": {
+        "family": "bone",
+        "scale": 0.45,
+        "grime": 0.15,
+        "edgewear": 0.05,
+        "saturation": 0.8,
+        "value": 1.05,
+        "tint": 0.1
+      },
+      "Black chitin plate": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.2,
+        "edgewear": 0.12,
+        "saturation": 0.3,
+        "value": 0.1,
+        "tint": 0.65
+      },
+      "Chitin ridge": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.2,
+        "edgewear": 0.15,
+        "saturation": 0.3,
+        "value": 0.28,
+        "tint": 0.5
+      },
+      "Translucent grub skin": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.05,
+        "edgewear": 0.0,
+        "saturation": 0.5,
+        "value": 1.45,
+        "tint": 0.45
+      },
+      "Grub segment crease": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.2,
+        "edgewear": 0.0,
+        "saturation": 0.8,
+        "value": 0.6,
+        "tint": 0.5
+      },
+      "Hatched egg shell": {
+        "family": "bone",
+        "scale": 0.45,
+        "grime": 0.2,
+        "edgewear": 0.05,
+        "saturation": 0.5,
+        "value": 0.9,
+        "tint": 0.3
       }
     },
     "concept": "pool"
