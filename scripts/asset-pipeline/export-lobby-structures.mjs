@@ -154,6 +154,28 @@ export async function deriveOutline(solidFile, sourceSize, displaySize, turn) {
   throw Error(`${solidFile}: outline needs more than ${MAX_RECTS} rects`);
 }
 
+/**
+ * Shadow casters at two display px per texel: the solid geometry's height (ropes, pegs and walkable
+ * floors excluded by the solid pass), max-pooled so posts and rafters stay continuous under the
+ * runtime's linear filtering. Opaque grayscale: R is the height between the manifest's min and max.
+ */
+export async function deriveCasterHeight(run, displaySize) {
+  const read = file => sharp(path.join(run, file)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const [elevation, solid] = await Promise.all([read('elevation.png'), read('solid.png')]);
+  const source = elevation.info.width, size = displaySize / 2, block = source / size;
+  if (solid.info.width !== source || !Number.isInteger(block)) throw Error(`${run}: caster grid does not divide the passes`);
+  const out = Buffer.alloc(size * size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let height = 0;
+    for (let yy = 0; yy < block; yy++) for (let xx = 0; xx < block; xx++) {
+      const i = ((y * block + yy) * source + x * block + xx) * 4;
+      if (solid.data[i + 3] >= 128 && elevation.data[i + 3] >= 128) height = Math.max(height, elevation.data[i]);
+    }
+    out[y * size + x] = height;
+  }
+  return sharp(out, { raw: { width: size, height: size, channels: 1 } }).png({ compressionLevel: 9 }).toBuffer();
+}
+
 async function overlay(run, outline, displaySize, turn) {
   const { width, height } = footprint(turn);
   const ox = (displaySize - width) / 2, oy = (displaySize - height) / 2;
@@ -207,6 +229,8 @@ async function main() {
     await mkdir(target, { recursive: true });
     const files = { beauty: 'top.png', albedo: 'color.png', elevation: 'elevation.png', solid: 'solid.png',
       ...Object.fromEntries(passes.layers.map(layer => [`emission-${layer}`, `emission-${layer}.png`])) };
+    await writeFile(path.join(run, 'caster-height.png'), await deriveCasterHeight(run, displaySize));
+    files['caster-height'] = 'caster-height.png';
     const hashes = {};
     for (const [name, source] of Object.entries(files)) {
       const buffer = await readFile(path.join(run, source));
@@ -228,7 +252,8 @@ async function main() {
     };
     const entry = outlines.find(candidate => candidate.id === structureId);
     if (!entry) throw Error(`No outline entry ${structureId}`);
-    entry.revision += 1;
+    // A republish of the same solid pass keeps its outline revision.
+    if (entry.sourceSha256 !== hashes.solid || JSON.stringify(entry.rects) !== JSON.stringify(outline.rects)) entry.revision += 1;
     entry.sourceSha256 = hashes.solid;
     entry.rects = outline.rects;
   }

@@ -259,7 +259,8 @@ export class LobbyStructureRenderer {
       name: 'LobbyStructureShadow', shaderName: 'LobbyStructureShadow', fragmentSource: LOBBY_STRUCTURE_SHADOW_FRAGMENT,
       setupUniforms: (set: (name: string, value: unknown) => void) => {
         const frame = this.castFrame;
-        set('uElevation', 0);
+        set('uCaster', 0);
+        set('uStep', STRUCTURE_SHADOW.marchStepPx);
         this.canvasUniform[0] = left; this.canvasUniform[1] = top; this.canvasUniform[2] = size; this.canvasUniform[3] = 0;
         set('uCanvas', this.canvasUniform);
         this.heightUniform[0] = asset.heightPx.min; this.heightUniform[1] = asset.heightPx.max;
@@ -272,7 +273,7 @@ export class LobbyStructureRenderer {
         this.shadeUniform[0] = STRUCTURE_SHADOW.opacity * frame.opacityMult; this.shadeUniform[1] = STRUCTURE_SHADOW.softnessPx * frame.softnessMult;
         set('uShade', this.shadeUniform);
       },
-    }, quadLeft, quadTop, quadSize, quadSize, [this.scene.textures.get(lobbyStructureTextureKey(asset, 'elevation'))]);
+    }, quadLeft, quadTop, quadSize, quadSize, [this.scene.textures.get(lobbyStructureTextureKey(asset, 'caster-height'))]);
     return this.scene.add.existing(quad).setOrigin(0).setDepth(STRUCTURE_SHADOW.layerDepth).setBlendMode(Phaser.BlendModes.MULTIPLY);
   }
 

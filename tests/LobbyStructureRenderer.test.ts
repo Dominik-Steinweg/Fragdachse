@@ -7,6 +7,8 @@ import { LOBBY_BUILDINGS, lobbyBuildingWorldRects } from '../src/config/authorin
 import { LOBBY_MERCHANT } from '../src/config/authoring/lobbyMerchant';
 import { isInsideStructure, structureBounds } from '../src/arena/StructureOutline';
 import { CELL_SIZE } from '../src/config';
+import { STRUCTURE_SHADOW } from '../src/effects/ShadowConfig';
+import { LOBBY_STRUCTURE_SHADOW_MAX_STEPS } from '../src/arena/lobbyStructures/lobbyStructureShaders';
 import type { WorldMetrics } from '../src/world/WorldMetrics';
 import { t } from '../src/i18n';
 
@@ -51,11 +53,16 @@ describe('Lobby structure presentation', () => {
     preloadLobbyStaffAssets(loader as unknown as Phaser.Loader.LoaderPlugin);
     for (const building of LOBBY_BUILDINGS) {
       const asset = lobbyStructureAsset(building.id)!;
-      for (const pass of ['beauty', 'albedo', 'elevation', 'solid'] as const) {
+      for (const pass of ['beauty', 'albedo', 'elevation', 'solid', 'caster-height'] as const) {
         expect(loader.image.mock.calls.map(call => call[0])).toContain(lobbyStructureTextureKey(asset, pass));
       }
       expect(loader.spritesheet.mock.calls.map(call => call[0])).toContain(lobbyStaffAsset(building.menu)!.sheetTextureKey);
     }
+  });
+
+  it('marches the ground shadow over its full reach in steps shorter than a caster texel', () => {
+    expect(STRUCTURE_SHADOW.marchStepPx).toBeLessThan(2);
+    expect(STRUCTURE_SHADOW.maxReachPx / STRUCTURE_SHADOW.marchStepPx).toBeLessThanOrEqual(LOBBY_STRUCTURE_SHADOW_MAX_STEPS);
   });
 
   it('places each structure on its canvas, its plaque outside the outline and its staff at the staff socket', () => {

@@ -341,7 +341,9 @@ diese Kontur, nie Texturen zur Laufzeit.
   Eigenschatten aus der Höhe in Sonnenrichtung und Lampen-/Mondrelief über `surfaceNightResponse`. Sonne, Wolken,
   Mond und Relieflampen leiht allein `WorldSunlightPresentation` (Ziel `structures`); Low zeigt die Beauty.
 - Der Bodenschatten ist ein Höhenfeld-Raymarch mit Peilung und Profil aus `ShadowSystem.getLongCasterFrame`;
-  er gehört nie in den Chunk-Bake.
+  er gehört nie in den Chunk-Bake. Er liest nicht die Elevation, sondern den Export `caster-height`: nur
+  Solid-Geometrie (keine Seile, Heringe, begehbaren Böden), max-gepoolt auf 2 px je Texel, und marschiert kürzer
+  als ein Texel. Sonst zerfallen dünne Teile und streifende Kanten im Schrittraster zu Zähnen.
 - Emissionsschichten liegen über der Lightmap (ADD, `emissiveAlpha`); `forge` und `cyan` tragen eine Tagesgrundhelligkeit,
   `lamp` folgt `getArtificialLightFactor`. Socket-Lichter nutzen eigene Presets.
 - Die Solid-Maske ist der Nebel-Dachstempel (`getFogSurfaceStamps`); eine eigene Dunstschicht gibt es nicht.

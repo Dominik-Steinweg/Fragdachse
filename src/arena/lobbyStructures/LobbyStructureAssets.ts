@@ -3,7 +3,7 @@ import manifest from '../../assets/manifests/lobby-structures.json';
 
 /** Runtime emission layers; each has its own gate (the forge burns by day, lamps follow the night). */
 export type LobbyStructureLayer = 'forge' | 'lamp' | 'cyan';
-export type LobbyStructurePass = 'beauty' | 'albedo' | 'elevation' | 'solid' | `emission-${LobbyStructureLayer}`;
+export type LobbyStructurePass = 'beauty' | 'albedo' | 'elevation' | 'solid' | 'caster-height' | `emission-${LobbyStructureLayer}`;
 
 export interface LobbyStructureSocket { readonly x: number; readonly y: number; readonly z: number }
 
@@ -32,10 +32,13 @@ export function lobbyStructureTextureKey(asset: LobbyStructureAsset, pass: Lobby
 }
 
 function passes(asset: LobbyStructureAsset): LobbyStructurePass[] {
-  return ['beauty', 'albedo', 'elevation', 'solid', ...asset.layers.map(layer => `emission-${layer}` as const)];
+  return ['beauty', 'albedo', 'elevation', 'solid', 'caster-height', ...asset.layers.map(layer => `emission-${layer}` as const)];
 }
 
-/** The elevation and emission PNGs are data: the shaders unpremultiply them themselves. */
+/**
+ * The elevation and emission PNGs are data: the shaders unpremultiply them themselves. The
+ * caster height is opaque grayscale at two display px per texel, read with linear filtering.
+ */
 export function preloadLobbyStructureAssets(loader: Phaser.Loader.LoaderPlugin): void {
   for (const asset of Object.values(LOBBY_STRUCTURE_ASSETS)) {
     for (const pass of passes(asset)) {

@@ -70,7 +70,8 @@
         "elevation": "bce3e804d791c456c1636ca532515bfa771548dfd9094bfc2a481c18661ba35e",
         "solid": "45307f5e679e6ff0f83b176121dad2c4706059a2e64972899b041731bdc0fa0d",
         "emission-forge": "83e2bea87dbd073ce3da81152ced83751e28feb6015165717f982a48013a3dca",
-        "emission-lamp": "a39f180cb9fa3ffc879c9bfc1a0cc931c5a150f36efd416500aacde0d31242eb"
+        "emission-lamp": "a39f180cb9fa3ffc879c9bfc1a0cc931c5a150f36efd416500aacde0d31242eb",
+        "caster-height": "9b057bcfe0ecfb7b6a2b944b7dfaa47751bf7040e42d5b51493c45379eb64d72"
       }
     },
     "lobby-yard": {
@@ -133,7 +134,8 @@
         "elevation": "150e8f594ebd93f3fa37915b3fd6a5cbd49108f620bfebc0b5c58e237bd7d024",
         "solid": "7bdf24ac76267e8ff7c6b2651faba1deb46f9ee9d5e7225af324ec3c7d26852f",
         "emission-lamp": "3884e73f3324fc4fbe8cb6cb0f11d8d227b556575ad2cd62404bd7789acccbf2",
-        "emission-cyan": "e72df076c11dc3b659c271f433ed0ccef756301626edfc518db2d557256e0a62"
+        "emission-cyan": "e72df076c11dc3b659c271f433ed0ccef756301626edfc518db2d557256e0a62",
+        "caster-height": "7402675271c8810ed6a4fd4c1058d38b2d0e848436e1dcd9edb2aa3b2b427e2d"
       }
     },
     "lobby-armory": {
@@ -194,7 +196,8 @@
         "albedo": "7258d010ac4b5a6e1d09e1af05a8c3417233ac3755a23708c3cbec270ba273f7",
         "elevation": "1745c6e9ffd37cf82a4e1c932c411d160f2ce4035db12d08103415cb40cafde6",
         "solid": "14a0b50224b4bd63b4c600e6339b460e18792f54755a6b5fe9800a596fefb45f",
-        "emission-lamp": "9b34674182d4c158173cc2f9b01e63455405c124dbf50d00a49e099ee89131a8"
+        "emission-lamp": "9b34674182d4c158173cc2f9b01e63455405c124dbf50d00a49e099ee89131a8",
+        "caster-height": "be0c95c130d93053e070a7eaf3f900d0944f40afa474ee95bc63b937f5a8bdcd"
       }
     },
     "lobby-merchant-stall": {
@@ -265,7 +268,8 @@
         "albedo": "c338ead455223982b9203c4f60f54a259557a716315a8be1f0074478e076f91c",
         "elevation": "549ee5900b9b6986b0e597753a64b78bf39da6ba9d76f5a626c7dcbfbb4744d4",
         "solid": "33a5840a2f745774148518ff092c72522bfa906673f0e246244e56ae09583dd1",
-        "emission-lamp": "d19f731946b7a6bcbf3d348683ad69c5b5bedbd1fa5c30cefc7c47df8283506f"
+        "emission-lamp": "d19f731946b7a6bcbf3d348683ad69c5b5bedbd1fa5c30cefc7c47df8283506f",
+        "caster-height": "abc7dddf74bb49444d3268c4ce0b21c83804ac478ad6baa28835cffbab00d2fc"
       }
     }
   },

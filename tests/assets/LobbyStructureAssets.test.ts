@@ -20,6 +20,7 @@ describe('lobby structure exports', () => {
       expect(asset, building.id).toBeTruthy();
       for (const [pass, hash] of Object.entries(asset.sha256)) expect(sha(readFileSync(file(asset.asset, pass))), `${asset.asset}/${pass}`).toBe(hash);
       for (const layer of asset.layers) expect(asset.sha256[`emission-${layer}`], `${asset.asset} ${layer}`).toBeDefined();
+      expect(asset.sha256['caster-height'], `${asset.asset} caster`).toBeDefined();
     }
     expect(Object.keys(LOBBY_STRUCTURE_ASSETS).sort()).toEqual(LOBBY_BUILDINGS.map(building => building.id).sort());
   });
