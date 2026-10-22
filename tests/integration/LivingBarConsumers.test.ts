@@ -329,7 +329,7 @@ describe('living UI consumer ownership', () => {
     const { scene } = sceneStub();
     const lobby: any = new LobbyPlayerProgress(scene, () => {}, () => {});
     lobby.build([]);
-    const tooltip = lobby.itemsTooltip.container as UiObject;
+    const tooltip = lobby.lockTooltip.container as UiObject;
     expect(tooltip.parentContainer).toBeNull();
     expect(tooltip.depth).toBeGreaterThan(DEPTH.OVERLAY);
     expect(effects.every(effect => !effect.active)).toBe(true);

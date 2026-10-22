@@ -14,7 +14,9 @@ import {
   type LivingBarPalette,
 } from './LivingBarEffect';
 import { UiButton } from './UiButton';
-import { UiTooltip } from './UiTooltip';
+import { UiTooltip, type UiTooltipLine as TooltipLine } from './UiTooltip';
+import { DAWN_UNLOCK_AFTER_MAP_ID } from '../dawn/rules/DawnUnlock';
+import { PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID } from '../config/persistentBase';
 import { ensureRoundedTexture } from './uiTextures';
 import { textStyle } from './uiTheme';
 
@@ -51,8 +53,8 @@ export class LobbyPlayerProgress {
   private coopItemsBtn: UiButton | null = null;
   private upgradeBtnEffect: LivingBarEffect | null = null;
   private itemsBtnEffect: LivingBarEffect | null = null;
-  private itemsTooltip: UiTooltip | null = null;
-  private baseTooltip: UiTooltip | null = null;
+  private lockTooltip: UiTooltip | null = null;
+  private dawnUnlocked = false;
   private coopItemsUnlocked = false;
   private coopItemsSignature: string | null = null;
   private coopProgressAvailable = false;
@@ -70,7 +72,7 @@ export class LobbyPlayerProgress {
   openMerchant(): void { this.merchant?.show(); }
   isMerchantOpen(): boolean { return this.merchant?.isOpen() ?? false; }
   setVisible(visible: boolean): void { this.visible = visible; this.syncCoopEffectActivity(); }
-  hideTooltip(): void { this.itemsTooltip?.hide(); this.baseTooltip?.hide(); }
+  hideTooltip(): void { this.lockTooltip?.hide(); }
   setReady(ready: boolean, ended = false): void {
     this.hideTooltip();
     this.isReady = ready; this.connectionEnded = ended; this.updateCoopDefenseMenuButtons();
@@ -78,18 +80,24 @@ export class LobbyPlayerProgress {
   destroy(): void {
     this.merchant?.destroy(); this.merchantBtn?.destroy();
     this.upgradeBtnEffect?.destroy(); this.itemsBtnEffect?.destroy(); this.coopBarEffect?.destroy();
-    this.itemsTooltip?.destroy(); this.coopUpgradesBtn?.destroy(); this.coopItemsBtn?.destroy();
+    this.lockTooltip?.destroy(); this.coopUpgradesBtn?.destroy(); this.coopItemsBtn?.destroy();
     this.coopBaseBtn?.destroy();
-    this.baseTooltip?.destroy();
     this.coopBand?.destroy(true);
   }
   build(objects: Phaser.GameObjects.GameObject[]): void {
     this.merchant = new DawnMerchantOverlay(this.scene,
       () => this.coopProgressAvailable && !this.isReady && !this.connectionEnded);
+    // Haendler, Basis und Items teilen sich das Sperrmuster: `disabled` plus Schloss und Hinweis.
     this.merchantBtn = new UiButton(this.scene, { skin: 'forest',
       x: COOP_ITEMS_BTN_X, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
-      label: t('ui.dawn.merchant'), onClick: this.onOpenMerchant,
+      label: t('ui.dawn.merchant'), icon: 'lock', iconSize: 16, intent: 'neutral',
+      onClick: () => { if (this.dawnUnlocked) this.onOpenMerchant(); },
     }).setVisible(false);
+    this.merchantBtn.setEnabled(false);
+    this.attachLockTooltip(this.merchantBtn, () => this.dawnUnlocked ? null : {
+      title: t('ui.dawn.merchant').toUpperCase(),
+      lines: this.victoryUnlockLines(DAWN_UNLOCK_AFTER_MAP_ID),
+    });
     // Das Band gibt es nur bei voller Panelhoehe, deshalb die feste Obergrenze.
     const bandBottom = 966;
     const bandH = bandBottom - COOP_BAND_BG_TOP;
@@ -150,15 +158,22 @@ export class LobbyPlayerProgress {
       },
     });
     this.coopItemsBtn.setEnabled(false);
-    this.attachItemsLockTooltip();
+    this.attachLockTooltip(this.coopItemsBtn, () => this.coopItemsUnlocked ? null : {
+      title: 'ITEMS',
+      lines: [
+        ...this.victoryUnlockLines(COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID),
+        { text: '', color: COLORS.GREY_5 },
+        { text: t('ui.items.victoryDrops'), color: FOREST.muted },
+      ],
+    });
 
     this.coopBaseBtn = new UiButton(this.scene, { skin: 'forest',
       x: PANEL_CX, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
-      label: t('ui.base.title'), icon: 'lock', iconSize: 14, onClick: this.onOpenBase,
-      isEnabled: () => this.coopBaseHost,
+      label: t('ui.base.title'), icon: 'lock', iconSize: 16, intent: 'neutral',
+      onClick: () => { if (this.coopBaseHost && this.coopBaseUnlocked) this.onOpenBase(); },
     });
     this.coopBaseBtn.setEnabled(false);
-    this.attachBaseLockTooltip();
+    this.attachLockTooltip(this.coopBaseBtn, () => this.baseLockContent());
     this.coopBand = this.scene.add.container(0, 0, [
       bandBg,
       bandLabel,
@@ -216,61 +231,43 @@ export class LobbyPlayerProgress {
 
     // Eine eigene Overlay-Ebene liegt auch ueber Systemleiste und aeusserem Kartenrahmen.
     // Die Lebensdauer bleibt beim Fortschrittsbereich; Sichtwechsel blenden den Hinweis aus.
-    this.itemsTooltip = new UiTooltip(this.scene, 360, undefined, undefined, 'forest');
-    const tooltipRoot = this.itemsTooltip.build().setDepth(DEPTH.OVERLAY + 2).setScrollFactor(0);
+    this.lockTooltip = new UiTooltip(this.scene, 360, undefined, undefined, 'forest');
+    const tooltipRoot = this.lockTooltip.build().setDepth(DEPTH.OVERLAY + 2).setScrollFactor(0);
     promoteToClarityCamera(this.scene, tooltipRoot);
-    this.baseTooltip = new UiTooltip(this.scene, 360, undefined, undefined, 'forest');
-    const baseTooltipRoot = this.baseTooltip.build().setDepth(DEPTH.OVERLAY + 2).setScrollFactor(0);
-    promoteToClarityCamera(this.scene, baseTooltipRoot);
   }
 
-  private attachBaseLockTooltip(): void {
-    const bg = this.coopBaseBtn?.getBackground();
-    if (!bg) return;
-    // UiButton preserves hover events on disabled buttons for explanatory tooltips.
-    bg.on('pointerover', (pointer: Phaser.Input.Pointer) => {
-      if (this.coopBaseHost) return;
-      this.itemsTooltip?.hide();
-      this.baseTooltip?.show(t('ui.base.title'), COLORS.GOLD_1,
-        [{ text: t('ui.base.hostOnly'), color: FOREST.text }], pointer);
-    });
-    bg.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!this.coopBaseHost) this.baseTooltip?.move(pointer);
-    });
-    bg.on('pointerout', () => this.baseTooltip?.hide());
+  private baseLockContent(): { title: string; lines: TooltipLine[] } | null {
+    const title = t('ui.base.title').toUpperCase();
+    if (!this.coopBaseHost) return { title, lines: [{ text: t('ui.base.hostOnly'), color: FOREST.text }] };
+    return this.coopBaseUnlocked ? null : { title, lines: this.victoryUnlockLines(PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID) };
   }
 
-  private attachItemsLockTooltip(): void {
-    const bg = this.coopItemsBtn?.getBackground();
-    if (!bg) return;
-    // Der Button ist im gesperrten Zustand nicht interaktiv; die Trefferflaeche muss deshalb
-    // eigens gesetzt werden, sonst gaebe es kein pointerover fuer den Hinweis.
-    bg.setInteractive({ useHandCursor: false });
+  private victoryUnlockLines(mapId: string): TooltipLine[] {
+    return [
+      { text: t('ui.items.locked'), color: FOREST.text },
+      { text: '', color: COLORS.GREY_5 },
+      { text: t('ui.items.unlockByVictory'), color: FOREST.muted },
+      { text: getMapName(mapId, getLocale()), color: COLORS.GOLD_2, bold: true },
+    ];
+  }
+
+  /**
+   * Gesperrte Buttons bleiben als Trefferflaeche erhalten (`UiButton.setEnabled`), deshalb kommen
+   * Hover-Ereignisse an. `content` liefert `null`, sobald der Button nutzbar ist.
+   */
+  private attachLockTooltip(
+    button: UiButton,
+    content: () => { title: string; lines: TooltipLine[] } | null,
+  ): void {
+    const bg = button.getBackground();
     bg.on('pointerover', (pointer: Phaser.Input.Pointer) => {
-      if (this.coopItemsUnlocked) return;
-      this.itemsTooltip?.show(
-        'ITEMS',
-        COLORS.GOLD_1,
-        [
-          { text: t('ui.items.locked'), color: FOREST.text },
-          { text: '', color: COLORS.GREY_5 },
-          { text: t('ui.items.unlockByVictory'), color: FOREST.muted },
-          {
-            text: getMapName(COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID, getLocale()),
-            color: COLORS.GOLD_2,
-            bold: true,
-          },
-          { text: '', color: COLORS.GREY_5 },
-          { text: t('ui.items.victoryDrops'), color: FOREST.muted },
-        ],
-        pointer,
-      );
+      const shown = content();
+      if (shown) this.lockTooltip?.show(shown.title, COLORS.GOLD_1, shown.lines, pointer);
     });
     bg.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (this.coopItemsUnlocked) return;
-      this.itemsTooltip?.move(pointer);
+      if (content()) this.lockTooltip?.move(pointer);
     });
-    bg.on('pointerout', () => this.itemsTooltip?.hide());
+    bg.on('pointerout', () => this.lockTooltip?.hide());
   }
 
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void {
@@ -329,7 +326,7 @@ export class LobbyPlayerProgress {
     this.coopItemsSignature = signature;
     this.coopItemsUnlocked = unlocked;
     // Ein offener Sperr-Hinweis waere nach dem Freischalten falsch.
-    this.itemsTooltip?.hide();
+    this.hideTooltip();
 
     this.updateCoopDefenseMenuButtons();
     // Das Schloss traegt die Sperre; freigeschaltet braucht der Button kein Symbol mehr.
@@ -368,15 +365,23 @@ export class LobbyPlayerProgress {
     this.baseSignature = signature;
     this.coopBaseUnlocked = unlocked;
     this.coopBaseHost = isHost;
-    this.baseTooltip?.hide();
+    this.hideTooltip();
     this.coopBaseBtn?.setIcon(isHost && unlocked ? null : 'lock');
     this.coopBaseBtn?.setBadge(isHost && unlocked && pending > 0 ? pending : null);
     this.updateCoopDefenseMenuButtons();
   }
 
+  setDawnUnlocked(unlocked: boolean): void {
+    if (unlocked === this.dawnUnlocked) return;
+    this.dawnUnlocked = unlocked;
+    this.hideTooltip();
+    this.merchantBtn?.setIcon(unlocked ? null : 'lock');
+    this.updateCoopDefenseMenuButtons();
+  }
+
   private updateCoopDefenseMenuButtons(): void {
     const enabled = !this.isReady && !this.connectionEnded;
-    this.merchantBtn?.setEnabled(enabled);
+    this.merchantBtn?.setEnabled(enabled && this.dawnUnlocked);
     if (!enabled) this.merchant?.hide();
     this.coopBaseBtn?.setEnabled(enabled && this.coopBaseHost && this.coopBaseUnlocked);
     this.coopUpgradesBtn?.setEnabled(enabled);

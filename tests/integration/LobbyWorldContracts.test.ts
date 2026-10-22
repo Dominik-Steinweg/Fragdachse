@@ -1,6 +1,7 @@
 import {
   LOBBY_BUILDINGS,
   LOBBY_BUILDING_BASES,
+  lobbyBuildingsOfWorld,
   LOBBY_BUILDING_INTERACTION_RANGE_PX,
   LOBBY_BUILDING_RING_CELLS,
   lobbyBuildingCellBounds,
@@ -168,7 +169,7 @@ describe('LobbyWorld – authored Geometrie', () => {
   }
 
   it('materializes all four menu structures along valid outlines, clear of terrain and the reserve', () => {
-    const world = lobbyWorldContextFor('coop_defense', false);
+    const world = lobbyWorldContextFor('coop_defense', true);
     const terrain = new Set([...layout.rocks, ...layout.trees, ...(layout.water ?? [])].map(cell => `${cell.gridX}:${cell.gridY}`));
     const claimed = new Map<string, string>();
     expect(LOBBY_BUILDINGS.map(building => building.menu).sort()).toEqual(['base', 'items', 'merchant', 'upgrades']);
@@ -197,7 +198,7 @@ describe('LobbyWorld – authored Geometrie', () => {
   });
 
   it('keeps a walkable ring and clear crowns around every structure and reaches all four sides from the spawn', () => {
-    const world = lobbyWorldContextFor('coop_defense', false);
+    const world = lobbyWorldContextFor('coop_defense', true);
     const canopyReach = CANOPY_RADIUS * Math.max(...CANOPY_ASSETS.map(asset => asset.displayScale));
     const solid = new Set([...layout.rocks, ...layout.trees, ...(layout.water ?? []), ...world.bases.flatMap(base => base.cells)]
       .map(cell => `${cell.gridX}:${cell.gridY}`));
@@ -263,7 +264,7 @@ describe('LobbyWorld – authored Geometrie', () => {
     const definition = getLobbyWorldDefinition();
     const site = definition.persistentBaseSite!;
     const radius = resolvePersistentBaseReservationRadiusCells(site.maxAreaStage);
-    const world = lobbyWorldContextFor('coop_defense', false);
+    const world = lobbyWorldContextFor('coop_defense', true);
     for (const building of LOBBY_BUILDINGS) {
       for (const cell of world.bases.find(base => base.id === building.id)!.cells) {
         expect(Math.max(Math.abs(cell.gridX - site.anchor.gridX), Math.abs(cell.gridY - site.anchor.gridY))).toBeGreaterThan(radius);
@@ -283,19 +284,20 @@ describe('LobbyWorld – authored Geometrie', () => {
     }
   });
 
-  it('materialisiert dieselbe Bauwerksgeometrie fuer alle Peers und ohne Freischaltung', () => {
+  it('materialisiert dieselbe Bauwerksgeometrie fuer alle Peers und gar keine ohne Freischaltung', () => {
     const reference = lobbyWorldContextFor('coop_defense', true).bases.filter(base => base.collisionRects);
     expect(reference).toHaveLength(LOBBY_BUILDINGS.length);
+    // Ein Peer mit demselben Parameter baut dieselbe Geometrie.
+    for (const base of reference) {
+      const other = lobbyWorldContextFor('coop_defense', true).bases.find(entry => entry.id === base.id)!;
+      expect(other.cells).toEqual(base.cells);
+      expect(other.collisionRects).toEqual(base.collisionRects);
+      expect(other.movementCells).toEqual(base.movementCells);
+    }
+    // Ohne Basiskern steht kein Gebaeude: keine Kollision, keine Zellen.
     for (const mode of ['coop_defense', 'deathmatch', 'team_deathmatch', 'capture_the_beer'] as const) {
-      for (const unlocked of [false, true]) {
-        const bases = lobbyWorldContextFor(mode, unlocked).bases;
-        for (const base of reference) {
-          const other = bases.find(entry => entry.id === base.id)!;
-          expect(other.cells).toEqual(base.cells);
-          expect(other.collisionRects).toEqual(base.collisionRects);
-          expect(other.movementCells).toEqual(base.movementCells);
-        }
-      }
+      const locked = lobbyWorldContextFor(mode, false);
+      expect(locked.bases.filter(base => base.collisionRects), mode).toEqual([]);
     }
   });
 
@@ -451,7 +453,9 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
       definition,
     });
     expect(world.definition).toBe(definition);
-    expect(world.bases.map(base => base.id)).toEqual(LOBBY_BUILDING_BASES.map(base => base.id));
+    // Gesperrt steht gar kein Gebaeude in der Lobby: weder Kollision noch Darstellung.
+    expect(world.bases).toEqual([]);
+    expect(lobbyBuildingsOfWorld(world.descriptor.parameters)).toEqual([]);
     expect(world.persistentBaseSite).toBeNull();
     expect(world.metrics.gridCols).toBe(LOBBY_WORLD_WIDTH_CELLS);
     expect(world.metrics.gridRows).toBe(LOBBY_WORLD_HEIGHT_CELLS);
@@ -472,6 +476,8 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     });
 
     expect(world.bases.map((base) => base.id)).toEqual([LOBBY_PERSISTENT_BASE_ID, ...LOBBY_BUILDING_BASES.map(base => base.id)]);
+    expect(lobbyBuildingsOfWorld(world.descriptor.parameters).map(building => building.id))
+      .toEqual(LOBBY_BUILDING_BASES.map(base => base.id));
     expect(world.persistentBaseSite).toMatchObject({
       baseId: LOBBY_PERSISTENT_BASE_ID,
       areaStage: 0,
@@ -504,6 +510,9 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
       const world = lobbyWorldContextFor(testCase.mode, testCase.unlocked);
       expect(world.persistentBaseSite !== null, `${testCase.mode}/${testCase.unlocked}`).toBe(testCase.hasBase);
       expect(world.bases.some(base => base.id === LOBBY_PERSISTENT_BASE_ID), `${testCase.mode}/${testCase.unlocked}`).toBe(testCase.hasBase);
+      // Die Gebaeude stehen genau dann, wenn der Kern steht.
+      expect(world.bases.some(base => LOBBY_BUILDING_BASES.some(building => building.id === base.id)),
+        `${testCase.mode}/${testCase.unlocked} buildings`).toBe(testCase.hasBase);
     }
 
     // Der Coordinator behaelt genau diese Entscheidung im bestehenden Lobby-Reinstance-Pfad;

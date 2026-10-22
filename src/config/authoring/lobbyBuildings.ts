@@ -68,11 +68,23 @@ export const LOBBY_BUILDING_BASES: WorldBaseDefinition[] = LOBBY_BUILDINGS.map(b
     id: building.id, surface: 'none', faction: 'friendly', role: 'outpost',
     // World structures without an Activity are invulnerable and have no health bar.
     hpMax: 1,
+    requiresPersistentBase: true,
     anchor: { kind: 'grid', gridX: building.gridX, gridY: building.gridY },
     shape: { kind: 'cells', cells: structureOccupancyCells(structure.rects) },
     structure,
   };
 });
+
+/**
+ * The structures a Lobby World instance actually carries. They stand with the persistent base
+ * core, so the same replicated parameter that builds the core builds them; a locked Lobby has no
+ * buildings at all. Mirrors `requiresPersistentBase` on {@link LOBBY_BUILDING_BASES}.
+ */
+export function lobbyBuildingsOfWorld(
+  parameters: { readonly persistentBaseUnlocked?: boolean } | undefined,
+): readonly LobbyBuilding[] {
+  return parameters?.persistentBaseUnlocked === true ? LOBBY_BUILDINGS : [];
+}
 
 /** Shift reach, measured from the nearest wall point: every side of a structure is an entrance. */
 export const LOBBY_BUILDING_INTERACTION_RANGE_PX = 56;

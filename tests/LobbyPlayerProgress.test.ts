@@ -10,10 +10,10 @@ import { getStoredCoopDefenseProgress, restoreStoredCoopDefenseProgress } from '
 import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
 
 describe('lobby base menu access', () => {
-  it('allows browsing the merchant before Dawn unlock and closes it when the lobby locks, not when the panel hides', () => {
+  it('locks the merchant until Dawn is unlocked and closes it when the lobby locks, not when the panel hides', () => {
     const saved = getStoredCoopDefenseProgress();
     const progress = new LobbyPlayerProgress({} as never, () => {}, () => {});
-    const button = { setVisible: vi.fn(), setEnabled: vi.fn(), setPosition: vi.fn() };
+    const button = { setVisible: vi.fn(), setEnabled: vi.fn(), setPosition: vi.fn(), setIcon: vi.fn() };
     const merchant = { hide: vi.fn() };
     Object.assign(progress, { coopBand: { visible: false, setVisible: vi.fn() },
       coopProgressLevelText: { setText: vi.fn() }, merchantBtn: button, merchant });
@@ -24,9 +24,17 @@ describe('lobby base menu access', () => {
       progress.setCoopDefenseProgress(getCoopDefenseProgressSnapshot(0));
       expect(button.setVisible).toHaveBeenLastCalledWith(true);
       expect(merchant.hide).not.toHaveBeenCalled();
+      // Visible but disabled with a lock until the final campaign map has been won.
+      progress.setDawnUnlocked(true);
+      progress.setDawnUnlocked(false);
+      expect(button.setIcon).toHaveBeenLastCalledWith('lock');
+      expect(button.setEnabled).toHaveBeenLastCalledWith(false);
       restoreStoredCoopDefenseProgress({ ...saved, completedMapIds: [DAWN_UNLOCK_AFTER_MAP_ID] });
       progress.setCoopDefenseProgress(getCoopDefenseProgressSnapshot(0));
       expect(button.setVisible).toHaveBeenLastCalledWith(true);
+      progress.setDawnUnlocked(true);
+      expect(button.setIcon).toHaveBeenLastCalledWith(null);
+      expect(button.setEnabled).toHaveBeenLastCalledWith(true);
       merchant.hide.mockClear();
       progress.setReady(true);
       expect(button.setEnabled).toHaveBeenLastCalledWith(false);
@@ -48,8 +56,11 @@ describe('lobby base menu access', () => {
     const background = new EventEmitter();
     const button = { getBackground: () => background, setEnabled: vi.fn(), setIcon: vi.fn(), setBadge: vi.fn() };
     const tooltip = { show: vi.fn(), move: vi.fn(), hide: vi.fn(), destroy: vi.fn() };
-    Object.assign(progress, { coopBaseBtn: button, baseTooltip: tooltip });
-    (progress as unknown as { attachBaseLockTooltip(): void }).attachBaseLockTooltip();
+    Object.assign(progress, { coopBaseBtn: button, lockTooltip: tooltip });
+    const internals = progress as unknown as {
+      attachLockTooltip(button: unknown, content: () => unknown): void; baseLockContent(): unknown;
+    };
+    internals.attachLockTooltip(button, () => internals.baseLockContent());
     const pointer = { x: 300, y: 900 };
 
     progress.setBaseState(unlocked, 2, false);
@@ -57,7 +68,7 @@ describe('lobby base menu access', () => {
     expect(button.setIcon).toHaveBeenLastCalledWith('lock');
     expect(button.setBadge).toHaveBeenLastCalledWith(null);
     background.emit('pointerover', pointer);
-    expect(tooltip.show).toHaveBeenCalledWith(t('ui.base.title'), expect.any(Number),
+    expect(tooltip.show).toHaveBeenCalledWith(t('ui.base.title').toUpperCase(), expect.any(Number),
       [{ text: t('ui.base.hostOnly'), color: expect.any(Number) }], pointer);
     background.emit('pointermove', pointer);
     expect(tooltip.move).toHaveBeenCalledWith(pointer);
@@ -71,7 +82,8 @@ describe('lobby base menu access', () => {
     expect(button.setBadge).toHaveBeenLastCalledWith(unlocked ? 2 : null);
     tooltip.show.mockClear();
     background.emit('pointerover', pointer);
-    expect(tooltip.show).not.toHaveBeenCalled();
+    if (unlocked) expect(tooltip.show).not.toHaveBeenCalled();
+    else expect(tooltip.show).toHaveBeenCalledOnce(); // Host sees why it is still locked.
     progress.setReady(true);
     expect(button.setEnabled).toHaveBeenLastCalledWith(false);
     progress.setReady(false);

@@ -64,7 +64,7 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   },
   // Die Geometrie ist vollstaendig authored; es gibt nichts zu generieren.
   terrain: {},
-  // Die vier Menue-Bauwerke bleiben auch ohne freigeschalteten Basiskern World-Inhalt.
+  // Die vier Menue-Bauwerke stehen nur zusammen mit dem Basiskern (`requiresPersistentBase`).
   bases: [buildPersistentBaseCoreBaseConfig(LOBBY_PERSISTENT_BASE_SITE), ...LOBBY_BUILDING_BASES],
   persistentBaseSite: LOBBY_PERSISTENT_BASE_SITE,
   // Die LobbyWorld folgt dem aktuell gewaehlten Spielmodus. Sie ist damit im Deathmatch

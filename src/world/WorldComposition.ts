@@ -28,6 +28,7 @@ import { generateWorldLayout } from './WorldLayout';
 import { WorldMaterialization } from './WorldMaterialization';
 import { WorldPresentationBinding } from './WorldPresentationBinding';
 import { LobbyStructureRenderer } from '../arena/lobbyStructures/LobbyStructureRenderer';
+import { lobbyBuildingsOfWorld } from '../config/authoring/lobbyBuildings';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import type { WorldPresentationHandoff } from './WorldPresentationHandoff';
 import { PersistentBaseWorldBinding, type PersistentBaseWorldBindingSink } from './PersistentBaseWorldBinding';
@@ -252,7 +253,8 @@ export function materializeWorldComposition(
     });
   input.runtime.setPresentation(presentation);
   if (presentationRequired && isLobbyWorldDefinitionId(world.descriptor.definitionId) && !presentation.lobbyStructures) {
-    presentation.lobbyStructures = new LobbyStructureRenderer(input.scene, world.metrics, input.gpuVfx ?? null);
+    presentation.lobbyStructures = new LobbyStructureRenderer(input.scene, world.metrics, input.gpuVfx ?? null,
+      lobbyBuildingsOfWorld(world.descriptor.parameters));
   }
   materialization.setArena(arena, (built) => { ArenaBuilder.destroyGameplay(built); });
   arena.groundSurface?.setPersistentBaseGravel(input.persistentBaseGravel);

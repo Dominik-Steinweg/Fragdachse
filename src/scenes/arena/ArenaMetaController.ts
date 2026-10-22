@@ -10,6 +10,7 @@ import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../../config/coopDefense
 import { getCoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { getHighestAvailableCoopDefenseMapId } from '../../config/coopDefenseMapUnlocks';
 import { isCoopDefenseMode } from '../../gameModes';
+import { isDawnUnlocked } from '../../dawn/rules/DawnUnlock';
 import { getSelectableLoadoutItems } from '../../loadout/LoadoutCatalog';
 import type { RoundResult, RoundState } from '../../network/NetworkBridge';
 import { getPersistentBaseRewardIds } from '../../persistentBase/PersistentBaseRewardCatalog';
@@ -150,6 +151,7 @@ export interface ArenaMetaResultReadPort {
 export interface ArenaMetaPresentationPort {
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void;
   setCoopDefenseItemsState(unlocked: boolean, pendingRewardCount: number, hasUnseenItems: boolean): void;
+  setDawnUnlocked(unlocked: boolean): void;
   refreshUpgradeOverlay(): void;
   scheduleUpgradeOverlayRefresh(): void;
   refreshColorIndicator(): void;
@@ -309,6 +311,7 @@ export class ArenaMetaController {
       stored.pendingItemRewards.length,
       stored.unseenItems,
     );
+    this.input.presentation.setDawnUnlocked(isDawnUnlocked(stored));
   }
 
   refreshLobbyProjection(showLobby = true): void {

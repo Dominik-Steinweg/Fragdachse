@@ -164,7 +164,7 @@ import type { WorldDescriptor } from '../world/WorldDescriptor';
 import type { WorldPresentationRequirement } from '../world/WorldPresentation';
 import { lobbyBuildingCandidates, lobbyMenuBlockedLabel, lobbyMenuDenial, type LobbyMenuAccessState } from '../systems/LobbyBuildingInteraction';
 import { bridgeChargeCandidates } from '../systems/BridgeInteraction';
-import type { LobbyMenu } from '../config/authoring/lobbyBuildings';
+import { lobbyBuildingsOfWorld, type LobbyMenu } from '../config/authoring/lobbyBuildings';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import { toArenaMetricsProfile } from '../world/WorldMetrics';
 import { resolvePresentationPolicy } from '../world/PresentationPolicy';
@@ -853,6 +853,7 @@ export class ArenaScene extends Phaser.Scene {
           pendingRewardCount,
           hasUnseenItems,
         ),
+        setDawnUnlocked: (unlocked) => this.lobbyOverlay.setDawnUnlocked(unlocked),
         refreshUpgradeOverlay: () => this.coopDefenseUpgradesOverlay?.refresh(),
         scheduleUpgradeOverlayRefresh: () => this.coopDefenseUpgradesOverlay?.scheduleRefresh(),
         refreshColorIndicator: () => this.ctx.leftPanel.refreshColorIndicator(),
@@ -1417,7 +1418,8 @@ export class ArenaScene extends Phaser.Scene {
           || bridge.getGamePhase() !== 'LOBBY' || this.isWorldMenuBlocking()
           || bridge.getLocalWorldParticipation() !== 'interactive') return [];
         const access = this.lobbyMenuAccessState();
-        return lobbyBuildingCandidates(metrics, world.worldRevision, player, menu => lobbyMenuBlockedLabel(menu, access));
+        return lobbyBuildingCandidates(metrics, world.worldRevision, player, menu => lobbyMenuBlockedLabel(menu, access),
+          lobbyBuildingsOfWorld(world.parameters));
       },
       open: menu => this.openLobbyMenu(menu),
     });

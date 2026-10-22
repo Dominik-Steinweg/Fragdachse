@@ -89,6 +89,7 @@ function makeInput(): {
     finishAfterRoundPresentation: vi.fn(),
     cancelAfterRoundPresentation: vi.fn(),
     setCoopDefenseItemsState: vi.fn(),
+    setDawnUnlocked: vi.fn(),
     showItemsOverlay: vi.fn(),
     refreshItemsOverlay: vi.fn(),
     isItemsOverlayOpen: vi.fn(() => false),

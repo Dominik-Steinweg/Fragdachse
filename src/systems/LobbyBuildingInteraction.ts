@@ -1,5 +1,5 @@
 import { LOBBY_BUILDINGS, LOBBY_BUILDING_INTERACTION_RANGE_PX, lobbyBuildingWorldRects,
-  type LobbyMenu } from '../config/authoring/lobbyBuildings';
+  type LobbyBuilding, type LobbyMenu } from '../config/authoring/lobbyBuildings';
 import { nearestStructurePoint, structureBounds } from '../arena/StructureOutline';
 import { t } from '../i18n';
 import type { WorldMetrics } from '../world/WorldMetrics';
@@ -15,8 +15,9 @@ export type LobbyMenuDenialCode = 'coop' | 'ready' | 'host' | 'locked';
  * selection measures the reach from the wall. The focus frames the whole outline.
  */
 export function lobbyBuildingCandidates(metrics: WorldMetrics, worldRevision: number, player: { x: number; y: number },
-  blockedFor: (menu: LobbyMenu) => string | undefined = () => undefined): WorldInteractionCandidate[] {
-  return LOBBY_BUILDINGS.map(building => {
+  blockedFor: (menu: LobbyMenu) => string | undefined = () => undefined,
+  buildings: readonly LobbyBuilding[] = LOBBY_BUILDINGS): WorldInteractionCandidate[] {
+  return buildings.map(building => {
     const rects = lobbyBuildingWorldRects(metrics, building);
     const point = nearestStructurePoint(rects, player.x, player.y);
     return {

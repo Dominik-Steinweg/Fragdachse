@@ -175,6 +175,11 @@ export interface WorldBaseDefinition {
    * Zellbelegung sein (siehe `StructureOutline`).
    */
   readonly structure?: import('../../arena/StructureOutline').StructureOutlineDefinition;
+  /**
+   * Die Basis gehoert nur zu einer World-Instanz, die den persistenten Basiskern traegt
+   * (`persistentBaseUnlocked`). Ohne ihn existiert sie gar nicht - weder Kollision noch Darstellung.
+   */
+  readonly requiresPersistentBase?: boolean;
 }
 
 /**

@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH, DEPTH_LIGHTING } from '../../config';
-import { LOBBY_BUILDINGS, lobbyBuildingWorldRects, type LobbyMenu } from '../../config/authoring/lobbyBuildings';
+import { LOBBY_BUILDINGS, lobbyBuildingWorldRects, type LobbyBuilding, type LobbyMenu } from '../../config/authoring/lobbyBuildings';
 import { LOBBY_MERCHANT } from '../../config/authoring/lobbyMerchant';
 import { lobbyStaffAsset, lobbyStaffWorkMarkers, registerLobbyStaffClips } from '../../animations/LobbyStaffAssets';
 import type { GpuVfxSystem } from '../../effects/gpu/GpuVfxSystem';
@@ -141,10 +141,11 @@ export class LobbyStructureRenderer {
   private readonly optionsUniform = new Float32Array([0, 0, 1, 1]);
   private readonly shadeUniform = new Float32Array(2);
 
-  constructor(private readonly scene: Phaser.Scene, metrics: WorldMetrics, gpuVfx: GpuVfxSystem | null = null) {
+  constructor(private readonly scene: Phaser.Scene, metrics: WorldMetrics, gpuVfx: GpuVfxSystem | null = null,
+    buildings: readonly LobbyBuilding[] = LOBBY_BUILDINGS) {
     const lit = getGraphicsQualityProfile(scene).level !== 'low';
     const emitters: LobbyStructureEmitter[] = [];
-    LOBBY_BUILDINGS.forEach((building, index) => {
+    buildings.forEach((building, index) => {
       const asset = lobbyStructureAsset(building.id);
       if (!asset || !scene.textures.exists(lobbyStructureTextureKey(asset, 'beauty'))) return;
       const rects = lobbyBuildingWorldRects(metrics, building);
