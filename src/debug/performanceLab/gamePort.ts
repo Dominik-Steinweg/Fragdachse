@@ -586,6 +586,13 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       return ready;
     },
     finishCase(test) {
+      if (test.enemyStart === 'far') {
+        // Evidence that the far AI tier was active; cumulative since the mission started.
+        const navigation = flow.navigationLabPort.getNavigationMetrics();
+        counters.navFarSolves = navigation.farSolves ?? 0;
+        counters.navFarSteeringReuses = navigation.farSteeringReuses ?? 0;
+        counters.navFarNarrowScans = navigation.farNarrowScans ?? 0;
+      }
       if (bossWindow) subphases.push({ id: `${test.id}.${bossWindow.id}`, kind: 'measurement',
         caseVersion: test.version, fromMs: bossWindow.fromMs, toMs: performance.now(), load: { ...counters } });
       if (clearedRouteAt !== null) subphases.push({ id: `${test.id}.cleared-route`, kind: 'measurement',
