@@ -17,6 +17,7 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 
 import type { GroundFireVisualStyle, SyncedBurningGroundCell } from '../src/types';
 import { GroundFireClusterRenderer } from '../src/effects/GroundFireClusterRenderer';
+import { GroundFireChangeJournal } from '../src/effects/GroundFireChanges';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
@@ -238,6 +239,27 @@ describe('GroundFire GPU particles', () => {
     const fresh = new GroundFireClusterRenderer();
     fresh.syncGround({ cells: final }, 0);
     expect(resolve(incremental)).toEqual(resolve(fresh));
+
+    // Host publishes carry their changes; a consumer that skipped one applies the chain.
+    const journal = new GroundFireChangeJournal();
+    const publish = (base: SyncedBurningGroundCell[], removed: SyncedBurningGroundCell[], upserts: SyncedBurningGroundCell[]) => {
+      const byId = new Map(base.map(cell => [cell.id, cell]));
+      for (const cell of removed) byId.delete(cell.id);
+      for (const cell of upserts) byId.set(cell.id, cell);
+      const next = [...byId.values()];
+      journal.record(next, { base, removed, upserts });
+      return next;
+    };
+    const holes = area.filter(cell => cell.gridY === 7 && cell.gridX >= 6 && cell.gridX <= 9);
+    const raised = final.filter(cell => cell.gridX === 20 && cell.gridY === 3);
+    const withTransient = publish(area, [], transient);
+    const changed = publish(withTransient, [...holes, ...transient.slice(0, 2)], raised);
+    const settled = publish(changed, transient.slice(2), []);
+    const journaled = new GroundFireClusterRenderer();
+    journaled.syncGround({ cells: area }, 0);
+    journaled.syncGround({ cells: withTransient }, 0);
+    journaled.syncGround({ cells: settled }, 0);
+    expect(resolve(journaled)).toEqual(resolve(fresh));
   });
 
   it('emits only regions near the camera and restores returning regions at steady density', () => {

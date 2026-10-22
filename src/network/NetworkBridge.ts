@@ -144,6 +144,7 @@ import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { cloneCoopDefenseUpgradeProfile, constrainCoopDefenseUpgradeProfileToEntitlements, resolveCoopDefenseUpgradeEntitlements, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
 import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
+import { resolveGroundFireChanges, type GroundFireCellChanges } from '../effects/GroundFireChanges';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
 import type { TemporaryUtilityInstanceDescriptor } from '../types';
 import type { RoundConclusion } from '../types';
@@ -4194,9 +4195,11 @@ export class NetworkBridge {
       this.lastPublishedGroundHadWarnings = !!snapshot.warnings?.length;
       return hadWarnings || this.lastPublishedGroundHadWarnings ? { w: snapshot.warnings ?? [] } : null;
     }
+    const changes = sendFull ? null : resolveGroundFireChanges(snapshot.cells, this.lastPublishedGroundCells);
+    this.lastPublishedGroundCells = snapshot.cells;
+    if (changes) return this.buildIncrementalBurningGroundDelta(changes, snapshot);
     const current = new Map<number, EncodedBurningGroundCell>();
     for (const cell of snapshot.cells) current.set(cell.id, this.encodeGroundCell(cell));
-    this.lastPublishedGroundCells = snapshot.cells;
 
     if (sendFull) {
       this.lastPublishedGroundHadWarnings = !!snapshot.warnings?.length;
@@ -4225,6 +4228,38 @@ export class NetworkBridge {
       w: snapshot.warnings ?? [],
       ...(upserts.length > 0 ? { u: upserts } : {}),
       ...(removals.length > 0 ? { r: removals } : {}),
+    };
+  }
+
+  /** Same delta as the full comparison, built from the host's published changes only. */
+  private buildIncrementalBurningGroundDelta(
+    steps: readonly GroundFireCellChanges[],
+    snapshot: SyncedBurningGroundSnapshot,
+  ): EncodedBurningGroundDelta | null {
+    const published = this.lastPublishedBurningGround;
+    const upserts = new Map<number, EncodedBurningGroundCell>();
+    const removals = new Set<number>();
+    for (const step of steps) {
+      for (const cell of step.removed) {
+        upserts.delete(cell.id);
+        if (published.delete(cell.id)) removals.add(cell.id);
+      }
+      for (const cell of step.upserts) {
+        const encoded = this.encodeGroundCell(cell);
+        const previous = published.get(cell.id);
+        published.set(cell.id, encoded);
+        if (previous !== encoded && (!previous || previous.some((value, index) => value !== encoded[index]))) {
+          upserts.set(cell.id, encoded);
+        }
+      }
+    }
+    if (upserts.size === 0 && removals.size === 0 && !snapshot.warnings?.length
+      && !this.lastPublishedGroundHadWarnings) return null;
+    this.lastPublishedGroundHadWarnings = !!snapshot.warnings?.length;
+    return {
+      w: snapshot.warnings ?? [],
+      ...(upserts.size > 0 ? { u: [...upserts.values()] } : {}),
+      ...(removals.size > 0 ? { r: [...removals] } : {}),
     };
   }
 

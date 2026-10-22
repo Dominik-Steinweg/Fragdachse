@@ -145,6 +145,7 @@ function createLayout(
 export const GROUND_FIRE_REGION_CELLS = 8;
 
 const STYLE_INDEX: Readonly<Record<GroundFireVisualStyle, number>> = { normal: 0, void: 1, allied: 2 };
+const STYLE_NAMES: readonly GroundFireVisualStyle[] = ['normal', 'void', 'allied'];
 const KEY_OFFSET = 2 ** 13;
 const KEY_ROW = 2 ** 14;
 const KEY_STYLE = 2 ** 28;
@@ -170,6 +171,18 @@ export function groundFireRegionKey(style: GroundFireVisualStyle, gridX: number,
     Math.floor(gridX / GROUND_FIRE_REGION_CELLS),
     Math.floor(gridY / GROUND_FIRE_REGION_CELLS),
   );
+}
+
+/** Visits the raster cell keys inside one emission region key (as built by `groundFireRegionKey`). */
+export function forEachGroundFireRegionCellKey(regionKey: number, visit: (key: number) => void): void {
+  const style = Math.floor(regionKey / KEY_STYLE);
+  const rest = regionKey - style * KEY_STYLE;
+  const regionY = Math.floor(rest / KEY_ROW) - KEY_OFFSET;
+  const regionX = rest - (regionY + KEY_OFFSET) * KEY_ROW - KEY_OFFSET;
+  const first = groundFireCellKey(STYLE_NAMES[style], regionX * GROUND_FIRE_REGION_CELLS, regionY * GROUND_FIRE_REGION_CELLS);
+  for (let dy = 0; dy < GROUND_FIRE_REGION_CELLS; dy += 1) {
+    for (let dx = 0; dx < GROUND_FIRE_REGION_CELLS; dx += 1) visit(first + dy * KEY_ROW + dx);
+  }
 }
 
 /** Stable string identity of an emission region; seeds and light owners derive from it. */

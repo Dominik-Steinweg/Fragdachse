@@ -1,7 +1,10 @@
 import * as Phaser from 'phaser';
 import type { GroundFireVisualStyle, SyncedBurningGroundCell, SyncedBurningGroundSnapshot } from '../types';
+import { resolveGroundFireChanges, type GroundFireCellChanges } from './GroundFireChanges';
 import {
+  GROUND_FIRE_REGION_CELLS,
   buildGroundFireRegionLayout,
+  forEachGroundFireRegionCellKey,
   groundFireCellKey,
   groundFireRegionKey,
   isStrongerGroundFireCell,
@@ -436,43 +439,37 @@ export class GroundFireClusterRenderer {
     // Snapshot producers replace the cells array when values change. Host frames between
     // changes can reuse the resolved surface without rescanning it.
     if (snapshot.cells === this.snapshotCells) return;
+    const changes = resolveGroundFireChanges(snapshot.cells, this.snapshotCells);
     this.snapshotCells = snapshot.cells;
 
-    // Diff against the previous resolved state with numeric keys. Small transient fires next
-    // to a large permanent surface must only rebuild the regions they touch, never the map.
-    const next = this.nextCells;
-    next.clear();
-    for (const cell of snapshot.cells) {
-      const key = groundFireCellKey(cell.visualStyle, cell.gridX, cell.gridY);
-      if (isStrongerGroundFireCell(cell, next.get(key))) next.set(key, cell);
-    }
-    const previous = this.knownCells;
     const dirty = this.dirtyRegions;
     const ignitions: number[] = [];
     dirty.clear();
-    for (const [key, cell] of next) {
-      const old = previous.get(key);
-      // Track spatial cells independently of cluster IDs: merges, splits and lifetime
-      // refreshes must not restart an already populated fire surface.
-      if (cell.expiresAt > now && (old?.expiresAt ?? 0) <= now) ignitions.push(key);
-      if (old && old.expiresAt === cell.expiresAt && old.intensity === cell.intensity) continue;
-      dirty.add(groundFireRegionKey(cell.visualStyle, cell.gridX, cell.gridY));
-    }
-    for (const [key, old] of previous) {
-      if (!next.has(key)) dirty.add(groundFireRegionKey(old.visualStyle, old.gridX, old.gridY));
-    }
-    this.knownCells = next;
-    this.nextCells = previous;
+    if (changes) this.applyGroundChanges(changes, now, ignitions);
+    else this.diffGroundCells(snapshot.cells, now, ignitions);
     if (dirty.size === 0) return;
     this.lightRankingDirty = true;
 
+    const known = this.knownCells;
     const regionCells = new Map<number, SyncedBurningGroundCell[]>();
-    for (const cell of next.values()) {
-      const regionKey = groundFireRegionKey(cell.visualStyle, cell.gridX, cell.gridY);
-      if (!dirty.has(regionKey)) continue;
+    const addRegionCell = (regionKey: number, cell: SyncedBurningGroundCell): void => {
       let cells = regionCells.get(regionKey);
       if (!cells) { cells = []; regionCells.set(regionKey, cells); }
       cells.push(cell);
+    };
+    if (dirty.size * GROUND_FIRE_REGION_CELLS * GROUND_FIRE_REGION_CELLS < known.size) {
+      // A few touched regions next to a large surface: look up their cells instead of scanning it.
+      for (const regionKey of dirty) {
+        forEachGroundFireRegionCellKey(regionKey, (key) => {
+          const cell = known.get(key);
+          if (cell) addRegionCell(regionKey, cell);
+        });
+      }
+    } else {
+      for (const cell of known.values()) {
+        const regionKey = groundFireRegionKey(cell.visualStyle, cell.gridX, cell.gridY);
+        if (dirty.has(regionKey)) addRegionCell(regionKey, cell);
+      }
     }
     for (const regionKey of dirty) {
       const cells = regionCells.get(regionKey);
@@ -484,7 +481,7 @@ export class GroundFireClusterRenderer {
       const layout = buildGroundFireRegionLayout(cells, CELL);
       const cluster = existing ?? this.createCluster(layout, regionKey);
       this.applyLayout(cluster, layout);
-      for (const key of cluster.pendingIgnitions) if (!next.has(key)) cluster.pendingIgnitions.delete(key);
+      for (const key of cluster.pendingIgnitions) if (!known.has(key)) cluster.pendingIgnitions.delete(key);
       if (!existing) {
         this.primeClusterEmission(cluster);
         this.clusters.set(cluster.id, cluster);
@@ -503,9 +500,63 @@ export class GroundFireClusterRenderer {
       }
     }
     for (const key of ignitions) {
-      const cell = next.get(key)!;
+      const cell = known.get(key);
+      if (!cell) continue;
       this.regionClusters.get(groundFireRegionKey(cell.visualStyle, cell.gridX, cell.gridY))?.pendingIgnitions.add(key);
     }
+  }
+
+  /** Diffs a snapshot of unknown origin against the previous resolved state with numeric keys. */
+  private diffGroundCells(cells: readonly SyncedBurningGroundCell[], now: number, ignitions: number[]): void {
+    const next = this.nextCells;
+    next.clear();
+    for (const cell of cells) {
+      const key = groundFireCellKey(cell.visualStyle, cell.gridX, cell.gridY);
+      if (isStrongerGroundFireCell(cell, next.get(key))) next.set(key, cell);
+    }
+    const previous = this.knownCells;
+    for (const [key, cell] of next) this.noteGroundCell(key, previous.get(key), cell, now, ignitions);
+    for (const [key, old] of previous) {
+      if (!next.has(key)) this.dirtyRegions.add(groundFireRegionKey(old.visualStyle, old.gridX, old.gridY));
+    }
+    this.knownCells = next;
+    this.nextCells = previous;
+  }
+
+  /**
+   * Applies the host's published changes. FireSystem keeps one visual per style and raster cell,
+   * so a removed or replaced object is exactly the one resolved for its key.
+   */
+  private applyGroundChanges(steps: readonly GroundFireCellChanges[], now: number, ignitions: number[]): void {
+    const known = this.knownCells;
+    for (const step of steps) {
+      for (const cell of step.removed) {
+        const key = groundFireCellKey(cell.visualStyle, cell.gridX, cell.gridY);
+        if (known.get(key)?.id !== cell.id) continue;
+        known.delete(key);
+        this.dirtyRegions.add(groundFireRegionKey(cell.visualStyle, cell.gridX, cell.gridY));
+      }
+      for (const cell of step.upserts) {
+        const key = groundFireCellKey(cell.visualStyle, cell.gridX, cell.gridY);
+        const old = known.get(key);
+        known.set(key, cell);
+        this.noteGroundCell(key, old, cell, now, ignitions);
+      }
+    }
+  }
+
+  private noteGroundCell(
+    key: number,
+    old: SyncedBurningGroundCell | undefined,
+    cell: SyncedBurningGroundCell,
+    now: number,
+    ignitions: number[],
+  ): void {
+    // Track spatial cells independently of cluster IDs: merges, splits and lifetime
+    // refreshes must not restart an already populated fire surface.
+    if (cell.expiresAt > now && (old?.expiresAt ?? 0) <= now) ignitions.push(key);
+    if (old && old.expiresAt === cell.expiresAt && old.intensity === cell.intensity) return;
+    this.dirtyRegions.add(groundFireRegionKey(cell.visualStyle, cell.gridX, cell.gridY));
   }
 
   /**

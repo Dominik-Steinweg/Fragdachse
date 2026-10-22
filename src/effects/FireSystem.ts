@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { BURN_TICK_INTERVAL_MS, NET_TICK_RATE_HZ, isPointInsideArena } from '../config';
+import { GroundFireChangeJournal } from './GroundFireChanges';
 import type {
   BurnOnHitConfig,
   FireChunkBurstConfig,
@@ -191,6 +192,7 @@ export class FireSystem {
    * unchanged cells keep their identity across snapshots.
    */
   private publishedGroundCells = new Map<number, SyncedBurningGroundCell>();
+  private readonly groundChanges = new GroundFireChangeJournal();
   private readonly groundWarnings = new Map<string, NonNullable<SyncedBurningGroundSnapshot['warnings']>>();
   private warningCells: NonNullable<SyncedBurningGroundSnapshot['warnings']> = [];
   private groundState: SyncedBurningGroundSnapshot = { cells: [] };
@@ -630,6 +632,7 @@ export class FireSystem {
     this.groundPublishedAt = Number.NEGATIVE_INFINITY;
     this.cachedGroundSnapshot = { cells: [] };
     this.publishedGroundCells.clear();
+    this.groundChanges.reset();
     this.lastSimulationMs = 0;
     this.lastCreationMs = 0;
   }
@@ -786,6 +789,8 @@ export class FireSystem {
     // The array is replaced on every change, but published cells are immutable values: an
     // unchanged cell keeps its object so network and renderers can skip it cheaply.
     const published = this.publishedGroundCells;
+    const base = this.cachedGroundSnapshot.cells;
+    let changes: { base: SyncedBurningGroundCell[]; removed: SyncedBurningGroundCell[]; upserts: SyncedBurningGroundCell[] } | null = null;
     if (this.groundSnapshotFull) {
       const previous = new Map(published);
       const cells: SyncedBurningGroundCell[] = [];
@@ -796,20 +801,30 @@ export class FireSystem {
       published.clear();
       for (const cell of cells) published.set(cell.id, cell);
       this.groundSnapshotFull = false;
+      this.groundChanges.reset();
     } else {
       // A spreading surface only appends or touches a few cells per publish.
-      for (const id of this.removedGroundVisualIds) published.delete(id);
+      changes = { base, removed: [], upserts: [] };
+      for (const id of this.removedGroundVisualIds) {
+        const old = published.get(id);
+        if (!old) continue;
+        published.delete(id);
+        changes.removed.push(old);
+      }
       for (const cell of this.dirtyGroundCells) {
         for (const visual of cell.visuals.values()) {
           const old = published.get(visual.id);
           const next = this.publishGroundVisual(cell, visual, old);
-          if (next !== old) published.set(visual.id, next);
+          if (next === old) continue;
+          published.set(visual.id, next);
+          changes.upserts.push(next);
         }
       }
     }
     this.removedGroundVisualIds.length = 0;
     this.dirtyGroundCells.clear();
     this.cachedGroundSnapshot = { cells: [...published.values()] };
+    if (changes) this.groundChanges.record(this.cachedGroundSnapshot.cells, changes);
     this.groundSnapshotDirty = false;
     return this.cachedGroundSnapshot;
   }
