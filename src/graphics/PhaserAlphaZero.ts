@@ -6,12 +6,14 @@ const MARKER = 'FD_ALPHA_ZERO_V1';
 const SUFFIX = '_FD_ALPHA_ZERO_V1';
 const installed = new WeakSet<object>();
 const sources = new Map<string, string>();
+/** Results that carry the guard; also keyed by themselves, since assembly hands them back every draw config. */
+const guardedSources = new Set<string>();
 
 /** Phaser 4.2.1: retain every positive-alpha instruction verbatim. No epsilon. */
 export function guardPhaserUnpremultiply(source: string): string {
   const cached = sources.get(source);
   if (cached !== undefined) return cached;
-  if (source.includes(MARKER)) return source;
+  if (source.includes(MARKER)) { sources.set(source, source); guardedSources.add(source); return source; }
   let guarded = source;
   for (const [signature, value, exit] of [
     ['vec4 applyTint(vec4 texture)', 'texture', 'return vec4(0.0);'],
@@ -33,6 +35,8 @@ export function guardPhaserUnpremultiply(source: string): string {
       `// ${MARKER}\n        if (sample.a <= 0.0) { gl_FragColor = vec4(0.0); return; }\n        sample.rgb /= sample.a;`);
   }
   sources.set(source, guarded);
+  sources.set(guarded, guarded);
+  if (guarded.includes(MARKER)) guardedSources.add(guarded);
   return guarded;
 }
 
@@ -45,7 +49,7 @@ function guardAddition(manager: Manager, addition: Addition): void {
   const header = fields.fragmentHeader;
   if (!header) return;
   const guarded = guardPhaserUnpremultiply(header);
-  if (!guarded.includes(MARKER)) return;
+  if (!guardedSources.has(guarded)) return;
   fields.fragmentHeader = guarded;
   // DefineLights is looked up by its canonical name when maxLights changes.
   // Namespace its base program instead; Tint/AlphaDiscard retain their tags.
@@ -72,6 +76,6 @@ export function installPhaserAlphaZero(prototype: Manager): void {
   prototype.setBaseShader = function (name, vertex, fragment) {
     const guarded = guardPhaserUnpremultiply(fragment);
     setBaseShader.call(this, name, vertex, guarded);
-    if (guarded.includes(MARKER)) namespace(this);
+    if (guardedSources.has(guarded)) namespace(this);
   };
 }
