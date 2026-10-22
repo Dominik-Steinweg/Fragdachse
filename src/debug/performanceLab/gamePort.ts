@@ -125,6 +125,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
           (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE, view)) visible++;
       }
       counters.voidFireCells = total;
+      counters.visibleVoidFireCells = visible;
       counters.permanentVoidFireCells = permanent;
       peak('voidFireCellsPeak', total); peak('visibleVoidFireCellsPeak', visible);
       if (measureVoidFire) {
@@ -296,7 +297,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     const now = performance.now();
     if (test.kind === 'boss' || test.kind === 'campaign') maintainTargets();
     observe();
-    if (test.kind === 'campaign' && !(counters.voidFireCells > 0 && flow.getEnemyCount() > 0)) {
+    // The sweep starts outside the view; measure once the fire has reached the visible clearing.
+    if (test.kind === 'campaign' && !(counters.visibleVoidFireCells > 0 && flow.getEnemyCount() > 0)) {
       if (now - preparationAt > fixture.voidFire.preparationTimeoutMs) throw new Error(`${test.id}: cp8 fire or encounter missing: ${JSON.stringify(counters)}`);
       return false;
     }
@@ -515,7 +517,12 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
         input();
       } else if (test.kind === 'campaign') {
         // Hold the cp8 position and shoot the nearest living enemy at the combat cadence.
+        // Knockback would otherwise carry the camera away from the clearing between runs.
         const player = players.getPlayer(localId())!;
+        if (Math.hypot(player.x - playerPosition.x, player.y - playerPosition.y) > 64) {
+          flow.navigationLabPort.placePlayer(playerPosition.x, playerPosition.y);
+          add('playerReanchors');
+        }
         let nearest = Infinity;
         aimPosition = point(230, 46);
         flow.getMovementEnemyVisuals().forEach(enemy => {

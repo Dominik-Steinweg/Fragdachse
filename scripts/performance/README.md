@@ -27,7 +27,7 @@ so partial HTTP/shader caches cannot turn a cold-load retry into a warm one.
 `campaign.map16-endgame` copies Map 16 from checkpoint cp8 on: the player stands on the
 cp8 marker, which starts the authored void backfire, the creeping fire and the
 burn-clearing encounter. The player is healed, holds position and shoots the nearest
-enemy every 350 ms; earlier checkpoints, their encounters, events and gates are dropped.
+enemy every 350 ms. Measurement starts once fire is visible, and knockback beyond 64 px\nre-anchors the player on the marker. Earlier checkpoints, their encounters, events and gates are dropped.
 
 Cases: `review`, `review.enemies-100`, `review.enemies-300`,
 `review.enemies-500`, `review.player`, `review.fog-rock`, `review.camera`,
