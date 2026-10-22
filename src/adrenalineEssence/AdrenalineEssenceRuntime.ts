@@ -489,11 +489,13 @@ export class AdrenalineEssenceRuntime {
 
   private reserveNearby(): void {
     // Read again after arrival commits; projected resource snapshots must not overbook new flights.
-    const playerGrid = new PointGrid<Collector>(this.config.magnetRadius);
+    // A handful of players and returning rockets: a plain list beats a string-keyed grid lookup per
+    // grounded cluster. The candidate sort below is total, so the scan order does not matter.
+    const collectors: Collector[] = [];
     const players = this.ports.getPlayers();
     for (const player of players) {
       if (player.interactive && player.alive && player.collectible && player.accessGroup && finitePoint(player)) {
-        playerGrid.add({ ...player, key: collectorKey(player.playerId) });
+        collectors.push({ ...player, key: collectorKey(player.playerId) });
       }
     }
     const owners = new Map(players.map(player => [player.playerId, player]));
@@ -505,10 +507,11 @@ export class AdrenalineEssenceRuntime {
         || (cargo && (cargo.snapshot.ownerId !== owner.playerId || cargo.lifeRevision !== owner.lifeRevision
           || cargo.participationRevision !== owner.participationRevision
           || !hasEssenceAccess(cargo.snapshot.accessGroup, owner.accessGroup)))) continue;
-      playerGrid.add({ ...owner, x: rocket.x, y: rocket.y, rocket,
+      collectors.push({ ...owner, x: rocket.x, y: rocket.y, rocket,
         key: collectorKey(owner.playerId, rocket.projectileId),
         adrenaline: cargo?.snapshot.value ?? 0, maxAdrenaline: rocket.capacity });
     }
+    if (!collectors.length) return;
     const incoming = new Map<string, number>();
     for (const transfer of this.transfers.values()) {
       const { playerId, value, target } = transfer.snapshot;
@@ -519,7 +522,7 @@ export class AdrenalineEssenceRuntime {
       .sort((left, right) => left.anchor.landAt - right.anchor.landAt || left.anchor.id.localeCompare(right.anchor.id));
     for (const cluster of clusters) {
       const anchor = cluster.anchor;
-      const candidates = playerGrid.nearby(anchor.x, anchor.y, this.config.magnetRadius)
+      const candidates = collectors
         .filter(player => {
           this.candidateChecks++;
           return hasEssenceAccess(anchor.accessGroup, player.accessGroup)
