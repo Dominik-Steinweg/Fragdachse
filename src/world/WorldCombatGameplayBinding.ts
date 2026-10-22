@@ -1279,13 +1279,14 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             emit(String(decoy.id), 'decoys', decoy.x, decoy.y);
           }
         }
-        for (const enemy of o.getEnemyManager()?.getAllEnemies() ?? []) {
-          if (!enemy.sprite.active) continue;
-          if (!inRange(enemy.sprite.x, enemy.sprite.y)) continue;
-          if (!o.combatSystem.isAlive(enemy.id)) continue;
-          if (!o.combatSystem.canDamageTarget(ownerId, enemy.id)) continue;
+        // Visit in place: homing projectiles query every tick, a copied enemy array per query adds up in hordes.
+        o.getEnemyManager()?.forEachEnemy((enemy) => {
+          if (!enemy.sprite.active) return;
+          if (!inRange(enemy.sprite.x, enemy.sprite.y)) return;
+          if (!o.combatSystem.isAlive(enemy.id)) return;
+          if (!o.combatSystem.canDamageTarget(ownerId, enemy.id)) return;
           emit(enemy.id, 'enemies', enemy.sprite.x, enemy.sprite.y);
-        }
+        });
         if (config.targetTypes?.includes('bases') && !o.getEnemyManager()?.hasEnemy(ownerId)) {
           for (const base of o.baseManager?.getBasesByFaction('hostile') ?? []) {
             if (base.isInert?.() === true || base.getHp() <= 0) continue;
