@@ -5,81 +5,57 @@
     {
       "state": "sealed",
       "outlet": "north",
-      "beauty": "b1fad86496c9ba22fb6d260ca5b66ae8e41f3a15c20bdc480f5196f4782b4a30",
-      "emit": "484292dd6200daec47a3add2f52d0e4e8cfcb7726524d3f992a7cb9c83aeb60e"
+      "beauty": "98a0e909b46d540bd90c994b41d5ae9754601a79b1c1b08eca6fa4eb974f3b9b",
+      "emit": "86e8e5d308f1dd21e2c916efb884e15260f77b3ecffdee362fe532b81e918318"
     },
     {
       "state": "sealed",
       "outlet": "east",
-      "beauty": "478d3ebab66a5b88476cb58d0151e20021dc4d2b2cb2a2d359fb36e6d211c283",
-      "emit": "c59cd772368ccc0e9c3d3420d3badc836bc866eba12deb4d98f960a0c5af72b6"
+      "beauty": "c03df44c2f00007f469a9fe364892f96613c64766df440fb28d52222f1b9b8d8",
+      "emit": "a3ab870b27e001fd06e125a50e8fbf1aee29f12b5a66e812f1bc2be897ae41fa"
     },
     {
       "state": "sealed",
       "outlet": "south",
-      "beauty": "f68efdc4f112a2b608d305db96c65ea35404e001e91091f22503987eddbe5e7c",
-      "emit": "64b3047c120c5041d8e1fa3effb37319d1e11ec57ec7f6ebefffd3508fa9b709"
+      "beauty": "bb3aef49881f7052d54b33a3589158f420ae9357be74bf6a4c73b8e1beab19e9",
+      "emit": "b13e5ebf68e41fea2b366b9c80d5ad4620bf24bd7b97f7a32721636d729991cb"
     },
     {
       "state": "sealed",
       "outlet": "west",
-      "beauty": "b05f792bd4554d7f23fa030b957b49b3a76cf7233c91e62aba794b2d3e00cbd7",
-      "emit": "4e56b5da3716bc2ea92429154e54167764134d9d84c51f8c3c60eb21827e7b2b"
+      "beauty": "5df62d55a57f3d190a931d34cc763665a2d0b88100ca1c27bb0e2bd078ba78b5",
+      "emit": "7cca20c2c5456e19f44fff70d6d5653e322de2aae3ed2d0e7d3bf401ce8f1957"
     },
     {
       "state": "active",
       "outlet": "north",
-      "beauty": "870f449d4414b5204f3c8896f1914a402ea26615801db106574dbe34db5e2401",
-      "emit": "f8509d9249ae1e64bdd0435c0ab39ddabb02640c18a09ae5756792f237cb239b"
+      "beauty": "3a620288ef36c8674eb826eed7a2f675dbaeffa90c930136d7ccc92bc300548f",
+      "emit": "87ef7abb22302b44c78fc6036a6b4b4265174d39393ac32a86f40a87434e72a7"
     },
     {
       "state": "active",
       "outlet": "east",
-      "beauty": "391029634327dd2f8811e8c474fc33dd172ccaf30e4afe6a30107c9c69800427",
-      "emit": "937977b5aac0486103ea6843d1402f842488ac51ec64ee4bfc24dc4b75e30866"
+      "beauty": "c8b6da98931c9fef00d8b9d7e4b54b8a3ee25f4ff30d5042d058e926aca52ec2",
+      "emit": "0e0470fd74ff1340aec6371f19de6b1dca39e8d606feac983fae89681f51ae8a"
     },
     {
       "state": "active",
       "outlet": "south",
-      "beauty": "440f446730f5f7a92b191265fdc25d00d92af583c66a1e7dccef4aec3723929b",
-      "emit": "0a1c6a2675ed43dead1c1c70c06bd10210ed8597ef7f4092f708712adbaab6bc"
+      "beauty": "67dce12d3baeaf7f9aee3c61afd77488fb96f66d9ba2f05710f955e347863905",
+      "emit": "f373b28a8a936efdfa89f81ed47265df7fe768cf3358fd1a20ac9bb079f8c81d"
     },
     {
       "state": "active",
       "outlet": "west",
-      "beauty": "bf57b7a4a869cb6e17af5d9b4d96340e92c0d9ece819b8fcfbe81981e5ba392f",
-      "emit": "2c7ea7f6dfa6159c0e5c0efefd41c4e11c06ea07c852b9b2d9564c5bd4381913"
-    },
-    {
-      "state": "dry",
-      "outlet": "north",
-      "beauty": "88823b619d42d3c1e7f75a529b0872163318b20f2c5abbc5782f6c418248e3d9",
-      "emit": "a79d8f8db837f9ae457b0e25b70f18d19913b3c01b4f579da56ce7bd49812dd8"
-    },
-    {
-      "state": "dry",
-      "outlet": "east",
-      "beauty": "cea86cb9ecaccb91389ba79d7552221d91cfbae525a29a89e77f0e8bb633c183",
-      "emit": "67e5d08ff296a65d02c0844f36a1f7b4c9b90b63b3e5514d756544ba51aeb8f9"
-    },
-    {
-      "state": "dry",
-      "outlet": "south",
-      "beauty": "5d527238b591ae3d51b8468b12f623329fc7985183197f74fcded53167b344fa",
-      "emit": "c8f29bade74cfb5de3b6c7ecfb2a49e996ce906e3e0eb53f9b8fbd574a62f26e"
-    },
-    {
-      "state": "dry",
-      "outlet": "west",
-      "beauty": "d32e42b8abc66370ec5912c6e8527f0231243bd5f9540da6f37e4900c4b093d8",
-      "emit": "fff3ba2aa1fc8e0d925f468ee2b2f6b5913673025818f406fec20861f755f227"
+      "beauty": "d54ed171cf3ccdd59552fc962148ada01ab440ca09ca6760941a6739a519724c",
+      "emit": "061167e104fd3ff31ce1df043b30be059641af0707a4ef91540fa36ba2bc64ce"
     }
   ],
   "runtime": {
     "id": "spawn-brood-pit",
     "category": "construction",
     "gameIds": [],
-    "revision": "v6",
+    "revision": "v7",
     "variant": "standard",
     "sourceSize": 480,
     "textureKey": "construction_spawn_brood_pit",
@@ -99,15 +75,15 @@
       "margin": 2,
       "spacing": 4,
       "columns": 8,
-      "rows": 2,
-      "frameCount": 12,
+      "rows": 1,
+      "frameCount": 8,
       "width": 3872,
-      "height": 968
+      "height": 484
     },
     "clips": [],
     "hashes": {
-      "idle": "e933bd6ddc251afab815817137ff941452a1365d697e28e6dbf2bf341e100543",
-      "sheet": "22970f5b79ad357f84435e0589a80ed23518960b6ee8b9a1e89ab0cf94e0d367"
+      "idle": "9445ce95cbd05f955fd498f2aa6bd3e0697b69a5bb7c551335d0796c42a042ab",
+      "sheet": "cdc7b10a4ea9555bdad80cd3bc71bfa142222613bbcf300e54ee23dfc57749a0"
     }
   },
   "sources": "scripts/asset-pipeline/spawn-carcass (README.md)",

@@ -1,8 +1,9 @@
 """Render the v6 carcass into game layers (straight top-down, fixed sun, one frame per opening and state).
 
-building/<state>-<outlet>.png + -emit.png : bones (intact / damaged / rubble), eyes as emission
+spawn-structure/intact-<outlet>.png + -emit.png : bones, dark eye embers as emission (the game lights the
+eyes; destruction is a bone burst at runtime, so there are no damaged or rubble frames)
 spawn-brood-pit/<state>-<outlet>.png + -emit.png : pool, growth, eggs, strands on a transparent ground
-(active / sealed / dry); bones cast their shadow into it but are not drawn.
+(sealed / active); bones cast their shadow into it but are not drawn.
 """
 import bpy, bmesh, json, math, os, random
 from mathutils import Vector
@@ -64,7 +65,9 @@ ramp = nodes.new('ShaderNodeValToRGB'); ramp.name = 'edge_ramp'
 ramp.color_ramp.elements[0].position = 0.12; ramp.color_ramp.elements[0].color = (0, 0, 0, 1)
 ramp.color_ramp.elements[1].position = 0.95; ramp.color_ramp.elements[1].color = (1, 1, 1, 1)
 mid = ramp.color_ramp.elements.new(0.55); mid.color = (0.7, 0.7, 0.7, 1)
-links.new(mul.outputs['Value'], ramp.inputs['Fac'])
+# The organic stain (ground.py) replaces the painted disc as the cut-out, when present.
+organic = nodes.get('org_frayed')
+links.new((organic.outputs['Value'] if organic else mul.outputs['Value']), ramp.inputs['Fac'])
 links.new(ramp.outputs['Color'], cut.inputs['Fac'])
 
 cam_data = bpy.data.cameras.get('export_top') or bpy.data.cameras.new('export_top')
@@ -186,7 +189,7 @@ for outlet in outlets:
     pivot.rotation_euler = (0, 0, -TURNS[outlet] * math.pi / 2)
     # Bones.
     hide(GROUND)
-    for state in (['intact'] if QUICK else ['intact', 'damaged', 'rubble']):
+    for state in ['intact']:          # destruction is a bone burst at runtime, no rubble frames
         building_state(state)
         lighting(True); render(f'{OUT}/spawn-structure/{state}-{outlet}.png', BUILDING_CELLS, 48)
         lighting(False); render(f'{OUT}/spawn-structure/{state}-{outlet}-emit.png', BUILDING_CELLS, 8)
@@ -195,18 +198,29 @@ for outlet in outlets:
     building_state('intact')
     show(SKELETON, camera=False, shadow=True)
     show([n for n in GROUND if n in objs])
-    for state in (['active'] if QUICK else ['sealed', 'active', 'dry']):
+    for state in (['active'] if QUICK else ['sealed', 'active']):
         pit_state(state)
         lighting(True); render(f'{OUT}/spawn-brood-pit/{state}-{outlet}.png', PIT_CELLS, 48)
         lighting(False); render(f'{OUT}/spawn-brood-pit/{state}-{outlet}-emit.png', PIT_CELLS, 8)
         done.append(f'pit {state} {outlet}')
 lighting(True); pit_state('active'); building_state('intact'); show(SKELETON); show([n for n in GROUND if n in objs])
 pivot.rotation_euler = (0, 0, 0)
-# Eye socket (core) in the south frame, normalized to the building canvas.
+# Eye sockets in the south frame, normalized to the building canvas: the runtime lights them on the GPU.
 emb = objs['v6_embers']
-c = sum((emb.matrix_world @ Vector(v) for v in emb.bound_box), Vector()) / 8
+dg = bpy.context.evaluated_depsgraph_get()
+points = [emb.matrix_world @ v.co for v in emb.evaluated_get(dg).data.vertices]
+centre = sum(points, Vector()) / len(points)
+far = max(points, key=lambda p: (p - centre).length)
+eyes = [[p for p in points if ((p - far).length < (p - (2 * centre - far)).length) == side] for side in (True, False)]
+eyes = sorted((sum(e, Vector()) / len(e) for e in eyes), key=lambda p: p.x)
+
+
+def socket(p):
+    return {'x': round(0.5 + p.x / BUILDING_CELLS, 6), 'y': round(0.5 - p.y / BUILDING_CELLS, 6), 'z': round(p.z, 3)}
+
+
 json.dump({'buildingCells': BUILDING_CELLS, 'pitCells': PIT_CELLS, 'pxPerCell': PX_PER_CELL,
-           'sockets': {'core': {'x': round(0.5 + c.x / BUILDING_CELLS, 6), 'y': round(0.5 - c.y / BUILDING_CELLS, 6), 'z': round(c.z, 3)},
+           'sockets': {'core': socket(centre), 'eyeA': socket(eyes[0]), 'eyeB': socket(eyes[1]),
                        'mouth': {'x': 0.5, 'y': round(0.5 + 2.0 / BUILDING_CELLS, 6), 'z': 0}}},
           open(f'{OUT}/export.json', 'w'), indent=1)
 result = {'rendered': len(done), 'rib_islands': len(rib_groups)}

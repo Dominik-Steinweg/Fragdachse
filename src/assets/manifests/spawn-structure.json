@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": "v6",
+  "revision": "v7",
   "pivot": "both canvases are centred on the brood nest centre at 32 px per world cell",
   "rotation": "baked: one frame per opening, rendered with a fixed sun",
   "emissiveEncoding": "white RGB, alpha = emission intensity; congruent with the sheet layout; tint and blend (ADD) at runtime",
@@ -17,16 +17,14 @@
       "frameHeight": 432,
       "margin": 2,
       "spacing": 4,
-      "columns": 8,
-      "rows": 2,
-      "frameCount": 12,
-      "width": 3488,
-      "height": 872
+      "columns": 4,
+      "rows": 1,
+      "frameCount": 4,
+      "width": 1744,
+      "height": 436
     },
     "states": [
-      "intact",
-      "damaged",
-      "rubble"
+      "intact"
     ],
     "outlets": [
       "north",
@@ -39,8 +37,8 @@
       "core": {
         "key": "construction_spawn_structure_emissive_core",
         "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-core.png",
-        "sha256": "62a2b9e40b95b676d2d4327c551cf5d35becfcd718659f319ea8369883b1a771",
-        "content": "deep violet embers in the eye sockets"
+        "sha256": "00b3edf07896c15b49f75c30a5d291a2d929842d5953ce1bbb0a3ddb9e4b7b6f",
+        "content": "dark violet embers in the eye sockets (the runtime lights the eyes)"
       }
     },
     "frames": [
@@ -50,9 +48,19 @@
         "outlet": "north",
         "sockets": {
           "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
+            "x": 0.664761,
+            "y": 0.666922,
+            "z": 0.239
+          },
+          "eyeA": {
+            "x": 0.63116,
+            "y": 0.645904,
+            "z": 0.268
+          },
+          "eyeB": {
+            "x": 0.698362,
+            "y": 0.68794,
+            "z": 0.209
           },
           "mouth": {
             "x": 0.5,
@@ -67,9 +75,19 @@
         "outlet": "east",
         "sockets": {
           "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
+            "x": 0.664761,
+            "y": 0.666922,
+            "z": 0.239
+          },
+          "eyeA": {
+            "x": 0.63116,
+            "y": 0.645904,
+            "z": 0.268
+          },
+          "eyeB": {
+            "x": 0.698362,
+            "y": 0.68794,
+            "z": 0.209
           },
           "mouth": {
             "x": 0.5,
@@ -84,9 +102,19 @@
         "outlet": "south",
         "sockets": {
           "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
+            "x": 0.664761,
+            "y": 0.666922,
+            "z": 0.239
+          },
+          "eyeA": {
+            "x": 0.63116,
+            "y": 0.645904,
+            "z": 0.268
+          },
+          "eyeB": {
+            "x": 0.698362,
+            "y": 0.68794,
+            "z": 0.209
           },
           "mouth": {
             "x": 0.5,
@@ -101,145 +129,19 @@
         "outlet": "west",
         "sockets": {
           "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
+            "x": 0.664761,
+            "y": 0.666922,
+            "z": 0.239
           },
-          "mouth": {
-            "x": 0.5,
-            "y": 0.722222,
-            "z": 0
-          }
-        }
-      },
-      {
-        "index": 4,
-        "state": "damaged",
-        "outlet": "north",
-        "sockets": {
-          "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
+          "eyeA": {
+            "x": 0.63116,
+            "y": 0.645904,
+            "z": 0.268
           },
-          "mouth": {
-            "x": 0.5,
-            "y": 0.722222,
-            "z": 0
-          }
-        }
-      },
-      {
-        "index": 5,
-        "state": "damaged",
-        "outlet": "east",
-        "sockets": {
-          "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
-          },
-          "mouth": {
-            "x": 0.5,
-            "y": 0.722222,
-            "z": 0
-          }
-        }
-      },
-      {
-        "index": 6,
-        "state": "damaged",
-        "outlet": "south",
-        "sockets": {
-          "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
-          },
-          "mouth": {
-            "x": 0.5,
-            "y": 0.722222,
-            "z": 0
-          }
-        }
-      },
-      {
-        "index": 7,
-        "state": "damaged",
-        "outlet": "west",
-        "sockets": {
-          "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
-          },
-          "mouth": {
-            "x": 0.5,
-            "y": 0.722222,
-            "z": 0
-          }
-        }
-      },
-      {
-        "index": 8,
-        "state": "rubble",
-        "outlet": "north",
-        "sockets": {
-          "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
-          },
-          "mouth": {
-            "x": 0.5,
-            "y": 0.722222,
-            "z": 0
-          }
-        }
-      },
-      {
-        "index": 9,
-        "state": "rubble",
-        "outlet": "east",
-        "sockets": {
-          "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
-          },
-          "mouth": {
-            "x": 0.5,
-            "y": 0.722222,
-            "z": 0
-          }
-        }
-      },
-      {
-        "index": 10,
-        "state": "rubble",
-        "outlet": "south",
-        "sockets": {
-          "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
-          },
-          "mouth": {
-            "x": 0.5,
-            "y": 0.722222,
-            "z": 0
-          }
-        }
-      },
-      {
-        "index": 11,
-        "state": "rubble",
-        "outlet": "west",
-        "sockets": {
-          "core": {
-            "x": 0.333107,
-            "y": 0.665677,
-            "z": 0.241
+          "eyeB": {
+            "x": 0.698362,
+            "y": 0.68794,
+            "z": 0.209
           },
           "mouth": {
             "x": 0.5,
@@ -263,15 +165,14 @@
       "margin": 2,
       "spacing": 4,
       "columns": 8,
-      "rows": 2,
-      "frameCount": 12,
+      "rows": 1,
+      "frameCount": 8,
       "width": 3872,
-      "height": 968
+      "height": 484
     },
     "states": [
       "sealed",
-      "active",
-      "dry"
+      "active"
     ],
     "outlets": [
       "north",
@@ -284,8 +185,8 @@
       "glow": {
         "key": "construction_spawn_brood_pit_emissive_glow",
         "path": "./assets/sprites/pipeline-v2/spawn-brood-pit/emissive-glow.png",
-        "sha256": "3733e8e206a3c03fe15a43c9e23958fceeb88ae68ff9ea1591047051946c0001",
-        "content": "glowing eggs and the veins of the void growth; none when dry"
+        "sha256": "62f3002d890453e1612cca04e8aabe6754ac1d36d99973a5cf4b0c0390115aa4",
+        "content": "glowing eggs and the veins of the void growth"
       }
     },
     "frames": [
@@ -327,26 +228,6 @@
       {
         "index": 7,
         "state": "active",
-        "outlet": "west"
-      },
-      {
-        "index": 8,
-        "state": "dry",
-        "outlet": "north"
-      },
-      {
-        "index": 9,
-        "state": "dry",
-        "outlet": "east"
-      },
-      {
-        "index": 10,
-        "state": "dry",
-        "outlet": "south"
-      },
-      {
-        "index": 11,
-        "state": "dry",
         "outlet": "west"
       }
     ]

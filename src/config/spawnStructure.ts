@@ -156,6 +156,12 @@ export function buildSpawnStructureShape(outlet: SpawnStructureOutlet): {
   };
 }
 
+/**
+ * Radius (cells) around the nest centre that the carcass's creep stain covers: no ground cover or grass
+ * specks are drawn there, so no plant grows through the bones or the pool.
+ */
+export const SPAWN_STRUCTURE_VEGETATION_CLEARING_CELLS = 4.6;
+
 /** Bodies of one tick rise one after another from the same pool. */
 export const SPAWN_STRUCTURE_RISE_STAGGER_MS = 300;
 /** Spacing (world px) between enemies that rise in the same tick, across the opening. */

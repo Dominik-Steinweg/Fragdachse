@@ -235,10 +235,11 @@ async function exportPainted(label) {
 
 const OUTLETS = ['north', 'east', 'south', 'west'];
 const CARCASS = {
-  building: { id: 'spawn-structure', textureKey: 'construction_spawn_structure', states: ['intact', 'damaged', 'rubble'],
-    emissive: { core: 'deep violet embers in the eye sockets' }, cells: 'buildingCells' },
-  pit: { id: 'spawn-brood-pit', textureKey: 'construction_spawn_brood_pit', states: ['sealed', 'active', 'dry'],
-    emissive: { glow: 'glowing eggs and the veins of the void growth; none when dry' }, cells: 'pitCells' },
+  // Destruction is a runtime bone burst: no damaged or rubble frames, the ground fades out.
+  building: { id: 'spawn-structure', textureKey: 'construction_spawn_structure', states: ['intact'],
+    emissive: { core: 'dark violet embers in the eye sockets (the runtime lights the eyes)' }, cells: 'buildingCells' },
+  pit: { id: 'spawn-brood-pit', textureKey: 'construction_spawn_brood_pit', states: ['sealed', 'active'],
+    emissive: { glow: 'glowing eggs and the veins of the void growth' }, cells: 'pitCells' },
 };
 
 /** Emission render (emitters lit, everything else black) to white RGB with alpha = emission strength. */

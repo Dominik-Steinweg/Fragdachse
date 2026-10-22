@@ -21,6 +21,7 @@ import {
   isCellInSpawnStructureArea,
   isSpawnStructureAreaCell,
   matchSpawnStructureShape,
+  SPAWN_STRUCTURE_VEGETATION_CLEARING_CELLS,
   type ResolvedSpawnStructureArea,
 } from '../config/spawnStructure';
 import { resolvePersistentBaseReservationRadiusCells, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
@@ -300,6 +301,15 @@ function resolveSpawnArea(
 /** Free brood-pit cell of an active or dormant spawn structure; players must not build there. */
 export function isCoopDefenseSpawnAreaCell(gridX: number, gridY: number, bases: readonly BaseSpec[]): boolean {
   return bases.some((base) => base.spawnArea !== undefined && isCellInSpawnStructureArea(base.spawnArea, gridX, gridY));
+}
+
+/** Circles around every spawn structure's nest where the creep stain lies: no plants are drawn there. */
+export function resolveSpawnStructureVegetationClearings(
+  bases: readonly BaseSpec[],
+): readonly { readonly x: number; readonly y: number; readonly radiusPx: number }[] {
+  return bases.flatMap((base) => base.spawnArea
+    ? [{ x: base.spawnArea.x, y: base.spawnArea.y, radiusPx: SPAWN_STRUCTURE_VEGETATION_CLEARING_CELLS * CELL_SIZE }]
+    : []);
 }
 
 function resolveBasePowerUpPedestalSpec(

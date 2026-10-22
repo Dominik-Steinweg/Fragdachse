@@ -1,7 +1,7 @@
 {
   "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
   "notes": [
-    "Spawn structures (GDD Spawnbauwerk V1): the brood pool with its creep and growth on the foundation layer, the carcass skeleton on the structure layer, the eye and pool-glow emissive passes above the light map like the other structure emissions."
+    "Spawn structures (GDD Spawnbauwerk V1): the brood pool with its organic creep stain on the foundation layer, the carcass skeleton on the structure layer, the ember, pool-glow and GPU-lit eye passes above the light map like the other structure and enemy-eye emissions."
   ],
   "source": {
     "blends": [
@@ -33,6 +33,20 @@
       {
         "key": "create/core/setDepth/0",
         "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "create/eyeGlows/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "create/eyeCores/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.12",
         "blends": [
           "ADD"
         ]
@@ -127,6 +141,50 @@
       "source": {
         "selector": "create/core/setDepth/0",
         "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureRenderer.ts:create/eyeGlows/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
+      "component": "create/eyeGlows/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "create/eyeGlows/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureRenderer.ts:create/eyeCores/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
+      "component": "create/eyeCores/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.62
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "create/eyeCores/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.12"
       }
     }
   ]

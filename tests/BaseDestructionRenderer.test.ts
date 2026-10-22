@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type * as Phaser from 'phaser';
 import {
   buildBaseDestructionPlan,
   getBaseDestructionBlast,
 } from '../src/effects/BaseDestructionPlan';
 import type { BaseSpec } from '../src/arena/BaseRegistry';
+import { BaseDestructionRenderer } from '../src/effects/BaseDestructionRenderer';
+
+vi.mock('phaser', () => ({}));
 
 const BASE_SPEC: BaseSpec = {
   id: 'test-base',
@@ -36,6 +40,22 @@ describe('BaseDestructionRenderer plan', () => {
     const gaps = plan.slice(1).map((step, index) => step.delayMs - plan[index].delayMs);
     expect(gaps.every((gap) => gap >= 48 && gap <= 96)).toBe(true);
     expect(new Set(gaps).size).toBeGreaterThan(1);
+  });
+
+  it('lets a spawn structure burst without cell explosions, fire chunks or ground fire', () => {
+    const calls: string[] = [];
+    const renderer = new BaseDestructionRenderer({} as Phaser.Scene, {
+      playExplosion: () => calls.push('explosion'),
+      playExplosionSound: () => calls.push('sound'),
+      playFireChunks: () => calls.push('chunks'),
+      onFireChunksLanded: () => calls.push('ground-fire'),
+    });
+    const spawnArea = { outlet: 'south', minGridX: 11, minGridY: 11, widthCells: 1, heightCells: 1, x: 0, y: 0, mouth: [] } as const;
+    const freed: number[] = [];
+    renderer.play({ ...BASE_SPEC, role: 'spawn-point', spawnArea }, (cellIndex) => freed.push(cellIndex));
+
+    expect(calls).toEqual(['sound']);
+    expect(freed).toEqual([0, 1, 2, 3]);
   });
 
   it('is deterministic and resolves one non-damaging blast around the whole base', () => {

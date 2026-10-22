@@ -2,7 +2,7 @@
   "id": "spawn-brood-pit",
   "category": "construction",
   "gameIds": [],
-  "revision": "v6",
+  "revision": "v7",
   "variant": "standard",
   "sourceSize": 480,
   "textureKey": "construction_spawn_brood_pit",
@@ -22,14 +22,14 @@
     "margin": 2,
     "spacing": 4,
     "columns": 8,
-    "rows": 2,
-    "frameCount": 12,
+    "rows": 1,
+    "frameCount": 8,
     "width": 3872,
-    "height": 968
+    "height": 484
   },
   "clips": [],
   "hashes": {
-    "idle": "e933bd6ddc251afab815817137ff941452a1365d697e28e6dbf2bf341e100543",
-    "sheet": "22970f5b79ad357f84435e0589a80ed23518960b6ee8b9a1e89ab0cf94e0d367"
+    "idle": "9445ce95cbd05f955fd498f2aa6bd3e0697b69a5bb7c551335d0796c42a042ab",
+    "sheet": "cdc7b10a4ea9555bdad80cd3bc71bfa142222613bbcf300e54ee23dfc57749a0"
   }
 }

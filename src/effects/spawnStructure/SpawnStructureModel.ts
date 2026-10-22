@@ -22,50 +22,84 @@ export interface SpawnStructureView {
   readonly wallCells: readonly { readonly x: number; readonly y: number }[];
 }
 
-export type SpawnStructureBuildingState = 'intact' | 'damaged' | 'rubble';
-export type SpawnPitState = 'sealed' | 'active' | 'dry';
+export type SpawnPitState = 'sealed' | 'active';
 
-/** Below this share of its HP the building shows its damaged frame. */
-export const SPAWN_STRUCTURE_DAMAGED_HP_SHARE = 0.5;
-
-export function resolveSpawnStructureBuildingState(view: SpawnStructureView): SpawnStructureBuildingState {
-  if (view.destroyed) return 'rubble';
-  return view.maxHp > 0 && view.hp / view.maxHp < SPAWN_STRUCTURE_DAMAGED_HP_SHARE ? 'damaged' : 'intact';
-}
-
-/** The pit only lives while the structure can release enemies. */
+/** The nest only lives while the structure can release enemies. A destroyed structure bursts and fades out. */
 export function resolveSpawnPitState(view: SpawnStructureView): SpawnPitState {
-  if (view.destroyed) return 'dry';
-  return view.live && !view.dormant ? 'active' : 'sealed';
+  return view.live && !view.dormant && !view.destroyed ? 'active' : 'sealed';
 }
 
 export interface SpawnStructureGlow {
-  /** The embers in the eye sockets. */
+  /** The dark baked embers in the eye sockets. */
   readonly core: number;
   readonly pit: number;
   readonly lightRadiusPx: number;
   readonly lightIntensity: number;
 }
 
-const NO_GLOW: SpawnStructureGlow = { core: 0, pit: 0, lightRadiusPx: 0, lightIntensity: 0 };
-
 /**
- * Emissive strengths 0..1 before the day/night factor. `charge` is the announced release (0..1):
- * the eyes flare and the pool glows up toward the moment enemies rise.
+ * Emissive strengths 0..1 before the day/night factor, for a standing structure. `charge` is the
+ * announced release (0..1): the pool glows up and the menacing nest light swells toward the moment
+ * enemies rise. The light reaches far past the carcass and breathes slowly.
  */
 export function resolveSpawnStructureGlow(view: SpawnStructureView, nowMs: number, charge: number): SpawnStructureGlow {
-  if (view.destroyed) return { ...NO_GLOW, core: 0.18 };
   if (resolveSpawnPitState(view) === 'sealed') {
-    return { core: 0.22, pit: 0.12, lightRadiusPx: 64, lightIntensity: 0.12 };
+    return { core: 0.25, pit: 0.12, lightRadiusPx: 150, lightIntensity: 0.16 };
   }
   const c = Math.max(0, Math.min(1, charge));
-  const breathe = 0.5 + 0.5 * Math.sin(nowMs * (0.0021 + 0.006 * c) + phaseOf(view.id));
+  const breathe = 0.5 + 0.5 * Math.sin(nowMs * (0.0012 + 0.005 * c) + phaseOf(view.id));
   return {
     core: Math.min(1, 0.55 + 0.2 * breathe + 0.25 * c),
     pit: Math.min(1, 0.3 + 0.15 * breathe + 0.55 * c),
-    lightRadiusPx: 88 + 46 * c,
-    lightIntensity: 0.3 + 0.08 * breathe + 0.42 * c,
+    lightRadiusPx: 230 + 30 * breathe + 80 * c,
+    lightIntensity: 0.42 + 0.08 * breathe + 0.48 * c,
   };
+}
+
+/** Each eye blinks shut for this long, once per blink period (offset per structure). */
+const EYE_BLINK_MS = 190;
+const EYE_BLINK_PERIOD_MS = 7300;
+
+/**
+ * Brightness 0..1 of the GPU-lit eyes over the dark baked sockets: a slow menacing breath, a restless
+ * flicker, an occasional blink, and a flare toward an announced release. Sealed eyes only smoulder.
+ */
+export function resolveSpawnStructureEyes(view: SpawnStructureView, nowMs: number, charge: number): number {
+  const phase = phaseOf(view.id);
+  if (resolveSpawnPitState(view) === 'sealed') return 0.18 + 0.05 * Math.sin(nowMs * 0.0009 + phase);
+  const c = Math.max(0, Math.min(1, charge));
+  const breathe = 0.5 + 0.5 * Math.sin(nowMs * 0.0011 + phase);
+  const flicker = 0.035 * Math.sin(nowMs * 0.031 + phase * 3) + 0.025 * Math.sin(nowMs * 0.047 + phase * 7);
+  const sinceBlink = (nowMs + phase * 1000) % EYE_BLINK_PERIOD_MS;
+  const blink = sinceBlink < EYE_BLINK_MS ? Math.sin(Math.PI * sinceBlink / EYE_BLINK_MS) : 0;
+  const flare = c * (0.75 + 0.25 * Math.sin(nowMs * 0.02));
+  return Math.max(0, Math.min(1, (0.5 + 0.14 * breathe + flicker + 0.5 * flare) * (1 - 0.85 * blink)));
+}
+
+/** The skeleton bursts at once; the eyes go out, then the nest and its creep stain fade away. */
+export const SPAWN_STRUCTURE_EYES_OUT_MS = 450;
+export const SPAWN_STRUCTURE_STAIN_FADE_DELAY_MS = 350;
+export const SPAWN_STRUCTURE_STAIN_FADE_MS = 2400;
+
+export interface SpawnStructureFade {
+  /** The skeleton is drawn (it is replaced by the burst at the moment of destruction). */
+  readonly body: boolean;
+  /** Opacity of the nest, its creep stain and the pool glow. */
+  readonly stain: number;
+  /** Opacity of the eyes and the nest light. */
+  readonly glow: number;
+  /** Nothing is left to draw. */
+  readonly done: boolean;
+}
+
+/** Fade of a destroyed structure, `burstAt` = moment of destruction; null = standing. */
+export function resolveSpawnStructureFade(burstAt: number | null, nowMs: number): SpawnStructureFade {
+  if (burstAt === null) return { body: true, stain: 1, glow: 1, done: false };
+  const age = Math.max(0, nowMs - burstAt);
+  const t = Math.min(1, Math.max(0, (age - SPAWN_STRUCTURE_STAIN_FADE_DELAY_MS) / SPAWN_STRUCTURE_STAIN_FADE_MS));
+  const stain = 1 - t * t * (3 - 2 * t);
+  const glow = Math.max(0, 1 - age / SPAWN_STRUCTURE_EYES_OUT_MS);
+  return { body: false, stain, glow, done: stain <= 0 && glow <= 0 };
 }
 
 /** Stable per-structure phase, so neighbouring structures never breathe in lockstep. */

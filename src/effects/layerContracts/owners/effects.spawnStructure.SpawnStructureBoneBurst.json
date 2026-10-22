@@ -1,0 +1,140 @@
+{
+  "owner": "effects/spawnStructure/SpawnStructureBoneBurst.ts",
+  "notes": [
+    "Spawn structure destruction (GDD Spawnbauwerk V1): bone slabs and splinters of the skeleton frame and bone dust just above the structure layer, the escaping void puff (ADD) above the light map."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/scene.add/setDepth/0",
+        "expression": "DEPTH.BASES + 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "play/image/setDepth/0",
+        "expression": "DEPTH.BASES + 0.05",
+        "blends": [
+          "ADD",
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "play/image/setDepth/1",
+        "expression": "DEPTH.BASES + 0.12",
+        "blends": [
+          "ADD",
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "play/image/setDepth/2",
+        "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "ADD",
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureBoneBurst.ts:module/scene.add/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureBoneBurst.ts",
+      "component": "module/scene.add/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        4.05
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/scene.add/setDepth/0",
+        "expression": "DEPTH.BASES + 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureBoneBurst.ts:play/image/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureBoneBurst.ts",
+      "component": "play/image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        4.05
+      ],
+      "blends": [
+        "ADD",
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "play/image/setDepth/0",
+        "expression": "DEPTH.BASES + 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureBoneBurst.ts:play/image/setDepth/1",
+      "owner": "effects/spawnStructure/SpawnStructureBoneBurst.ts",
+      "component": "play/image/setDepth/1",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        4.12
+      ],
+      "blends": [
+        "ADD",
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "play/image/setDepth/1",
+        "expression": "DEPTH.BASES + 0.12"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureBoneBurst.ts:play/image/setDepth/2",
+      "owner": "effects/spawnStructure/SpawnStructureBoneBurst.ts",
+      "component": "play/image/setDepth/2",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "ADD",
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "play/image/setDepth/2",
+        "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    }
+  ]
+}

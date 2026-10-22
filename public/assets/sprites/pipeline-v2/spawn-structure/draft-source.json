@@ -5,81 +5,33 @@
     {
       "state": "intact",
       "outlet": "north",
-      "beauty": "7527fa78e08fa2cf9d8aa54ab662c0b6174ebb269dd487a8a5b6d0045dc63333",
-      "emit": "193b8ad8449d4162956b291bc110e2569cf2ea2d961360eb026573dd6dc34287"
+      "beauty": "2f63c465f34b66021902977f73b364a2ba97a4cf7471341776f3ac4a30a34be2",
+      "emit": "caeb3c6822e23a88e420c53a39f91035eef8c8014a55ecd52febbc9a1a821bf6"
     },
     {
       "state": "intact",
       "outlet": "east",
-      "beauty": "a297a44c6bfc5f11735408a014b626735c814ba552c6a06b72c2849233762d71",
-      "emit": "e10cc8213afc05424b025131c6751b57fb2e7e27a83117fee21d9aeecdd50648"
+      "beauty": "ddf4ba0d6cbe727fcf0464402fb0bae995e6fd4c842ccfae5092d939d623915d",
+      "emit": "65c101f1317e858f35001f53fd5de0bf411fe3ed2ff39f0a1f64cd0d594ab07f"
     },
     {
       "state": "intact",
       "outlet": "south",
-      "beauty": "338852598a60ca2baf146f7ee5215853caf06640ac228b09b4b720b47bc058ab",
-      "emit": "126e9bcae8081bdf44adcd7009d0e9912afe3463240ee3f9cd8125027b9dec13"
+      "beauty": "b13605ff930838f1655c3f90da694402b98db33008289bdc366ac2644801f08a",
+      "emit": "a4b04717c07fb99de917d1902b6afd913ddab38138110441afa06237e5c04926"
     },
     {
       "state": "intact",
       "outlet": "west",
-      "beauty": "cba1f8e17dc22753935e9fb649e007dd5d2f817da0ea8a2567dd2881df4dd65b",
-      "emit": "fd08c2ca8328a6f14c19ab78b412fe5c36f01eac1dc92ef0308e82ca26d27db1"
-    },
-    {
-      "state": "damaged",
-      "outlet": "north",
-      "beauty": "03861fde2fb0a1f49963a722ea57b4bbbac379e2aecd18548e789e7d673162ff",
-      "emit": "797639f4f75224cfc70e4507b7a83f32a6db386cbf692879905255744a8ec3e9"
-    },
-    {
-      "state": "damaged",
-      "outlet": "east",
-      "beauty": "ff05292c7be550d9e7c39c215069238fd8fe23bc635e9256ba65435862c7c575",
-      "emit": "1c81f90e5fb64657208f9531a581f453ddb1a02a2d99041ac89fe742ac293083"
-    },
-    {
-      "state": "damaged",
-      "outlet": "south",
-      "beauty": "f583f724811a41aa5fca46d34e88b21acfb91902ec7adf8c929c755985f77482",
-      "emit": "babeb1724294b007a9526e79bc3d814c4349697faf556ca4795d4ffe59a9ad40"
-    },
-    {
-      "state": "damaged",
-      "outlet": "west",
-      "beauty": "681dd90746acdc31edf694ea44003373cd0d7837ce04270400c75b20fad8d09e",
-      "emit": "383220602f29aeb611e5b3eaa54d494b87e97847eec2479a7478304be1eae2bf"
-    },
-    {
-      "state": "rubble",
-      "outlet": "north",
-      "beauty": "421e7a9b8b65155758741375dbf91f3c246938ee6f1f29b5eef4d786a46ea9b3",
-      "emit": "bea8138bee24acf6e368104d8087f667b1197cbd7d9043a76f64662837c56160"
-    },
-    {
-      "state": "rubble",
-      "outlet": "east",
-      "beauty": "ac2e1c5451b0f4f132dd2cd527ead8c42fa97c9a6ac28c6c0ed9674bb033a1d5",
-      "emit": "fa3f0a0c182e1449b51d6acaaabc2c123c05e6a75258b6363f73b58d0b8223cd"
-    },
-    {
-      "state": "rubble",
-      "outlet": "south",
-      "beauty": "6eeae07f659ba33eaa18a102cf56e52e02df4624defa63f7dc9279a15b2bcc79",
-      "emit": "79fba1bf0801a63c23fbc0279efa004d705727cd715052b480e1829ab9ffd422"
-    },
-    {
-      "state": "rubble",
-      "outlet": "west",
-      "beauty": "5194a2d2332c48705a41fe7e8704ce28cd464ecc2ed93c896ff0a94141bce0c8",
-      "emit": "ac3d2d0ccf1017c31664f276b70b543a4e50d43c17ac70ffb9251eb9cf01b386"
+      "beauty": "c0726a8bd1815ed7c33407819bd4196d8dbef90f6097b29b856ceaff2a188c2f",
+      "emit": "b9850d8ef0cd32783198cefdd39402dbc0b54d2604d5368b3d0383fecfcb6651"
     }
   ],
   "runtime": {
     "id": "spawn-structure",
     "category": "construction",
     "gameIds": [],
-    "revision": "v6",
+    "revision": "v7",
     "variant": "standard",
     "sourceSize": 432,
     "textureKey": "construction_spawn_structure",
@@ -98,16 +50,16 @@
       "frameHeight": 432,
       "margin": 2,
       "spacing": 4,
-      "columns": 8,
-      "rows": 2,
-      "frameCount": 12,
-      "width": 3488,
-      "height": 872
+      "columns": 4,
+      "rows": 1,
+      "frameCount": 4,
+      "width": 1744,
+      "height": 436
     },
     "clips": [],
     "hashes": {
-      "idle": "7780067e64102126a6c998f9433d3cfd7323ed261c309ae876cc3fd66f735419",
-      "sheet": "e9a19f2e53c0d27a3c8bf0c48416f5a8d847bced484f2a564b31c6df451f6ed7"
+      "idle": "1b79079e72bb0a0e7d1657c090c5331db450f918cbc269d7136ccba3d129015b",
+      "sheet": "80051532f9bcb96c72e92adb3816dad439178064e395a115e6084436192714da"
     }
   },
   "sources": "scripts/asset-pipeline/spawn-carcass (README.md)",

@@ -2,7 +2,7 @@ import type * as Phaser from 'phaser';
 import manifest from '../../assets/manifests/spawn-structure.json';
 import { getPipelineAsset } from '../../config/pipelineAssets';
 import { getSpawnStructureRotation, type SpawnStructureOutlet } from '../../config/spawnStructure';
-import type { SpawnPitState, SpawnStructureBuildingState } from './SpawnStructureModel';
+import type { SpawnPitState } from './SpawnStructureModel';
 
 /**
  * Sheets of the Brutkadaver (scripts/asset-pipeline/export-spawn-structure.mjs blender): the skeleton
@@ -34,19 +34,33 @@ export function preloadSpawnStructureAssets(loader: Pick<Phaser.Loader.LoaderPlu
   loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.pitGlow, manifest.pit.emissive.glow.path, sheet(PIT_ASSET.layout));
 }
 
-export function spawnStructureBuildingFrame(state: SpawnStructureBuildingState, outlet: SpawnStructureOutlet): number {
-  return manifest.building.states.indexOf(state) * manifest.building.outlets.length + manifest.building.outlets.indexOf(outlet);
+/** The skeleton has one frame per opening; destruction is a runtime burst. */
+export function spawnStructureBuildingFrame(outlet: SpawnStructureOutlet): number {
+  return manifest.building.outlets.indexOf(outlet);
 }
 
 export function spawnPitFrame(state: SpawnPitState, outlet: SpawnStructureOutlet): number {
   return manifest.pit.states.indexOf(state) * manifest.pit.outlets.length + manifest.pit.outlets.indexOf(outlet);
 }
 
-/** Eye sockets in world pixels from the nest centre (the socket is normalized on the south-facing frame). */
-export function spawnStructureCoreOffset(outlet: SpawnStructureOutlet): { readonly x: number; readonly y: number } {
-  const socket = manifest.building.frames[spawnStructureBuildingFrame('intact', 'south')].sockets!.core;
+type FrameSocket = { readonly x: number; readonly y: number };
+
+/** A socket of the south-facing building frame as a world offset from the nest centre, turned to `outlet`. */
+function socketOffset(socket: FrameSocket, outlet: SpawnStructureOutlet): { readonly x: number; readonly y: number } {
   const x = (socket.x - 0.5) * manifest.building.displaySize;
   const y = (socket.y - 0.5) * manifest.building.displaySize;
   const turn = getSpawnStructureRotation(outlet);
   return { x: x * Math.cos(turn) - y * Math.sin(turn), y: x * Math.sin(turn) + y * Math.cos(turn) };
+}
+
+const SOUTH_SOCKETS = manifest.building.frames[spawnStructureBuildingFrame('south')].sockets!;
+
+/** Skull (between the eyes) in world pixels from the nest centre. */
+export function spawnStructureCoreOffset(outlet: SpawnStructureOutlet): { readonly x: number; readonly y: number } {
+  return socketOffset(SOUTH_SOCKETS.core, outlet);
+}
+
+/** Both eye sockets in world pixels from the nest centre. */
+export function spawnStructureEyeOffsets(outlet: SpawnStructureOutlet): readonly { readonly x: number; readonly y: number }[] {
+  return [socketOffset(SOUTH_SOCKETS.eyeA, outlet), socketOffset(SOUTH_SOCKETS.eyeB, outlet)];
 }

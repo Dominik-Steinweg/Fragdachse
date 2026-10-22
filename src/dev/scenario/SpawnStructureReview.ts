@@ -8,16 +8,16 @@ import type { DevScenarioController } from './controller';
 
 const fixtures = new WeakMap<DevScenarioController, { runtime: ArenaRuntime; review: SpawnStructureReview | null }>();
 
-type ReviewState = 'active' | 'sealed' | 'damaged' | 'rubble';
+type ReviewState = 'active' | 'sealed' | 'burst';
 
 /**
  * Presentation-only showcase of the spawn structure (GDD Spawnbauwerk V1): the four openings while
- * active, then sealed, damaged and rubble, around one point; `charge` previews an announced release.
+ * active, a sealed one and one that `destroy` bursts, around one point; `charge` previews an announced release.
  * Gameplay never sees these structures.
  */
 class SpawnStructureReview {
   private readonly renderer: SpawnStructureRenderer;
-  private readonly views: SpawnStructureView[];
+  private views: (SpawnStructureView & { readonly burst: boolean })[];
   private charge = 0;
   private emergenceCount = 0;
   private readonly pending: { enemyId: string; at: number }[] = [];
@@ -30,7 +30,7 @@ class SpawnStructureReview {
     this.renderer.setChargeProvider(() => this.charge);
     const layout: [SpawnStructureOutlet, ReviewState, number, number][] = [
       ...SPAWN_STRUCTURE_OUTLETS.map((outlet, i): [SpawnStructureOutlet, ReviewState, number, number] => [outlet, 'active', (i - 1.5) * 10, -6]),
-      ['south', 'sealed', -10, 6], ['south', 'damaged', 0, 6], ['south', 'rubble', 10, 6],
+      ['south', 'sealed', -10, 6], ['south', 'active', 0, 6], ['south', 'burst', 10, 6],
     ];
     this.views = layout.map(([outlet, state, dx, dy], index) => {
       const x = Math.round(centre.x / CELL_SIZE + dx) * CELL_SIZE, y = Math.round(centre.y / CELL_SIZE + dy) * CELL_SIZE;
@@ -39,8 +39,8 @@ class SpawnStructureReview {
       const originX = x - (template.area.gridX + template.area.widthCells / 2) * CELL_SIZE;
       const originY = y - (template.area.gridY + template.area.heightCells / 2) * CELL_SIZE;
       return {
-        id: `review-${index}`, x, y, outlet, maxHp: 100, hp: state === 'damaged' ? 30 : state === 'rubble' ? 0 : 100,
-        dormant: state === 'sealed', destroyed: state === 'rubble', live: true, hpRevision: 0,
+        id: `review-${index}`, x, y, outlet, maxHp: 100, hp: 100,
+        dormant: state === 'sealed', destroyed: false, live: true, hpRevision: 0, burst: state === 'burst',
         wallCells: template.cells.map((cell) => ({ x: originX + (cell.gridX + 0.5) * CELL_SIZE, y: originY + (cell.gridY + 0.5) * CELL_SIZE })),
       };
     });
@@ -48,6 +48,11 @@ class SpawnStructureReview {
   }
 
   setCharge(charge: number): void { this.charge = Math.max(0, Math.min(1, charge)); }
+
+  /** The marked structure bursts (and stands again on the next `show`). */
+  destroyStructure(): void {
+    this.views = this.views.map((view) => view.burst ? { ...view, hp: 0, destroyed: true } : view);
+  }
 
   /** Bodies rise through every active pool like a structure tick; `count` of them, 300 ms apart. */
   emerge(count: number): void {
@@ -97,7 +102,7 @@ export function releaseSpawnStructureReview(controller: DevScenarioController): 
 }
 
 /**
- * window.devScenario.run({action:'spawnStructureReview', step:'show'|'charge'|'emerge'|'auto'|'clear'|'status',
+ * window.devScenario.run({action:'spawnStructureReview', step:'show'|'charge'|'emerge'|'auto'|'destroy'|'clear'|'status',
  *   gridX?, gridY?, charge?, count?, auto?}).
  */
 export async function runSpawnStructureReview(controller: DevScenarioController, command: Record<string, unknown>): Promise<void> {
@@ -122,6 +127,7 @@ export async function runSpawnStructureReview(controller: DevScenarioController,
   if (step === 'charge') review.setCharge(typeof command.charge === 'number' ? command.charge : 0);
   else if (step === 'emerge') review.emerge(typeof command.count === 'number' ? Math.max(1, Math.min(3, Math.round(command.count))) : 1);
   else if (step === 'auto') review.setAutoEmerge(command.auto !== false);
+  else if (step === 'destroy') review.destroyStructure();
   else if (step === 'clear') { review.destroy(); fixture.review = null; controller.lastAction = { spawnStructureReview: 'cleared' }; return; }
   controller.lastAction = { spawnStructureReview: review.status() };
 }
