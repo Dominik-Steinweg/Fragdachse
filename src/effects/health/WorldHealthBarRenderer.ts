@@ -36,6 +36,8 @@ export interface WorldHealthBarLayerSnapshot {
 }
 
 const FAMILIES: readonly HealthBarFamily[] = ['enemyStatus', 'playerStatus', 'baseMarkers', 'rockTools'];
+const TRAIL_COLOR = packBarColor(HEALTH_BAR_TRAIL.color, HEALTH_BAR_TRAIL.alpha);
+const BACKING_COLOR = packBarColor(HEALTH_BAR_BACKING.color, HEALTH_BAR_BACKING.alpha);
 
 /**
  * Concrete scene-owned presenter. Bindings belong to a World and never enter a static handoff.
@@ -237,7 +239,8 @@ export class WorldHealthBarRenderer {
     const model = b.model;
     const ratio = model.hp / model.maxHp;
     const baseColor = ratio > 0.5 ? s.healthy : ratio > 0.25 ? s.hurt : s.critical;
-    const backgroundAlpha = Phaser.Math.Clamp(b.backgroundAlpha, 0, 1);
+    const backgroundAlpha = b.backgroundAlpha >= 1 ? 1 : Math.max(0, b.backgroundAlpha);
+    const heal = model.healEmphasis(now);
     inst.kind = BAR_SDF_KIND.world;
     inst.x = b.x - s.width / 2;
     inst.y = b.y - s.height / 2;
@@ -245,7 +248,7 @@ export class WorldHealthBarRenderer {
     inst.height = s.height;
     inst.radius = Math.min(s.height * HEALTH_BAR_SHAPE.radiusPerHeight, HEALTH_BAR_SHAPE.maxRadius);
     inst.margin = HEALTH_BAR_SHAPE.outlineWidth;
-    inst.alpha = Phaser.Math.Clamp(b.alpha, 0, 1);
+    inst.alpha = b.alpha >= 1 ? 1 : Math.max(0, b.alpha);
     inst.a0 = s.width * ratio;
     inst.a1 = s.width * (model.trailHp / model.maxHp);
     inst.a2 = s.stroke === undefined ? 0 : 1;
@@ -254,9 +257,10 @@ export class WorldHealthBarRenderer {
     inst.b1 = HEALTH_BAR_SHAPE.edge;
     inst.b2 = HEALTH_BAR_SHAPE.shade;
     inst.b3 = HEALTH_BAR_SHAPE.outlineAlpha * backgroundAlpha;
-    inst.c0 = packBarColor(mixBarRgb(baseColor, 0xffffff, model.healEmphasis(now)));
-    inst.c1 = packBarColor(HEALTH_BAR_TRAIL.color, HEALTH_BAR_TRAIL.alpha);
-    inst.c2 = packBarColor(HEALTH_BAR_BACKING.color, HEALTH_BAR_BACKING.alpha * backgroundAlpha);
+    inst.c0 = packBarColor(heal > 0 ? mixBarRgb(baseColor, 0xffffff, heal) : baseColor);
+    inst.c1 = TRAIL_COLOR;
+    inst.c2 = backgroundAlpha === 1 ? BACKING_COLOR
+      : packBarColor(HEALTH_BAR_BACKING.color, HEALTH_BAR_BACKING.alpha * backgroundAlpha);
     inst.c3 = packBarColor(s.stroke ?? 0, s.stroke === undefined ? 0 : backgroundAlpha);
   }
 }
