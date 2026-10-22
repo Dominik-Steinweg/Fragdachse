@@ -1,0 +1,115 @@
+{
+  "id": "lobby-staff-quartermaster",
+  "label": "Lobby Quartiermeister-Dachs",
+  "category": "character",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/dawn-dealer-concept.png",
+  "targetSize": 32,
+  "displayScale": 1.1875,
+  "sourceSizes": [
+    76,
+    152
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Olive field jacket with epaulettes and webbing, field cap at the rear; holds the issue ledger and a brass stamp.",
+    "colors": "Original ivory head and dark fur; role clothing in matte leather, cloth and metal.",
+    "anatomy": "Unchanged player body and head proportions. Existing grips hold a workshop spanner, no weapon. 32 px base, 38 px display.",
+    "animation": "Idle, work loop and greet clips; presentation only, no runtime collision."
+  },
+  "requiredClips": [
+    "idle"
+  ],
+  "production": "reference",
+  "recipe": "lobby-staff",
+  "model": {
+    "footSouthOffset": 0.04,
+    "footSpacing": 1.24,
+    "clawedPaws": true,
+    "headSouthOffset": 0.04,
+    "earSouthOffset": 0.055,
+    "fierceEyes": true,
+    "combatFace": true,
+    "cursorFace": true,
+    "eyeSouthOffset": 0.025,
+    "furBase": [
+      0.035,
+      0.047,
+      0.057
+    ],
+    "furTones": [
+      [
+        7,
+        11,
+        17
+      ],
+      [
+        23,
+        29,
+        34
+      ],
+      [
+        47,
+        55,
+        59
+      ],
+      [
+        91,
+        90,
+        82
+      ]
+    ],
+    "paintedFur": true,
+    "contactAODistance": 0.65,
+    "contactAOStrength": 0.9,
+    "headColor": [
+      0.99,
+      0.97,
+      0.9
+    ],
+    "tailColor": [
+      0.73,
+      0.71,
+      0.64
+    ],
+    "footColor": [
+      0.055,
+      0.067,
+      0.075
+    ],
+    "upperBodyMotion": "stable-grip",
+    "role": "quartermaster"
+  },
+  "orthoScale": 2.2,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
+    "bodyFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+    "headFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitetes Fell",
+      "textureStrength": 0.7,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "motion": "player_idle",
+      "frameCount": 24,
+      "frameRate": 8,
+      "loop": true,
+      "parameters": {
+        "chestWidth": 0.023,
+        "chestDepth": 0.025,
+        "chestLift": 0.014,
+        "headFollow": 0.018
+      }
+    }
+  ]
+}

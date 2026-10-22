@@ -1,0 +1,51 @@
+{
+  "id": "lobby-yard",
+  "label": "Lobby Bauhof",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/dawn-lobby-yard.png",
+  "targetSize": 192,
+  "sourceSizes": [
+    384
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "5 x 4 m open construction yard: site hut or pole barn, plan table, crane or gantry, timber, stone and sack stacks.",
+    "colors": "Weathered timber, faded signal ochre steel, galvanized sheet, burlap, cream plans, amber beacon.",
+    "anatomy": "One BU is one metre / 32 display pixels. Footprint x -2.5..2.5, y -2..2 m inside a 6 m canvas; working front faces south. Real structural floors only, no environment ground or baked shadow.",
+    "animation": "Static; embers, lamps, windows and beacons are separate emission materials."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "lobby-structure",
+  "model": {
+    "structure": "yard",
+    "variant": "a"
+  },
+  "orthoScale": 6,
+  "textures": {},
+  "materialSource": "procedural",
+  "materialVariants": {
+    "standard": {
+      "label": "Matte procedural weathering",
+      "textureStrength": 0,
+      "formShadowStrength": 0.9
+    }
+  },
+  "clips": [],
+  "elevation": {
+    "min": 0,
+    "max": 4.5,
+    "scale": 0.5
+  },
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1"
+  }
+}
