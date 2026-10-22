@@ -30,8 +30,8 @@ interface BarSdfBatch extends Phaser.Renderer.WebGL.RenderNodes.BatchHandler {
     matrix: BarSdfMatrix, ox: number, oy: number, pxPerUnit: number, instance: BarSdfInstance): void;
 }
 
-function webglRenderer(scene: Phaser.Scene): Phaser.Renderer.WebGL.WebGLRenderer | null {
-  const renderer = scene.sys?.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
+function webglRenderer(scene: Phaser.Scene | undefined): Phaser.Renderer.WebGL.WebGLRenderer | null {
+  const renderer = scene?.sys?.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
   return renderer?.gl && renderer.renderNodes ? renderer : null;
 }
 

@@ -40,6 +40,15 @@ import { LivingBarEffect } from '../src/ui/LivingBarEffect';
 import { GraphicsQualityController } from '../src/graphics/GraphicsQuality';
 import type { GraphicsQuality } from '../src/graphics/GraphicsQuality';
 import { addExternalGlow, removeExternalFx } from '../src/utils/phaserFx';
+import { getBarSdfSource } from '../src/effects/bars/BarSdfGpu';
+import { BAR_SDF_KIND, type BarSdfInstance } from '../src/effects/bars/barSdfInstance';
+
+/** Field samples the window currently draws (container-local contour at the window position). */
+function samplesOf(image: object): BarSdfInstance[] {
+  const source = getBarSdfSource(image)!;
+  return source.instances.slice(0, source.count ?? source.instances.length).map(instance => ({ ...instance }));
+}
+const rgb = (packed: number) => ((packed & 255) << 16) | (packed & 0xff00) | ((packed >>> 16) & 255);
 
 interface FakeImage {
   visible: boolean;
@@ -131,18 +140,23 @@ describe('LivingBarEffect quality gating', () => {
   it('shows a single tinted field window on high, without any emitter', () => {
     const { scene, created, container } = makeScene('high');
     const effect = new LivingBarEffect(scene, container, 0, 0, 40, 14, palette);
-    // Ein 40 px breiter Balken passt in eine Kachel.
     expect(created.length).toBe(1);
     expect(created[0].visible).toBe(true);
-    expect(created[0].cropped).toBe(true);
+    const [sample] = samplesOf(created[0]);
+    expect(samplesOf(created[0])).toHaveLength(1);
+    expect(sample).toMatchObject({ kind: BAR_SDF_KIND.living, width: 40, height: 14, radius: 0, a0: 0, a1: 40, a2: 0, a3: 14 });
+    // One bar height spans 64 field units: the blob scale follows the height, not the width.
+    expect(sample.b2).toBeCloseTo(64 / 14);
     expect(() => effect.destroy()).not.toThrow();
   });
 
-  it('tiles wide bars instead of stretching the field', () => {
+  it('repeats the periodic field for wide bars instead of stretching it', () => {
     const { scene, created, container } = makeScene('high');
-    // Die Kachelbreite haengt an der Balkenhoehe (16 * h); 12 px Hoehe ergeben 192 px je Kachel.
     new LivingBarEffect(scene, container, 0, 0, 600, 12, palette);
-    expect(created.length).toBe(Math.ceil(600 / 192));
+    expect(created.length).toBe(1);
+    const [sample] = samplesOf(created[0]);
+    expect(sample).toMatchObject({ width: 600, a1: 600 });
+    expect(sample.b2).toBeCloseTo(64 / 12);
   });
 
   it('creates nothing at all on low', () => {
@@ -194,71 +208,58 @@ describe('LivingBarEffect quality gating', () => {
     const { scene, container, created, controller, shaders } = makeScene('high');
     const effect = new LivingBarEffect(scene, container, -22, -22, 44, 44, palette,
       { sampling: 'compact', variantKey: 'node-a', intensity: 0.32 });
-    const original = created.map(image => ({ crop: image.crop, alpha: image.alpha, scale: image.scale }));
-    expect(original.length).toBeGreaterThan(1);
-    expect(new Set(original.map(sample => sample.crop!.x)).size).toBe(original.length);
-    expect(new Set(original.map(sample => sample.crop!.y)).size).toBe(original.length);
+    expect(created).toHaveLength(1);
+    const original = samplesOf(created[0]);
+    expect(original.length).toBe(3);
+    expect(new Set(original.map(sample => sample.b0)).size).toBe(original.length);
+    expect(new Set(original.map(sample => sample.b1)).size).toBe(original.length);
     expect(shaders).toHaveLength(1);
     effect.setEnergyIntensity(1);
-    const energized = created.map(image => image.alpha);
+    const energized = samplesOf(created[0]).map(sample => sample.alpha);
     energized.forEach((alpha, i) => expect(alpha / energized[0]).toBeCloseTo(original[i].alpha / original[0].alpha));
+    expect(energized[0]).toBeGreaterThan(original[0].alpha);
     controller.setLevel('low');
     expect(created.every(image => image.destroyed)).toBe(true);
     controller.setLevel('high');
     const rebuilt = created.filter(image => !image.destroyed);
-    rebuilt.forEach((image, i) => {
-      expect(image.crop).toEqual(original[i].crop);
-      expect(image.scale).toBe(original[i].scale);
-      expect(image.alpha).toBeCloseTo(energized[i]);
+    expect(rebuilt).toHaveLength(1);
+    samplesOf(rebuilt[0]).forEach((sample, i) => {
+      expect([sample.b0, sample.b1, sample.b2]).toEqual([original[i].b0, original[i].b1, original[i].b2]);
+      expect(sample.alpha).toBeCloseTo(energized[i]);
     });
     const before = created.length;
     new LivingBarEffect(scene, container, -22, -22, 44, 44, palette,
       { sampling: 'compact', variantKey: 'node-b', intensity: 0.32 });
-    expect(created[before].crop).not.toEqual(rebuilt[0].crop);
+    expect(samplesOf(created[before])[0].b0).not.toBe(samplesOf(rebuilt[0])[0].b0);
   });
 
-  it('maps clipped bands continuously in source space and keeps the fill edge straight', () => {
+  it('masks a partial vertical fill with the full contour and keeps the fill edge straight', () => {
     const { scene, container, created } = makeScene('high');
     new LivingBarEffect(scene, container, -22, 0, 44, 22, palette, {
       sampling: 'compact',
       clipShape: { kind: 'roundedRect', x: -22, y: -22, width: 44, height: 44, radius: 10 },
     });
-    const firstSample = created.filter(image => image.alpha === created[0].alpha);
-    expect(firstSample.length).toBeGreaterThan(1);
-    firstSample.forEach(image => {
-      // Cropped Phaser Images retain the source offset in their local quad geometry.
-      expect(image.x).toBeCloseTo(firstSample[0].x);
-      expect(image.y).toBeCloseTo(firstSample[0].y);
-      expect(image.y + image.crop!.y * image.scale).toBeGreaterThanOrEqual(0);
-      expect(image.y + (image.crop!.y + image.crop!.height) * image.scale).toBeLessThanOrEqual(22);
-      const left = image.x + image.crop!.x * image.scale;
-      const expected = Math.round(0x11 + (0x33 - 0x11) * (left + 22) / 44);
-      expect(image.tints[0] & 0xff).toBe(expected);
-    });
-    expect(firstSample[0].x + firstSample[0].crop!.x * firstSample[0].scale).toBeCloseTo(-22);
-    expect(firstSample[0].crop!.width * firstSample[0].scale).toBeCloseTo(44);
-    expect(firstSample.at(-1)!.crop!.width * firstSample.at(-1)!.scale).toBeLessThan(44);
+    expect(created).toHaveLength(1);
+    // The window covers the whole contour; the rounded clip and the straight fill rect mask it.
+    expect([created[0].x, created[0].y]).toEqual([-22, -22]);
+    for (const sample of samplesOf(created[0])) {
+      expect(sample).toMatchObject({ width: 44, height: 44, radius: 10, a0: 0, a1: 44, a2: 22, a3: 44 });
+      // Tint from dark at the fill start to light at the fill end.
+      expect([rgb(sample.c0), rgb(sample.c1)]).toEqual([palette.dark, palette.light]);
+    }
   });
 
-  it('tiles shallow compact fills within source bounds without stretching or gaps', () => {
+  it('samples shallow compact fills inside the field without stretching', () => {
     const { scene, container, created, shaders } = makeScene('high');
     new LivingBarEffect(scene, container, 0, 0, 44, 1, palette, { sampling: 'compact' });
-    for (const image of created) {
-      const crop = image.crop!;
-      expect(crop.x).toBeGreaterThanOrEqual(0);
-      expect(crop.y).toBeGreaterThanOrEqual(0);
-      expect(crop.x + crop.width).toBeLessThanOrEqual(1024 + 1e-7);
-      expect(crop.y + crop.height).toBeLessThanOrEqual(128 + 1e-7);
-      expect(image.scale).toBe(1 / 64);
-    }
-    for (const alpha of new Set(created.map(image => image.alpha))) {
-      const sample = created.filter(image => image.alpha === alpha);
-      let end = 0;
-      sample.forEach(image => {
-        expect(image.x + image.crop!.x * image.scale).toBeCloseTo(end);
-        end += image.crop!.width * image.scale;
-      });
-      expect(end).toBeCloseTo(44);
+    const samples = samplesOf(created[0]);
+    expect(samples).toHaveLength(3);
+    for (const sample of samples) {
+      expect(sample.b2).toBe(64);
+      expect(sample.b0).toBeGreaterThanOrEqual(0);
+      expect(sample.b0).toBeLessThan(1024);
+      expect(sample.b1).toBeGreaterThanOrEqual(0);
+      expect(sample.b1 + sample.b2).toBeLessThanOrEqual(128 + 1e-7);
     }
     expect(shaders).toHaveLength(1);
   });
@@ -286,9 +287,9 @@ describe('LivingBarEffect quality gating', () => {
     first.start();
     tick(1);
     expect(shaders[0].renders).toBe(4);
-    const cropWrites = created.map(image => image.cropWrites);
+    const samples = created.map(image => samplesOf(image));
     first.start(); first.setFilledWidth(20);
-    expect(created.map(image => image.cropWrites)).toEqual(cropWrites);
+    expect(created.map(image => samplesOf(image))).toEqual(samples);
     first.destroy(); first.destroy();
     tick();
     expect(shaders[0].renders).toBe(4);
@@ -356,8 +357,7 @@ describe('LivingBarEffect quality gating', () => {
     expect(children[0]).toBe(fillA);
     expect(children.at(-1)).toBe(labelB);
     for (const image of images) {
-      const left = image.x + image.crop!.x * image.scale;
-      const [fill, label] = left < 50 ? [fillA, labelA] : [fillB, labelB];
+      const [fill, label] = image.x < 50 ? [fillA, labelA] : [fillB, labelB];
       expect(children.indexOf(image)).toBeGreaterThan(children.indexOf(fill));
       expect(children.indexOf(image)).toBeLessThan(children.indexOf(label));
     }
