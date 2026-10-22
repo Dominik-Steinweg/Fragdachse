@@ -3,6 +3,7 @@ import { DEPTH } from '../config';
 import { GROUND_FIRE_CELL_SIZE } from './FireSystem';
 import { TEX_VOID_FLAME_GLOW } from './FlameShared';
 import type { SyncedBurningGroundSnapshot } from '../types';
+import { createVisibleWorldView, getVisibleWorldView } from '../graphics/CameraWorldView';
 
 const WARNING_TINT = { void: 0xc992ff, normal: 0xff8a3a } as const;
 
@@ -10,12 +11,20 @@ const WARNING_TINT = { void: 0xc992ff, normal: 0xff8a3a } as const;
 export class GroundHazardWarningRenderer {
   private readonly images: Phaser.GameObjects.Image[] = [];
   private activeCount = 0;
+  private readonly view = createVisibleWorldView();
   constructor(private readonly scene: Phaser.Scene) {}
 
   sync(cells: SyncedBurningGroundSnapshot['warnings'], now: number): void {
     let used = 0;
+    // A long firefront warns far outside the screen; only the band in view needs an image.
+    const camera = this.scene.cameras?.main;
+    const view = camera ? getVisibleWorldView(camera, this.view, GROUND_FIRE_CELL_SIZE * 2) : null;
     for (const cell of cells ?? []) {
       if (cell.activatesAt <= now) continue;
+      if (view) {
+        const x = (cell.gridX + 0.5) * GROUND_FIRE_CELL_SIZE, y = (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE;
+        if (x < view.x || y < view.y || x > view.right || y > view.bottom) continue;
+      }
       let image = this.images[used];
       if (!image) image = this.scene.add.image(0, 0, TEX_VOID_FLAME_GLOW)
         .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.FIRE - 0.1);
