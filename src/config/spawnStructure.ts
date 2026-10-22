@@ -1,8 +1,8 @@
 /**
  * Canonical spawn structure (GDD Spawnbauwerk V1): a feindlicher Spawnpunkt ist immer der Brutkadaver,
- * ein zum Ring eingerolltes Riesentier auf 6x6 Zellen. Nur die 23 Koerperzellen sind Basiszellen mit
+ * das Skelett eines eingerollten Drachen auf 6x6 Zellen. Nur die Knochenzellen sind Basiszellen mit
  * Hitbox; die 2x3-Innenflaeche ist das Brutnest, aus dem die Gegner steigen, und oeffnet sich ueber
- * zwei Zellen zwischen Schnauze und Kiefer zur Seite `outlet`.
+ * zwei Zellen zwischen Schwanz und Schaedel zur Seite `outlet`.
  *
  * Authored bleiben `shape.cells` und `spawnCenter` (eine Zelle der Innenflaeche). Alles Weitere
  * wird hier aus genau einer Vorlage je Ausrichtung abgeleitet, damit Authoring, World,
@@ -57,15 +57,17 @@ export const SPAWN_STRUCTURE_AREA_CELLS = 2;
 export const SPAWN_STRUCTURE_MAX_ENEMY_DIAMETER_PX = 56;
 
 /**
- * Body cells of the carcass opening south, traced from the painted sprite (more than half covered):
- * spine and ribcage across the top, the snout end lower left, the jaw end curling lower right.
+ * Body cells of the carcass opening south, traced from the rendered skeleton (bone coverage of at least
+ * a tenth of the cell): spine and ribcage across the top, the stretched tail down the left side, neck and
+ * skull down the right; the nest and the opening between tail and skull stay free. The outermost limb
+ * bones (hind claw, fore leg) reach past this footprint without a hitbox.
  */
 const SOUTH_BODY = [
   '.####.',
   '######',
-  '##..##',
-  '##..##',
-  '##..##',
+  '##...#',
+  '#...##',
+  '#...##',
   '....#.',
 ] as const;
 const SOUTH_AREA: SpawnStructureRect = { gridX: 2, gridY: 2, widthCells: 2, heightCells: 3 };

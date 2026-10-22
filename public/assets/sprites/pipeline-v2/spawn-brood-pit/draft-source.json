@@ -1,30 +1,87 @@
 {
-  "quality": "painted-concept-cut",
-  "targetSize": 320,
+  "quality": "blender-render-draft",
+  "targetSize": 352,
   "masters": [
     {
       "state": "sealed",
-      "beauty": "f5ea346cc890337b3aca7f115103b589ef5d90e6a5c6139b7330ae325af1c439",
-      "emission-glow": "67c2a266de52d715e59754fec3a0212961ae5552d0418c2fad907300ee4550cf"
+      "outlet": "north",
+      "beauty": "b1fad86496c9ba22fb6d260ca5b66ae8e41f3a15c20bdc480f5196f4782b4a30",
+      "emit": "484292dd6200daec47a3add2f52d0e4e8cfcb7726524d3f992a7cb9c83aeb60e"
+    },
+    {
+      "state": "sealed",
+      "outlet": "east",
+      "beauty": "478d3ebab66a5b88476cb58d0151e20021dc4d2b2cb2a2d359fb36e6d211c283",
+      "emit": "c59cd772368ccc0e9c3d3420d3badc836bc866eba12deb4d98f960a0c5af72b6"
+    },
+    {
+      "state": "sealed",
+      "outlet": "south",
+      "beauty": "f68efdc4f112a2b608d305db96c65ea35404e001e91091f22503987eddbe5e7c",
+      "emit": "64b3047c120c5041d8e1fa3effb37319d1e11ec57ec7f6ebefffd3508fa9b709"
+    },
+    {
+      "state": "sealed",
+      "outlet": "west",
+      "beauty": "b05f792bd4554d7f23fa030b957b49b3a76cf7233c91e62aba794b2d3e00cbd7",
+      "emit": "4e56b5da3716bc2ea92429154e54167764134d9d84c51f8c3c60eb21827e7b2b"
     },
     {
       "state": "active",
-      "beauty": "fd7278f8d1b5d87b613d445a41f1e53fc47f125f04fb64f267687b7c4cd945fe",
-      "emission-glow": "8010ad3e99699e002a1e29bd3b3a0ab22877a20b0c138d7e2cad3a6ca0d1af50"
+      "outlet": "north",
+      "beauty": "870f449d4414b5204f3c8896f1914a402ea26615801db106574dbe34db5e2401",
+      "emit": "f8509d9249ae1e64bdd0435c0ab39ddabb02640c18a09ae5756792f237cb239b"
+    },
+    {
+      "state": "active",
+      "outlet": "east",
+      "beauty": "391029634327dd2f8811e8c474fc33dd172ccaf30e4afe6a30107c9c69800427",
+      "emit": "937977b5aac0486103ea6843d1402f842488ac51ec64ee4bfc24dc4b75e30866"
+    },
+    {
+      "state": "active",
+      "outlet": "south",
+      "beauty": "440f446730f5f7a92b191265fdc25d00d92af583c66a1e7dccef4aec3723929b",
+      "emit": "0a1c6a2675ed43dead1c1c70c06bd10210ed8597ef7f4092f708712adbaab6bc"
+    },
+    {
+      "state": "active",
+      "outlet": "west",
+      "beauty": "bf57b7a4a869cb6e17af5d9b4d96340e92c0d9ece819b8fcfbe81981e5ba392f",
+      "emit": "2c7ea7f6dfa6159c0e5c0efefd41c4e11c06ea07c852b9b2d9564c5bd4381913"
     },
     {
       "state": "dry",
-      "beauty": "34fdba255c9fcb1325f3e42205dc0637e8511b4b671f563374174e2e623ecae6",
-      "emission-glow": "7f87d55409c0317fdba73b4fd230d1afe0444653b3779556098b1c78e5f4781b"
+      "outlet": "north",
+      "beauty": "88823b619d42d3c1e7f75a529b0872163318b20f2c5abbc5782f6c418248e3d9",
+      "emit": "a79d8f8db837f9ae457b0e25b70f18d19913b3c01b4f579da56ce7bd49812dd8"
+    },
+    {
+      "state": "dry",
+      "outlet": "east",
+      "beauty": "cea86cb9ecaccb91389ba79d7552221d91cfbae525a29a89e77f0e8bb633c183",
+      "emit": "67e5d08ff296a65d02c0844f36a1f7b4c9b90b63b3e5514d756544ba51aeb8f9"
+    },
+    {
+      "state": "dry",
+      "outlet": "south",
+      "beauty": "5d527238b591ae3d51b8468b12f623329fc7985183197f74fcded53167b344fa",
+      "emit": "c8f29bade74cfb5de3b6c7ecfb2a49e996ce906e3e0eb53f9b8fbd574a62f26e"
+    },
+    {
+      "state": "dry",
+      "outlet": "west",
+      "beauty": "d32e42b8abc66370ec5912c6e8527f0231243bd5f9540da6f37e4900c4b093d8",
+      "emit": "fff3ba2aa1fc8e0d925f468ee2b2f6b5913673025818f406fec20861f755f227"
     }
   ],
   "runtime": {
     "id": "spawn-brood-pit",
     "category": "construction",
     "gameIds": [],
-    "revision": "carcass-p1",
+    "revision": "v6",
     "variant": "standard",
-    "sourceSize": 640,
+    "sourceSize": 480,
     "textureKey": "construction_spawn_brood_pit",
     "sheetTextureKey": "construction_spawn_brood_pit_sheet",
     "runtimeContract": "sheet",
@@ -37,26 +94,25 @@
     "idlePath": "./assets/sprites/pipeline-v2/spawn-brood-pit/idle.png",
     "sheetPath": "./assets/sprites/pipeline-v2/spawn-brood-pit/sheet.png",
     "layout": {
-      "frameWidth": 640,
-      "frameHeight": 640,
+      "frameWidth": 480,
+      "frameHeight": 480,
       "margin": 2,
       "spacing": 4,
-      "columns": 3,
-      "rows": 1,
-      "frameCount": 3,
-      "width": 1932,
-      "height": 644
+      "columns": 8,
+      "rows": 2,
+      "frameCount": 12,
+      "width": 3872,
+      "height": 968
     },
     "clips": [],
     "hashes": {
-      "idle": "f5ea346cc890337b3aca7f115103b589ef5d90e6a5c6139b7330ae325af1c439",
-      "sheet": "21d3717740cf411e72abbb887d2c36c6260febd31f4ea6ee3eff12bb93edeca2"
+      "idle": "e933bd6ddc251afab815817137ff941452a1365d697e28e6dbf2bf341e100543",
+      "sheet": "22970f5b79ad357f84435e0589a80ed23518960b6ee8b9a1e89ab0cf94e0d367"
     }
   },
-  "sources": "tools/source-art/spawn-structure",
+  "sources": "scripts/asset-pipeline/spawn-carcass (README.md)",
   "export": {
-    "script": "scripts/asset-pipeline/export-spawn-structure.mjs painted",
-    "cut": "scripts/asset-pipeline/spawn-structure-painted.py",
+    "script": "scripts/asset-pipeline/export-spawn-structure.mjs blender",
     "sharp": {
       "aom": "3.9.1",
       "archive": "3.7.4",

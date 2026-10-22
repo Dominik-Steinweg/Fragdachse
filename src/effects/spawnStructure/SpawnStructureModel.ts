@@ -40,31 +40,27 @@ export function resolveSpawnPitState(view: SpawnStructureView): SpawnPitState {
 }
 
 export interface SpawnStructureGlow {
-  /** The nest's violet light on the carcass flank facing it. */
-  readonly rim: number;
-  readonly veins: number;
+  /** The embers in the eye sockets. */
   readonly core: number;
   readonly pit: number;
   readonly lightRadiusPx: number;
   readonly lightIntensity: number;
 }
 
-const NO_GLOW: SpawnStructureGlow = { rim: 0, veins: 0, core: 0, pit: 0, lightRadiusPx: 0, lightIntensity: 0 };
+const NO_GLOW: SpawnStructureGlow = { core: 0, pit: 0, lightRadiusPx: 0, lightIntensity: 0 };
 
 /**
  * Emissive strengths 0..1 before the day/night factor. `charge` is the announced release (0..1):
- * the veins and heart build up and the pit swells toward the moment enemies rise.
+ * the eyes flare and the pool glows up toward the moment enemies rise.
  */
 export function resolveSpawnStructureGlow(view: SpawnStructureView, nowMs: number, charge: number): SpawnStructureGlow {
   if (view.destroyed) return { ...NO_GLOW, core: 0.18 };
   if (resolveSpawnPitState(view) === 'sealed') {
-    return { rim: 0.7, veins: 0.1, core: 0.22, pit: 0.12, lightRadiusPx: 64, lightIntensity: 0.12 };
+    return { core: 0.22, pit: 0.12, lightRadiusPx: 64, lightIntensity: 0.12 };
   }
   const c = Math.max(0, Math.min(1, charge));
   const breathe = 0.5 + 0.5 * Math.sin(nowMs * (0.0021 + 0.006 * c) + phaseOf(view.id));
   return {
-    rim: Math.min(1, 0.82 + 0.12 * breathe + 0.06 * c),
-    veins: Math.min(1, 0.38 + 0.18 * breathe + 0.44 * c),
     core: Math.min(1, 0.55 + 0.2 * breathe + 0.25 * c),
     pit: Math.min(1, 0.3 + 0.15 * breathe + 0.55 * c),
     lightRadiusPx: 88 + 46 * c,

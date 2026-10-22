@@ -4,9 +4,9 @@
   "category": "construction",
   "gameIds": [],
   "reference": "tools/source-art/spawn-structure/concept.png",
-  "targetSize": 320,
+  "targetSize": 352,
   "sourceSizes": [
-    640
+    480
   ],
   "forward": "south",
   "pivot": [
@@ -14,9 +14,9 @@
     0.5
   ],
   "description": {
-    "silhouette": "A dense nest of glossy dark violet eggs in black-violet slime inside the carcass ring, on a round dark void creep stain that reaches beyond the carcass and frays out into the ground.",
-    "colors": "Black-violet slime and creep with fine violet veins, glossy violet egg highlights; dull crusted when sealed, grey dried husks when dry.",
-    "anatomy": "Strict orthographic plan view at ground level, painted (tools/source-art/spawn-structure). 32 px per cell, pivot = nest centre shared with spawn-structure; canvas 10 x 10 cells. States sealed/active/dry; a runtime shader animates the swells."
+    "silhouette": "A round black-violet brood pool with the painted egg nest, branching void growth creeping toward the bones, slime strands and puddles, glowing egg clutches under and around the skeleton; the stain frays out into any map ground.",
+    "colors": "Black-violet wet slime with faint violet veins, glowing violet eggs, dark growth; dull and crusted when sealed, dried grey-brown when dry.",
+    "anatomy": "Strict orthographic top view of the ground under the carcass rendered in Blender (export_v6.py): transparent outside the creep stain, the bones cast their shadow into it. 32 px per cell, pivot = nest centre; canvas 11 x 11 cells. States sealed/active/dry, one frame per opening; eggs and growth veins as emissive pass."
   },
   "requiredClips": [],
   "production": "reference",
@@ -371,7 +371,7 @@
     },
     "concept": "pool"
   },
-  "orthoScale": 10,
+  "orthoScale": 11,
   "textures": {
     "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
     "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",

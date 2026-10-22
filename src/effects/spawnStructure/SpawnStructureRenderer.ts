@@ -1,6 +1,5 @@
 import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_LIGHTING, VOID_PALETTE } from '../../config';
-import { getSpawnStructureRotation } from '../../config/spawnStructure';
 import { resolveDawnSitePropHitFlash, type DawnSitePropHitFlash } from '../../arena/DawnSitePropModel';
 import type { LightingSystem } from '../LightingSystem';
 import {
@@ -26,8 +25,6 @@ export interface SpawnStructureShadowCell {
 const HIT_FLASH_TINT = 0x5a3a6a;
 /** Emissive passes keep a visible floor by day; the night carries their full strength. */
 const EMISSIVE_DAY_FLOOR = 0.4;
-/** The nest's light on the inner flank stays faint by day. */
-const RIM_DAY_FLOOR = 0.3;
 /** The animated pool surface: quad half size (room for the droplets) and pool radius, px. */
 const POOL_QUAD_HALF_PX = 52;
 const POOL_RADIUS_PX = 21;
@@ -37,8 +34,6 @@ interface StructureVisual {
   readonly pit: Phaser.GameObjects.Image;
   readonly shimmer: Phaser.GameObjects.Image;
   readonly body: Phaser.GameObjects.Image;
-  readonly rim: Phaser.GameObjects.Image;
-  readonly veins: Phaser.GameObjects.Image;
   readonly core: Phaser.GameObjects.Image;
   readonly shadows: readonly SpawnStructureShadowCell[];
   flash?: DawnSitePropHitFlash;
@@ -109,12 +104,11 @@ export class SpawnStructureRenderer {
     this.pool.begin(nowMs);
     for (const view of views) {
       const visual = this.visuals.get(view.id) ?? this.create(view);
-      const frame = spawnStructureBuildingFrame(resolveSpawnStructureBuildingState(view));
-      const turn = getSpawnStructureRotation(view.outlet);
-      for (const part of [visual.body, visual.rim, visual.veins, visual.core]) part.setFrame(frame).setPosition(view.x, view.y).setRotation(turn);
-      const pitFrame = spawnPitFrame(resolveSpawnPitState(view));
-      visual.pit.setFrame(pitFrame).setPosition(view.x, view.y).setRotation(turn);
-      visual.shimmer.setFrame(pitFrame).setPosition(view.x, view.y).setRotation(turn);
+      const frame = spawnStructureBuildingFrame(resolveSpawnStructureBuildingState(view), view.outlet);
+      for (const part of [visual.body, visual.core]) part.setFrame(frame).setPosition(view.x, view.y);
+      const pitFrame = spawnPitFrame(resolveSpawnPitState(view), view.outlet);
+      visual.pit.setFrame(pitFrame).setPosition(view.x, view.y);
+      visual.shimmer.setFrame(pitFrame).setPosition(view.x, view.y);
       for (const cell of visual.shadows) cell.active = !view.destroyed;
 
       if (visual.hpRevision !== view.hpRevision) { visual.flash = undefined; visual.hpRevision = view.hpRevision; }
@@ -126,10 +120,9 @@ export class SpawnStructureRenderer {
       const glow = resolveSpawnStructureGlow(view, nowMs, charge);
       this.pool.add({ x: view.x, y: view.y, halfSize: POOL_QUAD_HALF_PX, radius: POOL_RADIUS_PX, charge,
         state: PIT_STATE_CODE[resolveSpawnPitState(view)], seed: phaseOf(view.id) / 6.283, swells: this.resolveSwells(view.id, nowMs) });
-      visual.rim.setTint(VOID_PALETTE.primary).setAlpha(glow.rim * Math.max(RIM_DAY_FLOOR, night));
-      visual.veins.setTint(VOID_PALETTE.primary).setAlpha(glow.veins * emissive);
-      visual.core.setTint(VOID_PALETTE.bright).setAlpha(glow.core * emissive);
-      visual.shimmer.setTint(VOID_PALETTE.primary).setAlpha(glow.pit * emissive);
+      // Deep violet embers and egg glow: the baked render carries the colour, this pass only lights it.
+      visual.core.setTint(VOID_PALETTE.primary).setAlpha(glow.core * emissive * 0.75);
+      visual.shimmer.setTint(VOID_PALETTE.deep).setAlpha(glow.pit * emissive * 0.7);
       if (this.lighting && glow.lightIntensity > 0) {
         const key = `spawn-structure:${view.id}`;
         const heart = spawnStructureCoreOffset(view.outlet);
@@ -184,7 +177,7 @@ export class SpawnStructureRenderer {
     this.pool.destroy();
     this.emergences.clear();
     for (const visual of this.visuals.values()) {
-      for (const part of [visual.pit, visual.shimmer, visual.body, visual.rim, visual.veins, visual.core]) part.destroy();
+      for (const part of [visual.pit, visual.shimmer, visual.body, visual.core]) part.destroy();
     }
     this.visuals.clear();
   }
@@ -204,11 +197,9 @@ export class SpawnStructureRenderer {
       .setDepth(DEPTH.BASES);
     // Emissive passes above the light map, like the other structure emissions.
     const shimmer = image(SPAWN_STRUCTURE_TEXTURES.pitGlow, pitSize).setDepth(DEPTH_LIGHTING + 0.08).setBlendMode(Phaser.BlendModes.ADD);
-    const rim = image(SPAWN_STRUCTURE_TEXTURES.rim, buildingSize).setDepth(DEPTH_LIGHTING + 0.08).setBlendMode(Phaser.BlendModes.ADD);
-    const veins = image(SPAWN_STRUCTURE_TEXTURES.veins, buildingSize).setDepth(DEPTH_LIGHTING + 0.08).setBlendMode(Phaser.BlendModes.ADD);
     const core = image(SPAWN_STRUCTURE_TEXTURES.core, buildingSize).setDepth(DEPTH_LIGHTING + 0.08).setBlendMode(Phaser.BlendModes.ADD);
     const visual: StructureVisual = {
-      pit: basin, shimmer, body, rim, veins, core,
+      pit: basin, shimmer, body, core,
       shadows: view.wallCells.map(({ x, y }) => ({ x, y, active: true, visible: true })),
       hpRevision: view.hpRevision,
     };

@@ -5,10 +5,10 @@ import { getSpawnStructureRotation, type SpawnStructureOutlet } from '../../conf
 import type { SpawnPitState, SpawnStructureBuildingState } from './SpawnStructureModel';
 
 /**
- * Sheets of the Brutkadaver (scripts/asset-pipeline/export-spawn-structure.mjs painted): the carcass
- * and the brood nest with its creep stain, one frame per state, each with congruent emissive sheets.
- * Both canvases are centred on the nest centre at 32 px per cell and open south; the renderer turns
- * them toward the structure's outlet.
+ * Sheets of the Brutkadaver (scripts/asset-pipeline/export-spawn-structure.mjs blender): the skeleton
+ * and the ground under it (brood pool, growth, eggs; transparent beyond the creep stain), one frame per
+ * state and opening rendered with a fixed sun, each with a congruent emissive sheet (eyes, eggs and
+ * veins). Both canvases are centred on the nest centre at 32 px per cell.
  */
 export const SPAWN_STRUCTURE_BUILDING = manifest.building;
 export const SPAWN_STRUCTURE_PIT = manifest.pit;
@@ -17,8 +17,6 @@ const PIT_ASSET = getPipelineAsset(manifest.pit.id);
 
 export const SPAWN_STRUCTURE_TEXTURES = {
   building: BUILDING_ASSET.sheetTextureKey,
-  rim: manifest.building.emissive.rim.key,
-  veins: manifest.building.emissive.veins.key,
   core: manifest.building.emissive.core.key,
   pit: PIT_ASSET.sheetTextureKey,
   pitGlow: manifest.pit.emissive.glow.key,
@@ -31,24 +29,22 @@ export function preloadSpawnStructureAssets(loader: Pick<Phaser.Loader.LoaderPlu
     endFrame: layout.frameCount - 1,
   });
   loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.building, BUILDING_ASSET.sheetPath, sheet(BUILDING_ASSET.layout));
-  loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.rim, manifest.building.emissive.rim.path, sheet(BUILDING_ASSET.layout));
-  loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.veins, manifest.building.emissive.veins.path, sheet(BUILDING_ASSET.layout));
   loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.core, manifest.building.emissive.core.path, sheet(BUILDING_ASSET.layout));
   loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.pit, PIT_ASSET.sheetPath, sheet(PIT_ASSET.layout));
   loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.pitGlow, manifest.pit.emissive.glow.path, sheet(PIT_ASSET.layout));
 }
 
-export function spawnStructureBuildingFrame(state: SpawnStructureBuildingState): number {
-  return manifest.building.states.indexOf(state);
+export function spawnStructureBuildingFrame(state: SpawnStructureBuildingState, outlet: SpawnStructureOutlet): number {
+  return manifest.building.states.indexOf(state) * manifest.building.outlets.length + manifest.building.outlets.indexOf(outlet);
 }
 
-export function spawnPitFrame(state: SpawnPitState): number {
-  return manifest.pit.states.indexOf(state);
+export function spawnPitFrame(state: SpawnPitState, outlet: SpawnStructureOutlet): number {
+  return manifest.pit.states.indexOf(state) * manifest.pit.outlets.length + manifest.pit.outlets.indexOf(outlet);
 }
 
-/** Brood heart in world pixels from the nest centre (manifest sockets are frame-normalized, opening south). */
+/** Eye sockets in world pixels from the nest centre (the socket is normalized on the south-facing frame). */
 export function spawnStructureCoreOffset(outlet: SpawnStructureOutlet): { readonly x: number; readonly y: number } {
-  const socket = manifest.building.frames[spawnStructureBuildingFrame('intact')].sockets.core;
+  const socket = manifest.building.frames[spawnStructureBuildingFrame('intact', 'south')].sockets!.core;
   const x = (socket.x - 0.5) * manifest.building.displaySize;
   const y = (socket.y - 0.5) * manifest.building.displaySize;
   const turn = getSpawnStructureRotation(outlet);

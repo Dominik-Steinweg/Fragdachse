@@ -1,99 +1,249 @@
 {
   "version": 1,
-  "revision": "carcass-p1",
-  "pivot": "both canvases are centred on the brood nest centre at 32 px per world cell, opening south",
-  "rotation": "runtime: turn both canvases clockwise by quarter turns toward the outlet (src/config/spawnStructure.ts)",
+  "revision": "v6",
+  "pivot": "both canvases are centred on the brood nest centre at 32 px per world cell",
+  "rotation": "baked: one frame per opening, rendered with a fixed sun",
   "emissiveEncoding": "white RGB, alpha = emission intensity; congruent with the sheet layout; tint and blend (ADD) at runtime",
-  "sockets": "normalized full-canvas x/y (0..1, y down) of the south-facing canvas",
+  "sockets": "normalized full-canvas x/y (0..1, y down) of the south-facing building frame",
   "building": {
     "id": "spawn-structure",
-    "displaySize": 256,
-    "sourceSize": 512,
-    "canvasCells": 8,
+    "displaySize": 288,
+    "sourceSize": 432,
+    "canvasCells": 9,
     "textureKey": "construction_spawn_structure",
     "sheetTextureKey": "construction_spawn_structure_sheet",
     "layout": {
-      "frameWidth": 512,
-      "frameHeight": 512,
+      "frameWidth": 432,
+      "frameHeight": 432,
       "margin": 2,
       "spacing": 4,
-      "columns": 3,
-      "rows": 1,
-      "frameCount": 3,
-      "width": 1548,
-      "height": 516
+      "columns": 8,
+      "rows": 2,
+      "frameCount": 12,
+      "width": 3488,
+      "height": 872
     },
     "states": [
       "intact",
       "damaged",
       "rubble"
     ],
-    "frameOrder": "index = stateIndex",
+    "outlets": [
+      "north",
+      "east",
+      "south",
+      "west"
+    ],
+    "frameOrder": "index = stateIndex * outlets.length + outletIndex",
     "emissive": {
-      "rim": {
-        "key": "construction_spawn_structure_emissive_rim",
-        "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-rim.png",
-        "sha256": "ed2ecb56bb6eaccaca1a1e1041895b9ccbb2297eb810986506836ada9e5bda5b",
-        "content": "the flank facing the nest catches its violet light"
-      },
-      "veins": {
-        "key": "construction_spawn_structure_emissive_veins",
-        "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-veins.png",
-        "sha256": "135b87aaafdb0322ebc5d099382381bb679da430f2fa010a65602fe85aeb830d",
-        "content": "torn hide and crevices, pulse with an announced release"
-      },
       "core": {
         "key": "construction_spawn_structure_emissive_core",
         "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-core.png",
-        "sha256": "636ee412c7c98467672e25d60956014eb4dd66a983b9c4652c6950adb956d27b",
-        "content": "violet flesh in the tears; spent residue in rubble"
+        "sha256": "62a2b9e40b95b676d2d4327c551cf5d35becfcd718659f319ea8369883b1a771",
+        "content": "deep violet embers in the eye sockets"
       }
     },
     "frames": [
       {
         "index": 0,
         "state": "intact",
+        "outlet": "north",
         "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
           "mouth": {
             "x": 0.5,
-            "y": 0.75,
-            "z": 0
-          },
-          "core": {
-            "x": 0.5,
-            "y": 0.4375,
+            "y": 0.722222,
             "z": 0
           }
         }
       },
       {
         "index": 1,
-        "state": "damaged",
+        "state": "intact",
+        "outlet": "east",
         "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
           "mouth": {
             "x": 0.5,
-            "y": 0.75,
-            "z": 0
-          },
-          "core": {
-            "x": 0.5,
-            "y": 0.4375,
+            "y": 0.722222,
             "z": 0
           }
         }
       },
       {
         "index": 2,
-        "state": "rubble",
+        "state": "intact",
+        "outlet": "south",
         "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
           "mouth": {
             "x": 0.5,
-            "y": 0.75,
+            "y": 0.722222,
             "z": 0
-          },
+          }
+        }
+      },
+      {
+        "index": 3,
+        "state": "intact",
+        "outlet": "west",
+        "sockets": {
           "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
+          "mouth": {
             "x": 0.5,
-            "y": 0.4375,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 4,
+        "state": "damaged",
+        "outlet": "north",
+        "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 5,
+        "state": "damaged",
+        "outlet": "east",
+        "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 6,
+        "state": "damaged",
+        "outlet": "south",
+        "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 7,
+        "state": "damaged",
+        "outlet": "west",
+        "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 8,
+        "state": "rubble",
+        "outlet": "north",
+        "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 9,
+        "state": "rubble",
+        "outlet": "east",
+        "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 10,
+        "state": "rubble",
+        "outlet": "south",
+        "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 11,
+        "state": "rubble",
+        "outlet": "west",
+        "sockets": {
+          "core": {
+            "x": 0.333107,
+            "y": 0.665677,
+            "z": 0.241
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
             "z": 0
           }
         }
@@ -102,69 +252,102 @@
   },
   "pit": {
     "id": "spawn-brood-pit",
-    "displaySize": 320,
-    "sourceSize": 640,
-    "canvasCells": 10,
+    "displaySize": 352,
+    "sourceSize": 480,
+    "canvasCells": 11,
     "textureKey": "construction_spawn_brood_pit",
     "sheetTextureKey": "construction_spawn_brood_pit_sheet",
     "layout": {
-      "frameWidth": 640,
-      "frameHeight": 640,
+      "frameWidth": 480,
+      "frameHeight": 480,
       "margin": 2,
       "spacing": 4,
-      "columns": 3,
-      "rows": 1,
-      "frameCount": 3,
-      "width": 1932,
-      "height": 644
+      "columns": 8,
+      "rows": 2,
+      "frameCount": 12,
+      "width": 3872,
+      "height": 968
     },
     "states": [
       "sealed",
       "active",
       "dry"
     ],
-    "frameOrder": "index = stateIndex",
+    "outlets": [
+      "north",
+      "east",
+      "south",
+      "west"
+    ],
+    "frameOrder": "index = stateIndex * outlets.length + outletIndex",
     "emissive": {
       "glow": {
         "key": "construction_spawn_brood_pit_emissive_glow",
         "path": "./assets/sprites/pipeline-v2/spawn-brood-pit/emissive-glow.png",
-        "sha256": "5ec60ef211000881421a6fbfd4e85d237ab7a48069456692777811ec215b508f",
-        "content": "egg highlights and creep veins; none when dry"
+        "sha256": "3733e8e206a3c03fe15a43c9e23958fceeb88ae68ff9ea1591047051946c0001",
+        "content": "glowing eggs and the veins of the void growth; none when dry"
       }
     },
     "frames": [
       {
         "index": 0,
         "state": "sealed",
-        "sockets": {
-          "orifice": {
-            "x": 0.5,
-            "y": 0.5,
-            "z": 0
-          }
-        }
+        "outlet": "north"
       },
       {
         "index": 1,
-        "state": "active",
-        "sockets": {
-          "orifice": {
-            "x": 0.5,
-            "y": 0.5,
-            "z": 0
-          }
-        }
+        "state": "sealed",
+        "outlet": "east"
       },
       {
         "index": 2,
+        "state": "sealed",
+        "outlet": "south"
+      },
+      {
+        "index": 3,
+        "state": "sealed",
+        "outlet": "west"
+      },
+      {
+        "index": 4,
+        "state": "active",
+        "outlet": "north"
+      },
+      {
+        "index": 5,
+        "state": "active",
+        "outlet": "east"
+      },
+      {
+        "index": 6,
+        "state": "active",
+        "outlet": "south"
+      },
+      {
+        "index": 7,
+        "state": "active",
+        "outlet": "west"
+      },
+      {
+        "index": 8,
         "state": "dry",
-        "sockets": {
-          "orifice": {
-            "x": 0.5,
-            "y": 0.5,
-            "z": 0
-          }
-        }
+        "outlet": "north"
+      },
+      {
+        "index": 9,
+        "state": "dry",
+        "outlet": "east"
+      },
+      {
+        "index": 10,
+        "state": "dry",
+        "outlet": "south"
+      },
+      {
+        "index": 11,
+        "state": "dry",
+        "outlet": "west"
       }
     ]
   }

@@ -29,8 +29,8 @@ class SpawnStructureReview {
     this.renderer.setLighting(lighting);
     this.renderer.setChargeProvider(() => this.charge);
     const layout: [SpawnStructureOutlet, ReviewState, number, number][] = [
-      ...SPAWN_STRUCTURE_OUTLETS.map((outlet, i): [SpawnStructureOutlet, ReviewState, number, number] => [outlet, 'active', (i - 1.5) * 8, -5]),
-      ['south', 'sealed', -8, 5], ['south', 'damaged', 0, 5], ['south', 'rubble', 8, 5],
+      ...SPAWN_STRUCTURE_OUTLETS.map((outlet, i): [SpawnStructureOutlet, ReviewState, number, number] => [outlet, 'active', (i - 1.5) * 10, -6]),
+      ['south', 'sealed', -10, 6], ['south', 'damaged', 0, 6], ['south', 'rubble', 10, 6],
     ];
     this.views = layout.map(([outlet, state, dx, dy], index) => {
       const x = Math.round(centre.x / CELL_SIZE + dx) * CELL_SIZE, y = Math.round(centre.y / CELL_SIZE + dy) * CELL_SIZE;

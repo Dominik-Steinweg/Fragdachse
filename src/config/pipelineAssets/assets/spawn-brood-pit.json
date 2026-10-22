@@ -2,9 +2,9 @@
   "id": "spawn-brood-pit",
   "category": "construction",
   "gameIds": [],
-  "revision": "carcass-p1",
+  "revision": "v6",
   "variant": "standard",
-  "sourceSize": 640,
+  "sourceSize": 480,
   "textureKey": "construction_spawn_brood_pit",
   "sheetTextureKey": "construction_spawn_brood_pit_sheet",
   "runtimeContract": "sheet",
@@ -17,19 +17,19 @@
   "idlePath": "./assets/sprites/pipeline-v2/spawn-brood-pit/idle.png",
   "sheetPath": "./assets/sprites/pipeline-v2/spawn-brood-pit/sheet.png",
   "layout": {
-    "frameWidth": 640,
-    "frameHeight": 640,
+    "frameWidth": 480,
+    "frameHeight": 480,
     "margin": 2,
     "spacing": 4,
-    "columns": 3,
-    "rows": 1,
-    "frameCount": 3,
-    "width": 1932,
-    "height": 644
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 12,
+    "width": 3872,
+    "height": 968
   },
   "clips": [],
   "hashes": {
-    "idle": "f5ea346cc890337b3aca7f115103b589ef5d90e6a5c6139b7330ae325af1c439",
-    "sheet": "21d3717740cf411e72abbb887d2c36c6260febd31f4ea6ee3eff12bb93edeca2"
+    "idle": "e933bd6ddc251afab815817137ff941452a1365d697e28e6dbf2bf341e100543",
+    "sheet": "22970f5b79ad357f84435e0589a80ed23518960b6ee8b9a1e89ab0cf94e0d367"
   }
 }

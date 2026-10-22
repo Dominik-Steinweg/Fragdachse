@@ -20,9 +20,9 @@ describe('spawn structure presentation model', () => {
     expect(resolveSpawnPitState(view({ destroyed: true }))).toBe('dry');
   });
 
-  it('keeps the edge strips lit while the structure stands and lets an announced release build up', () => {
-    expect(resolveSpawnStructureGlow(view({ destroyed: true }), 0, 1).rim).toBe(0);
-    expect(resolveSpawnStructureGlow(view({ dormant: true }), 0, 0).rim).toBeGreaterThan(0.5);
+  it('keeps the eyes smouldering while the structure stands and lets an announced release build up', () => {
+    expect(resolveSpawnStructureGlow(view({ destroyed: true }), 0, 1).pit).toBe(0);
+    expect(resolveSpawnStructureGlow(view({ dormant: true }), 0, 0).core).toBeGreaterThan(0);
     const calm = resolveSpawnStructureGlow(view(), 0, 0), charged = resolveSpawnStructureGlow(view(), 0, 1);
     expect(charged.pit).toBeGreaterThan(calm.pit);
     expect(charged.lightIntensity).toBeGreaterThan(calm.lightIntensity);

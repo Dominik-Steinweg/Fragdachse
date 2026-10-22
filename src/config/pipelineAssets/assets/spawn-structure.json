@@ -2,9 +2,9 @@
   "id": "spawn-structure",
   "category": "construction",
   "gameIds": [],
-  "revision": "carcass-p1",
+  "revision": "v6",
   "variant": "standard",
-  "sourceSize": 512,
+  "sourceSize": 432,
   "textureKey": "construction_spawn_structure",
   "sheetTextureKey": "construction_spawn_structure_sheet",
   "runtimeContract": "sheet",
@@ -17,19 +17,19 @@
   "idlePath": "./assets/sprites/pipeline-v2/spawn-structure/idle.png",
   "sheetPath": "./assets/sprites/pipeline-v2/spawn-structure/sheet.png",
   "layout": {
-    "frameWidth": 512,
-    "frameHeight": 512,
+    "frameWidth": 432,
+    "frameHeight": 432,
     "margin": 2,
     "spacing": 4,
-    "columns": 3,
-    "rows": 1,
-    "frameCount": 3,
-    "width": 1548,
-    "height": 516
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 12,
+    "width": 3488,
+    "height": 872
   },
   "clips": [],
   "hashes": {
-    "idle": "46f8da64ec561933316c1c5f250052d1bdd56b4983ab7666f6709f5495b14ebf",
-    "sheet": "41856742d48e142147a93010332e5f55332de5fa799efe47669f9fc53febce6a"
+    "idle": "7780067e64102126a6c998f9433d3cfd7323ed261c309ae876cc3fd66f735419",
+    "sheet": "e9a19f2e53c0d27a3c8bf0c48416f5a8d847bced484f2a564b31c6df451f6ed7"
   }
 }

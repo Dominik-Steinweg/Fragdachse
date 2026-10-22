@@ -4,9 +4,9 @@
   "category": "construction",
   "gameIds": [],
   "reference": "tools/source-art/spawn-structure/concept.png",
-  "targetSize": 256,
+  "targetSize": 288,
   "sourceSizes": [
-    512
+    432
   ],
   "forward": "south",
   "pivot": [
@@ -14,9 +14,9 @@
     0.5
   ],
   "description": {
-    "silhouette": "A giant long-dead beast curled into an open ring on 6 x 6 cells: open ribcage over the back, spine with spikes on the outer edge, a long flat snout end lower left and the jaw end curling in lower right; the two-cell gap between them faces the outlet.",
-    "colors": "Bleached grey-beige cracked hide and bone, torn holes with dark violet flesh; no light strips, the violet comes from the brood nest it encloses.",
-    "anatomy": "Strict orthographic plan view, painted (tools/source-art/spawn-structure, cut by spawn-structure-painted.py). 32 px per cell, pivot = nest centre shared with spawn-brood-pit; canvas 8 x 8 cells, opening south, turned at runtime. States intact/damaged/rubble."
+    "silhouette": "Skeleton of a curled dragon on 6 x 6 hitbox cells: spine hanging over a barrel ribcage, tail stretched out on the left, neck and a wedge-shaped skull with deep eye sockets on the right; the two-cell gap between tail and skull faces the outlet.",
+    "colors": "Weathered, stained bone with dirt in crevices and moss low on the outer side; slime creeping up the bones near the nest; dark violet embers in the eye sockets.",
+    "anatomy": "Strict orthographic top view rendered from the live Blender carcass (build/spawn-structure/live, export_v6.py) with a fixed sun, one frame per state and opening. 32 px per cell, pivot = nest centre shared with spawn-brood-pit; canvas 9 x 9 cells. States intact/damaged/rubble; eyes as emissive pass."
   },
   "requiredClips": [],
   "production": "reference",
@@ -326,7 +326,7 @@
     },
     "concept": "carcass"
   },
-  "orthoScale": 8,
+  "orthoScale": 9,
   "textures": {
     "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
     "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
