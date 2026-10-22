@@ -408,6 +408,20 @@ describe('Kraken renderer ownership', () => {
     expect(f.shaders.some(s => s.visible)).toBe(false);
     effects.destroy();
   });
+  it('keeps each ink cloud on its quad, so a new or expired cloud does not rebake the other masks', () => {
+    const f = sceneFixture(), waterAt = vi.fn(() => 0), effects = new KrakenEffects(f.scene, waterAt);
+    const cloud = (id: string, x: number) => ({ attackId: id, spitAt: 100, cloudEndsAt: 900,
+      pose: { originX: x, originY: 20, angle: .3, geometry: { kind: 'sector' as const, range: 120, arcDegrees: 50 } } });
+    const a = cloud('a', 0), b = cloud('b', 300), c = cloud('c', 600);
+    effects.begin(); effects.ink(b, 300); effects.ink(a, 300);
+    const baked = waterAt.mock.calls.length;
+    // Newest first, as the mini-ink renderer iterates: the new cloud must not take an older cloud's quad.
+    effects.begin(); effects.ink(c, 320); effects.ink(b, 320); effects.ink(a, 320);
+    expect(waterAt.mock.calls.length).toBe(baked * 1.5);
+    effects.begin(); effects.ink(c, 340); effects.ink(a, 340);
+    expect(waterAt.mock.calls.length).toBe(baked * 1.5);
+    effects.destroy();
+  });
   it('changes body asset under one boss identity and samples eggs without writing back hatch or spawn', () => {
     const f = sceneFixture(), s = state(), a = assets(), e = egg();
     s.tentacles = []; s.eggs = [e]; s.phase = { kind: 'surfaced', startedAt: 0, nextDiveAt: 4000 };

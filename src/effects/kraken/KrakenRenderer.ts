@@ -408,6 +408,8 @@ interface EffectQuad {
   object: Phaser.GameObjects.Shader; mode: number; age: number; opacity: number;
   shape: number[]; timing: number[]; detail: number[]; core: readonly number[]; edge: readonly number[];
   mask: Phaser.Textures.CanvasTexture | null; maskSignature: string; used: boolean;
+  /** Owner of the last frame's use (a cloud's attack id), so a masked quad stays with its cloud. */
+  owner: string;
 }
 let effectSerial = 0;
 /** Bounded reusable shader quads. Same shader, shapes and layering as the review renderer;
@@ -417,16 +419,25 @@ export class KrakenEffects {
   private destroyed = false;
   get gpuBytes(): number { return this.quads.filter(q => q.mask).length * 128 * 128 * 4; }
   constructor(private readonly scene: Phaser.Scene, private readonly waterAt: (x: number, y: number) => number) {}
-  begin(): void { for (const q of this.quads) { q.used = false; q.object.setVisible(false); } }
+  /** Owners that held a quad last frame; their quads are not handed to a different cloud first. */
+  private readonly owners = new Set<string>();
+  begin(): void {
+    this.owners.clear();
+    for (const q of this.quads) { if (q.used && q.owner) this.owners.add(q.owner); q.used = false; q.object.setVisible(false); }
+  }
   private take(mode: number, depth: number, point: KrakenPoint, angle: number, width: number, height: number,
-    age: number, shift = 0): EffectQuad | null {
+    age: number, shift = 0, owner = ''): EffectQuad | null {
     if (this.destroyed) return null;
-    let q = this.quads.find(q => !q.used && q.mode === mode);
+    // A cloud keeps its quad and therefore its baked water mask: otherwise every new or expired
+    // cloud shifts the pool order and all clouds rebake 128² samples in the same frame.
+    let q = owner ? this.quads.find(q => !q.used && q.mode === mode && q.owner === owner) : undefined;
+    q ??= this.quads.find(q => !q.used && q.mode === mode && (!owner || !this.owners.has(q.owner)));
+    if (!q && this.quads.length >= 96) q = this.quads.find(q => !q.used && q.mode === mode);
     if (!q) {
       if (this.quads.length >= 96) return null;
       const mask = mode === 0 ? this.scene.textures.createCanvas(`kraken-cloud-mask-${++effectSerial}`, 128, 128)! : null;
       const quad: Omit<EffectQuad, 'object'> = { mode, age, opacity: 1, shape: [1, 1, 1, 1], timing: [1, 1, 1, 1], detail: [0, 0, 0, 0],
-        core: [0, 0, 0], edge: [0, 0, 0], mask, maskSignature: '', used: true };
+        core: [0, 0, 0], edge: [0, 0, 0], mask, maskSignature: '', used: true, owner };
       const object = this.scene.add.shader({ name: 'KrakenReviewFX', shaderName: 'KrakenReviewFX', fragmentSource: KRAKEN_REVIEW_FX_SHADER,
         setupUniforms: (set: (name: string, value: number | readonly number[]) => void) => {
           set('uWater', 0); set('uMode', quad.mode); set('uAge', quad.age); set('uShape', quad.shape); set('uTiming', quad.timing);
@@ -439,7 +450,7 @@ export class KrakenEffects {
       registerGraphicsObject(this.scene, 'bossIntro', q.object);
       this.quads.push(q);
     }
-    q.used = true; q.age = age; q.opacity = 1;
+    q.used = true; q.owner = owner; q.age = age; q.opacity = 1;
     q.shape = [width, height, 1, 1]; q.timing = [1, 1, 1, 1]; q.detail = [0, 0, 0, 0];
     q.object.setPosition(point.x + Math.cos(angle) * shift, point.y + Math.sin(angle) * shift)
       .setRotation(angle).setDisplaySize(width, height).setDepth(depth).setVisible(true);
@@ -450,7 +461,7 @@ export class KrakenEffects {
     if (g.kind !== 'sector' || age < 0 || now >= cloud.cloudEndsAt) return;
     const look = LOOK.ink, half = g.arcDegrees * Math.PI / 360, quad = krakenInkQuad(g.range, half);
     const q = this.take(0, DEPTH.PLAYERS + .2, { x: cloud.pose.originX, y: cloud.pose.originY },
-      cloud.pose.angle, quad.width, quad.height, age, quad.shift);
+      cloud.pose.angle, quad.width, quad.height, age, quad.shift, cloud.attackId);
     if (!q) return;
     // Preserve the reviewed travel/hold/erosion proportions within the authoritative cloud lifetime.
     const scale = (cloud.cloudEndsAt - cloud.spitAt) / 1000 / (look.travel + look.hold + look.dissolve);
