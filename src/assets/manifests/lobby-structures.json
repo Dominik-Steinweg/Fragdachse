@@ -19,7 +19,7 @@
       ],
       "sockets": {
         "staff": {
-          "x": 92.2,
+          "x": 97.6,
           "y": 99.2,
           "z": 0
         },
@@ -65,13 +65,13 @@
         }
       },
       "sha256": {
-        "beauty": "36fa6a46a52619c0555b7353b08364ce14bf59aa845b61cbb6029138a43a536c",
-        "albedo": "10856617caffd3b896ce4d3ebe01a0098ab3f98d720f1fe00eec98fc0b25ec13",
-        "elevation": "bce3e804d791c456c1636ca532515bfa771548dfd9094bfc2a481c18661ba35e",
-        "solid": "45307f5e679e6ff0f83b176121dad2c4706059a2e64972899b041731bdc0fa0d",
+        "beauty": "0d88d6575c727456921e7c18ae30f212403a562a97efbbd68ecd240708bac133",
+        "albedo": "e47df76835a42b50d387ebd4eaf6e6b7a179478322555b1a85398fc344788a73",
+        "elevation": "5c2b6f4bc02174446b4b0a61cead10886057bbdb79ee55aa7ca83f4c80a6219d",
+        "solid": "b4d2a004295895fd19c1ff2fb7c226bfd4f0f2e42f84a3c386f0915641df6dc2",
         "emission-forge": "83e2bea87dbd073ce3da81152ced83751e28feb6015165717f982a48013a3dca",
         "emission-lamp": "a39f180cb9fa3ffc879c9bfc1a0cc931c5a150f36efd416500aacde0d31242eb",
-        "caster-height": "9b057bcfe0ecfb7b6a2b944b7dfaa47751bf7040e42d5b51493c45379eb64d72"
+        "caster-height": "069581438d3346bbe1affee73286862f6ac7bc2e0ab16c21d8092a360fca7906"
       }
     },
     "lobby-yard": {
@@ -94,12 +94,12 @@
       "sockets": {
         "staff": {
           "x": 86.4,
-          "y": 44.2,
+          "y": 39.7,
           "z": 0
         },
         "staff_facing": {
           "x": 86.4,
-          "y": 20.8,
+          "y": 16,
           "z": 0
         },
         "plaque": {
@@ -114,7 +114,7 @@
         },
         "lamp_table": {
           "x": 71,
-          "y": 22.4,
+          "y": 17.6,
           "z": 56
         },
         "hoist": {
@@ -129,13 +129,13 @@
         }
       },
       "sha256": {
-        "beauty": "edc027197854c352ccfa38916e5965a719a83ea6ef190d0f9088d495590f06b1",
-        "albedo": "24f337250981899cf1e3cf858ff78f2f44b25377cf173f1ff8ba643432a26ec7",
-        "elevation": "150e8f594ebd93f3fa37915b3fd6a5cbd49108f620bfebc0b5c58e237bd7d024",
-        "solid": "7bdf24ac76267e8ff7c6b2651faba1deb46f9ee9d5e7225af324ec3c7d26852f",
-        "emission-lamp": "3884e73f3324fc4fbe8cb6cb0f11d8d227b556575ad2cd62404bd7789acccbf2",
-        "emission-cyan": "e72df076c11dc3b659c271f433ed0ccef756301626edfc518db2d557256e0a62",
-        "caster-height": "7402675271c8810ed6a4fd4c1058d38b2d0e848436e1dcd9edb2aa3b2b427e2d"
+        "beauty": "c5b5ac576241729915a66b80ec79b9ab9f7a16930665c61d9fbc0e71810107ec",
+        "albedo": "4159c27180de7dcc3b4941e4481a01530c1815ee4742f6f8e1a9dc0b345e9d51",
+        "elevation": "bce578c35377e0e06566ad29fc2b19a29b2bb6a5a4754928d8cea907f27e0e4d",
+        "solid": "67b17d675b5cf359bdb0531572bac336263f43380fe39e8efcb0c8a003f3cb3c",
+        "emission-lamp": "2639714ccd901dfa3da096934a2425d7cc8b16d04aad0c79ca069d017a8b0ef1",
+        "emission-cyan": "7d8eeb4aaa6f0273be0e34fddbe721bd00c6b25a0c0a95560381392e00527ce8",
+        "caster-height": "e8ffe7645a1b683ccf81691a929da3eda47cbcbdd1c19f2ebabc1183d4958d87"
       }
     },
     "lobby-armory": {
@@ -157,7 +157,7 @@
       "sockets": {
         "staff": {
           "x": 80,
-          "y": 61.4,
+          "y": 63.4,
           "z": 0
         },
         "staff_facing": {
@@ -177,7 +177,7 @@
         },
         "lamp_tent": {
           "x": 80,
-          "y": 83.2,
+          "y": 89.6,
           "z": 51.2
         },
         "glint_helmet": {
@@ -192,12 +192,12 @@
         }
       },
       "sha256": {
-        "beauty": "72d5feb561da7e179ecef84165d8cd43b2e9c1277de7073e1296d4a12533e625",
-        "albedo": "7258d010ac4b5a6e1d09e1af05a8c3417233ac3755a23708c3cbec270ba273f7",
-        "elevation": "1745c6e9ffd37cf82a4e1c932c411d160f2ce4035db12d08103415cb40cafde6",
-        "solid": "14a0b50224b4bd63b4c600e6339b460e18792f54755a6b5fe9800a596fefb45f",
-        "emission-lamp": "9b34674182d4c158173cc2f9b01e63455405c124dbf50d00a49e099ee89131a8",
-        "caster-height": "be0c95c130d93053e070a7eaf3f900d0944f40afa474ee95bc63b937f5a8bdcd"
+        "beauty": "0bf5edd47ab3e4459de254dee1da6e0a4f4dc39ce0b5f078335126b310970d98",
+        "albedo": "7de1be20fd3e0797efd06d9a389e1319efb11277c57435446c9377c85719ed6b",
+        "elevation": "acb65ad72b836905f8ec8f78d7ca5e4e0205a86959d9e68b8897cf2a0195d996",
+        "solid": "dd57c88cd0a061c81822cf1be10521b6c1edce3926342051ddfe942b20177df6",
+        "emission-lamp": "fd28c5e867a2608c18f21208532d5dc07320d59af4eefd2559b06565cd6c7bb2",
+        "caster-height": "f3a5866558dcd7be24c061daeee5dff39db99a924cea7eabb3dd248be4456bbd"
       }
     },
     "lobby-merchant-stall": {
@@ -219,7 +219,7 @@
       "sockets": {
         "staff": {
           "x": 34.6,
-          "y": 87,
+          "y": 88.3,
           "z": 0
         },
         "staff_facing": {
@@ -264,14 +264,14 @@
         }
       },
       "sha256": {
-        "beauty": "8e1dd25b6b35612bc0f64a5cb2eccb4f7f2ebe4bc78efef72fa5961b2e97d09d",
-        "albedo": "c338ead455223982b9203c4f60f54a259557a716315a8be1f0074478e076f91c",
+        "beauty": "a9fd268357d72325e17d79219cc00394c74c09b0057aa4721e038936954f5dc2",
+        "albedo": "c0cc2b44c5a65eb615462f89d5642e9c7b726bd46b62afa1719ab2f35fba2f52",
         "elevation": "549ee5900b9b6986b0e597753a64b78bf39da6ba9d76f5a626c7dcbfbb4744d4",
-        "solid": "33a5840a2f745774148518ff092c72522bfa906673f0e246244e56ae09583dd1",
+        "solid": "7a479cc53344e01a2215892466f399814aec4bd269ead0011002cb768427447d",
         "emission-lamp": "d19f731946b7a6bcbf3d348683ad69c5b5bedbd1fa5c30cefc7c47df8283506f",
         "caster-height": "abc7dddf74bb49444d3268c4ce0b21c83804ac478ad6baa28835cffbab00d2fc"
       }
     }
   },
-  "revision": "hq-r1"
+  "revision": "hq-r3"
 }

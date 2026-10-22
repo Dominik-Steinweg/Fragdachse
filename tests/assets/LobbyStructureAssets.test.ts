@@ -60,4 +60,26 @@ describe('lobby structure exports', () => {
       expect(sheet.clips.find(clip => clip.name === 'greet')!.loop, building.id).toBe(false);
     }
   });
+
+  it('leave each staff member room to stand: arms may reach over a counter, the body never stands in the building', async () => {
+    // Display px: body radius 8 (0.25 m) clear above knee height, 11 (0.35 m) clear above head height.
+    const clearances = [{ heightPx: 8, radiusPx: 8 }, { heightPx: 42, radiusPx: 11 }];
+    for (const building of LOBBY_BUILDINGS) {
+      const asset = lobbyStructureAsset(building.id)!;
+      const { data, info } = await sharp(file(asset.asset, 'elevation')).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const scale = info.width / asset.displaySize;
+      const sx = (asset.sockets.staff.x - asset.canvasOffset.x) * scale, sy = (asset.sockets.staff.y - asset.canvasOffset.y) * scale;
+      for (const { heightPx, radiusPx } of clearances) {
+        const r = radiusPx * scale;
+        let blocked = 0;
+        for (let y = Math.floor(sy - r); y <= Math.ceil(sy + r); y++) for (let x = Math.floor(sx - r); x <= Math.ceil(sx + r); x++) {
+          if (Math.hypot(x + .5 - sx, y + .5 - sy) > r) continue;
+          const i = (y * info.width + x) * 4;
+          const height = asset.heightPx.min + data[i] / 255 * (asset.heightPx.max - asset.heightPx.min);
+          if (data[i + 3] >= 128 && height > heightPx) blocked++;
+        }
+        expect(blocked, `${building.id} above ${heightPx} px within ${radiusPx} px`).toBe(0);
+      }
+    }
+  });
 });

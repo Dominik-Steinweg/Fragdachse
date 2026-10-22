@@ -1,8 +1,8 @@
 [
   {
     "id": "lobby-merchant-stall",
-    "revision": 2,
-    "sourceSha256": "33a5840a2f745774148518ff092c72522bfa906673f0e246244e56ae09583dd1",
+    "revision": 3,
+    "sourceSha256": "7a479cc53344e01a2215892466f399814aec4bd269ead0011002cb768427447d",
     "stepPx": 8,
     "rects": [
       {
@@ -16,8 +16,8 @@
   },
   {
     "id": "lobby-workshop",
-    "revision": 2,
-    "sourceSha256": "45307f5e679e6ff0f83b176121dad2c4706059a2e64972899b041731bdc0fa0d",
+    "revision": 3,
+    "sourceSha256": "b4d2a004295895fd19c1ff2fb7c226bfd4f0f2e42f84a3c386f0915641df6dc2",
     "stepPx": 8,
     "rects": [
       {
@@ -31,8 +31,8 @@
   },
   {
     "id": "lobby-yard",
-    "revision": 2,
-    "sourceSha256": "7bdf24ac76267e8ff7c6b2651faba1deb46f9ee9d5e7225af324ec3c7d26852f",
+    "revision": 3,
+    "sourceSha256": "67b17d675b5cf359bdb0531572bac336263f43380fe39e8efcb0c8a003f3cb3c",
     "stepPx": 8,
     "rects": [
       {
@@ -53,8 +53,8 @@
   },
   {
     "id": "lobby-armory",
-    "revision": 2,
-    "sourceSha256": "14a0b50224b4bd63b4c600e6339b460e18792f54755a6b5fe9800a596fefb45f",
+    "revision": 3,
+    "sourceSha256": "dd57c88cd0a061c81822cf1be10521b6c1edce3926342051ddfe942b20177df6",
     "stepPx": 8,
     "rects": [
       {

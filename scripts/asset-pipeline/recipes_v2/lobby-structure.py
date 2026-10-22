@@ -211,9 +211,9 @@ def workshop(c, p):
     hearth(c, -1.7, -1.15, 1.0, .8, p, 9)
     anvil(c, -.25, -1.2, p, .15)
     # Quench trough, grindstone and a stocked tool wall on the hall front.
-    slab(c, 'Quench trough body', .75, -1.85, 1.45, -1.35, 0, .55, p['oak'], .05)
-    slab(c, 'Quench water', .82, -1.78, 1.38, -1.42, .5, .56, p['water'], .02)
-    for x in (.9, 1.3): slab(c, 'Trough iron band', x - .02, -1.87, x + .02, -1.33, .5, .58, p['rust'], .005)
+    slab(c, 'Quench trough body', .95, -1.85, 1.6, -1.35, 0, .55, p['oak'], .05)
+    slab(c, 'Quench water', 1.02, -1.78, 1.53, -1.42, .5, .56, p['water'], .02)
+    for x in (1.1, 1.45): slab(c, 'Trough iron band', x - .02, -1.87, x + .02, -1.33, .5, .58, p['rust'], .005)
     for y in (-1.25, -.75): slab(c, 'Grindstone trestle', 1.75, y - .05, 2.3, y + .05, 0, .5, p['oak'], .015)
     wheel = c.cylinder('Upright grindstone', (2.02, -1.0, .55), .3, .12, p['stone'], 40); wheel.rotation_euler.x = math.pi / 2
     tube(c, 'Grindstone crank', [(2.02, -1.32, .55), (2.02, -1.42, .55), (2.18, -1.42, .45)], .025, p['iron'], 8)
@@ -223,8 +223,9 @@ def workshop(c, p):
         beam(c, 'Racked bar stock', (-1.0 + k * .07, -.55), (-1.0 + k * .07 + .02, -1.35), .035, .3 + k * .01, p['iron'])
     sack(c, -2.15, -.75, 0, p, True); sack(c, -2.2, -1.75, 0, p, True); barrel(c, 2.2, -1.75, 0, .2, p)
     lamp_post(c, 2.38, -1.88, 2.1, p, (-.3, .0))
-    scraps(c, [(.2, -1.7), (.35, -1.85), (-.75, -1.75), (.55, -1.0)], p)
-    s.update(staff=(.38, -1.1, 0), staff_facing=(-.25, -1.2, 0), plaque=(0, -2.25, 0), forge=(-1.7, -1.15, .8),
+    scraps(c, [(.2, -1.7), (.35, -1.85), (-.75, -1.75), (-.4, -.72)], p)
+    # The smith stands a pace east of the anvil, between it and the trough.
+    s.update(staff=(.55, -1.1, 0), staff_facing=(-.25, -1.2, 0), plaque=(0, -2.25, 0), forge=(-1.7, -1.15, .8),
              chimney=(-1.65, 1.25, 4.0), spark_anvil=(-.25, -1.2, 1.0), spark_grind=(2.02, -1.0, .85),
              lamp_front=(2.08, -1.88, 1.85), window_skylight=(.95, .25, 2.9))
     return s
@@ -274,21 +275,23 @@ def yard(c, p):
     for dx in (-.3, .3): tube(c, 'Tile sling', [(apex[0], apex[1], 1.45), (apex[0] + dx, apex[1], 1.22)], .01, p['rope'], 4)
     base_tile(c, apex[0], apex[1], 1.15, .8, p, angle=.25, tilt=.06)
     # Front yard: plan table, sawhorses, a pallet of finished tiles and squared timber.
-    drafting_table(c, -.8, -1.65, .4, -1.05, .95, p)
-    lamp_post(c, .58, -1.05, 2.0, p, (-.3, -.25))
+    # The table stands forward, so the foreman's spot clears the rafters' overhang.
+    drafting_table(c, -.8, -1.8, .4, -1.2, .95, p)
+    lamp_post(c, .58, -1.2, 2.0, p, (-.3, -.25))
     sawhorse(c, -1.95, -1.25, p, math.pi / 2); sawhorse(c, -1.4, -1.25, p, math.pi / 2)
     strut(c, 'Plank on sawhorses', (-2.15, -1.25, .72), (-1.15, -1.25, .72), .26, .05, p['timber'])
     pallet(c, 1.5, -1.3, p, .95, .95)
     for k in range(3): base_tile(c, 1.5 + .02 * k, -1.3 - .015 * k, .14 + k * .1, .86, p, angle=.03 * k)
     timber_stack(c, 2.15, .15, 1.0, 2, 2, p, math.pi / 2, .16, 17)
-    return dict(staff=(-.2, -.62, 0), staff_facing=(-.2, -1.35, 0), plaque=(0, -2.25, 0), spark_saw=(-1.6, -1.25, .8),
-                lamp_table=(.28, -1.3, 1.75), hoist=apex, tile_glow=(X0 + 1.18, Y0 + 1.08, .45))
+    return dict(staff=(-.2, -.76, 0), staff_facing=(-.2, -1.5, 0), plaque=(0, -2.25, 0), spark_saw=(-1.6, -1.25, .8),
+                lamp_table=(.28, -1.45, 1.75), hoist=apex, tile_glow=(X0 + 1.18, Y0 + 1.08, .45))
 
 
 def armory(c, p):
     """Ausrüstung: oxblood fabric ridge tent behind an issue counter that shows the four shop slots."""
-    ridge_tent(c, -2.35, 2.35, .05, 1.95, 2.55, 1.55, p['oxblood'], p, 3, 4)
-    c.cylinder('Tent rolled door flap', (1.6, .02, 1.5), .09, .9, p['oxblood'], 14).rotation_euler.y = math.pi / 2
+    # The quartermaster stands in the aisle between counter and tent; only corner ropes at the front.
+    ridge_tent(c, -2.35, 2.35, .4, 1.95, 2.55, 1.55, p['oxblood'], p, 3, 4, front_guys=False)
+    c.cylinder('Tent rolled door flap', (1.6, .37, 1.5), .09, .9, p['oxblood'], 14).rotation_euler.y = math.pi / 2
     # Long issue counter; armour slots laid flat, front up, like the shop icons.
     # Display scale ~1.5x: each slot reads at about 25 px in game, like a shop sign.
     counter(c, -2.2, -1.25, 2.2, -.4, .95, p)
@@ -305,8 +308,8 @@ def armory(c, p):
     c.cylinder('Oil drum', (1.3, -1.45, .45), .27, .9, p['olive'], 24)
     annulus(c, 'Drum rolling hoop', (1.3, -1.45, .6), .28, .26, .04, p['dark'], steps=24)
     lamp_post(c, .45, -1.75, 2.05, p, (-.3, .15))
-    return dict(staff=(0, -.08, 0), staff_facing=(0, -1.0, 0), plaque=(0, -2.25, 0), lamp_front=(.15, -1.6, 1.8),
-                lamp_tent=(0, .6, 1.6), glint_helmet=(.45, -.82, 1.3), glint_cuirass=(-.5, -.82, 1.1))
+    return dict(staff=(0, -.02, 0), staff_facing=(0, -1.0, 0), plaque=(0, -2.25, 0), lamp_front=(.15, -1.6, 1.8),
+                lamp_tent=(0, .8, 1.6), glint_helmet=(.45, -.82, 1.3), glint_cuirass=(-.5, -.82, 1.1))
 
 
 def scrap_stall(c, p):
@@ -334,10 +337,9 @@ def scrap_stall(c, p):
         x, z = -2.4 + 2.55 * t, 1.95 - .35 * math.sin(math.pi * t)
         lantern(c, x, -1.95, z - .25, p)
     barrel(c, 1.35, .3, 0, .2, p, True)
-    s.update(staff=(-1.42, -.72, 0), staff_facing=(-1.42, -1.6, 0), plaque=(0, -2.3, 0), spark_grind=(.2, -1.5, .6),
+    s.update(staff=(-1.42, -.76, 0), staff_facing=(-1.42, -1.6, 0), plaque=(0, -2.3, 0), spark_grind=(.2, -1.5, .6),
              exhaust=(.75, -1.25, 1.4), lamp_wagon=(1.15, 1.4, 1.35), lamp_string_a=(-1.76, -1.95, 1.5),
              lamp_string_b=(-1.12, -1.95, 1.45), lamp_string_c=(-.49, -1.95, 1.5))
-    return s
     return s
 
 BUILDERS = dict(workshop=workshop, yard=yard, armory=armory, scrap_stall=scrap_stall)

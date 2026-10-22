@@ -308,10 +308,11 @@ def strut(c, name, a, b, w, h, mat, bevel=.012):
     return ob
 
 
-def ridge_tent(c, x0, x1, y0, y1, z_ridge, z_eave, mat, p, poles=3, seed=0):
+def ridge_tent(c, x0, x1, y0, y1, z_ridge, z_eave, mat, p, poles=3, seed=0, front_guys=True):
     """Two-slope fabric tent: sag between ridge poles, raised panel seams, hems, guy ropes.
 
-    Reads as cloth from above through the ridge line, the catenary sag and the seams.
+    Reads as cloth from above through the ridge line, the catenary sag and the seams. Without
+    `front_guys` the y0 eave keeps only its corner ropes, so a working front stays clear.
     """
     rng = random.Random(seed)
     ym = (y0 + y1) / 2
@@ -337,6 +338,7 @@ def ridge_tent(c, x0, x1, y0, y1, z_ridge, z_eave, mat, p, poles=3, seed=0):
         eave = [Vector((x0 + span * i / 16, ym, z_ridge)) + v * length + n * (sag(span * i / 16) * .6 + .01) for i in range(17)]
         tube(c, 'Tent eave hem', [tuple(q) for q in eave], .03, p['rope'], 6)
         for i in range(0, 17, 4):
+            if not front_guys and y_eave < ym and 0 < i < 16: continue
             q = eave[i]
             out = Vector((0, .55 if y_eave > ym else -.55, 0))
             peg = q + out + Vector((0, 0, -q.z + .05))
