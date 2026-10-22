@@ -45,6 +45,9 @@ function namespace(manager: Manager): void {
   if (!base.name.endsWith(SUFFIX)) base.name += SUFFIX;
 }
 function guardAddition(manager: Manager, addition: Addition): void {
+  // Texture-sampling additions carry none of the guarded instructions; Phaser rebuilds them on every
+  // texture-count change of a batch, so they skip the source lookup entirely.
+  if (addition.tags?.includes('TEXTURE')) return;
   const fields = addition.additions as Record<string, string>;
   const header = fields.fragmentHeader;
   if (!header) return;
