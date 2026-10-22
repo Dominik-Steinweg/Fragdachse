@@ -116,6 +116,8 @@ mit dem Inspector.
 ## 4. Vorschläge für TD-Spieler (priorisiert)
 
 ### V1 Lagekarte im Basis-Editor (Priorität hoch, Grundlage für alle weiteren Vorschläge)
+Nachtrag 2026-10-22: Weiter ausgearbeitet im [GDD Lagekarte im Bauhof V1](../GDDs/Fragdachse_GDD_Lagekarte_Bauhof_V1.md). Wo die Fassung hier abweicht, gilt das GDD: keine Grundrisse oder Vorschläge pro Map, nur „Drehen 90°“, keine Stärkeangaben, kein Fallenring.
+
 Die Idee des Projektinhabers, ausformuliert:
 - **Gelände:** Der Editor zeigt um den Bauradius das **Gelände der als Nächstes gewählten Map**: Felsen, Bäume,
   Wasser, Gleise, Brücken. Grundlage ist dieselbe World-Definition, die die Mission lädt. Die Darstellung ist
