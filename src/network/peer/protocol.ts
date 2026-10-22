@@ -38,7 +38,9 @@
 // Reactive props: the required rp key carries explosive-barrel phases (index, phase code, progress byte).
 // Recharging reactive props: rp carries recharge phases and progress; required sw slice (bee swarms of
 // hives, one entry per swarm); sc carries the puffball dust styles.
-export const PEER_PROTOCOL_VERSION = 45;
+// Burning ground: fg carries base64 run-length blobs keyed by style and raster cell (full f, delta d)
+// and the warning band as full w or changed cells wd instead of JSON tuples with host ids.
+export const PEER_PROTOCOL_VERSION = 46;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';
