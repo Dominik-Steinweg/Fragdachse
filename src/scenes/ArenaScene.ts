@@ -1275,7 +1275,9 @@ export class ArenaScene extends Phaser.Scene {
       void import('../dev/scenario/controller').then(({ DevScenarioController }) => {
         if (!disposed) this.devScenario = new DevScenarioController(this, this.arenaRuntime,
           (angle, trigger) => inputSystem.setDiagnosticInput(angle, trigger), () => this.lobbyOverlay.isRevealComplete(),
-          () => inputSystem.getInteractionView());
+          () => inputSystem.getInteractionView(),
+          () => this.coopDefenseUpgradesOverlay?.isOpen() ? 'upgrades' : this.itemsOverlay?.isOpen() ? 'items'
+            : this.lobbyOverlay.isMerchantOpen() ? 'merchant' : this.baseEditor ? 'base' : null);
       }).catch(error => { console.error('[Dev scenario]', error); });
     }
     if (__PERFORMANCE_LAB__) {

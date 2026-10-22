@@ -245,7 +245,9 @@ export class DevScenarioController {
     private setInput: (angle: number, trigger: WeaponSlot | null) => void,
     private lobbyReady: () => boolean,
     /** Live Shift focus of the local input, as the HUD presents it. */
-    private readonly interactionView: () => WorldInteractionView | null = () => null) {
+    private readonly interactionView: () => WorldInteractionView | null = () => null,
+    /** The lobby menu overlay currently open, if any. */
+    private readonly openLobbyMenu: () => string | null = () => null) {
     if (!isDevScenarioMode()) throw new Error('Dev entry required.');
     this.unregisterKrakenMap = registerKrakenAbyssMap();
     this.restoreTextureKeys = bindVisualTestTextureKeys(scene.textures);
@@ -273,6 +275,7 @@ export class DevScenarioController {
   }
   requireReadyForBots(): void { this.requireReady(); }
   readInteraction(): WorldInteractionView | null { return this.interactionView(); }
+  readOpenLobbyMenu(): string | null { return this.openLobbyMenu(); }
   isCurrentScenario(config: DevScenario): boolean { return !this.disposed && this.config === config; }
   hidesAim(): boolean { return this.state === 'ready' && this.config.hideAim; }
   private requireReady(): void {

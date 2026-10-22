@@ -84,6 +84,7 @@ function status(controller: DevScenarioController, fixture: Fixture) {
   return {
     player,
     focus: focus ? { key: focus.key, subject: focus.subject, label: focus.label, blocked: focus.blocked } : null,
+    openMenu: controller.readOpenLobbyMenu(),
     buildings: LOBBY_BUILDINGS.map(entry => {
       const rects = lobbyBuildingWorldRects(metrics, entry), bounds = structureBounds(rects);
       return {
