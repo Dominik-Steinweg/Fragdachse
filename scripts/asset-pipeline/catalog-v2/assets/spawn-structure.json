@@ -15,8 +15,8 @@
   ],
   "description": {
     "silhouette": "Skeleton of a curled dragon on 6 x 6 hitbox cells: spine hanging over a barrel ribcage, tail stretched out on the left, neck and a wedge-shaped skull with deep eye sockets on the right; the two-cell gap between tail and skull faces the outlet.",
-    "colors": "Weathered, stained bone with dirt in crevices and moss low on the outer side; slime creeping up the bones near the nest; dark violet embers in the eye sockets.",
-    "anatomy": "Strict orthographic top view rendered from the live Blender carcass (build/spawn-structure/live, export_v6.py) with a fixed sun, one frame per state and opening. 32 px per cell, pivot = nest centre shared with spawn-brood-pit; canvas 9 x 9 cells. States intact/damaged/rubble; eyes as emissive pass."
+    "colors": "Dark, aged and stained bone with dirt in crevices and moss low on the outer side; slime creeping up the bones near the nest; dark violet embers in the eye sockets.",
+    "anatomy": "Strict orthographic top view rendered from the live Blender carcass (scripts/asset-pipeline/spawn-carcass, export.py) with a fixed sun, one frame per opening. 32 px per cell, pivot = nest centre shared with spawn-brood-pit; canvas 9 x 9 cells. State intact only (destruction is a runtime bone burst); dark eye embers as emissive pass, the runtime lights the eyes."
   },
   "requiredClips": [],
   "production": "reference",

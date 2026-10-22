@@ -137,10 +137,32 @@ sind `concurrent` (aktivieren ohne Fokus-Slot), starten mit `site-activated` und
 aus `getCoopMissionTimeLimitSec`.
 
 Bauwerke mit `surface: 'none'` (World-Feld) zeichnen weder Blobfläche noch Basisleuchten; ihre Darstellung besitzt ein
-eigener Präsentations-Owner (Dawn: `DawnSitePropRenderer`, auch im ruhenden Zustand). Encounter-Ansagen steuert
+eigener Präsentations-Owner (Dawn: `DawnSitePropRenderer`, auch im ruhenden Zustand; Spawnpunkte siehe unten). Encounter-Ansagen steuert
 `announce`: fehlt es, ist jeder Encounter eine eigene Welle; `false` hält ihn aus Wellenkarte, -ansage und -zählung;
 `{ group, finale? }` fasst Encounter zu einer angesagten Welle zusammen. Index, Anzahl und Finale bestimmt der Host im
 `CoopDefenseMapDirector`; Clients zeigen nur den replizierten Zustand.
+
+## Spawnbauwerke
+
+Ein zerstörbarer feindlicher Spawnort (`role: 'spawn-point'`) ist in jedem Modus der Brutkadaver
+([GDD Spawnbauwerk V1](../GDDs/Fragdachse_GDD_Spawnbauwerk_V1.md)):
+
+- **Form:**
+  - `shape.cells` muss exakt einer der vier Vorlagen aus [`src/config/spawnStructure.ts`](../../src/config/spawnStructure.ts)
+    entsprechen. `buildSpawnStructureShape(outlet)` erzeugt sie für Editor und Dawn.
+  - `spawnCenter` liegt im Brutnest.
+  - `BaseRegistry` leitet daraus `BaseSpec.spawnArea` ab: Nest, Mittelpunkt und Öffnung. Spawn, Bauverbot und
+    Vegetationslichtung lesen `spawnArea`, nicht `spawnCenter`.
+- **Validierung:** Die zwei Zellen vor der Öffnung müssen frei und erreichbar sein. Basisquellen dürfen nur Gegner bis
+  `SPAWN_STRUCTURE_MAX_ENEMY_DIAMETER_PX` freigeben.
+- **Darstellung:**
+  - Einziger Owner ist der World-eigene `SpawnStructureRenderer` im `BaseManager`.
+  - `BaseEntity`, `DawnSitePropRenderer` und die Zellexplosionen des `BaseDestructionRenderer` überspringen
+    Spawnpunkte.
+  - Die Activity liefert nur Ankündigungen und das Auftauchen der Gegner.
+- **Ankündigung:** Der Host kündigt jeden Takt einer Basisquelle über `csz` mit `structure: true` und der Basis-ID als
+  `zoneId` an, auch den ersten nach der Aktivierung. Zonenalarme und Strukturalarme werden deshalb immer anhand von
+  `structure` getrennt.
 
 ## Portal-Links
 

@@ -14,9 +14,9 @@
     0.5
   ],
   "description": {
-    "silhouette": "A round black-violet brood pool with the painted egg nest, branching void growth creeping toward the bones, slime strands and puddles, glowing egg clutches under and around the skeleton; the stain frays out into any map ground.",
-    "colors": "Black-violet wet slime with faint violet veins, glowing violet eggs, dark growth; dull and crusted when sealed, dried grey-brown when dry.",
-    "anatomy": "Strict orthographic top view of the ground under the carcass rendered in Blender (export_v6.py): transparent outside the creep stain, the bones cast their shadow into it. 32 px per cell, pivot = nest centre; canvas 11 x 11 cells. States sealed/active/dry, one frame per opening; eggs and growth veins as emissive pass."
+    "silhouette": "A black-violet brood pool with the painted egg nest inside an organic creep stain that runs out along the bones in lobes, branching void growth, slime strands and puddles, glowing egg clutches under and around the skeleton; the stain frays out into any map ground.",
+    "colors": "Black-violet wet slime with faint violet veins, glowing violet eggs, dark growth; dull and crusted when sealed.",
+    "anatomy": "Strict orthographic top view of the ground under the carcass rendered in Blender (scripts/asset-pipeline/spawn-carcass, ground.py and export.py): transparent outside the creep stain, the bones cast their shadow into it. 32 px per cell, pivot = nest centre; canvas 11 x 11 cells. States sealed/active, one frame per opening; eggs and growth veins as emissive pass."
   },
   "requiredClips": [],
   "production": "reference",
