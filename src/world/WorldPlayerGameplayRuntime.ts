@@ -463,6 +463,7 @@ export class WorldPlayerGameplayRuntime implements
   PlayerGameplayResourceCommandPort,
   PlayerGameplayFrameStages {
   private readonly systems: WorldPlayerGameplaySystems;
+  private combatIntegrationPort: PlayerCombatIntegrationPort | null = null;
   private readonly earthbreak: BurrowEarthbreakRuntime;
   private readonly detachEarthbreakMovement: () => void;
   private readonly turretControl: TurretControlSystem;
@@ -980,6 +981,15 @@ export class WorldPlayerGameplayRuntime implements
    * directory. Combat integration owns neither the player-Gameplay state nor its lifecycle.
    */
   getPlayerCombatIntegrationPort(): PlayerCombatIntegrationPort {
+    // Hit, damage and stat resolvers ask for this per call; the systems are fixed for this
+    // runtime's lifetime, so one port serves until teardown changes its fire-chunk capability.
+    if (this.combatIntegrationPort && !this.destroyed) return this.combatIntegrationPort;
+    const port = this.createPlayerCombatIntegrationPort();
+    if (!this.destroyed) this.combatIntegrationPort = port;
+    return port;
+  }
+
+  private createPlayerCombatIntegrationPort(): PlayerCombatIntegrationPort {
     const systems = this.systems;
     return {
       resource: systems.resource,
@@ -1806,6 +1816,7 @@ export class WorldPlayerGameplayRuntime implements
     this.structureOccupancy.clear();
     this.turretControl.clear();
     this.destroyed = true;
+    this.combatIntegrationPort = null;
     const { systems } = this;
     this.heldActionUtilityIds?.clear();
     this.shieldBuffPort = null;
