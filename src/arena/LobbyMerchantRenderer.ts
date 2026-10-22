@@ -1,6 +1,6 @@
 import type * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH, DEPTH_LIGHTING } from '../config';
-import { LOBBY_BUILDINGS, LOBBY_BUILDING_LANTERN, type LobbyMenu } from '../config/authoring/lobbyBuildings';
+import { LOBBY_BUILDINGS, LOBBY_BUILDING_LANTERN, lobbyBuildingWorldRects, type LobbyMenu } from '../config/authoring/lobbyBuildings';
 import { LOBBY_MERCHANT } from '../config/authoring/lobbyMerchant';
 import { LOBBY_SPAWN_FOCUS_CELL } from './LobbyWorldLayout';
 import { LOBBY_DEALER_ASSET, registerLobbyDealerIdle } from '../animations/LobbyMerchantAssets';
@@ -10,8 +10,12 @@ import { WorldPlaque } from '../ui/WorldPlaque';
 import { HUD_TONES } from '../ui/HudFrameAssets';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { registerGraphicsObject } from '../effects/EffectUtils';
+import { nearestStructurePoint, structureBounds, type StructureRect } from './StructureOutline';
 
 type LobbyLighting = Pick<LightingSystem, 'setLight' | 'releaseLight' | 'getArtificialLightFactor'>;
+
+/** Gap between an outline's lower edge and its name plaque. */
+const NAMEPLATE_GAP_PX = 12;
 
 /** Smooth spatial fade in cell units, with flat endpoints (no threshold pop). */
 export function resolveLobbyMerchantNameplateAlpha(distanceCells: number): number {
@@ -22,38 +26,37 @@ export function resolveLobbyMerchantNameplateAlpha(distanceCells: number): numbe
   return 1 - fraction * fraction * (3 - 2 * fraction);
 }
 
-/** World material on the main camera. No interaction, physics, progress or Activity dependency. */
+/**
+ * World material of the four lobby structures and the dealer on the main camera. No interaction,
+ * physics, progress or Activity dependency. The building images are provisional stand-ins scaled
+ * over their outline bounds; collision, fog and focus follow the authored outline.
+ */
 export class LobbyMerchantRenderer {
-  private readonly buildings: { menu: LobbyMenu; image: Phaser.GameObjects.Image; label: WorldPlaque }[] = [];
+  private readonly buildings: { menu: LobbyMenu; rects: readonly StructureRect[]; image: Phaser.GameObjects.Image; label: WorldPlaque }[] = [];
   private readonly lanterns: { key: string; x: number; y: number; housing: Phaser.GameObjects.Graphics }[] = [];
   private lighting: LobbyLighting | null = null;
-  private stall: Phaser.GameObjects.Image | null = null;
   private dealer: Phaser.GameObjects.Sprite | null = null;
-  private nameplate: WorldPlaque | null = null;
-  private readonly dealerPosition: { x: number; y: number };
 
   constructor(private readonly scene: Phaser.Scene, metrics: WorldMetrics) {
     for (const building of LOBBY_BUILDINGS) {
       if (!scene.textures.exists(building.textureKey)) continue;
-      const center = worldCellCenter(metrics, building.gridX + 1.5, building.gridY + 1);
-      const image = scene.add.image(center.x, center.y, building.textureKey)
-        .setOrigin(0.5).setDisplaySize(128, 128).setDepth(DEPTH.BASES);
-      // The 4x4 canvas has a transparent half-cell below the occupied 4x3 building.
-      const label = new WorldPlaque(scene).setText(t(building.nameKey))
-        .setPosition(center.x, center.y + 1.5 * CELL_SIZE + 8);
-      this.buildings.push({ menu: building.menu, image, label });
-      this.addLantern(building.menu, center.x, center.y);
-    }
-    const { stall, dealer } = LOBBY_MERCHANT;
-    const standPosition = worldCellCenter(metrics, stall.gridX, stall.gridY);
-    const position = this.dealerPosition = worldCellCenter(metrics, dealer.gridX, dealer.gridY);
-    if (scene.textures.exists(stall.textureKey)) {
-      this.stall = scene.add.image(standPosition.x, standPosition.y, stall.textureKey)
-        .setOrigin(0.5).setDisplaySize(stall.sizeCells * CELL_SIZE, stall.sizeCells * CELL_SIZE)
+      const rects = lobbyBuildingWorldRects(metrics, building);
+      const bounds = structureBounds(rects);
+      const centerX = (bounds.left + bounds.right) / 2, centerY = (bounds.top + bounds.bottom) / 2;
+      const width = bounds.right - bounds.left;
+      // Building art sits in a square canvas with transparent rows above and below; the stall
+      // art fills its canvas.
+      const image = scene.add.image(centerX, centerY, building.textureKey)
+        .setOrigin(0.5).setDisplaySize(width, building.menu === 'merchant' ? bounds.bottom - bounds.top : width)
         .setDepth(DEPTH.BASES);
-      this.addLantern('merchant', standPosition.x, standPosition.y);
+      const label = new WorldPlaque(scene).setText(t(building.nameKey))
+        .setPosition(centerX, bounds.bottom + NAMEPLATE_GAP_PX);
+      this.buildings.push({ menu: building.menu, rects, image, label });
+      this.addLantern(building.menu, centerX, centerY);
     }
+    const { dealer } = LOBBY_MERCHANT;
     if (scene.textures.exists(LOBBY_DEALER_ASSET.sheetTextureKey)) {
+      const position = worldCellCenter(metrics, dealer.gridX, dealer.gridY);
       const idle = registerLobbyDealerIdle(scene.anims);
       const focus = worldCellCenter(metrics, LOBBY_SPAWN_FOCUS_CELL.gridX, LOBBY_SPAWN_FOCUS_CELL.gridY);
       this.dealer = scene.add.sprite(position.x, position.y, LOBBY_DEALER_ASSET.sheetTextureKey)
@@ -62,19 +65,13 @@ export class LobbyMerchantRenderer {
         .setDepth(DEPTH.PLAYERS);
       if (idle) this.dealer.play(idle);
     }
-    if (this.stall || this.dealer) {
-      this.nameplate = new WorldPlaque(scene).setText(t('ui.dawn.dealerName'))
-        .setPosition(standPosition.x, standPosition.y + stall.sizeCells * CELL_SIZE / 2 + 8);
-    }
   }
 
   update(localPlayer: { x: number; y: number } | null, activeMenu: LobbyMenu | null = null,
     lighting: LobbyLighting | null = null): void {
-    for (const { menu, image, label } of this.buildings) label.setAlpha(localPlayer && activeMenu !== menu
-      ? resolveLobbyMerchantNameplateAlpha(Math.hypot(localPlayer.x - image.x, localPlayer.y - image.y) / CELL_SIZE) : 0);
-    this.nameplate?.setAlpha(localPlayer && activeMenu !== 'merchant' ? resolveLobbyMerchantNameplateAlpha(
-      Math.hypot(localPlayer.x - this.dealerPosition.x, localPlayer.y - this.dealerPosition.y) / CELL_SIZE,
-    ) : 0);
+    // Names fade with the distance to the nearest wall, the same measure Shift uses.
+    for (const { menu, rects, label } of this.buildings) label.setAlpha(localPlayer && activeMenu !== menu
+      ? resolveLobbyMerchantNameplateAlpha(nearestStructurePoint(rects, localPlayer.x, localPlayer.y).distance / CELL_SIZE) : 0);
     if (this.lighting !== lighting) this.releaseLights();
     this.lighting = lighting;
     const factor = lighting?.getArtificialLightFactor() ?? 0;
@@ -110,8 +107,6 @@ export class LobbyMerchantRenderer {
     this.lanterns.length = 0;
     for (const { image, label } of this.buildings) { image.destroy(); label.destroy(); }
     this.buildings.length = 0;
-    this.stall?.destroy(); this.stall = null;
     this.dealer?.destroy(); this.dealer = null;
-    this.nameplate?.destroy(); this.nameplate = null;
   }
 }

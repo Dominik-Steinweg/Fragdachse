@@ -76,7 +76,10 @@ export class WorldGroundFogBinding {
     if (bases && this.generation !== bases.getObstacleGeneration()) {
       const baseline = this.generation < 0; this.generation = bases.getObstacleGeneration();
       for (const base of bases.getBases()) {
-        this.fog.terrain.setObstacle(`base:${base.id}`, base.isInert() ? [] : base.spec.cells, baseline);
+        // Outlined structures block the fog along their outline, not their occupied cells.
+        const rects = base.spec.collisionRects;
+        if (rects) this.fog.terrain.setFineObstacle(`base:${base.id}`, base.isInert() ? [] : rects, baseline);
+        else this.fog.terrain.setObstacle(`base:${base.id}`, base.isInert() ? [] : base.spec.cells, baseline);
         if (baseline && base.isInert()) this.fog.terrain.markOpened(base.spec.cells);
       }
     }

@@ -1,7 +1,7 @@
 {
   "owner": "arena/LobbyMerchantRenderer.ts",
   "notes": [
-    "Dawn lobby buildings share the stall band; their night lantern housings stay lit above the light map."
+    "The four lobby structures and the dealer share the base band; their night lantern housings stay lit above the light map."
   ],
   "source": {
     "blends": [],
@@ -9,13 +9,6 @@
     "sites": [
       {
         "key": "module/image/setDepth/0",
-        "expression": "DEPTH.BASES",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "module/this.stall/setDepth/0",
         "expression": "DEPTH.BASES",
         "blends": [
           "NORMAL"
@@ -39,28 +32,6 @@
     "bindings": {}
   },
   "cpuLayers": [
-    {
-      "id": "cpu:arena/LobbyMerchantRenderer.ts:module/this.stall/setDepth/0",
-      "owner": "arena/LobbyMerchantRenderer.ts",
-      "component": "module/this.stall/setDepth/0",
-      "height": "body",
-      "lighting": "material",
-      "camera": "world",
-      "depths": [
-        4
-      ],
-      "blends": [
-        "NORMAL"
-      ],
-      "profiles": [
-        "G"
-      ],
-      "role": "effect",
-      "source": {
-        "selector": "module/this.stall/setDepth/0",
-        "expression": "DEPTH.BASES"
-      }
-    },
     {
       "id": "cpu:arena/LobbyMerchantRenderer.ts:module/image/setDepth/0",
       "owner": "arena/LobbyMerchantRenderer.ts",

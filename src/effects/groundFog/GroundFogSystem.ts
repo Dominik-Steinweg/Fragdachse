@@ -1,4 +1,5 @@
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
+import type { FogSurfaceStamp } from './FogSurfaceMask';
 import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
 import { DEFAULT_FOG_STRENGTH } from '../../config/groundFog';
@@ -52,7 +53,7 @@ export class GroundFogSystem {
   }
   measureGpu = false;
   private timer: FogGpuTimer | null = null;
-  private surfaces: readonly Phaser.GameObjects.Image[] = [];
+  private surfaces: readonly FogSurfaceStamp[] = [];
   private gpu: FogGpuField | null = null;
   private woodlandLight: FogWoodlandLight | null = null;
   private rockCoverage: (() => FormationCoverageBinding | null) | null = null;
@@ -244,7 +245,7 @@ export class GroundFogSystem {
   }
   readDensity(x: number, y: number): { density: number; reached: boolean } { return this.gpu?.readDensity(x, y) ?? { density: 0, reached: false }; }
   getDiagnostics(): Readonly<FogDiagnostics> { this.stats.pendingImpulses = this.impulses.size + this.fineInputs.length; return this.stats; }
-  setSurfaceImages(images: readonly Phaser.GameObjects.Image[]): void { this.surfaces = images; }
+  setSurfaceStamps(stamps: readonly FogSurfaceStamp[]): void { this.surfaces = stamps; }
   setRockCoverage(provider: (() => FormationCoverageBinding | null) | null): void { this.rockCoverage = provider; }
   setDebugRockLighting(contactDisabled: boolean, sunDisabled: boolean, options: FogRockLightingOptions = {}): void {
     const strength=resolveFogRockLighting(options);

@@ -184,6 +184,32 @@ describe('ground fog bounded world state', () => {
     expect(releaseExplosion).toHaveBeenCalledTimes(1); expect(releaseProjectile).toHaveBeenCalledTimes(1); expect(releaseCombat).toHaveBeenCalledTimes(1);
     expect(fog.terrain.opened.some(Boolean)).toBe(true); fog.destroy();
   });
+  it('blocks outlined structures along their outline and cell bases by their cells', () => {
+    const events = new EventEmitter(), renderer = { on: vi.fn(), off: vi.fn() };
+    const scene = { game: { events }, sys: { renderer } };
+    const fog = new GroundFogSystem(scene as never, frame, 1, []);
+    const effects = { bindExplosionObserver: vi.fn(() => vi.fn()), bindGroundFogCombat: vi.fn(() => vi.fn()) };
+    const binding = new WorldGroundFogBinding(scene as never, fog, { rocks: [] } as never, { rockPhysicsProxies: [] } as never, effects);
+    // A 3x2-cell structure whose outline leaves a 16-px notch in its upper right cell.
+    const left = frame.offsetX + 4 * 32, top = frame.offsetY + 4 * 32;
+    const structure = { id: 'hall', isInert: () => false, spec: { cells: [{ gridX: 4, gridY: 4 }, { gridX: 5, gridY: 4 }, { gridX: 6, gridY: 4 },
+      { gridX: 4, gridY: 5 }, { gridX: 5, gridY: 5 }, { gridX: 6, gridY: 5 }],
+      collisionRects: [{ x: left, y: top, width: 80, height: 64, edges: 0 }, { x: left + 80, y: top + 16, width: 16, height: 48, edges: 0 }] } };
+    const plate = { id: 'plate', isInert: () => false, spec: { cells: [{ gridX: 9, gridY: 4 }] } };
+    const bases = { getObstacleGeneration: () => 0, getBases: () => [structure, plate] };
+    binding.sync(null, bases as never, null);
+    const blocked = (x: number, y: number) => fog.terrain.sample(x - frame.offsetX, y - frame.offsetY)[0] === 0;
+    expect(blocked(left + 4, top + 4)).toBe(true);
+    expect(blocked(left + 84, top + 4)).toBe(false);
+    expect(blocked(left + 84, top + 20)).toBe(true);
+    expect(blocked(left + 92, top + 60)).toBe(true);
+    expect(blocked(left + 100, top + 20)).toBe(false);
+    expect(fog.terrain.blocked[4 * fog.terrain.cols + 4]).toBe(0);
+    expect(blocked(frame.offsetX + 9 * 32 + 30, frame.offsetY + 4 * 32 + 30)).toBe(true);
+    expect(fog.terrain.changed.size).toBe(0);
+    binding.destroy(); fog.destroy();
+  });
+
   it('batches dirty cells, keeps overlapping blockers closed and remembers openings after acknowledgement', () => {
     const terrain = new FogTerrainModel(frame, [{ gridX: 2, gridY: 3 }]);
     const cell = { gridX: 1, gridY: 1 };

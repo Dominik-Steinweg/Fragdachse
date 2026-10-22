@@ -12,8 +12,10 @@ vi.mock('../src/effects/EnemyMeshShadowRenderer',()=>({EnemyMeshShadowRenderer:c
  sync(){}setVisible(){}setDebugSolid(){}handles(){return false;}
  destroy(){expect(characters.receivers.has(this.receiver)).toBe(true);characters.enemies.delete(this);}
 }}));
-vi.mock('../src/effects/CharacterShadowReceiver',()=>({CharacterShadowReceiver:class {
- constructor(){characters.receivers.add(this);}update(){}destroy(){expect(characters.receivers.has(this)).toBe(true);characters.receivers.delete(this);}
+vi.mock('../src/effects/CharacterShadowReceiver',()=>({STRUCTURE_RECEIVER_TEXEL_PX:8,CharacterShadowReceiver:class {
+ updates:any[][]=[];
+ constructor(_scene:any,_bounds:any,readonly texelPx=32){characters.receivers.add(this);}update(...args:any[]){this.updates.push(args);}
+ destroy(){expect(characters.receivers.has(this)).toBe(true);characters.receivers.delete(this);}
 }}));
 vi.mock('../src/effects/CharacterMeshShadowRenderer',()=>({CharacterMeshShadowRenderer:class {
  count=0;activeCount=0;constructor(_scene:any,readonly clouds:any,readonly receiver:any){characters.live.add(this);}
@@ -745,4 +747,27 @@ it('World receiver is shared with player-free Low casters and outlives each borr
  expect(characters.receivers.size).toBe(0);
  const third=shadows.borrowFigureEnvironment(()=>released.push('third'));expect(third!.receiver).not.toBe(second!.receiver);
  shadows.destroy();expect(released).toEqual(['second','third']);expect(characters.receivers.size).toBe(0);quality.destroy();
+});
+
+it('switches the World receiver to fine texels while structures exist and excludes their roofs',()=>{
+ const {scene}=makeScene();
+ const shadows=new ShadowSystem(scene);shadows.rebuildStaticLayoutShadows(layout(0,0));
+ shadows.setCharacterSunlight({name:'pilot'} as any);
+ const released:string[]=[];
+ const coarse=shadows.borrowFigureEnvironment(()=>released.push('coarse'))!;
+ expect((coarse.receiver as any).texelPx).toBe(CELL_SIZE);
+ const roofs=[{x:64,y:64,width:160,height:128}];
+ shadows.syncStructureReceiverRects(roofs);
+ expect(released).toEqual(['coarse']);expect(characters.receivers.size).toBe(0);
+ const fine=shadows.borrowFigureEnvironment(()=>released.push('fine'))!;
+ expect((fine.receiver as any).texelPx).toBe(8);
+ expect((fine.receiver as any).updates.at(-1).at(-1)).toBe(roofs);
+ // The same rects are no change; other rects of the same kind only refresh the receiver.
+ const updates=(fine.receiver as any).updates.length;
+ shadows.syncStructureReceiverRects(roofs);shadows.borrowFigureEnvironment(()=>{})!.release();
+ expect((fine.receiver as any).updates).toHaveLength(updates);
+ const moved=[{x:96,y:64,width:160,height:128}];
+ shadows.syncStructureReceiverRects(moved);shadows.borrowFigureEnvironment(()=>{})!.release();
+ expect(released).toEqual(['coarse']);expect((fine.receiver as any).updates.at(-1).at(-1)).toBe(moved);
+ shadows.destroy();expect(characters.receivers.size).toBe(0);
 });

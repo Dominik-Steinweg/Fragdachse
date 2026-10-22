@@ -154,7 +154,7 @@ export class InputSystem {
   private interactionCandidate: WorldInteractionCandidate | null = null;
   private interactionAlternatives: readonly WorldInteractionFootprint[] = [];
   private lobbyMenuProvider: {
-    candidates: () => WorldInteractionCandidate[];
+    candidates: (player: { x: number; y: number }) => WorldInteractionCandidate[];
     open: (menu: import('../config/authoring/lobbyBuildings').LobbyMenu) => void;
   } | null = null;
   setupLobbyMenuProvider(provider: NonNullable<InputSystem['lobbyMenuProvider']>): void { this.lobbyMenuProvider = provider; }
@@ -204,7 +204,7 @@ export class InputSystem {
         footprint: platform.footprint, worldRevision });
     }
     if (structureState) return candidates.filter(c => c.kind === 'watchtower');
-    candidates.push(...this.lobbyMenuProvider?.candidates() ?? []);
+    candidates.push(...this.lobbyMenuProvider?.candidates(sprite) ?? []);
     const range = this.getShootingRange?.();
     if (range) {
       const state = range.snapshot();

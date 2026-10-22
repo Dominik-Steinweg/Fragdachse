@@ -316,7 +316,7 @@ class FogLab extends Phaser.Scene {
     if (this.bench && this.elapsed >= this.nextExplosion) { this.nextExplosion += 4000; this.fog.addExplosion(1080, 800, 180); }
     for (const cell of this.fadingBase) if (cell.image.active && cell.removeAt <= this.elapsed) cell.image.destroy();
     this.fadingBase = this.fadingBase.filter(cell => cell.image.active);
-    this.fog.setSurfaceImages([...this.obstacles.values()].flat().concat(this.fadingBase.map(cell => cell.image)));
+    this.fog.setSurfaceStamps([...this.obstacles.values()].flat().concat(this.fadingBase.map(cell => cell.image)));
     this.fog.update(dt, number('time'), view);
     this.cameraFeedback.applyToCamera(camera, this.baseScroll.x, this.baseScroll.y, dt);
     this.light.setTimeOfDay(number('time'));

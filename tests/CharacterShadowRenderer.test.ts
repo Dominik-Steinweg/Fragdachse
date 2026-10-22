@@ -112,6 +112,24 @@ it('receiver excludes actual obstacles and bases, weakens water and releases des
  f.receiver.update(layout,0,0,()=>false,[],[]);expect(f.pixels()[0]).toBe(255);expect(f.pixels()[8]).toBe(255);f.renderer.destroy();
 });
 
+it('excludes structure outlines on 8-px texels while cell rules keep covering whole cells', () => {
+ const f=fixture();
+ const fine=new CharacterShadowReceiver(f.scene,{minX:0,minY:0,maxX:640,maxY:640},8);
+ expect(fine.world).toEqual(f.receiver.world);
+ const layout:any={rocks:[{gridX:5,gridY:5}],water:[]};
+ const roof={x:40,y:48,width:56,height:32};
+ fine.update(layout,0,0,()=>true,[],[],new Set(),[roof]);
+ for(let y=36;y<92;y+=4)for(let x=28;x<108;x+=4){
+  const inside=x>=roof.x&&x<roof.x+roof.width&&y>=roof.y&&y<roof.y+roof.height;
+  expect(fine.sample(x,y),`${x},${y}`).toBe(inside?0:1);
+ }
+ for(let y=160;y<192;y+=8)for(let x=160;x<192;x+=8)expect(fine.sample(x+4,y+4)).toBe(0);
+ expect(fine.sample(196,170)).toBe(1);
+ fine.update(layout,0,0,()=>true,[],[],new Set(),[]);
+ expect(fine.sample(60,60)).toBe(1);
+ fine.destroy();f.renderer.destroy();
+});
+
 it('receives figure shadows across the whole live tower deck and restores ground rules after removal', () => {
  const f=fixture();
  const tower={id:0,kind:'watchtower',gridX:1,gridY:1,hp:1};

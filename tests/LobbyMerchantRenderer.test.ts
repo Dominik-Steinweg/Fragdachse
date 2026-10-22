@@ -7,7 +7,8 @@ import { worldCellCenter } from '../src/world/WorldMetrics';
 import { LOBBY_DEALER_ASSET, preloadLobbyMerchantAssets } from '../src/animations/LobbyMerchantAssets';
 import { getWalkingSheetForStaticTexture } from '../src/animations/BadgerAnimations';
 import { LOBBY_MERCHANT } from '../src/config/authoring/lobbyMerchant';
-import { LOBBY_BUILDINGS } from '../src/config/authoring/lobbyBuildings';
+import { LOBBY_BUILDINGS, lobbyBuildingWorldRects } from '../src/config/authoring/lobbyBuildings';
+import { structureBounds } from '../src/arena/StructureOutline';
 import { t } from '../src/i18n';
 import { WorldPresentationBinding } from '../src/world/WorldPresentationBinding';
 import type { WorldMetrics } from '../src/world/WorldMetrics';
@@ -45,7 +46,7 @@ describe('Lobby merchant presentation', () => {
   it('loads and registers only the authored idle clip, independently of locomotion', () => {
     const loader = { image: vi.fn(), spritesheet: vi.fn() };
     preloadLobbyMerchantAssets(loader as unknown as Phaser.Loader.LoaderPlugin);
-    expect(loader.image.mock.calls[0][0]).toBe(LOBBY_MERCHANT.stall.textureKey);
+    expect(loader.image.mock.calls.map(call => call[0])).toEqual(LOBBY_BUILDINGS.map(building => building.textureKey));
     expect(loader.spritesheet.mock.calls[0][0]).toBe(LOBBY_DEALER_ASSET.sheetTextureKey);
     expect(getWalkingSheetForStaticTexture(LOBBY_MERCHANT.dealer.textureKey)).toBeNull();
     const f = fixture();
@@ -54,28 +55,29 @@ describe('Lobby merchant presentation', () => {
     expect(f.scene.anims.create).toHaveBeenCalledTimes(1);
     expect(f.scene.anims.create.mock.calls[0][0]).toMatchObject({ key: 'dawn_dealer_sheet_idle', frameRate: idle.frameRate, repeat: -1,
       frames: idle.frames.map(frame => ({ key: LOBBY_DEALER_ASSET.sheetTextureKey, frame })) });
-    const stall = f.objects.find(object => object.texture === LOBBY_MERCHANT.stall.textureKey);
     const dealer = f.objects.find(object => object.texture === LOBBY_DEALER_ASSET.sheetTextureKey);
-    expect(stall.setDisplaySize).toHaveBeenCalledWith(LOBBY_MERCHANT.stall.sizeCells * CELL_SIZE, LOBBY_MERCHANT.stall.sizeCells * CELL_SIZE);
     expect(dealer.setDisplaySize).toHaveBeenCalledWith(LOBBY_MERCHANT.dealer.displaySize, LOBBY_MERCHANT.dealer.displaySize);
     expect(dealer.play).toHaveBeenCalledWith('dawn_dealer_sheet_idle');
     for (const building of LOBBY_BUILDINGS) {
-      expect(loader.image.mock.calls.some(call => call[0] === building.textureKey)).toBe(true);
-      expect(f.objects.find(object => object.texture === building.textureKey).setDisplaySize).toHaveBeenCalledWith(128, 128);
+      // Provisional art spans its outline: centred, as wide as the outline bounds.
+      const bounds = structureBounds(lobbyBuildingWorldRects(f.metrics, building));
+      const image = f.objects.find(object => object.texture === building.textureKey);
+      expect(image).toMatchObject({ x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 });
+      expect(image.setDisplaySize.mock.calls[0][0]).toBe(bounds.right - bounds.left);
     }
     const focus = worldCellCenter(f.metrics, LOBBY_SPAWN_FOCUS_CELL.gridX, LOBBY_SPAWN_FOCUS_CELL.gridY);
     expect(dealer.setRotation.mock.calls[0][0]).toBeCloseTo(Math.atan2(focus.y - dealer.y, focus.x - dealer.x) + Math.PI / 2);
   });
 
   it('skips each missing texture and destroys sprites with the owning presentation exactly once', () => {
-    const absent = fixture([LOBBY_MERCHANT.stall.textureKey, LOBBY_DEALER_ASSET.sheetTextureKey, ...LOBBY_BUILDINGS.map(building => building.textureKey)]);
+    const absent = fixture([LOBBY_DEALER_ASSET.sheetTextureKey, ...LOBBY_BUILDINGS.map(building => building.textureKey)]);
     absent.render().destroy();
     expect(absent.objects).toEqual([]);
     expect(absent.scene.anims.create).not.toHaveBeenCalled();
     const partial = fixture([LOBBY_DEALER_ASSET.sheetTextureKey]);
     partial.render().destroy();
     expect(partial.objects.some(object => object.texture === LOBBY_DEALER_ASSET.sheetTextureKey)).toBe(false);
-    expect(partial.objects.some(object => object.texture === LOBBY_MERCHANT.stall.textureKey)).toBe(true);
+    expect(partial.objects.some(object => object.texture === LOBBY_BUILDINGS[0].textureKey)).toBe(true);
     const f = fixture();
     const binding = new WorldPresentationBinding({} as never, {} as never, { destroyPresentation: vi.fn() });
     binding.lobbyMerchant = f.render();
@@ -84,32 +86,28 @@ describe('Lobby merchant presentation', () => {
     for (const object of f.objects) expect(object.destroy).toHaveBeenCalledTimes(1);
   });
 
-  it('fades in world coordinates from the local player and hides without a player', () => {
+  it('fades names by the distance to the nearest wall and hides them without a player', () => {
     const f = fixture();
     const renderer = f.render();
     const dealer = f.objects.find(object => object.texture === LOBBY_DEALER_ASSET.sheetTextureKey);
-    const nameplate = f.objects.find(object => object.texture === t('ui.dawn.dealerName'));
-    const position = worldCellCenter(f.metrics, LOBBY_MERCHANT.dealer.gridX, LOBBY_MERCHANT.dealer.gridY);
-    expect(dealer).toMatchObject(position);
-    const stall = f.objects.find(object => object.texture === LOBBY_MERCHANT.stall.textureKey);
-    expect(nameplate.x).toBe(stall.x);
-    expect(nameplate.y).toBeGreaterThan(stall.y + LOBBY_MERCHANT.stall.sizeCells * CELL_SIZE / 2);
-    expect(nameplate.setAlpha).toHaveBeenLastCalledWith(0);
+    expect(dealer).toMatchObject(worldCellCenter(f.metrics, LOBBY_MERCHANT.dealer.gridX, LOBBY_MERCHANT.dealer.gridY));
     const { fullVisibilityCells, hiddenAtCells } = LOBBY_MERCHANT.nameplate;
-    renderer.update({ x: dealer.x + fullVisibilityCells * CELL_SIZE, y: dealer.y });
-    expect(nameplate.setAlpha).toHaveBeenLastCalledWith(1);
-    renderer.update({ x: dealer.x, y: dealer.y - (fullVisibilityCells + hiddenAtCells) / 2 * CELL_SIZE });
-    expect(nameplate.setAlpha).toHaveBeenLastCalledWith(0.5);
-    renderer.update(null);
-    expect(nameplate.setAlpha).toHaveBeenLastCalledWith(0);
     for (const building of LOBBY_BUILDINGS) {
-      const image = f.objects.find(object => object.texture === building.textureKey);
+      const bounds = structureBounds(lobbyBuildingWorldRects(f.metrics, building));
       const label = f.objects.find(object => object.texture === t(building.nameKey));
-      expect(label.y).toBeGreaterThan(image.y + 1.5 * CELL_SIZE);
+      expect(label.x).toBe((bounds.left + bounds.right) / 2);
+      expect(label.y).toBeGreaterThan(bounds.bottom);
       expect(label.setAlpha).toHaveBeenLastCalledWith(0);
-      renderer.update(image);
-      expect(label.setAlpha).toHaveBeenLastCalledWith(1);
-      renderer.update({ x: image.x + hiddenAtCells * CELL_SIZE, y: image.y });
+      // Every side counts the same: the distance is measured from the outline, not its centre.
+      for (const [dx, dy, edgeX, edgeY] of [[1, 0, bounds.right, bounds.bottom - 4], [0, -1, bounds.left + 4, bounds.top], [-1, 0, bounds.left, bounds.top + 4]]) {
+        renderer.update({ x: edgeX + dx * fullVisibilityCells * CELL_SIZE, y: edgeY + dy * fullVisibilityCells * CELL_SIZE });
+        expect(label.setAlpha).toHaveBeenLastCalledWith(1);
+        renderer.update({ x: edgeX + dx * (fullVisibilityCells + hiddenAtCells) / 2 * CELL_SIZE, y: edgeY + dy * (fullVisibilityCells + hiddenAtCells) / 2 * CELL_SIZE });
+        expect(label.setAlpha).toHaveBeenLastCalledWith(0.5);
+      }
+      renderer.update({ x: bounds.right + hiddenAtCells * CELL_SIZE, y: bounds.top });
+      expect(label.setAlpha).toHaveBeenLastCalledWith(0);
+      renderer.update(null);
       expect(label.setAlpha).toHaveBeenLastCalledWith(0);
     }
   });

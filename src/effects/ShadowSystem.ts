@@ -5,7 +5,7 @@ import { quantizeSunAzimuth, type SunPathState } from './sunlight/SunPath';
 import type { SunCloudState } from './sunlight/cloudShadow';
 import { CharacterMeshShadowRenderer } from './CharacterMeshShadowRenderer';
 import { EnemyMeshShadowRenderer } from './EnemyMeshShadowRenderer';
-import { CharacterShadowReceiver } from './CharacterShadowReceiver';
+import { CharacterShadowReceiver, STRUCTURE_RECEIVER_TEXEL_PX, type CharacterShadowReceiverRect } from './CharacterShadowReceiver';
 import { writeShadowCellHull } from './sunlight/ShadowProjection';
 import {
   ARENA_OFFSET_X,
@@ -217,14 +217,15 @@ export class ShadowSystem {
   private syncFigureReceiver(): CharacterShadowReceiver | null {
     if (!this.characterClouds || !this.lastStaticLayout) return null;
     if (!this.figureReceiver) {
-      this.figureReceiver = new CharacterShadowReceiver(this.scene, this.getStaticWorldBounds());
+      this.figureReceiver = new CharacterShadowReceiver(this.scene, this.getStaticWorldBounds(),
+        this.structureReceiverRects.length > 0 ? STRUCTURE_RECEIVER_TEXEL_PX : CELL_SIZE);
       this.characterReceiverDirty = true;
     }
     if (this.characterReceiverDirty) {
       const options = this.lastStaticOptions;
       this.figureReceiver.update(this.lastStaticLayout, options.offsetX ?? ARENA_OFFSET_X,
         options.offsetY ?? ARENA_OFFSET_Y, options.rockVisibilityPredicate, options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS,
-        this.baseCells.values(), this.collapsedBridges);
+        this.baseCells.values(), this.collapsedBridges, this.structureReceiverRects);
       this.characterReceiverDirty = false;
     }
     return this.figureReceiver;
@@ -248,6 +249,18 @@ export class ShadowSystem {
   }
   private characterReceiverDirty = true;
   private collapsedBridges: ReadonlySet<string> = new Set();
+  private structureReceiverRects: readonly CharacterShadowReceiverRect[] = [];
+  /**
+   * Structure roofs receive no figure shadows. Their outlines sit on an 8-px grid, so the receiver
+   * switches to finer texels while structures exist; that swap rebuilds the figure shadows.
+   */
+  syncStructureReceiverRects(rects: readonly CharacterShadowReceiverRect[]): void {
+    if (rects === this.structureReceiverRects) return;
+    const finer = rects.length > 0, wasFiner = this.structureReceiverRects.length > 0;
+    this.structureReceiverRects = rects;
+    if (finer !== wasFiner && this.figureReceiver) this.destroyFigureShadows();
+    this.characterReceiverDirty = true;
+  }
   /** Bridge decks receive figure shadows while they stand; the World bridge owner reports collapses. */
   setCollapsedBridges(ids: ReadonlySet<string>): void {
     if (ids.size === this.collapsedBridges.size && [...ids].every((id) => this.collapsedBridges.has(id))) return;

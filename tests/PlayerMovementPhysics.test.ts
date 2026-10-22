@@ -12,6 +12,8 @@ import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { CELL_SIZE, PLAYER_SIZE, DASH_T1_S, DASH_T2_S } from '../src/config';
 import type { PlayerEntity } from '../src/entities/PlayerEntity';
 import type { PlayerInput } from '../src/types';
+import { nearestStructurePoint, structureBounds, structureMovementCells, type StructureRect } from '../src/arena/StructureOutline';
+import { LOBBY_BUILDINGS, lobbyBuildingOutline } from '../src/config/authoring/lobbyBuildings';
 
 vi.mock('phaser', () => ({ Math: { Clamp: (v: number, a: number, b: number) => Math.max(a, Math.min(b, v)),
   Distance: { Between: (x: number, y: number, a: number, b: number) => Math.hypot(x - a, y - b) } } }));
@@ -22,7 +24,7 @@ const arcade = (name: string) => require(fileURLToPath(new URL(`../node_modules/
 const World = arcade('World'), Body = arcade('Body'), StaticBody = arcade('StaticBody');
 const metrics = resolveActiveArenaWorldMetrics();
 
-function fixture(mode: 'wall' | 'water' | 'bounds' | 'rocks' = 'wall') {
+function fixture(mode: 'wall' | 'water' | 'bounds' | 'rocks' | 'outline' = 'wall', outline: readonly StructureRect[] = []) {
   const scene = { sys: { scale: { width: metrics.maxX, height: metrics.maxY } }, events: new EventEmitter(), physics: {} as any };
   const world = new World(scene, { fps: 120, gravity: { x: 0, y: 0 }, x: metrics.offsetX, y: metrics.offsetY,
     width: metrics.widthPx, height: metrics.heightPx });
@@ -47,12 +49,20 @@ function fixture(mode: 'wall' | 'water' | 'bounds' | 'rocks' = 'wall') {
     cell.center.set(wallX + CELL_SIZE / 2, wallY + (i + 0.5) * CELL_SIZE);
     world.add(cell); return cell;
   });
-  const obstacles = [wall, ...cells];
+  // A structure collides with one static body per outline rect, anchored at the wall's cell.
+  const outlineBodies = mode !== 'outline' ? [] : outline.map(rect => {
+    const body = new StaticBody(world); body.setSize(rect.width, rect.height);
+    body.position.set(wallX + rect.x, wallY + rect.y);
+    body.center.set(wallX + rect.x + rect.width / 2, wallY + rect.y + rect.height / 2);
+    world.add(body); return body;
+  });
+  const outlineCells = new Set(structureMovementCells(outline).map(cell => `${5 + cell.gridX}:${3 + cell.gridY}`));
+  const obstacles = [wall, ...cells, ...outlineBodies];
   const water = new WaterGeometry(mode === 'water'
     ? Array.from({ length: 6 }, (_, i) => ({ gridX: 5, gridY: 3 + i })) : [], metrics);
   const slide = { x: 0, y: 0, vx: 0, vy: 0 };
   const blocked = (x: number, y: number) => ((mode === 'wall' && wall.enable) || mode === 'rocks')
-    && x === 5 && y >= 3 && y < 9 || water.hasCell(x, y);
+    && x === 5 && y >= 3 && y < 9 || water.hasCell(x, y) || (mode === 'outline' && outlineCells.has(`${x}:${y}`));
   const geometry: PlayerMovementGeometry = { metrics, isBlockedCell: blocked,
     collide: p => {
       for (const obstacle of obstacles) if (obstacle.enable) world.collide(p, obstacle);
@@ -75,7 +85,7 @@ function fixture(mode: 'wall' | 'water' | 'bounds' | 'rocks' = 'wall') {
     combat as never);
   system.setRunSpeedResolver(() => 100);
   const manual = new ClientPlayerMovementBody(player, geometry);
-  return { scene, world, body, proxy, wall, cells, water, slide, blocked, geometry, player, input, combat, system, manual };
+  return { scene, world, body, proxy, wall, cells, outlineBodies, wallX, wallY, water, slide, blocked, geometry, player, input, combat, system, manual };
 }
 
 describe('isolated client Arcade movement', () => {
@@ -191,6 +201,45 @@ describe('isolated client Arcade movement', () => {
     expect(client.world.bodies.has(client.body)).toBe(true);
     expect(client.body.velocity.length()).toBe(0);
   });
+
+  it.each(LOBBY_BUILDINGS.flatMap(building => ([
+    // [face, start relative to the outline bounds, input pressing into the face while moving along it]
+    ['north', -0.1, -0.35, 1, 0.5], ['east', 1.25, -0.1, -0.5, 1], ['south', 1.1, 1.3, -1, -0.5], ['west', -0.3, 1.1, 0.5, -1],
+  ] as const).map(([face, u, v, dx, dy]) => [building.id, face, u, v, dx, dy] as const)))(
+    'slides %s along its %s outline face, across seams and around the corner, like the host', (id, _face, u, v, dx, dy) => {
+      const outline = lobbyBuildingOutline({ id }).rects;
+      const bounds = structureBounds(outline);
+      const host = fixture('outline', outline), client = fixture('outline', outline);
+      const start = { x: host.wallX + bounds.left + u * (bounds.right - bounds.left), y: host.wallY + bounds.top + v * (bounds.bottom - bounds.top) };
+      for (const f of [host, client]) f.body.reset(start.x, start.y);
+      for (const body of host.outlineBodies) host.world.addCollider(host.proxy, body);
+      client.manual.control(true);
+      const velocity = { dx: 0, dy: 0 };
+      const radius = PLAYER_SIZE / 2;
+      const along = { x: Math.abs(dx) > Math.abs(dy) ? Math.sign(dx) : 0, y: Math.abs(dy) > Math.abs(dx) ? Math.sign(dy) : 0 };
+      let previous = start.x * along.x + start.y * along.y;
+      const beyond = () => {
+        const x = client.player.x - client.wallX, y = client.player.y - client.wallY;
+        return along.x > 0 ? x - bounds.right : along.x < 0 ? bounds.left - x : along.y > 0 ? y - bounds.bottom : bounds.top - y;
+      };
+      // Stop once the corner is rounded; the arena edge lies just beyond the north face.
+      for (let i = 0; i < 360 && beyond() <= radius; i++) {
+        resolveWalkingVelocity(host.player.x, host.player.y, dx, dy, 100, metrics, host.blocked, velocity);
+        host.body.setVelocity(velocity.dx, velocity.dy);
+        host.world.update(i * 1000 / 120, 1000 / 120); host.world.postUpdate();
+        client.manual.step(dx, dy, 100, 1000 / 120);
+        // Never inside the outline, and every step makes progress along the face: no snag at a seam or corner.
+        const x = client.player.x - client.wallX, y = client.player.y - client.wallY;
+        expect(nearestStructurePoint(outline, x, y).distance, `step ${i}`).toBeGreaterThan(radius - 0.5);
+        const progress = client.player.x * along.x + client.player.y * along.y;
+        expect(progress - previous, `step ${i}`).toBeGreaterThan(0.2);
+        previous = progress;
+      }
+      // It has rounded the corner and left the face behind.
+      expect(beyond()).toBeGreaterThan(radius);
+      expect(client.player.x).toBeCloseTo(host.player.x, 6);
+      expect(client.player.y).toBeCloseTo(host.player.y, 6);
+    });
 
   it('reads removed obstacles on the next replay and rejects cosmetic paths through walls', () => {
     const f = fixture(); f.manual.control(true);
