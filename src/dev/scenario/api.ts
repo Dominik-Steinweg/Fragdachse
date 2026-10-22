@@ -3,6 +3,7 @@ import { runWatchtowerReview, releaseWatchtowerReview } from './WatchtowerReview
 import { setReactivePropVariantOverride } from '../../effects/reactiveProps/ReactivePropVariantOverride';
 import { runBridgeReview, releaseBridgeReview, runBridgeCommand } from './BridgeReview';
 import { runPortalReview, releasePortalReview } from './PortalReview';
+import { runSpawnStructureReview, releaseSpawnStructureReview } from './SpawnStructureReview';
 import { runBloodReview, releaseBloodReview } from './BloodReview';
 import { runInspectorUltimatesReview, inspectorUltimatesStatus, releaseInspectorUltimatesReview } from './InspectorUltimatesReview';
 import type { DevScenarioController } from './controller';
@@ -75,6 +76,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     case 'lobbyBuildingReview': return runLobbyBuildingReview(controller, c);
     case 'bridgeReview': return runBridgeReview(controller, c);
     case 'portalReview': return runPortalReview(controller, c);
+    case 'spawnStructureReview': return runSpawnStructureReview(controller, c);
     case 'bloodReview': return runBloodReview(controller, c);
     case 'bridge': return runBridgeCommand(controller, c);
     case 'inspectorUltimates': return runInspectorUltimatesReview(controller, c);
@@ -336,6 +338,7 @@ export function installScenarioApi(controller: DevScenarioController) {
     releaseWatchtowerReview(controller);
     releaseBridgeReview(controller);
     releasePortalReview(controller);
+    releaseSpawnStructureReview(controller);
     releaseBloodReview(controller);
     releaseInspectorUltimatesReview(controller);
     for (const check of waiters) check();

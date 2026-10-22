@@ -1,0 +1,75 @@
+{
+  "owner": "effects/spawnStructure/SpawnStructureSpores.ts",
+  "notes": [
+    "Spawn structure brood spores (GDD Spawnbauwerk V1): glowing violet motes rising from the nest, a soft halo under a bright core, additive above the light map around the eye passes; their light enters the light map as decorative ground glow."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/halo/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.09",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/core/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.11",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureSpores.ts:module/halo/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureSpores.ts",
+      "component": "module/halo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.59
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/halo/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.09"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureSpores.ts:module/core/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureSpores.ts",
+      "component": "module/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.61
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/core/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.11"
+      }
+    }
+  ]
+}

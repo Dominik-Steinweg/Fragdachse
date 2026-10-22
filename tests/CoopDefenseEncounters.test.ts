@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildSpawnStructureShape } from '../src/config/spawnStructure';
 import {
   getCoopDefenseMapConfig,
   normalizeCoopDefenseMapConfig,
@@ -32,6 +33,8 @@ function makeMap(
     ...extras,
   };
 }
+
+const SPAWN_STRUCTURE = buildSpawnStructureShape('east');
 
 describe('Coop defense encounters', () => {
   it.each(['direct', 'via-event'] as const)('rejects a %s dependency on a later sequential repel encounter', path => {
@@ -311,8 +314,8 @@ describe('Coop defense encounters', () => {
             role: 'spawn-point',
             dormant: true,
             anchor: { kind: 'grid', gridX: 12, gridY: 3 },
-            shape: { kind: 'rectangle', widthCells: 2, heightCells: 2 },
-            spawnCenter: { gridX: 0, gridY: 0 },
+            shape: { kind: 'cells', cells: SPAWN_STRUCTURE.cells },
+            spawnCenter: SPAWN_STRUCTURE.spawnCenter,
           },
           {
             id: 'brood-south',
@@ -321,8 +324,8 @@ describe('Coop defense encounters', () => {
             role: 'spawn-point',
             dormant: true,
             anchor: { kind: 'grid', gridX: 12, gridY: 20 },
-            shape: { kind: 'rectangle', widthCells: 2, heightCells: 2 },
-            spawnCenter: { gridX: 0, gridY: 0 },
+            shape: { kind: 'cells', cells: SPAWN_STRUCTURE.cells },
+            spawnCenter: SPAWN_STRUCTURE.spawnCenter,
           },
           {
             id: 'forward-outpost',

@@ -4,10 +4,14 @@ import { parseReactivePropScatterSpec, REACTIVE_PROP_KINDS, type ReactivePropSca
 import { isBossIntroPresetId, type BossIntroPresetId } from './bossIntros';
 import { normalizeFogStrength } from './groundFog';
 import { normalizeWorldMoonlight, normalizeWorldVoidDanger, type WorldMoonlightConfig, type WorldVoidDangerConfig } from './nightWorld';
-import { normalizeCoopDefenseWater } from './coopDefenseWater';
+import { normalizeCoopDefenseWater, resolveAuthoredBaseOrigin } from './coopDefenseWater';
+import { isCellInsidePersistentBaseReservation } from '../persistentBase/PersistentBaseZone';
 import { normalizeCoopDefenseBridges } from './coopDefenseBridges';
 import { normalizeKrakenHabitat, type KrakenHabitatConfig } from './krakenHabitat';
 import { normalizeWorldSpawnZones, spawnZoneArea, type WorldSpawnZone } from './spawnZones';
+import {
+  getSpawnStructureTemplate, isSpawnStructureAreaCell, matchSpawnStructureShape, SPAWN_STRUCTURE_MAX_ENEMY_DIAMETER_PX,
+} from './spawnStructure';
 import { turretAimConfig, validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import {
   getCoopDefenseEnemyConfig,
@@ -146,7 +150,10 @@ export interface CoopBaseConfig {
   readonly shape: CoopBaseShape;
   readonly turrets?: readonly CoopBaseTurretConfig[];
   readonly powerUpPedestals?: readonly CoopBasePowerUpPedestalConfig[];
-  /** Freie Zelle innerhalb der Shape, an der die strukturgebundene Quelle erscheint. */
+  /**
+   * Nur Spawnpunkte: eine Zelle der 2x2-Brutgrube im kanonischen U (`src/config/spawnStructure.ts`).
+   * Die Gegner erscheinen in der Mitte der Grube, nicht in dieser Zelle.
+   */
   readonly spawnCenter?: CoopBaseCellOffset;
 }
 
@@ -1461,6 +1468,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     water: mapConfig.water, waterAreas: mapConfig.waterAreas,
     bases, persistentBase, rockWalls, missionProgress, trackMode, trackPosition,
   }, arenaWidthCells, arenaHeightCells);
+  validateSpawnStructureMouths(mapConfig.mapId, bases, persistentBase, rockWalls, missionProgress,
+    arenaWidthCells, arenaHeightCells);
   const reactiveProps = normalizeReactivePropsConfig(
     mapConfig.mapId, mapConfig.reactiveProps, arenaWidthCells, arenaHeightCells,
     water ?? [], rockWalls ?? [], missionProgress, trackMode === 'none' ? undefined : trackPosition,
@@ -4436,6 +4445,10 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
   if (role !== 'spawn-point' && spawnCenter) {
     throw new Error(`[coopDefenseMaps] Only spawn points may declare spawnCenter: ${baseConfig.id}`);
   }
+  const shape = normalizeBaseShape(baseConfig.shape);
+  if (role === 'spawn-point') {
+    validateSpawnStructureBase(baseConfig, faction, shape, spawnCenter!, turrets.length);
+  }
   if (baseConfig.dormant === true && role === 'main') {
     throw new Error(`[coopDefenseMaps] Dormant mission structure ${baseConfig.id} must not use role main`);
   }
@@ -4472,11 +4485,88 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
     role,
     dormant: baseConfig.dormant === true,
     anchor: normalizeBaseAnchor(baseConfig.anchor),
-    shape: normalizeBaseShape(baseConfig.shape),
+    shape,
     turrets,
     powerUpPedestals,
     spawnCenter,
   };
+}
+
+/**
+ * Die zwei Zellen vor der Grubenoeffnung muessen begehbar bleiben, sonst steigen die Gegner in eine
+ * Sackgasse. Wasser, Felsen und Gleise halten die Basis-Abstaende bereits frei; hier bleiben nur
+ * Arena-Rand, fremde Basen, Basisreservierung, Felswaende und Missionsbarrieren.
+ */
+function validateSpawnStructureMouths(
+  mapId: string,
+  bases: readonly CoopBaseConfig[],
+  persistentBase: CoopDefenseMapPersistentBaseConfig | undefined,
+  rockWalls: readonly CoopDefenseMapRockWallConfig[] | undefined,
+  missionProgress: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
+  cols: number,
+  rows: number,
+): void {
+  const occupied = new Set<string>();
+  const placements = bases.map((base) => {
+    const origin = resolveAuthoredBaseOrigin(base, cols, rows);
+    const shape = base.shape;
+    const cells = shape.kind === 'cells'
+      ? shape.cells
+      : Array.from({ length: shape.widthCells * shape.heightCells }, (_, index) => ({
+        gridX: index % shape.widthCells,
+        gridY: Math.floor(index / shape.widthCells),
+      }));
+    for (const cell of cells) occupied.add(`${origin.gridX + cell.gridX}_${origin.gridY + cell.gridY}`);
+    return { base, origin };
+  });
+  const blocked = new Set<string>();
+  for (const wall of rockWalls ?? []) {
+    for (let y = wall.gridY; y < wall.gridY + wall.heightCells; y++) {
+      for (let x = wall.gridX; x < wall.gridX + wall.widthCells; x++) blocked.add(`${x}_${y}`);
+    }
+  }
+  for (const barrier of missionProgress?.barriers ?? []) {
+    for (const cell of barrier.cells) blocked.add(`${cell.gridX}_${cell.gridY}`);
+  }
+  const reservationRadius = resolvePersistentBaseReservationRadiusCells(persistentBase?.maxAreaStage);
+  for (const { base, origin } of placements) {
+    if (base.role !== 'spawn-point' || base.shape.kind !== 'cells') continue;
+    const outlet = matchSpawnStructureShape(base.shape.cells);
+    if (!outlet) continue;
+    for (const mouth of getSpawnStructureTemplate(outlet).mouth) {
+      const gridX = origin.gridX + mouth.gridX;
+      const gridY = origin.gridY + mouth.gridY;
+      const key = `${gridX}_${gridY}`;
+      const reason = gridX < 0 || gridY < 0 || gridX >= cols || gridY >= rows ? 'leaves the arena'
+        : occupied.has(key) ? 'is covered by a base'
+          : blocked.has(key) ? 'is covered by a rock wall or mission barrier'
+            : persistentBase && isCellInsidePersistentBaseReservation(gridX, gridY, persistentBase.anchor, reservationRadius)
+              ? 'lies inside the persistent base reservation' : null;
+      if (reason) throw new Error(`[coopDefenseMaps] Spawn point ${mapId}:${base.id} opening ${reason}: ${key}`);
+    }
+  }
+}
+
+/**
+ * Spawnpunkte sind immer das kanonische U (GDD Spawnbauwerk V1): Nur so deckt das eine
+ * Bauwerks-Asset die Hitbox exakt ab, und die Gegner steigen in einer freien, offenen Grube auf.
+ */
+function validateSpawnStructureBase(
+  baseConfig: CoopBaseConfig,
+  faction: CoopBaseFaction,
+  shape: CoopBaseShape,
+  spawnCenter: CoopBaseCellOffset,
+  turretCount: number,
+): void {
+  const label = `[coopDefenseMaps] Spawn point ${baseConfig.id}`;
+  if (faction !== 'hostile') throw new Error(`${label} must be hostile`);
+  if (baseConfig.surface !== undefined) throw new Error(`${label} must not declare a surface; the spawn structure owns its look`);
+  if (turretCount > 0) throw new Error(`${label} must not declare turrets`);
+  const outlet = shape.kind === 'cells' ? matchSpawnStructureShape(shape.cells) : null;
+  if (!outlet) throw new Error(`${label} needs the canonical 4x3 U shape (see src/config/spawnStructure.ts)`);
+  if (!isSpawnStructureAreaCell(getSpawnStructureTemplate(outlet), spawnCenter)) {
+    throw new Error(`${label} needs its spawnCenter inside the 2x2 brood pit`);
+  }
 }
 
 function normalizeBasePlayerScaling(
@@ -4640,6 +4730,9 @@ function normalizePersistentSpawnConfigs(
     if (source.type === 'zone' && spawnZones.get(source.zoneId)?.medium === 'water'
       && !getCoopDefenseEnemyConfig(spawnConfig.enemyKind).amphibious) {
       throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${id} spawns non-amphibious ${spawnConfig.enemyKind} from water`);
+    }
+    if (source.type === 'base' && getCoopDefenseEnemyConfig(spawnConfig.enemyKind).size > SPAWN_STRUCTURE_MAX_ENEMY_DIAMETER_PX) {
+      throw new Error(`[coopDefenseMaps] Persistent spawn ${mapId}:${id} releases ${spawnConfig.enemyKind}, which does not fit the spawn structure's brood pit`);
     }
     return {
       id,

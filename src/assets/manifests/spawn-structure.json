@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "revision": "v9",
+  "pivot": "both canvases are centred on the brood nest centre at 32 px per world cell",
+  "rotation": "baked: one frame per opening, rendered with a fixed sun",
+  "emissiveEncoding": "white RGB, alpha = emission intensity; congruent with the sheet layout; tint and blend (ADD) at runtime",
+  "sockets": "normalized full-canvas x/y (0..1, y down) of the south-facing building frame",
+  "building": {
+    "id": "spawn-structure",
+    "displaySize": 288,
+    "sourceSize": 432,
+    "canvasCells": 9,
+    "textureKey": "construction_spawn_structure",
+    "sheetTextureKey": "construction_spawn_structure_sheet",
+    "layout": {
+      "frameWidth": 432,
+      "frameHeight": 432,
+      "margin": 2,
+      "spacing": 4,
+      "columns": 4,
+      "rows": 1,
+      "frameCount": 4,
+      "width": 1744,
+      "height": 436
+    },
+    "states": [
+      "intact"
+    ],
+    "outlets": [
+      "north",
+      "east",
+      "south",
+      "west"
+    ],
+    "frameOrder": "index = stateIndex * outlets.length + outletIndex",
+    "emissive": {
+      "core": {
+        "key": "construction_spawn_structure_emissive_core",
+        "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-core.png",
+        "sha256": "170761250eac4b39e9109c2f1f28bb80ba7d96769f393ffc2e5df1d1becdbb18",
+        "content": "dark violet embers in the eye sockets (the runtime lights the eyes)"
+      }
+    },
+    "frames": [
+      {
+        "index": 0,
+        "state": "intact",
+        "outlet": "north",
+        "sockets": {
+          "core": {
+            "x": 0.664761,
+            "y": 0.666922,
+            "z": 0.239
+          },
+          "eyeA": {
+            "x": 0.63116,
+            "y": 0.645904,
+            "z": 0.268
+          },
+          "eyeB": {
+            "x": 0.698362,
+            "y": 0.68794,
+            "z": 0.209
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 1,
+        "state": "intact",
+        "outlet": "east",
+        "sockets": {
+          "core": {
+            "x": 0.664761,
+            "y": 0.666922,
+            "z": 0.239
+          },
+          "eyeA": {
+            "x": 0.63116,
+            "y": 0.645904,
+            "z": 0.268
+          },
+          "eyeB": {
+            "x": 0.698362,
+            "y": 0.68794,
+            "z": 0.209
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 2,
+        "state": "intact",
+        "outlet": "south",
+        "sockets": {
+          "core": {
+            "x": 0.664761,
+            "y": 0.666922,
+            "z": 0.239
+          },
+          "eyeA": {
+            "x": 0.63116,
+            "y": 0.645904,
+            "z": 0.268
+          },
+          "eyeB": {
+            "x": 0.698362,
+            "y": 0.68794,
+            "z": 0.209
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      },
+      {
+        "index": 3,
+        "state": "intact",
+        "outlet": "west",
+        "sockets": {
+          "core": {
+            "x": 0.664761,
+            "y": 0.666922,
+            "z": 0.239
+          },
+          "eyeA": {
+            "x": 0.63116,
+            "y": 0.645904,
+            "z": 0.268
+          },
+          "eyeB": {
+            "x": 0.698362,
+            "y": 0.68794,
+            "z": 0.209
+          },
+          "mouth": {
+            "x": 0.5,
+            "y": 0.722222,
+            "z": 0
+          }
+        }
+      }
+    ]
+  },
+  "pit": {
+    "id": "spawn-brood-pit",
+    "displaySize": 352,
+    "sourceSize": 480,
+    "canvasCells": 11,
+    "textureKey": "construction_spawn_brood_pit",
+    "sheetTextureKey": "construction_spawn_brood_pit_sheet",
+    "layout": {
+      "frameWidth": 480,
+      "frameHeight": 480,
+      "margin": 2,
+      "spacing": 4,
+      "columns": 8,
+      "rows": 1,
+      "frameCount": 8,
+      "width": 3872,
+      "height": 484
+    },
+    "states": [
+      "sealed",
+      "active"
+    ],
+    "outlets": [
+      "north",
+      "east",
+      "south",
+      "west"
+    ],
+    "frameOrder": "index = stateIndex * outlets.length + outletIndex",
+    "emissive": {
+      "glow": {
+        "key": "construction_spawn_brood_pit_emissive_glow",
+        "path": "./assets/sprites/pipeline-v2/spawn-brood-pit/emissive-glow.png",
+        "sha256": "85e4ac6ed5483f612f4fe5644d5ef3d46a0c195565124781c19dee163bb7324d",
+        "content": "glowing eggs and the veins of the void growth"
+      }
+    },
+    "frames": [
+      {
+        "index": 0,
+        "state": "sealed",
+        "outlet": "north"
+      },
+      {
+        "index": 1,
+        "state": "sealed",
+        "outlet": "east"
+      },
+      {
+        "index": 2,
+        "state": "sealed",
+        "outlet": "south"
+      },
+      {
+        "index": 3,
+        "state": "sealed",
+        "outlet": "west"
+      },
+      {
+        "index": 4,
+        "state": "active",
+        "outlet": "north"
+      },
+      {
+        "index": 5,
+        "state": "active",
+        "outlet": "east"
+      },
+      {
+        "index": 6,
+        "state": "active",
+        "outlet": "south"
+      },
+      {
+        "index": 7,
+        "state": "active",
+        "outlet": "west"
+      }
+    ]
+  }
+}

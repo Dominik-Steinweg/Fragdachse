@@ -9,6 +9,7 @@ import { LAYERS, mapObjects, type MapObject } from './objects';
 import { MapCanvas, type DrawTool, type Rect } from './MapCanvas';
 import { addPowerUpControls, addReactivePropControls, powerUpControls, reactivePropControls, trackControls } from './ContentControls';
 import { fireFrontControls } from './FireFrontControls';
+import { buildSpawnStructureShape, SPAWN_STRUCTURE_OUTLETS, type SpawnStructureOutlet } from '../../../../src/config/spawnStructure';
 import { addZone, deleteZone, isZoneReferenced, renameZone } from '../../shared/spawns';
 
 export class MapView {
@@ -112,6 +113,7 @@ export class MapView {
       box.append(element('p', 'muted', `Ankerform: ${value.kind}. Form und lokale Anbauten bewegen sich mit der Basis.`));
       const keys = value.kind === 'center-offset' ? ['dxCells', 'dyCells'] : value.kind === 'left-center' || value.kind === 'right-center' ? ['edgeInsetCells'] : ['gridX', 'gridY'];
       for (const key of keys) box.append(numberField(env, key, [...item.path, key]));
+      if (object(at(env.session.draft, ['bases', item.path[1]])).role === 'spawn-point') box.append(...this.spawnStructureControls(item));
       if (value.kind !== 'grid') box.append(button('In frei platzierbaren Rasteranker umwandeln', () => {
         env.session.transact('In Rasteranker umwandeln', draft => {
           set(draft, item.path, { ...value, kind: 'grid', gridX: item.x, gridY: item.y });
@@ -158,6 +160,25 @@ export class MapView {
     }
     if (tool !== 'waterArea') this.canvas.tool = 'select';
     env.changed();
+  }
+  /** Spawn structures are always the canonical U; only its opening can turn (GDD Spawnbauwerk V1). */
+  private spawnStructureControls(item: MapObject): HTMLElement[] {
+    const { env } = this, basePath: Path = ['bases', item.path[1]];
+    const current = item.spawnPit?.outlet;
+    const labels: Record<SpawnStructureOutlet, string> = { north: 'Norden', east: 'Osten', south: 'Süden', west: 'Westen' };
+    const note = element('p', 'muted', current
+      ? `Spawnbauwerk: U aus 8 Wandzellen, Brutgrube 2×2 offen nach ${labels[current]}. Gegner steigen in der Grube auf.`
+      : 'Spawnbauwerk ohne kanonische U-Form – die Validierung lehnt die Karte ab. Mit „Öffnung drehen“ neu setzen.');
+    const turn = button('Öffnung drehen', () => {
+      const next = SPAWN_STRUCTURE_OUTLETS[(current ? SPAWN_STRUCTURE_OUTLETS.indexOf(current) + 1 : 1) % SPAWN_STRUCTURE_OUTLETS.length];
+      const shape = buildSpawnStructureShape(next);
+      env.session.transact('Spawnbauwerk drehen', draft => {
+        set(draft, [...basePath, 'shape'], { kind: 'cells', cells: shape.cells.map(cell => ({ ...cell })) });
+        set(draft, [...basePath, 'spawnCenter'], { ...shape.spawnCenter });
+      });
+      env.changed();
+    });
+    return [note, turn];
   }
   /** Zone identity: rename rewrites every reference; delete only while unused. */
   private zoneControls(id: string): HTMLElement[] {

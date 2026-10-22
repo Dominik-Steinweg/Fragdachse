@@ -1225,6 +1225,66 @@
       "visiblePixelSha256": "bc84926fb8676525ebf3834cdee0333e9bb3c73bf3aa94b5b86c6120b0c57f1d",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/spawn-brood-pit/emissive-glow.png": {
+      "file": "assets/sprites/pipeline-v2/spawn-brood-pit/emissive-glow.webp",
+      "source": "assets/sprites/pipeline-v2/spawn-brood-pit/emissive-glow.png",
+      "width": 3872,
+      "height": 484,
+      "sourceBytes": 244005,
+      "downloadBytes": 139022,
+      "sourceSha256": "85e4ac6ed5483f612f4fe5644d5ef3d46a0c195565124781c19dee163bb7324d",
+      "sha256": "2c1dc56e84ca3ac623cc3f79e5dd387ff342dc376c079a467263d1d9f08cec48",
+      "visiblePixelSha256": "9b8b73f1f3b2502d0078126746b8dcd5694922dd44bd6805b062e777446017e7",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/spawn-brood-pit/idle.png": {
+      "file": "assets/sprites/pipeline-v2/spawn-brood-pit/idle.webp",
+      "source": "assets/sprites/pipeline-v2/spawn-brood-pit/idle.png",
+      "width": 480,
+      "height": 480,
+      "sourceBytes": 277619,
+      "downloadBytes": 166920,
+      "sourceSha256": "1c7a20173eafc573e7c4564338c7864888576ab487c2bdd912f9c791d2454416",
+      "sha256": "14f5bcc2613d753a68c2ef7f95d13e2d118d49270794d0653e57bade66680ae4",
+      "visiblePixelSha256": "8e31a31bd69ea34996c5ce424b268a10d7a5a409b9e451233887b0e847d2daa2",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/spawn-brood-pit/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/spawn-brood-pit/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/spawn-brood-pit/sheet.png",
+      "width": 3872,
+      "height": 484,
+      "sourceBytes": 1483789,
+      "downloadBytes": 1082082,
+      "sourceSha256": "bf01fa418d8e045256a211d314ff65f0a08346cd1f137d4494f5e5021080684b",
+      "sha256": "99a7c387174b47f59e04e0ddc70019507412a8b2649624a4cf8de787f3952ddb",
+      "visiblePixelSha256": "fbc04c40ad3542278dca1fcf7f282ae85b668ff6628520e98625725f6264f77c",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/spawn-structure/idle.png": {
+      "file": "assets/sprites/pipeline-v2/spawn-structure/idle.webp",
+      "source": "assets/sprites/pipeline-v2/spawn-structure/idle.png",
+      "width": 432,
+      "height": 432,
+      "sourceBytes": 96389,
+      "downloadBytes": 67936,
+      "sourceSha256": "51e4ac4f762e1410f22b4cd2b527f4fba6742aae0fde40c628b6dcb02dae598f",
+      "sha256": "f5ecb4f2ee7b06e5ace50b830d37fa4b8b47bf51264ed65b78d7b7c0497cea63",
+      "visiblePixelSha256": "7c8333dbd78779e328c82c95ac7d780510678c76e7d129056f4e28580ff03820",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/spawn-structure/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/spawn-structure/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/spawn-structure/sheet.png",
+      "width": 1744,
+      "height": 436,
+      "sourceBytes": 388027,
+      "downloadBytes": 276872,
+      "sourceSha256": "d34643ac717e09434151d9a59e95d36e4d90dd861195509c02fd4275aadfadc6",
+      "sha256": "37b02c85164a90654fdda0aaea5c3183600a7a8e94c3c12cc73d02dd7a046cdb",
+      "visiblePixelSha256": "46d09484e06fe3eff295a87a1f6b139e30f3cf668ad7a20cd63ec25f648e2f5f",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/tesla/sheet.png": {
       "file": "assets/sprites/pipeline-v2/tesla/sheet.webp",
       "source": "assets/sprites/pipeline-v2/tesla/sheet.png",

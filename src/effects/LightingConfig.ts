@@ -904,6 +904,24 @@ export const LIGHT_PRESETS = {
     flickerHz: 1.8,
   },
   /**
+   * Spawnbauwerk (GDD Spawnbauwerk V1): tiefviolettes, bedrohliches Licht aus dem Brutnest, das weit
+   * über den Kadaver reicht, mit langsamem, unruhigem Pulsieren statt Portal-Flackern. Der Renderer
+   * liefert Radius und Intensität aus Zustand und Aufladung; die Augen nutzen es klein am Schädel.
+   */
+  broodPit: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 230,
+    color: 0x8a2be8,
+    intensity: 0.5,
+    durationMs: 0,
+    decayExponent: 1.5,
+    occludes: false,
+    priority: 4,
+    flickerAmount: 0.06,
+    flickerHz: 0.35,
+  },
+  /**
    * Gemeinsames Dauerlicht aller Portale (Translokator, Feuerleitung, Generator-Portale). Farbe,
    * Radius und Stärke setzt die Portal-Darstellung je Stil und Öffnung.
    */

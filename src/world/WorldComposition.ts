@@ -6,7 +6,7 @@ import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRen
 import * as Phaser from 'phaser';
 import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
 import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../arena/ArenaGenerator';
-import type { BaseSpec } from '../arena/BaseRegistry';
+import { resolveSpawnStructureVegetationClearings, type BaseSpec } from '../arena/BaseRegistry';
 import { RockRegistry } from '../arena/RockRegistry';
 import type { GroundSurfacePersistentBaseGravelZone } from '../arena/chunks/GroundSurfaceStreamer';
 import {
@@ -243,6 +243,7 @@ export function materializeWorldComposition(
       presentation: presentationRequired,
       enablePersistentBaseGravel: input.persistentBaseGravel !== null,
       persistentBaseGravel: input.persistentBaseGravel ?? undefined,
+      vegetationClearings: resolveSpawnStructureVegetationClearings(bases),
     });
   }
   const presentation = adoptedPresentation

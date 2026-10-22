@@ -1,0 +1,66 @@
+import type * as Phaser from 'phaser';
+import manifest from '../../assets/manifests/spawn-structure.json';
+import { getPipelineAsset } from '../../config/pipelineAssets';
+import { getSpawnStructureRotation, type SpawnStructureOutlet } from '../../config/spawnStructure';
+import type { SpawnPitState } from './SpawnStructureModel';
+
+/**
+ * Sheets of the Brutkadaver (scripts/asset-pipeline/export-spawn-structure.mjs blender): the skeleton
+ * and the ground under it (brood pool, growth, eggs; transparent beyond the creep stain), one frame per
+ * state and opening rendered with a fixed sun, each with a congruent emissive sheet (eyes, eggs and
+ * veins). Both canvases are centred on the nest centre at 32 px per cell.
+ */
+export const SPAWN_STRUCTURE_BUILDING = manifest.building;
+export const SPAWN_STRUCTURE_PIT = manifest.pit;
+const BUILDING_ASSET = getPipelineAsset(manifest.building.id);
+const PIT_ASSET = getPipelineAsset(manifest.pit.id);
+
+export const SPAWN_STRUCTURE_TEXTURES = {
+  building: BUILDING_ASSET.sheetTextureKey,
+  core: manifest.building.emissive.core.key,
+  pit: PIT_ASSET.sheetTextureKey,
+  pitGlow: manifest.pit.emissive.glow.key,
+} as const;
+
+/** Preloaded with the scene: an unloaded building would be an invisible solid wall. */
+export function preloadSpawnStructureAssets(loader: Pick<Phaser.Loader.LoaderPlugin, 'spritesheet'>): void {
+  const sheet = (layout: typeof BUILDING_ASSET.layout) => ({
+    frameWidth: layout.frameWidth, frameHeight: layout.frameHeight, margin: layout.margin, spacing: layout.spacing,
+    endFrame: layout.frameCount - 1,
+  });
+  loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.building, BUILDING_ASSET.sheetPath, sheet(BUILDING_ASSET.layout));
+  loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.core, manifest.building.emissive.core.path, sheet(BUILDING_ASSET.layout));
+  loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.pit, PIT_ASSET.sheetPath, sheet(PIT_ASSET.layout));
+  loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.pitGlow, manifest.pit.emissive.glow.path, sheet(PIT_ASSET.layout));
+}
+
+/** The skeleton has one frame per opening; destruction is a runtime burst. */
+export function spawnStructureBuildingFrame(outlet: SpawnStructureOutlet): number {
+  return manifest.building.outlets.indexOf(outlet);
+}
+
+export function spawnPitFrame(state: SpawnPitState, outlet: SpawnStructureOutlet): number {
+  return manifest.pit.states.indexOf(state) * manifest.pit.outlets.length + manifest.pit.outlets.indexOf(outlet);
+}
+
+type FrameSocket = { readonly x: number; readonly y: number };
+
+/** A socket of the south-facing building frame as a world offset from the nest centre, turned to `outlet`. */
+function socketOffset(socket: FrameSocket, outlet: SpawnStructureOutlet): { readonly x: number; readonly y: number } {
+  const x = (socket.x - 0.5) * manifest.building.displaySize;
+  const y = (socket.y - 0.5) * manifest.building.displaySize;
+  const turn = getSpawnStructureRotation(outlet);
+  return { x: x * Math.cos(turn) - y * Math.sin(turn), y: x * Math.sin(turn) + y * Math.cos(turn) };
+}
+
+const SOUTH_SOCKETS = manifest.building.frames[spawnStructureBuildingFrame('south')].sockets!;
+
+/** Skull (between the eyes) in world pixels from the nest centre. */
+export function spawnStructureCoreOffset(outlet: SpawnStructureOutlet): { readonly x: number; readonly y: number } {
+  return socketOffset(SOUTH_SOCKETS.core, outlet);
+}
+
+/** Both eye sockets in world pixels from the nest centre. */
+export function spawnStructureEyeOffsets(outlet: SpawnStructureOutlet): readonly { readonly x: number; readonly y: number }[] {
+  return [socketOffset(SOUTH_SOCKETS.eyeA, outlet), socketOffset(SOUTH_SOCKETS.eyeB, outlet)];
+}

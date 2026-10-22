@@ -12,6 +12,7 @@ import {
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import {
   COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS,
+  isCoopDefenseBaseCell,
   isCoopDefenseBaseObstacleClearanceCell,
   isPersistentBaseReservationCell,
   resolveCoopDefenseBases,
@@ -28,6 +29,7 @@ import {
 import { shouldDelayFirstPedestalSpawn } from '../src/powerups/PowerUpConfig';
 import { type PersistentBaseAreaStage } from '../src/persistentBase/PersistentBaseCore';
 import { resolveWorldBases } from '../src/arena/BaseRegistry';
+import { getSpawnStructureTemplate } from '../src/config/spawnStructure';
 import { toWorldDefinition } from '../src/config/authoring/coopDefenseAuthoringAdapter';
 import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 import { formatTimeOfDay, parseTimeOfDay } from '../src/effects/TimeOfDay';
@@ -430,7 +432,7 @@ describe('Coop defense map progression', () => {
       .toBeGreaterThan(getCoopDefenseMapXpReference(shortReference, persistentSpawns, 1));
   });
 
-  it('keeps obstacle clearance around every role and preserves spawn-center gaps', () => {
+  it('keeps obstacle clearance around every role and keeps every spawn structure pit open', () => {
     const mapsWithBases = COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId, bases }) => mapId !== '0' && bases.length > 0);
     expect(mapsWithBases.length).toBeGreaterThan(0);
     for (const map of mapsWithBases) {
@@ -442,8 +444,18 @@ describe('Coop defense map progression', () => {
         };
         expect(isCoopDefenseBaseObstacleClearanceCell(edgeCell.gridX, edgeCell.gridY, specs)).toBe(true);
         if (spec.role === 'spawn-point') {
-          expect(spec.spawnCenter).toBeDefined();
-          expect(spec.cells).not.toContainEqual(spec.spawnCenter);
+          // Kanonischer Brutkadaver: das Nest ist frei, und beide Zellen vor der Oeffnung bleiben begehbar.
+          const area = spec.spawnArea!;
+          expect(area, `${map.mapId}:${spec.id}`).toBeDefined();
+          expect(spec.cells).toHaveLength(getSpawnStructureTemplate(area.outlet).cells.length);
+          for (let y = area.minGridY; y < area.minGridY + area.heightCells; y++) {
+            for (let x = area.minGridX; x < area.minGridX + area.widthCells; x++) {
+              expect(isCoopDefenseBaseCell(x, y, specs), `${map.mapId}:${spec.id} pit ${x}_${y}`).toBe(false);
+            }
+          }
+          for (const cell of area.mouth) {
+            expect(isCoopDefenseBaseCell(cell.gridX, cell.gridY, specs), `${map.mapId}:${spec.id} mouth`).toBe(false);
+          }
         }
       }
     }

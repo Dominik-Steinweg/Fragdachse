@@ -51,6 +51,7 @@ import { preloadPersistentBaseGravelAssets } from '../arena/PersistentBaseGravel
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
 import { preloadRockVegetationMask } from '../arena/RockVegetationConfig';
 import { preloadTurretVisualAssets, registerTurretAnimations } from '../config/turretVisuals';
+import { preloadSpawnStructureAssets } from '../effects/spawnStructure/SpawnStructureAssets';
 import { PlayerManager }         from '../entities/PlayerManager';
 import { InputSystem }           from '../systems/InputSystem';
 import { HostPhysicsSystem }     from '../systems/HostPhysicsSystem';
@@ -422,6 +423,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadRockMossAssets(this.load);
     preloadRockVegetationMask(this.load);
     preloadTurretVisualAssets(this.load, [...DAWN_PIPELINE_ASSETS, ...REACTIVE_PROP_PIPELINE_ASSETS]);
+    preloadSpawnStructureAssets(this.load);
     preloadDawnDecalAssets(this.load);
     preloadDawnNightAssets(this.load);
     preloadCanopyAssets(this.load);

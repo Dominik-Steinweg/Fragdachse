@@ -133,10 +133,12 @@ describe('Dawn site prop projection', () => {
     expect(resolveDawnSitePropVisual('wreck', 1, undefined, false, 'unknown')).toBeNull();
   });
 
-  it('projects the M3 archetypes from rest to active to resolved, lighting only nest and capsule', () => {
-    expect(resolveDawnSitePropVisual('brood-nest', 2, undefined, false)).toEqual({ textureKey: DAWN_M3_ASSET_KEYS.broodNest, animationKey: null });
-    expect(resolveDawnSitePropVisual('brood-nest', 2, 'active', false)?.animationKey).toBe('construction_dawn_broodnest_sheet_idle');
-    expect(resolveDawnSitePropVisual('brood-nest', 2, 'completed', false)).toBeNull();
+  it('projects the M3 archetypes from rest to active to resolved, lighting only the capsule', () => {
+    // Brood nests are spawn structures; SpawnStructureRenderer draws them in every mode.
+    for (const state of [undefined, 'active', 'completed'] as const) {
+      expect(resolveDawnSitePropVisual('brood-nest', 2, state, false)).toBeNull();
+      expect(resolveDawnSiteLights('brood-nest', 2, state, false, 0)).toEqual([]);
+    }
     expect(resolveDawnSitePropVisual('supply', 1, 'completed', false)?.textureKey).toBe(DAWN_M3_ASSET_KEYS.supplyCapsule);
     expect(resolveDawnSitePropVisual('scavenger', 3, 'active', false)?.textureKey).toBe(DAWN_M3_ASSET_KEYS.scavengerCamp(3));
     expect(resolveDawnSitePropVisual('scrap-heaps', 3, 'active', false)?.textureKey).toBe(DAWN_M3_ASSET_KEYS.scrapHeap(3));
@@ -144,9 +146,7 @@ describe('Dawn site prop projection', () => {
       expect(resolveDawnSitePropVisual(archetype, 3, 'completed', false)).toBeNull();
       expect(resolveDawnSiteLights(archetype, 3, 'active', false, 0)).toEqual([]);
     }
-    expect(resolveDawnSiteLights('brood-nest', 1, 'active', false, 0)[0].radiusPx)
-      .toBeGreaterThan(resolveDawnSiteLights('brood-nest', 1, undefined, false, 0)[0].radiusPx);
-    for (const key of [DAWN_M3_ASSET_KEYS.broodNest, DAWN_M3_ASSET_KEYS.supplyCapsule, DAWN_M3_ASSET_KEYS.supplyCrate,
+    for (const key of [DAWN_M3_ASSET_KEYS.supplyCapsule, DAWN_M3_ASSET_KEYS.supplyCrate,
       DAWN_M3_ASSET_KEYS.supplyCrateCarried, DAWN_M3_ASSET_KEYS.scrapHeap(1), DAWN_M3_ASSET_KEYS.scavengerCamp(2)]) {
       expect(DAWN_PIPELINE_ASSETS.some(asset => asset.textureKey === key), key).toBe(true);
     }
@@ -155,14 +155,14 @@ describe('Dawn site prop projection', () => {
 
 describe('Dawn site ground decals', () => {
   it('lays deterministic, archetype-specific decals and points supply drag marks toward the base', () => {
-    for (const archetype of ['wreck', 'extractor', 'brood-nest', 'supply', 'scrap-heaps', 'scavenger']) {
+    expect(resolveDawnSiteDecals('brood-nest', 'nw-far', 0)).toEqual([]);
+    for (const archetype of ['wreck', 'extractor', 'supply', 'scrap-heaps', 'scavenger']) {
       const decals = resolveDawnSiteDecals(archetype, 'nw-far', 0);
       expect(decals.length, archetype).toBeGreaterThan(0);
       expect(resolveDawnSiteDecals(archetype, 'nw-far', 0)).toEqual(decals);
       for (const decal of decals) expect(DAWN_DECAL_NAMES).toContain(decal.name);
     }
     expect(resolveDawnSiteDecals('extractor', 'a', 0)[0].name).toBe('drill-disturbance-03');
-    expect(resolveDawnSiteDecals('brood-nest', 'a', 0)[0].name).toBe('organic-stain-01');
     expect(resolveDawnSiteDecals('scrap-heaps', 'a', 0)[0].name).toBe('rust-flakes-01');
     const [drag] = resolveDawnSiteDecals('supply', 'a', Math.PI / 2);
     expect(drag).toMatchObject({ name: 'drag-marks-01', rotation: Math.PI / 2 });

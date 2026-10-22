@@ -178,6 +178,16 @@ interface WildfirePanicState extends WildfireSourceInfo {
   lastTrailY: number;
 }
 
+/**
+ * Presentation of bodies created underground at a spawn structure (GDD Spawnbauwerk V1). A claimed
+ * body rises through the structure's brood pool; the generic burrow dust stays off for it.
+ */
+export interface EnemySpawnEmergencePort {
+  claim(enemyId: string, x: number, y: number): boolean;
+  surfaced(enemyId: string): void;
+  release(enemyId: string): void;
+}
+
 export interface EnemySpawnOptions {
   /** Spawn visual is represented by the burrow effect instead of the normal materialization burst. */
   readonly spawnBurrowed?: boolean;
@@ -187,6 +197,8 @@ export interface EnemySpawnOptions {
   readonly originId?: string;
   /** Ein inszeniertes Intro uebernimmt die Ankuendigung; der generische Spawnblitz entfaellt. */
   readonly skipSpawnEffect?: boolean;
+  /** Host-only: extra time underground, so bodies of one structure tick rise one after another. */
+  readonly burrowExtraMs?: number;
 }
 
 export class EnemyManager {
@@ -438,6 +450,19 @@ export class EnemyManager {
   }
 
   private spawnEffectSuppressor: ((kind: CoopDefenseEnemyKind, x: number, y: number) => boolean) | null = null;
+  private spawnEmergence: EnemySpawnEmergencePort | null = null;
+  /** Bodies whose rise a spawn structure presents; they get no burrow dust. */
+  private readonly emerging = new Set<string>();
+  /** The body that is being created underground right now (host spawn or first client snapshot). */
+  private creatingBurrowed: string | null = null;
+
+  /** Activity presentation binds the spawn structures' rise presenter (host and client alike). */
+  setSpawnEmergencePresenter(port: EnemySpawnEmergencePort | null): void {
+    if (this.spawnEmergence === port) return;
+    for (const id of this.emerging) this.spawnEmergence?.release(id);
+    this.emerging.clear();
+    this.spawnEmergence = port;
+  }
   /**
    * Präsentationsfilter für den generischen Spawnblitz (Host wie Client), z. B. wenn ein
    * repliziertes Boss-Intro das Erscheinen bereits inszeniert.
@@ -454,6 +479,16 @@ export class EnemyManager {
   setEnemyBurrowed(enemyId: string, burrowed: boolean): void {
     const enemy = this.enemies.get(enemyId);
     if (!enemy || !enemy.setBurrowed(burrowed)) return;
+    if (burrowed && this.creatingBurrowed === enemyId
+      && this.spawnEmergence?.claim(enemyId, enemy.sprite.x, enemy.sprite.y)) {
+      this.emerging.add(enemyId);
+      return;
+    }
+    // Claims only exist while a presenter is bound (setSpawnEmergencePresenter clears them).
+    if (!burrowed && this.spawnEmergence && this.emerging.delete(enemyId)) {
+      this.spawnEmergence.surfaced(enemyId);
+      return;
+    }
 
     const sink = this.visualSink;
     if (!sink) return;
@@ -569,7 +604,12 @@ export class EnemyManager {
     if (enemy.eliteAffixId === 'shielding') this.eliteShields.add(enemy);
     this.registerCombatTarget(id, this.nextEnemyGeneration++);
     this.playSpawnEffect(enemy, options);
-    this.onEnemySpawned?.(enemy, options);
+    this.creatingBurrowed = options.spawnBurrowed ? id : null;
+    try {
+      this.onEnemySpawned?.(enemy, options);
+    } finally {
+      this.creatingBurrowed = null;
+    }
     return enemy;
   }
 
@@ -1386,6 +1426,7 @@ export class EnemyManager {
     this.visualSink?.clearEnemyClaw?.(id);
     this.plaguePursuers.delete(id);
     this.visualSink?.clearBurrowState(id);
+    if (this.spawnEmergence && this.emerging.delete(id)) this.spawnEmergence.release(id);
     enemy.destroy();
     this.enemies.delete(id);
     this.enemyTargets.delete(id);
@@ -1657,7 +1698,11 @@ export class EnemyManager {
       if (remote.submerged) enemy.setSubmerged(true);
       if (this.remoteSnapshotSeen && !remote.burrowed && !remote.submerged) this.playSpawnEffect(enemy, {});
       // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
-      if (remote.burrowed) this.setEnemyBurrowed(remote.id, true);
+      if (remote.burrowed) {
+        this.creatingBurrowed = remote.id;
+        this.setEnemyBurrowed(remote.id, true);
+        this.creatingBurrowed = null;
+      }
       return;
     }
 

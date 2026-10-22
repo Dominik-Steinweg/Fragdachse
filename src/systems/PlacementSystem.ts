@@ -4,7 +4,7 @@ import { getPersistentBaseRewardFootprint } from '../persistentBase/PersistentBa
 import { turretAimConfig } from '../config/turretAim';
 import * as Phaser from 'phaser';
 import { AutoTiler, ROCK_AUTOTILE } from '../arena/AutoTiler';
-import { isCoopDefenseBaseCell, type BaseSpec } from '../arena/BaseRegistry';
+import { isCoopDefenseBaseCell, isCoopDefenseSpawnAreaCell, type BaseSpec } from '../arena/BaseRegistry';
 import { RockGridIndex } from '../arena/RockGridIndex';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { PlaceableUtilityConfig, TunnelUltimateConfig } from '../loadout/LoadoutConfig';
@@ -1083,6 +1083,8 @@ export class PlacementSystem {
       if (this.buildReservation?.(tx, ty)) return false;
       if (tx < 0 || tx >= this.metrics.gridCols || ty < 0 || ty >= this.metrics.gridRows) return false;
       if (!allowPersistentBaseCells && isCoopDefenseBaseCell(tx, ty, this.coopDefenseBases)) return false;
+      // Die Brutgrube eines Spawnbauwerks bleibt frei, sonst saessen die aufsteigenden Gegner fest.
+      if (isCoopDefenseSpawnAreaCell(tx, ty, this.coopDefenseBases)) return false;
       if (this.rockGrid.isOccupied(tx, ty)) {
         const occupiedId = this.rockGrid.getIndex(tx, ty);
         // Das zu verschiebende Objekt darf seine eigene Belegung nicht als Zielkonflikt

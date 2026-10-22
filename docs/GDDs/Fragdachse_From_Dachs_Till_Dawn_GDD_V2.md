@@ -78,7 +78,7 @@ daraus. Zeitpläne liegen in `src/config/dawn/schedules.json`.
 ## 6a. M3-Inhalte (Vertrag)
 
 - **Archetypen** (IDs in `src/dawn/contracts/DawnContentIds.ts`): Wrack (zerstören, Varianten Drohne/Traktor/Lore),
-  Extraktor (halten), Brutnest (feindlicher Spawner, zerstören; spawnt bis zur Zerstörung), Versorgung (Kiste aus der
+  Extraktor (halten), Brutnest (feindlicher Spawner, zerstören; spawnt bis zur Zerstörung; Bauwerk: [Spawnbauwerk V1](Fragdachse_GDD_Spawnbauwerk_V1.md)), Versorgung (Kiste aus der
   Kapsel zur Basis tragen), Schrotthaufen (verstreute Funde einsammeln), Schrottsammler (fliehender Gegner, Beute beim Abschuss).
 - **Versteckte Sites** (`hidden`) zeigen ohne Schrottscanner (Infrastruktur `scrap-scanner`) keine Navigationsmarker.
 - **Nacht-Modifikatoren** (`nightModifierId` im Activity-Plan): Blutmond, Nebelnacht, Bombernacht, Brandnacht; Chance steigt

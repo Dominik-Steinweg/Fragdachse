@@ -1,0 +1,44 @@
+{
+  "owner": "effects/gpu/BroodPitGpuLayer.ts",
+  "notes": [
+    "Spawn structure brood pool: the heaving ooze surface, swells, opening and droplets just above the pit sprite on the foundation layer (lit), the depth glow in the emissive band."
+  ],
+  "gpuLayers": [
+    {
+      "id": "brood-pit:surface",
+      "owner": "effects/gpu/BroodPitGpuLayer.ts",
+      "component": "surface",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        3.62
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "brood-pit:glow",
+      "owner": "effects/gpu/BroodPitGpuLayer.ts",
+      "component": "glow",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.57
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect"
+    }
+  ]
+}

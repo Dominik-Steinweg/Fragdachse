@@ -204,16 +204,12 @@
       "dormant": true,
       "anchor": {
         "kind": "grid",
-        "gridX": 4,
-        "gridY": 5
+        "gridX": 2,
+        "gridY": 4
       },
       "shape": {
         "kind": "cells",
         "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
           {
             "gridX": 1,
             "gridY": 0
@@ -223,7 +219,31 @@
             "gridY": 0
           },
           {
+            "gridX": 3,
+            "gridY": 0
+          },
+          {
+            "gridX": 4,
+            "gridY": 0
+          },
+          {
             "gridX": 0,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 3,
+            "gridY": 1
+          },
+          {
+            "gridX": 4,
+            "gridY": 1
+          },
+          {
+            "gridX": 5,
             "gridY": 1
           },
           {
@@ -235,14 +255,46 @@
             "gridY": 2
           },
           {
+            "gridX": 0,
+            "gridY": 3
+          },
+          {
+            "gridX": 1,
+            "gridY": 3
+          },
+          {
+            "gridX": 0,
+            "gridY": 4
+          },
+          {
+            "gridX": 1,
+            "gridY": 4
+          },
+          {
             "gridX": 2,
-            "gridY": 2
+            "gridY": 4
+          },
+          {
+            "gridX": 1,
+            "gridY": 5
+          },
+          {
+            "gridX": 2,
+            "gridY": 5
+          },
+          {
+            "gridX": 3,
+            "gridY": 5
+          },
+          {
+            "gridX": 4,
+            "gridY": 5
           }
         ]
       },
       "spawnCenter": {
-        "gridX": 1,
-        "gridY": 1
+        "gridX": 2,
+        "gridY": 2
       }
     },
     {
@@ -253,16 +305,12 @@
       "dormant": true,
       "anchor": {
         "kind": "grid",
-        "gridX": 15,
-        "gridY": 6
+        "gridX": 13,
+        "gridY": 5
       },
       "shape": {
         "kind": "cells",
         "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
           {
             "gridX": 1,
             "gridY": 0
@@ -272,7 +320,31 @@
             "gridY": 0
           },
           {
+            "gridX": 3,
+            "gridY": 0
+          },
+          {
+            "gridX": 4,
+            "gridY": 0
+          },
+          {
             "gridX": 0,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 3,
+            "gridY": 1
+          },
+          {
+            "gridX": 4,
+            "gridY": 1
+          },
+          {
+            "gridX": 5,
             "gridY": 1
           },
           {
@@ -284,14 +356,46 @@
             "gridY": 2
           },
           {
+            "gridX": 0,
+            "gridY": 3
+          },
+          {
+            "gridX": 1,
+            "gridY": 3
+          },
+          {
+            "gridX": 0,
+            "gridY": 4
+          },
+          {
+            "gridX": 1,
+            "gridY": 4
+          },
+          {
             "gridX": 2,
-            "gridY": 2
+            "gridY": 4
+          },
+          {
+            "gridX": 1,
+            "gridY": 5
+          },
+          {
+            "gridX": 2,
+            "gridY": 5
+          },
+          {
+            "gridX": 3,
+            "gridY": 5
+          },
+          {
+            "gridX": 4,
+            "gridY": 5
           }
         ]
       },
       "spawnCenter": {
-        "gridX": 1,
-        "gridY": 1
+        "gridX": 2,
+        "gridY": 2
       }
     },
     {
@@ -302,16 +406,12 @@
       "dormant": true,
       "anchor": {
         "kind": "grid",
-        "gridX": 4,
-        "gridY": 18
+        "gridX": 2,
+        "gridY": 15
       },
       "shape": {
         "kind": "cells",
         "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
           {
             "gridX": 1,
             "gridY": 0
@@ -321,7 +421,31 @@
             "gridY": 0
           },
           {
+            "gridX": 3,
+            "gridY": 0
+          },
+          {
+            "gridX": 4,
+            "gridY": 0
+          },
+          {
             "gridX": 0,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 3,
+            "gridY": 1
+          },
+          {
+            "gridX": 4,
+            "gridY": 1
+          },
+          {
+            "gridX": 5,
             "gridY": 1
           },
           {
@@ -333,14 +457,46 @@
             "gridY": 2
           },
           {
+            "gridX": 0,
+            "gridY": 3
+          },
+          {
+            "gridX": 1,
+            "gridY": 3
+          },
+          {
+            "gridX": 0,
+            "gridY": 4
+          },
+          {
+            "gridX": 1,
+            "gridY": 4
+          },
+          {
             "gridX": 2,
-            "gridY": 2
+            "gridY": 4
+          },
+          {
+            "gridX": 1,
+            "gridY": 5
+          },
+          {
+            "gridX": 2,
+            "gridY": 5
+          },
+          {
+            "gridX": 3,
+            "gridY": 5
+          },
+          {
+            "gridX": 4,
+            "gridY": 5
           }
         ]
       },
       "spawnCenter": {
-        "gridX": 1,
-        "gridY": 1
+        "gridX": 2,
+        "gridY": 2
       }
     },
     {
@@ -351,16 +507,12 @@
       "dormant": true,
       "anchor": {
         "kind": "grid",
-        "gridX": 16,
-        "gridY": 16
+        "gridX": 13,
+        "gridY": 14
       },
       "shape": {
         "kind": "cells",
         "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
           {
             "gridX": 1,
             "gridY": 0
@@ -370,7 +522,31 @@
             "gridY": 0
           },
           {
+            "gridX": 3,
+            "gridY": 0
+          },
+          {
+            "gridX": 4,
+            "gridY": 0
+          },
+          {
             "gridX": 0,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 3,
+            "gridY": 1
+          },
+          {
+            "gridX": 4,
+            "gridY": 1
+          },
+          {
+            "gridX": 5,
             "gridY": 1
           },
           {
@@ -382,14 +558,46 @@
             "gridY": 2
           },
           {
+            "gridX": 0,
+            "gridY": 3
+          },
+          {
+            "gridX": 1,
+            "gridY": 3
+          },
+          {
+            "gridX": 0,
+            "gridY": 4
+          },
+          {
+            "gridX": 1,
+            "gridY": 4
+          },
+          {
             "gridX": 2,
-            "gridY": 2
+            "gridY": 4
+          },
+          {
+            "gridX": 1,
+            "gridY": 5
+          },
+          {
+            "gridX": 2,
+            "gridY": 5
+          },
+          {
+            "gridX": 3,
+            "gridY": 5
+          },
+          {
+            "gridX": 4,
+            "gridY": 5
           }
         ]
       },
       "spawnCenter": {
-        "gridX": 1,
-        "gridY": 1
+        "gridX": 2,
+        "gridY": 2
       }
     },
     {

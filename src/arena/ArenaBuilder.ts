@@ -34,7 +34,7 @@ import type { GroundCoverPlacement } from './GroundCoverField';
 import { generateRockMossPlacements } from './RockMossField';
 import type { RockMossPlacement } from './RockMossField';
 import { RockGridIndex } from './RockGridIndex';
-import { GroundSurfaceStreamer } from './chunks/GroundSurfaceStreamer';
+import { GroundSurfaceStreamer, isInVegetationClearing, type VegetationClearing } from './chunks/GroundSurfaceStreamer';
 import type { GroundSurfacePersistentBaseGravelZone } from './chunks/GroundSurfaceStreamer';
 import { RockOverlayStreamer } from './chunks/RockOverlayStreamer';
 import type { ChunkWorldRect } from './chunks/ArenaChunkGrid';
@@ -160,6 +160,8 @@ export interface ArenaBuilderDynamicOptions {
   readonly enablePersistentBaseGravel?: boolean;
   /** Optionaler Zustand fuer den ersten Chunk-Bake. */
   readonly persistentBaseGravel?: GroundSurfacePersistentBaseGravelZone;
+  /** Kreise ohne Bodenbewuchs und Grasdecals (Kriechfleck der Spawnbauwerke); reine Darstellung. */
+  readonly vegetationClearings?: readonly VegetationClearing[];
 }
 
 export class ArenaBuilder {
@@ -280,7 +282,8 @@ export class ArenaBuilder {
     }).filter(p => !waterGeometry.isCircleBlocked(p.worldX, p.worldY,
       // Bank growth may lean over the waterline and large flat surfaces may reach under it; the
       // water surface above covers them.
-      p.sizePx * (p.anchor === 'bank' ? .3 : p.sizePx > 3 * CELL_SIZE ? .1 : Math.SQRT2 / 2)));
+      p.sizePx * (p.anchor === 'bank' ? .3 : p.sizePx > 3 * CELL_SIZE ? .1 : Math.SQRT2 / 2)))
+      .filter(p => !isInVegetationClearing(options.vegetationClearings, p.worldX, p.worldY, p.sizePx * .5));
 
     // Felsen mit Autotiling
     for (let i = 0; i < layout.rocks.length; i++) {
@@ -385,6 +388,7 @@ export class ArenaBuilder {
         groundCoverPlacements,
         enablePersistentBaseGravel: options.enablePersistentBaseGravel === true,
         persistentBaseGravel: options.persistentBaseGravel,
+        vegetationClearings: options.vegetationClearings,
       });
       // Erst nach dem Erzeugen der Live-Felsen, damit der Streamer beim ersten Bake exakt die
       // aktiven Fels-IDs sieht.

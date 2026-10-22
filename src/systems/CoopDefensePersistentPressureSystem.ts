@@ -14,6 +14,8 @@ interface PersistentPressureSpawnExecutor {
 export class CoopDefensePersistentPressureSystem {
   private readonly accumulators: number[];
   private readonly startedSources: boolean[];
+  /** Spawn structures announce even their first release (GDD Spawnbauwerk V1): its mission time. */
+  private readonly firstReleaseAt: (number | null)[];
   private readonly basesById: ReadonlyMap<string, BaseSpec>;
   private elapsedMs = 0;
 
@@ -25,6 +27,7 @@ export class CoopDefensePersistentPressureSystem {
   ) {
     this.accumulators = sources.map(() => 0);
     this.startedSources = sources.map(() => false);
+    this.firstReleaseAt = sources.map(() => null);
     this.basesById = new Map(bases.map((base) => [base.id, base]));
   }
 
@@ -38,6 +41,15 @@ export class CoopDefensePersistentPressureSystem {
       if (this.elapsedMs < source.startAtMs) continue;
 
       if (!this.startedSources[index]) {
+        if (source.source.type === 'base') {
+          // The structure charges visibly before its first brood rises; the interval counts from then.
+          this.firstReleaseAt[index] ??= this.elapsedMs + SPAWN_ZONE_ALERT_LEAD_MS;
+          if (this.elapsedMs < this.firstReleaseAt[index]!) continue;
+          this.firstReleaseAt[index] = null;
+          this.startedSources[index] = true;
+          this.spawnSource(source);
+          continue;
+        }
         this.startedSources[index] = true;
         this.spawnSource(source);
       }
@@ -56,6 +68,7 @@ export class CoopDefensePersistentPressureSystem {
   reset(): void {
     this.accumulators.fill(0);
     this.startedSources.fill(false);
+    this.firstReleaseAt.fill(null);
     this.elapsedMs = 0;
   }
 
@@ -72,12 +85,20 @@ export class CoopDefensePersistentPressureSystem {
   }
 
   /**
-   * The next release of every active zone source, announced SPAWN_ZONE_ALERT_LEAD_MS ahead so
-   * its haze thickens before each tick (GDD Void-Gefahrenzonen V1, E4).
+   * The next release of every active zone and structure source, announced SPAWN_ZONE_ALERT_LEAD_MS
+   * ahead: a zone's haze thickens (GDD Void-Gefahrenzonen V1, E4), a spawn structure charges and its
+   * brood pool heaves (GDD Spawnbauwerk V1).
    */
   getSpawnZoneAlerts(out: SyncedSpawnZoneAlert[] = []): SyncedSpawnZoneAlert[] {
     for (const [index, source] of this.sources.entries()) {
-      if (source.source.type !== 'zone' || !this.isSourceActive(source)) continue;
+      if (source.source.type === 'map' || !this.isSourceActive(source)) continue;
+      if (source.source.type === 'base') {
+        if (!this.startedSources[index] && this.elapsedMs < source.startAtMs) continue;
+        const atMs = this.startedSources[index] ? this.elapsedMs + source.intervalMs - this.accumulators[index]
+          : this.firstReleaseAt[index] ?? this.elapsedMs + SPAWN_ZONE_ALERT_LEAD_MS;
+        out.push({ zoneId: source.source.baseId, structure: true, fromMs: atMs - SPAWN_ZONE_ALERT_LEAD_MS, atMs, endMs: atMs });
+        continue;
+      }
       const atMs = this.startedSources[index] ? this.elapsedMs + source.intervalMs - this.accumulators[index] : source.startAtMs;
       out.push({ zoneId: source.source.zoneId, fromMs: atMs - SPAWN_ZONE_ALERT_LEAD_MS, atMs, endMs: atMs });
     }

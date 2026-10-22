@@ -1,0 +1,393 @@
+{
+  "id": "spawn-brood-pit",
+  "label": "Brutnest und Kriechboden des Spawnbauwerks",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "tools/source-art/spawn-structure/concept.png",
+  "targetSize": 352,
+  "sourceSizes": [
+    480
+  ],
+  "forward": "south",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "A black-violet brood pool with the painted egg nest inside an organic creep stain that runs out along the bones in lobes, branching void growth, slime strands and puddles, glowing egg clutches under and around the skeleton; the stain frays out into any map ground.",
+    "colors": "Black-violet wet slime with faint violet veins, glowing violet eggs, dark growth; dull and crusted when sealed.",
+    "anatomy": "Strict orthographic top view of the ground under the carcass rendered in Blender (scripts/asset-pipeline/spawn-carcass, ground.py and export.py): transparent outside the creep stain, the bones cast their shadow into it. 32 px per cell, pivot = nest centre; canvas 11 x 11 cells. States sealed/active, one frame per opening; eggs and growth veins as emissive pass."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "spawn-brood-pit",
+  "model": {
+    "state": "active",
+    "librarySurfaces": {
+      "Sunken void armour floor": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.35,
+        "edgewear": 0.08,
+        "saturation": 0.15,
+        "value": 0.07,
+        "tint": 0.55
+      },
+      "Broken floor plate": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.3,
+        "edgewear": 0.2,
+        "saturation": 0.15,
+        "value": 0.12,
+        "tint": 0.35
+      },
+      "Violet ooze film": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.05,
+        "edgewear": 0.0,
+        "saturation": 1.0,
+        "value": 0.45,
+        "tint": 0.4
+      },
+      "Translucent brood egg": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.04,
+        "edgewear": 0.0,
+        "saturation": 0.9,
+        "value": 0.7,
+        "tint": 0.45
+      },
+      "Dormant brood crust": {
+        "family": "bone",
+        "scale": 0.5,
+        "grime": 0.5,
+        "edgewear": 0.05,
+        "saturation": 0.3,
+        "value": 0.35,
+        "tint": 0.5
+      },
+      "Spent brood residue": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.6,
+        "edgewear": 0.05,
+        "saturation": 0.1,
+        "value": 0.12,
+        "tint": 0.6
+      },
+      "Black brood ooze": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.2,
+        "edgewear": 0.0,
+        "saturation": 0.8,
+        "value": 0.14,
+        "tint": 0.8
+      },
+      "Splintered obsidian": {
+        "family": "stone",
+        "scale": 0.6,
+        "grime": 0.1,
+        "edgewear": 0.05,
+        "saturation": 0.3,
+        "value": 0.05,
+        "tint": 0.75
+      },
+      "Dark brood works metal": {
+        "family": "stone",
+        "scale": 0.55,
+        "grime": 0.35,
+        "edgewear": 0.18,
+        "saturation": 0.1,
+        "value": 0.14,
+        "tint": 0.45
+      },
+      "Blackened pipe": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.4,
+        "edgewear": 0.2,
+        "saturation": 0.1,
+        "value": 0.11,
+        "tint": 0.5
+      },
+      "Blackened void armour": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.3,
+        "edgewear": 0.08,
+        "saturation": 0.15,
+        "value": 0.09,
+        "tint": 0.5
+      },
+      "Void armour plate": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.25,
+        "edgewear": 0.12,
+        "saturation": 0.15,
+        "value": 0.12,
+        "tint": 0.45
+      },
+      "Grey armour frame": {
+        "family": "stone",
+        "scale": 0.6,
+        "grime": 0.3,
+        "edgewear": 0.2,
+        "saturation": 0.1,
+        "value": 0.34,
+        "tint": 0.4
+      },
+      "Void brood mass": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.12,
+        "edgewear": 0.0,
+        "saturation": 0.9,
+        "value": 0.6,
+        "tint": 0.35
+      },
+      "Bruised brood fold": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.06,
+        "edgewear": 0.0,
+        "saturation": 0.95,
+        "value": 0.85,
+        "tint": 0.25
+      },
+      "Opaque brood throat": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.2,
+        "edgewear": 0.0,
+        "tint": 0.9
+      },
+      "Dark chitin hook": {
+        "family": "bone",
+        "scale": 0.42,
+        "grime": 0.3,
+        "edgewear": 0.05,
+        "saturation": 0.4,
+        "value": 0.45,
+        "tint": 0.45
+      },
+      "Brood tank glass": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.02,
+        "edgewear": 0.0,
+        "saturation": 1.0,
+        "value": 0.6,
+        "tint": 0.5
+      },
+      "Dead grey hide": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.3,
+        "edgewear": 0.05,
+        "saturation": 0.25,
+        "value": 0.75,
+        "tint": 0.55
+      },
+      "Raw carcass flesh": {
+        "family": "dawnPaint",
+        "scale": 0.45,
+        "grime": 0.15,
+        "edgewear": 0.0,
+        "saturation": 0.9,
+        "value": 0.75,
+        "tint": 0.35
+      },
+      "Bleached carcass bone": {
+        "family": "bone",
+        "scale": 0.45,
+        "grime": 0.2,
+        "edgewear": 0.1,
+        "saturation": 0.7,
+        "value": 1.0,
+        "tint": 0.1
+      },
+      "Brood clay": {
+        "family": "stone",
+        "scale": 0.55,
+        "grime": 0.35,
+        "edgewear": 0.08,
+        "saturation": 0.7,
+        "value": 0.55,
+        "tint": 0.6
+      },
+      "Wet brood clay": {
+        "family": "stone",
+        "scale": 0.55,
+        "grime": 0.45,
+        "edgewear": 0.05,
+        "saturation": 0.6,
+        "value": 0.38,
+        "tint": 0.65
+      },
+      "Weathered bunker concrete": {
+        "family": "stone",
+        "scale": 0.55,
+        "grime": 0.4,
+        "edgewear": 0.2,
+        "saturation": 0.15,
+        "value": 0.55,
+        "tint": 0.3
+      },
+      "Stained bunker concrete": {
+        "family": "stone",
+        "scale": 0.55,
+        "grime": 0.5,
+        "edgewear": 0.1,
+        "saturation": 0.15,
+        "value": 0.38,
+        "tint": 0.35
+      },
+      "Rusted rebar": {
+        "family": "rust",
+        "scale": 0.5,
+        "grime": 0.2,
+        "edgewear": 0.05,
+        "value": 0.8
+      },
+      "Sandbag canvas": {
+        "family": "canvas",
+        "scale": 0.5,
+        "grime": 0.3,
+        "edgewear": 0.05,
+        "value": 0.85
+      },
+      "Barbed wire": {
+        "family": "rust",
+        "scale": 0.5,
+        "grime": 0.3,
+        "edgewear": 0.1,
+        "saturation": 0.3,
+        "value": 0.5
+      },
+      "Black brood slime": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.2,
+        "edgewear": 0.0,
+        "saturation": 0.8,
+        "value": 0.2,
+        "tint": 0.75
+      },
+      "Violet slime film": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.05,
+        "edgewear": 0.0,
+        "saturation": 1.0,
+        "value": 0.55,
+        "tint": 0.4
+      },
+      "Dark leathery hide": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.35,
+        "edgewear": 0.05,
+        "saturation": 0.3,
+        "value": 0.5,
+        "tint": 0.6
+      },
+      "Wet violet gum": {
+        "family": "dawnPaint",
+        "scale": 0.45,
+        "grime": 0.08,
+        "edgewear": 0.0,
+        "saturation": 1.0,
+        "value": 0.95,
+        "tint": 0.3
+      },
+      "Monster tongue": {
+        "family": "dawnPaint",
+        "scale": 0.45,
+        "grime": 0.06,
+        "edgewear": 0.0,
+        "saturation": 0.9,
+        "value": 1.15,
+        "tint": 0.35
+      },
+      "Yellowed monster tooth": {
+        "family": "bone",
+        "scale": 0.45,
+        "grime": 0.15,
+        "edgewear": 0.05,
+        "saturation": 0.8,
+        "value": 1.05,
+        "tint": 0.1
+      },
+      "Black chitin plate": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.2,
+        "edgewear": 0.12,
+        "saturation": 0.3,
+        "value": 0.1,
+        "tint": 0.65
+      },
+      "Chitin ridge": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.2,
+        "edgewear": 0.15,
+        "saturation": 0.3,
+        "value": 0.28,
+        "tint": 0.5
+      },
+      "Translucent grub skin": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.05,
+        "edgewear": 0.0,
+        "saturation": 0.5,
+        "value": 1.45,
+        "tint": 0.45
+      },
+      "Grub segment crease": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.2,
+        "edgewear": 0.0,
+        "saturation": 0.8,
+        "value": 0.6,
+        "tint": 0.5
+      },
+      "Hatched egg shell": {
+        "family": "bone",
+        "scale": 0.45,
+        "grime": 0.2,
+        "edgewear": 0.05,
+        "saturation": 0.5,
+        "value": 0.9,
+        "tint": 0.3
+      }
+    },
+    "concept": "pool"
+  },
+  "orthoScale": 11,
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
+    "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
+    "bone": "art/poc/dawn/textures/library/bone-weathered-02.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+    "wood": "art/poc/dawn/textures/library/wood-planks-weathered-01.png",
+    "canvas": "art/poc/dawn/textures/library/canvas-tarp-stained-02.png",
+    "rust": "art/poc/dawn/textures/library/steel-rust-bare-02.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Basin stone and brood membrane (Dawn library), matte damp",
+      "textureStrength": 1,
+      "formShadowStrength": 0.8
+    }
+  },
+  "clips": []
+}

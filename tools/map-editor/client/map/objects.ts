@@ -9,6 +9,7 @@ import { getMapTutorial, getPowerUpName } from '../../../../src/i18n/contentPres
 import { geometryRevision } from '../preview/PreviewController';
 import type { PreviewResult } from '../preview/generate';
 import type { CoopBaseConfig } from '../../../../src/config/coopDefenseMapAuthoring';
+import { getSpawnStructureTemplate, matchSpawnStructureShape, type SpawnStructureOutlet } from '../../../../src/config/spawnStructure';
 import { at, array, object, set, type JsonObject, type Path } from '../../shared/json';
 import type { MapDocumentSession } from '../document/MapDocumentSession';
 import { reactivePropKindLabel } from './reactivePropLabels';
@@ -35,6 +36,8 @@ export interface MapObject {
   points?: { x: number; y: number }[]; radius?: number;
   readonly?: boolean; cells?: { gridX: number; gridY: number }[];
   reservationRadius?: number; anchorX?: number; anchorY?: number; backing?: { x: number; y: number; w: number; h: number }; halo?: number;
+  /** Spawn structures: the free brood pit and the side it opens to. */
+  spawnPit?: { x: number; y: number; w: number; h: number; outlet: SpawnStructureOutlet };
 }
 export function mapMetrics(draft: JsonObject) { return resolveCoopDefenseWorldMetrics(draft.arenaWidthCells as number | undefined, draft.arenaHeightCells as number | undefined); }
 
@@ -101,7 +104,10 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft, g
   array(draft.bases).forEach((b, i) => {
     try {
       const p = resolveCoopDefenseBasePlacement(b as unknown as CoopBaseConfig, metrics);
-      items.push({ id: `base:${b.id}`, label: `Basis · ${b.id}`, path: ['bases', i, 'anchor'], layer: 'structures', kind: 'base', x: p.minGridX, y: p.minGridY, w: p.width, h: p.height, cells: p.cells.map(c => ({ gridX: p.minGridX + c.gridX, gridY: p.minGridY + c.gridY })) });
+      const outlet = b.role === 'spawn-point' ? matchSpawnStructureShape(p.cells) : null;
+      const pit = outlet ? getSpawnStructureTemplate(outlet).area : null;
+      items.push({ id: `base:${b.id}`, label: `${outlet ? 'Spawnbauwerk' : 'Basis'} · ${b.id}`, path: ['bases', i, 'anchor'], layer: 'structures', kind: 'base', x: p.minGridX, y: p.minGridY, w: p.width, h: p.height, cells: p.cells.map(c => ({ gridX: p.minGridX + c.gridX, gridY: p.minGridY + c.gridY })),
+        ...(outlet && pit ? { spawnPit: { x: p.minGridX + pit.gridX, y: p.minGridY + pit.gridY, w: pit.widthCells, h: pit.heightCells, outlet } } : {}) });
       array(b.powerUpPedestals).forEach((powerUp, j) => {
         const offset = object(powerUp.cellOffset);
         items.push({ id: `base-powerup:${b.id}:${powerUp.id}`, label: `${getPowerUpName(String(powerUp.defId), 'de')} · Basis ${b.id}`, path: ['bases', i, 'powerUpPedestals', j, 'cellOffset'], powerUpPath: ['bases', i, 'powerUpPedestals', j], layer: 'powerups', kind: 'powerup', x: p.minGridX + Number(offset.gridX), y: p.minGridY + Number(offset.gridY), w: 1, h: 1 });

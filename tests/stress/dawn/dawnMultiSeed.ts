@@ -179,9 +179,8 @@ export function describeDawnMultiSeedShard(shard: number): void {
           }
 
           // Flood starts at the persistent core itself, never at a friendly site structure.
-          // A spawn ring (brood nest, as Map 17) encloses its spawn centre on purpose; it belongs to the structure.
-          const structureCells = new Set(bases.flatMap(base => [...base.cells, ...(base.spawnCenter ? [base.spawnCenter] : [])]
-            .map(cell => cell.gridY * cols + cell.gridX)));
+          // A brood nest's pit opens toward the base, so its free cells must be reached like any core cell.
+          const structureCells = new Set(bases.flatMap(base => base.cells.map(cell => cell.gridY * cols + cell.gridX)));
           for (const site of resolveDawnSites(dawn.world)) {
             const slotStats = entry.slots[site.slotId];
             slotStats.occupied++;

@@ -546,21 +546,25 @@ export class ArenaLifecycleCoordinator {
           else this.worldRuntime?.materialization?.bases?.releaseLights();
         },
         getBaseShadowCells: () => {
-          const bases = this.worldRuntime?.materialization?.bases?.getBases() ?? [];
+          const manager = this.worldRuntime?.materialization?.bases ?? null;
+          const bases = manager?.getBases() ?? [];
           const preview = this.persistentBasePreviewRenderer.getSurfaceImages();
           return (function* () {
             for (const base of bases) yield* base.getSurfaceImages();
             yield* preview;
+            if (manager) yield* manager.getSpawnStructureShadowCells();
           })();
         },
-        // Base plates and the solid stamps of outlined structures.
+        // Base plates, the spawn structures' skeletons and the solid stamps of outlined structures.
         getFogSurfaceStamps: () => {
-          const bases = this.worldRuntime?.materialization?.bases?.getBases() ?? [];
+          const manager = this.worldRuntime?.materialization?.bases ?? null;
+          const bases = manager?.getBases() ?? [];
           const preview = this.persistentBasePreviewRenderer.getSurfaceImages();
           const structures = this.worldRuntime?.presentation?.lobbyStructures?.getFogSurfaceStamps() ?? [];
           return (function* () {
             for (const base of bases) yield* base.getSurfaceImages();
             yield* preview;
+            if (manager) yield* manager.getSpawnStructureFogSurfaces();
             yield* structures;
           })();
         },

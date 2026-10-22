@@ -1,0 +1,191 @@
+{
+  "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
+  "notes": [
+    "Spawn structures (GDD Spawnbauwerk V1): the brood pool with its organic creep stain on the foundation layer, the carcass skeleton on the structure layer, the ember, pool-glow and GPU-lit eye passes above the light map like the other structure and enemy-eye emissions."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "create/basin/setDepth/0",
+        "expression": "DEPTH.BASE_GROUNDING + 0.1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "create/body/setDepth/0",
+        "expression": "DEPTH.BASES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "create/shimmer/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "create/core/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "create/eyeGlows/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "create/eyeCores/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.12",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureRenderer.ts:create/basin/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
+      "component": "create/basin/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        3.6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "create/basin/setDepth/0",
+        "expression": "DEPTH.BASE_GROUNDING + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureRenderer.ts:create/body/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
+      "component": "create/body/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "create/body/setDepth/0",
+        "expression": "DEPTH.BASES"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureRenderer.ts:create/shimmer/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
+      "component": "create/shimmer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "create/shimmer/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureRenderer.ts:create/core/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
+      "component": "create/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "create/core/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureRenderer.ts:create/eyeGlows/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
+      "component": "create/eyeGlows/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "create/eyeGlows/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureRenderer.ts:create/eyeCores/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
+      "component": "create/eyeCores/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.62
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "create/eyeCores/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.12"
+      }
+    }
+  ]
+}

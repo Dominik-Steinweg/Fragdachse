@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { buildSpawnStructureShape } from '../src/config/spawnStructure';
 vi.mock('phaser', () => ({}));
 import { WaterGeometry } from '../src/arena/WaterGeometry';
 import { WaterSurfaceModel, WATER_MASK_HALO, WATER_MASK_STEP, WATER_VISUAL_EXPANSION, waterBlobDistance } from '../src/arena/WaterSurfaceModel';
@@ -14,6 +15,7 @@ import type { CoopDefenseMapAuthoringConfig } from '../src/config/coopDefenseMap
 import { isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseReservationCell, resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
 import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from '../src/config/persistentBase';
 
+const SPAWN_STRUCTURE = buildSpawnStructureShape('east');
 const metrics = resolveWorldMetrics(getArenaMetricsProfile('coop_defense', 'ARENA', 400, 80));
 const cell = { gridX: 8, gridY: 8 };
 const x = metrics.offsetX + (cell.gridX + .5) * CELL_SIZE;
@@ -100,19 +102,27 @@ describe('Water terrain contracts', () => {
       ...areaMap, trackMode: 'none', rockFillRatio: 0, treeCount: 0,
       bases: [{ id: 'base', role, faction: role === 'spawn-point' ? 'hostile' : 'friendly', hpMax: 100,
         anchor: { kind: 'grid', gridX: 30, gridY: 20 },
-        shape: { kind: 'cells', cells: Array.from({ length: 9 }, (_, i) => ({ gridX: i % 3, gridY: Math.floor(i / 3) })).filter(c => c.gridX !== 1 || c.gridY !== 1) },
-        ...(role === 'spawn-point' ? { spawnCenter: { gridX: 1, gridY: 1 } } : {}),
+        shape: { kind: 'cells', cells: role === 'spawn-point' ? SPAWN_STRUCTURE.cells
+          : Array.from({ length: 9 }, (_, i) => ({ gridX: i % 3, gridY: Math.floor(i / 3) })).filter(c => c.gridX !== 1 || c.gridY !== 1) },
+        ...(role === 'spawn-point' ? { spawnCenter: SPAWN_STRUCTURE.spawnCenter } : {}),
       }],
     };
     const map = normalizeCoopDefenseMapConfig(raw);
     const input = resolveArenaGenerationInput('coop_defense', resolveWorldMetrics(getArenaMetricsProfile('coop_defense', 'ARENA', map.arenaWidthCells, map.arenaHeightCells)));
+    const cells = raw.bases[0].shape.kind === 'cells' ? raw.bases[0].shape.cells : [];
+    const right = 30 + Math.max(...cells.map(c => c.gridX));
+    const bottom = 20 + Math.max(...cells.map(c => c.gridY));
     const ring = (minX: number, maxX: number, minY: number, maxY: number) => [
       [minX, minY], [31, minY], [maxX, minY], [minX, 21], [maxX, 21], [minX, maxY], [31, maxY], [maxX, maxY],
     ].map(([gridX, gridY]) => ({ gridX, gridY }));
-    const allowed = ring(28, 34, 18, 24);
+    // The inner cell: the 3x3 courtyard's centre, or the spawn structure's brood nest.
+    const inner = role === 'spawn-point'
+      ? { gridX: 30 + SPAWN_STRUCTURE.spawnCenter.gridX, gridY: 20 + SPAWN_STRUCTURE.spawnCenter.gridY }
+      : { gridX: 31, gridY: 21 };
+    const allowed = ring(28, right + 2, 18, bottom + 2);
     expect(normalizeCoopDefenseMapConfig({ ...raw, water: allowed }).water).toEqual(allowed);
     expect(ArenaGenerator.generate(183, input, { ...map, water: allowed }).water).toEqual(allowed);
-    for (const cell of [...ring(29, 33, 19, 23), { gridX: 31, gridY: 21 }]) {
+    for (const cell of [...ring(29, right + 1, 19, bottom + 1), inner]) {
       expect(() => normalizeCoopDefenseMapConfig({ ...raw, water: [cell] })).toThrow(/base clearance/);
       expect(() => normalizeCoopDefenseMapConfig({ ...raw, waterAreas: [{ ...cell, widthCells: 1, heightCells: 1 }] })).toThrow(/base clearance/);
       expect(() => ArenaGenerator.generate(183, input, { ...map, water: [cell] })).toThrow(/base clearance/);

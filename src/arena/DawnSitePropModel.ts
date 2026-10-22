@@ -1,5 +1,4 @@
 import {
-  DAWN_BROOD_NEST_ANIMATION, DAWN_BROOD_NEST_KEY,
   DAWN_EXTRACTOR_ACTIVE_ANIMATION, DAWN_EXTRACTOR_IDLE_ANIMATION,
   DAWN_EXTRACTOR_KEY, DAWN_EXTRACTOR_SHEET_KEY, DAWN_HEAP_DISPLAY_SIZE, type DawnDecalName,
 } from '../assets/DawnAssets';
@@ -45,7 +44,6 @@ export function resolveDawnSiteDecals(archetypeId: string, slotId: string, towar
         { name: secondary, size: 120, offsetX: Math.cos(turn) * 54, offsetY: Math.sin(turn) * 54, rotation: -turn }];
     }
     case 'extractor': return [{ name: 'drill-disturbance-03', size: 176, offsetX: 0, offsetY: 0, rotation: turn }];
-    case 'brood-nest': return [{ name: 'organic-stain-01', size: 184, offsetX: 0, offsetY: 0, rotation: turn }];
     case 'scrap-heaps': return [{ name: 'rust-flakes-01', size: 150, offsetX: 0, offsetY: 0, rotation: turn }];
     case 'scavenger': return [{ name: 'rust-flakes-01', size: 130, offsetX: 0, offsetY: 0, rotation: turn },
       { name: 'debris-scatter-02', size: 110, offsetX: Math.cos(turn) * 40, offsetY: Math.sin(turn) * 40, rotation: turn }];
@@ -74,7 +72,6 @@ export const DAWN_SITE_LIGHT = {
   emberSize: 7, emberAlpha: 0.48,
   techRadius: 52, techIntensity: 0.28, techX: 15, techY: -10,
   techSize: 5, techAlpha: 0.5,
-  brood: 0x9be05a, broodIdleRadius: 84, broodIdleIntensity: 0.22, broodActiveRadius: 120, broodActiveIntensity: 0.42,
   supplyRadius: 96, supplyIntensity: 0.34,
 } as const;
 
@@ -106,12 +103,7 @@ export function resolveDawnSiteLights(
 ): readonly DawnSiteLight[] {
   if (!resolveDawnSitePropVisual(archetypeId, tier, objectiveState, destroyed, variant)) return [];
   const c = DAWN_SITE_LIGHT;
-  // Brood nest: a sick green glow that wakes with the nest; the capsule keeps a small lamp; heaps stay unlit.
-  if (archetypeId === 'brood-nest') {
-    const active = objectiveState === 'active';
-    return [{ id: 'warm', color: c.brood, radiusPx: active ? c.broodActiveRadius : c.broodIdleRadius,
-      intensity: active ? c.broodActiveIntensity : c.broodIdleIntensity, offsetX: 0, offsetY: 0, emissionSize: 0, emissionAlpha: 0 }];
-  }
+  // The capsule keeps a small lamp; heaps stay unlit. Brood nests are spawn structures with their own light.
   if (archetypeId === 'supply') {
     return [{ id: 'warm', color: c.warm, radiusPx: c.supplyRadius, intensity: c.supplyIntensity,
       offsetX: 0, offsetY: 0, emissionSize: c.lampSize, emissionAlpha: objectiveState === 'active' ? c.lampAlpha : 0 }];
@@ -174,12 +166,7 @@ export function resolveDawnSitePropVisual(
       || !Number.isInteger(tier) || tier < 1 || tier > DAWN_MAX_SITE_TIER) return null;
     return { textureKey: DAWN_M3_ASSET_KEYS.wreckVariant(wreckVariant, tier), animationKey: null };
   }
-  if (archetypeId === 'brood-nest') {
-    if (objectiveState === 'completed') return null;
-    return objectiveState === 'active'
-      ? { textureKey: `${DAWN_BROOD_NEST_KEY}_sheet`, animationKey: DAWN_BROOD_NEST_ANIMATION }
-      : { textureKey: DAWN_BROOD_NEST_KEY, animationKey: null };
-  }
+  // Brood nests are spawn structures: SpawnStructureRenderer draws them in every mode.
   // The capsule stays as scenery after its crates are delivered.
   if (archetypeId === 'supply') return { textureKey: DAWN_M3_ASSET_KEYS.supplyCapsule, animationKey: null };
   // The emptied stockpile stays too; only its crates leave with the carriers.

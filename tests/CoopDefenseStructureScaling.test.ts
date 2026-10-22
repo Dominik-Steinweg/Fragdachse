@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { resolveCoopDefenseActivityBases } from '../src/arena/BaseRegistry';
 import type { CoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { buildSpawnStructureShape } from '../src/config/spawnStructure';
 
-const C_SHAPE = {
-  kind: 'cells' as const,
-  cells: [
-    { gridX: 0, gridY: 0 }, { gridX: 1, gridY: 0 }, { gridX: 2, gridY: 0 },
-    { gridX: 0, gridY: 1 },                         { gridX: 2, gridY: 1 },
-    { gridX: 0, gridY: 2 }, { gridX: 1, gridY: 2 }, { gridX: 2, gridY: 2 },
-  ],
-};
+const SPAWN_STRUCTURE = buildSpawnStructureShape('east');
 
 const STRUCTURE_SCALING_MAP: CoopDefenseMapConfig = {
   mapId: 'structure-scaling-test',
@@ -61,8 +55,8 @@ const STRUCTURE_SCALING_MAP: CoopDefenseMapConfig = {
       faction: 'hostile',
       role: 'spawn-point',
       anchor: { kind: 'grid', gridX: 40, gridY: 12 },
-      shape: C_SHAPE,
-      spawnCenter: { gridX: 1, gridY: 1 },
+      shape: { kind: 'cells', cells: SPAWN_STRUCTURE.cells },
+      spawnCenter: SPAWN_STRUCTURE.spawnCenter,
     },
     {
       id: 'hostile-override',

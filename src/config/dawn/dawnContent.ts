@@ -9,6 +9,10 @@ import {
 } from '../coopDefenseMapAuthoring';
 import { hasCoopDefenseEnemyKind } from '../coopDefenseEnemies';
 import { PERSISTENT_BASE_MAX_AREA_STAGE, resolvePersistentBaseReservationRadiusCells } from '../../persistentBase/PersistentBaseCore';
+import {
+  buildSpawnStructureShape, getSpawnStructureTemplate, resolveSpawnStructureOutletToward, SPAWN_STRUCTURE_OUTLETS,
+  type SpawnStructureOutlet,
+} from '../spawnStructure';
 import { parseTimeOfDay } from '../../effects/TimeOfDay';
 import type { SpawnFront } from '../../types';
 import { isSpawnFront, SPAWN_FRONTS } from '../../utils/spawnFront';
@@ -117,14 +121,14 @@ export type DawnSiteObjectiveType = 'destroy' | 'hold' | 'carry';
 
 /**
  * Bauwerk einer Site. `cells` sind nicht-negative Offsets; der Resolver zentriert die Form auf
- * dem Slot-Anker (siehe {@link resolveDawnSiteStructurePlacement}).
+ * dem Slot-Anker (siehe {@link resolveDawnSiteStructurePlacement}). Spawnpunkte deklarieren keine
+ * Form: Sie sind immer das kanonische U (`src/config/spawnStructure.ts`), offen zur Basis.
  */
 export interface DawnSiteStructureTemplate {
   readonly role: 'outpost' | 'spawn-point';
   readonly faction: CoopBaseFaction;
-  readonly cells: readonly CoopBaseCellOffset[];
-  /** Nur fuer `spawn-point`: freie Zelle innerhalb der Form. */
-  readonly spawnCenter?: CoopBaseCellOffset;
+  /** Nur fuer `outpost`. */
+  readonly cells?: readonly CoopBaseCellOffset[];
 }
 
 export interface DawnSiteArchetypeTier {
@@ -354,22 +358,38 @@ export function resolveDawnWaveBlockWeight(block: DawnWaveBlock, curve: DawnThre
   return Math.min(...block.groups.map((group) => curve.enemyWeights[group.enemyKind] ?? 0));
 }
 
+export interface DawnSiteStructurePlacement {
+  readonly anchor: { readonly gridX: number; readonly gridY: number };
+  readonly cells: readonly CoopBaseCellOffset[];
+  /** Nur Spawnpunkte. */
+  readonly spawnCenter?: CoopBaseCellOffset;
+  /** Nur Spawnpunkte: die zwei freien Zellen vor der Grubenoeffnung, relativ zur Form. */
+  readonly mouth?: readonly CoopBaseCellOffset[];
+}
+
 /**
- * Platzierung eines Site-Bauwerks: Die Form wird auf dem Slot-Anker zentriert. Die eine Quelle
- * fuer Resolver und Lichtungs-Validator.
+ * Platzierung eines Site-Bauwerks: Die Form wird auf dem Slot-Anker zentriert. Ein Spawnpunkt
+ * oeffnet sein U zu `toward` (dem Basisanker). Die eine Quelle fuer Resolver und Lichtungs-Validator.
  */
 export function resolveDawnSiteStructurePlacement(
   structure: DawnSiteStructureTemplate,
   slotAnchor: { readonly gridX: number; readonly gridY: number },
-): { readonly anchor: { readonly gridX: number; readonly gridY: number }; readonly cells: readonly CoopBaseCellOffset[] } {
-  const width = Math.max(...structure.cells.map(({ gridX }) => gridX)) + 1;
-  const height = Math.max(...structure.cells.map(({ gridY }) => gridY)) + 1;
+  toward: { readonly gridX: number; readonly gridY: number } = slotAnchor,
+  outlet: SpawnStructureOutlet = resolveSpawnStructureOutletToward(
+    { x: slotAnchor.gridX, y: slotAnchor.gridY }, { x: toward.gridX, y: toward.gridY },
+  ),
+): DawnSiteStructurePlacement {
+  const spawnShape = structure.role === 'spawn-point' ? buildSpawnStructureShape(outlet) : null;
+  const cells = spawnShape?.cells ?? structure.cells ?? [];
+  const width = Math.max(...cells.map(({ gridX }) => gridX)) + 1;
+  const height = Math.max(...cells.map(({ gridY }) => gridY)) + 1;
   return {
     anchor: {
       gridX: slotAnchor.gridX - Math.floor((width - 1) / 2),
       gridY: slotAnchor.gridY - Math.floor((height - 1) / 2),
     },
-    cells: structure.cells,
+    cells,
+    ...(spawnShape ? { spawnCenter: spawnShape.spawnCenter, mouth: getSpawnStructureTemplate(outlet).mouth } : {}),
   };
 }
 
@@ -569,36 +589,38 @@ function validateSiteStructure(label: string, archetype: DawnSiteArchetype): voi
   if (structure.faction !== expectedFaction) {
     throw new Error(`[dawnContent] ${label} structure must be ${expectedFaction} for ${archetype.objectiveType}`);
   }
-  const cells = structure.cells;
-  const keys = new Set<string>();
-  if (!Array.isArray(cells) || cells.length === 0 || cells.some((cell) => {
-    if (!isNonNegativeInteger(cell?.gridX) || !isNonNegativeInteger(cell?.gridY)) return true;
-    const key = `${cell.gridX}_${cell.gridY}`;
-    if (keys.has(key)) return true;
-    keys.add(key);
-    return false;
-  })) {
-    throw new Error(`[dawnContent] ${label} structure needs unique non-negative integer cells`);
+  if ((structure.role === 'spawn-point') === (structure.cells !== undefined)
+    || 'spawnCenter' in structure) {
+    throw new Error(`[dawnContent] ${label} structure declares cells exactly for outposts; spawn points use the canonical U`);
   }
-  if (Math.min(...cells.map(({ gridX }) => gridX)) !== 0 || Math.min(...cells.map(({ gridY }) => gridY)) !== 0) {
-    throw new Error(`[dawnContent] ${label} structure cells must start at offset 0`);
+  if (structure.cells !== undefined) {
+    const cells = structure.cells;
+    const keys = new Set<string>();
+    if (!Array.isArray(cells) || cells.length === 0 || cells.some((cell) => {
+      if (!isNonNegativeInteger(cell?.gridX) || !isNonNegativeInteger(cell?.gridY)) return true;
+      const key = `${cell.gridX}_${cell.gridY}`;
+      if (keys.has(key)) return true;
+      keys.add(key);
+      return false;
+    })) {
+      throw new Error(`[dawnContent] ${label} structure needs unique non-negative integer cells`);
+    }
+    if (Math.min(...cells.map(({ gridX }) => gridX)) !== 0 || Math.min(...cells.map(({ gridY }) => gridY)) !== 0) {
+      throw new Error(`[dawnContent] ${label} structure cells must start at offset 0`);
+    }
   }
-  const spawnCenter = structure.spawnCenter;
-  if ((structure.role === 'spawn-point') !== (spawnCenter !== undefined)) {
-    throw new Error(`[dawnContent] ${label} structure declares spawnCenter exactly when it is a spawn point`);
-  }
-  if (spawnCenter && (!isNonNegativeInteger(spawnCenter.gridX) || !isNonNegativeInteger(spawnCenter.gridY)
-    || keys.has(`${spawnCenter.gridX}_${spawnCenter.gridY}`))) {
-    throw new Error(`[dawnContent] ${label} structure spawnCenter must be a free cell`);
-  }
-  // Das Bauwerk steht in seiner Lichtung und laesst innerhalb des garantierten Kerns einen Laufring.
-  const placement = resolveDawnSiteStructurePlacement(structure, { gridX: 0, gridY: 0 });
-  const farthest = Math.max(...placement.cells.map((cell) => Math.hypot(
-    placement.anchor.gridX + cell.gridX,
-    placement.anchor.gridY + cell.gridY,
-  )));
-  if (farthest + 1 > archetype.clearingRadiusCells) {
-    throw new Error(`[dawnContent] ${label} structure does not fit inside its clearing`);
+  // Das Bauwerk steht in seiner Lichtung und laesst innerhalb des garantierten Kerns einen Laufring;
+  // beim Spawnbauwerk zaehlt auch die Oeffnung mit, in jeder der vier Ausrichtungen.
+  const outlets = structure.role === 'spawn-point' ? SPAWN_STRUCTURE_OUTLETS : [undefined];
+  for (const outlet of outlets) {
+    const placement = resolveDawnSiteStructurePlacement(structure, { gridX: 0, gridY: 0 }, undefined, outlet);
+    const farthest = Math.max(...[...placement.cells, ...(placement.mouth ?? [])].map((cell) => Math.hypot(
+      placement.anchor.gridX + cell.gridX,
+      placement.anchor.gridY + cell.gridY,
+    )));
+    if (farthest + 1 > archetype.clearingRadiusCells) {
+      throw new Error(`[dawnContent] ${label} structure does not fit inside its clearing`);
+    }
   }
 }
 

@@ -42,7 +42,9 @@
 // and the warning band as full w or changed cells wd instead of JSON tuples with host ids.
 // Lobby structures: host physics and fog follow checked-in building outlines that the layout
 // fingerprint does not cover.
-export const PEER_PROTOCOL_VERSION = 47;
+// Spawn structures: csz also announces spawn structures (structure: true, zoneId = base id); spawn
+// points are the canonical carcass footprint with the brood pit centre as spawn point.
+export const PEER_PROTOCOL_VERSION = 48;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

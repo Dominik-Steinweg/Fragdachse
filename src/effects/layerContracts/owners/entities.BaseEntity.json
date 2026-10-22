@@ -14,13 +14,6 @@
         ]
       },
       {
-        "key": "createPresentationRepresentation/marker/setDepth/0",
-        "expression": "DEPTH.BASES + 2",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
         "key": "setVulnerable/marker/setDepth/0",
         "expression": "DEPTH.BASES + 5",
         "blends": [
@@ -51,28 +44,6 @@
       "source": {
         "selector": "createPresentationRepresentation/image/setDepth/0",
         "expression": "DEPTH.BASES + 3"
-      }
-    },
-    {
-      "id": "cpu:entities/BaseEntity.ts:createPresentationRepresentation/marker/setDepth/0",
-      "owner": "entities/BaseEntity.ts",
-      "component": "createPresentationRepresentation/marker/setDepth/0",
-      "height": "body",
-      "lighting": "material",
-      "camera": "world",
-      "depths": [
-        6
-      ],
-      "blends": [
-        "NORMAL"
-      ],
-      "profiles": [
-        "M"
-      ],
-      "role": "effect",
-      "source": {
-        "selector": "createPresentationRepresentation/marker/setDepth/0",
-        "expression": "DEPTH.BASES + 2"
       }
     },
     {

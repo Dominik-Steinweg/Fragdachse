@@ -71,6 +71,20 @@ export interface GroundSurfacePersistentBaseGravelZone {
   readonly buildArea: PersistentBaseBuildArea;
 }
 
+/** Kreis ohne Bodenbewuchs (Weltpixel), etwa der Kriechfleck eines Spawnbauwerks. */
+export interface VegetationClearing {
+  readonly x: number;
+  readonly y: number;
+  readonly radiusPx: number;
+}
+
+/** Whether a plant of the given reach at (x, y) would grow into a clearing. */
+export function isInVegetationClearing(
+  clearings: readonly VegetationClearing[] | undefined, x: number, y: number, reachPx = 0,
+): boolean {
+  return clearings?.some((c) => Math.hypot(x - c.x, y - c.y) < c.radiusPx + reachPx) ?? false;
+}
+
 export interface GroundSurfaceStreamerOptions {
   readonly scene: Phaser.Scene;
   readonly frame: ChunkWorldFrame;
@@ -83,6 +97,8 @@ export interface GroundSurfaceStreamerOptions {
   readonly chunkSize?: number;
   /** CPU material samples for the soil bake; read from the loaded textures when omitted. */
   readonly groundMaterials?: GroundMaterialSamples;
+  /** Grass specks stay out of these circles (spawn structure stains). */
+  readonly vegetationClearings?: readonly VegetationClearing[];
 }
 
 export interface GroundSnapshotRegion {
@@ -148,7 +164,11 @@ export class GroundSurfaceStreamer {
     for (const decal of options.layout.decals ?? []) {
       if ((decal.surface ?? 'ground') === 'rock') continue;
       // Grass specks gather with the undergrowth instead of dotting every open patch.
-      if (isGroundDecalInGrowth(options.layout.seed, decal)) groundDecals.push(decal);
+      if (!isGroundDecalInGrowth(options.layout.seed, decal)) continue;
+      if (isInVegetationClearing(options.vegetationClearings,
+        options.frame.offsetX + decal.gridX * CELL_SIZE + CELL_SIZE / 2 + decal.offsetX,
+        options.frame.offsetY + decal.gridY * CELL_SIZE + CELL_SIZE / 2 + decal.offsetY, CELL_SIZE / 2)) continue;
+      groundDecals.push(decal);
     }
     this.groundDecals = groundDecals;
     this.scratch = new ChunkScratchPool(options.scene);

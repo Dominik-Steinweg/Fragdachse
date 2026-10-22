@@ -268,6 +268,7 @@ export class DevScenarioController {
     bindWatchtowerReview(this, this.runtime);
     bindBridgeReview(this, this.runtime);
     bindPortalReview(this, this.runtime);
+    bindSpawnStructureReview(this, this.runtime);
     bindBloodReview(this, this.runtime);
     bindLobbyBuildingReview(this, this.runtime, scene);
     let imported: DevScenario | null = null;
@@ -1131,6 +1132,7 @@ import { bindLobbyBuildingReview, releaseLobbyBuildingReview } from './LobbyBuil
 import type { WorldInteractionView } from '../../systems/WorldInteractionCandidate';
 import { bindBridgeReview } from './BridgeReview';
 import { bindPortalReview } from './PortalReview';
+import { bindSpawnStructureReview } from './SpawnStructureReview';
 import { bindBloodReview } from './BloodReview';
 
 /**

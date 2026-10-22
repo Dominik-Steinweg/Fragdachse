@@ -16,6 +16,14 @@ import {
   DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER,
 } from '../config/coopDefenseMapAuthoring';
 import { resolveCoopDefensePositiveInteger } from '../config/coopDefenseScaling';
+import {
+  getSpawnStructureTemplate,
+  isCellInSpawnStructureArea,
+  isSpawnStructureAreaCell,
+  matchSpawnStructureShape,
+  SPAWN_STRUCTURE_VEGETATION_CLEARING_CELLS,
+  type ResolvedSpawnStructureArea,
+} from '../config/spawnStructure';
 import { resolvePersistentBaseReservationRadiusCells, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
 import { isCellInsidePersistentBaseReservation } from '../persistentBase/PersistentBaseZone';
 import {
@@ -95,6 +103,8 @@ export interface BaseSpec {
   readonly dormantObjectiveId?: string;
   readonly turrets: readonly BaseTurretSpec[];
   readonly powerUpPedestals: readonly BasePowerUpPedestalSpec[];
+  /** Only spawn points: the brood pit inside the canonical U (`src/config/spawnStructure.ts`). */
+  readonly spawnArea?: ResolvedSpawnStructureArea;
   /**
    * World-pixel silhouette of an outlined structure. Set, collision bodies, light occlusion, fog
    * and interaction follow these rects; `cells` stays the occupancy for placement and reservations.
@@ -102,12 +112,6 @@ export interface BaseSpec {
   readonly collisionRects?: readonly StructureRect[];
   /** Cells whose centre lies inside the outline; cell-based movement reads these instead of `cells`. */
   readonly movementCells?: readonly { gridX: number; gridY: number }[];
-  readonly spawnCenter?: {
-    readonly gridX: number;
-    readonly gridY: number;
-    readonly x: number;
-    readonly y: number;
-  };
 }
 
 /**
@@ -234,33 +238,9 @@ function resolveBaseSpec(
     ? { minGridX: minX, maxGridX: maxX, minGridY: minY, maxGridY: maxY }
     : { minGridX: 0, maxGridX: 0, minGridY: 0, maxGridY: 0 };
 
-  let spawnCenter: BaseSpec['spawnCenter'];
-  if (config.role === 'spawn-point') {
-    const relativeCenter = config.spawnCenter;
-    if (!relativeCenter) {
-      throw new Error(`[BaseRegistry] Spawn point ${config.id} has no spawnCenter`);
-    }
-    if (
-      relativeCenter.gridX < 0
-      || relativeCenter.gridX >= width
-      || relativeCenter.gridY < 0
-      || relativeCenter.gridY >= height
-    ) {
-      throw new Error(`[BaseRegistry] Spawn point ${config.id} has a spawnCenter outside its shape bounds`);
-    }
-    const centerGridX = minGridX + relativeCenter.gridX;
-    const centerGridY = minGridY + relativeCenter.gridY;
-    if (absoluteCells.some((cell) => cell.gridX === centerGridX && cell.gridY === centerGridY)) {
-      throw new Error(`[BaseRegistry] Spawn point ${config.id} needs a free spawnCenter cell`);
-    }
-    const centerPosition = worldCellCenter(metrics, centerGridX, centerGridY);
-    spawnCenter = {
-      gridX: centerGridX,
-      gridY: centerGridY,
-      x: centerPosition.x,
-      y: centerPosition.y,
-    };
-  }
+  const spawnArea = config.role === 'spawn-point'
+    ? resolveSpawnArea(config, relativeCells, minGridX, minGridY, metrics)
+    : undefined;
 
   const turrets = (config.turrets ?? []).map((turret) => resolveBaseTurretSpec(
     config.id,
@@ -300,8 +280,50 @@ function resolveBaseSpec(
     ...(dormantObjectiveId === undefined ? {} : { dormantObjectiveId }),
     turrets,
     powerUpPedestals,
-    spawnCenter,
+    ...(spawnArea ? { spawnArea } : {}),
   };
+}
+
+function resolveSpawnArea(
+  config: CoopBaseConfig,
+  relativeCells: readonly CoopBaseCellOffset[],
+  minGridX: number,
+  minGridY: number,
+  metrics: WorldMetrics,
+): ResolvedSpawnStructureArea {
+  const outlet = matchSpawnStructureShape(relativeCells);
+  if (!outlet) throw new Error(`[BaseRegistry] Spawn point ${config.id} needs the canonical U shape`);
+  const template = getSpawnStructureTemplate(outlet);
+  if (!config.spawnCenter || !isSpawnStructureAreaCell(template, config.spawnCenter)) {
+    throw new Error(`[BaseRegistry] Spawn point ${config.id} needs its spawnCenter inside the brood pit`);
+  }
+  const areaGridX = minGridX + template.area.gridX;
+  const areaGridY = minGridY + template.area.gridY;
+  const corner = worldCellOrigin(metrics, areaGridX, areaGridY);
+  return {
+    outlet,
+    minGridX: areaGridX,
+    minGridY: areaGridY,
+    widthCells: template.area.widthCells,
+    heightCells: template.area.heightCells,
+    x: corner.x + template.area.widthCells * CELL_SIZE / 2,
+    y: corner.y + template.area.heightCells * CELL_SIZE / 2,
+    mouth: template.mouth.map((cell) => ({ gridX: minGridX + cell.gridX, gridY: minGridY + cell.gridY })),
+  };
+}
+
+/** Free brood-pit cell of an active or dormant spawn structure; players must not build there. */
+export function isCoopDefenseSpawnAreaCell(gridX: number, gridY: number, bases: readonly BaseSpec[]): boolean {
+  return bases.some((base) => base.spawnArea !== undefined && isCellInSpawnStructureArea(base.spawnArea, gridX, gridY));
+}
+
+/** Circles around every spawn structure's nest where the creep stain lies: no plants are drawn there. */
+export function resolveSpawnStructureVegetationClearings(
+  bases: readonly BaseSpec[],
+): readonly { readonly x: number; readonly y: number; readonly radiusPx: number }[] {
+  return bases.flatMap((base) => base.spawnArea
+    ? [{ x: base.spawnArea.x, y: base.spawnArea.y, radiusPx: SPAWN_STRUCTURE_VEGETATION_CLEARING_CELLS * CELL_SIZE }]
+    : []);
 }
 
 function resolveBasePowerUpPedestalSpec(
@@ -469,7 +491,7 @@ function resolveWorldBaseSpec(config: WorldBaseDefinition, metrics: WorldMetrics
     role: config.role ?? 'main',
     turrets: resolved.turrets,
     powerUpPedestals: [],
-    spawnCenter: resolved.spawnCenter,
+    ...(resolved.spawnArea ? { spawnArea: resolved.spawnArea } : {}),
     ...(config.structure ? resolveStructureOutline(config, metrics) : {}),
   };
 }

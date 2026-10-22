@@ -45,6 +45,13 @@ export class BaseDestructionRenderer {
 
   play(spec: BaseSpec, destroyCellVisual: (cellIndex: number) => void): void {
     if (this.destroyed) return;
+    if (spec.spawnArea) {
+      // Ein Spawnbauwerk zerplatzt als Knochenexplosion (SpawnStructureRenderer): ein Knall am Nest,
+      // keine Feuerbrocken und kein Bodenfeuer, danach ist der Boden frei.
+      spec.cells.forEach((_cell, cellIndex) => destroyCellVisual(cellIndex));
+      this.hooks.playExplosionSound?.(spec.spawnArea.x, spec.spawnArea.y, 1);
+      return;
+    }
 
     for (const step of buildBaseDestructionPlan(spec)) {
       let timer: Phaser.Time.TimerEvent;
