@@ -74,13 +74,20 @@ export function writeBarSdfInstance(
   const pad = inst.margin + aa * 1.5;
   const x0 = -pad, y0 = -pad, x1 = inst.width + pad, y1 = inst.height + pad;
   const bx = ox + inst.x, by = oy + inst.y;
+  // Axis-aligned bars start on a whole framebuffer pixel. Thin bars (2–6 px) otherwise straddle
+  // pixel rows at half coverage and read dim and soft; the analytic AA then only shapes corners.
+  let sx = 0, sy = 0;
+  if (Math.abs(m.b) < 1e-6 && Math.abs(m.c) < 1e-6) {
+    const X = m.a * bx + m.tx, Y = m.d * by + m.ty;
+    sx = Math.round(X) - X; sy = Math.round(Y) - Y;
+  }
   for (let corner = 0; corner < 4; corner++) {
     const lx = corner < 2 ? x0 : x1;
     const ly = (corner & 1) === 0 ? y0 : y1;
     const px = bx + lx, py = by + ly;
     let o = offset + corner * BAR_SDF_VERTEX_WORDS;
-    f32[o++] = m.a * px + m.c * py + m.tx;
-    f32[o++] = m.b * px + m.d * py + m.ty;
+    f32[o++] = m.a * px + m.c * py + m.tx + sx;
+    f32[o++] = m.b * px + m.d * py + m.ty + sy;
     f32[o++] = lx; f32[o++] = ly;
     f32[o++] = inst.width; f32[o++] = inst.height; f32[o++] = inst.radius; f32[o++] = aa;
     f32[o++] = inst.a0; f32[o++] = inst.a1; f32[o++] = inst.a2; f32[o++] = inst.a3;

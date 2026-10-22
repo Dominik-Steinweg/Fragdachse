@@ -120,10 +120,12 @@ void main() {
   float fillStart = world ? 0.0 : vA.x;
   float fillEnd = world ? vA.x : vA.y;
   float trailEnd = world ? vA.y : vA.z;
-  float gloss = vB.x;
+  // Value shading needs a few pixel rows; on a 2–3 px bar it would only darken the colour.
+  float rows = clamp((size.y / aa - 2.0) / 8.0, 0.3, 1.0);
+  float gloss = vB.x * rows;
   float edge = vB.y;
   float flash = world ? 0.0 : vB.z;
-  float shade = world ? vB.z : vB.w;
+  float shade = (world ? vB.z : vB.w) * rows;
 
   if (world) {
     float inside = cover(d, aa);

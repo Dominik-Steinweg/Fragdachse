@@ -221,8 +221,7 @@ export class WorldHealthBarRenderer {
     // World presentation: drawn by the World camera with its lighting, like the former Rectangles.
     getClarityCameraRegistry(this.scene)?.demote(image);
     const instances: BarSdfInstance[] = [];
-    const source: BarSdfSource = { instances, count: 0,
-      unitWidth: image.frame?.realWidth || 1, unitHeight: image.frame?.realHeight || 1 };
+    const source: BarSdfSource = { instances, count: 0, unitWidth: image.width || 1, unitHeight: image.height || 1 };
     attachBarSdf(image, source);
     getArenaVisualAttribution(this.scene).registerGraphicsObject(style.family, image);
     layer = { family: style.family, depth: style.fillDepth, instances, source, image };

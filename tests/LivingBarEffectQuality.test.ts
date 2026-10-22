@@ -94,6 +94,7 @@ function makeScene(quality: GraphicsQuality, options: { webgl?: boolean } = {}) 
       setTint: (...tints: number[]) => { image.tints = tints; return image; },
       setPosition: (x: number, y: number) => { image.x = x; image.y = y; return image; },
       setDisplaySize: () => image,
+      setSize: () => image,
       setScrollFactor: () => image,
       setCrop: (x: number, y: number, width: number, height: number) => {
         image.cropped = true; image.crop = { x, y, width, height }; image.cropWrites++; return image;

@@ -8,8 +8,8 @@ import {
 /**
  * Everything a bar object submits. `instances` live in the object's local units; for a world
  * layer the object sits at the origin and the instances carry world coordinates. `unitWidth` /
- * `unitHeight` map the Image's display size back to local units, so a bar may be scaled by its
- * parents (tweens, HUD scale) without rebuilding anything.
+ * `unitHeight` map the Image's `width`/`height` back to local units, so a bar may be scaled by
+ * itself or its parents (tweens, HUD scale) without rebuilding anything.
  */
 export interface BarSdfSource {
   readonly instances: readonly BarSdfInstance[];
@@ -76,9 +76,10 @@ function gpuNodes(renderer: Phaser.Renderer.WebGL.WebGLRenderer): GpuNodes {
       view.copyWithScrollFactorFrom(camera.getViewMatrix(!context.useCanvas), camera.scrollX, camera.scrollY,
         gameObject.scrollFactorX, gameObject.scrollFactorY);
       if (parentMatrix) view.multiply(parentMatrix);
-      const frame = gameObject.frame;
-      const sx = gameObject.scaleX * (frame.realWidth || 1) / Math.max(1e-6, source.unitWidth);
-      const sy = gameObject.scaleY * (frame.realHeight || 1) / Math.max(1e-6, source.unitHeight);
+      // Bars keep scale 1 and carry their size in `width`/`height` (Size component), so filters
+      // focus a framebuffer of the real bar size instead of the 4×4 white frame.
+      const sx = gameObject.scaleX * (gameObject.width || 1) / Math.max(1e-6, source.unitWidth);
+      const sy = gameObject.scaleY * (gameObject.height || 1) / Math.max(1e-6, source.unitHeight);
       sprite.applyITRS(gameObject.x, gameObject.y, gameObject.rotation, sx, sy);
       view.multiply(sprite);
       const m = view.matrix;

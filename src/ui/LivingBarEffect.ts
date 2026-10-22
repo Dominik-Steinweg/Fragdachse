@@ -295,8 +295,8 @@ export class LivingBarEffect {
       .setOrigin(0, 0)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setVisible(false);
-    // Bounds of the contour: filters, culling and input see the real footprint.
-    window.setDisplaySize(clip.width, clip.height);
+    // Size (not scale) of the contour: filters, bounds and input see the real footprint.
+    window.setSize(clip.width, clip.height);
     if (this.opts?.scrollFactor !== undefined) window.setScrollFactor(this.opts.scrollFactor);
     this.container.addAt(window, insertionIndex);
     const textureKey = field.getTextureKey();
