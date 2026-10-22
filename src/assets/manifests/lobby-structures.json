@@ -65,12 +65,12 @@
         }
       },
       "sha256": {
-        "beauty": "36e86e9526c30da22cb4f8e815572a77aedcffcd92ab3564a3f4d549911a8da9",
-        "albedo": "273048032d0fbe93975cff2e2bc85a4334442f5aa5694c922701b08fc1969b5d",
-        "elevation": "6f2e603bffd20d32d2938957094ba72c929581c174008150358543852921c58c",
-        "solid": "934d1071b2611c37e51df4101ae59770a11e8e97c58296ca1797af9c20785903",
-        "emission-forge": "2802fefa7b24a67a59d77f9c89c10d705735b493f0229ba2e71e493e2359b318",
-        "emission-lamp": "5f385a7c74515c22ba0443336d2f471b8ca48ef7cd133374c111e5f74a1547c9"
+        "beauty": "36fa6a46a52619c0555b7353b08364ce14bf59aa845b61cbb6029138a43a536c",
+        "albedo": "10856617caffd3b896ce4d3ebe01a0098ab3f98d720f1fe00eec98fc0b25ec13",
+        "elevation": "bce3e804d791c456c1636ca532515bfa771548dfd9094bfc2a481c18661ba35e",
+        "solid": "45307f5e679e6ff0f83b176121dad2c4706059a2e64972899b041731bdc0fa0d",
+        "emission-forge": "83e2bea87dbd073ce3da81152ced83751e28feb6015165717f982a48013a3dca",
+        "emission-lamp": "a39f180cb9fa3ffc879c9bfc1a0cc931c5a150f36efd416500aacde0d31242eb"
       }
     },
     "lobby-yard": {
@@ -128,12 +128,12 @@
         }
       },
       "sha256": {
-        "beauty": "93f391bdc00d5711998fda5f71334cd95370dcf35cb9198f1dae8c2f25b96bc3",
-        "albedo": "2c28ab8192b5e7a505d755c8239febc57c0d65d11e09e4b3f1c7015767b969c7",
-        "elevation": "a29806d730d13c31c1513d31f6b1eeb9d0f6240663ef1f0aa556ebad58f5fbfc",
-        "solid": "7b3c222501bdd18b4b0ee09bc47cef233af18cfa054c0669ad047e36b4f1a5fb",
-        "emission-lamp": "a4fab11fe6f293472c3b9a270044a0e6a07a768298cfc46037074fae40e98957",
-        "emission-cyan": "d122e70b89add3e2f8ab34895767eecd44ad51545451b71ea93e8d16ffdfa588"
+        "beauty": "edc027197854c352ccfa38916e5965a719a83ea6ef190d0f9088d495590f06b1",
+        "albedo": "24f337250981899cf1e3cf858ff78f2f44b25377cf173f1ff8ba643432a26ec7",
+        "elevation": "150e8f594ebd93f3fa37915b3fd6a5cbd49108f620bfebc0b5c58e237bd7d024",
+        "solid": "7bdf24ac76267e8ff7c6b2651faba1deb46f9ee9d5e7225af324ec3c7d26852f",
+        "emission-lamp": "3884e73f3324fc4fbe8cb6cb0f11d8d227b556575ad2cd62404bd7789acccbf2",
+        "emission-cyan": "e72df076c11dc3b659c271f433ed0ccef756301626edfc518db2d557256e0a62"
       }
     },
     "lobby-armory": {
@@ -190,11 +190,11 @@
         }
       },
       "sha256": {
-        "beauty": "9ae8cc74353ccc4fcc91067740fd7e06b07c287b08af4a6e2a9904ecb6ca91ef",
-        "albedo": "d89fdcc13172173e9173bda885c7d756d81cef74801f1714342eb2eb901777b8",
-        "elevation": "dcfac23a9b43318c56ee21d5631c127f42b0c63259c091c59116378c345de6ee",
-        "solid": "4c28b495d35194e968157f401abc75e59ea7ba863fc966dfef53120ebd5e2326",
-        "emission-lamp": "aa2413f96ded6aa1cd2e62adfb53b0f9c71639e55e1193ee76cb1582d1ef11c7"
+        "beauty": "72d5feb561da7e179ecef84165d8cd43b2e9c1277de7073e1296d4a12533e625",
+        "albedo": "7258d010ac4b5a6e1d09e1af05a8c3417233ac3755a23708c3cbec270ba273f7",
+        "elevation": "1745c6e9ffd37cf82a4e1c932c411d160f2ce4035db12d08103415cb40cafde6",
+        "solid": "14a0b50224b4bd63b4c600e6339b460e18792f54755a6b5fe9800a596fefb45f",
+        "emission-lamp": "9b34674182d4c158173cc2f9b01e63455405c124dbf50d00a49e099ee89131a8"
       }
     },
     "lobby-merchant-stall": {
@@ -261,13 +261,13 @@
         }
       },
       "sha256": {
-        "beauty": "c52f1f6e103e6e2297efbe8a93b4e02ff42694cf3dec9b3b6ca34912f8bb1ecf",
-        "albedo": "f263c64f3f97eb24ccd4b1acced2b10efa6fcfd766f546e487b16e951a51d58f",
-        "elevation": "b44dc1332057876ec677001529d4b7c67b35b78a45ce03df8bdea999340f41dc",
-        "solid": "8ccab7ba29d74982f1f3de46a3d676bdf90b457575045c5347679638f179095d",
-        "emission-lamp": "3ef1bba930492dc92872fa958492393d2051d052eeb347c8d8f62f4f5626b8e5"
+        "beauty": "8e1dd25b6b35612bc0f64a5cb2eccb4f7f2ebe4bc78efef72fa5961b2e97d09d",
+        "albedo": "c338ead455223982b9203c4f60f54a259557a716315a8be1f0074478e076f91c",
+        "elevation": "549ee5900b9b6986b0e597753a64b78bf39da6ba9d76f5a626c7dcbfbb4744d4",
+        "solid": "33a5840a2f745774148518ff092c72522bfa906673f0e246244e56ae09583dd1",
+        "emission-lamp": "d19f731946b7a6bcbf3d348683ad69c5b5bedbd1fa5c30cefc7c47df8283506f"
       }
     }
   },
-  "revision": "draft-r1"
+  "revision": "hq-r1"
 }
