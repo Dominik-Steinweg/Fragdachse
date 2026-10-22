@@ -31,6 +31,8 @@ import {
 
 /** Anliegen an einem Hindernis gilt bei der Impuls-Sweep-Pruefung noch als frei. */
 const ENEMY_IMPULSE_CONTACT_TOLERANCE_PX = 1;
+const OCCUPANCY_CELL_PX = 64;
+const occupancyCellKey = (cx: number, cy: number): number => (cx + 32768) * 65536 + (cy + 32768);
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType   = {
@@ -198,6 +200,14 @@ export class HostPhysicsSystem {
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
+  /**
+   * Static blockers bucketed for occupancy sweeps. Rebuilt at most once per game frame (static
+   * bodies do not move within a frame) or when a group gains or loses members; `enable` and the
+   * exact circle test are still read per query.
+   */
+  private readonly occupancyCells = new Map<number, Phaser.Physics.Arcade.StaticBody[]>();
+  private occupancyFrame = Number.NaN;
+  private occupancyMembers = -1;
 
   // Pro-Spieler Collider-Tracking
   private rockCollidersSetup  = new Set<string>();
@@ -407,16 +417,48 @@ export class HostPhysicsSystem {
     const m = this.worldMetrics;
     if (!m || ![x, y, radius].every(Number.isFinite) || radius < 0
       || x - radius < m.offsetX || y - radius < m.offsetY || x + radius > m.maxX || y + radius > m.maxY) return false;
-    for (const group of [this.rockGroup, this.trunkGroup, this.baseGroup]) {
-      for (const child of group?.getChildren() ?? []) {
-        const body = (child as Phaser.GameObjects.GameObject & { body?: Phaser.Physics.Arcade.StaticBody }).body;
-        if (!body?.enable) continue;
-        const dx = x - Math.max(body.left, Math.min(x, body.right));
-        const dy = y - Math.max(body.top, Math.min(y, body.bottom));
-        if (dx * dx + dy * dy < radius * radius) return false;
+    const cells = this.getOccupancyCells();
+    const r2 = radius * radius;
+    const minCx = Math.floor((x - radius) / OCCUPANCY_CELL_PX), maxCx = Math.floor((x + radius) / OCCUPANCY_CELL_PX);
+    const minCy = Math.floor((y - radius) / OCCUPANCY_CELL_PX), maxCy = Math.floor((y + radius) / OCCUPANCY_CELL_PX);
+    for (let cy = minCy; cy <= maxCy; cy++) {
+      for (let cx = minCx; cx <= maxCx; cx++) {
+        const bucket = cells.get(occupancyCellKey(cx, cy));
+        if (!bucket) continue;
+        for (const body of bucket) {
+          if (!body.enable) continue;
+          const dx = x - Math.max(body.left, Math.min(x, body.right));
+          const dy = y - Math.max(body.top, Math.min(y, body.bottom));
+          if (dx * dx + dy * dy < r2) return false;
+        }
       }
     }
     return true;
+  }
+
+  private getOccupancyCells(): ReadonlyMap<number, Phaser.Physics.Arcade.StaticBody[]> {
+    const frame = this.scene.game?.loop?.frame ?? Number.NaN;
+    const members = (this.rockGroup?.getLength() ?? 0) + (this.trunkGroup?.getLength() ?? 0) + (this.baseGroup?.getLength() ?? 0);
+    if (frame === this.occupancyFrame && members === this.occupancyMembers) return this.occupancyCells;
+    this.occupancyFrame = frame;
+    this.occupancyMembers = members;
+    const cells = this.occupancyCells;
+    for (const bucket of cells.values()) bucket.length = 0;
+    for (const group of [this.rockGroup, this.trunkGroup, this.baseGroup]) {
+      for (const child of group?.getChildren() ?? []) {
+        const body = (child as Phaser.GameObjects.GameObject & { body?: Phaser.Physics.Arcade.StaticBody }).body;
+        if (!body) continue;
+        for (let cy = Math.floor(body.top / OCCUPANCY_CELL_PX); cy <= Math.floor(body.bottom / OCCUPANCY_CELL_PX); cy++) {
+          for (let cx = Math.floor(body.left / OCCUPANCY_CELL_PX); cx <= Math.floor(body.right / OCCUPANCY_CELL_PX); cx++) {
+            const key = occupancyCellKey(cx, cy);
+            let bucket = cells.get(key);
+            if (!bucket) cells.set(key, bucket = []);
+            bucket.push(body);
+          }
+        }
+      }
+    }
+    return cells;
   }
   /** A position discontinuity preserves dash/impulses but never emits a trail across the jump. */
   resolvePortalExitMovement(from: {x: number; y: number}, to: {x: number; y: number}, radius: number): {x: number; y: number} {
@@ -753,6 +795,7 @@ export class HostPhysicsSystem {
     }
     this.rockGroup  = rockGroup;
     this.trunkGroup = trunkGroup;
+    this.occupancyFrame = Number.NaN;
   }
 
   /**
@@ -763,6 +806,7 @@ export class HostPhysicsSystem {
    */
   setBaseGroup(baseGroup: Phaser.Physics.Arcade.StaticGroup | null): void {
     this.baseGroup = baseGroup;
+    this.occupancyFrame = Number.NaN;
     if (baseGroup === null) this.baseCollidersSetup.clear();
   }
 
