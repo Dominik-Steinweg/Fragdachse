@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NET_TICK_RATE_HZ } from '../../src/config';
 import { NetworkBridge } from '../../src/network/NetworkBridge';
+import { GroundFireChangeJournal } from '../../src/effects/GroundFireChanges';
+import type { SyncedBurningGroundCell } from '../../src/types';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
 import { FakeNetwork, createHostRoom, addClientRoom, type TestRoom } from '../fakePeerNetwork';
 
@@ -144,5 +146,40 @@ describe('ground hazard and base burn replication', () => {
       publish();
       expect(client.getLatestGameState()!.burningGround).toEqual(state.burningGround);
     } finally { clearActiveSession(); }
+  });
+
+  it('replicates journaled host changes and expiry exactly through incremental deltas', async () => {
+    const { client, state, publish } = await setup();
+    const journal = new GroundFireChangeJournal();
+    type Cell = SyncedBurningGroundCell;
+    const now = Date.now();
+    const step = (base: Cell[], removed: Cell[], upserts: Cell[]) => {
+      const byId = new Map(base.map(cell => [cell.id, cell]));
+      for (const cell of removed) byId.delete(cell.id);
+      for (const cell of upserts) byId.set(cell.id, cell);
+      const cells = [...byId.values()];
+      journal.record(cells, { base, removed, upserts });
+      return cells;
+    };
+    const cell = (id: number, gridX: number, expiresAt = Number.MAX_SAFE_INTEGER): Cell =>
+      ({ id, gridX, gridY: 3, intensity: 1, expiresAt, visualStyle: 'void' });
+    try {
+      let cells = [cell(1, 0), cell(2, 1), cell(3, 2, now + 60_000)];
+      state.burningGround = { cells };
+      publish(true);
+      // Growth, a refresh, a removal, a skipped publish and an expiring cell.
+      cells = step(cells, [], [cell(4, 3), cell(5, 4)]);
+      state.burningGround = { cells }; publish();
+      cells = step(cells, [cells[1]], [{ ...cell(1, 0), intensity: 3 }]);
+      cells = step(cells, [], [cell(6, 5, now + 5_000)]);
+      state.burningGround = { cells }; publish();
+      expect(client.getLatestGameState()!.burningGround.cells).toEqual(cells);
+      const merged = client.getLatestGameState()!.burningGround.cells;
+      publish();
+      expect(client.getLatestGameState()!.burningGround.cells).toBe(merged);
+      vi.spyOn(client, 'getSynchronizedNow').mockReturnValue(now + 5_010);
+      publish();
+      expect(client.getLatestGameState()!.burningGround.cells).toEqual(cells.filter(entry => entry.id !== 6));
+    } finally { vi.restoreAllMocks(); clearActiveSession(); }
   });
 });

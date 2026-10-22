@@ -144,7 +144,7 @@ import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { cloneCoopDefenseUpgradeProfile, constrainCoopDefenseUpgradeProfileToEntitlements, resolveCoopDefenseUpgradeEntitlements, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
 import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
-import { resolveGroundFireChanges, type GroundFireCellChanges } from '../effects/GroundFireChanges';
+import { GroundFireChangeJournal, resolveGroundFireChanges, type GroundFireCellChanges } from '../effects/GroundFireChanges';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
 import type { TemporaryUtilityInstanceDescriptor } from '../types';
 import type { RoundConclusion } from '../types';
@@ -608,6 +608,16 @@ function sanitizeGroundWarnings(value: unknown, now: number): NonNullable<Synced
     && Number.isFinite(cell.activatesAt) && cell.activatesAt > now)
     .map(cell => ({ gridX: cell.gridX, gridY: cell.gridY, activatesAt: cell.activatesAt,
       ...(cell.visualStyle === 'normal' ? { visualStyle: 'normal' as const } : {}) }));
+}
+
+/** Client merge state behind the last published burning-ground array. */
+interface ClientGroundCells {
+  source: SyncedBurningGroundSnapshot['cells'];
+  readonly cells: Map<number, SyncedBurningGroundSnapshot['cells'][number]>;
+  earliestExpiry: number;
+  maxId: number;
+  /** Ids arrived out of order; the published array is sorted and the view re-read next time. */
+  unordered: boolean;
 }
 
 function encodeBurningGroundCell(cell: SyncedBurningGroundSnapshot['cells'][number]): EncodedBurningGroundCell {
@@ -3384,6 +3394,8 @@ export class NetworkBridge {
   private lastPublishedGroundHadWarnings = false;
   private readonly lastPublishedBurningGround = new Map<number, EncodedBurningGroundCell>();
   private lastPublishedGroundCells: readonly SyncedBurningGroundSnapshot['cells'][number][] | null = null;
+  private clientGroundCells: ClientGroundCells | null = null;
+  private readonly clientGroundChanges = new GroundFireChangeJournal();
   /** FireSystem keeps unchanged cell objects across snapshots; their encoding is reused. */
   private encodedGroundCells = new WeakMap<SyncedBurningGroundSnapshot['cells'][number], EncodedBurningGroundCell>();
   // Client-seitiger Statik-Cache der Projektile. Nur die Statik wird gecacht – die Dynamik kommt
@@ -4298,17 +4310,56 @@ export class NetworkBridge {
         : delta.f.map(decodeBurningGroundCell).filter(cell => cell.expiresAt > now),
       warnings: sanitizeGroundWarnings(delta.w, now) };
     }
-    if (!delta?.r?.length && !delta?.u?.length && previous.cells.every(cell => cell.expiresAt > now)) {
+    const live = this.clientGroundCellsFor(previous.cells);
+    if (!delta?.r?.length && !delta?.u?.length && now < live.earliestExpiry) {
       return { cells: previous.cells, warnings: sanitizeGroundWarnings(delta?.w ?? previous.warnings, now) };
     }
-    const cells = new Map(previous.cells.filter(cell => cell.expiresAt > now).map(cell => [cell.id, cell]));
-    for (const id of delta?.r ?? []) cells.delete(id);
+    // Mutate the live cells in place and publish what changed, so the ground renderer applies a
+    // few cells per tick instead of re-resolving a permanent surface of thousands.
+    const cells = live.cells;
+    const removed: SyncedBurningGroundSnapshot['cells'] = [];
+    const upserts: SyncedBurningGroundSnapshot['cells'] = [];
+    if (now >= live.earliestExpiry) {
+      live.earliestExpiry = Number.POSITIVE_INFINITY;
+      for (const [id, cell] of cells) {
+        if (cell.expiresAt > now) live.earliestExpiry = Math.min(live.earliestExpiry, cell.expiresAt);
+        else { cells.delete(id); removed.push(cell); }
+      }
+    }
+    for (const id of delta?.r ?? []) {
+      const cell = cells.get(id);
+      if (cell && cells.delete(id)) removed.push(cell);
+    }
     for (const encoded of delta?.u ?? []) {
       const cell = decodeBurningGroundCell(encoded);
-      if (cell.expiresAt > now) cells.set(cell.id, cell);
+      if (cell.expiresAt <= now) continue;
+      if (!cells.has(cell.id) && cell.id < live.maxId) live.unordered = true;
+      live.maxId = Math.max(live.maxId, cell.id);
+      live.earliestExpiry = Math.min(live.earliestExpiry, cell.expiresAt);
+      cells.set(cell.id, cell);
+      upserts.push(cell);
     }
-    return { cells: [...cells.values()].sort((left, right) => left.id - right.id),
-      warnings: sanitizeGroundWarnings(delta?.w ?? previous.warnings, now) };
+    if (removed.length === 0 && upserts.length === 0) {
+      return { cells: previous.cells, warnings: sanitizeGroundWarnings(delta?.w ?? previous.warnings, now) };
+    }
+    const next = [...cells.values()];
+    if (live.unordered) { next.sort((left, right) => left.id - right.id); this.clientGroundCells = null; }
+    else live.source = next;
+    this.clientGroundChanges.record(next, { base: previous.cells, removed, upserts });
+    return { cells: next, warnings: sanitizeGroundWarnings(delta?.w ?? previous.warnings, now) };
+  }
+
+  /** Id-keyed view of the last merged cells; any other array (full snapshot, reset) is re-read once. */
+  private clientGroundCellsFor(source: SyncedBurningGroundSnapshot['cells']): ClientGroundCells {
+    if (this.clientGroundCells?.source === source) return this.clientGroundCells;
+    const live: ClientGroundCells = { source, cells: new Map(), earliestExpiry: Number.POSITIVE_INFINITY, maxId: 0, unordered: false };
+    for (const cell of source) {
+      if (cell.id < live.maxId) live.unordered = true;
+      live.maxId = Math.max(live.maxId, cell.id);
+      live.earliestExpiry = Math.min(live.earliestExpiry, cell.expiresAt);
+      live.cells.set(cell.id, cell);
+    }
+    return this.clientGroundCells = live;
   }
 
   /** Repliziert die Zielzellen der Schleimbluete fuer identische Einschlagsorte auf allen Clients. */
