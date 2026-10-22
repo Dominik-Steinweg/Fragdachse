@@ -21,7 +21,6 @@ interface Binding {
 /** All bars of one family and depth: one Image, one SDF batch, one draw. */
 interface Layer {
   readonly family: HealthBarFamily;
-  readonly depth: number;
   readonly instances: BarSdfInstance[];
   readonly source: BarSdfSource;
   readonly image: Phaser.GameObjects.Image;
@@ -30,7 +29,7 @@ interface Layer {
 /** Read-only view for diagnostics and tests; world coordinates, unrounded. */
 export interface WorldHealthBarLayerSnapshot {
   readonly family: HealthBarFamily;
-  readonly depth: number;
+  readonly drawDepth: number;
   readonly visible: boolean;
   readonly bars: readonly BarSdfInstance[];
 }
@@ -183,7 +182,7 @@ export class WorldHealthBarRenderer {
   }
 
   getLayers(): WorldHealthBarLayerSnapshot[] {
-    return [...this.layers.values()].map(layer => ({ family: layer.family, depth: layer.depth,
+    return [...this.layers.values()].map(layer => ({ family: layer.family, drawDepth: layer.image.depth,
       visible: layer.image.visible, bars: layer.instances.slice(0, layer.source.count ?? 0) }));
   }
 
@@ -226,7 +225,7 @@ export class WorldHealthBarRenderer {
     const source: BarSdfSource = { instances, count: 0, unitWidth: image.width || 1, unitHeight: image.height || 1 };
     attachBarSdf(image, source);
     getArenaVisualAttribution(this.scene).registerGraphicsObject(style.family, image);
-    layer = { family: style.family, depth: style.fillDepth, instances, source, image };
+    layer = { family: style.family, instances, source, image };
     this.layers.set(key, layer);
     return layer;
   }

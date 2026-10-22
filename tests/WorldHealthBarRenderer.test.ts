@@ -221,11 +221,11 @@ describe('World HP view ownership', () => {
     h.renderer.bind(baseHealthBarStyle(80, 0x345678), 50, 100, 0, 0);
     h.at(0);
     const layers = h.renderer.getLayers();
-    expect(layers.map(layer => [layer.family, layer.depth])).toEqual([
+    expect(layers.map(layer => [layer.family, layer.drawDepth])).toEqual([
       ['enemyStatus', enemyHealthBarStyle(true, 40).fillDepth],
       ['playerStatus', playerHealthBarStyle(false).fillDepth],
       ['baseMarkers', baseHealthBarStyle(80, 0).fillDepth],
     ]);
-    expect(h.cosmetic.map(image => image.depth)).toEqual(layers.map(layer => layer.depth));
+    expect(h.cosmetic.map(image => image.depth)).toEqual(layers.map(layer => layer.drawDepth));
   });
 });

@@ -153,6 +153,7 @@ Bestehende passende Suites erweitern. Reines Modell ohne große Phaser-Mocks tes
 ## 8. Abschlussstatus
 
 - **Implementierung:** Vollstaendig umgesetzt: gemeinsames Feedbackmodell, gepoolte Dreier-Views, alle vorhandenen Enemy-/Player-/Base-/Construction-Weltbalken, zentraler Tick sowie Entity-/Activity-/World-Cleanup.
+- **Nachtrag 2026-10-22:** Die Dreier-Views sind durch einen gebatchten SDF-Layer je Familie ersetzt (`src/effects/bars/`): ein Image und ein Draw je Familie statt drei Rectangles je Balken, abgerundete Enden, dunkler Rand und vertiefter Hintergrund; Feedbackmodell, Positionen, Groessen, Sichtbarkeit und Tiefen unveraendert.
 - **Automatisierte Gates:** Bestanden: `npm run check` (2662 Core-Tests, 32 Architecture-Tests, TypeScript und Vite-Build), `npm run test:integration` (175 Tests), `npx vitest run --pool=threads tests/stress/WorldHealthBarStress.test.ts` (2 Lasttests fuer kalten/vorgewaermten Pool auf Host und Client) und `git diff --check`. Kein separater Typecheck, da im Build enthalten.
 - **Menschliche Sicht-/Performanceabnahme:** Offen. Kein Browser, Dev-Server oder Screenshot gestartet; CPU-/GC-/GPU-/Draw-Call-Messungen auf Zielhardware stehen aus.
 - **Relevante Abweichungen oder verbleibende Blocker:** Keine Implementierungsblocker. Die dynamische Diagnosefamilie des Pools wird durch Verhaltenstests fuer alle Consumer statt durch literale Source-Hook-Erkennung abgesichert. Der Build meldet weiterhin drei zur Laufzeit aufzuloesende Font-Referenzen.
