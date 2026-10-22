@@ -27,6 +27,19 @@ describe('fog bank boundary contracts',()=>{
     terrain.removeObstacle('mineral');build();expect(visual[(33*64+62)*4+2]).toBe(0);
     expect(terrain.sample(500,268)[2]).toBe(255);
   });
+  it('ramps the mineral shoulder weight towards a competing obstacle instead of switching per cell',()=>{
+    const terrain=new FogTerrainModel({offsetX:70,offsetY:90,width:1024,height:512},[]);
+    const column=(gridX:number)=>Array.from({length:9},(_,i)=>({gridX,gridY:4+i}));
+    terrain.setObstacle('mineral',column(10),true,true);
+    terrain.setObstacle('base',column(14),true);
+    const field=new FogBankField(),boundary=new Uint8Array(64*64*4),visual=new Uint8Array(boundary.length);
+    field.build(terrain,0,0,boundary,64,0,0,false,visual);
+    // Row 32 crosses both columns: mineral cells 40-43, the gap 44-55, base cells 56-59.
+    const weight=(x:number)=>visual[(32*64+x)*4+2];
+    expect(weight(41)).toBe(255);expect(weight(44)).toBe(255);
+    expect(weight(50)).toBe(0);expect(weight(57)).toBe(0);
+    for(let x=41;x<57;x++)expect(Math.abs(weight(x+1)-weight(x)),`${x}`).toBeLessThanOrEqual(86);
+  });
   it('has a continuous monotone shoreline ramp on both sides of the waterline',()=>{
     for(const width of [60,110,140])for(const warp of [-12,0,12]) {
       let previous=0;

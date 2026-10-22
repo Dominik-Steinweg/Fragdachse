@@ -2,6 +2,9 @@ import { CELL_SIZE } from '../../config';
 import type { FogTerrainModel } from './FogTerrainModel';
 export const FOG_BOUNDARY_RANGE=64;
 const STEP=8,HALO=10,SIDE=64,FULL=SIDE+HALO*2;
+/** Lead in px a mineral solid needs over the nearest non-mineral one for full rock weight. The lead
+ * changes by 16 px per cell across a bisector, so the weight ramps over three cells. */
+const ROCK_WEIGHT_RAMP=48;
 /** Reused scratch, two chamfer sweeps; never a second collision/flow owner. */
 export class FogBankField {
   private readonly solid=new Float32Array(FULL*FULL);
@@ -9,6 +12,8 @@ export class FogBankField {
   private readonly solidSource=new Int32Array(FULL*FULL);
   private readonly openSource=new Int32Array(FULL*FULL);
   private readonly mineral=new Uint8Array(FULL*FULL);
+  private readonly foreign=new Float32Array(FULL*FULL);
+  private readonly foreignSource=new Int32Array(FULL*FULL);
   build(terrain:FogTerrainModel,cx:number,cy:number,out:Uint8Array,stride:number,ox:number,oy:number,keepPrevious=false,presentation?:Uint8Array):void {
     for(let y=0;y<FULL;y++)for(let x=0;x<FULL;x++) {
       const px=cx*512+(x-HALO+.5)*STEP,py=cy*512+(y-HALO+.5)*STEP;
@@ -19,8 +24,11 @@ export class FogBankField {
       const cell=gy*terrain.cols+gx;
       this.mineral[i]=Number(gx>=0&&gy>=0&&gx<terrain.cols&&gy<terrain.rows
         &&terrain.mineral[cell]>0&&terrain.mineral[cell]===terrain.blocked[cell]);
+      const foreign=blocked&&!this.mineral[i];
+      this.foreign[i]=foreign?0:1e4;this.foreignSource[i]=foreign?i:-1;
     }
     this.sweep(this.solid,this.solidSource);this.sweep(this.open,this.openSource);
+    if(presentation)this.sweep(this.foreign,this.foreignSource);
     for(let y=0;y<SIDE;y++)for(let x=0;x<SIDE;x++) {
       const i=(y+HALO)*FULL+x+HALO;
       const distance=this.solid[i]===0?4-this.open[i]:this.solid[i]-4;
@@ -29,11 +37,15 @@ export class FogBankField {
       if(!keepPrevious){out[target+2]=out[target];out[target+3]=out[target+1];}
       if(presentation) {
         const source=this.openSource[i],solid=this.solidSource[i];
-        const eligible=solid>=0&&source>=0&&this.mineral[solid]>0&&Math.abs(distance)<64;
+        // Where a non-mineral obstacle (base, wall, construction, frame edge) competes for the
+        // nearest solid, the rock weight ramps to zero at their bisector instead of switching the
+        // fog treatment per cell. B is that weight; zero means not eligible.
+        const weight=Math.min(1,Math.max(0,(this.foreign[i]-this.solid[i])/ROCK_WEIGHT_RAMP));
+        const eligible=solid>=0&&source>=0&&this.mineral[solid]>0&&Math.abs(distance)<64&&weight>0;
         // Nearest open simulation centre, not ambient density invented inside a collider.
         presentation[target]=eligible?128+(source%FULL-i%FULL)*STEP:128;
         presentation[target+1]=eligible?128+(Math.floor(source/FULL)-Math.floor(i/FULL))*STEP:128;
-        presentation[target+2]=eligible?255:0;
+        presentation[target+2]=eligible?Math.max(1,Math.round(weight*255)):0;
         presentation[target+3]=Math.round(Math.max(-64,Math.min(64,distance))+128);
       }
     }

@@ -363,13 +363,15 @@ vec3 rockPresentation(vec2 world) {
  vec2 cell=floor(mod(world,512.0)/8.0);
  vec4 p=texture2D(uCommands,cellUV(floor(slot+.5),cell));
  float valid=texture2D(uBins,outTexCoord).g;
- if(p.b<.5||valid<.999)return vec3(world,0.0);
+ // B is the shoulder's rock weight (zero: not a mineral shoulder), already ramped down towards
+ // competing non-mineral obstacles.
+ if(p.b<.5/255.0||valid<.999)return vec3(world,0.0);
  vec2 delta=floor(p.rg*255.0+.5)-128.0;
  // Away from the shoulder, free samples retain continuous coordinates. At the
  // shoulder borrow an open centre, including corners where a gradient is zero.
  float distance=floor(p.a*255.0+.5)-128.0;
  vec2 source=distance<8.0?(floor(world/8.0)+.5)*8.0+delta:world;
- return vec3(source,1.0);
+ return vec3(source,p.b);
 }
 float waterCell(vec2 world) {
  if(any(lessThan(world,vec2(0)))||any(greaterThanEqual(world,uWorldSize)))return 0.0;
@@ -409,7 +411,11 @@ float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out
  // Static small erosion follows rounded corners without moving the collision contour.
  float edge=boundary.x+(fogBankNoise(global/19.0)-.5)*4.0;
  vec2 source=world+normal*max(0.0,12.0-boundary.x);
- if(rock.z>.5)source=rock.xy;
+ if(rock.z>0.0)source=rock.xy;
+ // Mineral shoulders keep their fog instead of thinning towards the obstacle. Eligibility ends per
+ // 8 px cell at 64 px, so the exemption fades out on the continuous distance before that rim:
+ // otherwise the 64 px contour shows as a stepped rectangle of denser fog around every rock.
+ float rockWeight=rock.z*(1.0-smoothstep(${f(FOG.obstacleReach * .6)},${f(FOG.obstacleReach - 2)},boundary.x));
  vec4 transported=smoothWorld(source);
  float slot=texture2D(uLookup,(floor(source/512.0)+.5)/uLookupSize).r*255.0-1.0;
  if(slot<-.5){layered=0.0;return 0.0;}
@@ -460,9 +466,9 @@ float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out
   // display pass cuts out meet thin mist instead of a dense wall along the stepped contour. Like a
   // wake it thins the coverage: thinner dense fog would still stand there as a wall.
   float erode=(shape.a-.5)*${f(FOG.obstacleErode)};
-  if(rock.z<.5)wake*=mix(${f(FOG.obstacleFloor)},1.0,smoothstep(-4.0,${f(FOG.obstacleReach)},max(edge,0.0)+erode));
-  float styledPile=rock.z>.5?1.0:smoothstep(-5.0,uFogPileSoftness,edge);
-  float styledShoulder=rock.z>.5?1.0:mix(.22,1.0,smoothstep(-2.0,9.0,edge));
+  wake*=mix(mix(${f(FOG.obstacleFloor)},1.0,smoothstep(-4.0,${f(FOG.obstacleReach)},max(edge,0.0)+erode)),1.0,rockWeight);
+  float styledPile=mix(smoothstep(-5.0,uFogPileSoftness,edge),1.0,rockWeight);
+  float styledShoulder=mix(mix(.22,1.0,smoothstep(-2.0,9.0,edge)),1.0,rockWeight);
   return max(0.0,styled*styledPile*styledShoulder*(1.0-surface)-.004);
  }
  float bank=fogBank(global,uCloudTime,uCloudSpeed);
@@ -472,12 +478,12 @@ float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out
  float shape=uFogClearHaze+uFogPatchDensity*patch*(.07+2.25*layered*layered);
  float pile=smoothstep(-5.0,uFogPileSoftness,edge)
    *(1.0+.28*exp(-pow((edge-uFogPileSoftness*.65)/uFogPileSoftness,2.0)));
- if(rock.z>.5)pile=1.0;
+ pile=mix(pile,1.0,rockWeight);
  // Extra moisture appears only in narrow drifting fibres, not the entire pond.
  float vapour=smoothstep(.65,.95,layered);
  float density=uFogDensity*shape*(1.0+uFogWaterBoost*waterRamp*vapour)*flow*pile;
  // Thin wind-borne shoulder wisps, not a fog sheet over rock tops.
- float shoulder=rock.z>.5?1.0:mix(.22,1.0,smoothstep(-2.0,9.0,edge));
+ float shoulder=mix(mix(.22,1.0,smoothstep(-2.0,9.0,edge)),1.0,rockWeight);
  density*=shoulder;
  patchActivity=clamp(uOpacity*uFogOpticalOpacity*uFogDensity*uFogPatchDensity
    *flow*pile*shoulder*(1.0-surface),0.0,1.0);
@@ -497,7 +503,7 @@ void main() {
   d=mix(mix(worldSample(base).r,worldSample(base+vec2(8,0)).r,weight.x),
     mix(worldSample(base+vec2(0,8)).r,worldSample(base+vec2(8,8)).r,weight.x),weight.y);
  }
- if(rock.z>.5&&banksWeight<1.0)d=smoothWorld(rock.xy).r;
+ if(rock.z>0.0&&banksWeight<1.0)d=smoothWorld(rock.xy).r;
  float surface=uHasSurface>.5?texture2D(uBins,outTexCoord).a:0.0;
  d*=1.0-surface;
  if(uDebug>.5) {
