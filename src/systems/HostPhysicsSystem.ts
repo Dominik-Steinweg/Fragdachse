@@ -33,6 +33,25 @@ import {
 const ENEMY_IMPULSE_CONTACT_TOLERANCE_PX = 1;
 const OCCUPANCY_CELL_PX = 64;
 const occupancyCellKey = (cx: number, cy: number): number => (cx + 32768) * 65536 + (cy + 32768);
+/**
+ * Membership revisions of static blocker groups. Their bodies are placed once when added and never
+ * moved afterwards, so a group only changes through its member set; that set reports each change.
+ */
+const memberRevisions = new WeakMap<Set<unknown>, { value: number }>();
+function memberRevision(group: Phaser.Physics.Arcade.StaticGroup | null): number {
+  const members = group?.children as Set<unknown> | undefined;
+  if (!members) return 0;
+  let revision = memberRevisions.get(members);
+  if (!revision) {
+    const counter = { value: 0 };
+    memberRevisions.set(members, revision = counter);
+    const { add, delete: remove, clear } = members;
+    members.add = function (value) { counter.value++; return add.call(this, value); };
+    members.delete = function (value) { counter.value++; return remove.call(this, value); };
+    members.clear = function () { counter.value++; clear.call(this); };
+  }
+  return revision.value;
+}
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType   = {
@@ -201,13 +220,12 @@ export class HostPhysicsSystem {
   private trunkGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   /**
-   * Static blockers bucketed for occupancy sweeps. Rebuilt at most once per game frame (static
-   * bodies do not move within a frame) or when a group gains or loses members; `enable` and the
-   * exact circle test are still read per query.
+   * Static blockers bucketed for occupancy sweeps, rebuilt when a group is bound or gains or loses
+   * members (see {@link memberRevision}); `enable` and the exact circle test are read per query.
    */
   private readonly occupancyCells = new Map<number, Phaser.Physics.Arcade.StaticBody[]>();
-  private occupancyFrame = Number.NaN;
-  private occupancyMembers = -1;
+  private occupancyValid = false;
+  private readonly occupancyRevisions = [0, 0, 0];
 
   // Pro-Spieler Collider-Tracking
   private rockCollidersSetup  = new Set<string>();
@@ -437,11 +455,11 @@ export class HostPhysicsSystem {
   }
 
   private getOccupancyCells(): ReadonlyMap<number, Phaser.Physics.Arcade.StaticBody[]> {
-    const frame = this.scene.game?.loop?.frame ?? Number.NaN;
-    const members = (this.rockGroup?.getLength() ?? 0) + (this.trunkGroup?.getLength() ?? 0) + (this.baseGroup?.getLength() ?? 0);
-    if (frame === this.occupancyFrame && members === this.occupancyMembers) return this.occupancyCells;
-    this.occupancyFrame = frame;
-    this.occupancyMembers = members;
+    const revisions = this.occupancyRevisions;
+    const rock = memberRevision(this.rockGroup), trunk = memberRevision(this.trunkGroup), base = memberRevision(this.baseGroup);
+    if (this.occupancyValid && revisions[0] === rock && revisions[1] === trunk && revisions[2] === base) return this.occupancyCells;
+    this.occupancyValid = true;
+    revisions[0] = rock; revisions[1] = trunk; revisions[2] = base;
     const cells = this.occupancyCells;
     for (const bucket of cells.values()) bucket.length = 0;
     for (const group of [this.rockGroup, this.trunkGroup, this.baseGroup]) {
@@ -797,7 +815,7 @@ export class HostPhysicsSystem {
     }
     this.rockGroup  = rockGroup;
     this.trunkGroup = trunkGroup;
-    this.occupancyFrame = Number.NaN;
+    this.occupancyValid = false;
   }
 
   /**
@@ -808,7 +826,7 @@ export class HostPhysicsSystem {
    */
   setBaseGroup(baseGroup: Phaser.Physics.Arcade.StaticGroup | null): void {
     this.baseGroup = baseGroup;
-    this.occupancyFrame = Number.NaN;
+    this.occupancyValid = false;
     if (baseGroup === null) this.baseCollidersSetup.clear();
   }
 

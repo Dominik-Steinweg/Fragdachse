@@ -708,9 +708,8 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     expect(Math.hypot(vx, vy)).toBeCloseTo(100);
   });
 
-  it('blocks occupancy on static rock bodies, honours enable and sees members added in the same frame', () => {
-    const { system, scene } = createHarness();
-    (scene as unknown as { game: { loop: { frame: number } } }).game = { loop: { frame: 7 } };
+  it('blocks occupancy on static rock bodies, honours enable and sees members added or removed later', () => {
+    const { system } = createHarness();
     const metrics = resolveActiveArenaWorldMetrics();
     system.setWorldMetrics(metrics);
     const body = (x: number, y: number) => ({ body: { enable: true, position: { x, y }, width: 32, height: 32,
@@ -726,6 +725,8 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     expect(system.canOccupyCircle(cx, cy, 8, false)).toBe(true);
     rocks.add(body(metrics.offsetX + 260, metrics.offsetY + 200));
     expect(system.canOccupyCircle(cx + 60, cy, 8, false)).toBe(false);
+    rocks.delete([...rocks][1]);
+    expect(system.canOccupyCircle(cx + 60, cy, 8, false)).toBe(true);
   });
 
   it('does not apply corner assistance to dash or forced movement', () => {
