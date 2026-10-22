@@ -236,6 +236,40 @@
         "value": 0.8,
         "grime": 0.25,
         "edgewear": 0.2
+      },
+      "Slate blue canvas": {
+        "family": "canvas",
+        "scale": 0.8,
+        "tint": 0.62,
+        "value": 0.85,
+        "grime": 0.2,
+        "edgewear": 0.06
+      },
+      "Oxblood canvas": {
+        "family": "canvas",
+        "scale": 0.8,
+        "tint": 0.62,
+        "value": 0.8,
+        "grime": 0.22,
+        "edgewear": 0.06
+      },
+      "Camouflage leaf green": {
+        "family": "canvas",
+        "scale": 1,
+        "tint": 0.7,
+        "value": 0.8
+      },
+      "Camouflage leaf brown": {
+        "family": "canvas",
+        "scale": 1,
+        "tint": 0.7,
+        "value": 0.8
+      },
+      "Builder sand": {
+        "family": "stone",
+        "scale": 1.4,
+        "tint": 0.7,
+        "value": 1.1
       }
     }
   },

@@ -36,6 +36,8 @@ def palette(c, spec):
         leather=m('Shop leather', (122, 78, 44), .28),
         plate_steel=m('Shop steel plate', (150, 156, 152), .22),
         shop_moss=m('Shop moss', (88, 104, 48), .40),
+        slate_canvas=m('Slate blue canvas', (74, 90, 108), .25),
+        oxblood=m('Oxblood canvas', (110, 50, 44), .25),
         slate=m('Slate shingle', (72, 76, 78), .26),
         shingle=m('Split wood shingle', (98, 80, 60), .30),
         canvas=m('Weathered canvas', (156, 140, 104), .25),

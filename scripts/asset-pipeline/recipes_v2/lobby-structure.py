@@ -11,7 +11,8 @@ from dawn_lobby_details import rock, barrel, rope, sack, lantern, crate, hammer,
 from lobby_structure_parts import (palette, slab, gable_roof, shed_roof, hip_roof, plank_wall, stone_course, post,
                                    chimney, skylight, canvas_awning, counter, gas_bottle, timber_stack, stone_blocks,
                                    pallet, sack_stack, scrap_pile, lamp_post, socket, grid_surface, strut, lattice_jib,
-                                   wheelbarrow, camo_net, ridge_tent, shop_cuirass, shop_helmet, shop_glove, shop_boot)
+                                   wheelbarrow, camo_net, ridge_tent, shop_cuirass, shop_helmet, shop_glove, shop_boot,
+                                   corrugated_slope)
 
 
 def flagstones(c, x0, y0, x1, y1, p, seed=0, size=.42):
@@ -399,8 +400,72 @@ def yard_base(c, p):
                 lamp_gantry=(1.75, Y0 + .1, 2.78), holo_plan=(-.32, -1.32, .97))
 
 
+def yard_hybrid(c, p):
+    """Bauhof F: a base module rising in dark stone inside the yard's timber scaffold and roof.
+
+    Same timber, fieldstone and corrugated iron as the other buildings; the base speaks
+    only through the dark dressed blocks and a few restrained cyan ring lamps.
+    """
+    X0, X1, Y0, Y1 = -2.35, .95, -.2, 1.9
+    for a, b in [((X0, Y0), (X1, Y0)), ((X1, Y0), (X1, Y1)), ((X0, Y1), (X1, Y1)), ((X0, Y0), (X0, Y1))]:
+        stone_course(c, a, b, 0, .28, p, int(a[0] * 7 + b[1] * 3) & 63, .34, .32)
+    # Dark base plating inside the footing, with two inset ring lamps only.
+    nx, ny = 3, 2
+    w, h = (X1 - X0 - .3) / nx, (Y1 - Y0 - .3) / ny
+    for i in range(nx):
+        for j in range(ny):
+            cx, cy = X0 + .15 + (i + .5) * w, Y0 + .15 + (j + .5) * h
+            slab(c, 'Base dark stone slab', cx - w / 2 + .04, cy - h / 2 + .04, cx + w / 2 - .04, cy + h / 2 - .04, .2, .3, p['base_stone'], .02)
+    for cx, cy in [(X0 + .15 + w * .5, Y0 + .15 + h * .5), (X0 + .15 + w * 2.5, Y0 + .15 + h * 1.5)]:
+        annulus(c, 'Inset base ring lamp', (cx, cy, .305), .13, .09, .02, p['base_steel'], steps=24)
+        annulus(c, 'Separate base cyan ring glow', (cx, cy, .312), .09, .065, .012, p['cyan'], steps=24)
+    # The module's dark walls rise course by course inside the timber frame.
+    stone_block_wall(c, (X0 + .25, Y1 - .25), (X1 - .25, Y1 - .25), 4, p, 1)
+    stone_block_wall(c, (X0 + .25, Y0 + .3), (X0 + .25, Y1 - .25), 3, p, 2)
+    stone_block_wall(c, (X1 - .25, Y1 - .25), (X1 - .25, 1.0), 2, p, 3)
+    stone_block_wall(c, (X0 + .25, Y0 + .3), (-1.3, Y0 + .3), 1, p, 4)
+    for px, py in [(X0, Y0), (X1, Y0), (X0, Y1), (X1, Y1), (-.7, Y0), (-.7, Y1)]:
+        post(c, px, py, 2.6, p, .08)
+    for a, b in [((X0, Y1), (X1, Y1)), ((X0, Y0), (X0, Y1)), ((X1, Y0), (X1, Y1)), ((X0, Y0), (X1, Y0))]:
+        strut(c, 'Wall top plate', (a[0], a[1], 2.62), (b[0], b[1], 2.62), .14, .14, p['oak'])
+    ym = (Y0 + Y1) / 2
+    for x in (X0, X1): strut(c, 'King post', (x, ym, 2.62), (x, ym, 3.5), .12, .12, p['oak'])
+    strut(c, 'Ridge beam', (X0 - .1, ym, 3.55), (X1 + .1, ym, 3.55), .14, .16, p['oak'])
+    roof_slope_rafters(c, X0, X1, Y0 - .15, ym, 2.55, 3.55, p, .55)
+    roof_slope_rafters(c, X0, X1, Y1 + .15, ym, 2.55, 3.55, p, .55)
+    # First corrugated sheets already on the north slope: the workshop's roofing material.
+    corrugated_slope(c, 'Newly laid roof sheet', X0 - .15, X0 + 1.55, ym, Y1 + .2, 3.62, 2.52, [p['tin'], p['rust'], p['tin']], 31)
+    # Timber scaffold on the east side and a tripod hoist lifting a dark block.
+    for sx in (1.15, 1.6):
+        for sy in (Y0, ym, Y1): c.cylinder('Scaffold standard', (sx, sy, 1.15), .035, 2.3, p['oak'], 8)
+        strut(c, 'Scaffold ledger', (sx, Y0, 1.55), (sx, Y1, 1.55), .05, .05, p['oak'])
+    for k in range(3):
+        strut(c, 'Scaffold plank', (1.2 + k * .17, Y0 - .1, 1.62), (1.2 + k * .17, Y1 + .1, 1.62), .16, .04, p['timber'] if k != 1 else p['oak'], .006)
+    for sy in (Y0, Y1): strut(c, 'Scaffold diagonal', (1.15, sy, .05), (1.6, sy, 2.2), .04, .04, p['oak'])
+    apex = (2.05, 1.35, 2.9)
+    for gx, gy in [(1.75, 1.85), (2.45, 1.75), (2.15, .85)]: strut(c, 'Hoist tripod leg', (gx, gy, 0), apex, .07, .07, p['oak'])
+    c.box('Hoist pulley block', (apex[0], apex[1], apex[2] - .2), (.14, .12, .22), p['dark'], .02)
+    tube(c, 'Hoist rope', [(apex[0], apex[1], apex[2] - .3), (apex[0], apex[1], 1.35)], .016, p['rope'], 6)
+    c.box('Hoisted dark base block', (apex[0], apex[1], 1.15), (.48, .4, .3), p['base_stone'], .025)
+    # Front yard: plan table under a lamp, sawhorses, a pallet of dark blocks and timber.
+    drafting_table(c, -.8, -1.65, .4, -1.05, .95, p)
+    post(c, .58, -1.05, 2.0, p, .05)
+    c.cylinder('Post ring lamp housing', (.58, -1.05, 2.04), .1, .07, p['base_steel'], 16)
+    annulus(c, 'Separate base cyan post ring', (.58, -1.05, 2.08), .085, .055, .015, p['cyan'], steps=16)
+    sawhorse(c, -1.95, -1.25, p, math.pi / 2); sawhorse(c, -1.4, -1.25, p, math.pi / 2)
+    strut(c, 'Plank on sawhorses', (-2.15, -1.25, .72), (-1.15, -1.25, .72), .26, .05, p['timber'])
+    pallet(c, 1.5, -1.3, p, .95, .8)
+    for k in range(4):
+        c.box('Stacked dark base block', (1.29 + (k % 2) * .42, -1.47 + (k // 2) * .36, .3), (.4, .32, .3), p['base_stone'], .025)
+    c.box('Stacked dark base block', (1.5, -1.3, .62), (.4, .32, .3), p['base_stone'], .025)
+    timber_stack(c, 2.15, .15, 1.0, 2, 2, p, math.pi / 2, .16, 17)
+    return dict(staff=(-.2, -.62, 0), staff_facing=(-.2, -1.35, 0), plaque=(0, -2.25, 0), spark_saw=(-1.6, -1.25, .8),
+                lamp_table=(.58, -1.05, 2.1), lamp_floor_a=(X0 + .15 + w * .5, Y0 + .15 + h * .5, .32), hoist=apex)
+
+
 def yard(c, p, variant):
     s = {}
+    if variant == 'f': return yard_hybrid(c, p)
     if variant == 'e': return yard_base(c, p)
     if variant == 'c': return yard_frame(c, p)
     if variant == 'd': return yard_crane(c, p)
@@ -524,10 +589,10 @@ def armory_net(c, p):
                 lamp_front=(-2.05, -.35, 1.85), glint_counter=(.35, -.72, 1.05))
 
 
-def armory_tent(c, p):
+def armory_tent(c, p, fabric):
     """Ausrüstung D: fabric ridge tent behind an issue counter that shows the four shop slots."""
-    ridge_tent(c, -2.35, 2.35, .05, 1.95, 2.55, 1.55, p['olive'], p, 3, 4)
-    c.cylinder('Tent rolled door flap', (1.6, .02, 1.5), .09, .9, p['olive'], 14).rotation_euler.y = math.pi / 2
+    ridge_tent(c, -2.35, 2.35, .05, 1.95, 2.55, 1.55, fabric, p, 3, 4)
+    c.cylinder('Tent rolled door flap', (1.6, .02, 1.5), .09, .9, fabric, 14).rotation_euler.y = math.pi / 2
     # Long issue counter; armour slots laid flat, front up, like the shop icons.
     # Display scale ~1.5x: each slot reads at about 25 px in game, like a shop sign.
     counter(c, -2.2, -1.25, 2.2, -.4, .95, p)
@@ -550,7 +615,9 @@ def armory_tent(c, p):
 
 def armory(c, p, variant):
     s = {}
-    if variant == 'd': return armory_tent(c, p)
+    if variant == 'd': return armory_tent(c, p, p['olive'])
+    if variant == 'g': return armory_tent(c, p, p['slate_canvas'])
+    if variant == 'h': return armory_tent(c, p, p['oxblood'])
     if variant == 'c': return armory_net(c, p)
     if variant == 'a':
         # Stone-plinth armory under a sheet-steel hip roof; open issue niche with counter at the front.
