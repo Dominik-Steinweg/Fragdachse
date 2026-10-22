@@ -13,6 +13,7 @@ import bpy
 from dawn_parts import surface, root, finish
 from enemy_parts_b import plate
 from spawn_structure_concepts import PITS, ConceptKit
+import spawn_structure_concepts2 as second_round
 
 VOID_DEEP = (111, 22, 168)
 # The floor reaches just under the walls (which draw above it), so no ground shows at the seam.
@@ -134,7 +135,9 @@ def build(c, spec):
         raise ValueError(f'Unknown brood pit state: {state}')
     pivot = root(c)
     concept = spec['model'].get('concept', 'pool')
-    if concept in PITS:
+    if concept in second_round.PITS:
+        second_round.PITS[concept](c, second_round.ConceptKit2(c, spec), random.Random(f'spawn-brood-pit-concept-{concept}'))
+    elif concept in PITS:
         # Design drafts for the user's choice (active only); see spawn_structure_concepts.py.
         PITS[concept](c, ConceptKit(c, spec), random.Random(f'spawn-brood-pit-concept-{concept}'))
     else:
