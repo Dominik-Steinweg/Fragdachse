@@ -7,6 +7,11 @@ const body: LocomotionRequest = { id: 'a', x: 64, y: 64, radius: 15, speed: 100,
   waypoint: { x: 180, y: 64 }, previousVx: 0, previousVy: 0, priority: 'ordinary' };
 const geometry = (obstacles: NavigationObstacle[] = []) => new NavigationGeometry({ left: 0, top: 0, right: 256, bottom: 256, obstacles });
 const neighbor = (id: string, x: number, y: number, radius = 15) => ({ id, x, y, radius, vx: 0, vy: 0 });
+/** One body wide: no room to step around another body. */
+const corridor = () => geometry([
+  { id: 'top', kind: 'rock', shape: 'rect', left: 0, right: 256, top: 0, bottom: 48.5 },
+  { id: 'bottom', kind: 'rock', shape: 'rect', left: 0, right: 256, top: 79.5, bottom: 256 },
+]);
 
 describe('Shared enemy and ally locomotion', () => {
   it('keeps broad-phase reuse equivalent to exact sweeps for mixed shapes and world boundaries', () => {
@@ -221,17 +226,27 @@ describe('Shared enemy and ally locomotion', () => {
     expect(free.vy).toBeCloseTo(0);
   });
 
-  it('steers a far body only against geometry while it still counts as a neighbour for others', () => {
-    const world = geometry(), blocker = neighbor('b', 96, 64);
+  it('steers a far body without crowd scoring, past bodies beside it but never into one ahead', () => {
+    const world = geometry(), self = neighbor('a', 64, 64), beside = neighbor('s', 64, 96);
     const full = new EnemyLocomotion(), far = new EnemyLocomotion();
-    full.begin([neighbor('a', 64, 64), blocker], world, 16);
-    far.begin([neighbor('a', 64, 64), blocker], world, 16);
+    full.begin([self, beside], world, 16);
+    far.begin([self, beside], world, 16);
     const avoiding = full.solve(body), straight = far.solve({ ...body, detail: 'far' });
     expect(avoiding.neighborsVisited).toBe(1);
     expect(straight).toMatchObject({ neighborsVisited: 0, waitReason: 'none' });
     expect(straight.vy).toBeCloseTo(0);
-    expect(straight.vx).toBeGreaterThan(avoiding.vx);
-    expect(far.solve({ ...body, id: 'b', x: 96, waypoint: { x: 0, y: 64 } }).neighborsVisited).toBe(1);
+    expect(straight.vx).toBeGreaterThan(0);
+    // The far body still counts as a neighbour for a full-detail unit.
+    expect(far.solve({ ...body, id: 's', y: 96, waypoint: { x: 64, y: 0 } }).neighborsVisited).toBe(1);
+
+    // A stopped body right ahead: the far step leaves the straight line through it.
+    const ahead = neighbor('b', 98, 64), queued = new EnemyLocomotion(), free = new EnemyLocomotion();
+    queued.begin([self, ahead], world, 16);
+    free.begin([self], world, 16);
+    const step = queued.solve({ ...body, previousVx: 100, detail: 'far' });
+    const open = free.solve({ ...body, previousVx: 100, detail: 'far' });
+    expect(open.vy).toBeCloseTo(0);
+    expect(Math.abs(step.vy) > 1 || step.vx < open.vx - 1).toBe(true);
 
     const wall = geometry([{ id: 'wall', kind: 'rock', shape: 'rect', left: 90, right: 110, top: 0, bottom: 256 }]);
     far.begin([], wall, 16);
@@ -261,6 +276,41 @@ describe('Shared enemy and ally locomotion', () => {
     request = { ...request, previousVy: 5 };
     step();
     expect(movement.getWorkCounters()).toMatchObject({ farSolves: 3, farSteeringReuses: reuses });
+  });
+
+  it('queues a far body behind a stopped one ahead and follows it once it moves', () => {
+    const movement = new EnemyLocomotion();
+    const leader = (vx: number) => ({ ...neighbor('lead', 100, 64), vx });
+    let request: LocomotionRequest = { ...body, detail: 'far', waypoint: { x: 240, y: 64 } };
+    const step = (lead: ReturnType<typeof leader>) => {
+      movement.begin([{ ...neighbor('a', request.x, request.y), vx: request.previousVx, vy: request.previousVy }, lead], corridor(), 16);
+      const feedback = movement.solve(request);
+      request = { ...request, x: request.x + feedback.vx * .016, y: request.y + feedback.vy * .016,
+        previousVx: feedback.vx, previousVy: feedback.vy };
+      return feedback;
+    };
+    for (let frame = 0; frame < 30; frame++) step(leader(0));
+    // Waiting behind the leader with a following distance, not on top of it.
+    expect(request.x).toBeLessThan(100 - 2 * body.radius);
+    expect(step(leader(0)).waitReason).toBe('crowd');
+    expect(step(leader(100)).vx).toBeGreaterThan(0);
+  });
+
+  it('never lets two far bodies wait for each other for good', () => {
+    const movement = new EnemyLocomotion();
+    let east: LocomotionRequest = { ...body, id: 'east', x: 80, detail: 'far', waypoint: { x: 240, y: 64 } };
+    let west: LocomotionRequest = { ...body, id: 'west', x: 118, detail: 'far', waypoint: { x: 0, y: 64 } };
+    const advance = (request: LocomotionRequest) => {
+      const feedback = movement.solve(request);
+      return { ...request, x: request.x + feedback.vx * .016, previousVx: feedback.vx, previousVy: feedback.vy };
+    };
+    let frame = 0;
+    for (; frame < 400 && (east.x < 118 || west.x > 80); frame++) {
+      movement.begin([east, west].map(unit => ({ ...neighbor(unit.id, unit.x, unit.y), vx: unit.previousVx, vy: unit.previousVy })), corridor(), 16);
+      [east, west] = [advance(east), advance(west)];
+    }
+    expect(east.x).toBeGreaterThanOrEqual(118);
+    expect(west.x).toBeLessThanOrEqual(80);
   });
 
   it('never lets a full-detail solve continue a far course, even in a sliced crowd', () => {

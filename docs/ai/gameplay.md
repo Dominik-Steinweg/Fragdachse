@@ -54,8 +54,9 @@ an, laufen aber nicht. Dies sichert [NecromancyLifecycle.test.ts](../../tests/Ne
 
 Die Coop-Activity stuft feindliche Gegner einmal pro Host-Frame nach ihrem Abstand zu allen Sichtfeldern
 ein ([EnemyAiDetail.ts](../../src/systems/navigation/EnemyAiDetail.ts)); Anker sind alle Spieler, auch tote,
-dazu Köder und Bosse. Außerhalb jedes Sichtfelds samt Randband lenkt ein Gegner ohne Gedränge-Ausweichen
-und vergleicht Ziele seltener, während die Route zum gebundenen Ziel im gewöhnlichen Takt aktuell bleibt.
+dazu Köder und Bosse. Außerhalb jedes Sichtfelds samt Randband lenkt ein Gegner ohne Sichtprüfung und
+Gedränge-Bewertung, hält aber Abstand zu Körpern vor ihm, damit Engstellen den Strom wie bei voller Stufe
+dosieren; Ziele vergleicht er seltener, während die Route zum gebundenen Ziel im gewöhnlichen Takt aktuell bleibt.
 Nur die gewöhnliche Wegfolge in `EnemyManager.hostUpdateMovement` und das `EnemyIntentSystem` lesen diese
 Stufe; Angriffe, Spezialbewegungen, Ausweichen, Physik und Replikation nie. Kämpfende, durchbrechende,
 amphibische, verbündete und Boss-Einheiten bleiben voll. Ein neues Spezialverhalten, das aus der Distanz zu

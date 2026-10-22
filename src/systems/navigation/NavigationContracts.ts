@@ -27,8 +27,9 @@ export interface LocomotionRequest {
   /** Geometry the body collides with when it differs from the shared frame geometry (amphibious bodies). */
   readonly geometry?: NavigationGeometry;
   /**
-   * `far` steers only against geometry: no crowd avoidance, and a verified course is kept for a
-   * few frames. The body still counts as a neighbour for everybody else. Default `full`.
+   * `far` steers without sight lines or crowd scoring: it only refuses to close in on bodies ahead
+   * (queues still meter the flow), and a verified course is kept for a few frames. The body still
+   * counts as a neighbour for everybody else. Default `full`.
    */
   readonly detail?: EnemyAiDetail;
 }

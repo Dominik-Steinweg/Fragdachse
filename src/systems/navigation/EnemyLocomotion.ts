@@ -15,11 +15,19 @@ const CROWD_SLICE_MAX_DT = 0.05;
 const FAR_REUSE_FRAMES = 3;
 /** ... and only while the body stays inside the verified capsule (horizon >= 0.12 s) including the next step. */
 const FAR_REUSE_WINDOW_MS = 100;
+/** With a body close ahead, a far course is kept only for one frame, like a sliced crowd. */
+const FAR_CROWDED_REUSE_FRAMES = 1;
+/** A far unit stalled this long waits only for bodies ahead of it on the route (breaks mutual waits). */
+const FAR_ORDERED_AFTER_STALL_S = 1;
+/** ...and one stalled this long ignores the far crowd until it moves again, so no off-screen wait lasts. */
+const FAR_CROWD_RELEASE_S = 2;
 interface Conflict { dx: number; dy: number; vx: number; vy: number; separation: number;
   separationSq: number; existingOverlap: number; weight: number }
 interface SteeringChoice { angle: number; scale: number; heading: number; vx: number; vy: number; frame: number;
   /** Chosen without crowd avoidance; never a commitment for a full-detail solve. */
-  far: boolean; solvedAtMs: number; reuses: number }
+  far: boolean; solvedAtMs: number; reuses: number;
+  /** Far only: nobody ahead could be reached within the reuse window, so the course may be kept. */
+  clearAhead: boolean }
 interface MovementHistory { x: number; y: number; targetX: number; targetY: number; stalled: number;
   retryAt: number; geometry: NavigationGeometry; crowdNeighbors?: readonly Neighbor[]; steering?: SteeringChoice }
 
@@ -44,6 +52,8 @@ export class EnemyLocomotion {
   private sliced = false;
   private readonly slicePhases = new Map<string, number>();
   private readonly nearby: Neighbor[] = [];
+  /** Far detail: bodies around the unit, without sight lines or scoring. */
+  private readonly farCrowd: Neighbor[] = [];
   private readonly conflicts: Conflict[] = [];
   private readonly movementObstacles: NavigationObstacle[] = [];
   private readonly neighborObstacles: NavigationObstacle[] = [];
@@ -132,7 +142,7 @@ export class EnemyLocomotion {
     }
     // Far detail: the same continuity rules, but a few frames in a row, as long as the motion
     // since that solve plus the next step stays inside the capsule it was verified against.
-    if (far && keepable && kept.far && kept.reuses < FAR_REUSE_FRAMES
+    if (far && keepable && kept.far && kept.reuses < (kept.clearAhead ? FAR_REUSE_FRAMES : FAR_CROWDED_REUSE_FRAMES)
       && this.elapsedMs - kept.solvedAtMs + dt * 1000 <= FAR_REUSE_WINDOW_MS) {
       this.farSteeringReuses++;
       history.steering = { ...kept, frame: this.frame, reuses: kept.reuses + 1 };
@@ -163,8 +173,13 @@ export class EnemyLocomotion {
 
     const neighbors = this.nearby;
     neighbors.length = 0;
-    // Far detail skips the crowd entirely; the heading candidates below still test geometry.
+    // Far detail skips sight lines and crowd scoring. It only keeps the crowd's throughput:
+    // a heading that closes in on a body ahead is not taken and a queue keeps a following
+    // distance, so far hordes still meter through bottlenecks like full-detail ones.
+    const crowd = this.farCrowd;
+    crowd.length = 0;
     if (!far) this.gatherVisibleNeighbors(request, geometry, neighbors);
+    else if (stalled <= FAR_CROWD_RELEASE_S) this.gatherFarCrowd(request, crowd, horizon, stalled > FAR_ORDERED_AFTER_STALL_S);
     const conflicts = this.conflicts;
     const radiusSq = radius ** 2;
     let lastOverlap = -1;
@@ -206,6 +221,7 @@ export class EnemyLocomotion {
         const vy = request.previousVy + (desiredY - request.previousVy) * blend;
         if (!geometry.canMoveAgainst(x, y, x + vx * horizon, y + vy * horizon, radius, this.movementObstacles)) continue;
         safeCandidate = true;
+        if (crowd.length && closesInAhead(x, y, vx, vy, radius, speed, horizon, crowd)) continue;
         const straight = angle === 0 && scale === 1;
         let improvement = straight ? 0 : (distance - Math.hypot(targetDx - vx * horizon, targetDy - vy * horizon)) / improvementScale;
         let penalty = 0;
@@ -224,7 +240,8 @@ export class EnemyLocomotion {
         }
         if (straight && penalty <= .005) {
           if (!choice || continuityBonus) {
-            history.steering = { angle, scale, heading, vx, vy, frame: this.frame, far, solvedAtMs: this.elapsedMs, reuses: 0 };
+            history.steering = { angle, scale, heading, vx, vy, frame: this.frame, far, solvedAtMs: this.elapsedMs, reuses: 0,
+              clearAhead: far && clearAhead(x, y, vx, vy, radius, crowd) };
             return result(vx, vy, 'none', progress, neighbors.length);
           }
           // A clear straight path still accepts reversing momentum if no useful detour
@@ -243,18 +260,56 @@ export class EnemyLocomotion {
       bestVx = freeStraightVx; bestVy = freeStraightVy;
     }
     if (bestVx || bestVy) history.steering = { angle: bestAngle, scale: bestScale, heading,
-      vx: bestVx, vy: bestVy, frame: this.frame, far, solvedAtMs: this.elapsedMs, reuses: 0 };
+      vx: bestVx, vy: bestVy, frame: this.frame, far, solvedAtMs: this.elapsedMs, reuses: 0,
+      clearAhead: far && clearAhead(x, y, bestVx, bestVy, radius, crowd) };
     if (!bestVx && !bestVy && safeCandidate) {
+      // Waiting behind a far queue wakes as soon as one of its bodies moves, like a crowd wait.
       history.retryAt = this.elapsedMs + 250;
-      history.crowdNeighbors = neighbors.slice();
+      history.crowdNeighbors = far ? crowd.slice() : neighbors.slice();
     }
     return result(bestVx, bestVy, bestVx || bestVy ? 'none' : safeCandidate ? 'crowd' : 'geometry', progress, neighbors.length);
   }
 
+  /**
+   * Bodies a far step could close in on, without the sight-line test. Once the unit has stalled,
+   * bodies it precedes on the route (the full solver nearly ignores them) are left out, so two
+   * far bodies never wait for each other for good.
+   */
+  private gatherFarCrowd(request: LocomotionRequest, crowd: Neighbor[], horizon: number, ordered: boolean): void {
+    const { x, y, routeCost, radius, speed } = request;
+    // Reach of the closing test over the horizon and of a kept course over the reuse window.
+    const range = radius + this.maxRadius + 2 + FAR_QUEUE_GAP_PX + Math.max((speed + this.maxNeighborSpeed) * horizon,
+      speed * (FAR_REUSE_WINDOW_MS / 1000 + horizon));
+    const rangeSq = range * range;
+    const minRow = Math.floor((y - range) / CELL), maxRow = Math.floor((y + range) / CELL);
+    const minCol = Math.floor((x - range) / CELL), maxCol = Math.floor((x + range) / CELL);
+    for (let row = minRow; row <= maxRow; row++) {
+      const columns = this.buckets.get(row);
+      if (!columns) continue;
+      for (let col = minCol; col <= maxCol; col++) {
+        const bucket = columns.get(col);
+        if (!bucket) continue;
+        for (const neighbor of bucket) {
+          if (neighbor.id === request.id) continue;
+          this.neighborsExamined++;
+          const dx = neighbor.x - x, dy = neighbor.y - y;
+          if (dx * dx + dy * dy > rangeSq) continue;
+          if (ordered && routeCost !== undefined && neighbor.routeCost !== undefined && (routeCost < neighbor.routeCost - 2
+            || (Math.abs(routeCost - neighbor.routeCost) <= 2 && request.id < neighbor.id))) continue;
+          crowd.push(neighbor);
+        }
+      }
+    }
+  }
+
+  private neighborRange(request: LocomotionRequest): number {
+    return request.radius + this.maxRadius + (request.speed + this.maxNeighborSpeed) * 0.16 + 8;
+  }
+
   /** Neighbours whose predicted bodies can reach this one before the next frames, minus those behind walls. */
   private gatherVisibleNeighbors(request: LocomotionRequest, geometry: NavigationGeometry, neighbors: Neighbor[]): void {
-    const { x, y, radius, speed } = request;
-    const range = radius + this.maxRadius + (speed + this.maxNeighborSpeed) * 0.16 + 8;
+    const { x, y } = request;
+    const range = this.neighborRange(request);
     const rangeSq = range * range;
     const minRow = Math.floor((y - range) / CELL), maxRow = Math.floor((y + range) / CELL);
     const minCol = Math.floor((x - range) / CELL), maxCol = Math.floor((x + range) / CELL);
@@ -320,7 +375,55 @@ export class EnemyLocomotion {
     this.frame = 0; this.elapsedMs = 0; this.neighborsExamined = 0; this.waitingNeighborsObserved = 0;
     this.farSolves = 0; this.farSteeringReuses = 0;
     this.sliced = false; this.slicePhases.clear();
-    this.nearby.length = 0; this.conflicts.length = 0; this.movementObstacles.length = 0;
+    this.nearby.length = 0; this.farCrowd.length = 0; this.conflicts.length = 0; this.movementObstacles.length = 0;
     this.neighborObstacles.length = 0;
   }
+}
+
+/** Squared cosine of the half-angle (about 39 degrees) in which a body counts as ahead of a far step. */
+const AHEAD_COS_SQ = 0.6;
+/** Extra following distance behind a queued leader (slower than a third of the follower's speed). */
+const FAR_QUEUE_GAP_PX = 6;
+
+/**
+ * Whether a body is in front of this velocity: inside the forward cone, and not itself coming
+ * head-on (two bodies meeting head-on would otherwise wait for each other forever).
+ */
+function isAhead(dx: number, dy: number, vx: number, vy: number, body: Neighbor): boolean {
+  const along = dx * vx + dy * vy;
+  if (along <= 0) return false;
+  const distanceSq = dx * dx + dy * dy;
+  if (along * along < AHEAD_COS_SQ * distanceSq * (vx * vx + vy * vy)) return false;
+  const back = -(body.vx * dx + body.vy * dy);
+  return !(back > 0 && back * back > 0.25 * distanceSq * (body.vx * body.vx + body.vy * body.vy));
+}
+
+/**
+ * Far crowd rule: within the horizon, would this velocity close in on a body ahead that it
+ * already touches or would touch? Bodies beside or behind do not count; they yield themselves.
+ */
+function closesInAhead(x: number, y: number, vx: number, vy: number, radius: number, speed: number, horizon: number,
+  crowd: readonly Neighbor[]): boolean {
+  for (const body of crowd) {
+    const dx = body.x - x, dy = body.y - y;
+    if (!isAhead(dx, dy, vx, vy, body)) continue;
+    const queued = body.vx * body.vx + body.vy * body.vy < (speed / 3) ** 2;
+    const separation = radius + body.radius + 2 + (queued ? FAR_QUEUE_GAP_PX : 0);
+    const px = dx + (body.vx - vx) * horizon, py = dy + (body.vy - vy) * horizon;
+    const predicted = px * px + py * py;
+    if (predicted < separation * separation && predicted < dx * dx + dy * dy) return true;
+  }
+  return false;
+}
+
+/** A far course may be kept only if no body ahead is within reach of it until the reuse window ends. */
+function clearAhead(x: number, y: number, vx: number, vy: number, radius: number, crowd: readonly Neighbor[]): boolean {
+  const travel = Math.hypot(vx, vy) * (FAR_REUSE_WINDOW_MS / 1000 + 0.12);
+  for (const body of crowd) {
+    const dx = body.x - x, dy = body.y - y;
+    if (!isAhead(dx, dy, vx, vy, body)) continue;
+    const reach = radius + body.radius + 2 + travel;
+    if (dx * dx + dy * dy < reach * reach) return false;
+  }
+  return true;
 }
