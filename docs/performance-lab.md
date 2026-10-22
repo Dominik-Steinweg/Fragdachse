@@ -122,6 +122,7 @@ npm run perf:chrome -- --case destruction.bfg --duration-seconds 60
 npm run perf:chrome -- --case combat.day-night
 npm run perf:chrome -- --case hazards.void-fire
 npm run perf:chrome -- --case boss.map15
+npm run perf:chrome -- --case campaign.map16-endgame
 npm run perf:chrome -- --case weapon.glock --capture-profile reduced
 npm run perf:compare -- <Ergebnisordner-A> <Ergebnisordner-B>
 ```
@@ -195,6 +196,7 @@ Sichtbare Gameplay-Last und Spieltakte ändern sich durch die Profilauswahl nich
 | `hazards.void-fire` | Dauerhafte VoidFire-Front in der Größe des Endzustands von Map 14, danach 30 Sekunden volle Feuerlast |
 | `hazards.map14-fire` | Echtes Map-14-Gelände mit Wasser, Basen und regulären Gegnerwellen; beschleunigte Feuerfront, danach 30 Sekunden Messung |
 | `boss.map15` | Map 15 mit regulären Gegnerwellen, Leerenjäger, Nuke, Armageddon und radialer Feuer-Ausbreitung; 60 Sekunden mit getrennten Phasen |
+| `campaign.map16-endgame` | Map 16 ab Checkpoint cp8: authored Void-Rückfeuer (Sweep), kriechendes Feuer und Encounter an der Brandlichtung; der Spieler hält die Stellung und schießt; 40 Sekunden |
 | `weapon.glock`, `weapon.p90`, `weapon.plasma`, `weapon.mini-rockets`, `weapon.shotgun` | Baseline beziehungsweise explizit voll ausgebaute Waffen |
 | `weapon.asmd`, `weapon.bite`, `weapon.rocket`, `weapon.tesla`, `weapon.flame` | Basis-Builds einschließlich gehaltener Waffen |
 | `weapon.hydra` | Aufgerüstete Hydra gegen eine Felswand: tatsächliche Teilung und nachführende Split-Projektile mit Treffern |
@@ -272,6 +274,13 @@ ausgeweitetes Feuer lassen den Lauf scheitern. Der Fall ist ein Host-/Rendering-
 mit festem Seed und ohne Spielerschüsse; er misst keine vollständige Kampagnenrunde oder
 WebRTC-Verbindung. Änderungen an Map 15 verändern auch diesen Fall.
 Messaufbau, Optimierung und Ergebnisse stehen im [Map-15-Bericht](reports/performance-map15-2026-10-08.md).
+
+`campaign.map16-endgame` kopiert Map 16 ab cp8; frühere Checkpoints, ihre Encounter, Events und
+Gates entfallen. Der geheilte Spieler steht auf dem cp8-Marker und startet damit Void-Rückfeuer,
+Kriechfeuer und den Encounter der Brandlichtung; er schießt alle 350 ms auf den nächsten Gegner.
+Die Messung beginnt mit Feuer und Gegnern; sichtbares Feuer, Gegnerspitze und Schüsse werden
+geprüft. Messaufbau und Ergebnisse stehen im
+[Nachtbericht vom 22.10.](reports/performance-2026-10-22-overnight.md).
 
 Lastmengen, Ziel-HP und Mindestbestände stehen in `fixtures.ts`, die Karte in `referenceMap.ts`,
 Zeiten und Fallverträge in `scenarios.ts`. `build-presets.json` hält die erlaubten Upgrade-IDs

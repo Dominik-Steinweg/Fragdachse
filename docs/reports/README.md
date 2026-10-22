@@ -11,5 +11,7 @@ Dauerhafte Anleitungen und Verträge stehen woanders:
 - Feature-Konzepte in [`docs/GDDs/`](../GDDs/README.md).
 
 Neue Berichte bekommen ein Datum im Namen, z. B. `performance-2026-10-09-breakdown.md`.
+Jüngster Performance-Stand: [Nachtlauf 22.10.2026](performance-2026-10-22-overnight.md) (Map-16-Endphase,
+Map 20, Horden).
 Rohdaten aus `build/` sind nicht versioniert. Links darauf funktionieren nur auf dem Rechner, auf dem
 der Bericht entstand.
