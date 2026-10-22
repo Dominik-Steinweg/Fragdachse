@@ -227,9 +227,10 @@ describe('ground hazard and base burn replication', () => {
     } finally { clearActiveSession(); }
   });
 
-  it('sends only changed warnings and repairs a dropped warning delta with the complete band', async () => {
+  it('sends only changed warnings and repairs lost warning deltas', async () => {
     const { hostRoom, client, state, publish } = await setup();
     const now = Date.now();
+    const link = hostRoom.transport.links[0];
     const warning = (gridX: number, activatesAt: number) => ({ gridX, gridY: 4, activatesAt });
     const warnings = () => replicated(client.getLatestGameState()!.burningGround).warnings;
     state.burningGround = { cells: [], warnings: [warning(1, now + 60_000), warning(2, now + 60_000)] };
@@ -244,12 +245,20 @@ describe('ground hazard and base burn replication', () => {
       state.burningGround = { cells: [], warnings: [warning(1, now + 59_000), warning(3, now + 61_000)] };
       publish();
       expect(warnings()).toEqual(replicated(state.burningGround).warnings);
-      hostRoom.transport.links[0].fastReady = false;
+      // A single lost delta is healed by the next tick, which repeats recent changes.
+      link.fastReady = false;
       state.burningGround = { cells: [], warnings: [warning(4, now + 62_000)] };
       publish();
-      hostRoom.transport.links[0].fastReady = true;
-      for (let tick = 5; tick < NET_TICK_RATE_HZ; tick++) publish();
-      expect(warnings()).toEqual([warning(1, now + 59_000), warning(3, now + 61_000)]);
+      link.fastReady = true;
+      publish();
+      expect(warnings()).toEqual(replicated(state.burningGround).warnings);
+      // A longer outage waits for the complete band.
+      link.fastReady = false;
+      state.burningGround = { cells: [], warnings: [warning(5, now + 63_000)] };
+      publish(); publish(); publish();
+      link.fastReady = true;
+      for (let tick = 9; tick < NET_TICK_RATE_HZ; tick++) publish();
+      expect(warnings()).toEqual([warning(4, now + 62_000)]);
       publish();
       expect(warnings()).toEqual(replicated(state.burningGround).warnings);
     } finally { clearActiveSession(); }

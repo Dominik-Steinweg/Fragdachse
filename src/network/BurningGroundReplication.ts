@@ -37,6 +37,11 @@ type GroundWarnings = readonly GroundWarning[];
  * periodic complete band carries exact values again.
  */
 const WARNING_RESEND_TOLERANCE_MS = 16;
+/**
+ * A warning lives for a few seconds, so a lost delta must not wait for the next complete band:
+ * each change rides along in this many consecutive ticks, which heals isolated packet loss.
+ */
+const WARNING_CHANGE_TICKS = 3;
 const NO_WARNINGS: GroundWarnings = [];
 
 interface CellChanges {
@@ -61,6 +66,8 @@ export class BurningGroundPublisher {
   private fullCells: { revision: number; encoded: string } | null = null;
   private lastWarnings: GroundWarnings | null = null;
   private readonly publishedWarnings = new Map<number, GroundWarnings>();
+  /** Warning keys changed since the complete band, with the tick of their latest change. */
+  private readonly warningChanges = new Map<number, number>();
 
   constructor(private readonly now: () => number) {}
 
@@ -72,17 +79,19 @@ export class BurningGroundPublisher {
     this.fullCells = null;
     this.lastWarnings = null;
     this.publishedWarnings.clear();
+    this.warningChanges.clear();
   }
 
   /** The slice of one fast-channel tick, or null when clients already hold this state. */
   publish(snapshot: SyncedBurningGroundSnapshot): EncodedBurningGroundSlice | null {
     this.ticks++;
-    const changes = this.collectCellChanges(snapshot.cells);
-    if (this.ticks === 1 || this.ticks % NET_TICK_RATE_HZ === 0) return this.complete(snapshot);
+    if (this.ticks === 1 || this.ticks % NET_TICK_RATE_HZ === 0) return this.completeSlice(snapshot);
+    const changes: CellChanges = { upserts: new Map(), removals: new Set() };
+    const cellsChanged = this.collectCellChanges(snapshot.cells, changes);
     const warnings = this.collectWarningChanges(snapshot.warnings ?? NO_WARNINGS);
-    if (!changes && warnings === null) return null;
+    if (!cellsChanged && warnings === null) return null;
     return {
-      ...(changes ? { d: encodeBurningGroundCells([...changes.upserts.values()], changes.removals) } : {}),
+      ...(cellsChanged ? { d: encodeBurningGroundCells([...changes.upserts.values()], changes.removals) } : {}),
       ...(warnings !== null ? { wd: warnings } : {}),
     };
   }
@@ -90,11 +99,11 @@ export class BurningGroundPublisher {
   /** Complete slice for a bootstrap payload; it also counts as this tick's publication. */
   publishComplete(snapshot: SyncedBurningGroundSnapshot): EncodedBurningGroundSlice {
     this.ticks++;
-    this.collectCellChanges(snapshot.cells);
-    return this.complete(snapshot);
+    return this.completeSlice(snapshot);
   }
 
-  private complete(snapshot: SyncedBurningGroundSnapshot): EncodedBurningGroundSlice {
+  private completeSlice(snapshot: SyncedBurningGroundSnapshot): EncodedBurningGroundSlice {
+    this.collectCellChanges(snapshot.cells, null);
     if (this.fullCells?.revision !== this.revision) {
       this.fullCells = { revision: this.revision, encoded: encodeBurningGroundCells([...this.published.values()]) };
     }
@@ -102,6 +111,7 @@ export class BurningGroundPublisher {
     const groups = groupGroundWarnings(warnings);
     this.lastWarnings = warnings;
     this.publishedWarnings.clear();
+    this.warningChanges.clear();
     const entries: GroundWarningEntry[] = [];
     for (const [key, group] of groups) {
       this.publishedWarnings.set(key, group);
@@ -120,79 +130,92 @@ export class BurningGroundPublisher {
     return wire;
   }
 
-  /** Applies the host's journaled changes, or compares whole arrays when the chain is unknown. */
-  private collectCellChanges(cells: GroundCells): CellChanges | null {
-    if (cells === this.lastCells) return null;
+  /**
+   * Updates what clients hold from the host's journaled changes, or by comparing whole arrays
+   * when the chain is unknown. Records the delta into `changes` when given; true on any change.
+   */
+  private collectCellChanges(cells: GroundCells, changes: CellChanges | null): boolean {
+    if (cells === this.lastCells) return false;
     const steps = resolveGroundFireChanges(cells, this.lastCells);
     this.lastCells = cells;
-    const changes: CellChanges = { upserts: new Map(), removals: new Set() };
+    let changed = false;
     if (steps) {
       for (const step of steps) {
-        for (const cell of step.removed) this.removeCell(cell, changes);
-        for (const cell of step.upserts) this.upsertCell(cell, changes);
+        for (const cell of step.removed) {
+          const wire = this.wireCell(cell);
+          if (wire) changed = this.removePublished(wire, changes) || changed;
+        }
+        for (const cell of step.upserts) changed = this.upsertCell(cell, changes) || changed;
       }
     } else {
-      const present = new Set<number>();
+      // Only keys published before this comparison can have left.
+      const present = this.published.size > 0 ? new Set<number>() : null;
       for (const cell of cells) {
-        const key = this.upsertCell(cell, changes);
-        if (key !== null) present.add(key);
+        changed = this.upsertCell(cell, changes) || changed;
+        const wire = present ? this.wireCell(cell) : null;
+        if (wire) present?.add(wire.key);
       }
-      for (const key of this.published.keys()) {
-        if (present.has(key)) continue;
-        this.published.delete(key);
-        changes.upserts.delete(key);
-        changes.removals.add(key);
+      if (present) {
+        for (const [key, wire] of this.published) {
+          if (!present.has(key)) changed = this.removePublished(wire, changes) || changed;
+        }
       }
     }
-    if (changes.upserts.size === 0 && changes.removals.size === 0) return null;
-    this.revision++;
-    return changes;
+    if (changed) this.revision++;
+    return changed;
   }
 
-  private removeCell(cell: SyncedBurningGroundCell, changes: CellChanges): void {
-    const wire = this.wireCell(cell);
+  private removePublished(wire: PublishedCell, changes: CellChanges | null): boolean {
     // A stale removal must not take down a newer visual at the same key.
-    if (!wire || this.published.get(wire.key)?.hostId !== wire.hostId) return;
+    if (this.published.get(wire.key)?.hostId !== wire.hostId) return false;
     this.published.delete(wire.key);
-    changes.upserts.delete(wire.key);
-    changes.removals.add(wire.key);
+    changes?.upserts.delete(wire.key);
+    changes?.removals.add(wire.key);
+    return true;
   }
 
-  private upsertCell(cell: SyncedBurningGroundCell, changes: CellChanges): number | null {
+  private upsertCell(cell: SyncedBurningGroundCell, changes: CellChanges | null): boolean {
     const wire = this.wireCell(cell);
-    if (!wire) return null;
+    if (!wire) return false;
     const previous = this.published.get(wire.key);
-    if (previous === wire) return wire.key;
+    if (previous === wire) return false;
     this.published.set(wire.key, wire);
     if (previous && previous.hostId !== wire.hostId) {
       // A new visual replaced the old one at this key: clients replay removal and ignition.
-      changes.removals.add(wire.key);
-    } else if (previous && sameBurningGroundWireCell(previous, wire)) return wire.key;
-    changes.upserts.set(wire.key, wire);
-    return wire.key;
+      changes?.removals.add(wire.key);
+    } else if (previous && sameBurningGroundWireCell(previous, wire)) return false;
+    changes?.upserts.set(wire.key, wire);
+    return true;
   }
 
   /**
-   * Warning cells that appeared, were withdrawn or moved beyond the tolerance. Activated warnings
-   * leave on the client by their own time, exactly as the complete band would drop them.
+   * Warning cells that appeared, were withdrawn or moved beyond the tolerance, repeated for a few
+   * ticks. Activated warnings leave on the client by their own time, exactly as the complete band
+   * would drop them.
    */
   private collectWarningChanges(warnings: GroundWarnings): string | null {
-    if (warnings === this.lastWarnings) return null;
-    this.lastWarnings = warnings;
-    const now = this.now();
-    const current = groupGroundWarnings(warnings);
-    const changed: GroundWarningEntry[] = [];
-    for (const [key, group] of current) {
-      if (sameLiveWarningTimes(this.publishedWarnings.get(key) ?? NO_WARNINGS, group, now)) continue;
-      this.publishedWarnings.set(key, group);
-      changed.push({ key, warnings: group });
+    if (warnings !== this.lastWarnings) {
+      this.lastWarnings = warnings;
+      const now = this.now();
+      const current = groupGroundWarnings(warnings);
+      for (const [key, group] of current) {
+        if (sameLiveWarningTimes(this.publishedWarnings.get(key) ?? NO_WARNINGS, group, now)) continue;
+        this.publishedWarnings.set(key, group);
+        this.warningChanges.set(key, this.ticks);
+      }
+      for (const [key, previous] of this.publishedWarnings) {
+        if (current.has(key)) continue;
+        this.publishedWarnings.delete(key);
+        if (previous.some(warning => warning.activatesAt > now)) this.warningChanges.set(key, this.ticks);
+      }
     }
-    for (const [key, previous] of this.publishedWarnings) {
-      if (current.has(key)) continue;
-      this.publishedWarnings.delete(key);
-      if (previous.some(warning => warning.activatesAt > now)) changed.push({ key, warnings: NO_WARNINGS });
+    if (this.warningChanges.size === 0) return null;
+    const entries: GroundWarningEntry[] = [];
+    for (const [key, tick] of this.warningChanges) {
+      if (this.ticks - tick >= WARNING_CHANGE_TICKS) this.warningChanges.delete(key);
+      else entries.push({ key, warnings: this.publishedWarnings.get(key) ?? NO_WARNINGS });
     }
-    return changed.length > 0 ? encodeGroundWarnings(changed) : null;
+    return entries.length > 0 ? encodeGroundWarnings(entries) : null;
   }
 }
 
