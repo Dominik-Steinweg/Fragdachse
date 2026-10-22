@@ -123,6 +123,34 @@ try {
   };
   const grid = (p,s) => ({gridX:(p.x-s.metrics.offsetX)/(s.metrics.widthPx/s.metrics.gridCols)-.5,
     gridY:(p.y-s.metrics.offsetY)/(s.metrics.heightPx/s.metrics.gridRows)-.5});
+  // The land body wanders for 20 s before the death phase; weapon fire needs the player within range.
+  const standNear = async distance => {
+    let last;
+    for(const turn of [0,.25,.5,.75,.125,.375,.625,.875]) {
+      try {
+        const s=await status(),body=s.krakenResidency.hostPosition,a=turn*Math.PI*2;
+        const g=grid({x:body.x+Math.cos(a)*distance,y:body.y+Math.sin(a)*distance},s);return await target(g.gridX,g.gridY);
+      } catch(error) { last=error; if(!/blockiert|ungültig|außerhalb/i.test(error.message))throw error; }
+    }
+    throw last;
+  };
+  // The land body wanders, so the authored point can fall inside ink range. Keep it first (same
+  // workload when valid), then stand between ink and spine range around the current body.
+  const spinesFrom = async (x,y) => {
+    const between=(config.ink.range+config.ink.mouthOffset.x+config.spines.range)/2;
+    let last;
+    for(const turn of [null,0,.25,.5,.75,.125,.375,.625,.875]) {
+      try {
+        if(turn===null) await target(x,y);
+        else {
+          const s=await status(),body=s.krakenResidency.hostPosition,a=turn*Math.PI*2;
+          const g=grid({x:body.x+Math.cos(a)*between,y:body.y+Math.sin(a)*between},s);await target(g.gridX,g.gridY);
+        }
+        return await act('spines');
+      } catch(error) { last=error; if(!/spines requires|blockiert|ungültig|außerhalb|Teleport|free/i.test(error.message))throw error; }
+    }
+    throw last;
+  };
   const parity = async name => {
     if(!parityCode && args.rendererParity!=='true')return;
     const stem=`${quality}-${repeat}-${name}`;
@@ -273,9 +301,9 @@ try {
     await phase('water-waves',()=>step(900));
     await phase('ashore',async()=>{await surfaced();const s=await status();await command({action:'krakenHp',hp:s.krakenResidency.maxHp*config.phaseTwoHpRatio});await act('ashore');await wait(s=>state(s)?.phase.kind==='land','land');await step(60);});
     await phase('land-claw',async()=>{await command({action:'camera',zoom:1,focusTarget:false});await target(39,44);await act('lunge');await step(55);await parity('land-claw');await step(95);});
-    await phase('land-spines',async()=>{await target(60,42);await act('spines');await step(80);await parity('land-spines');await step(160);});
+    await phase('land-spines',async()=>{await spinesFrom(60,42);await step(80);await parity('land-spines');await step(160);});
     await phase('land-trail-waves',async()=>{await target(68,40);await step(600);await parity('land-trail');await step(600);});
-    await phase('death',async()=>{await command({action:'krakenHp',hp:1});let s=await status();
+    await phase('death',async()=>{await command({action:'krakenHp',hp:1});await standNear(320);let s=await status();
       for(let i=0;state(s)?.phase.kind!=='dying'&&i<150;i++) {await command({action:'target',...grid(s.krakenResidency.hostPosition,s)});await command({action:'fire',slot:'weapon1'});s=await step(3);}
       if(state(s)?.phase.kind!=='dying')throw Error('Death not triggered by weapon damage');await step(60);await parity('death');await step(120);});
     run.coverage={intro:run.phases.some(p=>p.observedPhases.includes('intro')),
