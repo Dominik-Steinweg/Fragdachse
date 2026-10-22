@@ -62,6 +62,8 @@ export class BaseManager {
   private readonly turretOwners = new Map<string, BaseEntity>();
   private onBaseDestroyed: ((spec: BaseSpec) => void) | null = null;
   private onBaseActivated: ((spec: BaseSpec) => void) | null = null;
+  /** Objective-bound bases whose objective has started; only these count as navigation goals. */
+  private readonly goalReleasedBaseIds = new Set<string>();
   private getSecondaryObjectiveState: ((objectiveId: string) => CoopDefenseSecondaryObjectiveState | null) | null = null;
   private obstacleGeneration = 0;
   private readonly presentation: boolean;
@@ -170,6 +172,7 @@ export class BaseManager {
         attached = true;
         this.activeActivityBinding = binding;
         this.snapshotSeen.clear();
+        this.goalReleasedBaseIds.clear();
         for (const entity of this.entities) entity.applyActivityOverlay(overlayById.get(entity.id)!);
         this.rebuildActivityIndexes();
         onChanged();
@@ -182,6 +185,7 @@ export class BaseManager {
         this.burnRenderer?.clear();
         this.structureRenderer?.clearEmergences();
         this.snapshotSeen.clear();
+        this.goalReleasedBaseIds.clear();
         for (const entity of this.entities) entity.clearActivityOverlay();
         this.rebuildActivityIndexes();
         onChanged();
@@ -198,9 +202,26 @@ export class BaseManager {
       const objectiveState = this.getSecondaryObjectiveState?.(objectiveId) ?? null;
       if (!objectiveState || objectiveState === 'dormant') continue;
       if (!entity.activate()) continue;
+      this.goalReleasedBaseIds.add(entity.id);
       for (const body of entity.getCellBodies()) this.group.add(body);
       for (const turret of entity.getTurrets()) this.turretOwners.set(turret.id, entity);
       this.obstacleGeneration += 1;
+      this.onBaseActivated?.(entity.getSpec());
+    }
+    this.releaseObjectiveGoals();
+  }
+
+  /**
+   * A structure that stands from the start (`activeFromStart`) never goes through `activate()`. Its objective
+   * starting is the moment it becomes a navigation goal, announced through the same activation path.
+   */
+  private releaseObjectiveGoals(): void {
+    for (const entity of this.entities) {
+      const objectiveId = entity.getSpec().dormantObjectiveId;
+      if (!objectiveId || entity.isInert() || this.goalReleasedBaseIds.has(entity.id)) continue;
+      const objectiveState = this.getSecondaryObjectiveState?.(objectiveId) ?? null;
+      if (!objectiveState || objectiveState === 'dormant') continue;
+      this.goalReleasedBaseIds.add(entity.id);
       this.onBaseActivated?.(entity.getSpec());
     }
   }
@@ -417,6 +438,21 @@ export class BaseManager {
     for (const entity of this.entities) {
       if (entity.isInert()) continue;
       if (faction && entity.faction !== faction) continue;
+      result.add(entity.id);
+    }
+    return result;
+  }
+
+  /**
+   * Bases enemies may navigate to. Like `getActiveBaseIds`, but an objective-bound structure only counts once its
+   * objective has started: before that it can lie behind barriers, and a goal no spawn can reach leaves every
+   * ground enemy without a path.
+   */
+  getNavigationBaseIds(): ReadonlySet<string> {
+    const result = new Set<string>();
+    for (const entity of this.entities) {
+      if (entity.isInert()) continue;
+      if (entity.getSpec().dormantObjectiveId !== undefined && !this.goalReleasedBaseIds.has(entity.id)) continue;
       result.add(entity.id);
     }
     return result;

@@ -220,6 +220,8 @@ export class CoopMissionComposition {
       getBaseSpecs: () => baseManager?.getBaseSpecs() ?? world.bases,
       getActiveBaseIds: () => baseManager?.getActiveBaseIds()
         ?? new Set(world.bases.map((spec) => spec.id)),
+      getNavigationBaseIds: () => baseManager?.getNavigationBaseIds()
+        ?? new Set(world.bases.map((spec) => spec.id)),
       getBase: (baseId) => baseManager?.getBase(baseId) ?? null,
       obstacleCellProvider,
       geometryProvider: this.options.getNavigationGeometry,

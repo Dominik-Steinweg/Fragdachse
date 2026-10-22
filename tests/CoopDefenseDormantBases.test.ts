@@ -194,7 +194,10 @@ function makeScene(): { scene: any; groupObjects: any[]; presentationCalls: Reco
 describe('Coop-Defense dormant mission structures', () => {
   it('keeps all four lobby menu structures solid and invulnerable without an Activity', () => {
     const { scene, groupObjects } = makeScene();
-    const specs = resolveWorldBases(getLobbyWorldDefinition(), TEST_WORLD_METRICS, { includePersistentBaseCore: false });
+    // Die Gebaeude stehen nur mit dem Basiskern; ohne ihn gibt es gar keine.
+    expect(resolveWorldBases(getLobbyWorldDefinition(), TEST_WORLD_METRICS, { includePersistentBaseCore: false })).toEqual([]);
+    const specs = resolveWorldBases(getLobbyWorldDefinition(), TEST_WORLD_METRICS, { includePersistentBaseCore: true })
+      .filter(base => base.collisionRects);
     const manager = new BaseManager(scene, specs, TEST_WORLD_METRICS, {}, true, false, null);
     expect(specs).toHaveLength(4);
     // Outlined structures collide with one body per outline rect, not one per occupied cell.
@@ -536,6 +539,56 @@ describe('Coop-Defense dormant mission structures', () => {
     manager.syncLights();
     expect((lighting.setLight as ReturnType<typeof vi.fn>).mock.calls
       .every(([key]) => !String(key).includes(dormant.id))).toBe(true);
+  });
+
+  it('stands as an ordinary base from the start with activeFromStart while keeping the objective link', () => {
+    const { scene, groupObjects } = makeScene();
+    const overlays = resolveCoopDefenseActivityBaseOverlays(withMapChanges({
+      bases: makeDormantMap().bases.map((base) => base.id === DORMANT_BASE_ID
+        ? { ...base, faction: 'friendly' as const, activeFromStart: true }
+        : base),
+    }), 1, TEST_WORLD_METRICS);
+    const overlay = overlays.find((entry) => entry.baseId === DORMANT_BASE_ID)!;
+    expect(overlay).toMatchObject({ dormant: false, dormantObjectiveId: DORMANT_OBJECTIVE_ID });
+
+    const worldBase = makeBaseSpec(DORMANT_BASE_ID);
+    const manager = new BaseManager(scene, [worldBase], TEST_WORLD_METRICS, {}, true, false);
+    manager.createActivityBinding([overlay], vi.fn()).attach();
+    const entity = manager.getBase(DORMANT_BASE_ID)!;
+
+    expect(entity.isDormant()).toBe(false);
+    expect(entity.isDamageable()).toBe(true);
+    expect(entity.getCellBodies()).toHaveLength(1);
+    expect(groupObjects.filter((body) => body.active).length).toBeGreaterThan(0);
+    expect(manager.getActiveBaseIds()).toEqual(new Set([DORMANT_BASE_ID]));
+    expect(manager.isMovementBlockedCell(10, 10)).toBe(true);
+    expect(entity.getSurfaceImages()).toHaveLength(worldBase.cells.length);
+
+    // Es steht, ist aber erst ein Navigationsziel, wenn sein Objective laeuft; vorher waere es hinter
+    // Barrieren unerreichbar und Gegner fanden keinen Spawn.
+    let objectiveState: CoopDefenseSecondaryObjectiveState | null = 'dormant';
+    const activated = vi.fn();
+    manager.setOnBaseActivated(activated);
+    manager.setSecondaryObjectiveStateProvider(() => objectiveState);
+    expect(manager.getActiveBaseIds().has(DORMANT_BASE_ID)).toBe(true);
+    expect(manager.getNavigationBaseIds().has(DORMANT_BASE_ID)).toBe(false);
+    objectiveState = 'active';
+    manager.syncDormantStates();
+    expect(manager.getNavigationBaseIds().has(DORMANT_BASE_ID)).toBe(true);
+    expect(activated).toHaveBeenCalledTimes(1);
+    manager.syncDormantStates();
+    expect(activated).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts activeFromStart only on a dormant non-spawn-point structure', () => {
+    const withFlag = (changes: Record<string, unknown>) => withMapChanges({
+      bases: makeDormantMap().bases.map((base) => base.id === DORMANT_BASE_ID ? { ...base, ...changes } : base),
+    });
+    expect(() => normalizeCoopDefenseMapConfig(withFlag({ activeFromStart: false }))).toThrow(/activeFromStart/);
+    expect(() => normalizeCoopDefenseMapConfig(withMapChanges({
+      bases: makeDormantMap().bases.map((base) => base.id === 'test-friendly-main'
+        ? { ...base, activeFromStart: true } : base),
+    }))).toThrow(/activeFromStart/);
   });
 
   it('caches only active base cells and invalidates the lookup on activation or destruction', () => {

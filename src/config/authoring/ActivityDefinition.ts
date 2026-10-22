@@ -112,6 +112,8 @@ export interface CoopMissionBaseOverlay {
   readonly startHpFactor?: number;
   readonly playerScaling?: CoopBasePlayerScaling;
   readonly dormant?: boolean;
+  /** Nur mit `dormant`: Das Bauwerk steht ab Rundenstart sichtbar da und wird erst mit dem Objective aktiv. */
+  readonly activeFromStart?: boolean;
   readonly powerUpPedestals?: readonly CoopBasePowerUpPedestalConfig[];
 }
 

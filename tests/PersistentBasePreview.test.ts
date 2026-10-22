@@ -32,7 +32,7 @@ describe('Persistent-Base-Vorschau – Map 1 Authoring', () => {
     expect(map.persistentBase).toBeUndefined();
     expect(preview).toEqual({
       checkpointId: 'final-extraction',
-      anchor: { gridX: 248, gridY: 14 },
+      anchor: { gridX: 280, gridY: 14 },
       orientation: 'open-left',
       buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA,
     });

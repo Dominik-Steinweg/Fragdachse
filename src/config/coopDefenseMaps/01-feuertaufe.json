@@ -1,15 +1,15 @@
 {
   "mapId": "1",
   "persistentBaseRewardsOnVictory": ["base_rage_pedestal"],
-  "arenaWidthCells": 260,
+  "arenaWidthCells": 290,
   "arenaHeightCells": 33,
   "spawnZones": [
     { "id": "cp1-first-contact", "gridX": 47, "gridY": 14, "widthCells": 18, "heightCells": 12, "keepClear": false },
-    { "id": "cp4-pressure-a", "gridX": 132, "gridY": 8, "widthCells": 20, "heightCells": 16, "keepClear": false },
-    { "id": "cp4-pressure-b", "gridX": 132, "gridY": 5, "widthCells": 20, "heightCells": 24, "keepClear": false },
-    { "id": "cp5-wave-1", "gridX": 192, "gridY": 10, "widthCells": 25, "heightCells": 9, "keepClear": false },
-    { "id": "cp5-wave-2-a", "gridX": 172, "gridY": 10, "widthCells": 25, "heightCells": 9, "keepClear": false },
-    { "id": "cp5-wave-2-b", "gridX": 172, "gridY": 14, "widthCells": 25, "heightCells": 9, "keepClear": false }
+    { "id": "cp4-pressure-a", "gridX": 149, "gridY": 8, "widthCells": 17, "heightCells": 16, "keepClear": false },
+    { "id": "cp4-pressure-b", "gridX": 151, "gridY": 8, "widthCells": 17, "heightCells": 24, "keepClear": false },
+    { "id": "cp5-wave-1", "gridX": 206, "gridY": 14, "widthCells": 20, "heightCells": 8, "keepClear": false },
+    { "id": "cp5-wave-2-a", "gridX": 207, "gridY": 12, "widthCells": 16, "heightCells": 5, "keepClear": false },
+    { "id": "cp5-wave-2-b", "gridX": 208, "gridY": 17, "widthCells": 18, "heightCells": 7, "keepClear": false }
   ],
   "timeOfDay": "08:00",
   "tutorialShowControls": true,
@@ -18,7 +18,7 @@
     "gridX": 15,
     "gridY": 1
   },
-  "trackPosition": "center",
+  "trackPosition": { "kind": "grid", "gridX": 129 },
   "mapEvents": [{
     "id": "burrow-train",
     "type": "train",
@@ -51,7 +51,10 @@
           { "gridX": 185, "gridY": 20 },
           { "gridX": 205, "gridY": 18 },
           { "gridX": 222, "gridY": 16 },
-          { "gridX": 250, "gridY": 14 }
+          { "gridX": 250, "gridY": 14 },
+          { "gridX": 264, "gridY": 14 },
+          { "gridX": 278, "gridY": 14 },
+          { "gridX": 284, "gridY": 14 }
         ]
       },
       {
@@ -82,12 +85,21 @@
         ]
       },
       {
+        "id": "extraction-approach-meadow",
+        "radiusCells": 5,
+        "points": [
+          { "gridX": 248, "gridY": 14 },
+          { "gridX": 256, "gridY": 14 },
+          { "gridX": 266, "gridY": 14 }
+        ]
+      },
+      {
         "id": "final-extraction-chamber",
         "radiusCells": 5.5,
         "points": [
-          { "gridX": 246, "gridY": 14 },
-          { "gridX": 248, "gridY": 14 },
-          { "gridX": 252, "gridY": 14 }
+          { "gridX": 276, "gridY": 14 },
+          { "gridX": 280, "gridY": 14 },
+          { "gridX": 284, "gridY": 14 }
         ]
       },
       {
@@ -1561,11 +1573,12 @@
       "id": "tutorial-outpost",
       "role": "outpost",
       "dormant": true,
+      "activeFromStart": true,
       "hpMax": 12000,
       "anchor": {
         "kind": "grid",
-        "gridX": 220,
-        "gridY": 14
+        "gridX": 198,
+        "gridY": 13
       },
       "shape": {
         "kind": "rectangle",
@@ -1636,21 +1649,21 @@
       {
         "id": "cp4-rage",
         "completeOn": { "type": "after-encounter", "encounterId": "cp4-pressure" },
-        "gridX": 148,
-        "gridY": 14,
+        "gridX": 142,
+        "gridY": 16,
         "radiusCells": 5,
         "setRespawn": true
       },
       {
         "id": "cp5-base-defense",
-        "gridX": 205,
-        "gridY": 18,
+        "gridX": 193,
+        "gridY": 19,
         "radiusCells": 5,
         "setRespawn": true
       },
       {
         "id": "final-extraction",
-        "gridX": 248,
+        "gridX": 280,
         "gridY": 14,
         "radiusCells": 5,
         "setRespawn": true
@@ -1717,12 +1730,13 @@
     {
       "id": "map01-base-defense",
       "checkpointId": "cp5-base-defense",
-      "anchor": { "gridX": 205, "gridY": 25 }
+      "anchor": { "gridX": 208, "gridY": 27 }
     },
     {
       "id": "map01-extraction",
-      "checkpointId": "final-extraction",
-      "anchor": { "gridX": 245, "gridY": 1 }
+      "checkpointId": "cp5-base-defense",
+      "visibleFrom": "completion",
+      "anchor": { "gridX": 265, "gridY": 1 }
     }
   ],
   "secondaryObjectives": [

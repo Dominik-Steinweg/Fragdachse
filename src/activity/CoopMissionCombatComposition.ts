@@ -75,6 +75,7 @@ export interface CoopMissionCombatCompositionOptions {
   readonly isHost: boolean;
   readonly getBaseSpecs: () => readonly BaseSpec[];
   readonly getActiveBaseIds: () => ReadonlySet<string>;
+  readonly getNavigationBaseIds: () => ReadonlySet<string>;
   readonly getBase: (baseId: string) => BaseStatePort | null;
   readonly obstacleCellProvider: () => ReadonlyArray<{ gridX: number; gridY: number }>;
   readonly barrierCells: readonly { gridX: number; gridY: number }[];
@@ -169,7 +170,7 @@ export class CoopMissionCombatComposition {
       bases: applyEnemyTargetingToBaseDescriptors(buildBaseDescriptors(this.options.getBaseSpecs()),
         this.options.activity.mapConfig.enemyTargeting).map(base => exact
         ? { ...base, cellCoords: base.cellCoords.map(coordinate => coordinate * 2 + 1) } : base),
-      activeBaseIds: this.options.getActiveBaseIds(),
+      activeBaseIds: this.options.getNavigationBaseIds(),
       obstacleCellProvider: exact ? () => [] : this.options.obstacleCellProvider,
       barrierCells: exact ? [] : this.options.barrierCells,
       geometryProvider: this.options.geometryProvider,

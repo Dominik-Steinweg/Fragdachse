@@ -276,7 +276,8 @@ function resolveBaseSpec(
     startHp,
     faction,
     role: config.role ?? 'main',
-    dormant: config.dormant === true,
+    // `activeFromStart`: the linked objective still starts later, but the structure stands as a normal base.
+    dormant: config.dormant === true && config.activeFromStart !== true,
     ...(dormantObjectiveId === undefined ? {} : { dormantObjectiveId }),
     turrets,
     powerUpPedestals,
@@ -423,9 +424,10 @@ export function resolveWorldBases(
   // Ein ausgelassener Kern existiert gar nicht: keine Kollision, keine Reservierung, kein
   // HP-Ziel. Ihn nur unsichtbar zu schalten wuerde eine Basis hinterlassen, die alles blockiert,
   // was die World sonst zulaesst.
-  const baseConfigs = persistentBaseId && !includeCore
-    ? worldDefinition.bases.filter((baseConfig) => baseConfig.id !== persistentBaseId)
-    : worldDefinition.bases;
+  const baseConfigs = includeCore
+    ? worldDefinition.bases
+    : worldDefinition.bases.filter((baseConfig) => baseConfig.id !== persistentBaseId
+      && !baseConfig.requiresPersistentBase);
   const resolved = baseConfigs.map((baseConfig) => resolveWorldBaseSpec(baseConfig, worldMetrics));
   if (!persistentBaseId || !includeCore) return resolved;
   return addPersistentBaseReservation(resolved, persistentBaseId, worldDefinition.persistentBaseSite?.maxAreaStage);

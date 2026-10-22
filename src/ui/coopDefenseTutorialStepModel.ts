@@ -21,12 +21,23 @@ export function getVisibleCoopDefenseTutorialStepId(
   steps: readonly ResolvedCoopDefenseMapTutorialStepConfig[],
   activatedCheckpoints: readonly CoopDefenseTutorialStepActivation[],
   roundElapsedMs: number,
-  completedCheckpoints: readonly { readonly checkpointId: string }[],
+  completedCheckpoints: readonly { readonly checkpointId: string; readonly completedAtRoundMs?: number }[],
 ): string | null {
   let visibleStep: ResolvedCoopDefenseMapTutorialStepConfig | null = null;
   let visibleActivatedAtRoundMs = -1;
 
   for (const step of steps) {
+    if (step.visibleFrom === 'completion') {
+      // Bleibt nach dem Abschluss seines Checkpoints stehen, bis die Runde endet.
+      const completion = completedCheckpoints.find(({ checkpointId }) => checkpointId === step.checkpointId);
+      const completedAt = completion?.completedAtRoundMs ?? 0;
+      if (!completion || roundElapsedMs < completedAt) continue;
+      if (completedAt >= visibleActivatedAtRoundMs) {
+        visibleStep = step;
+        visibleActivatedAtRoundMs = completedAt;
+      }
+      continue;
+    }
     const activation = activatedCheckpoints.find(({ checkpointId }) => checkpointId === step.checkpointId);
     if (!activation) continue;
 

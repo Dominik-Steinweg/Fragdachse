@@ -126,7 +126,7 @@ export function composeWorldCombatGameplay(
   // prioritaer und sperrt die entfallenen Zielzellen sofort, bis das neue Feld aktiv ist.
   const syncActiveBaseIds = (): void => {
     flow.getCoopMissionRuntime()?.flowFieldCoordinator?.setActiveBaseIds(
-      baseManager?.getActiveBaseIds() ?? new Set<string>(),
+      baseManager?.getNavigationBaseIds() ?? new Set<string>(),
     );
   };
   const combatGameplayBinding = new WorldCombatGameplayBinding({

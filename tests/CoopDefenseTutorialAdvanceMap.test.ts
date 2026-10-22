@@ -114,7 +114,7 @@ describe('Map 1 as the guided advance tutorial', () => {
 
   it('is a productive advance map that is clearly larger than the old tutorial arena', () => {
     expect(MAP.objective).toBe('advance');
-    expect(MAP.arenaWidthCells).toBe(260);
+    expect(MAP.arenaWidthCells).toBe(290);
     expect(MAP.arenaHeightCells).toBe(33);
     expect(MAP.rockField).toBeDefined();
     expect(MAP.arenaWidthCells!).toBeGreaterThan(MAP.arenaHeightCells! * 7);

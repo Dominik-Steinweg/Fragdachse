@@ -146,6 +146,12 @@ export interface CoopBaseConfig {
   readonly role?: CoopBaseRole;
   /** Mission structure: constructed at round setup but inert until its objective leaves dormant. */
   readonly dormant?: boolean;
+  /**
+   * Only with `dormant`: the structure is an ordinary base from round start (visible, solid, damageable,
+   * targetable). `dormant` then only keeps the link to its objective, which still starts later. Without it,
+   * a dormant structure appears and becomes active when its objective starts.
+   */
+  readonly activeFromStart?: boolean;
   readonly anchor: CoopBaseAnchor;
   readonly shape: CoopBaseShape;
   readonly turrets?: readonly CoopBaseTurretConfig[];
@@ -868,6 +874,11 @@ export interface CoopDefenseMapTutorialStepConfig {
   /** Weltposition des Step-Fensters; der Checkpoint bleibt ausschließlich sein Trigger. */
   readonly anchor?: CoopDefenseMapTutorialAnchorConfig;
   readonly durationMs?: number;
+  /**
+   * Fenster, in dem der Hinweis steht: Standard 'activation' = von der Aktivierung des Checkpoints bis zu
+   * seinem Abschluss; 'completion' = ab dem Abschluss des Checkpoints bis zum Ende der Runde.
+   */
+  readonly visibleFrom?: 'activation' | 'completion';
 }
 
 /**
@@ -4137,6 +4148,9 @@ function normalizeTutorialSteps(
     if (!checkpointIds.has(checkpointId)) {
       throw new Error(`[coopDefenseMaps] Tutorial step ${mapId}:${id} references unknown checkpoint: ${checkpointId}`);
     }
+    if (step.visibleFrom !== undefined && step.visibleFrom !== 'activation' && step.visibleFrom !== 'completion') {
+      throw new Error(`[coopDefenseMaps] Tutorial step ${mapId}:${id} has an invalid visibleFrom`);
+    }
     const durationMs = step.durationMs ?? COOP_DEFENSE_TUTORIAL_STEP_DEFAULT_DURATION_MS;
     if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs <= 0) {
       throw new Error(`[coopDefenseMaps] Tutorial step ${mapId}:${id} needs a positive durationMs`);
@@ -4151,6 +4165,7 @@ function normalizeTutorialSteps(
       id,
       checkpointId,
       ...(anchor ? { anchor } : {}),
+      ...(step.visibleFrom === 'completion' ? { visibleFrom: 'completion' as const } : {}),
       durationMs: Math.floor(durationMs),
     };
   });
@@ -4452,6 +4467,13 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
   if (baseConfig.dormant === true && role === 'main') {
     throw new Error(`[coopDefenseMaps] Dormant mission structure ${baseConfig.id} must not use role main`);
   }
+  if (baseConfig.activeFromStart !== undefined) {
+    if (baseConfig.activeFromStart !== true || baseConfig.dormant !== true || role === 'spawn-point') {
+      throw new Error(
+        `[coopDefenseMaps] Base ${baseConfig.id} may declare activeFromStart: true only on a dormant non-spawn-point structure`,
+      );
+    }
+  }
   if (baseConfig.startHpFactor !== undefined) {
     if (typeof baseConfig.startHpFactor !== 'number'
       || !Number.isFinite(baseConfig.startHpFactor)
@@ -4484,6 +4506,7 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
     faction,
     role,
     dormant: baseConfig.dormant === true,
+    ...(baseConfig.activeFromStart === true ? { activeFromStart: true as const } : {}),
     anchor: normalizeBaseAnchor(baseConfig.anchor),
     shape,
     turrets,

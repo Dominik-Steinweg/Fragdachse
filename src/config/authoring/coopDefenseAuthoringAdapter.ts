@@ -82,6 +82,7 @@ export const COOP_MISSION_BASE_FIELDS = [
   'startHpFactor',
   'playerScaling',
   'dormant',
+  'activeFromStart',
   'powerUpPedestals',
 ] as const satisfies readonly (keyof CoopBaseConfig)[];
 
@@ -357,9 +358,13 @@ function toCoopMissionBaseOverlay(base: CoopBaseConfig): CoopMissionBaseOverlay 
     dormant: base.dormant,
     powerUpPedestals: base.powerUpPedestals,
   };
-  // `startHpFactor` ist das einzige Basisfeld, dessen blosse Anwesenheit die Normalisierung
-  // unterscheidet. Es darf deshalb nicht als `undefined` wieder auftauchen.
-  return base.startHpFactor === undefined ? overlay : { ...overlay, startHpFactor: base.startHpFactor };
+  // `startHpFactor` und `activeFromStart` sind Basisfelder, deren blosse Anwesenheit die
+  // Normalisierung unterscheidet. Sie duerfen deshalb nicht als `undefined` wieder auftauchen.
+  return {
+    ...overlay,
+    ...(base.startHpFactor === undefined ? {} : { startHpFactor: base.startHpFactor }),
+    ...(base.activeFromStart === undefined ? {} : { activeFromStart: base.activeFromStart }),
+  };
 }
 
 function toCoopBaseConfig(
@@ -380,9 +385,11 @@ function toCoopBaseConfig(
     powerUpPedestals: overlay?.powerUpPedestals,
     spawnCenter: base.spawnCenter,
   };
-  return overlay?.startHpFactor === undefined
-    ? restored
-    : { ...restored, startHpFactor: overlay.startHpFactor };
+  return {
+    ...restored,
+    ...(overlay?.startHpFactor === undefined ? {} : { startHpFactor: overlay.startHpFactor }),
+    ...(overlay?.activeFromStart === undefined ? {} : { activeFromStart: overlay.activeFromStart }),
+  };
 }
 
 interface NormalizedWorldFields {
