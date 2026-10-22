@@ -130,6 +130,11 @@ export class BloodFieldModel {
   private live = 0;
   private tinted = 0;
   private revision = 0;
+  /** Revision the cached scan below belongs to; until then marks only change by the clock. */
+  private scannedRevision = -1;
+  /** Earliest end of a live mark and earliest birth of a mark not yet counted in the bounds. */
+  private nextEndSec = -Infinity;
+  private nextBornSec = -Infinity;
   private epoch: number;
   private readonly channelBounds: BloodFieldBounds[] = Array.from({ length: 3 },
     () => ({ minX: 0, minY: 0, maxX: 0, maxY: 0, count: 0 }));
@@ -287,8 +292,11 @@ export class BloodFieldModel {
    */
   update(nowMs: number, budget: number, pressure: number, fastFadeMs: number): void {
     const nowSec = this.seconds(nowMs);
-    for (let slot = 0; slot < this.highWater; slot++) {
-      if (this.alive[slot] && this.word(slot, W.end) <= nowSec) this.remove(slot);
+    // Unchanged marks are skipped until the clock reaches the next end or a mark comes into range.
+    if (this.revision !== this.scannedRevision || nowSec >= this.nextEndSec) {
+      for (let slot = 0; slot < this.highWater; slot++) {
+        if (this.alive[slot] && this.word(slot, W.end) <= nowSec) this.remove(slot);
+      }
     }
     const limit = Math.max(1, Math.floor(Math.min(budget, this.capacity) * pressure));
     let excess = this.live - limit;
@@ -305,7 +313,7 @@ export class BloodFieldModel {
       this.set(slot, W.shrink, Math.min(fade, Math.max(0.05, end - nowSec)));
       this.touch(slot);
     }
-    this.refreshBounds(nowSec);
+    if (this.revision !== this.scannedRevision || nowSec + 2 >= this.nextBornSec) this.refreshBounds(nowSec);
   }
 
   /** World bounds of a receiver's marks after the last update; count 0 when it has none. */
@@ -337,15 +345,20 @@ export class BloodFieldModel {
     for (const bounds of this.channelBounds) {
       bounds.count = 0; bounds.minX = bounds.minY = Infinity; bounds.maxX = bounds.maxY = -Infinity;
     }
+    let nextEnd = Infinity, nextBorn = Infinity;
     for (let slot = 0; slot < this.highWater; slot++) {
+      if (!this.alive[slot]) continue;
+      nextEnd = Math.min(nextEnd, this.word(slot, W.end));
       // Marks still in flight already count: the pass must exist when they land.
-      if (!this.alive[slot] || this.word(slot, W.born) > nowSec + 2) continue;
+      const born = this.word(slot, W.born);
+      if (born > nowSec + 2) { nextBorn = Math.min(nextBorn, born); continue; }
       const bounds = this.channelBounds[this.word(slot, W.channel)];
       const x = this.word(slot, W.x), y = this.word(slot, W.y), reach = this.reach(slot);
       bounds.minX = Math.min(bounds.minX, x - reach); bounds.maxX = Math.max(bounds.maxX, x + reach);
       bounds.minY = Math.min(bounds.minY, y - reach); bounds.maxY = Math.max(bounds.maxY, y + reach);
       bounds.count++;
     }
+    this.nextEndSec = nextEnd; this.nextBornSec = nextBorn; this.scannedRevision = this.revision;
   }
 
   /** Conservative world radius a mark can cover, matching the shader's quad extents. */
