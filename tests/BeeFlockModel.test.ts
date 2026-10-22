@@ -32,6 +32,18 @@ describe('BeeFlockModel', () => {
     for (const bee of settled) expect(Math.hypot(bee.x - 220, bee.y - 140)).toBeLessThan(70);
   });
 
+  it('lets bees circle the hive only once its cooldown is over', () => {
+    const idle = (phase: BeeHivePresentation['phase'], progress: number) => {
+      const out: BeeInstance[] = [];
+      const count = new BeeFlockModel().update({ swarms: [], hives: new Map([[3, { ...hive, phase, progress }]]),
+        syncNow: 0, time: 1, dt: 1 / 60, beesPerSwarm: 22, targetPosition: () => null }, out);
+      return count;
+    };
+    expect(idle('recharging', .1)).toBe(0);
+    expect(idle('recharging', .95)).toBe(0);
+    expect(idle('idle', 0)).toBeGreaterThan(0);
+  });
+
   it('flows back into the hive entrance when returning', () => {
     const model = new BeeFlockModel();
     run(model, 120, () => [swarm({})]);

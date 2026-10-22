@@ -181,14 +181,13 @@ export class BeeFlockModel {
     }
   }
 
-  /** Bees around the hive entrance: a few calm ones when ready, agitated ones in the anticipation. */
+  /** Bees around the hive entrance: a few calm ones once it is ready again (none while recharging), agitated ones in the anticipation. */
   private hiveBees(frame: BeeFlockFrame, emit: (bee: BeeInstance) => void): void {
     const out = new Set(frame.swarms.map(swarm => swarm.hiveIndex));
     for (const hive of frame.hives.values()) {
       if (out.has(hive.index)) continue;
       const agitated = hive.phase === 'triggered';
-      const count = hive.phase === 'idle' ? 7 : agitated ? 18
-        : hive.phase === 'recharging' ? Math.round(7 * Math.max(0, (hive.progress - .6) / .4)) : 0;
+      const count = hive.phase === 'idle' ? 7 : agitated ? 18 : 0;
       for (let i = 0; i < count; i++) {
         const seed = hive.index * 977 + i * 31.7;
         const orbit = (agitated ? 7 : 5) + (agitated ? 12 : 8) * rnd(seed, 1);
