@@ -5,7 +5,7 @@ Integriert per Fast-Forward nach `main` (nicht gepusht).
 
 **Ergebnis:** In der Map-16-Endphase braucht ein Frame 16 % weniger CPU-Zeit (p95 −22 %, Ausreißer
 p99 23 → 16 ms). Horden profitieren am stärksten: 300 Gegner −25 %, 500 Gegner −46 % (p95 −62 %).
-Map 20 verliert vor allem die Spitzen beim Tintenspucken der Mini-Kraken (p95 je nach Phase bis −35 %).
+Map 20 verliert vor allem die Spitzen beim Tintenspucken der Mini-Kraken (p95 je nach Phase −20 bis −35 %).
 Ruhige Szenen werden 3 bis 7 % schneller. Alle Änderungen sind ohne gewollte Sicht- oder
 Spieländerung; die einzige Zeitänderung ist das Bodenfeuer-Update des Hosts im Netztakt (siehe unten).
 
@@ -60,23 +60,30 @@ Gegner); Vergleiche gelten nur innerhalb einer Messreihe.
 
 ### Map 20 (Abgrundteich, Kraken)
 
-`npm run perf:kraken` gegen zwei Dev-Server (Ausgangsstand `1864a78a` und Endstand `e450b06a`), hohe
-Qualität, feste 60-Hz-Schritte, Reihenfolge A-B-B-A, je Seite zwei Läufe (Mittelwert der beiden
-Lauf-Mediane bzw. -p95, ms). Alle vier Läufe brachen in `land-spines` am bekannten Skript-Fehler der
-Zielwahl ab (siehe offene Hebel); die Phasen davor sind vollständig. Ab ~55 Gegnern schwanken die
-Gegnerzahlen zwischen den Läufen (55–79). Rohdaten: `build/perf-night-2026-10-22/kraken/e2e-*`.
+`npm run perf:kraken` gegen zwei Dev-Server (Ausgangsstand `1864a78a` auf :8091, Endstand auf :8090),
+hohe Qualität, feste 60-Hz-Schritte, je Seite zwei vollständige Läufe mit dem korrigierten Skript
+(`2177e9ba`, siehe unten); Werte sind Mittel der beiden Lauf-Mediane bzw. -p95/-p99 in ms. Ab ~55 Gegnern
+schwanken die Wellen zwischen den Läufen; der Endstand hatte in den Landphasen sogar mehr Gegner.
+Rohdaten: `build/perf-night-2026-10-22/kraken/full-base1`, `full-base2`, `fix-cur3`, `full-cur2`.
 
-| Phase | Gegner | CPU p50 vorher → nachher | CPU p95 vorher → nachher | CPU p99 vorher → nachher |
-|---|---:|---:|---:|---:|
-| intro | 10 | 8,4 → 7,9 | 13,4 → 12,8 | 25,4 → 26,9 |
-| water | 10 | 8,0 → 7,3 | 11,0 → 9,3 | 12,8 → 11,2 |
-| ink | 23 | 9,0 → 8,7 | 12,6 → 11,6 | 14,7 → 13,2 |
-| spines | 30 | 10,5 → 10,3 | 15,2 → 12,9 | 17,0 → 14,1 |
-| eggs-hatch | 43 | 11,5 → 11,0 | 18,6 → 15,1 | 21,4 → 18,5 |
-| dive-tentacles | 55 | 10,9 → 10,3 | 19,6 → 13,0 | 22,3 → 14,4 |
-| water-waves | 55–62 | 12,4 → 12,3 | 19,1 → 15,1 | 21,5 → 16,8 |
-| ashore | 67–73 | 12,5 → 12,0 | 21,9 → 15,5 | 24,8 → 19,4 |
-| land-claw | 73–79 | 13,0 → 11,4 | 22,8 → 14,9 | 24,7 → 16,7 |
+| Phase | Gegner vorher → nachher | CPU p50 | CPU p95 | CPU p99 |
+|---|---|---:|---:|---:|
+| intro | 10 → 10 | 7,6 → 7,9 | 12,7 → 12,7 | 23,8 → 24,0 |
+| water | 10 → 10 | 7,8 → 7,7 | 10,3 → 9,9 | 13,4 → 12,1 |
+| ink | 23 → 23 | 8,7 → 8,7 | 12,5 → 11,9 | 14,8 → 13,4 |
+| spines | 30 → 30 | 10,7 → 10,3 | 15,3 → 12,9 | 17,4 → 14,1 |
+| eggs-hatch | 43 → 43 | 11,7 → 10,9 | 18,8 → 14,5 | 21,7 → 18,8 |
+| dive-tentacles | 55 → 55 | 10,8 → 10,2 | 19,3 → 12,8 | 21,6 → 14,1 |
+| water-waves | 55 → 61/62 | 12,8 → 12,5 | 20,3 → 15,7 | 24,0 → 17,0 |
+| ashore | 61/66 → 73 | 12,6 → 12,0 | 22,8 → 15,6 | 26,8 → 19,7 |
+| land-claw | 61/66 → 73 | 11,1 → 11,9 | 15,5 → 14,3 | 23,1 → 16,7 |
+| land-spines | 61/66 → 73 | 11,5 → 12,3 | 14,6 → 15,4 | 15,4 → 17,5 |
+| land-trail-waves | 66/67 → 79 | 11,6 → 11,6 | 19,2 → 14,8 | 22,3 → 17,1 |
+| death | 65/66 → 78 | 12,0 → 11,0 | 21,6 → 14,8 | 25,0 → 22,1 |
+
+Der Median bleibt bei gleicher Gegnerzahl 0–7 % niedriger; die Spitzen (p95) fallen in allen Phasen mit
+Tinte, Eiern, Tentakeln und Wellen um 20–35 %. `land-claw`/`land-spines` liegen bei 11–20 % mehr Gegnern
+leicht höher im Median.
 
 Hauptursache der Spitzen war das Neubacken der Tinten-Wassermasken (`krakenWaterMask`, 5,4 % der
 Map-20-CPU im Profil vor dem Fix, danach 1,1 % für die legitimen Körper-/Tentakelmasken). Das
@@ -125,11 +132,13 @@ Profil enthält zusätzlich ~3 % Dev-Szenario-Panel (Messwerkzeug, kein Spielcod
 | Horden-Kollision | Phasers Arcade-RTree (Gegner gegen statische Körper, 120 Hz) ~6 % bei 500 Gegnern | eigener Raster-Collider oder Physik mit 60 Hz plus Interpolation (Gameplay-Abwägung) |
 | Gegner-Fortbewegung | `EnemyLocomotion.solve` ~9 % bei 500 Gegnern | Entfernungs-LOD außerhalb des Bildes (aus Runde 2) |
 | Phaser-Render | weiterhin ~40–45 % der Frame-CPU, ~230 Draw-Calls | vorgebackenes Vegetationslicht (Runde 2) |
-| Kraken-Szenario | `perf:kraken` scheitert sporadisch in `land-spines` („target outside ink range“); Gegnerzahlen ab ~55 schwanken | Zielwahl im Skript robuster machen |
+| Kraken-Szenario | Gegnerzahlen schwanken ab ~55 zwischen Läufen (55–79), Vergleiche der späten Phasen bleiben deshalb unscharf | Wellen-Spawn im Szenario deterministisch machen |
+| Kraken-Masken | Körper-/Tentakel-Wassermasken backen bei jeder Bewegung am Ufer 128² Proben (~1,5 % Map 20) | gröberer Schwellwert oder kleinere Maske (sichtbare Uferkante prüfen) |
 
 ## Prüfung
 
-- `npm run check:release` vor jeder Integration (drei Integrationen), zusätzlich `npm run test:stress`.
+- `npm run check:release` vor jeder Code-Integration, zusätzlich `npm run test:stress`.
+- `perf:kraken`-Skript: Zielwahl in `land-spines` und Waffenreichweite vor der Todesphase korrigiert (`2177e9ba`); vier vollständige Läufe.
 - Neue Tests: Feuer-Snapshot im Netztakt und inkrementell in Id-Reihenfolge
   (`tests/FireSystemVisualStyles.test.ts`), stabile Tintenwolken-Quads (`tests/KrakenRenderer.test.ts`),
   Hindernis-Raster mit `enable` und Mitgliederänderung (`tests/HostPhysicsSystemAllocation.test.ts`).
