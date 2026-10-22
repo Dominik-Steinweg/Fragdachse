@@ -9,6 +9,9 @@ export class NavigationDensity {
     this.occupied = new Float32Array(metrics.cols * metrics.rows);
     this.smoothed = new Float32Array(this.occupied.length);
   }
+  /** Whether {@link sample} would read positions now; lets callers skip collecting them. */
+  isDue(now: number): boolean { return now >= this.nextAt; }
+
   sample(positions: Iterable<{ x: number; y: number }>, now: number): Float32Array | null {
     if (now < this.nextAt) return null;
     this.nextAt = now + 500; this.occupied.fill(0);

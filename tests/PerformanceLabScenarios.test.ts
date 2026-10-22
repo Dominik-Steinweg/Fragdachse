@@ -7,6 +7,7 @@ import { PERFORMANCE_FIXTURE } from '../src/debug/performanceLab/fixtures';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import { buildPerformanceLoadout, presets } from '../src/debug/performanceLab/loadouts';
 import { COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../src/utils/coopDefenseUpgrades';
+import { GAME_HEIGHT, GAME_WIDTH } from '../src/config';
 
 describe('Performance reference fixtures', () => {
   it('uses Holo consistently in Inspector commits and effective lab loadouts', () => {
@@ -80,6 +81,16 @@ describe('Performance reference fixtures', () => {
       expect(config.spawnThrow, kind).toBeUndefined();
       expect(config.deathSpawns ?? [], kind).toHaveLength(0);
     }
+  });
+
+  it('starts the far enemy case outside the whole view and returns arrivals before they reach that ring', () => {
+    const [far] = resolvePerformanceCases('review.enemies-300-far');
+    expect(far).toMatchObject({ kind: 'enemies', enemyStart: 'far' });
+    expect(resolvePerformanceCases('review').map(test => test.id)).toContain(far.id);
+    const ring = PERFORMANCE_FIXTURE.farEnemySpawnRadius;
+    expect(ring.min).toBeGreaterThan(Math.hypot(GAME_WIDTH, GAME_HEIGHT) / 2);
+    expect(PERFORMANCE_FIXTURE.farEnemyReturnRadius).toBeLessThan(PERFORMANCE_FIXTURE.enemySpawnRadius.max);
+    expect(ring.max).toBeGreaterThan(ring.min);
   });
 
   it('resolves every frozen build through legal ready contracts and supports independent cases', () => {
