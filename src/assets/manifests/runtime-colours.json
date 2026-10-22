@@ -913,6 +913,54 @@
       "visiblePixelSha256": "755d394f1b4e16243c548e1752fa2990019bbd338d9c85ae471e9034be23e321",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/lobby-staff-dealer/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/lobby-staff-dealer/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/lobby-staff-dealer/sheet.png",
+      "width": 640,
+      "height": 560,
+      "sourceBytes": 346611,
+      "downloadBytes": 209486,
+      "sourceSha256": "da6766ebd087e8c3938e0dbd260741a4cb93128283897d7fec601e2892195359",
+      "sha256": "27ac22c38e829965a67caff9b99051f1b46cb2f060f6a703ca929de8001f3bf1",
+      "visiblePixelSha256": "d45885bcebf9d30162e1f1d038f3c4436de492cf437e0451a384231c66dd8f27",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/lobby-staff-foreman/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/lobby-staff-foreman/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/lobby-staff-foreman/sheet.png",
+      "width": 640,
+      "height": 560,
+      "sourceBytes": 349957,
+      "downloadBytes": 208764,
+      "sourceSha256": "0b12c358ed78f2200ed57df8f3475768c3fc15c101d1ffeff41a515cbdd52b0d",
+      "sha256": "6cce0dd75b6c9e84d60bb54a0d3690535567ca21eae0cea0f7580f8658db1690",
+      "visiblePixelSha256": "1853d0cba8fc317c21cb698123802fe8f3646c26b427ab2101011cd762301bf9",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/lobby-staff-quartermaster/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/lobby-staff-quartermaster/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/lobby-staff-quartermaster/sheet.png",
+      "width": 640,
+      "height": 560,
+      "sourceBytes": 338212,
+      "downloadBytes": 192862,
+      "sourceSha256": "2dd81ae0e6c49eff4a6f81e914378a77bf3589a1bacf84d2b5d89947ed5c7b6f",
+      "sha256": "037f7540d7add288629397ee7d0c43c7056a02799d6bbe4abba0bd3a76436bfa",
+      "visiblePixelSha256": "805a657d22391ce63e4b26e3d766f530314eedbe8f609227572c888e84f96f6f",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/lobby-staff-smith/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/lobby-staff-smith/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/lobby-staff-smith/sheet.png",
+      "width": 640,
+      "height": 560,
+      "sourceBytes": 343207,
+      "downloadBytes": 204184,
+      "sourceSha256": "b1ecff8eaa1a91701ba6a650c46db2c0ccc3c3299af41068e086b5e3c8c0232f",
+      "sha256": "8f9ad3bd07390b638906286ceb556624c4240cb25ef53ad4065bc991e517996c",
+      "visiblePixelSha256": "3a169ff90a2d9b05cd4c0898467056bee1ca8c5edcb3746bc7c83e2d95cd1ed1",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/lobby-workshop/albedo.png": {
       "file": "assets/sprites/pipeline-v2/lobby-workshop/albedo.webp",
       "source": "assets/sprites/pipeline-v2/lobby-workshop/albedo.png",

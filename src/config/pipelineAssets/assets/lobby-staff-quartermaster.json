@@ -2,9 +2,9 @@
   "id": "lobby-staff-quartermaster",
   "category": "character",
   "gameIds": [],
-  "revision": "staff-d1",
+  "revision": "staff-v3",
   "variant": "standard",
-  "sourceSize": 38,
+  "sourceSize": 76,
   "textureKey": "lobby_staff_quartermaster",
   "runtimeContract": "sheet",
   "forward": "north",
@@ -44,7 +44,8 @@
         24
       ],
       "frameRate": 8,
-      "loop": true
+      "loop": true,
+      "end": "rest"
     },
     {
       "name": "work",
@@ -70,7 +71,8 @@
       "loop": true,
       "markers": {
         "stamp": 11
-      }
+      },
+      "end": "rest"
     },
     {
       "name": "greet",
@@ -89,25 +91,26 @@
         52
       ],
       "frameRate": 12,
-      "loop": false
+      "loop": false,
+      "end": "rest"
     }
   ],
-  "sheetTextureKey": "lobby_staff_quartermaster_walking",
+  "sheetTextureKey": "lobby_staff_quartermaster_sheet",
   "idlePath": "./assets/sprites/pipeline-v2/lobby-staff-quartermaster/idle.png",
   "sheetPath": "./assets/sprites/pipeline-v2/lobby-staff-quartermaster/sheet.png",
   "layout": {
-    "frameWidth": 38,
-    "frameHeight": 38,
+    "frameWidth": 76,
+    "frameHeight": 76,
     "margin": 2,
     "spacing": 4,
     "columns": 8,
     "rows": 7,
     "frameCount": 53,
-    "width": 336,
-    "height": 294
+    "width": 640,
+    "height": 560
   },
   "hashes": {
-    "idle": "e27706a31ccefd523936480a885fbfa0284f67d11ac2de80e9fbba449cf413f1",
-    "sheet": "21b50b0c718e7aab78ceacefdcb2d27f0bb39cb234491dd6da98968fb1635f1a"
+    "idle": "36da4e320d9967c333b0c87b0259314d2e4e37ba221285050895e91e27424ee8",
+    "sheet": "2dd81ae0e6c49eff4a6f81e914378a77bf3589a1bacf84d2b5d89947ed5c7b6f"
   }
 }

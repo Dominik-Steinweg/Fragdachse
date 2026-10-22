@@ -2,9 +2,9 @@
   "id": "lobby-staff-foreman",
   "category": "character",
   "gameIds": [],
-  "revision": "staff-d1",
+  "revision": "staff-v3",
   "variant": "standard",
-  "sourceSize": 38,
+  "sourceSize": 76,
   "textureKey": "lobby_staff_foreman",
   "runtimeContract": "sheet",
   "forward": "north",
@@ -44,7 +44,8 @@
         24
       ],
       "frameRate": 8,
-      "loop": true
+      "loop": true,
+      "end": "rest"
     },
     {
       "name": "work",
@@ -70,7 +71,8 @@
       "loop": true,
       "markers": {
         "point": 8
-      }
+      },
+      "end": "rest"
     },
     {
       "name": "greet",
@@ -89,25 +91,26 @@
         52
       ],
       "frameRate": 12,
-      "loop": false
+      "loop": false,
+      "end": "rest"
     }
   ],
-  "sheetTextureKey": "lobby_staff_foreman_walking",
+  "sheetTextureKey": "lobby_staff_foreman_sheet",
   "idlePath": "./assets/sprites/pipeline-v2/lobby-staff-foreman/idle.png",
   "sheetPath": "./assets/sprites/pipeline-v2/lobby-staff-foreman/sheet.png",
   "layout": {
-    "frameWidth": 38,
-    "frameHeight": 38,
+    "frameWidth": 76,
+    "frameHeight": 76,
     "margin": 2,
     "spacing": 4,
     "columns": 8,
     "rows": 7,
     "frameCount": 53,
-    "width": 336,
-    "height": 294
+    "width": 640,
+    "height": 560
   },
   "hashes": {
-    "idle": "c82cc128c8a64114018f236258fdfe1bed84ca957764f861286ab85de2e0bd02",
-    "sheet": "93bc5e5ea8eafad2469336a02fdbb9be620d80f5fe0d21dfbb9bf2f38bf98af3"
+    "idle": "564daa3a5f4b4a1e008a8c14d89a11803414d68abfe0eb83aa9a57b5ab992e8c",
+    "sheet": "0b12c358ed78f2200ed57df8f3475768c3fc15c101d1ffeff41a515cbdd52b0d"
   }
 }

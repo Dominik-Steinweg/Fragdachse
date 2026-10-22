@@ -2,9 +2,9 @@
   "id": "lobby-staff-dealer",
   "category": "character",
   "gameIds": [],
-  "revision": "staff-d1",
+  "revision": "staff-v3",
   "variant": "standard",
-  "sourceSize": 38,
+  "sourceSize": 76,
   "textureKey": "lobby_staff_dealer",
   "runtimeContract": "sheet",
   "forward": "north",
@@ -44,7 +44,8 @@
         24
       ],
       "frameRate": 8,
-      "loop": true
+      "loop": true,
+      "end": "rest"
     },
     {
       "name": "work",
@@ -70,7 +71,8 @@
       "loop": true,
       "markers": {
         "tap": 9
-      }
+      },
+      "end": "rest"
     },
     {
       "name": "greet",
@@ -89,25 +91,26 @@
         52
       ],
       "frameRate": 12,
-      "loop": false
+      "loop": false,
+      "end": "rest"
     }
   ],
-  "sheetTextureKey": "lobby_staff_dealer_walking",
+  "sheetTextureKey": "lobby_staff_dealer_sheet",
   "idlePath": "./assets/sprites/pipeline-v2/lobby-staff-dealer/idle.png",
   "sheetPath": "./assets/sprites/pipeline-v2/lobby-staff-dealer/sheet.png",
   "layout": {
-    "frameWidth": 38,
-    "frameHeight": 38,
+    "frameWidth": 76,
+    "frameHeight": 76,
     "margin": 2,
     "spacing": 4,
     "columns": 8,
     "rows": 7,
     "frameCount": 53,
-    "width": 336,
-    "height": 294
+    "width": 640,
+    "height": 560
   },
   "hashes": {
-    "idle": "e21e4bc62aaff14d6560e5ae2ade8801ead3cba1eae2a2009f7856849bbd24de",
-    "sheet": "33dd3aa69621a95c8935a3ffe7d017601ecf517010012723185f84476e45e0da"
+    "idle": "a1bbf59894cdf0ff5d6b1626b49dae2e50d92c172839885e593406bdc3d57f42",
+    "sheet": "da6766ebd087e8c3938e0dbd260741a4cb93128283897d7fec601e2892195359"
   }
 }

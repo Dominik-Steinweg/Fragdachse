@@ -2,9 +2,9 @@
   "id": "lobby-staff-smith",
   "category": "character",
   "gameIds": [],
-  "revision": "staff-d1",
+  "revision": "staff-v3",
   "variant": "standard",
-  "sourceSize": 38,
+  "sourceSize": 76,
   "textureKey": "lobby_staff_smith",
   "runtimeContract": "sheet",
   "forward": "north",
@@ -44,7 +44,8 @@
         24
       ],
       "frameRate": 8,
-      "loop": true
+      "loop": true,
+      "end": "rest"
     },
     {
       "name": "work",
@@ -70,7 +71,8 @@
       "loop": true,
       "markers": {
         "strike": 10
-      }
+      },
+      "end": "rest"
     },
     {
       "name": "greet",
@@ -89,25 +91,26 @@
         52
       ],
       "frameRate": 12,
-      "loop": false
+      "loop": false,
+      "end": "rest"
     }
   ],
-  "sheetTextureKey": "lobby_staff_smith_walking",
+  "sheetTextureKey": "lobby_staff_smith_sheet",
   "idlePath": "./assets/sprites/pipeline-v2/lobby-staff-smith/idle.png",
   "sheetPath": "./assets/sprites/pipeline-v2/lobby-staff-smith/sheet.png",
   "layout": {
-    "frameWidth": 38,
-    "frameHeight": 38,
+    "frameWidth": 76,
+    "frameHeight": 76,
     "margin": 2,
     "spacing": 4,
     "columns": 8,
     "rows": 7,
     "frameCount": 53,
-    "width": 336,
-    "height": 294
+    "width": 640,
+    "height": 560
   },
   "hashes": {
-    "idle": "e429df9f14dd95c8115877017884f3efc1c64055bebb89705fe86c50efd15715",
-    "sheet": "602e507930c475a5812052e4f749e7f9bf6db56bed1b3216f24a9715d8587716"
+    "idle": "d0df3c65b80e4a76c73bcd5ac626b961e208e28104032fd331302b84b55f22d8",
+    "sheet": "b1ecff8eaa1a91701ba6a650c46db2c0ccc3c3299af41068e086b5e3c8c0232f"
   }
 }
