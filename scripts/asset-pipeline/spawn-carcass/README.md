@@ -32,6 +32,6 @@ in einem laufenden Blender gebaut. Die Skripte steuern Blender über den Socket 
 
 Die Hitbox (`SOUTH_BODY` in `src/config/spawnStructure.ts`) ist aus der Knochenabdeckung des Frames
 `intact-south` abgeleitet. `carcass.py` spiegelt sie als `BODY` und hält Schwanz, Hinterbein und Vorderklaue
-auf diesen Zellen; der Schwanz trägt seitliche Knochenplatten, damit seine Zellen so massiv wirken wie der
-Brustkorb. Ändert sich die Vorlage, müssen beide Stellen gemeinsam angepasst werden.
+auf diesen Zellen. Die Schwanzwirbel sind fein ausgearbeitet (eigenes Objekt `v6_tail` mit feinerem Raster);
+ihre langen Querfortsätze überspannen die Zellen wie die Rippen den Brustkorb. Ändert sich die Vorlage, müssen beide Stellen gemeinsam angepasst werden.
 `python -I scripts/asset-pipeline/spawn-carcass/hitbox_check.py <frame.png> <overlay.png>` misst die Abdeckung je Zelle.

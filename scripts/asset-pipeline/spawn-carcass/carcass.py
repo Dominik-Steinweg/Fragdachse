@@ -347,7 +347,7 @@ def column_z(i):
 spine_z = dict(zip(spine_idx, gauss([column_z(i) for i in spine_idx], 5)))
 # The tail ends on its hitbox cells: TAIL_CUT is where its centreline first stands on them.
 TAIL_CUT = next(seglen[i] for i in spine_idx if on_body(point(i), 0.12))
-bm = bmesh.new()
+bm, bm_tail = bmesh.new(), bmesh.new()
 last = -1.0
 for i in spine_idx:
     s = seglen[i]
@@ -357,7 +357,10 @@ for i in spine_idx:
     # last cell; the tip there has come slightly apart.
     size = (0.72 + 0.28 * smoothstep(0, PELVIS, s)) * (0.6 + 0.4 * smoothstep(TAIL_CUT, TAIL_CUT + 0.5, s))
     size *= 1 + 0.45 * smoothstep(CAGE_END - 0.2, SKULL_START, s)
-    if s - last < 0.1 + 0.09 * size: continue
+    if s < PELVIS - 0.2:
+        size *= 1.28                # the fine tail vertebrae span their hitbox cells, closely set
+        if s - last < 0.08 + 0.07 * size: continue
+    elif s - last < 0.1 + 0.09 * size: continue
     last = s
     tan = tangent(i)
     c = Vector((xs[i], ys[i], spine_z[i]))
@@ -369,25 +372,48 @@ for i in spine_idx:
     if s < PELVIS and not on_body(c, 0.12):
         continue                    # the tail ends on its hitbox cells: no bones trail off past it
     basis = frame(tan)
-    ellipsoid(bm, c, basis, (0.11 * size, 0.12 * size, 0.11 * size), wobble=0.18, seed=s)
-    # Neural spine leaning back, often snapped; transverse processes.
-    height = (0.1 + rng.random() * 0.16) * size
-    tube(bm, [c + UP * 0.06 * size, c + UP * (0.06 + height) - tan * 0.07 * size], [0.05 * size, 0.012], seg=7, jag=0.03)
-    for sgn in (-1, 1):
-        tube(bm, [c, c + basis.col[1] * sgn * 0.17 * size - UP * 0.03], [0.042 * size, 0.016 * size], seg=6, jag=0.02)
-    if s < PELVIS - 0.2:
-        # Bony scutes on both flanks, tilted like a roof: the armoured tail fills its cells.
+    tail = s < PELVIS - 0.2
+    target = bm_tail if tail else bm
+    if tail:
+        # A tail vertebra in detail: a waisted spool with knobbly ends, long slender transverse processes
+        # swept back and down (they span the hitbox cell as the ribs span theirs) and a thin neural spine.
+        a, b = c - tan * 0.07 * size, c + tan * 0.07 * size
+        tube(target, [a, c, b], [0.062 * size, 0.042 * size, 0.062 * size], seg=10, wobble=0.01)
+        for end in (a, b):
+            ellipsoid(target, end, basis, (0.028 * size, 0.068 * size, 0.062 * size), wobble=0.15, seed=s + end.x)
         for sgn in (-1, 1):
             side = basis.col[1] * sgn
-            ellipsoid(bm, c + side * 0.19 * size + UP * 0.02, frame(tan, (UP + side * 0.6).normalized()),
-                      (0.15 * size, 0.11 * size, 0.035 * size), wobble=0.3, seed=s * 3 + sgn)
+            root = c + side * 0.05 * size
+            tube(target, [root, root + side * 0.17 * size - tan * 0.04 * size + UP * 0.01,
+                          root + side * 0.33 * size - tan * 0.13 * size - UP * 0.04],
+                 [0.032 * size, 0.019 * size, 0.007], seg=7, flat=0.55, up=UP, jag=0.02)
+    else:
+        ellipsoid(target, c, basis, (0.11 * size, 0.12 * size, 0.11 * size), wobble=0.18, seed=s)
+    # Neural spine leaning back, often snapped.
+    height = (0.1 + rng.random() * 0.16) * size
+    tube(target, [c + UP * 0.06 * size, c + UP * (0.06 + height) - tan * 0.07 * size], [(0.034 if tail else 0.05) * size, 0.01],
+         seg=7, jag=0.03)
+    if not tail:
+        # Transverse processes.
+        for sgn in (-1, 1):
+            tube(target, [c, c + basis.col[1] * sgn * 0.17 * size - UP * 0.03], [0.042 * size, 0.016 * size], seg=6, jag=0.02)
     if s < PELVIS - 0.3:
-        # Chevron under each tail vertebra, raking back.
-        tube(bm, [c - UP * 0.05 * size, c - UP * 0.13 * size - tan * 0.1 * size], [0.035 * size, 0.012], seg=6)
+        # Chevron under each tail vertebra, raking back; now and then one has fallen out beside the tail.
+        tube(target, [c - UP * 0.05 * size, c - UP * 0.13 * size - tan * 0.1 * size], [0.03 * size, 0.01], seg=6)
+        if rng.random() < 0.35:
+            side = basis.col[1] * (1 if rng.random() < 0.5 else -1)
+            p = Vector((c.x, c.y, 0.015)) + side * rng.uniform(0.3, 0.37) + tan * rng.uniform(-0.06, 0.06)
+            if on_body(p, 0.07):
+                d = (tan + side * rng.uniform(-0.6, 0.6)).normalized()
+                tube(target, [p - d * 0.06, p + side * 0.025 + UP * 0.012, p + d * 0.065], [0.02, 0.016, 0.007], seg=6, flat=0.6, up=UP)
     if loose < 0.3:
+        # Vertebrae stay apart in the tail: only a thin strand of ligament joins them.
         nxt = index_at(s + 0.08)
-        tube(bm, [c, Vector((xs[nxt], ys[nxt], spine_z.get(nxt, c.z)))], [0.06 * size, 0.06 * size], seg=8)
+        r = (0.026 if tail else 0.06) * size
+        tube(target, [c, Vector((xs[nxt], ys[nxt], spine_z.get(nxt, c.z)))], [r, r], seg=8)
 spine_obj = organic(finish(bm, 'v6_spine', BONE), 0.022, [CRACKS, ERODE, FINE_CRACKS], smooth=1)
+# The tail's slender processes keep their shape: a finer fuse and only fine weathering.
+tail_obj = organic(finish(bm_tail, 'v6_tail', BONE), 0.012, [('VORONOI', 0.1, 0.01, 0.2), FINE_CRACKS], smooth=1)
 
 # --- Ribcage: barrel-shaped, flat ribs bulging out before they fall; many end in the air ------------
 rng.seed('carcass-v8-ribs')         # the ribcage and everything after it do not depend on the tail
@@ -674,7 +700,7 @@ jaw_obj = organic(finish(bm, 'v6_jaw_teeth_horns', BONE), 0.016, [CRACKS, FINE_C
 
 # --- Stage -------------------------------------------------------------------------------------------
 root = bpy.data.objects.new('v6_root', None); scene.collection.objects.link(root)
-for obj in (spine_obj, ribs_obj, pelvis_obj, legs_obj, skull_obj, ember_obj, socket_obj, jaw_obj, *cutters, *socket_marks): obj.parent = root
+for obj in (spine_obj, tail_obj, ribs_obj, pelvis_obj, legs_obj, skull_obj, ember_obj, socket_obj, jaw_obj, *cutters, *socket_marks): obj.parent = root
 g_mesh = bpy.data.meshes.new('v6_ground'); b = bmesh.new()
 bmesh.ops.create_grid(b, x_segments=1, y_segments=1, size=8.0); b.to_mesh(g_mesh); b.free()
 ground = bpy.data.objects.new('v6_ground', g_mesh); ground.is_shadow_catcher = True; scene.collection.objects.link(ground)

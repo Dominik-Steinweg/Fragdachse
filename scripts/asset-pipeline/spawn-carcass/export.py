@@ -18,7 +18,7 @@ rng = random.Random('carcass-export-v6')
 OUTLETS = ['north', 'east', 'south', 'west']
 TURNS = {'south': 0, 'west': 1, 'north': 2, 'east': 3}       # quarter turns clockwise on screen
 BUILDING_CELLS, PIT_CELLS, PX_PER_CELL = 9, 11, 64
-SKELETON = ['v6_spine', 'v6_ribs', 'v6_pelvis', 'v6_legs', 'v6_skull', 'v6_embers', 'v6_socket_floor', 'v6_jaw_teeth_horns']
+SKELETON = ['v6_spine', 'v6_tail', 'v6_ribs', 'v6_pelvis', 'v6_legs', 'v6_skull', 'v6_embers', 'v6_socket_floor', 'v6_jaw_teeth_horns']
 GROUND = ['atmos6_floor', 'atmos6_growth', 'atmos6_strands', 'atmos6_eggs', 'atmos6_eggs_scatter', 'atmos6_shells', 'atmos6_shards', 'atmos6_stones']
 
 objs = scene.objects

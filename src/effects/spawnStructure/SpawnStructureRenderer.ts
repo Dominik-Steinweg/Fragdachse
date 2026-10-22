@@ -9,13 +9,13 @@ import {
 } from './SpawnStructureAssets';
 import {
   phaseOf, resolveSpawnEmergencePhase, resolveSpawnPitState, resolveSpawnStructureEyes, resolveSpawnStructureFade,
-  resolveSpawnStructureGlow, type SpawnEmergence, type SpawnStructureView,
+  resolveSpawnStructureGlow, resolveSpawnStructureHeartbeat, type SpawnEmergence, type SpawnStructureView,
 } from './SpawnStructureModel';
 import { SpawnStructureBoneBurst } from './SpawnStructureBoneBurst';
 import { SpawnStructureSpores } from './SpawnStructureSpores';
 import { BROOD_PIT_SWELLS, BroodPitGpuLayer, type BroodPitSwell } from '../gpu/BroodPitGpuLayer';
 
-export type SpawnStructureLightingPort = Pick<LightingSystem, 'setLight' | 'releaseLight' | 'getArtificialLightFactor'>;
+export type SpawnStructureLightingPort = Pick<LightingSystem, 'setLight' | 'releaseLight' | 'getArtificialLightFactor' | 'setGroundGlowLights'>;
 
 /** One wall cell as a shadow caster; stable identity, so the shadow cache only invalidates on change. */
 export interface SpawnStructureShadowCell {
@@ -111,6 +111,7 @@ export class SpawnStructureRenderer {
   setLighting(lighting: SpawnStructureLightingPort | null): void {
     if (this.lighting && this.lighting !== lighting) this.releaseLights();
     this.lighting = lighting;
+    this.spores.setLighting(lighting);
   }
 
   /** Activity input: announced release of a structure, 0 (none) to 1 (enemies rise now). */
@@ -165,7 +166,9 @@ export class SpawnStructureRenderer {
       if (!view.destroyed) {
         this.pool.add({ x: view.x, y: view.y, halfSize: POOL_QUAD_HALF_PX, radius: POOL_RADIUS_PX, charge,
           state: PIT_STATE_CODE[resolveSpawnPitState(view)], seed: phaseOf(view.id) / 6.283, swells: this.resolveSwells(view.id, nowMs) });
-        if (resolveSpawnPitState(view) === 'active') this.spores.emit(view.id, view.x, view.y, charge, nowMs);
+        if (resolveSpawnPitState(view) === 'active') {
+          this.spores.emit(view.id, view.x, view.y, charge, resolveSpawnStructureHeartbeat(view, nowMs, charge), nowMs);
+        }
       }
 
       // The baked embers stay dark; the eyes are lit here, the pool glow fades with the stain.
@@ -201,7 +204,7 @@ export class SpawnStructureRenderer {
       }
     }
     this.pool.flush();
-    this.spores.update(nowMs, 0.45 + 0.55 * emissive);
+    this.spores.update(nowMs, 0.6 + 0.4 * emissive);
     for (const key of this.lightKeys) {
       if (seenLights.has(key)) continue;
       this.lighting?.releaseLight(key);
@@ -236,6 +239,7 @@ export class SpawnStructureRenderer {
   releaseLights(): void {
     for (const key of this.lightKeys) this.lighting?.releaseLight(key, { immediate: true });
     this.lightKeys.clear();
+    this.spores.releaseLights();
   }
 
   destroy(): void {
