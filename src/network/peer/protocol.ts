@@ -40,7 +40,9 @@
 // hives, one entry per swarm); sc carries the puffball dust styles.
 // Burning ground: fg carries base64 run-length blobs keyed by style and raster cell (full f, delta d)
 // and the warning band as full w or changed cells wd instead of JSON tuples with host ids.
-export const PEER_PROTOCOL_VERSION = 46;
+// Lobby structures: host physics and fog follow checked-in building outlines that the layout
+// fingerprint does not cover.
+export const PEER_PROTOCOL_VERSION = 47;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';
