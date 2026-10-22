@@ -1,5 +1,6 @@
 import type { NavigationGeometry, NavigationPoint } from './NavigationGeometry';
 import type { EnemyAiTargetRef } from '../EnemyAiTargetCatalog';
+import type { EnemyAiDetail } from './EnemyAiDetail';
 
 export interface NavigationVersion { readonly generation: number; readonly topology: number; readonly goal: number; readonly profile: string }
 export type NavigationResult = (NavigationVersion & (
@@ -25,6 +26,11 @@ export interface LocomotionRequest {
   readonly routeCost?: number;
   /** Geometry the body collides with when it differs from the shared frame geometry (amphibious bodies). */
   readonly geometry?: NavigationGeometry;
+  /**
+   * `far` steers only against geometry: no crowd avoidance, and a verified course is kept for a
+   * few frames. The body still counts as a neighbour for everybody else. Default `full`.
+   */
+  readonly detail?: EnemyAiDetail;
 }
 export interface MovementFeedback {
   readonly vx: number; readonly vy: number;

@@ -221,7 +221,67 @@ describe('Shared enemy and ally locomotion', () => {
     expect(free.vy).toBeCloseTo(0);
   });
 
-  it.each(['attack', 'exclusive', 'route-pending', 'stopped', 'skipped', 'removed', 'geometry', 'override', 'clear'] as const)(
+  it('steers a far body only against geometry while it still counts as a neighbour for others', () => {
+    const world = geometry(), blocker = neighbor('b', 96, 64);
+    const full = new EnemyLocomotion(), far = new EnemyLocomotion();
+    full.begin([neighbor('a', 64, 64), blocker], world, 16);
+    far.begin([neighbor('a', 64, 64), blocker], world, 16);
+    const avoiding = full.solve(body), straight = far.solve({ ...body, detail: 'far' });
+    expect(avoiding.neighborsVisited).toBe(1);
+    expect(straight).toMatchObject({ neighborsVisited: 0, waitReason: 'none' });
+    expect(straight.vy).toBeCloseTo(0);
+    expect(straight.vx).toBeGreaterThan(avoiding.vx);
+    expect(far.solve({ ...body, id: 'b', x: 96, waypoint: { x: 0, y: 64 } }).neighborsVisited).toBe(1);
+
+    const wall = geometry([{ id: 'wall', kind: 'rock', shape: 'rect', left: 90, right: 110, top: 0, bottom: 256 }]);
+    far.begin([], wall, 16);
+    const blocked = far.solve({ ...body, previousVx: 100, detail: 'far' });
+    expect(world.canMove(64, 64, 64 + 100 * .12, 64, body.radius)).toBe(true);
+    expect(wall.canMove(64, 64, 64 + 100 * .12, 64, body.radius)).toBe(false);
+    expect(blocked.vx).toBeLessThan(100);
+    expect(wall.canMove(64, 64, 64 + blocked.vx * .12, 64 + blocked.vy * .12, body.radius)).toBe(true);
+    expect(far.getWorkCounters().farSolves).toBe(2);
+  });
+
+  it.each([[16, 3], [40, 1]])('keeps a verified far course only inside its capsule at %i ms frames', (deltaMs, reuses) => {
+    const world = geometry(), movement = new EnemyLocomotion();
+    let request: LocomotionRequest = { ...body, detail: 'far', waypoint: { x: 240, y: 64 } };
+    const step = () => {
+      movement.begin([{ ...neighbor('a', request.x, request.y), vx: request.previousVx, vy: request.previousVy }], world, deltaMs);
+      const feedback = movement.solve(request);
+      request = { ...request, x: request.x + feedback.vx * deltaMs / 1000, previousVx: feedback.vx, previousVy: feedback.vy };
+      return feedback;
+    };
+    const first = step();
+    for (let frame = 0; frame < reuses; frame++) expect(step()).toMatchObject({ vx: first.vx, vy: first.vy });
+    expect(movement.getWorkCounters()).toMatchObject({ farSolves: 1, farSteeringReuses: reuses });
+    step();
+    expect(movement.getWorkCounters().farSolves).toBe(2);
+    // A foreign velocity (dodge, override) ends the kept course at once.
+    request = { ...request, previousVy: 5 };
+    step();
+    expect(movement.getWorkCounters()).toMatchObject({ farSolves: 3, farSteeringReuses: reuses });
+  });
+
+  it('never lets a full-detail solve continue a far course, even in a sliced crowd', () => {
+    const crowd = Array.from({ length: 100 }, (_, index) =>
+      neighbor(`c${index}`, 200 + (index % 10) * 3, 200 + Math.floor(index / 10) * 3, 1));
+    for (const farFrames of [1, 2]) {
+      const movement = new EnemyLocomotion(), reference = new EnemyLocomotion(), world = geometry();
+      let request: LocomotionRequest = body;
+      for (let frame = 0; frame < farFrames; frame++) {
+        movement.begin([neighbor('a', 64, 64), ...crowd], world, 16);
+        const feedback = movement.solve({ ...request, detail: 'far' });
+        request = { ...request, previousVx: feedback.vx, previousVy: feedback.vy };
+      }
+      movement.begin([neighbor('a', 64, 64), ...crowd], world, 16);
+      reference.begin([neighbor('a', 64, 64), ...crowd], world, 16);
+      const expected = reference.solve(request);
+      expect(movement.solve(request)).toMatchObject({ vx: expected.vx, vy: expected.vy, waitReason: expected.waitReason });
+    }
+  });
+
+  it.each(['attack', 'exclusive', 'route-pending', 'stopped', 'skipped', 'removed', 'geometry', 'override', 'clear', 'far'] as const)(
     'discards the previous choice after %s', reset => {
       const gap = movingGap();
       let world = gap.world, request = gap.request();
@@ -238,6 +298,11 @@ describe('Shared enemy and ally locomotion', () => {
       if (reset === 'geometry') world = geometry();
       if (reset === 'override') request = { ...request, previousVy: 5 };
       if (reset === 'clear') gap.movement.clear();
+      if (reset === 'far') {
+        // A course chosen without the crowd, even one the body actually followed.
+        const far = gap.movement.solve({ ...request, detail: 'far' });
+        request = { ...request, previousVx: far.vx, previousVy: far.vy };
+      }
       gap.movement.begin(gap.snapshot(-.1), world, 16);
       reference.clear(); reference.begin(gap.snapshot(-.1), world, 16);
       const expected = reference.solve(request);

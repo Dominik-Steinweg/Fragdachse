@@ -11,9 +11,15 @@ const CELL = 96;
 const CROWD_SLICE_BODIES = 96;
 /** Reuse stays inside the capsule the previous solve proved free (horizon >= 0.12 s) for two frames. */
 const CROWD_SLICE_MAX_DT = 0.05;
+/** Far detail keeps a geometry-verified course for at most this many following frames ... */
+const FAR_REUSE_FRAMES = 3;
+/** ... and only while the body stays inside the verified capsule (horizon >= 0.12 s) including the next step. */
+const FAR_REUSE_WINDOW_MS = 100;
 interface Conflict { dx: number; dy: number; vx: number; vy: number; separation: number;
   separationSq: number; existingOverlap: number; weight: number }
-interface SteeringChoice { angle: number; scale: number; heading: number; vx: number; vy: number; frame: number }
+interface SteeringChoice { angle: number; scale: number; heading: number; vx: number; vy: number; frame: number;
+  /** Chosen without crowd avoidance; never a commitment for a full-detail solve. */
+  far: boolean; solvedAtMs: number; reuses: number }
 interface MovementHistory { x: number; y: number; targetX: number; targetY: number; stalled: number;
   retryAt: number; geometry: NavigationGeometry; crowdNeighbors?: readonly Neighbor[]; steering?: SteeringChoice }
 
@@ -29,6 +35,8 @@ export class EnemyLocomotion {
   private elapsedMs = 0;
   private neighborsExamined = 0;
   private waitingNeighborsObserved = 0;
+  private farSolves = 0;
+  private farSteeringReuses = 0;
   private maxRadius = 0;
   private maxNeighborSpeed = 0;
   private geometry: NavigationGeometry | null = null;
@@ -107,19 +115,30 @@ export class EnemyLocomotion {
     if (distance < 1e-3) return result(0, 0, 'arrival', progress);
     const dt = this.deltaSeconds;
     if (dt <= 0 || speed <= 0) return result(0, 0, 'arrival', progress);
+    const far = request.detail === 'far';
     // Crowd LOD: between its solves a unit keeps last frame's committed steering, as long as
     // nothing invalidated it (same waypoint and geometry, no recovery stall, no foreign velocity
     // change). The stall bound matches the solver's own continuity rule; stall time keeps
     // accumulating above, so recovery headings still start on time. Two short frames stay
     // inside the swept capsule that choice was verified against.
     const kept = prior?.steering;
-    if (this.sliced && kept && kept.frame === this.frame - 1 && sameTarget && stalled <= 0.8 && dt <= CROWD_SLICE_MAX_DT
-      && prior.geometry === geometry && ((this.frame + this.slicePhase(request.id)) & 1) === 1
+    const keepable = kept && kept.frame === this.frame - 1 && sameTarget && stalled <= 0.8 && prior.geometry === geometry
       && Math.abs(request.previousVx - kept.vx) < 1e-3 && Math.abs(request.previousVy - kept.vy) < 1e-3
-      && distance > Math.hypot(kept.vx, kept.vy) * Math.max(dt, 0.12) * 2) {
+      && distance > Math.hypot(kept.vx, kept.vy) * Math.max(dt, 0.12) * 2;
+    if (!far && keepable && !kept.far && this.sliced && dt <= CROWD_SLICE_MAX_DT
+      && ((this.frame + this.slicePhase(request.id)) & 1) === 1) {
       history.steering = { ...kept, frame: this.frame };
       return result(kept.vx, kept.vy, 'none', progress);
     }
+    // Far detail: the same continuity rules, but a few frames in a row, as long as the motion
+    // since that solve plus the next step stays inside the capsule it was verified against.
+    if (far && keepable && kept.far && kept.reuses < FAR_REUSE_FRAMES
+      && this.elapsedMs - kept.solvedAtMs + dt * 1000 <= FAR_REUSE_WINDOW_MS) {
+      this.farSteeringReuses++;
+      history.steering = { ...kept, frame: this.frame, reuses: kept.reuses + 1 };
+      return result(kept.vx, kept.vy, 'none', progress);
+    }
+    if (far) this.farSolves++;
     const horizon = Math.max(dt, 0.12);
     const blend = 1 - Math.exp(-dt * 14);
     // Every smoothed candidate lies inside this envelope, including previous dash/impulse
@@ -144,40 +163,8 @@ export class EnemyLocomotion {
 
     const neighbors = this.nearby;
     neighbors.length = 0;
-    const range = radius + this.maxRadius + (speed + this.maxNeighborSpeed) * 0.16 + 8;
-    const rangeSq = range * range;
-    const minRow = Math.floor((y - range) / CELL), maxRow = Math.floor((y + range) / CELL);
-    const minCol = Math.floor((x - range) / CELL), maxCol = Math.floor((x + range) / CELL);
-    for (let row = minRow; row <= maxRow; row++) {
-      const columns = this.buckets.get(row);
-      if (!columns) continue;
-      for (let col = minCol; col <= maxCol; col++) {
-        const bucket = columns.get(col);
-        if (!bucket) continue;
-        for (const neighbor of bucket) {
-          if (neighbor.id === request.id) continue;
-          this.neighborsExamined++;
-          const dx = neighbor.x - x, dy = neighbor.y - y;
-          if (dx * dx + dy * dy > rangeSq) continue;
-          neighbors.push(neighbor);
-        }
-      }
-    }
-    // All neighbor sight lines lie inside this envelope. A dense crowd reuses one
-    // broad phase; sparse groups keep the cheaper individual segment queries.
-    const reuseBroadPhase = neighbors.length > 4;
-    if (reuseBroadPhase) {
-      this.neighborObstacles.length = 0;
-      geometry.visit(x - range, y - range, x + range, y + range, 0, this.collectNeighborObstacle);
-    }
-    let visibleNeighbors = 0;
-    for (const neighbor of neighbors) {
-      // Bodies separated by geometry exert no social force through the wall.
-      if (reuseBroadPhase
-        ? geometry.canMoveAgainst(x, y, neighbor.x, neighbor.y, 0, this.neighborObstacles)
-        : geometry.canMove(x, y, neighbor.x, neighbor.y, 0)) neighbors[visibleNeighbors++] = neighbor;
-    }
-    neighbors.length = visibleNeighbors;
+    // Far detail skips the crowd entirely; the heading candidates below still test geometry.
+    if (!far) this.gatherVisibleNeighbors(request, geometry, neighbors);
     const conflicts = this.conflicts;
     const radiusSq = radius ** 2;
     let lastOverlap = -1;
@@ -198,7 +185,8 @@ export class EnemyLocomotion {
     // Retain a decision only across uninterrupted ordinary movement. Re-score it against
     // today's geometry and crowd; momentum from an override is not a steering commitment.
     const priorChoice = prior?.steering;
-    const choice = priorChoice && prior?.geometry === geometry && priorChoice.frame === this.frame - 1
+    // A far course ignored the crowd, so it is no commitment once the unit steers in full again.
+    const choice = priorChoice && (far || !priorChoice.far) && prior?.geometry === geometry && priorChoice.frame === this.frame - 1
       && stalled <= 0.8 && Math.cos(heading - priorChoice.heading) >= 0.5
       && Math.abs(request.previousVx - priorChoice.vx) < 1e-3
       && Math.abs(request.previousVy - priorChoice.vy) < 1e-3 ? priorChoice : undefined;
@@ -236,7 +224,7 @@ export class EnemyLocomotion {
         }
         if (straight && penalty <= .005) {
           if (!choice || continuityBonus) {
-            history.steering = { angle, scale, heading, vx, vy, frame: this.frame };
+            history.steering = { angle, scale, heading, vx, vy, frame: this.frame, far, solvedAtMs: this.elapsedMs, reuses: 0 };
             return result(vx, vy, 'none', progress, neighbors.length);
           }
           // A clear straight path still accepts reversing momentum if no useful detour
@@ -255,12 +243,51 @@ export class EnemyLocomotion {
       bestVx = freeStraightVx; bestVy = freeStraightVy;
     }
     if (bestVx || bestVy) history.steering = { angle: bestAngle, scale: bestScale, heading,
-      vx: bestVx, vy: bestVy, frame: this.frame };
+      vx: bestVx, vy: bestVy, frame: this.frame, far, solvedAtMs: this.elapsedMs, reuses: 0 };
     if (!bestVx && !bestVy && safeCandidate) {
       history.retryAt = this.elapsedMs + 250;
       history.crowdNeighbors = neighbors.slice();
     }
     return result(bestVx, bestVy, bestVx || bestVy ? 'none' : safeCandidate ? 'crowd' : 'geometry', progress, neighbors.length);
+  }
+
+  /** Neighbours whose predicted bodies can reach this one before the next frames, minus those behind walls. */
+  private gatherVisibleNeighbors(request: LocomotionRequest, geometry: NavigationGeometry, neighbors: Neighbor[]): void {
+    const { x, y, radius, speed } = request;
+    const range = radius + this.maxRadius + (speed + this.maxNeighborSpeed) * 0.16 + 8;
+    const rangeSq = range * range;
+    const minRow = Math.floor((y - range) / CELL), maxRow = Math.floor((y + range) / CELL);
+    const minCol = Math.floor((x - range) / CELL), maxCol = Math.floor((x + range) / CELL);
+    for (let row = minRow; row <= maxRow; row++) {
+      const columns = this.buckets.get(row);
+      if (!columns) continue;
+      for (let col = minCol; col <= maxCol; col++) {
+        const bucket = columns.get(col);
+        if (!bucket) continue;
+        for (const neighbor of bucket) {
+          if (neighbor.id === request.id) continue;
+          this.neighborsExamined++;
+          const dx = neighbor.x - x, dy = neighbor.y - y;
+          if (dx * dx + dy * dy > rangeSq) continue;
+          neighbors.push(neighbor);
+        }
+      }
+    }
+    // All neighbor sight lines lie inside this envelope. A dense crowd reuses one
+    // broad phase; sparse groups keep the cheaper individual segment queries.
+    const reuseBroadPhase = neighbors.length > 4;
+    if (reuseBroadPhase) {
+      this.neighborObstacles.length = 0;
+      geometry.visit(x - range, y - range, x + range, y + range, 0, this.collectNeighborObstacle);
+    }
+    let visibleNeighbors = 0;
+    for (const neighbor of neighbors) {
+      // Bodies separated by geometry exert no social force through the wall.
+      if (reuseBroadPhase
+        ? geometry.canMoveAgainst(x, y, neighbor.x, neighbor.y, 0, this.neighborObstacles)
+        : geometry.canMove(x, y, neighbor.x, neighbor.y, 0)) neighbors[visibleNeighbors++] = neighbor;
+    }
+    neighbors.length = visibleNeighbors;
   }
 
   private recover(request: LocomotionRequest, geometry: NavigationGeometry, dt: number, progress: number): MovementFeedback {
@@ -283,11 +310,15 @@ export class EnemyLocomotion {
     return { vx, vy, waitReason: 'recovery', progress, neighborsVisited: 0 };
   }
 
-  getWorkCounters() { return { localNeighborsExamined: this.neighborsExamined, waitingNeighborsObserved: this.waitingNeighborsObserved }; }
+  getWorkCounters() {
+    return { localNeighborsExamined: this.neighborsExamined, waitingNeighborsObserved: this.waitingNeighborsObserved,
+      farSolves: this.farSolves, farSteeringReuses: this.farSteeringReuses };
+  }
   clear(): void {
     this.previous.clear(); this.buckets.clear(); this.neighborsById.clear(); this.pool.length = 0; this.geometry = null;
     this.activeBuckets.length = 0; this.rowPool.length = 0;
     this.frame = 0; this.elapsedMs = 0; this.neighborsExamined = 0; this.waitingNeighborsObserved = 0;
+    this.farSolves = 0; this.farSteeringReuses = 0;
     this.sliced = false; this.slicePhases.clear();
     this.nearby.length = 0; this.conflicts.length = 0; this.movementObstacles.length = 0;
     this.neighborObstacles.length = 0;
