@@ -898,9 +898,10 @@ export class FireSystem {
       for (let gridX = minGridX; gridX <= maxGridX; gridX++) {
         const cell = this.cells.get(this.cellKey(gridX, gridY));
         if (!cell) continue;
-        const bounds = this.cellBounds(gridX, gridY);
-        const nearestX = Phaser.Math.Clamp(x, bounds.left, bounds.right);
-        const nearestY = Phaser.Math.Clamp(y, bounds.top, bounds.bottom);
+        // Inline cell bounds: contact queries run per actor and tick, a Rectangle per cell adds up.
+        const left = gridX * GROUND_FIRE_CELL_SIZE, top = gridY * GROUND_FIRE_CELL_SIZE;
+        const nearestX = Math.min(Math.max(x, left), left + GROUND_FIRE_CELL_SIZE);
+        const nearestY = Math.min(Math.max(y, top), top + GROUND_FIRE_CELL_SIZE);
         const dx = x - nearestX;
         const dy = y - nearestY;
         if (dx * dx + dy * dy <= radiusSq) visitor(cell);
