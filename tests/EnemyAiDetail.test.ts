@@ -7,6 +7,8 @@ import {
   type EnemyAiDetailSubject,
 } from '../src/systems/navigation/EnemyAiDetail';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../src/config/coopDefenseEnemies';
+import { CoopMissionHostUpdate } from '../src/activity/CoopMissionHostUpdate';
+import type { EnemyAiDetailSource } from '../src/systems/navigation/EnemyAiDetail';
 
 const options = { viewWidthPx: 1920, viewHeightPx: 1080, nearMarginPx: 400, farMarginPx: 600 };
 const world: EnemyAiDetailBounds = { left: 0, top: 0, right: 8000, bottom: 4000 };
@@ -108,5 +110,50 @@ describe('Enemy AI detail tiers', () => {
         { left: -1e6, top: -1e6, right: 1e6, bottom: 1e6 });
       expect(tiers.isFar('e'), config.id).toBe(false);
     }
+  });
+});
+
+describe('Enemy AI detail in the coop host frame', () => {
+  const geometry = { snapshot: { left: 0, top: 0, right: 8000, bottom: 4000 } };
+  const enemy = (id: string, x: number, y: number, options: { allied?: boolean; boss?: boolean; amphibious?: boolean } = {}) => ({
+    id, faction: options.allied ? 'allied' : 'hostile', positionRevision: 0, sprite: { x, y, active: true },
+    isBoss: () => options.boss === true, isAmphibious: () => options.amphibious === true,
+  });
+  function hostFrame(players: { id: string; x: number; y: number; active: boolean }[],
+    decoys: { id: number; x: number; y: number }[] = [], withGeometry = true) {
+    // The far corner is outside the view of a player at (500, 500); the boss stands elsewhere.
+    const enemies = [enemy('idle', 7000, 3500), enemy('boss', 4000, 3500, { boss: true }),
+      enemy('swimmer', 7000, 3500, { amphibious: true }), enemy('ally', 7000, 3500, { allied: true }),
+      enemy('fighter', 7000, 3500), enemy('breacher', 7000, 3500), enemy('near', 900, 700)];
+    const seen: { intents?: EnemyAiDetailSource | null; movement?: EnemyAiDetailSource | null } = {};
+    const runtime = {
+      analysisScenarioActive: true,
+      flowFieldCoordinator: { getGeometry: () => withGeometry ? geometry : null, advance: () => {} },
+      enemyManager: { getAllEnemies: () => enemies,
+        hostUpdateMovement: (...args: unknown[]) => { seen.movement = args.at(-1) as EnemyAiDetailSource | null; } },
+      enemyIntents: { update: (_enemies: unknown, _now: number, detail: EnemyAiDetailSource | null) => { seen.intents = detail; },
+        getBreach: (id: string) => id === 'breacher' ? { status: 'pending' } : null },
+      coopDefenseEnemyAttackSystem: { hostUpdate: () => {},
+        getCurrentTarget: (id: string) => id === 'fighter' ? { kind: 'player', id: 'p1' } : null },
+    };
+    const port = { getPlayers: () => players, getDecoyTargets: () => decoys,
+      getFireSystem: () => null, getSmokeSystem: () => null, getActiveBurnSources: () => [] };
+    new CoopMissionHostUpdate(runtime as never, port as never).run(16, 1000, false, false);
+    return seen;
+  }
+
+  it('hands one classification to intents and movement and keeps engaged or special enemies full', () => {
+    const seen = hostFrame([{ id: 'p1', x: 500, y: 500, active: true }]);
+    expect(seen.movement).toBe(seen.intents);
+    const far = ['idle', 'boss', 'swimmer', 'ally', 'fighter', 'breacher', 'near'].filter(id => seen.intents!.isFar(id));
+    expect(far).toEqual(['idle']);
+  });
+
+  it('counts the views of dead players and decoys, and stays full without world geometry', () => {
+    const dead = hostFrame([{ id: 'p1', x: 500, y: 500, active: true }, { id: 'p2', x: 7500, y: 3500, active: false }]);
+    expect(dead.intents!.isFar('idle')).toBe(false);
+    const decoy = hostFrame([{ id: 'p1', x: 500, y: 500, active: true }], [{ id: 1, x: 7500, y: 3500 }]);
+    expect(decoy.intents!.isFar('idle')).toBe(false);
+    expect(hostFrame([{ id: 'p1', x: 500, y: 500, active: true }], [], false).intents).toBeNull();
   });
 });
