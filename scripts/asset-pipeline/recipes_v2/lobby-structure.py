@@ -11,7 +11,7 @@ from dawn_lobby_details import rock, barrel, rope, sack, lantern, crate, hammer,
 from lobby_structure_parts import (palette, slab, gable_roof, shed_roof, hip_roof, plank_wall, stone_course, post,
                                    chimney, skylight, canvas_awning, counter, gas_bottle, timber_stack, stone_blocks,
                                    pallet, sack_stack, scrap_pile, lamp_post, socket, grid_surface, strut, lattice_jib,
-                                   wheelbarrow, camo_net)
+                                   wheelbarrow, camo_net, ridge_tent, shop_cuirass, shop_helmet, shop_glove, shop_boot)
 
 
 def flagstones(c, x0, y0, x1, y1, p, seed=0, size=.42):
@@ -312,8 +312,96 @@ def yard_crane(c, p):
                 hook=(tx, ty, 1.45), floodlight=(-.15, cy0 - .2, h), spark_cut=(-.1, -1.6, .2), cab=(mx + .3, my - .5, top + .15))
 
 
+def base_plate_floor(c, x0, y0, x1, y1, z, p, cell=.95):
+    """Base-style plating: dark stone slabs in steel frames with cyan seam strips."""
+    nx, ny = max(1, round((x1 - x0) / cell)), max(1, round((y1 - y0) / cell))
+    w, h = (x1 - x0) / nx, (y1 - y0) / ny
+    slab(c, 'Base plinth core', x0, y0, x1, y1, 0, z - .04, p['base_steel'], .03)
+    for i in range(nx):
+        for j in range(ny):
+            cx, cy = x0 + (i + .5) * w, y0 + (j + .5) * h
+            slab(c, 'Base dark stone slab', cx - w / 2 + .05, cy - h / 2 + .05, cx + w / 2 - .05, cy + h / 2 - .05, z - .06, z, p['base_stone'], .02)
+            if (i + j) % 3 == 1:
+                annulus(c, 'Inset base ring lamp', (cx, cy, z + .005), .14, .1, .02, p['base_steel'], steps=24)
+                annulus(c, 'Separate base cyan ring glow', (cx, cy, z + .012), .1, .075, .012, p['cyan'], steps=24)
+    for a, b in [((x0, y0), (x1, y0)), ((x1, y0), (x1, y1)), ((x1, y1), (x0, y1)), ((x0, y1), (x0, y0))]:
+        strut(c, 'Base steel edge frame', (a[0], a[1], z - .02), (b[0], b[1], z - .02), .1, .08, p['base_steel'])
+        strut(c, 'Separate base cyan edge strip', (a[0], a[1], z + .025), (b[0], b[1], z + .025), .03, .012, p['cyan'], .003)
+
+
+def stone_block_wall(c, a, b, courses, p, seed=0, block=.5, height=.32, thickness=.42):
+    """Dark dressed blocks laid in courses; a lower `courses` value shows work in progress."""
+    rng = random.Random(seed)
+    ax, ay = a; bx, by = b
+    length = math.hypot(bx - ax, by - ay); angle = math.atan2(by - ay, bx - ax)
+    for r in range(courses):
+        offset = (r % 2) * block / 2
+        t = -offset
+        while t < length - .05:
+            lo, hi = max(0, t), min(length, t + block)
+            if hi - lo > .12:
+                m = (lo + hi) / 2
+                bl = c.box('Dressed dark base block', (ax + math.cos(angle) * m, ay + math.sin(angle) * m, .3 + height * (r + .5)),
+                           (hi - lo - .025, thickness, height - .02), p['base_stone'], .025)
+                bl.rotation_euler.z = angle + rng.uniform(-.01, .01)
+            t += block
+
+
+def yard_base(c, p):
+    """Bauhof E: base-module workshop in the base's own language: dark stone, steel, cyan light."""
+    X0, X1, Y0, Y1 = -2.35, .95, -.2, 1.9
+    base_plate_floor(c, X0, Y0, X1, Y1, .3, p)
+    # Module walls rising course by course; steel corner columns carry cyan strips.
+    stone_block_wall(c, (X0 + .2, Y1 - .2), (X1 - .2, Y1 - .2), 4, p, 1)
+    stone_block_wall(c, (X0 + .2, Y0 + .25), (X0 + .2, Y1 - .2), 3, p, 2)
+    stone_block_wall(c, (X1 - .2, Y1 - .2), (X1 - .2, .9), 2, p, 3)
+    stone_block_wall(c, (X0 + .2, Y0 + .25), (-1.05, Y0 + .25), 1, p, 4)
+    for x, y, h in [(X0 + .2, Y1 - .2, 1.9), (X1 - .2, Y1 - .2, 1.9), (X0 + .2, Y0 + .25, 1.9), (X1 - .2, Y0 + .25, 1.1)]:
+        slab(c, 'Base steel corner column', x - .14, y - .14, x + .14, y + .14, .3, h, p['base_steel'], .02)
+        slab(c, 'Separate base cyan column strip', x - .04, y - .04, x + .04, y + .04, h, h + .02, p['cyan'], .005)
+    # Steel gantry with a block on the hoist, over the open east side of the module.
+    for gy in (Y0 + .1, Y1 - .1):
+        for gx in (1.2, 1.75):
+            slab(c, 'Gantry steel leg', gx - .05, gy - .05, gx + .05, gy + .05, 0, 2.6, p['base_steel'], .01)
+        strut(c, 'Gantry cross beam', (1.2, gy, 2.6), (1.75, gy, 2.6), .1, .12, p['base_steel'])
+    strut(c, 'Gantry runway beam', (1.48, Y0 + .1, 2.7), (1.48, Y1 - .1, 2.7), .14, .14, p['base_steel'])
+    c.box('Hoist trolley', (1.48, .85, 2.6), (.24, .22, .12), p['dark'], .01)
+    tube(c, 'Hoist chain', [(1.48, .85, 2.55), (1.48, .85, 1.25)], .016, p['iron'], 6)
+    c.box('Hoisted dark base block', (1.48, .85, 1.0), (.5, .42, .32), p['base_stone'], .025)
+    slab(c, 'Separate base cyan clamp glow', 1.3, .62, 1.66, .66, 1.18, 1.2, p['cyan'], .003)
+    slab(c, 'Separate base cyan clamp glow', 1.3, 1.04, 1.66, 1.08, 1.18, 1.2, p['cyan'], .003)
+    c.cylinder('Gantry ring lamp', (1.75, Y0 + .1, 2.72), .09, .06, p['base_steel'], 16)
+    annulus(c, 'Separate base cyan lamp ring', (1.75, Y0 + .1, 2.76), .08, .05, .015, p['cyan'], steps=16)
+    # Front yard: block stacks, stone saw with cyan blade glow, holo plan table.
+    for i, (bx, by) in enumerate([(1.45, -1.3), (2.1, -.55)]):
+        pallet(c, bx, by, p, .9, .75)
+        for k in range(4 if i == 0 else 3):
+            c.box('Stacked dark base block', (bx - .2 + (k % 2) * .42, by - .17 + (k // 2) * .36, .3 + (k // 2) * .0), (.4, .32, .3), p['base_stone'], .025)
+        c.box('Stacked dark base block', (bx, by, .62), (.4, .32, .3), p['base_stone'], .025)
+    slab(c, 'Stone saw table', -2.25, -1.6, -1.15, -.95, .65, .75, p['base_steel'], .015)
+    for x in (-2.15, -1.25):
+        for y in (-1.5, -1.05): slab(c, 'Saw table leg', x - .03, y - .03, x + .03, y + .03, 0, .65, p['base_steel'], .005)
+    c.cylinder('Stone saw blade guard', (-1.7, -1.28, .86), .24, .14, p['base_steel'], 24)
+    slab(c, 'Separate base cyan saw slot', -1.95, -1.3, -1.45, -1.26, .75, .77, p['cyan'], .003)
+    c.box('Block on saw table', (-1.95, -1.1, .9), (.4, .25, .28), p['base_stone'], .02)
+    for x in (-.85, .2):
+        for y in (-1.6, -1.05): post(c, x, y, .9, p, .04, p['base_steel'])
+    slab(c, 'Plan table steel top', -.9, -1.65, .25, -1.0, .9, .95, p['base_steel'], .01)
+    plate(c, 'Separate base cyan holo plan', (-.32, -1.32, .96), [(-.5, -.27), (.5, -.27), (.5, .27), (-.5, .27)], .006, p['cyan'], .002)
+    for a, b in [((-.7, -1.5), (.05, -1.5)), ((-.7, -1.5), (-.7, -1.15)), ((.05, -1.5), (.05, -1.15)), ((-.7, -1.15), (.05, -1.15)), ((-.33, -1.5), (-.33, -1.15))]:
+        tube(c, 'Holo plan base outline', [(a[0], a[1], .97), (b[0], b[1], .97)], .01, p['base_steel'], 4)
+    for x, y in [(-2.35, -1.95), (.6, -1.95), (2.4, .3)]:
+        post(c, x, y, 2.0, p, .05, p['base_steel'])
+        c.cylinder('Post ring lamp housing', (x, y, 2.04), .1, .07, p['base_steel'], 16)
+        annulus(c, 'Separate base cyan post ring', (x, y, 2.08), .085, .055, .015, p['cyan'], steps=16)
+    return dict(staff=(-.32, -.62, 0), staff_facing=(-.32, -1.35, 0), plaque=(0, -2.25, 0), spark_saw=(-1.7, -1.28, .95),
+                lamp_cyan_a=(-2.35, -1.95, 2.1), lamp_cyan_b=(.6, -1.95, 2.1), lamp_cyan_c=(2.4, .3, 2.1),
+                lamp_gantry=(1.75, Y0 + .1, 2.78), holo_plan=(-.32, -1.32, .97))
+
+
 def yard(c, p, variant):
     s = {}
+    if variant == 'e': return yard_base(c, p)
     if variant == 'c': return yard_frame(c, p)
     if variant == 'd': return yard_crane(c, p)
     if variant == 'a':
@@ -436,8 +524,33 @@ def armory_net(c, p):
                 lamp_front=(-2.05, -.35, 1.85), glint_counter=(.35, -.72, 1.05))
 
 
+def armory_tent(c, p):
+    """Ausrüstung D: fabric ridge tent behind an issue counter that shows the four shop slots."""
+    ridge_tent(c, -2.35, 2.35, .05, 1.95, 2.55, 1.55, p['olive'], p, 3, 4)
+    c.cylinder('Tent rolled door flap', (1.6, .02, 1.5), .09, .9, p['olive'], 14).rotation_euler.y = math.pi / 2
+    # Long issue counter; armour slots laid flat, front up, like the shop icons.
+    # Display scale ~1.5x: each slot reads at about 25 px in game, like a shop sign.
+    counter(c, -2.2, -1.25, 2.2, -.4, .95, p)
+    shop_glove(c, -1.85, -.82, .95, p, 1.65, -1); shop_glove(c, -1.38, -.86, .95, p, 1.65, 1)
+    shop_cuirass(c, -.5, -.82, .95, p, 1.3)
+    shop_helmet(c, .45, -.82, .95, p, 1.55)
+    shop_boot(c, 1.25, -.82, .95, p, 1.5, 1); shop_boot(c, 1.85, -.8, .95, p, 1.5, 1)
+    # Front corners: sandbags, ammunition, a drum and a warm lamp.
+    for sx in (-1, 1):
+        for k in range(3):
+            c.ell('Corner sandbag', (sx * (2.2 - k * .38), -1.8, .12), (.2, .15, .1), p['burlap'])
+        c.ell('Corner sandbag', (sx * 2.25, -1.45, .12), (.15, .2, .1), p['burlap'])
+    ammo_crates(c, -1.6, -1.5, p, 2, 2, 14)
+    c.cylinder('Oil drum', (1.3, -1.45, .45), .27, .9, p['olive'], 24)
+    annulus(c, 'Drum rolling hoop', (1.3, -1.45, .6), .28, .26, .04, p['dark'], steps=24)
+    lamp_post(c, .45, -1.75, 2.05, p, (-.3, .15))
+    return dict(staff=(0, -.08, 0), staff_facing=(0, -1.0, 0), plaque=(0, -2.25, 0), lamp_front=(.15, -1.6, 1.8),
+                lamp_tent=(0, .6, 1.6), glint_helmet=(.45, -.82, 1.3), glint_cuirass=(-.5, -.82, 1.1))
+
+
 def armory(c, p, variant):
     s = {}
+    if variant == 'd': return armory_tent(c, p)
     if variant == 'c': return armory_net(c, p)
     if variant == 'a':
         # Stone-plinth armory under a sheet-steel hip roof; open issue niche with counter at the front.
@@ -526,25 +639,36 @@ def wagon_wheel(c, x, y, z, r, p, outward=-1, tilt=None, width=.13):
 
 def covered_wagon(c, p):
     """Bed, arched canvas with raised dark hoops, outboard wheels, shafts and a spare wheel."""
-    X0, X1, Y0, Y1 = -2.05, .85, .05, 1.45
+    X0, X1, Y0, Y1 = -2.05, .85, .0, 1.5
     slab(c, 'Wagon bed', X0, Y0, X1, Y1, .62, .82, p['oak'], .03)
-    for y in (Y0 - .03, Y1 + .03):
+    # Side boards stay visible as a wooden rim beside the canvas, with iron stakes and rails.
+    for y in (Y0 + .04, Y1 - .04):
         for k in range(8):
-            c.box('Wagon side board', (X0 + (k + .5) * (X1 - X0) / 8, y, 1.0), ((X1 - X0) / 8 - .02, .07, .36), p['tar'] if k % 3 else p['oak'], .01)
+            c.box('Wagon side board', (X0 + (k + .5) * (X1 - X0) / 8, y, 1.0), ((X1 - X0) / 8 - .02, .08, .36), p['cut'] if k % 3 else p['oak'], .01)
+        strut(c, 'Side top rail', (X0, y, 1.2), (X1, y, 1.2), .1, .05, p['oak'])
+        for k in range(5):
+            c.box('Iron side stake', (X0 + .1 + k * (X1 - X0 - .2) / 4, y + (.05 if y > 1 else -.05), 1.0), (.05, .03, .42), p['dark'], .006)
     for x in (-1.55, .4):
-        wagon_wheel(c, x, Y0 - .2, .62, .62, p, -1)
-        wagon_wheel(c, x, Y1 + .2, .62, .62, p, 1)
-        strut(c, 'Axle tree', (x, Y0 - .3, .62), (x, Y1 + .3, .62), .1, .1, p['dark'])
-    w = Y1 - Y0
-    cover = grid_surface(c, 'Arched wagon canvas', (X0 + .05, Y0, .95), (1, 0, 0), (0, 1, 0), (0, 0, 1), X1 - X0 - .1, w,
-                         lambda s, t: 1.05 * math.sin(math.pi * t / w) + .025 * math.sin(s * 9) * math.sin(math.pi * t / w), p['canvas'], 48, 24, .015)
+        wagon_wheel(c, x, Y0 - .22, .62, .62, p, -1)
+        wagon_wheel(c, x, Y1 + .22, .62, .62, p, 1)
+        strut(c, 'Axle tree', (x, Y0 - .32, .62), (x, Y1 + .32, .62), .1, .1, p['dark'])
+    w = Y1 - Y0 - .24
+    cy0 = Y0 + .12
+    cover = grid_surface(c, 'Arched wagon canvas', (X0 + .05, cy0, 1.18), (1, 0, 0), (0, 1, 0), (0, 0, 1), X1 - X0 - .1, w,
+                         lambda s, t: .95 * math.sin(math.pi * t / w) + .03 * math.sin(s * 9) * math.sin(math.pi * t / w)
+                         - .05 * math.exp(-((t / w - .5) / .2) ** 2) * (1 - math.cos(s * 2.2)) * .5, p['canvas'], 56, 28, .015)
     for k in range(6):
         x = X0 + .12 + k * (X1 - X0 - .24) / 5
-        pts = [(x, Y0 + w * t, .95 + 1.05 * math.sin(math.pi * t) + .035) for t in [i / 16 for i in range(17)]]
+        pts = [(x, cy0 + w * t, 1.18 + .95 * math.sin(math.pi * t) + .035) for t in [i / 16 for i in range(17)]]
         tube(c, 'Raised dark cover hoop', pts, .035, p['tar'], 6)
-    tube(c, 'Cover ridge lashing', [(X0 + .1, Y0 + w / 2, 2.04), (X1 - .1, Y0 + w / 2, 2.04)], .018, p['rope'], 6)
+        for y, z in ((cy0 + .02, 1.2), (cy0 + w - .02, 1.2)):
+            tube(c, 'Canvas tie-down rope', [(x, y, z), (x, y + (-.1 if y < 1 else .1), 1.05)], .012, p['rope'], 4)
+    tube(c, 'Cover ridge lashing', [(X0 + .1, cy0 + w / 2, 2.17), (X1 - .1, cy0 + w / 2, 2.17)], .018, p['rope'], 6)
     for k in range(2):
-        plate(c, 'Canvas patch', (-1.2 + k * 1.1, .55 + k * .3, 2.0 - .1 * k), [(-.2, -.14), (.18, -.12), (.2, .13), (-.16, .15)], .01, p['burlap'], .005)
+        patch = plate(c, 'Canvas patch', (0, 0, 0), [(-.2, -.14), (.18, -.12), (.2, .13), (-.16, .15)], .01, p['burlap'], .005)
+        patch.location = (-1.2 + k * 1.1, .55 + k * .35, 2.08)
+    c.cylinder('Rolled rear canvas flap', (X0 + .05, cy0 + w / 2, 2.05), .09, w * .8, p['canvas'], 14).rotation_euler.x = math.pi / 2
+    c.box('Toolbox on driver box', (X1 + .2, Y1 - .35, 1.28), (.3, .2, .16), p['olive'], .015)
     # Driver's box, two shafts and a cross bar to the east: reads as a horse cart.
     slab(c, 'Driver box', X1, Y0 + .1, X1 + .4, Y1 - .1, .8, 1.15, p['oak'], .02)
     slab(c, 'Driver seat plank', X1 + .02, Y0 + .15, X1 + .3, Y1 - .15, 1.15, 1.2, p['timber'], .01)
@@ -555,7 +679,7 @@ def covered_wagon(c, p):
     # Lowered tailgate with cargo and a spare wheel lying almost flat against the south side.
     slab(c, 'Lowered tailgate', X0 - .45, Y0 + .1, X0, Y1 - .1, .55, .6, p['oak'], .01)
     crate(c, X0 - .2, .45, .6, p, .9)
-    wagon_wheel(c, 1.5, -.3, .2, .55, p, tilt=.22)
+    barrel(c, X0 - .22, 1.05, .6, .17, p)
 
 
 def scrap_stall(c, p, variant):

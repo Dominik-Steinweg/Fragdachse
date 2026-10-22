@@ -30,6 +30,12 @@ def palette(c, spec):
         container=m('Faded container paint', (96, 102, 92), .40),
         brick=m('Fired clay brick', (128, 76, 58), .30),
         sand=m('Builder sand', (164, 146, 108), .15),
+        base_stone=m('Base dark stone', (60, 64, 66), .35),
+        base_steel=m('Base steel frame', (72, 80, 84), .22),
+        cyan=m('Separate base cyan glow', (114, 202, 255), .01, .6),
+        leather=m('Shop leather', (122, 78, 44), .28),
+        plate_steel=m('Shop steel plate', (150, 156, 152), .22),
+        shop_moss=m('Shop moss', (88, 104, 48), .40),
         slate=m('Slate shingle', (72, 76, 78), .26),
         shingle=m('Split wood shingle', (98, 80, 60), .30),
         canvas=m('Weathered canvas', (156, 140, 104), .25),
@@ -458,6 +464,103 @@ def camo_net(c, x0, y0, x1, y1, z_back, z_front, p, seed=0, coverage=.62, rope=T
         leaf.location = (lx, ly, z_at(ly) + rng.uniform(-.04, .02) - .05 * math.sin(math.pi * (lx - x0) / (x1 - x0)))
         leaf.rotation_euler = (rng.uniform(-.3, .3), rng.uniform(-.3, .3), rng.uniform(0, math.tau))
         placed += 1
+
+
+def ridge_tent(c, x0, x1, y0, y1, z_ridge, z_eave, mat, p, poles=3, seed=0):
+    """Two-slope fabric tent: sag between ridge poles, raised panel seams, hems, guy ropes.
+
+    Reads as cloth from above through the ridge line, the catenary sag and the seams.
+    """
+    rng = random.Random(seed)
+    ym = (y0 + y1) / 2
+    span = x1 - x0
+    pole_x = [x0 + span * k / (poles - 1) for k in range(poles)]
+    def sag(s):
+        # Low between poles, pinned at each pole.
+        t = (s / span) * (poles - 1)
+        return -.11 * math.sin(math.pi * (t - math.floor(t)))
+    for y_eave in (y0, y1):
+        dy, dz = y_eave - ym, z_eave - z_ridge
+        length = math.hypot(dy, dz)
+        v = Vector((0, dy / length, dz / length)); u = Vector((1, 0, 0)); n = u.cross(v)
+        if n.z < 0: n = -n
+        grid_surface(c, 'Tent fabric slope', (x0, ym, z_ridge), u, v, n, span, length,
+                     lambda s, t: sag(s) * (1 - .4 * t / length) + .018 * math.sin(s * 5.3 + t * 3) * (t / length)
+                     - .03 * math.exp(-((t / length - .55) / .18) ** 2) * math.sin(s * 2.1), mat, 64, 20, .014)
+        # Raised seams down the slope at each panel joint, and a rolled hem at the eave.
+        for k in range(1, 4):
+            s = span * k / 4
+            pts = [Vector((x0 + s, ym, z_ridge)) + v * (length * t) + n * (sag(s) * (1 - .4 * t) + .02) for t in [i / 6 for i in range(7)]]
+            tube(c, 'Tent panel seam', [tuple(q) for q in pts], .014, mat, 6)
+        eave = [Vector((x0 + span * i / 16, ym, z_ridge)) + v * length + n * (sag(span * i / 16) * .6 + .01) for i in range(17)]
+        tube(c, 'Tent eave hem', [tuple(q) for q in eave], .03, p['rope'], 6)
+        for i in range(0, 17, 4):
+            q = eave[i]
+            out = Vector((0, .55 if y_eave > ym else -.55, 0))
+            peg = q + out + Vector((0, 0, -q.z + .05))
+            tube(c, 'Tent guy rope', [tuple(q), tuple(peg)], .01, p['rope'], 4)
+            c.cylinder('Tent peg', tuple(peg), .03, .14, p['oak'], 6)
+    tube(c, 'Tent ridge seam', [(x0 - .05, ym, z_ridge + .03), (x1 + .05, ym, z_ridge + .03)], .03, mat, 8)
+    for x in pole_x:
+        c.cylinder('Tent pole', (x, ym, z_ridge / 2), .045, z_ridge, p['oak'], 10)
+        c.ell('Tent pole finial', (x, ym, z_ridge + .06), (.06, .06, .05), p['brass'])
+    for k in range(3):
+        px = rng.uniform(x0 + .5, x1 - .5)
+        py = ym + rng.choice((-1, 1)) * rng.uniform(.3, .6)
+        zz = z_ridge - (z_ridge - z_eave) * abs(py - ym) / ((y1 - y0) / 2) + .03
+        patch = plate(c, 'Sewn tent patch', (0, 0, 0), [(-.2, -.15), (.19, -.13), (.21, .14), (-.17, .16)], .008, p['canvas'], .004)
+        patch.location = (px, py, zz)
+        patch.rotation_euler.x = math.atan2(z_ridge - z_eave, (y1 - y0) / 2) * (1 if py < ym else -1)
+
+
+def shop_cuirass(c, x, y, z, p, s=1.0):
+    """Leather cuirass laid flat, front up: shoulder plates, hex badge, belt; mirrors the shop icon."""
+    def place(ob, dx, dy, dz=0):
+        ob.location = (x + dx * s, y + dy * s, z + dz); return ob
+    body = [(-.26, .3), (-.12, .36), (0, .3), (.12, .36), (.26, .3), (.3, .05), (.27, -.3), (-.27, -.3), (-.3, .05)]
+    place(plate(c, 'Cuirass leather body', (0, 0, 0), [(a * s, b * s) for a, b in body], .07, p['leather'], .025), 0, 0, .035)
+    place(plate(c, 'Cuirass neck opening', (0, 0, 0), [(-.1 * s, .3 * s), (0, .24 * s), (.1 * s, .3 * s), (0, .34 * s)], .02, p['dark'], .004), 0, 0, .075)
+    for side in (-1, 1):
+        sh = plate(c, 'Cuirass steel shoulder plate', (0, 0, 0), [(-.11 * s, -.09 * s), (.11 * s, -.1 * s), (.13 * s, .08 * s), (-.1 * s, .11 * s)], .05, p['plate_steel'], .02)
+        place(sh, side * .3, .22, .09); sh.rotation_euler.z = side * .25
+        for k in range(3): place(c.cylinder('Cuirass rivet', (0, 0, 0), .014 * s, .012, p['brass'], 6), side * (.24 + k * .045), .16 + k * .06, .12)
+    hexagon = [(.09 * s * math.cos(a), .09 * s * math.sin(a)) for a in [k * math.pi / 3 + math.pi / 6 for k in range(6)]]
+    place(plate(c, 'Cuirass hex steel badge', (0, 0, 0), hexagon, .04, p['plate_steel'], .012), 0, .02, .09)
+    place(c.box('Cuirass belt', (0, 0, 0), (.58 * s, .07 * s, .03), p['tar'], .006), 0, -.22, .085)
+    place(c.box('Cuirass belt buckle', (0, 0, 0), (.08 * s, .08 * s, .03), p['plate_steel'], .006), 0, -.22, .1)
+    for dx, dy in [(-.17, .0), (.15, -.1)]:
+        place(c.ell('Cuirass moss patch', (0, 0, 0), (.05 * s, .035 * s, .01), p['shop_moss']), dx, dy, .075)
+
+
+def shop_helmet(c, x, y, z, p, s=1.0):
+    c.ell('Helmet leather dome', (x, y, z + .1 * s), (.2 * s, .23 * s, .15 * s), p['leather'])
+    annulus(c, 'Helmet steel brow band', (x, y, z + .06 * s), .205 * s, .175 * s, .05 * s, p['plate_steel'], steps=28)
+    tube(c, 'Helmet steel crest band', [(x, y + .22 * s, z + .07 * s), (x, y + .1 * s, z + .22 * s), (x, y - .1 * s, z + .22 * s), (x, y - .23 * s, z + .07 * s)], .035 * s, p['plate_steel'], 8)
+    c.box('Helmet nasal guard', (x, y - .24 * s, z + .05 * s), (.07 * s, .1 * s, .1 * s), p['plate_steel'], .01)
+    for side in (-1, 1):
+        c.box('Helmet cheek guard', (x + side * .15 * s, y - .17 * s, z + .04 * s), (.08 * s, .12 * s, .08 * s), p['leather'], .015)
+    c.ell('Helmet moss patch', (x + .06 * s, y + .08 * s, z + .23 * s), (.06 * s, .05 * s, .015), p['shop_moss'])
+
+
+def shop_glove(c, x, y, z, p, s=1.0, mirror=1):
+    hand = [(-.09, -.16), (.09, -.16), (.11, .02), (.12, .1), (.08, .2), (.03, .22), (-.02, .21), (-.07, .19), (-.11, .12), (-.17, .06), (-.15, -.02)]
+    ob = plate(c, 'Gauntlet leather hand', (0, 0, 0), [(a * s * mirror, b * s) for a, b in hand], .06, p['leather'], .02)
+    ob.location = (x, y, z + .03)
+    for k in range(3):
+        c.box('Gauntlet knuckle plate', (x + (k - 1) * .055 * s * mirror, y + .13 * s, z + .07), (.045 * s, .05 * s, .02), p['plate_steel'], .005)
+    c.box('Gauntlet cuff', (x, y - .17 * s, z + .05), (.22 * s, .08 * s, .06), p['tar'], .01)
+
+
+def shop_boot(c, x, y, z, p, s=1.0, mirror=1):
+    """Boot laid on its side: shaft and foot as an L, steel shin plate and toe cap."""
+    boot = [(-.09, .26), (.08, .26), (.08, -.06), (.24, -.12), (.25, -.22), (-.1, -.22)]
+    ob = plate(c, 'Boot leather profile', (0, 0, 0), [(a * s * mirror, b * s) for a, b in boot], .1, p['leather'], .025)
+    ob.location = (x, y, z + .05)
+    c.box('Boot steel shin plate', (x, y + .1 * s, z + .11), (.12 * s, .16 * s, .02), p['plate_steel'], .006)
+    c.box('Boot steel toe cap', (x + .19 * s * mirror, y - .17 * s, z + .11), (.1 * s, .08 * s, .02), p['plate_steel'], .006)
+    for k in range(2):
+        c.box('Boot strap', (x, y + (.18 - k * .12) * s, z + .105), (.19 * s, .025 * s, .015), p['tar'], .004)
+    c.box('Boot sole', (x + .07 * s * mirror, y - .225 * s, z + .05), (.36 * s, .035 * s, .1), p['dark'], .006)
 
 
 def socket(c, name, x, y, z):
