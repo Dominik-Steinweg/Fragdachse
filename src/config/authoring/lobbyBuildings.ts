@@ -7,6 +7,7 @@ import {
   type StructureOutlineDefinition,
   type StructureRect,
 } from '../../arena/StructureOutline';
+import type { WorldFlagParameter, WorldParameters } from '../../world/WorldDescriptor';
 import type { WorldBaseDefinition } from './WorldDefinition';
 import outlines from './lobbyStructureOutlines.json';
 
@@ -29,11 +30,15 @@ const OUTLINES = outlines as readonly LobbyStructureOutlineEntry[];
  * from the same Blender export (`src/assets/manifests/lobby-structures.json`).
  */
 export const LOBBY_BUILDINGS = [
-  { id: 'lobby-merchant-stall', menu: 'merchant', gridX: 53, gridY: 8, nameKey: 'ui.dawn.dealerName' },
-  { id: 'lobby-workshop', menu: 'upgrades', gridX: 44, gridY: 8, nameKey: 'ui.lobbyBuilding.workshop' },
-  { id: 'lobby-yard', menu: 'base', gridX: 53, gridY: 27, nameKey: 'ui.lobbyBuilding.yard' },
-  { id: 'lobby-armory', menu: 'items', gridX: 44, gridY: 27, nameKey: 'ui.lobbyBuilding.armory' },
-] as const;
+  { id: 'lobby-merchant-stall', menu: 'merchant', gridX: 53, gridY: 8, nameKey: 'ui.dawn.dealerName',
+    requires: ['persistentBaseUnlocked', 'lobbyDawnUnlocked'] },
+  { id: 'lobby-workshop', menu: 'upgrades', gridX: 44, gridY: 8, nameKey: 'ui.lobbyBuilding.workshop',
+    requires: ['persistentBaseUnlocked'] },
+  { id: 'lobby-yard', menu: 'base', gridX: 53, gridY: 27, nameKey: 'ui.lobbyBuilding.yard',
+    requires: ['persistentBaseUnlocked'] },
+  { id: 'lobby-armory', menu: 'items', gridX: 44, gridY: 27, nameKey: 'ui.lobbyBuilding.armory',
+    requires: ['persistentBaseUnlocked', 'lobbyItemsUnlocked'] },
+] as const satisfies readonly (Record<string, unknown> & { requires: readonly WorldFlagParameter[] })[];
 
 export type LobbyBuilding = typeof LOBBY_BUILDINGS[number];
 
@@ -68,7 +73,7 @@ export const LOBBY_BUILDING_BASES: WorldBaseDefinition[] = LOBBY_BUILDINGS.map(b
     id: building.id, surface: 'none', faction: 'friendly', role: 'outpost',
     // World structures without an Activity are invulnerable and have no health bar.
     hpMax: 1,
-    requiresPersistentBase: true,
+    requiresWorldParameters: building.requires,
     anchor: { kind: 'grid', gridX: building.gridX, gridY: building.gridY },
     shape: { kind: 'cells', cells: structureOccupancyCells(structure.rects) },
     structure,
@@ -76,14 +81,13 @@ export const LOBBY_BUILDING_BASES: WorldBaseDefinition[] = LOBBY_BUILDINGS.map(b
 });
 
 /**
- * The structures a Lobby World instance actually carries. They stand with the persistent base
- * core, so the same replicated parameter that builds the core builds them; a locked Lobby has no
- * buildings at all. Mirrors `requiresPersistentBase` on {@link LOBBY_BUILDING_BASES}.
+ * The structures a Lobby World instance actually carries: each one stands once the host has
+ * unlocked its menu, none before the persistent base. Same rule as `requiresWorldParameters` on
+ * {@link LOBBY_BUILDING_BASES}, so presentation, Shift and collision agree on the replicated
+ * parameters.
  */
-export function lobbyBuildingsOfWorld(
-  parameters: { readonly persistentBaseUnlocked?: boolean } | undefined,
-): readonly LobbyBuilding[] {
-  return parameters?.persistentBaseUnlocked === true ? LOBBY_BUILDINGS : [];
+export function lobbyBuildingsOfWorld(parameters: WorldParameters | undefined): readonly LobbyBuilding[] {
+  return LOBBY_BUILDINGS.filter(building => building.requires.every(flag => parameters?.[flag] === true));
 }
 
 /** Shift reach, measured from the nearest wall point: every side of a structure is an entrance. */

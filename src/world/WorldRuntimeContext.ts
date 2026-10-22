@@ -87,7 +87,7 @@ export function createWorldRuntimeContext(input: WorldRuntimeContextInput): Worl
   // nicht doch die Kollisionszellen einer Basis traegt, die es fuer sie nicht gibt.
   const includePersistentBaseCore = descriptor.parameters?.persistentBaseUnlocked === true;
   let bases = definition
-    ? resolveWorldBases(definition, metrics, { includePersistentBaseCore })
+    ? resolveWorldBases(definition, metrics, { includePersistentBaseCore, parameters: descriptor.parameters ?? {} })
     : [];
   const baseId = definition?.persistentBaseSite?.baseId;
   if (includePersistentBaseCore && baseId) {

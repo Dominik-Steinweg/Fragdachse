@@ -49,6 +49,12 @@ export interface WorldParameters {
    * unterschiedlichem Wert haben nicht dieselbe World gebaut.
    */
   readonly persistentBaseUnlocked?: boolean;
+  /**
+   * Host-frozen menu entitlements of the Lobby World: which lobby structures stand besides the
+   * ones the persistent base brings. Peers read them, so every peer builds the host's Lobby.
+   */
+  readonly lobbyItemsUnlocked?: boolean;
+  readonly lobbyDawnUnlocked?: boolean;
   /** Semantische, fuer diese World-Instanz eingefrorene Area-Stufe der persistenten Basis. */
   readonly persistentBaseAreaStage?: PersistentBaseAreaStage;
   readonly persistentBaseHealthRewards?: readonly PersistentBaseHealthReward[];
@@ -78,11 +84,16 @@ export function isProceduralWorldDefinitionId(definitionId: string): boolean {
  */
 export const WORLD_PARAMETER_FIELDS = [
   'persistentBaseUnlocked',
+  'lobbyItemsUnlocked',
+  'lobbyDawnUnlocked',
   'persistentBaseAreaStage',
   'persistentBaseHealthRewards',
   'persistentBaseHpBonus',
   'dawn',
 ] as const satisfies readonly (keyof WorldParameters)[];
+
+/** Boolean World-Parameter, an denen authored Inhalt haengen kann (`requiresWorldParameters`). */
+export type WorldFlagParameter = 'persistentBaseUnlocked' | 'lobbyItemsUnlocked' | 'lobbyDawnUnlocked';
 
 /**
  * Netzwerkgrenze fuer eingehende World-Identitaeten. Ungueltige Nutzlast wird verworfen statt
@@ -153,6 +164,16 @@ export function hasPersistentBaseUnlockStatusChanged(
     !== (right?.parameters?.persistentBaseUnlocked === true);
 }
 
+/** True, wenn sich die Menge der Lobby-Gebaeude einer LobbyWorld-Instanz aendert. */
+export function hasLobbyBuildingSetChanged(
+  left: Pick<WorldDescriptor, 'parameters'> | null | undefined,
+  right: Pick<WorldDescriptor, 'parameters'> | null | undefined,
+): boolean {
+  return hasPersistentBaseUnlockStatusChanged(left, right)
+    || (left?.parameters?.lobbyItemsUnlocked === true) !== (right?.parameters?.lobbyItemsUnlocked === true)
+    || (left?.parameters?.lobbyDawnUnlocked === true) !== (right?.parameters?.lobbyDawnUnlocked === true);
+}
+
 /** True, wenn sich die fuer die persistente Basis sichtbare World-Konfiguration veraendert. */
 export function hasPersistentBaseConfigurationChanged(
   left: Pick<WorldDescriptor, 'parameters'> | null | undefined,
@@ -178,6 +199,8 @@ function parseWorldParameters(raw: unknown): WorldParameters | null {
   const candidate = raw as Partial<WorldParameters>;
   const parameters: {
     persistentBaseUnlocked?: boolean;
+    lobbyItemsUnlocked?: boolean;
+    lobbyDawnUnlocked?: boolean;
     persistentBaseAreaStage?: PersistentBaseAreaStage;
     persistentBaseHealthRewards?: PersistentBaseHealthReward[];
     persistentBaseHpBonus?: number;
@@ -193,6 +216,13 @@ function parseWorldParameters(raw: unknown): WorldParameters | null {
   if (unlocked !== undefined) {
     if (typeof unlocked !== 'boolean') return null;
     parameters.persistentBaseUnlocked = unlocked;
+  }
+
+  for (const field of ['lobbyItemsUnlocked', 'lobbyDawnUnlocked'] as const) {
+    const flag = candidate[field];
+    if (flag === undefined) continue;
+    if (typeof flag !== 'boolean') return null;
+    parameters[field] = flag;
   }
 
   const hpBonus = candidate.persistentBaseHpBonus;

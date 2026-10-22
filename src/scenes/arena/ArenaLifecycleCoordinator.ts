@@ -122,6 +122,8 @@ import {
   getStoredPersonalPersistentBaseAreaStage,
   getStoredPersistentBaseHealthRewards,
   getStoredPersistentBaseUnlocked,
+  getStoredCoopDefenseItemsUnlocked,
+  isStoredDawnUnlocked,
   getStoredPersistentBaseRewardState,
 } from '../../utils/localPreferences';
 import { resolveFrozenPersistentBaseAreaStage } from '../../persistentBase/PersistentBaseAreaStageResolution';
@@ -203,6 +205,7 @@ import {
   type WorldPresentationRequirement,
 } from '../../world/WorldPresentation';
 import {
+  hasLobbyBuildingSetChanged,
   hasPersistentBaseConfigurationChanged,
   isSameWorldInstance,
   type WorldDescriptor,
@@ -299,6 +302,8 @@ export class ArenaLifecycleCoordinator {
    * ist ohnehin ihr Reset.
   */
   private lobbyWorldPersistentBaseUnlockedAtRevision: boolean | null = null;
+  /** Host menu entitlements (`items|dawn`) the current Lobby World instance was built with. */
+  private lobbyWorldMenuUnlocksAtRevision: string | null = null;
   /** HP-Belohnungen der aktuellen LobbyWorld; ein Wechsel erzwingt eine neue World. */
   private lobbyWorldPersistentBaseHealthRewardsAtRevision = '';
   /** Area-Stage-Marker der aktuellen LobbyWorld; ein Wechsel erzwingt eine neue World. */
@@ -1760,6 +1765,10 @@ export class ArenaLifecycleCoordinator {
     const currentMode = bridge.getActiveGameMode();
     const persistentBaseUnlocked = isCoopDefenseMode(currentMode)
       && getStoredPersistentBaseUnlocked();
+    // Each structure appears with its menu: the host's own unlocks decide, peers only read them.
+    const lobbyItemsUnlocked = persistentBaseUnlocked && getStoredCoopDefenseItemsUnlocked();
+    const lobbyDawnUnlocked = persistentBaseUnlocked && isStoredDawnUnlocked();
+    const menuUnlocksKey = `${lobbyItemsUnlocked ? 'i' : ''}${lobbyDawnUnlocked ? 'd' : ''}`;
     const persistentBaseHealthRewards = getStoredPersistentBaseHealthRewards();
     const healthRewardsKey = [...persistentBaseHealthRewards].sort().join(',');
     const persistentBaseAreaStage = isCoopDefenseMode(currentMode)
@@ -1772,10 +1781,12 @@ export class ArenaLifecycleCoordinator {
         if (this.lobbyWorldModeAtRevision === null) {
           this.lobbyWorldModeAtRevision = currentMode;
           this.lobbyWorldPersistentBaseUnlockedAtRevision = persistentBaseUnlocked;
+          this.lobbyWorldMenuUnlocksAtRevision = menuUnlocksKey;
           this.lobbyWorldPersistentBaseAreaStageAtRevision = persistentBaseAreaStage;
           this.lobbyWorldPersistentBaseHealthRewardsAtRevision = healthRewardsKey;
         } else if (this.lobbyWorldModeAtRevision !== currentMode
           || this.lobbyWorldPersistentBaseUnlockedAtRevision !== persistentBaseUnlocked
+          || this.lobbyWorldMenuUnlocksAtRevision !== menuUnlocksKey
           || this.lobbyWorldPersistentBaseAreaStageAtRevision !== persistentBaseAreaStage
           || this.lobbyWorldPersistentBaseHealthRewardsAtRevision !== healthRewardsKey) {
           const previousRevision = currentWorld.worldRevision;
@@ -1787,15 +1798,15 @@ export class ArenaLifecycleCoordinator {
           const nextWorld = createAuthoredWorldDescriptor(
             LOBBY_WORLD_DEFINITION_ID,
             worldRevision,
-            resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage, persistentBaseHealthRewards),
+            resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage, persistentBaseHealthRewards,
+              lobbyItemsUnlocked, lobbyDawnUnlocked),
           );
-          const lobbyPresentationStructureChanged = hasPersistentBaseConfigurationChanged(
-            currentWorld,
-            nextWorld,
-          );
+          const lobbyPresentationStructureChanged = hasPersistentBaseConfigurationChanged(currentWorld, nextWorld)
+            || hasLobbyBuildingSetChanged(currentWorld, nextWorld);
           this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);
           this.lobbyWorldModeAtRevision = currentMode;
           this.lobbyWorldPersistentBaseUnlockedAtRevision = persistentBaseUnlocked;
+          this.lobbyWorldMenuUnlocksAtRevision = menuUnlocksKey;
           this.lobbyWorldPersistentBaseAreaStageAtRevision = persistentBaseAreaStage;
           this.lobbyWorldPersistentBaseHealthRewardsAtRevision = healthRewardsKey;
           this.worldLifecycle.beginCreate(nextWorld, null);
@@ -1803,6 +1814,7 @@ export class ArenaLifecycleCoordinator {
       } else {
         this.lobbyWorldModeAtRevision = null;
         this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+        this.lobbyWorldMenuUnlocksAtRevision = null;
         this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
       }
       return;
@@ -1817,13 +1829,15 @@ export class ArenaLifecycleCoordinator {
     this.lastRoundRevision = worldRevision;
     this.lobbyWorldModeAtRevision = currentMode;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = persistentBaseUnlocked;
+    this.lobbyWorldMenuUnlocksAtRevision = menuUnlocksKey;
     this.lobbyWorldPersistentBaseAreaStageAtRevision = persistentBaseAreaStage;
     this.lobbyWorldPersistentBaseHealthRewardsAtRevision = healthRewardsKey;
     this.worldLifecycle.beginCreate(
       createAuthoredWorldDescriptor(
         LOBBY_WORLD_DEFINITION_ID,
         worldRevision,
-        resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage, persistentBaseHealthRewards),
+        resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage, persistentBaseHealthRewards,
+          lobbyItemsUnlocked, lobbyDawnUnlocked),
       ),
       null,
     );
@@ -1930,6 +1944,7 @@ export class ArenaLifecycleCoordinator {
     // darf bereits laufen; Abbau, Metrikwechsel und Generierung folgen erst hinter dem Gate.
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+    this.lobbyWorldMenuUnlocksAtRevision = null;
     this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     this.pendingLobbyWorldPresentationRebuild = false;
@@ -2415,6 +2430,7 @@ export class ArenaLifecycleCoordinator {
     this.clearWorldAdmission();
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+    this.lobbyWorldMenuUnlocksAtRevision = null;
     this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     this.pendingLobbyWorldPresentationRebuild = false;
@@ -2871,6 +2887,7 @@ export class ArenaLifecycleCoordinator {
     this.arenaEnteredAt = 0;
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+    this.lobbyWorldMenuUnlocksAtRevision = null;
     this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     this.pendingLobbyWorldPresentationRebuild = false;
@@ -3770,6 +3787,7 @@ export class ArenaLifecycleCoordinator {
     this.arenaEnteredAt = 0;
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+    this.lobbyWorldMenuUnlocksAtRevision = null;
     this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     this.pendingLobbyWorldPresentationRebuild = false;
@@ -3989,10 +4007,14 @@ function resolveLobbyWorldParameters(
   persistentBaseUnlocked: boolean,
   areaStage: PersistentBaseAreaStage | null,
   healthRewards: readonly PersistentBaseHealthReward[],
+  itemsUnlocked: boolean,
+  dawnUnlocked: boolean,
 ): WorldParameters | undefined {
   if (!persistentBaseUnlocked || areaStage === null) return undefined;
   return {
     persistentBaseUnlocked: true,
+    ...(itemsUnlocked ? { lobbyItemsUnlocked: true } : {}),
+    ...(dawnUnlocked ? { lobbyDawnUnlocked: true } : {}),
     persistentBaseAreaStage: areaStage,
     persistentBaseHealthRewards: [...healthRewards],
   };

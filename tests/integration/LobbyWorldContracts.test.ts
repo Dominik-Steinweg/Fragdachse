@@ -79,7 +79,8 @@ function lobbyWorldContextFor(mode: GameMode, persistentBaseUnlocked: boolean) {
       LOBBY_WORLD_DEFINITION_ID,
       ownsPersistentBase ? 9 : 10,
       ownsPersistentBase
-        ? { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 0 }
+        ? { persistentBaseUnlocked: true, lobbyItemsUnlocked: true, lobbyDawnUnlocked: true,
+          persistentBaseHealthRewards: [], persistentBaseAreaStage: 0 }
         : undefined,
     ),
     metricsProfile: getAuthoredWorldMetricsProfile(
@@ -475,9 +476,11 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
       definition,
     });
 
-    expect(world.bases.map((base) => base.id)).toEqual([LOBBY_PERSISTENT_BASE_ID, ...LOBBY_BUILDING_BASES.map(base => base.id)]);
-    expect(lobbyBuildingsOfWorld(world.descriptor.parameters).map(building => building.id))
-      .toEqual(LOBBY_BUILDING_BASES.map(base => base.id));
+    // Mit dem Basiskern allein stehen nur Werkstatt und Bauhof.
+    const standing = lobbyBuildingsOfWorld(world.descriptor.parameters).map(building => building.id);
+    expect(standing).toEqual(['lobby-workshop', 'lobby-yard']);
+    expect(world.bases.map((base) => base.id)).toEqual([LOBBY_PERSISTENT_BASE_ID, ...LOBBY_BUILDING_BASES
+      .map(base => base.id).filter(id => standing.includes(id))]);
     expect(world.persistentBaseSite).toMatchObject({
       baseId: LOBBY_PERSISTENT_BASE_ID,
       areaStage: 0,
@@ -495,6 +498,26 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     expect(world.bases[0]?.cells.some((cell) => (
       cell.gridX === LOBBY_SPAWN_FOCUS_CELL.gridX && cell.gridY === LOBBY_SPAWN_FOCUS_CELL.gridY
     ))).toBe(false);
+  });
+
+  it('stellt die Gebaeude nach und nach mit den Host-Freischaltungen auf', () => {
+    const definition = getLobbyWorldDefinition();
+    const idsFor = (flags: Record<string, boolean>) => {
+      const parameters = { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 0 as const, ...flags };
+      const world = createWorldRuntimeContext({
+        descriptor: createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 20, parameters),
+        metricsProfile: getAuthoredWorldMetricsProfile(definition.metrics.widthCells, definition.metrics.heightCells),
+        definition,
+      });
+      const bases = world.bases.filter(base => base.collisionRects).map(base => base.id).sort();
+      // Collision and presentation follow the same replicated parameters.
+      expect(lobbyBuildingsOfWorld(parameters).map(building => building.id).sort()).toEqual(bases);
+      return bases;
+    };
+    expect(idsFor({})).toEqual(['lobby-workshop', 'lobby-yard']);
+    expect(idsFor({ lobbyItemsUnlocked: true })).toEqual(['lobby-armory', 'lobby-workshop', 'lobby-yard']);
+    expect(idsFor({ lobbyDawnUnlocked: true })).toEqual(['lobby-merchant-stall', 'lobby-workshop', 'lobby-yard']);
+    expect(idsFor({ lobbyItemsUnlocked: true, lobbyDawnUnlocked: true })).toHaveLength(4);
   });
 
   it('materialisiert den Kern in der Lobby nur fuer Coop mit Entitlement', () => {

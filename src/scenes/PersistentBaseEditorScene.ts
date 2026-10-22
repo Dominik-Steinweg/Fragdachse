@@ -19,6 +19,7 @@ import { UPGRADE_MENU } from '../ui/UpgradeMenuLayout';
 import { ensureModalFrame, ensureModalPanelTexture, ensureGlossyButtonTexture, textStyle, TEXT } from '../ui/ForestModal';
 import { ensureUpgradeFrame, ensureUpgradeApply } from '../ui/upgradeForestTextures';
 import { createPersistentBaseDragPreview } from '../ui/PersistentBaseDragPreview';
+import { createPowerUpSymbolPreview } from '../powerups/PowerUpItemArt';
 import { UiButton } from '../ui/UiButton';
 import { INTENT } from '../ui/uiTheme';
 import { BUTTON_CURSOR } from '../ui/gameCursor';
@@ -387,7 +388,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
         this.rowBackgrounds.set(baseEditorObjectKey(row.object), background);
         background.setInteractive({ useHandCursor: true }).on('pointerdown', (pointer: Phaser.Input.Pointer) => this.beginDrag(row.object!, pointer));
       }
-      if (row.icon && this.textures.exists(row.icon)) this.list.add(this.add.image(TABLE.x + 23, y, row.icon).setDisplaySize(24, 24));
+      const powerUpIcon = row.icon ? createPowerUpSymbolPreview(this, row.icon, 24, true) : null;
+      if (powerUpIcon) this.list.add(powerUpIcon.setPosition(TABLE.x + 23, y));
+      else if (row.icon && this.textures.exists(row.icon)) this.list.add(this.add.image(TABLE.x + 23, y, row.icon).setDisplaySize(24, 24));
       const name = this.add.text(NAME_X, y, row.label, textStyle('label', { color: TEXT.primary })).setOrigin(0, .5);
       if (name.width > STATUS_X - NAME_X - 90) name.setScale((STATUS_X - NAME_X - 90) / name.width);
       this.list.add(name);

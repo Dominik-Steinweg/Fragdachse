@@ -1,4 +1,5 @@
 import type * as Phaser from 'phaser';
+import { POWERUP_TOKEN_KEY, powerUpSymbolArt } from '../assets/PowerUpAssets';
 import { POWERUP_ITEM_ART } from './PowerUpConfig';
 
 /** Shared procedural frames of the item decoration GPU layers. */
@@ -54,6 +55,26 @@ export function ensurePowerUpDisplayTexture(scene: Phaser.Scene, sourceKey: stri
   }
   textures.addCanvas(key, canvas);
   return key;
+}
+
+/**
+ * Static menu copy of a lying pickup: the World's symbol layer (first loop frame) at the World's
+ * symbol fit. The legacy composite textures keyed by `spriteKey` are not the World artwork.
+ * With `withToken` the shared token goes underneath, as in the World.
+ */
+export function createPowerUpSymbolPreview(scene: Phaser.Scene, spriteKey: string, size: number,
+  withToken = false): Phaser.GameObjects.Container | null {
+  const art = powerUpSymbolArt(spriteKey);
+  if (!art || !scene.textures.exists(art.key)) return null;
+  const root = scene.add.container(0, 0);
+  if (withToken && scene.textures.exists(POWERUP_TOKEN_KEY)) {
+    root.add(scene.add.image(0, 0, ensurePowerUpDisplayTexture(scene, POWERUP_TOKEN_KEY)).setDisplaySize(size, size));
+  }
+  const symbolKey = art.frames > 1 ? art.key : ensurePowerUpDisplayTexture(scene, art.key);
+  const symbol = art.frames > 1 ? scene.add.image(0, 0, symbolKey, 0) : scene.add.image(0, 0, symbolKey);
+  const fit = size * POWERUP_ITEM_ART.symbolScale;
+  root.add(symbol.setDisplaySize(fit, fit));
+  return root;
 }
 
 export function ensurePowerUpItemFxTexture(scene: Phaser.Scene): Phaser.Textures.Texture {

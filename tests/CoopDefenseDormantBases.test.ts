@@ -195,8 +195,9 @@ describe('Coop-Defense dormant mission structures', () => {
   it('keeps all four lobby menu structures solid and invulnerable without an Activity', () => {
     const { scene, groupObjects } = makeScene();
     // Die Gebaeude stehen nur mit dem Basiskern; ohne ihn gibt es gar keine.
-    expect(resolveWorldBases(getLobbyWorldDefinition(), TEST_WORLD_METRICS, { includePersistentBaseCore: false })).toEqual([]);
-    const specs = resolveWorldBases(getLobbyWorldDefinition(), TEST_WORLD_METRICS, { includePersistentBaseCore: true })
+    expect(resolveWorldBases(getLobbyWorldDefinition(), TEST_WORLD_METRICS, { includePersistentBaseCore: false, parameters: {} })).toEqual([]);
+    const specs = resolveWorldBases(getLobbyWorldDefinition(), TEST_WORLD_METRICS, { includePersistentBaseCore: true,
+      parameters: { persistentBaseUnlocked: true, lobbyItemsUnlocked: true, lobbyDawnUnlocked: true } })
       .filter(base => base.collisionRects);
     const manager = new BaseManager(scene, specs, TEST_WORLD_METRICS, {}, true, false, null);
     expect(specs).toHaveLength(4);

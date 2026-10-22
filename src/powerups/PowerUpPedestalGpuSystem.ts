@@ -333,9 +333,10 @@ function baseFrameName(defId: string): string {
 }
 
 /** Static menu previews sample the same pedestal artwork as the World GPU layer. */
-export function getPowerUpPedestalPreviewFrame(scene: Phaser.Scene, defId: string): { key: string; frame: string } {
+export function getPowerUpPedestalPreviewFrame(scene: Phaser.Scene, defId: string): { key: string; frame: string; scale: number } {
   ensurePedestalTexture(scene);
-  return { key: TEX_POWERUP_PEDESTAL_GPU, frame: baseFrameName(defId) };
+  // Plinth frames are supersampled; `scale` is the same world scale the GPU layer applies.
+  return { key: TEX_POWERUP_PEDESTAL_GPU, frame: baseFrameName(defId), scale: 1 / PLINTH_TEXELS };
 }
 
 function ensurePedestalTexture(scene: Phaser.Scene): void {

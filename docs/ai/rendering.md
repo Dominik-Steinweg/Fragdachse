@@ -334,9 +334,10 @@ Kontur in [lobbyStructureOutlines.json](../../src/config/authoring/lobbyStructur
 (`sourceSha256` bindet beide); Kollision, Nebelbarriere, Figurenschatten-Ausschluss und Shift-Annäherung lesen nur
 diese Kontur, nie Texturen zur Laufzeit.
 
-Die Bauwerke gehören zur Instanz mit Basiskern: Sie stehen nur bei `persistentBaseUnlocked` (Basis-Flag
-`requiresPersistentBase`, Darstellung und Shift-Kandidaten über `lobbyBuildingsOfWorld`); eine gesperrte Lobby
-hat keine Gebäude, Clients sehen sie mit dem Host-Parameter und sperrt nur der Zugriff (Bauhof: Host).
+Die Bauwerke erscheinen mit den Host-Freischaltungen: keines vor `persistentBaseUnlocked`, danach Werkstatt und
+Bauhof, mit `lobbyItemsUnlocked` die Waffenkammer, mit `lobbyDawnUnlocked` der Händler. Die Voraussetzungen stehen je
+Gebäude in `requires` (Basis-Feld `requiresWorldParameters`, Darstellung und Shift über `lobbyBuildingsOfWorld`); die
+Flags reisen im WorldDescriptor, Clients sehen also die Lobby des Hosts. Der Zugriff bleibt personenbezogen (Bauhof: Host).
 
 - [LobbyStructureRenderer](../../src/arena/lobbyStructures/LobbyStructureRenderer.ts) stellt den Körper ins
   Wachturm-Band (`DEPTH.ROCKS + .15`); Decals, Blut und Bodenschatten liegen darunter, Sonnen-Composite, Lightmap

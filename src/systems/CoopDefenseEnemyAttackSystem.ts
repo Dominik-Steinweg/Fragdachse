@@ -63,24 +63,27 @@ interface EnemySalvoState {
 }
 
 export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
-  private readonly targetFacing = new WeakMap<EnemyEntity, { angle: number; at: number; held: boolean }>();
+  private readonly targetFacing = new WeakMap<EnemyEntity, { angle: number; at: number; held: boolean; from: number; budget: number }>();
   /** Overlapping centers do not define a stable bearing. Hysteresis avoids toggling at the boundary. */
   private aimAt(enemy: EnemyEntity, x: number, y: number, now: number): number {
     const previous = this.targetFacing.get(enemy);
+    // Repeated read/fire in one host step must not spend the turn budget twice. A second call in
+    // the same step may aim at another target (movement aim vs. selected weapon), so it turns from
+    // the step's start angle with the step's budget instead of reusing the first target's angle.
+    const sameStep = previous?.at === now;
     const dx = x - enemy.sprite.x, dy = y - enemy.sprite.y, distance = Math.hypot(dx, dy);
     const radius = enemy.getCollisionRadius();
     const held = distance < radius * (previous?.held ? 1.25 : 1);
-    const current = enemy.getAimAngle();
+    const current = sameStep ? previous.from : enemy.getAimAngle();
+    const limit = sameStep ? previous.budget
+      : previous ? Math.PI * 2 * Math.min(100, Math.max(0, now - previous.at)) / 1000 : Math.PI;
     let angle = current;
     if (!held && distance > .001) {
       const desired = Math.atan2(dy, dx);
       const diff = Math.atan2(Math.sin(desired - current), Math.cos(desired - current));
-      const limit = previous ? Math.PI * 2 * Math.min(100, Math.max(0, now - previous.at)) / 1000 : Math.PI;
       angle += Math.max(-limit, Math.min(limit, diff));
     }
-    // Repeated read/fire in one host step must not spend the turn budget twice.
-    if (previous?.at === now) return previous.angle;
-    this.targetFacing.set(enemy, { angle, at: now, held });
+    this.targetFacing.set(enemy, { angle, at: now, held, from: current, budget: limit });
     return angle;
   }
   private intents: EnemyIntentSystem | null = null;
@@ -176,6 +179,10 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       : sustained && (now < sustained.fireUntil || sustained.lastShotAt < sustained.fireUntil) ? sustained.weaponId : null;
     for (const attackWeapon of enemy.getAttackWeapons()) {
       if (committedWeaponId && attackWeapon.weapon.config.id !== committedWeaponId) continue;
+      // A salvo weapon in its pause cannot fire; aiming at its target would turn the body away from
+      // what the next ready weapon (e.g. a melee bite on a base) actually attacks.
+      if (attackWeapon.salvo && committedWeaponId !== attackWeapon.weapon.config.id
+        && !enemy.isWeaponReady(attackWeapon.weapon, now)) continue;
       const fire = attackWeapon.weapon.config.fire.type;
       if (fire === 'tesla_dome') continue;
       const range = attackWeapon.weapon.config.range;
@@ -331,7 +338,11 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     const timing = attack.attackWeapon.meleeTiming!;
     const config = attack.attackWeapon.weapon.config;
     if (config.fire.type !== 'melee') return;
-    const angle = this.aimAt(enemy, attack.target.targetX, attack.target.targetY, now);
+    // The strike resolves along this fixed angle. A turn-limited aim could still point at the
+    // previous movement target (e.g. a far ranged-weapon target) and swing into empty air.
+    const dx = attack.target.targetX - enemy.sprite.x, dy = attack.target.targetY - enemy.sprite.y;
+    const angle = Math.hypot(dx, dy) >= enemy.getCollisionRadius()
+      ? Math.atan2(dy, dx) : this.aimAt(enemy, attack.target.targetX, attack.target.targetY, now);
     const revision = ++this.clawRevision;
     const presentation: EnemyClawAttack = {
       attackId: enemy.id + ':' + now + ':' + revision, weaponId: config.id, angle,

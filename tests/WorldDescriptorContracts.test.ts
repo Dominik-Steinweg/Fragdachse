@@ -180,12 +180,19 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
       { persistentBaseHpBonus: 1900 },
       { persistentBaseUnlocked: true },
       { persistentBaseUnlocked: false },
+      { persistentBaseUnlocked: true, lobbyItemsUnlocked: true, lobbyDawnUnlocked: false },
       { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 1 },
       { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 2 },
     ]) {
       const descriptor = { ...world, parameters };
       expect(parseWorldDescriptor(JSON.parse(JSON.stringify(descriptor)))).toEqual(descriptor);
     }
+    // The lobby menu flags are part of the instance identity and must be real booleans.
+    expect(parseWorldDescriptor({ ...world, parameters: { lobbyDawnUnlocked: 'yes' } })?.parameters).toBeUndefined();
+    expect(isSameWorldInstance(
+      { ...world, parameters: { persistentBaseUnlocked: true } },
+      { ...world, parameters: { persistentBaseUnlocked: true, lobbyItemsUnlocked: true } },
+    )).toBe(false);
   });
 });
 

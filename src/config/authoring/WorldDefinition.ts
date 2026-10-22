@@ -176,10 +176,10 @@ export interface WorldBaseDefinition {
    */
   readonly structure?: import('../../arena/StructureOutline').StructureOutlineDefinition;
   /**
-   * Die Basis gehoert nur zu einer World-Instanz, die den persistenten Basiskern traegt
-   * (`persistentBaseUnlocked`). Ohne ihn existiert sie gar nicht - weder Kollision noch Darstellung.
+   * Die Basis existiert nur in einer World-Instanz, deren replizierte Parameter alle hier genannten
+   * Flags setzen. Sonst gibt es sie gar nicht - weder Kollision noch Darstellung.
    */
-  readonly requiresPersistentBase?: boolean;
+  readonly requiresWorldParameters?: readonly import('../../world/WorldDescriptor').WorldFlagParameter[];
 }
 
 /**

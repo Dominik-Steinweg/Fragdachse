@@ -223,4 +223,34 @@ describe('Grufttitan Void-Plasma', () => {
     });
     expect(weaponIds.slice(firstBiteIndex + 1)).toContain(VOID_PLASMA.id);
   });
+
+  it('schlaegt waehrend der Plasma-Pause zur Basis statt in Richtung des fernen Spielers', () => {
+    const minTargetDistance = VOID_PLASMA_ATTACK.minTargetDistancePx ?? 0;
+    const players = [fakeEntity({ id: 'p1', x: 100 + minTargetDistance + 50, y: 100, active: true })];
+    const bases: TestBase[] = [{
+      faction: 'friendly',
+      role: 'main',
+      isInert: () => false,
+      getHp: () => 1_000,
+      getTurrets: () => [],
+      getNearestSurfacePoint: () => ({ x: 100, y: 200, distance: 100 }),
+    }];
+    const enemy = createTitan();
+    let aim = 0;
+    Object.assign(enemy, { getAimAngle: () => aim, faceAngle: (angle: number) => { aim = angle; } });
+    const { system } = createAttackSystem(enemy, players, bases);
+    const biteAngles: number[] = [];
+    system.setClawStateSink((_enemy, state) => { if (state.attack) biteAngles.push(state.attack.angle); });
+
+    // Locomotion reads the combat aim before the attack update of the same host step.
+    const salvo = VOID_PLASMA_ATTACK.salvo!;
+    for (let now = 1_000; now <= 1_000 + salvo.intervalMs * (salvo.count + 1) + 2_000; now += 10) {
+      const movement = system.getCombatMovement(enemy, now);
+      if (movement) aim = movement.aimAngle;
+      system.hostUpdate(10, now);
+    }
+
+    expect(biteAngles.length).toBeGreaterThan(0);
+    for (const angle of biteAngles) expect(angle).toBeCloseTo(Math.PI / 2, 5);
+  });
 });

@@ -6,6 +6,7 @@ import { createWorldTurretVisual, syncWorldTurretVisualPose } from '../entities/
 import { TurretAnimationController } from '../effects/TurretAnimationController';
 import { POWERUP_DEFS, POWERUP_RENDER_SIZE } from '../powerups/PowerUpConfig';
 import { getPowerUpPedestalPreviewFrame } from '../powerups/PowerUpPedestalGpuSystem';
+import { createPowerUpSymbolPreview } from '../powerups/PowerUpItemArt';
 import type { BaseEditorAppearance } from '../persistentBase/PersistentBaseEditorAppearance';
 
 /** A pointer-bound copy of the actual World artwork, visible across both menu panes. */
@@ -34,9 +35,10 @@ export function createPersistentBaseDragPreview(scene: Phaser.Scene, appearance:
   }
   if (appearance.powerUpDefId) {
     const pedestal = getPowerUpPedestalPreviewFrame(scene, appearance.powerUpDefId);
-    root.add(scene.add.image(0, 0, pedestal.key, pedestal.frame));
+    root.add(scene.add.image(0, 0, pedestal.key, pedestal.frame).setScale(pedestal.scale));
     const icon = POWERUP_DEFS[appearance.powerUpDefId]?.spriteKey;
-    if (icon) root.add(scene.add.image(0, 0, icon).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE));
+    const symbol = icon ? createPowerUpSymbolPreview(scene, icon, POWERUP_RENDER_SIZE) : null;
+    if (symbol) root.add(symbol);
   }
   return root;
 }

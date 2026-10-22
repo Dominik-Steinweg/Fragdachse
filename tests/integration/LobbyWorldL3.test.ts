@@ -785,7 +785,7 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
 
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     expect(lifecycle).toContain('lobbyWorldPersistentBaseAreaStageAtRevision');
-    expect(lifecycle).toContain('resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage, persistentBaseHealthRewards)');
+    expect(lifecycle).toContain('resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage, persistentBaseHealthRewards,');
     expect(lifecycle).toContain('hasPersistentBaseConfigurationChanged(');
   });
 

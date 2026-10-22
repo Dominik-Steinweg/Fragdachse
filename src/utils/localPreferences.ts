@@ -27,6 +27,7 @@ import type {
   LoadoutSlot,
 } from '../types';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
+import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
 import { COOP_DEFENSE_CONSTRUCTION_IDS } from '../config/coopDefenseConstructions';
 import {
   addCoopDefenseItem,
@@ -2069,6 +2070,11 @@ export function markStoredCoopDefenseRoundProcessed(
 
 export function getStoredCoopDefenseItemsUnlocked(): boolean {
   return readPreferences().progression.coopDefense.itemsUnlocked;
+}
+
+/** Cheap read for per-frame host sync: the merchant stands once Dawn is unlocked. */
+export function isStoredDawnUnlocked(): boolean {
+  return isDawnUnlocked(readPreferences().progression.coopDefense);
 }
 
 /** Gibt zurueck, ob sich der Freischaltstand tatsaechlich geaendert hat. */

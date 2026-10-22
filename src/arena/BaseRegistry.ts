@@ -33,6 +33,7 @@ import {
   type WorldMetrics,
 } from '../world/WorldMetrics';
 import type { WorldBaseDefinition, WorldDefinition } from '../config/authoring/WorldDefinition';
+import type { WorldParameters } from '../world/WorldDescriptor';
 import { toWorldDefinition } from '../config/authoring/coopDefenseAuthoringAdapter';
 import type { ArenaGenerationMapConfig } from './ArenaGenerator';
 import {
@@ -411,6 +412,11 @@ export interface WorldBaseResolutionOptions {
    * LobbyWorld vor der Freischaltung. Ohne Angabe traegt die Instanz ihren Kern.
    */
   readonly includePersistentBaseCore?: boolean;
+  /**
+   * Replizierte Parameter der Instanz. Basen mit `requiresWorldParameters` bleiben nur, wenn alle
+   * genannten Flags gesetzt sind; ohne Angabe gilt jede Voraussetzung als erfuellt.
+   */
+  readonly parameters?: WorldParameters;
 }
 
 /** Loest World-Basen direkt aus dem kanonischen authored World-Vertrag auf. */
@@ -424,10 +430,9 @@ export function resolveWorldBases(
   // Ein ausgelassener Kern existiert gar nicht: keine Kollision, keine Reservierung, kein
   // HP-Ziel. Ihn nur unsichtbar zu schalten wuerde eine Basis hinterlassen, die alles blockiert,
   // was die World sonst zulaesst.
-  const baseConfigs = includeCore
-    ? worldDefinition.bases
-    : worldDefinition.bases.filter((baseConfig) => baseConfig.id !== persistentBaseId
-      && !baseConfig.requiresPersistentBase);
+  const { parameters } = options;
+  const baseConfigs = worldDefinition.bases.filter((baseConfig) => (includeCore || baseConfig.id !== persistentBaseId)
+    && (!parameters || (baseConfig.requiresWorldParameters ?? []).every((flag) => parameters[flag] === true)));
   const resolved = baseConfigs.map((baseConfig) => resolveWorldBaseSpec(baseConfig, worldMetrics));
   if (!persistentBaseId || !includeCore) return resolved;
   return addPersistentBaseReservation(resolved, persistentBaseId, worldDefinition.persistentBaseSite?.maxAreaStage);
