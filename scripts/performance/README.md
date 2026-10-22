@@ -31,7 +31,12 @@ enemy every 350 ms; earlier checkpoints, their encounters, events and gates are 
 
 Cases: `review`, `review.enemies-100`, `review.enemies-300`,
 `review.enemies-500`, `review.player`, `review.fog-rock`, `review.camera`,
-`review.explosions`, `review.train`, plus the existing weapon/utility/combat cases.
+`review.explosions`, `review.train`, `review.enemies-300-far`, plus the existing weapon/utility/combat cases.
+`review.enemies-300-far` starts its 300 enemies 1800-3500 px from the player, outside the whole
+view, and sends every enemy that reaches the player back out, so far, crossing and near enemies
+are measured together; the window only completes once enemies have entered the view. It is the
+case for far-from-view enemy costs; the other enemy cases start every enemy near the player.
+It also runs with `--case review` and can be traced alone with `perf:chrome --case review.enemies-300-far`.
 The explosion case submits twelve simultaneous effect RPCs every second; it does
 not simulate damage. The train case uses normal authoritative train destruction.
 Absent features in an older revision remain absent: compare the scenario as a

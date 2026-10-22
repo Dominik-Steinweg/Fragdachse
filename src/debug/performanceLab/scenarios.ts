@@ -20,6 +20,8 @@ export function allPerformanceCases(): PerformanceCase[] {
   const combat = build('GLOCK', true);
   return [
     ...[100, 300, 500].map(enemyCount => base(`review.enemies-${enemyCount}`, 12_000, 'enemies', { enemyCount })),
+    // Enemies walk in from outside every view and are sent back out on arrival: far, crossing and near at once.
+    base('review.enemies-300-far', 20_000, 'enemies', { enemyCount: 300, enemyStart: 'far' }),
     base('review.player', 12_000, 'presentation'),
     base('review.fog-rock', 12_000, 'presentation', { timeOfDay: 360 }),
     base('review.camera', 12_000, 'presentation', { timeOfDay: 360 }),
