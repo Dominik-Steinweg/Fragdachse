@@ -2,6 +2,7 @@ import { runtimeTextureFrame } from '../../assets/RuntimeAtlases';
 import {getVisibleWorldView,createVisibleWorldView} from '../../graphics/CameraWorldView';
 import * as Phaser from 'phaser';
 import { getChunkBakeScheduler } from '../../arena/chunks/ChunkBakeScheduler';
+import { installDirtyUniformApply } from '../../graphics/DirtyUniformApply';
 import { CLOUD_SHADOW_GLSL, setCloudUniforms, type SunCloudState } from './cloudShadow';
 import { SUN_VISIBILITY_GLSL } from './sunVisibility';
 import { VEGETATION_SHADOW_GLSL } from './VegetationShadow';
@@ -91,16 +92,21 @@ export class VegetationLighting {
   const manager=renderer.renderNodes,batch=new Phaser.Renderer.WebGL.RenderNodes.BatchHandlerQuadSingle(manager,{name:this.prefix});
   this.batch=batch;
   batch.programManager.addAddition(VEGETATION_MATERIAL);
-  const setup=batch.setupUniforms,set=(name:string,value:unknown)=>batch.programManager.setUniform(name,value);
+  const setup=batch.setupUniforms,set=installDirtyUniformApply(batch.programManager,renderer);
+  let sharedFrame=-1,sharedState:SunCloudState|null=null;
   batch.setupUniforms=context=>{
    setup.call(batch,context);const r=this.current;if(!r?.wrapper)return;
    const image=r.image,f=image.frame,state=this.clouds,t=state.tuning,path=state.sunPath;
    this.uv[0]=f.u0;this.uv[1]=f.v0;this.uv[2]=f.u1-f.u0;this.uv[3]=f.v1-f.v0;
    this.world[0]=image.x;this.world[1]=image.y;this.world[2]=image.width;this.world[3]=image.height;
+   renderer.glTextureUnits.bind(r.wrapper,1);set('uVegUV',this.uv);set('uVegWorld',this.world);
+   // Sun, cloud and tuning values are the same for every chunk of a frame.
+   const frame=this.scene.game?.loop?.frame??NaN;if(frame===sharedFrame&&state===sharedState)return;
+   sharedFrame=frame;sharedState=state;
    const length=vegetationShadowLength(path?.elevation??Math.PI/4,t.vegShadowLength);
    this.offset[0]=(path?.direction[0]??0)*length;this.offset[1]=(path?.direction[1]??0)*length;
-   setCloudUniforms(set,state);renderer.glTextureUnits.bind(r.wrapper,1);
-   set('uVegData',1);set('uVegDataSize',this.dataSize);set('uVegUV',this.uv);set('uVegWorld',this.world);
+   setCloudUniforms(set,state);
+   set('uVegData',1);set('uVegDataSize',this.dataSize);
    set('uVegSun',path?.sun??this.sunFallback);set('uVegStrength',state.strength);
    set('uVegLight',t.vegLight);set('uVegShadow',state.quality?.vegetationShadows?t.vegShadow:0);
    set('uVegShadowOffset',this.offset);

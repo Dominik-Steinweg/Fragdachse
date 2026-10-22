@@ -9,7 +9,7 @@ import { DEFAULT_TIME_OF_DAY_MINUTES } from '../effects/TimeOfDay';
 import type { ArenaLayout } from '../types';
 import type { ChunkWorldFrame, ChunkWorldRect } from './chunks/ArenaChunkGrid';
 import { prepareWildlifeVisuals } from './AmbientWildlifeGeometry';
-import { prepareBirdVisuals, projectBirdShadow, type BirdVisual } from './AmbientWildlifeBirdGeometry';
+import { MAX_BIRD_SHADOW_REACH, prepareBirdVisuals, projectBirdShadow, type BirdVisual } from './AmbientWildlifeBirdGeometry';
 import { birdDrawScale, writeBirdLayerWeights } from './AmbientWildlifeBirds';
 import { fireflyGlowStrength } from './AmbientWildlifeAppearance';
 import { AmbientWildlifeAudio, type WildlifeAudioPort } from './AmbientWildlifeAudio';
@@ -123,6 +123,12 @@ export class AmbientWildlifeRenderer {
       const a = v.animal, bird = a.bird!, p = v.presence;
       p.scale = birdDrawScale(bird.altitude);
       p.radius = v.reach * p.scale + 2;
+      // Conservative pre-cull: no shadow projection or cloud sample for birds far outside the view.
+      const bound = p.radius + MAX_BIRD_SHADOW_REACH;
+      if (a.x < view.x - bound || a.y < view.y - bound || a.x > view.x + view.width + bound || a.y > view.y + view.height + bound) {
+        p.ground = p.low = p.high = p.shadowAlpha = 0;
+        continue;
+      }
       this.projectShadow(v, minutes);
       const reach = p.radius + Math.abs(p.shadowX) + Math.abs(p.shadowY);
       if (a.opacity <= .005 || a.x < view.x - reach || a.y < view.y - reach

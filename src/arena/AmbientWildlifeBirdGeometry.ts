@@ -520,7 +520,8 @@ export function prepareBirdVisuals(animals: readonly WildlifeAnimal[]): BirdVisu
 }
 
 /** Flight shadows stretch with low sun, but never further than this from their bird. */
-const MAX_SHADOW_REACH = 220;
+export const MAX_BIRD_SHADOW_REACH = 220;
+const MAX_SHADOW_REACH = MAX_BIRD_SHADOW_REACH;
 
 /**
  * Offset and opacity of an airborne bird's ground shadow: by day along the sun like a held weapon's

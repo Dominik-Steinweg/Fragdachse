@@ -94,6 +94,7 @@ class UiObject extends EventEmitter {
   setColor() { return this; }
   setOrigin() { return this; }
   setDisplaySize() { return this; }
+  setSize() { return this; }
   setDepth(depth: number) { this.depth = depth; return this; }
   setInteractive() { return this; }
   disableInteractive() { return this; }

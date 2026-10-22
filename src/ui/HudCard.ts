@@ -14,7 +14,8 @@
 import * as Phaser from 'phaser';
 import { COLORS, toCssColor } from '../config';
 import { registerGraphicsObject } from '../effects/EffectUtils';
-import { createGradientTexture, rgbStr } from './LivingBarEffect';
+import { rgbStr } from './LivingBarEffect';
+import { BarSdfView } from '../effects/bars/BarSdfView';
 import { FONT_DISPLAY, FONT_MONO, FONT_WEIGHT } from './uiTheme';
 import { roundRectPath } from './uiTextures';
 import {
@@ -27,9 +28,9 @@ import {
 
 const BACKING_TEX = '_hud_card_backing';
 const HEAD_TEX = '_hud_card_fill_head';
-const FILL_TEX_W = 256;
-const FILL_TEX_H = 8;
 const SRC = HUD_CARD_SOURCE;
+/** The painted rail is the groove: the fill is a rounded SDF bar resting in it, without its own trough. */
+const FILL_SHADING = { gloss: 0.14, edge: 0.5, shade: 0.22 } as const;
 
 /** Ruhiger Text: warmes Pergament wie die Forest-Menüs, nicht reines Weiß. */
 export const HUD_TEXT_PRIMARY = 0xe6dcc4;
@@ -99,12 +100,6 @@ function ensureHeadTexture(scene: Phaser.Scene): void {
   ct.refresh();
 }
 
-export function ensureHudFillTexture(scene: Phaser.Scene, tone: HudTone): string {
-  const key = `_hud_card_fill_${tone}`;
-  if (!scene.textures.exists(key)) createGradientTexture(scene, key, HUD_TONES[tone].fill, FILL_TEX_W, FILL_TEX_H);
-  return key;
-}
-
 /** Kürzt einen Text pixelgenau mit Auslassungszeichen; läuft nur bei Textänderungen. */
 export function fitHudText(text: Phaser.GameObjects.Text, full: string, maxWidth: number): void {
   text.setText(full);
@@ -141,7 +136,9 @@ export class HudCard {
   readonly kicker: Phaser.GameObjects.Text;
   readonly title: Phaser.GameObjects.Text;
   readonly value: Phaser.GameObjects.Text;
+  /** Fill Image of {@link fillBar}; its alpha footprint is the filled part (glow target). */
   readonly fill: Phaser.GameObjects.Image;
+  private readonly fillBar: BarSdfView;
   private readonly kickerIcon: Phaser.GameObjects.Image | null;
   private readonly valueIcon: Phaser.GameObjects.Image | null;
 
@@ -178,7 +175,8 @@ export class HudCard {
     this.frame = scene.add.nineslice(
       0, 0, HUD_FRAME_TEXTURE, hudCardFrame(config.frameTone ?? config.tone), SRC.width, SRC.height, SRC.cap, SRC.cap,
     ).setScale(config.scale);
-    this.fill = scene.add.image(0, 0, ensureHudFillTexture(scene, config.tone)).setOrigin(0, 0.5);
+    this.fillBar = new BarSdfView(scene, 0, 0, 1, 1, { radius: 64, palette: style.fill, ...FILL_SHADING });
+    this.fill = this.fillBar.fill;
     this.root = scene.add.container(0, 0, [this.backing, this.frame, this.fill]);
     config.onFillCreated?.(this);
     this.head = scene.add.image(0, 0, HEAD_TEX).setBlendMode(Phaser.BlendModes.ADD).setVisible(false)
@@ -242,7 +240,7 @@ export class HudCard {
       // `setFrame` setzt die Slices nicht zurück; Breite und Kappen bleiben erhalten.
       this.frame.setSlices(this.frame.width, SRC.height, SRC.cap, SRC.cap, 0, 0);
     }
-    this.fill.setTexture(ensureHudFillTexture(this.scene, tone));
+    this.fillBar.setPalette(style.fill);
     this.head.setTint(style.accent);
     this.kicker.setColor(toCssColor(style.accent));
     this.layout();
@@ -351,12 +349,9 @@ export class HudCard {
     const rect = this.fillRect;
     const width = rect.width * this.fillFrac;
     // Mittig gesetzte Karten (Ankündigungen) füllen symmetrisch von der Mitte aus.
-    const cropX = this.centered ? FILL_TEX_W * (1 - this.fillFrac) / 2 : 0;
-    this.fill
-      .setVisible(this.fillVisible && width > 0.5)
-      .setPosition(rect.x, rect.y + rect.height / 2)
-      .setDisplaySize(Math.max(1, rect.width), rect.height)
-      .setCrop(cropX, 0, FILL_TEX_W * this.fillFrac, FILL_TEX_H);
+    const start = this.centered ? rect.width * (1 - this.fillFrac) / 2 : 0;
+    this.fillBar.setSize(Math.max(1, rect.width), rect.height).setPosition(rect.x, rect.y).setSpan(start, start + width);
+    this.fill.setVisible(this.fillVisible && width > 0.5);
     this.head.setVisible(this.headVisible);
     if (this.headVisible) {
       this.head.setPosition(rect.x + width, rect.y + rect.height / 2).setScale(Math.max(0.6, rect.height / 5));

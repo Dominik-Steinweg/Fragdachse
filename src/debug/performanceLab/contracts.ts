@@ -73,6 +73,11 @@ export interface PerformanceCase {
   mapId?: string;
   targetDistance?: number;
   enemyCount?: number;
+  /**
+   * Where fixture enemies start: 'near' (default) around the player, or 'far' outside every view;
+   * far enemies that reach the player are sent back out, so the population keeps crossing in.
+   */
+  enemyStart?: 'near' | 'far';
   requireHits?: boolean;
   requiredDamageKinds?: readonly CombatDamageKind[];
   continuous?: boolean;

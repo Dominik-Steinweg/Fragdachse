@@ -54,7 +54,7 @@ import { COOP_DEFENSE_CONSTRUCTION_IDS, getCoopDefenseConstructionDefinition } f
 import type { BaseSpec } from '../../src/arena/BaseRegistry';
 import type { PlayerProfile, ProjectileExplosionConfig, SyncedEnemyDeltaState, SyncedPlaceableRock } from '../../src/types';
 import type { CombatSource } from '../../src/combat/CombatScope';
-import { healthBarTestScene } from '../healthBarTestScene';
+import { drawnHealthBars, healthBarTestScene } from '../healthBarTestScene';
 import { BURN_TICK_INTERVAL_MS, ENEMY_HIT_STAGGER_BASE_MS, BURROW_WINDUP_DURATION_MS } from '../../src/config';
 import { EnemyMovementStatusSystem } from '../../src/systems/EnemyMovementStatusSystem';
 import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
@@ -71,10 +71,10 @@ import { createMovementVisualSample, MovementStepSampler } from '../../src/effec
 function harness() {
   const fake = healthBarTestScene();
   let time = 0;
-  const renderer = new WorldHealthBarRenderer(fake.scene, () => time, HEALTH_BAR_TUNING,
-    { prewarmEnemyViews: 0, maxFreeViews: 100 });
+  const renderer = new WorldHealthBarRenderer(fake.scene, () => time, HEALTH_BAR_TUNING);
   renderer.openWorld({});
-  return { ...fake, renderer, clock(t: number) { time = t; }, tick() { renderer.update(true); } };
+  const bar = (family: string) => drawnHealthBars(renderer).find(entry => entry.family === family);
+  return { ...fake, renderer, bar, clock(t: number) { time = t; }, tick() { renderer.update(true); } };
 }
 const kind = COOP_DEFENSE_ENEMY_KINDS[0];
 function enemies(h: ReturnType<typeof harness>, boss = false, deathSpawns: readonly CoopDefenseEnemyDeathSpawnConfig[] = [], decoration = false) {
@@ -1477,8 +1477,10 @@ describe('World HP consumer boundaries', () => {
     upsert(manager, { id: 'e2', hp: 40, maxHp: 100 });
     manager.getEnemy('e2')!.setHealthBarRenderer(h.renderer); // Idempotent visual wiring preserves the trail.
     h.tick();
-    expect(h.rectangles[2].width * h.rectangles[2].scaleX / h.rectangles[0].width).toBeCloseTo(0.4);
-    expect(h.rectangles[1].width * h.rectangles[1].scaleX / h.rectangles[0].width).toBeCloseTo(0.6);
+    const [damaged] = drawnHealthBars(h.renderer);
+    expect(drawnHealthBars(h.renderer)).toHaveLength(1);
+    expect(damaged.hpWidth / damaged.width).toBeCloseTo(0.4);
+    expect(damaged.trailWidth / damaged.width).toBeCloseTo(0.6);
     for (let t = 100; t <= HEALTH_BAR_TUNING.visibleAfterDamageMs + 200; t += 100) {
       h.clock(t);
       upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 40, maxHp: 100 });
@@ -1502,7 +1504,7 @@ describe('World HP consumer boundaries', () => {
     }
     // Nur der Verbündete zeigt seinen Balken ungefragt, und zwar nicht in der Gegnerfarbe.
     expect(h.renderer.getStats()).toMatchObject({ bindings: 2, active: 1 });
-    const fills = h.rectangles.filter(object => object.visible).map(object => object.fillColor);
+    const fills = drawnHealthBars(h.renderer).map(entry => entry.color);
     expect(fills).toContain(playerHealthBarStyle(false).healthy);
     expect(fills).not.toContain(enemyHealthBarStyle(false, 1).healthy);
     manager.destroy();
@@ -1612,15 +1614,15 @@ describe('World HP consumer boundaries', () => {
     player.setHealthBarRenderer(h.renderer);
     player.updateHP(60, 100);
     h.tick();
-    const [bg, trail, fill] = h.rectangles.slice(-3);
-    expect(fill.width * fill.scaleX / bg.width).toBeCloseTo(0.6);
-    expect(trail.visible).toBe(false);
+    const bar = () => h.bar('playerStatus')!;
+    expect(bar().hpWidth / bar().width).toBeCloseTo(0.6);
+    expect(bar().trailVisible).toBe(false);
     player.updateArmor(30);
     player.updateHP(60, 100);
     h.tick();
-    expect(trail.visible).toBe(false);
+    expect(bar().trailVisible).toBe(false);
     player.updateHP(40, 100); h.tick();
-    expect(trail.visible).toBe(true);
+    expect(bar().trailVisible).toBe(true);
     player.setWorldBarsVisible(false); h.tick();
     expect(h.renderer.getStats().active).toBe(0);
     player.setWorldBarsVisible(true); h.tick();
@@ -1628,11 +1630,11 @@ describe('World HP consumer boundaries', () => {
     player.setDecoyStealth(true); player.updateHP(20, 100); h.tick();
     expect(h.renderer.getStats().active).toBe(0);
     player.setDecoyStealth(false); h.tick();
-    expect(trail.visible).toBe(false);
+    expect(bar().trailVisible).toBe(false);
     player.updateHP(0, 100); player.setVisible(false); h.tick();
     player.updateHP(100, 100); player.setVisible(true); h.tick();
-    expect(fill.width * fill.scaleX).toBe(bg.width);
-    expect(trail.visible).toBe(false);
+    expect(bar().hpWidth).toBe(bar().width);
+    expect(bar().trailVisible).toBe(false);
     player.destroy();
     expect(h.renderer.getStats().bindings).toBe(0);
   });
@@ -1646,7 +1648,7 @@ describe('World HP consumer boundaries', () => {
     const base = new BaseEntity(h.scene, baseSpec, resolveCoopDefenseWorldMetrics(20, 20), false, true, h.renderer);
     base.applyDamage(10);
     h.tick();
-    expect(h.renderer.getStats()).toMatchObject({ bindings: 0, active: 0, created: 0 });
+    expect(h.renderer.getStats()).toMatchObject({ bindings: 0, active: 0, layers: 0 });
     player.destroy(); base.destroy();
   });
 
@@ -1661,30 +1663,30 @@ describe('World HP consumer boundaries', () => {
     };
     expect(observeAttack(0)).toEqual([]);
     h.tick();
-    const [bg, trail, fill] = h.rectangles.slice(-3);
-    expect(fill.width * fill.scaleX / bg.width).toBeCloseTo(0.7);
+    const bar = () => h.bar('baseMarkers')!;
+    expect(bar().hpWidth / bar().width).toBeCloseTo(0.7);
     bases.applySnapshot([{ id: 'base', hp: 50, maxHp: 100 }]); h.tick();
     expect(observeAttack(100)).toEqual([]);
-    expect(trail.visible).toBe(false);
+    expect(bar().trailVisible).toBe(false);
     bases.applySnapshot([{ id: 'base', hp: 30, maxHp: 100 }]); h.tick();
     expect(observeAttack(200)[0].progress).toBe(.3);
-    expect(trail.visible).toBe(true);
+    expect(bar().trailVisible).toBe(true);
     h.clock(10_000);
     bases.applySnapshot([{ id: 'base', hp: 30, maxHp: 100 }]); h.tick();
     expect(observeAttack(10_000)).toEqual([]);
-    expect(trail.visible).toBe(false);
-    const color = fill.fillColor;
+    expect(bar().trailVisible).toBe(false);
+    const color = bar().color;
     bases.heal('base', 10); h.tick();
     expect(observeAttack(10_100)).toEqual([]);
-    expect(fill.width * fill.scaleX / bg.width).toBeCloseTo(0.4);
-    expect(fill.fillColor).not.toBe(color);
+    expect(bar().hpWidth / bar().width).toBeCloseTo(0.4);
+    expect(bar().color).not.toBe(color);
     const activity = bases.createActivityBinding([{ baseId: 'base', hpMax: 200, startHp: 100,
       dormant: true, powerUpPedestals: [] }]);
     activity.attach(); h.tick();
     expect(h.renderer.getStats().bindings).toBe(0);
     bases.getBase('base')!.activate(); h.tick();
-    expect(fill.width * fill.scaleX / bg.width).toBeCloseTo(0.5);
-    expect(trail.visible).toBe(false);
+    expect(bar().hpWidth / bar().width).toBeCloseTo(0.5);
+    expect(bar().trailVisible).toBe(false);
     activity.detach(); h.tick();
     expect(h.renderer.getStats().bindings).toBe(0);
     bases.destroy();
@@ -1700,18 +1702,18 @@ describe('World HP consumer boundaries', () => {
     const rock = { id: 1, kind: 'turret', gridX: 2, gridY: 2, hp: 70, maxHp: 100,
       angle: 0, ownerColor: 0x123456, ownerId: 'p' } as SyncedPlaceableRock;
     helper.createOrUpdateTurretVisual(rock); h.tick();
-    const [bg, trail, fill] = h.rectangles;
-    expect(fill.width * fill.scaleX).toBe(TURRET_HEALTH_BAR_STYLE.width * 0.7);
-    expect(trail.visible).toBe(false);
+    const bar = () => h.bar('rockTools');
+    expect(bar()!.hpWidth).toBe(TURRET_HEALTH_BAR_STYLE.width * 0.7);
+    expect(bar()!.trailVisible).toBe(false);
     helper.createOrUpdateTurretVisual({ ...rock, hp: 40 }); h.tick();
-    expect(trail.visible).toBe(true);
+    expect(bar()!.trailVisible).toBe(true);
     h.clock(100_000); h.tick();
-    expect(fill.visible).toBe(true);
+    expect(bar()).toBeDefined();
     helper.createOrUpdateTurretVisual({ ...rock, hp: 40, gridX: 4 }); h.tick();
-    expect(trail.visible).toBe(false);
-    expect(bg.x).toBeGreaterThan(0);
+    expect(bar()!.trailVisible).toBe(false);
+    expect(bar()!.x).toBeGreaterThan(0);
     helper.createOrUpdateTurretVisual({ ...rock, hp: 100 }); h.tick();
-    expect(fill.visible).toBe(false);
+    expect(bar()).toBeUndefined();
     helper.destroyAllTurretVisuals();
     expect(h.renderer.getStats().bindings).toBe(0);
     const indestructible = COOP_DEFENSE_CONSTRUCTION_IDS.find(id => getCoopDefenseConstructionDefinition(id).indestructible)!;

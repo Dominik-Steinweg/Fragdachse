@@ -303,6 +303,44 @@ describe('Navigation authority across lifetime and faction changes', () => {
     world.destroy();
   });
 
+  it('lets a far enemy refresh its bound route on schedule but compare targets only on its far search', () => {
+    const run = (far: (now: number) => boolean) => {
+      const world = navigationTestWorld([], [], 15, { width: 512, height: 256 }), unit = enemy('rabid-badger', 'far', 32, 128);
+      let now = 0;
+      const detail = { isFar: () => far(now) };
+      const step = (at: number) => { now = at; world.intents.update([unit], at, detail); world.flush(); };
+      const first = { kind: 'player' as const, id: 'first', x: 480, y: 128 };
+      world.catalog.updateTargets([first]);
+      step(0); step(1);
+      expect(world.intents.get(unit.id)?.target).toEqual({ kind: 'player', id: 'first' });
+      // A second player appears right next to the enemy.
+      world.catalog.updateTargets([first, { kind: 'player', id: 'second', x: 96, y: 128 }]);
+      const switched: number[] = [];
+      for (let at = 16; at <= 800; at += 16) {
+        const before = world.intents.get(unit.id)!;
+        unit.sprite.x = 32 + at / 100;
+        step(at);
+        const after = world.intents.get(unit.id)!;
+        if (after.target?.id === 'second') { switched.push(at); break; }
+        // Between full searches the bound route still follows the moving body.
+        if (after !== before) expect(after.navigation).not.toBe(before.navigation);
+      }
+      const counters = world.intents.getWorkCounters();
+      world.destroy();
+      return { switchedAt: switched[0], narrow: counters.farNarrowScans };
+    };
+    const full = run(() => false);
+    expect(full.switchedAt).toBeLessThanOrEqual(16 + 112);
+    expect(full.narrow).toBe(0);
+    const far = run(() => true);
+    expect(far.switchedAt).toBeGreaterThanOrEqual(400);
+    expect(far.switchedAt).toBeLessThanOrEqual(600 + 112);
+    expect(far.narrow).toBeGreaterThan(0);
+    // Back in full detail, the enemy compares every candidate on its very next frame.
+    const promoted = run(now => now < 200);
+    expect(promoted.switchedAt).toBe(208);
+  });
+
   it('uses only an observed position through smoke and grants no new attack on memory', () => {
     const world = navigationTestWorld(), e = enemy(); let visible = true;
     world.intents.setPerception(() => visible);

@@ -16,6 +16,7 @@ import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import { EnemyLocomotion } from '../systems/navigation/EnemyLocomotion';
 import type { EnemyIntentSystem } from '../systems/navigation/EnemyIntentSystem';
 import type { MovementFeedback } from '../systems/navigation/NavigationContracts';
+import type { EnemyAiDetail, EnemyAiDetailSource } from '../systems/navigation/EnemyAiDetail';
 import { resolveEnemySmokeConfusion, type EnemySmokeConfusionState } from '../systems/EnemySmokeConfusion';
 import { GROUND_FIRE_CELL_SIZE, type FireSystem, type WildfireSourceInfo } from '../effects/FireSystem';
 import type { SmokePerceptionPort } from '../systems/SmokeRules';
@@ -230,21 +231,23 @@ export class EnemyManager {
       || (intent?.target?.kind === kind && intent.target.id === id);
   }
   getMovementFeedback(enemyId: string) { return this.movementFeedback.get(enemyId) ?? null; }
+  /** Cumulative diagnostic counters, including far-detail solves and kept far courses. */
   getNavigationWorkCounters() { return { ...this.locomotion.getWorkCounters(), ...this.intents?.getWorkCounters() }; }
   getBreachAttackPoint(enemyId: string) { return this.intents?.getBreachAttackPoint(enemyId) ?? null; }
   routeAlly(enemy: EnemyEntity, key: string, destination: { x: number; y: number }, range: number) {
     return (enemy.faction === 'allied' ? this.intents?.routeAlly(enemy, key, destination, range)
       : this.intents?.routeTo(key, enemy.sprite.x, enemy.sprite.y, enemy.getSize() / 2, destination, range)) ?? null;
   }
+  /** `detail` is chosen by the host frame's movement step; every other caller steers in full. */
   moveNormally(enemy: EnemyEntity, waypoint: { x: number; y: number } | null, speed: number,
-    aimAngle?: number, priority: 'ordinary' | 'attack' = 'ordinary'): MovementFeedback {
+    aimAngle?: number, priority: 'ordinary' | 'attack' = 'ordinary', detail: EnemyAiDetail = 'full'): MovementFeedback {
     const previous = enemy.getDesiredVelocity();
     const navigation = this.intents?.get(enemy.id)?.navigation;
     // An amphibious body steers against the world without water (its intent field carries that geometry).
     const geometry = enemy.isAmphibious() ? this.intents?.getField(enemy.id)?.getNavigationGeometry() ?? undefined : undefined;
     const result = this.locomotion.solve({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
       radius: enemy.getSize() / 2, speed, waypoint, priority, previousVx: previous.vx, previousVy: previous.vy,
-      routeCost: navigation?.status === 'ready' ? navigation.cost : undefined, geometry });
+      routeCost: navigation?.status === 'ready' ? navigation.cost : undefined, geometry, detail });
     this.movementFeedback.set(enemy.id, result);
     enemy.setDesiredVelocity(result.vx, result.vy, this.movementNow, aimAngle,
       result.waitReason === 'none' ? 'locomotion' : 'immediate');
@@ -600,6 +603,8 @@ export class EnemyManager {
     smokeSystem?: SmokePerceptionPort | null,
     decoyTargets?: DecoyTargetPort | null,
     combatMovementSource?: EnemyCombatMovementSource | null,
+    /** Host-frame detail tiers; only the ordinary route below reads them. Absent: full detail. */
+    aiDetail?: EnemyAiDetailSource | null,
   ): void {
     this.movementNow = now;
     if (this.dawnElites && !movementLocked) {
@@ -790,7 +795,7 @@ export class EnemyManager {
       if (route.status === 'invalid-start') waypoint = { x: enemy.sprite.x + 1, y: enemy.sprite.y };
       const swimFactor = enemy.isSubmerged() ? config.amphibious?.swimSpeedFactor ?? 1 : 1;
       const feedback = this.moveNormally(enemy, waypoint, enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor * swimFactor,
-        combatMovement?.aimAngle);
+        combatMovement?.aimAngle, 'ordinary', aiDetail?.isFar(enemy.id) ? 'far' : 'full');
       const train = activeTrainAwareness?.resolveMovement(enemy, feedback.vx, feedback.vy, now);
       if (train?.override) enemy.setDesiredVelocity(train.vx, train.vy, now);
       else if (decoyTarget && route.status === 'ready') decoyTargets?.usedTarget(enemy.id);

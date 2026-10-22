@@ -3,7 +3,7 @@ import type { PerformanceCase } from './contracts';
 import { buildPerformanceLoadout as build, presets, type PresetItem } from './loadouts';
 import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID, DAWN_MAP_ID, MAP14_FIRE_MAP_ID, MAP15_MAP_ID, MAP16_MAP_ID } from './referenceMap';
 export { PERFORMANCE_MAP_ID, REFERENCE_SEED, registerReferenceMap } from './referenceMap';
-export const SCENARIO_VERSION = 'map16-endgame-1';
+export const SCENARIO_VERSION = 'map16-endgame-2';
 
 export function allPerformanceCases(): PerformanceCase[] {
   const glock = build('GLOCK');
@@ -20,6 +20,8 @@ export function allPerformanceCases(): PerformanceCase[] {
   const combat = build('GLOCK', true);
   return [
     ...[100, 300, 500].map(enemyCount => base(`review.enemies-${enemyCount}`, 12_000, 'enemies', { enemyCount })),
+    // Enemies walk in from outside every view and are sent back out on arrival: far, crossing and near at once.
+    base('review.enemies-300-far', 20_000, 'enemies', { enemyCount: 300, enemyStart: 'far' }),
     base('review.player', 12_000, 'presentation'),
     base('review.fog-rock', 12_000, 'presentation', { timeOfDay: 360 }),
     base('review.camera', 12_000, 'presentation', { timeOfDay: 360 }),

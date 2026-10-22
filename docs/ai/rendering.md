@@ -182,9 +182,10 @@ Resets sind stille Baselines, unveraenderte Refreshes keine Treffer. Der
 [HealthBarFeedbackModel](../../src/effects/health/HealthBarFeedbackModel.ts) besitzt nur lokale
 Feedbackzeit und Sichtbarkeit, keine Health-Authority. Der
 [WorldHealthBarRenderer](../../src/effects/health/WorldHealthBarRenderer.ts) wird einmal nach
-Zustands- und Positionssynchronisation vom Combat-Presentation-Controller getaktet. Seine
-View-Pools sind scene-langlebig; Entity-Bindings und ihre HP-Historie enden mit dem jeweiligen
-Owner. Der World-Presentation-Frame-Binding loest die verbleibenden World-Bindings vor dem
+Zustands- und Positionssynchronisation vom Combat-Presentation-Controller getaktet. Er zeichnet
+alle sichtbaren Balken einer Familie als Instanzen eines gemeinsamen SDF-Layers
+([BarSdfGpu](../../src/effects/bars/BarSdfGpu.ts), ein Draw je Familie und Tiefe); diese Layer
+sind scene-langlebig, Entity-Bindings und ihre HP-Historie enden mit dem jeweiligen Owner. Der World-Presentation-Frame-Binding loest die verbleibenden World-Bindings vor dem
 statischen Handoff. HP null verbirgt die Anzeige, invalidiert aber noch nicht das Handle:
 Die echte Entity-Entfernung bleibt beim Lifecycle-Owner. Die Consumer- und Handoff-Vertraege
 sichern [WorldHealthBarConsumers.test.ts](../../tests/integration/WorldHealthBarConsumers.test.ts)

@@ -5,6 +5,12 @@ export const PERFORMANCE_FIXTURE = {
   // Summoners would grow the population during a fixed-load enemy case.
   enemyKinds: ['rabid-badger', 'alien-badger', 'pyro-badger'],
   enemySpawnRadius: { min: 230, max: 650 },
+  // Far start: outside the player's 1920 x 1080 px view at the default fixture position and still
+  // inside the 5120 x 3072 px reference map around point (67, 72).
+  farEnemySpawnRadius: { min: 1800, max: 3500 },
+  // Far enemies this close to the player go back to a far start, checked at this interval.
+  farEnemyReturnRadius: 450,
+  farEnemyReturnIntervalMs: 250,
   minimumGlobalRocks: 3500,
   remainingGlobalRocks: 1500,
   minimumDestructionFieldRocks: 200,

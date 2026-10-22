@@ -49,9 +49,11 @@ export class EnemyAiTargetCatalog {
       else this.groups.set(group, []);
     }
 
-    const ordered = [...candidates].sort((left, right) => this.key(left).localeCompare(this.key(right)));
-    for (const candidate of ordered) {
-      this.targets.set(this.key(candidate), candidate);
+    // Keys once per candidate, not twice per comparison: the catalog is rebuilt every host frame.
+    const ordered = candidates.map(candidate => ({ key: this.key(candidate), candidate }))
+      .sort((left, right) => left.key.localeCompare(right.key));
+    for (const { key, candidate } of ordered) {
+      this.targets.set(key, candidate);
       if (candidate.kind === 'player' || (candidate.representedPlayerIds?.length ?? 0) > 0) {
         this.groups.get('player-threats')!.push(candidate);
         this.groups.get('player-like-threats')!.push(candidate);
