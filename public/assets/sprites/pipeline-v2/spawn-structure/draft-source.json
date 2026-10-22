@@ -5,33 +5,33 @@
     {
       "state": "intact",
       "outlet": "north",
-      "beauty": "2f63c465f34b66021902977f73b364a2ba97a4cf7471341776f3ac4a30a34be2",
-      "emit": "caeb3c6822e23a88e420c53a39f91035eef8c8014a55ecd52febbc9a1a821bf6"
+      "beauty": "d51920b28089998f642c3e1a406f2e03749bacc7500929a594f3461305fcf116",
+      "emit": "f72cd9448122662db951b0cc2613e416b40034200051d027a212d607fc9309d9"
     },
     {
       "state": "intact",
       "outlet": "east",
-      "beauty": "ddf4ba0d6cbe727fcf0464402fb0bae995e6fd4c842ccfae5092d939d623915d",
-      "emit": "65c101f1317e858f35001f53fd5de0bf411fe3ed2ff39f0a1f64cd0d594ab07f"
+      "beauty": "675c5919c1f2eda4213a339e8fabf9bc85d93bdd18d3c5415274d34e4c8920f2",
+      "emit": "7d132cf414816807e7a623f2f09f691f8ec3178d313e7527f271ec644ac6e8e5"
     },
     {
       "state": "intact",
       "outlet": "south",
-      "beauty": "b13605ff930838f1655c3f90da694402b98db33008289bdc366ac2644801f08a",
-      "emit": "a4b04717c07fb99de917d1902b6afd913ddab38138110441afa06237e5c04926"
+      "beauty": "c9443869bab7d8d8a5c5a3e8451475772cdb0b143852eb2549f4496138760a61",
+      "emit": "1bf7f5c681d2e8848c63fe9c1c0d6bcea7682f145b8230b2839f7e483e75100b"
     },
     {
       "state": "intact",
       "outlet": "west",
-      "beauty": "c0726a8bd1815ed7c33407819bd4196d8dbef90f6097b29b856ceaff2a188c2f",
-      "emit": "b9850d8ef0cd32783198cefdd39402dbc0b54d2604d5368b3d0383fecfcb6651"
+      "beauty": "58488259acfeec7d098b6a1e1399bbf926c6e897c4f679c30f8115eb2f5c915a",
+      "emit": "34fec26c43b996330c4da5484a41dbb1f6043d5fc93b5d6d9cd9716db99b22b4"
     }
   ],
   "runtime": {
     "id": "spawn-structure",
     "category": "construction",
     "gameIds": [],
-    "revision": "v7",
+    "revision": "v8",
     "variant": "standard",
     "sourceSize": 432,
     "textureKey": "construction_spawn_structure",
@@ -58,8 +58,8 @@
     },
     "clips": [],
     "hashes": {
-      "idle": "1b79079e72bb0a0e7d1657c090c5331db450f918cbc269d7136ccba3d129015b",
-      "sheet": "80051532f9bcb96c72e92adb3816dad439178064e395a115e6084436192714da"
+      "idle": "10f4b37f5f3bd68af89efa54eb368f6283a83b2a02500998de79a3bff245d4c7",
+      "sheet": "9f0c6e5a71ef9145f058e21751be23383706f89a7931b03d570e041b3fa9d3ab"
     }
   },
   "sources": "scripts/asset-pipeline/spawn-carcass (README.md)",

@@ -15,18 +15,42 @@ ember.inputs['Emission Color'].default_value = (0.26, 0.05, 0.55, 1)
 for n in bpy.data.materials['v6_ember'].node_tree.nodes:
     if n.type == 'MAP_RANGE': n.inputs['To Max'].default_value = 2.2
 
-# Eggs glow from inside.
+# Eggs glow from inside dark shells.
 egg = bpy.data.materials['atmos6_egg'].node_tree.nodes
+egg['Principled BSDF'].inputs['Base Color'].default_value = (0.045, 0.016, 0.065, 1)
 egg['Principled BSDF'].inputs['Emission Color'].default_value = (0.42, 0.1, 0.9, 1)
 for n in egg:
     if n.type == 'MAP_RANGE': n.inputs['To Min'].default_value = 0.65; n.inputs['To Max'].default_value = 0.12
 
-# Pool: no cell relief and no grey puddle speckles from straight above.
+# Finer slime veins.
+for n in bpy.data.materials['atmos6_slime'].node_tree.nodes:
+    if n.type == 'TEX_VORONOI': n.inputs['Scale'].default_value = 30
+
+# Moss only low on the bones, never on the tops of the ribs and the spine.
+for name in ('v6_bone', 'v6_old_bone'):
+    tree = bpy.data.materials[name].node_tree
+    nodes, links = tree.nodes, tree.links
+    for old in ('atmos6_mosslow', 'atmos6_mossmul'):
+        if old in nodes: nodes.remove(nodes[old])
+    low = nodes.new('ShaderNodeMapRange'); low.name = 'atmos6_mosslow'
+    low.inputs['From Min'].default_value, low.inputs['From Max'].default_value = 0.25, 0.55
+    low.inputs['To Min'].default_value, low.inputs['To Max'].default_value = 0.8, 0.0
+    links.new(nodes['atmos6_sep'].outputs['Z'], low.inputs['Value'])
+    mul = nodes.new('ShaderNodeMath'); mul.name = 'atmos6_mossmul'; mul.operation = 'MULTIPLY'
+    links.new(nodes['atmos6_mo2'].outputs['Value'], mul.inputs[0]); links.new(low.outputs['Result'], mul.inputs[1])
+    links.new(mul.outputs['Value'], nodes['atmos6_mosscol'].inputs['Factor'])
+
+# Pool: no cell relief and no grey puddle speckles from straight above; the membrane lies faint and light
+# over the painted egg nest instead of darkening it into blotches.
 floor = bpy.data.materials['atmos6_floor'].node_tree.nodes
 for n in floor:
     if n.type == 'BUMP': n.inputs['Strength'].default_value = 0.18
     if n.type == 'TEX_VORONOI': n.inputs['Scale'].default_value = 3.5
     if n.type == 'MAP_RANGE' and abs(n.inputs['To Min'].default_value - 0.55) < 1e-6: n.inputs['To Min'].default_value = 0.32; n.inputs['To Max'].default_value = 0.22
+    if n.type == 'MAP_RANGE' and abs(n.inputs['From Min'].default_value - 0.6) < 1e-6 and n.inputs['Value'].is_linked:
+        n.inputs['To Max'].default_value = 0.35
+    if n.type == 'MIX' and n.blend_type == 'MULTIPLY' and n.inputs['A'].is_linked and n.inputs['A'].links[0].from_node.type == 'TEX_IMAGE':
+        n.inputs['B'].default_value = (0.6, 0.55, 0.65, 1)
 
 # Litter only on the forest floor, never on the stain.
 for obj in list(scene.objects):

@@ -37,22 +37,43 @@ export interface SpawnStructureGlow {
   readonly lightIntensity: number;
 }
 
+/** The brood's resting heartbeat and the racing one of an announced release (ms per double beat). */
+const HEART_REST_MS = 1700;
+const HEART_RACE_MS = 620;
+
+/** One double beat (lub-dub) 0..1 per period, at fixed rate so it never jumps in phase. */
+function heartbeat(nowMs: number, periodMs: number, phase: number): number {
+  const u = (((nowMs / periodMs + phase) % 1) + 1) % 1;
+  const beat = (at: number, width: number) => Math.exp(-(((u - at) / width) ** 2));
+  return Math.max(beat(0.08, 0.05), 0.62 * beat(0.27, 0.05));
+}
+
 /**
- * Emissive strengths 0..1 before the day/night factor, for a standing structure. `charge` is the
- * announced release (0..1): the pool glows up and the menacing nest light swells toward the moment
- * enemies rise. The light reaches far past the carcass and breathes slowly.
+ * The brood's heartbeat 0..1: a slow double beat at rest that gives way to a racing one while a
+ * release charges (`charge` 0..1). Both run at fixed rates and are blended, so the pulse never jumps.
+ */
+export function resolveSpawnStructureHeartbeat(view: SpawnStructureView, nowMs: number, charge: number): number {
+  if (resolveSpawnPitState(view) === 'sealed') return 0;
+  const c = Math.max(0, Math.min(1, charge)), phase = phaseOf(view.id) / (Math.PI * 2);
+  return (1 - c) * heartbeat(nowMs, HEART_REST_MS, phase) + c * heartbeat(nowMs, HEART_RACE_MS, phase);
+}
+
+/**
+ * Emissive strengths 0..1 before the day/night factor, for a standing structure. The pool glow and
+ * the menacing nest light pulse with the brood's heartbeat; `charge` is the announced release (0..1):
+ * the pool glows up and the light swells toward the moment enemies rise.
  */
 export function resolveSpawnStructureGlow(view: SpawnStructureView, nowMs: number, charge: number): SpawnStructureGlow {
   if (resolveSpawnPitState(view) === 'sealed') {
     return { core: 0.25, pit: 0.12, lightRadiusPx: 150, lightIntensity: 0.16 };
   }
   const c = Math.max(0, Math.min(1, charge));
-  const breathe = 0.5 + 0.5 * Math.sin(nowMs * (0.0012 + 0.005 * c) + phaseOf(view.id));
+  const heart = resolveSpawnStructureHeartbeat(view, nowMs, c);
   return {
-    core: Math.min(1, 0.55 + 0.2 * breathe + 0.25 * c),
-    pit: Math.min(1, 0.3 + 0.15 * breathe + 0.55 * c),
-    lightRadiusPx: 230 + 30 * breathe + 80 * c,
-    lightIntensity: 0.42 + 0.08 * breathe + 0.48 * c,
+    core: Math.min(1, 0.55 + 0.15 * heart + 0.25 * c),
+    pit: Math.min(1, 0.28 + 0.3 * heart + 0.45 * c),
+    lightRadiusPx: 230 + 25 * heart + 80 * c,
+    lightIntensity: 0.4 + 0.14 * heart + 0.46 * c,
   };
 }
 

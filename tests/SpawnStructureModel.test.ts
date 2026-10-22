@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveSpawnEmergencePhase, resolveSpawnPitState, resolveSpawnStructureEyes, resolveSpawnStructureFade, resolveSpawnStructureGlow,
+  resolveSpawnStructureHeartbeat,
   SPAWN_EMERGENCE_PART_MS, SPAWN_EMERGENCE_SWELL_MS, SPAWN_STRUCTURE_STAIN_FADE_DELAY_MS, SPAWN_STRUCTURE_STAIN_FADE_MS,
   type SpawnEmergence, type SpawnStructureView,
 } from '../src/effects/spawnStructure/SpawnStructureModel';
@@ -24,6 +25,26 @@ describe('spawn structure presentation model', () => {
     expect(charged.lightRadiusPx).toBeGreaterThan(calm.lightRadiusPx);
     expect(resolveSpawnStructureEyes(view(), 2000, 1)).toBeGreaterThan(resolveSpawnStructureEyes(view(), 2000, 0));
     expect(resolveSpawnStructureEyes(view({ dormant: true }), 2000, 1)).toBeLessThan(0.3);
+  });
+
+  it('lets the brood heartbeat race while a release charges, without jumping as the charge rises', () => {
+    const beats = (charge: number) => {
+      let count = 0, previous = 0;
+      for (let t = 0; t < 6000; t += 10) {
+        const h = resolveSpawnStructureHeartbeat(view(), t, charge);
+        if (h > 0.5 && previous <= 0.5) count++;
+        previous = h;
+      }
+      return count;
+    };
+    expect(beats(1)).toBeGreaterThan(beats(0) * 2);
+    for (let t = 0; t < 3000; t += 37) {
+      for (const charge of [0, 0.3, 0.7]) {
+        const step = Math.abs(resolveSpawnStructureHeartbeat(view(), t, charge + 0.01) - resolveSpawnStructureHeartbeat(view(), t, charge));
+        expect(step).toBeLessThan(0.02);
+      }
+    }
+    expect(resolveSpawnStructureHeartbeat(view({ dormant: true }), 1234, 1)).toBe(0);
   });
 
   it('bursts the skeleton at once and fades the stain softly, never popping', () => {

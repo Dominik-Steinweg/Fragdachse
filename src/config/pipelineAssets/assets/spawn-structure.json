@@ -2,7 +2,7 @@
   "id": "spawn-structure",
   "category": "construction",
   "gameIds": [],
-  "revision": "v7",
+  "revision": "v8",
   "variant": "standard",
   "sourceSize": 432,
   "textureKey": "construction_spawn_structure",
@@ -29,7 +29,7 @@
   },
   "clips": [],
   "hashes": {
-    "idle": "1b79079e72bb0a0e7d1657c090c5331db450f918cbc269d7136ccba3d129015b",
-    "sheet": "80051532f9bcb96c72e92adb3816dad439178064e395a115e6084436192714da"
+    "idle": "10f4b37f5f3bd68af89efa54eb368f6283a83b2a02500998de79a3bff245d4c7",
+    "sheet": "9f0c6e5a71ef9145f058e21751be23383706f89a7931b03d570e041b3fa9d3ab"
   }
 }

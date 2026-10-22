@@ -1,0 +1,46 @@
+{
+  "owner": "effects/spawnStructure/SpawnStructureSpores.ts",
+  "notes": [
+    "Spawn structure brood spores (GDD Spawnbauwerk V1): sparse violet motes rising from the nest, additive above the light map between the ember and the eye passes."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/image/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.09",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureSpores.ts:module/image/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureSpores.ts",
+      "component": "module/image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.59
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/image/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.09"
+      }
+    }
+  ]
+}

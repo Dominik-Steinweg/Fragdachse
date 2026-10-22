@@ -42,6 +42,35 @@ def smoothstep(a, b, x):
     return t * t * (3 - 2 * t)
 
 
+# Hitbox of the south frame (mirror of SOUTH_BODY in src/config/spawnStructure.ts). The nest centre is the
+# origin, one Blender unit is one cell: cell (gx, gy) spans x in [gx - 3, gx - 2] and y in [2.5 - gy, 3.5 - gy].
+# Bones that read as solid stay on these cells, so the hitbox follows what the player sees.
+BODY = ('.####.', '######', '##...#', '#...##', '#...##', '....#.')
+
+
+def on_body(p, margin=0.0):
+    """Whether p and its surroundings within `margin` all lie on hitbox cells."""
+    for dx in (-margin, 0.0, margin):
+        for dy in (-margin, 0.0, margin):
+            gx, gy = math.floor(p.x + dx + 3), math.floor(3.5 - (p.y + dy))
+            if not (0 <= gy < len(BODY) and 0 <= gx < len(BODY[0]) and BODY[gy][gx] == '#'):
+                return False
+    return True
+
+
+def onto_body(p, margin):
+    """The nearest point to p (same height) that lies on the hitbox at least `margin` inside."""
+    if on_body(p, margin):
+        return p.copy()
+    best = None
+    for kx in range(-30, 31):
+        for ky in range(-30, 31):
+            q = Vector((p.x + kx * 0.05, p.y + ky * 0.05, p.z))
+            if on_body(q, margin) and (best is None or (q - p).length < (best - p).length):
+                best = q
+    return best if best is not None else p.copy()
+
+
 def frame(tan, up_hint=UP):
     x = tan.normalized(); z = (up_hint - x * up_hint.dot(x)).normalized(); y = z.cross(x)
     return Matrix((x, y, z)).transposed()
@@ -316,21 +345,29 @@ def column_z(i):
 
 
 spine_z = dict(zip(spine_idx, gauss([column_z(i) for i in spine_idx], 5)))
+# The tail ends on its hitbox cells: TAIL_CUT is where its centreline first stands on them.
+TAIL_CUT = next(seglen[i] for i in spine_idx if on_body(point(i), 0.12))
 bm = bmesh.new()
 last = -1.0
 for i in spine_idx:
     s = seglen[i]
-    size = 0.4 + 0.6 * smoothstep(0, PELVIS, s)
+    if s < TAIL_CUT:
+        continue
+    # The tail stays strong (its hitbox cells must read as solid as the ribcage) and tapers only within its
+    # last cell; the tip there has come slightly apart.
+    size = (0.72 + 0.28 * smoothstep(0, PELVIS, s)) * (0.6 + 0.4 * smoothstep(TAIL_CUT, TAIL_CUT + 0.5, s))
     size *= 1 + 0.45 * smoothstep(CAGE_END - 0.2, SKULL_START, s)
     if s - last < 0.1 + 0.09 * size: continue
     last = s
     tan = tangent(i)
     c = Vector((xs[i], ys[i], spine_z[i]))
-    loose = smoothstep(TAIL_BONES * 0.9, 0.0, s)
+    loose = 0.6 * smoothstep(TAIL_CUT + TAIL_BONES * 0.4, TAIL_CUT, s)
     if loose > 0.05:
         # The tail tip has fallen apart: vertebrae shifted, tilted, half sunk.
         c += Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), 0)) * 0.1 * loose - UP * 0.04 * loose
         tan = (tan + Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), 0)) * 0.6 * loose).normalized()
+    if s < PELVIS and not on_body(c, 0.12):
+        continue                    # the tail ends on its hitbox cells: no bones trail off past it
     basis = frame(tan)
     ellipsoid(bm, c, basis, (0.11 * size, 0.12 * size, 0.11 * size), wobble=0.18, seed=s)
     # Neural spine leaning back, often snapped; transverse processes.
@@ -338,6 +375,12 @@ for i in spine_idx:
     tube(bm, [c + UP * 0.06 * size, c + UP * (0.06 + height) - tan * 0.07 * size], [0.05 * size, 0.012], seg=7, jag=0.03)
     for sgn in (-1, 1):
         tube(bm, [c, c + basis.col[1] * sgn * 0.17 * size - UP * 0.03], [0.042 * size, 0.016 * size], seg=6, jag=0.02)
+    if s < PELVIS - 0.2:
+        # Bony scutes on both flanks, tilted like a roof: the armoured tail fills its cells.
+        for sgn in (-1, 1):
+            side = basis.col[1] * sgn
+            ellipsoid(bm, c + side * 0.19 * size + UP * 0.02, frame(tan, (UP + side * 0.6).normalized()),
+                      (0.15 * size, 0.11 * size, 0.035 * size), wobble=0.3, seed=s * 3 + sgn)
     if s < PELVIS - 0.3:
         # Chevron under each tail vertebra, raking back.
         tube(bm, [c - UP * 0.05 * size, c - UP * 0.13 * size - tan * 0.1 * size], [0.035 * size, 0.012], seg=6)
@@ -347,6 +390,7 @@ for i in spine_idx:
 spine_obj = organic(finish(bm, 'v6_spine', BONE), 0.022, [CRACKS, ERODE, FINE_CRACKS], smooth=1)
 
 # --- Ribcage: barrel-shaped, flat ribs bulging out before they fall; many end in the air ------------
+rng.seed('carcass-v8-ribs')         # the ribcage and everything after it do not depend on the tail
 rib_at = []
 s = PELVIS + 0.35
 while s < CAGE_END - 0.05:
@@ -357,7 +401,8 @@ bm = bmesh.new()
 def rib(i, lateral, reach, width, outer):
     zs = spine_z[i]
     start = Vector((xs[i], ys[i], zs))
-    roll = rng.random()
+    # Ribs toward the nest snap short less often: they are the cage wall that the hitbox stands on.
+    roll = rng.random() * (1.0 if outer else 0.9)
     if roll < 0.4: end_deg = rng.uniform(-8, 2)               # reaches the ground
     elif roll < 0.8: end_deg = rng.uniform(15, 50)            # ends in the air
     else: end_deg = rng.uniform(55, 72)                       # snapped short
@@ -383,7 +428,7 @@ for k, i in enumerate(rib_at):
     out = outward_at(point(i))
     w = (0.085 + 0.03 * bell) * rng.uniform(0.85, 1.15)
     broken, pts = rib(i, -out, (0.55 + 0.8 * full[i]) * bell, w, False)
-    rib(i, out, (0.38 + 0.35 * full[i]) * bell, w * 0.95, True)
+    rib(i, out, (0.38 + 0.35 * full[i]) * bell * 0.85, w * 0.95, True)
     if broken and rng.random() < 0.5:
         # The lost piece lies below, half sunk.
         a = Vector((pts[-1].x, pts[-1].y, 0.02)) + Vector((rng.uniform(-0.2, 0.2), rng.uniform(-0.2, 0.2), 0))
@@ -446,20 +491,21 @@ def claw(bm, at, toward, scale):
 
 
 bm = bmesh.new()
-# Hind leg: femur out of the hip socket, knee down at the outside, shin snapped; foot sunk in.
+# Hind leg folded along the flank: femur out of the hip socket, shin snapped, the foot sunk in beside the
+# tail with its claws pointing forward. Knee and foot stay on the hitbox cells.
 socket = P + op * 0.42 + UP * (zp * 0.42)
-knee = P + op * 1.0 + tp * 0.45 + UP * 0.14
+knee = onto_body(P + op * 1.0 + tp * 0.45 + UP * 0.14, 0.2)
 long_bone(bm, socket, knee, 0.14)
-foot = P + op * 1.25 - tp * 0.15
+foot = onto_body(P + op * 0.6 - tp * 0.9, 0.3)
 long_bone(bm, knee, foot + UP * 0.05, 0.11, broken_at=0.6)
-claw(bm, foot, (op * 0.35 + tp).normalized(), 1.7)
+claw(bm, foot, (tp + op * 0.15).normalized(), 1.35)
 # The other hind leg folded under the body: only the femur shows.
 long_bone(bm, P - op * 0.3 + UP * (zp * 0.35), P - op * 0.6 + tp * 0.5 + UP * 0.08, 0.12, broken_at=0.75)
 # Fore leg at the shoulder: humerus snapped, a claw lying beside the neck.
 ia = index_at(CAGE_END - 0.35); A = point(ia); ta = tangent(ia); oa = outward_at(A)
 shoulder = A + oa * 0.35 + UP * (spine_z.get(ia, 0.9) * 0.55)
-long_bone(bm, shoulder, A + oa * 0.95 - ta * 0.3 + UP * 0.1, 0.13, broken_at=0.7)
-claw(bm, A + oa * 1.05 + ta * 0.35, (oa * 0.6 + ta).normalized(), 1.6)
+long_bone(bm, shoulder, onto_body(A + oa * 0.95 - ta * 0.3 + UP * 0.1, 0.2), 0.13, broken_at=0.7)
+claw(bm, onto_body(A + oa * 0.6 + ta * 0.2, 0.3), (ta + oa * 0.15).normalized(), 1.3)
 isc = index_at(CAGE_END - 0.45); S = point(isc); ts = tangent(isc); os_ = outward_at(S); zs_ = spine_z.get(isc, 1.0)
 for sgn in (-1, 1):
     side = os_ * sgn
@@ -644,4 +690,5 @@ scene.render.film_transparent = True
 scene.render.image_settings.file_format = 'PNG'; scene.render.image_settings.color_mode = 'RGBA'
 scene.view_settings.view_transform = 'Standard'
 bpy.context.window.scene = scene
-result = {'length': round(LENGTH, 2), 'ribs': len(rib_at), 'pelvis_s': round(PELVIS, 2), 'skull_len': round(L, 2)}
+result = {'length': round(LENGTH, 2), 'ribs': len(rib_at), 'pelvis_s': round(PELVIS, 2), 'skull_len': round(L, 2),
+          'pelvis': [round(P.x, 2), round(P.y, 2)], 'hind_foot': [round(foot.x, 2), round(foot.y, 2)], 'knee': [round(knee.x, 2), round(knee.y, 2)]}

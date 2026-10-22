@@ -18,7 +18,8 @@ Das Bauwerk soll:
 
 - **Grundriss:**
   - 6 × 6 Zellen in einer von vier Ausrichtungen ([`src/config/spawnStructure.ts`](../../src/config/spawnStructure.ts)).
-  - Nur die 20 Knochenzellen haben eine Hitbox. Gliedmaßenspitzen ragen ohne Hitbox darüber hinaus.
+  - Nur die 20 Knochenzellen haben eine Hitbox. Das Asset ist auf sie gebaut: Schwanz und Klauen bleiben auf
+    ihren Zellen, der Schwanz trägt Knochenplatten. Nur Rippenspitzen ragen leicht darüber hinaus.
   - Das Brutnest (2 × 3 Zellen) ist begehbar und hat keine Hitbox. Spieler können darauf nicht bauen.
   - Es öffnet sich über zwei Zellen zwischen Schwanz und Schädel. Die Öffnung zeigt zur verteidigten Basis.
 - **Spawn:**
@@ -53,8 +54,11 @@ Das Bauwerk soll:
   - Im Asset glimmt nur eine dunkle Glut.
   - Im Spiel leuchten die Augen als tiefviolette Schlitze. Sie atmen, flackern und blinzeln. Beim Aufladen glühen sie
     auf.
+- **Herzschlag:** Nestglühen und Nestlicht pulsieren in einem langsamen Doppelschlag. Beim Aufladen rast er.
 - **Licht:** Das Nestlicht deckt ein großes Feld ab und wächst beim Aufladen; nachts ist es ein bedrohlicher
   violetter Lichtkegel.
+- **Brutsporen:** Wenige violette Sporen steigen aus dem Nest auf, beim Aufladen viele. Sie verteilen sich ohne
+  Richtung und bilden keinen Strom wie beim Portal.
 - **Owner:**
   - `SpawnStructureRenderer` gehört zur World und wird über den `BaseManager` erzeugt. Damit zeigen auch eine World
     ohne Activity und die World nach der Runde das Bauwerk.

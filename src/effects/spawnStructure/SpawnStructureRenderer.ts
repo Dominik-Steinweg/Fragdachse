@@ -12,6 +12,7 @@ import {
   resolveSpawnStructureGlow, type SpawnEmergence, type SpawnStructureView,
 } from './SpawnStructureModel';
 import { SpawnStructureBoneBurst } from './SpawnStructureBoneBurst';
+import { SpawnStructureSpores } from './SpawnStructureSpores';
 import { BROOD_PIT_SWELLS, BroodPitGpuLayer, type BroodPitSwell } from '../gpu/BroodPitGpuLayer';
 
 export type SpawnStructureLightingPort = Pick<LightingSystem, 'setLight' | 'releaseLight' | 'getArtificialLightFactor'>;
@@ -69,12 +70,14 @@ export class SpawnStructureRenderer {
   private readonly emergences = new Map<string, SpawnEmergence[]>();
   private readonly pool: BroodPitGpuLayer;
   private readonly burst: SpawnStructureBoneBurst;
+  private readonly spores: SpawnStructureSpores;
   private readonly swells: BroodPitSwell[] = [];
   private destroyed = false;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.pool = new BroodPitGpuLayer(scene);
     this.burst = new SpawnStructureBoneBurst(scene);
+    this.spores = new SpawnStructureSpores(scene);
     fillRadialGradientTexture(scene.textures, EYE_GLOW_TEXTURE, 64, [[0, 'rgba(255,255,255,1)'], [0.18, 'rgba(255,255,255,.7)'],
       [0.45, 'rgba(255,255,255,.22)'], [0.75, 'rgba(255,255,255,.05)'], [1, 'rgba(255,255,255,0)']]);
     fillRadialGradientTexture(scene.textures, EYE_CORE_TEXTURE, 32, [[0, '#ffffff'], [0.4, 'rgba(255,255,255,.75)'], [1, 'rgba(255,255,255,0)']]);
@@ -122,6 +125,7 @@ export class SpawnStructureRenderer {
     const emissive = Math.max(EMISSIVE_DAY_FLOOR, night);
     const seenLights = new Set<string>();
     this.pool.begin(nowMs);
+    this.spores.begin(nowMs);
     for (const view of views) {
       const visual = this.visuals.get(view.id) ?? this.create(view);
       if (visual.hpRevision !== view.hpRevision) {
@@ -161,7 +165,9 @@ export class SpawnStructureRenderer {
       if (!view.destroyed) {
         this.pool.add({ x: view.x, y: view.y, halfSize: POOL_QUAD_HALF_PX, radius: POOL_RADIUS_PX, charge,
           state: PIT_STATE_CODE[resolveSpawnPitState(view)], seed: phaseOf(view.id) / 6.283, swells: this.resolveSwells(view.id, nowMs) });
+        if (resolveSpawnPitState(view) === 'active') this.spores.emit(view.id, view.x, view.y, charge, nowMs);
       }
+
       // The baked embers stay dark; the eyes are lit here, the pool glow fades with the stain.
       visual.core.setTint(VOID_PALETTE.deep).setAlpha(glow.core * emissive * 0.5 * fade.glow).setVisible(fade.body);
       visual.shimmer.setTint(VOID_PALETTE.deep).setAlpha(glow.pit * emissive * 0.7 * fade.stain).setVisible(fade.stain > 0);
@@ -195,6 +201,7 @@ export class SpawnStructureRenderer {
       }
     }
     this.pool.flush();
+    this.spores.update(nowMs, 0.45 + 0.55 * emissive);
     for (const key of this.lightKeys) {
       if (seenLights.has(key)) continue;
       this.lighting?.releaseLight(key);
@@ -237,6 +244,7 @@ export class SpawnStructureRenderer {
     this.releaseLights();
     this.pool.destroy();
     this.burst.destroy();
+    this.spores.destroy();
     this.emergences.clear();
     for (const visual of this.visuals.values()) {
       for (const part of [visual.pit, visual.shimmer, visual.body, visual.core, ...visual.eyeGlows, ...visual.eyeCores]) part.destroy();

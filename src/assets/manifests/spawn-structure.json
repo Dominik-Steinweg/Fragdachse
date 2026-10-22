@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": "v7",
+  "revision": "v8",
   "pivot": "both canvases are centred on the brood nest centre at 32 px per world cell",
   "rotation": "baked: one frame per opening, rendered with a fixed sun",
   "emissiveEncoding": "white RGB, alpha = emission intensity; congruent with the sheet layout; tint and blend (ADD) at runtime",
@@ -37,7 +37,7 @@
       "core": {
         "key": "construction_spawn_structure_emissive_core",
         "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-core.png",
-        "sha256": "00b3edf07896c15b49f75c30a5d291a2d929842d5953ce1bbb0a3ddb9e4b7b6f",
+        "sha256": "7b01db1c7c594d3a992bc8a693a2941ec454d8e94cb260dfe27d376ef7bc8a98",
         "content": "dark violet embers in the eye sockets (the runtime lights the eyes)"
       }
     },
@@ -185,7 +185,7 @@
       "glow": {
         "key": "construction_spawn_brood_pit_emissive_glow",
         "path": "./assets/sprites/pipeline-v2/spawn-brood-pit/emissive-glow.png",
-        "sha256": "62f3002d890453e1612cca04e8aabe6754ac1d36d99973a5cf4b0c0390115aa4",
+        "sha256": "552e8b0f8cef4522043275fb15e7dbf3b0d5278909607f2dc5fba0b66a0b4426",
         "content": "glowing eggs and the veins of the void growth"
       }
     },

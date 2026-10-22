@@ -5,57 +5,57 @@
     {
       "state": "sealed",
       "outlet": "north",
-      "beauty": "98a0e909b46d540bd90c994b41d5ae9754601a79b1c1b08eca6fa4eb974f3b9b",
-      "emit": "86e8e5d308f1dd21e2c916efb884e15260f77b3ecffdee362fe532b81e918318"
+      "beauty": "ad8a301b2b6737ddb20dfca65e7d585c68087235cc57f89340d0534f32ac7627",
+      "emit": "c1e2634dbd48d29498ae3a56851f9cdbc20c7db76c60d1b61c14942687a637e6"
     },
     {
       "state": "sealed",
       "outlet": "east",
-      "beauty": "c03df44c2f00007f469a9fe364892f96613c64766df440fb28d52222f1b9b8d8",
-      "emit": "a3ab870b27e001fd06e125a50e8fbf1aee29f12b5a66e812f1bc2be897ae41fa"
+      "beauty": "459a4afad8b81cda461bdb0a90054aa6c568048d64d250b18063e76e6b614d71",
+      "emit": "2b7259c19c3c4a406b3c56cccba59c97c084555978a74e0b2046ddefdf666dcc"
     },
     {
       "state": "sealed",
       "outlet": "south",
-      "beauty": "bb3aef49881f7052d54b33a3589158f420ae9357be74bf6a4c73b8e1beab19e9",
-      "emit": "b13e5ebf68e41fea2b366b9c80d5ad4620bf24bd7b97f7a32721636d729991cb"
+      "beauty": "5dd8c120f8190643343557454a5121f5d586b7f78d92053868ffc8bdaa07121b",
+      "emit": "b30a190a862fad1956be4a318525d5777fda88b5d197df10a9e207f337b057fe"
     },
     {
       "state": "sealed",
       "outlet": "west",
-      "beauty": "5df62d55a57f3d190a931d34cc763665a2d0b88100ca1c27bb0e2bd078ba78b5",
-      "emit": "7cca20c2c5456e19f44fff70d6d5653e322de2aae3ed2d0e7d3bf401ce8f1957"
+      "beauty": "3ab081b87542401645cb8a7c9bd63f233ff8ecdd760aba0fed5628d52cd65caf",
+      "emit": "81f67807a1d442abafdde4ce09b0688bb1a9bfc5a2767e1277229acbc09bde01"
     },
     {
       "state": "active",
       "outlet": "north",
-      "beauty": "3a620288ef36c8674eb826eed7a2f675dbaeffa90c930136d7ccc92bc300548f",
-      "emit": "87ef7abb22302b44c78fc6036a6b4b4265174d39393ac32a86f40a87434e72a7"
+      "beauty": "54f69c4b7e0508cdc36ea80efaaa341bf29c4be6a5f1274bea8e734dcd9d5e64",
+      "emit": "1149da1c18bbdac76f8c15bde02c68fc41ef46a51cb53d5f47e61a5546642f80"
     },
     {
       "state": "active",
       "outlet": "east",
-      "beauty": "c8b6da98931c9fef00d8b9d7e4b54b8a3ee25f4ff30d5042d058e926aca52ec2",
-      "emit": "0e0470fd74ff1340aec6371f19de6b1dca39e8d606feac983fae89681f51ae8a"
+      "beauty": "96b898380f0ed6ba42cae8944780b02a3201d2318340a7329866ba93a4addcbf",
+      "emit": "854f8e15adbfe913b0789b729508dd6fca68dd635eeb850907ce00b44aba11c1"
     },
     {
       "state": "active",
       "outlet": "south",
-      "beauty": "67dce12d3baeaf7f9aee3c61afd77488fb96f66d9ba2f05710f955e347863905",
-      "emit": "f373b28a8a936efdfa89f81ed47265df7fe768cf3358fd1a20ac9bb079f8c81d"
+      "beauty": "e89d115d04ebd79ee4680be64fcb9aec130557730d59bce8f73319b6b9fc906b",
+      "emit": "76058e2113ee8ae590f922a0f912ab9506c6cb7a2403ecadea1dd83af22ea578"
     },
     {
       "state": "active",
       "outlet": "west",
-      "beauty": "d54ed171cf3ccdd59552fc962148ada01ab440ca09ca6760941a6739a519724c",
-      "emit": "061167e104fd3ff31ce1df043b30be059641af0707a4ef91540fa36ba2bc64ce"
+      "beauty": "6ae4b0dbd84f0e86ad1235c2fb57877e1bde7fef57b8bd8f3e5a1cc6351d139b",
+      "emit": "9ba2671b9d261c01140ab04eaf68ebea662b25c8d2c2a3790bcbf3c3bdafbad5"
     }
   ],
   "runtime": {
     "id": "spawn-brood-pit",
     "category": "construction",
     "gameIds": [],
-    "revision": "v7",
+    "revision": "v8",
     "variant": "standard",
     "sourceSize": 480,
     "textureKey": "construction_spawn_brood_pit",
@@ -82,8 +82,8 @@
     },
     "clips": [],
     "hashes": {
-      "idle": "9445ce95cbd05f955fd498f2aa6bd3e0697b69a5bb7c551335d0796c42a042ab",
-      "sheet": "cdc7b10a4ea9555bdad80cd3bc71bfa142222613bbcf300e54ee23dfc57749a0"
+      "idle": "d9f1eaaa459bdf0ea147d90c66801772dc90c8943b0ea1d849b004615d6c9189",
+      "sheet": "f948b43128d3569c18a4ff306d7fbc22d97216248088b7781301b1cab02e5db3"
     }
   },
   "sources": "scripts/asset-pipeline/spawn-carcass (README.md)",
