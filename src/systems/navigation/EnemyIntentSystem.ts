@@ -12,6 +12,12 @@ import { BreachPlanner } from './BreachPlanner';
 import { AttackPositionReservations } from './AttackPositionReservations';
 import { NavigationDensity } from './NavigationDensity';
 import { EnemyFleeNavigation } from './EnemyFleeNavigation';
+import type { EnemyAiDetailSource } from './EnemyAiDetail';
+
+/** A far enemy compares all target candidates at most this often (out of every player's view)... */
+const FAR_TARGET_SEARCH_MS = 400;
+/** ...staggered by its scan phase, so far searches of a group spread over 400-600 ms. */
+const FAR_TARGET_SEARCH_STAGGER_MS = 50;
 
 type Target = NonNullable<EnemyIntent['target']> & NavigationPoint & { radius?: number; objectId?: string };
 interface SharedField { readonly id: string; readonly field: EnemyFlowFieldService; signature: string; usedAt: number;
@@ -27,6 +33,9 @@ interface Decision {
 export class EnemyIntentSystem {
   private readonly decisions = new Map<string, Decision>();
   private readonly nextDecisionAt = new Map<string, number>();
+  /** Far enemies only: when they next compare every candidate instead of their bound target. */
+  private readonly farTargetSearchAt = new Map<string, number>();
+  private farNarrowScans = 0;
   private readonly fieldEntries = new WeakMap<EnemyFlowFieldService, SharedField>();
   private readonly fields = new Map<string, SharedField>();
   private readonly planner = new BreachPlanner();
@@ -62,7 +71,7 @@ export class EnemyIntentSystem {
   get(enemyId: string): EnemyIntent | null { return this.decisions.get(enemyId)?.intent ?? null; }
   getField(enemyId: string): EnemyFlowFieldService | null { return this.decisions.get(enemyId)?.field ?? null; }
   getBreach(enemyId: string): BreachPlan | null { return this.decisions.get(enemyId)?.breach ?? null; }
-  getWorkCounters() { return this.planner.getWorkCounters(); }
+  getWorkCounters() { return { ...this.planner.getWorkCounters(), farNarrowScans: this.farNarrowScans }; }
 
   routeTo(key: string, x: number, y: number, radius: number, destination: NavigationPoint, range: number): NavigationResult | null {
     const geometry = this.coordinator.getGeometry();
@@ -105,7 +114,12 @@ export class EnemyIntentSystem {
     return best;
   }
 
-  update(enemies: readonly EnemyEntity[], now: number): void {
+  /**
+   * One host frame of target binding. With `detail`, a far enemy re-evaluates its bound target on
+   * the ordinary schedule (fresh route, same budget) but compares all candidates only every
+   * FAR_TARGET_SEARCH_MS; forced rescans stay immediate. Without it every enemy is full detail.
+   */
+  update(enemies: readonly EnemyEntity[], now: number, detail: EnemyAiDetailSource | null = null): void {
     this.now = now;
     this.frame++; this.planner.beginFrame();
     const geometry = this.coordinator.getGeometry();
@@ -173,8 +187,14 @@ export class EnemyIntentSystem {
       const topologyChanged = prior?.intent.navigation.topology !== this.coordinator.getTopologyVersion();
       // After a jump the old waypoint still aims at the far portal entry: rescan outside the budget.
       const teleported = prior !== undefined && prior.positionRevision !== enemy.positionRevision;
-      const scan = !prior || !bound || prior.intent.reason !== reason || teleported
+      const far = detail?.isFar(enemy.id) ?? false;
+      // Back in full detail, the next frame compares every candidate again on the ordinary schedule.
+      if (!far && this.farTargetSearchAt.delete(enemy.id)) this.nextDecisionAt.delete(enemy.id);
+      const forced = !prior || !bound || prior.intent.reason !== reason || teleported;
+      const scan = forced
         || (ordinaryScans < scanBudget && (topologyChanged || now >= (this.nextDecisionAt.get(enemy.id) ?? 0)));
+      // A far enemy between its target searches only refreshes the route to its bound target.
+      const narrow = scan && !forced && far && now < (this.farTargetSearchAt.get(enemy.id) ?? 0);
       if (!scan && prior && (prior.intent.navigation.status === 'ready'
         || (prior.intent.navigation.status === 'pending' && prior.intent.navigation.continuation
           && prior.field.getNavigationSnapshot()?.goalVersion !== prior.intent.navigation.goal))
@@ -183,7 +203,7 @@ export class EnemyIntentSystem {
         if (entry) entry.usedAt = this.frame;
         continue;
       }
-      const candidates: Target[] = !scan && bound ? [bound] : decoy ? [decoy] : engagedTarget ? [engagedTarget]
+      const candidates: Target[] = (!scan || narrow) && bound ? [bound] : decoy ? [decoy] : engagedTarget ? [engagedTarget]
         : config.movementTarget === 'bases' && baseTargets.length ? baseTargets
         : this.catalog.getCandidates(config.movementTarget === 'players-and-armed-constructs' ? 'players-and-armed-constructs' : 'player-threats')
           .filter(target => !this.perception || this.perception(enemy, target.x, target.y, visibilityRange))
@@ -192,9 +212,11 @@ export class EnemyIntentSystem {
         ordinaryScans++;
         const phase = [...enemy.id].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0, 0) % 5;
         this.nextDecisionAt.set(enemy.id, now + 80 + phase * 8);
+        if (narrow) this.farNarrowScans++;
+        else if (far) this.farTargetSearchAt.set(enemy.id, now + FAR_TARGET_SEARCH_MS + phase * FAR_TARGET_SEARCH_STAGGER_MS);
       }
       let chosen = this.choose(enemy, candidates, geometry, now, prior);
-      if (basePreference && scan) {
+      if (basePreference && scan && !narrow) {
         const base = this.resolveBasePreference(enemy, basePreference, chosen, baseTargets, geometry, now, prior, visibilityRange);
         if (base) { chosen = base; reason = 'fallback-base'; } else if (reason === 'fallback-base') reason = 'player';
       }
@@ -245,6 +267,7 @@ export class EnemyIntentSystem {
     for (const id of this.engaged.keys()) if (!active.has(id)) this.engaged.delete(id);
     for (const id of this.baseCommitted.keys()) if (!active.has(id)) this.baseCommitted.delete(id);
     for (const id of this.nextDecisionAt.keys()) if (!active.has(id)) this.nextDecisionAt.delete(id);
+    for (const id of this.farTargetSearchAt.keys()) if (!active.has(id)) this.farTargetSearchAt.delete(id);
     this.positions.retain(active, now);
     for (const [key, entry] of this.fields) if (entry.usedAt < this.frame - 120) {
       entry.field.destroy(); this.coordinator.unregisterField(entry.id); this.fields.delete(key);
@@ -515,6 +538,6 @@ export class EnemyIntentSystem {
     this.flee.clear();
     this.scanCursor = 0;
     for (const entry of this.fields.values()) { entry.field.destroy(); this.coordinator.unregisterField(entry.id); }
-    this.fields.clear(); this.decisions.clear(); this.nextDecisionAt.clear(); this.lastSeen.clear(); this.engaged.clear(); this.planner.clear(); this.positions.clear(); this.baseGeometry = null; this.baseTargets = [];
+    this.fields.clear(); this.decisions.clear(); this.nextDecisionAt.clear(); this.farTargetSearchAt.clear(); this.farNarrowScans = 0; this.lastSeen.clear(); this.engaged.clear(); this.planner.clear(); this.positions.clear(); this.baseGeometry = null; this.baseTargets = [];
   }
 }
