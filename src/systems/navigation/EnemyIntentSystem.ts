@@ -124,7 +124,7 @@ export class EnemyIntentSystem {
     this.frame++; this.planner.beginFrame();
     const geometry = this.coordinator.getGeometry();
     if (!geometry) return;
-    const density = this.density?.sample(enemies.map(enemy => enemy.sprite), now);
+    const density = this.density?.isDue(now) ? this.density.sample(enemies.map(enemy => enemy.sprite), now) : null;
     if (density) this.coordinator.setDensityCosts(density);
     const baseIds = this.coordinator.getBaseTargetIds(), baseSignature = baseIds.join('|');
     if (geometry !== this.baseGeometry || baseSignature !== this.baseSignature) {
