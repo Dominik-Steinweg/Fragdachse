@@ -19,7 +19,7 @@ export const HEALTH_BAR_BACKING = { color: 0x2a2420, alpha: 0.88 };
  * rim keep the bar readable on meadow, gravel, fog and void without reading as a cartoon pill.
  */
 export const HEALTH_BAR_SHAPE = {
-  radiusPerHeight: 0.4, maxRadius: 3, outlineWidth: 1, outlineAlpha: 0.55,
+  radiusPerHeight: 0.3, maxRadius: 3, outlineWidth: 1, outlineAlpha: 0.55,
   gloss: 0.12, edge: 0.45, shade: 0.3,
 };
 export type HealthBarFamily = 'enemyStatus' | 'playerStatus' | 'baseMarkers' | 'rockTools';
