@@ -1,7 +1,9 @@
 # Performance: Nachtlauf Map-16-Endphase, Map 20 und Horden
 
 Stand: 22. Oktober 2026, Branch `perf-night-1022` (von `main` 458c1030), autonomer Nachtlauf.
-Integriert per Fast-Forward nach `main` (nicht gepusht).
+Integriert per Fast-Forward nach `main` (nicht gepusht), Endstand f26be39b. Der Folgelauf (06:15–07:45)
+ergänzte inkrementelle Bodenfeuer-Verbraucher auf Host und Client und zwei Allokationshebel
+(siehe „Behaltene Hebel“, letzte vier Zeilen); die Tabellen unter „Messung“ zeigen den Stand ac8ecf88.
 
 **Ergebnis:** In der Map-16-Endphase braucht ein Frame 16 % weniger CPU-Zeit (p95 −22 %, Ausreißer
 p99 23 → 16 ms). Horden profitieren am stärksten: 300 Gegner −25 %, 500 Gegner −46 % (p95 −62 %).
@@ -105,6 +107,9 @@ Profil enthält zusätzlich ~3 % Dev-Szenario-Panel (Messwerkzeug, kein Spielcod
 | 6393e68c | Zielsuche | Homing-Abfragen ohne Kopie des Gegner-Arrays | im Endpaket |
 | ac8ecf88 | Bodenfeuer | Kontaktabfragen ohne Rectangle-Allokation je Zelle | im Endpaket |
 | e450b06a | Feuer-Warnband | Vorheiz-Band nur im Kamerabild (+2 Zellen Rand) | nicht separat gemessen |
+| 27012d3b | Bodenfeuer | FireSystem führt ein host-lokales Änderungsjournal je Veröffentlichung (entfernte/neue Zellen, nie auf dem Draht); Renderer und Netz-Delta wenden es an statt ~4.700 Zellen zu vergleichen, Renderer sammelt nur betroffene Regionen | map16 (6bc36df7 → 27012d3b) CPU Mittel 9,17 → 8,97 (−2 %, Läufe überlappen nicht), p95 12,3 → 11,7 (−5 %) |
+| 3e4fab11 | Bodenfeuer-Client | Client führt das Delta in eine id-indizierte Sicht zusammen (kein Neuaufbau/Sortieren je Tick, Ablaufprüfung nur bei fälliger Zelle) und journalisiert es für den Client-Renderer | Microbenchmark 4.700 Zellen, 8 neue je Tick: Merge 0,52 → 0,09 ms je Tick; der Voll-Diff im Client-Renderer entfällt zusätzlich. Das Lab misst nur den Host |
+| 5d4626af, f26be39b | Allokationen | Uniform-Requests per `forEach` statt Entry-Arrays je Programm-Bind; Kampf-Integrationsport einmal je Laufzeit statt ~20 Closures je Abfrage (Map-20-Heap-Profil: ~7 % bzw. ~2 % der Allokationen) | Review-Suite ohne messbaren CPU-Effekt (alle Fälle im Rauschen), reine GC-Entlastung |
 
 ## Sichtbare oder spielerische Änderungen
 
@@ -127,11 +132,10 @@ Profil enthält zusätzlich ~3 % Dev-Szenario-Panel (Messwerkzeug, kein Spielcod
 
 | Thema | Befund | Idee |
 |---|---|---|
-| Bodenfeuer-Netz | Bei 4.700 Zellen sendet der Host jede Sekunde einen Voll-Snapshot aller Zellen (Verlustreparatur) | Voll-Snapshot seltener oder als komprimierte Bitmaske; Bandbreite messen (`perf:network`) |
-| Feuer-Renderer-Diff | `GroundFireClusterRenderer.syncGround` und Netz-Delta vergleichen bei jeder Veröffentlichung alle Zellen (~2 % map16) | Änderungsliste aus dem FireSystem an Verbraucher weiterreichen |
+| Bodenfeuer-Netz | Bei 4.700 Zellen sendet der Host jede Sekunde einen Voll-Snapshot (Verlustreparatur): ≈152 KB JSON roh, ≈14 KB deflate, Host-`stringify` ≈0,8 ms, Client-`parse` ≈0,6 ms | bewusst unverändert (Verlust-Robustheit); bei Bedarf seltener oder als Bitmaske, dann mit `perf:network` messen |
 | Horden-Kollision | Phasers Arcade-RTree (Gegner gegen statische Körper, 120 Hz) ~6 % bei 500 Gegnern | eigener Raster-Collider oder Physik mit 60 Hz plus Interpolation (Gameplay-Abwägung) |
 | Gegner-Fortbewegung | `EnemyLocomotion.solve` ~9 % bei 500 Gegnern | Entfernungs-LOD außerhalb des Bildes (aus Runde 2) |
-| Phaser-Render | weiterhin ~40–45 % der Frame-CPU, ~230 Draw-Calls | vorgebackenes Vegetationslicht (Runde 2) |
+| Phaser-Render | weiterhin ~40–45 % der Frame-CPU, ~230 Draw-Calls; map16: `renderSubmit` 5,1 von 9,0 ms, davon ~7 % Uniform-Verarbeitung je Batch (Phaser setzt alle Uniforms je Batch, Duplikate filtert es bereits) | Draw-Calls/Batch-Wechsel senken, vorgebackenes Vegetationslicht (Runde 2) |
 | Kraken-Szenario | Gegnerzahlen schwanken ab ~55 zwischen Läufen (55–79), Vergleiche der späten Phasen bleiben deshalb unscharf | Wellen-Spawn im Szenario deterministisch machen |
 | Kraken-Masken | Körper-/Tentakel-Wassermasken backen bei jeder Bewegung am Ufer 128² Proben (~1,5 % Map 20) | gröberer Schwellwert oder kleinere Maske (sichtbare Uferkante prüfen) |
 
@@ -142,12 +146,16 @@ Profil enthält zusätzlich ~3 % Dev-Szenario-Panel (Messwerkzeug, kein Spielcod
 - Neue Tests: Feuer-Snapshot im Netztakt und inkrementell in Id-Reihenfolge
   (`tests/FireSystemVisualStyles.test.ts`), stabile Tintenwolken-Quads (`tests/KrakenRenderer.test.ts`),
   Hindernis-Raster mit `enable` und Mitgliederänderung (`tests/HostPhysicsSystemAllocation.test.ts`).
+- Neue/erweiterte Tests: Journal-Pfad des Feuer-Renderers inkl. übersprungener Veröffentlichung
+  (`tests/GroundFireGpuParticles.test.ts`), Host-Journal → Netz-Delta → Client inkl. Ablauf
+  (`tests/integration/GroundHazardNetwork.test.ts`).
 - Drahtformat unverändert, keine Protokollversion nötig.
 
 ## Playtest-Hinweise
 
-1. **Map 16 bis zum Ende spielen** (cp8, Brandlichtung): Fühlt sich der Kampf im Void-Feuer flüssiger
-   an? Breitet sich das Kriechfeuer beim Host weiterhin gleichmäßig aus (kein sichtbares Stocken)?
+1. **Map 16 bis zum Ende spielen** (cp8, Brandlichtung), am besten mit einem zweiten Spieler als Client:
+   Fühlt sich der Kampf im Void-Feuer flüssiger an? Breitet sich das Kriechfeuer bei Host *und* Client
+   gleichmäßig und lückenlos aus, und verschwinden auslaufende Flächen sauber?
 2. **Map 20 gegen Mini-Kraken-Wellen:** Ruckler, wenn viele Mini-Kraken Tinte spucken, sollten weg sein;
    die Tintenwolken sollen am Ufer weiter korrekt am Wasser enden.
 3. **Gegner mit Rückstoß an Felsen** (Explosionen, Schrotflinte, Dash-Gegner): dürfen weiterhin nicht
