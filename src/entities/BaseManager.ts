@@ -1,3 +1,4 @@
+import type { StructureRect } from '../arena/StructureOutline';
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
@@ -73,6 +74,9 @@ export class BaseManager {
   /** Projection of the live base entities, rebuilt only when obstacleGeneration changes. */
   private movementBlockedCells: Set<number> | null = null;
   private movementBlockedCellsGeneration = -1;
+  /** Outline rects of the live outlined structures, rebuilt only when obstacleGeneration changes. */
+  private structureRects: readonly StructureRect[] = [];
+  private structureRectsGeneration = -1;
 
   constructor(
     scene: Phaser.Scene,
@@ -277,7 +281,7 @@ export class BaseManager {
       const cells = new Set<number>();
       for (const entity of this.entities) {
         if (entity.isInert()) continue;
-        for (const cell of entity.spec.cells) {
+        for (const cell of entity.spec.movementCells ?? entity.spec.cells) {
           cells.add(cell.gridY * this.worldMetrics.gridCols + cell.gridX);
         }
       }
@@ -309,6 +313,18 @@ export class BaseManager {
    */
   getObstacleGeneration(): number {
     return this.obstacleGeneration;
+  }
+
+  /**
+   * World-pixel outline rects of all live outlined structures. The same array is returned until
+   * a base changes, so per-frame consumers can compare by identity.
+   */
+  getStructureRects(): readonly StructureRect[] {
+    if (this.structureRectsGeneration !== this.obstacleGeneration) {
+      this.structureRects = this.entities.flatMap(entity => entity.isInert() ? [] : entity.spec.collisionRects ?? []);
+      this.structureRectsGeneration = this.obstacleGeneration;
+    }
+    return this.structureRects;
   }
 
   getBases(): readonly BaseEntity[] {

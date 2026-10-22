@@ -169,6 +169,12 @@ export interface WorldBaseDefinition {
   readonly turrets?: readonly CoopBaseTurretConfig[];
   /** Freie Zelle innerhalb der Shape, an der die strukturgebundene Quelle erscheint. */
   readonly spawnCenter?: CoopBaseCellOffset;
+  /**
+   * Silhouette eines Bauwerks als Rechtecke relativ zum Shape-Ursprung. Gesetzt folgen Kollision,
+   * Licht, Nebel und Interaktion dieser Kontur statt den vollen Zellen; die Shape muss genau ihre
+   * Zellbelegung sein (siehe `StructureOutline`).
+   */
+  readonly structure?: import('../../arena/StructureOutline').StructureOutlineDefinition;
 }
 
 /**

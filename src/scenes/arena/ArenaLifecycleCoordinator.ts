@@ -1,4 +1,5 @@
 import { ENEMY_BURST_PRESETS } from '../../config/enemyBurstPresets';
+import type { StructureRect } from '../../arena/StructureOutline';
 import { CELL_SIZE, VOID_PALETTE } from '../../config';
 import { warmupKrakenShaders } from '../../effects/kraken/KrakenShaderWarmup';
 import { restrictStructureOccupant } from '../../world/PlayerCapabilities';
@@ -217,6 +218,9 @@ import {
   toPersistentBaseGravelZone,
   type PersistentBaseVisualSite,
 } from '../../persistentBase/PersistentBasePresentation';
+
+/** Shared empty answer for worlds without outlined structures. */
+const NO_STRUCTURE_RECTS: readonly StructureRect[] = [];
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
 
@@ -549,6 +553,16 @@ export class ArenaLifecycleCoordinator {
             yield* preview;
           })();
         },
+        // Base plates for now; outlined structures add their solid stamp once their art has one.
+        getFogSurfaceStamps: () => {
+          const bases = this.worldRuntime?.materialization?.bases?.getBases() ?? [];
+          const preview = this.persistentBasePreviewRenderer.getSurfaceImages();
+          return (function* () {
+            for (const base of bases) yield* base.getSurfaceImages();
+            yield* preview;
+          })();
+        },
+        getStructureRects: () => this.worldRuntime?.materialization?.bases?.getStructureRects() ?? NO_STRUCTURE_RECTS,
         getSynchronizedNow: () => bridge.getSynchronizedNow(),
       }));
     },

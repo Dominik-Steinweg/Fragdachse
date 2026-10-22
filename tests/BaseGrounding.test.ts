@@ -10,7 +10,7 @@ vi.mock('../src/arena/BaseAccentGlowTexture', () => ({
 import { CELL_SIZE, VOID_PALETTE } from '../src/config';
 import { buildBaseGroundingLayout } from '../src/arena/BaseGroundingLayout';
 import { BASE_GROUNDING_ASSETS } from '../src/arena/BaseGroundingConfig';
-import { getBaseApronRaster, writeBaseApron } from '../src/arena/BaseGroundingField';
+import { BASE_APRON_REACH_PX, getBaseApronRaster, writeBaseApron, type BaseGroundingFootprint } from '../src/arena/BaseGroundingField';
 import { BaseEntity } from '../src/entities/BaseEntity';
 import type { BaseSpec } from '../src/arena/BaseRegistry';
 import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
@@ -96,10 +96,11 @@ describe('Base foundation apron', () => {
     rgba: Uint8ClampedArray.from({ length: 64 * 64 * 4 }, (_, i) => i % 4 === 3 ? 255 : (Math.imul(i + salt, 2654435761) >>> 24)) });
   const materials = { soil: material(1), gravel: material(2),
     grassHeight: { width: 64, height: 64, data: Uint8Array.from({ length: 4096 }, (_, i) => Math.imul(i, 2654435761) >>> 24) } };
-  const apron = (footprint: typeof cells, frame: { offsetX: number; offsetY: number } = metrics) => {
-    const raster = getBaseApronRaster(footprint, frame)!;
+  const apron = (footprint: typeof cells | BaseGroundingFootprint, frame: { offsetX: number; offsetY: number } = metrics) => {
+    const ground = Array.isArray(footprint) ? { cells: footprint } : footprint as BaseGroundingFootprint;
+    const raster = getBaseApronRaster(ground, frame)!;
     const data = new Uint8ClampedArray(raster.width * raster.height * 4);
-    writeBaseApron(data, raster, footprint, frame, materials);
+    writeBaseApron(data, raster, ground, frame, materials);
     return { raster, data };
   };
 
@@ -109,7 +110,8 @@ describe('Base foundation apron', () => {
     const moved = apron(cells, { offsetX: metrics.offsetX + 64, offsetY: metrics.offsetY - 32 });
     expect(moved.raster.worldX - raster.worldX).toBe(64);
     expect(moved.data).toEqual(data);
-    expect(getBaseApronRaster([], metrics)).toBeNull();
+    expect(getBaseApronRaster({ cells: [] }, metrics)).toBeNull();
+    expect(getBaseApronRaster({ cells, rects: [] }, metrics)).toBeNull();
   });
 
   it('keeps the foundation under the footprint and ends within its reach', () => {
@@ -132,10 +134,10 @@ describe('Base foundation apron', () => {
     const red = { width: 8, height: 8, rgba: Uint8ClampedArray.from({ length: 256 }, (_, i) => [255, 0, 0, 255][i % 4]) };
     const grey = { width: 8, height: 8, rgba: Uint8ClampedArray.from({ length: 256 }, (_, i) => i % 4 === 3 ? 255 : 120) };
     const flat = { soil: red, gravel: grey, grassHeight: { width: 8, height: 8, data: new Uint8Array(64).fill(128) } };
-    const raster = getBaseApronRaster(cells, metrics)!;
+    const raster = getBaseApronRaster({ cells }, metrics)!;
     const draw = (coverage?: (x: number, y: number) => number) => {
       const data = new Uint8ClampedArray(raster.width * raster.height * 4);
-      writeBaseApron(data, raster, cells, metrics, flat, 1, coverage);
+      writeBaseApron(data, raster, { cells }, metrics, flat, 1, coverage);
       return data;
     };
     const grass = draw(), noGravel = draw(() => 0), gravel = draw(() => 1);
@@ -151,6 +153,34 @@ describe('Base foundation apron', () => {
     }
     expect(reddish).toBeGreaterThan(0);
     expect(lighter).toBeGreaterThan(0);
+  });
+
+  it('follows a structure outline exactly like the same footprint given as cells', () => {
+    const block = Array.from({ length: 6 }, (_, i) => ({ gridX: 3 + (i % 3), gridY: 3 + Math.floor(i / 3) }));
+    const origin = { x: metrics.offsetX + 3 * CELL_SIZE, y: metrics.offsetY + 3 * CELL_SIZE };
+    const rects = [{ x: origin.x, y: origin.y, width: 3 * CELL_SIZE, height: 2 * CELL_SIZE }];
+    const fromCells = apron(block), fromOutline = apron({ cells: block, rects });
+    expect(fromOutline.raster).toEqual(fromCells.raster);
+    expect(fromOutline.data).toEqual(fromCells.data);
+  });
+
+  it('measures its reach from the outline, so a niche is trodden ground and the cell grid leaves no trace', () => {
+    const origin = { x: metrics.offsetX + 4 * CELL_SIZE, y: metrics.offsetY + 4 * CELL_SIZE };
+    const rects = [
+      { x: origin.x, y: origin.y, width: 160, height: 40 },
+      { x: origin.x + 16, y: origin.y + 40, width: 144, height: 48 },
+      { x: origin.x, y: origin.y + 88, width: 160, height: 40 },
+    ];
+    const { raster, data } = apron({ cells: [], rects });
+    const alphaAt = (x: number, y: number) => data[((Math.floor(y) - raster.worldY) * raster.width + Math.floor(x) - raster.worldX) * 4 + 3];
+    expect(raster.worldX).toBe(origin.x - BASE_APRON_REACH_PX);
+    expect(raster.width).toBe(160 + BASE_APRON_REACH_PX * 2);
+    for (const rect of rects) for (let y = rect.y + 2; y < rect.y + rect.height; y += 6) for (let x = rect.x + 2; x < rect.x + rect.width; x += 6) {
+      expect(alphaAt(x, y)).toBe(255);
+    }
+    // The 16-px niche lies within the contact shade of its walls.
+    expect(alphaAt(origin.x + 14, origin.y + 64)).toBeGreaterThan(0);
+    for (let x = 0; x < raster.width; x++) expect(data[x * 4 + 3]).toBe(0);
   });
 
   it('wanders between grass at the plates and a wide trodden patch along a long edge', () => {
@@ -249,6 +279,38 @@ describe('Base foundation ownership', () => {
     expect(images.filter((image) => image.key.startsWith('__base_apron_')).every((image) => !image.active)).toBe(true);
     expect(accents().every(image => !image.active)).toBe(true);
     expect(scene.events.eventNames()).toEqual([]);
+  });
+
+  it('embeds an outlined structure without base plates by its apron alone and releases it', () => {
+    const scene = createFakeArenaScene();
+    const images: FakeImage[] = [];
+    scene.add.image = (x: number, y: number, key: string, frame?: string | number) => {
+      const image = new FakeImage(key, x, y, frame); images.push(image); return image;
+    };
+    const bodies: { size: [number, number]; data: Record<string, unknown> }[] = [];
+    Object.assign(scene.add, { rectangle: (x: number, y: number, width: number, height: number) => {
+      const data: Record<string, unknown> = {};
+      const entry = { size: [width, height] as [number, number], data };
+      bodies.push(entry);
+      return Object.assign(new FakeImage('body', x, y), { setData: (key: string, value: unknown) => { data[key] = value; },
+        body: { setSize: vi.fn(), updateFromGameObject: vi.fn() } });
+    } });
+    Object.assign(scene, { physics: { add: { existing: vi.fn() } } });
+    const origin = { x: metrics.offsetX + 3 * CELL_SIZE, y: metrics.offsetY + 3 * CELL_SIZE };
+    const collisionRects = [{ x: origin.x, y: origin.y, width: 64, height: 32, edges: 7 }, { x: origin.x, y: origin.y + 32, width: 48, height: 32, edges: 14 }];
+    const spec: BaseSpec = { id: 'structure', cells: [{ gridX: 3, gridY: 3 }, { gridX: 4, gridY: 3 }, { gridX: 3, gridY: 4 }, { gridX: 4, gridY: 4 }],
+      surface: 'none', faction: 'friendly', role: 'outpost', hpMax: 1, collisionRects,
+      region: { minGridX: 3, minGridY: 3, maxGridX: 4, maxGridY: 4 }, turrets: [], powerUpPedestals: [] };
+    const base = new BaseEntity(scene as never, spec, metrics, true, false);
+    expect(images.filter(image => image.key.startsWith('__base_apron_'))).toHaveLength(1);
+    expect(images.filter(image => image.key.startsWith('base-grounding-'))).toHaveLength(0);
+    expect(base.getSurfaceImages()).toHaveLength(0);
+    // One body per outline rect, carrying its authored light-occluder edges.
+    expect(bodies.map(body => body.size)).toEqual([[64, 32], [48, 32]]);
+    expect(bodies.map(body => body.data)).toEqual(collisionRects.map(rect => ({ baseId: 'structure', occluderEdges: rect.edges })));
+    expect(base.getNearestSurfacePoint(origin.x + 56, origin.y + 50)).toEqual({ x: origin.x + 48, y: origin.y + 50, distance: 8 });
+    base.destroy();
+    expect(images.every(image => !image.active)).toBe(true);
   });
 
   it('redraws only the apron when the gravel below changes, and not for the same gravel again', () => {

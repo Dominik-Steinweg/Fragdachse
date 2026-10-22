@@ -1,9 +1,8 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
-import type { BaseVisualCell } from '../entities/BaseVisuals';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import { baseGroundingTextureKey } from './BaseGroundingConfig';
-import { getBaseApronRaster, writeBaseApron, type BaseApronMaterials } from './BaseGroundingField';
+import { getBaseApronRaster, writeBaseApron, type BaseApronMaterials, type BaseGroundingFootprint } from './BaseGroundingField';
 import type { PersistentBaseGravelCoverage } from './PersistentBaseGravelField';
 import { buildBaseGroundingLayout } from './BaseGroundingLayout';
 import { DIRT_MATERIAL_KEY, GRASS_MATERIAL_KEY, GRAVEL_MATERIAL_KEY } from './GroundMaterialConfig';
@@ -46,24 +45,26 @@ export class BaseGroundingRenderer {
   private readonly imagesByCell = new Map<number, Phaser.GameObjects.Image[]>();
   private apron: Phaser.GameObjects.Image | null = null;
   private apronKey: string | null = null;
-  private readonly cells: readonly BaseVisualCell[];
+  private readonly footprint: BaseGroundingFootprint;
   private readonly metrics: WorldMetrics;
   private readonly brightness: number;
   private gravel: PersistentBaseGravelCoverage | null;
 
   constructor(
     private readonly scene: Phaser.Scene,
-    cells: readonly BaseVisualCell[],
+    footprint: BaseGroundingFootprint,
     metrics: WorldMetrics,
     style: BaseGroundingStyle = {},
   ) {
-    this.cells = cells;
+    this.footprint = footprint;
     this.metrics = metrics;
     this.brightness = style.hostile ? HOSTILE_APRON_BRIGHTNESS : 1;
     this.gravel = style.gravel ?? null;
     this.renderApron();
+    // Stone nests line exposed cell edges; an outlined structure is embedded by its apron alone.
+    if (footprint.rects) return;
     const groundTint = style.hostile ? HOSTILE_TINT : FRIENDLY_TINT;
-    for (const placement of buildBaseGroundingLayout(cells, metrics)) {
+    for (const placement of buildBaseGroundingLayout(footprint.cells, metrics)) {
       const image = scene.add.image(placement.x, placement.y, baseGroundingTextureKey(placement.asset))
         .setDisplaySize(placement.width, placement.height)
         .setRotation(placement.rotation)
@@ -89,14 +90,14 @@ export class BaseGroundingRenderer {
 
   private renderApron(): void {
     const materials = readApronMaterials(this.scene);
-    const raster = getBaseApronRaster(this.cells, this.metrics);
+    const raster = getBaseApronRaster(this.footprint, this.metrics);
     if (!materials || !raster) return;
     const key = `__base_apron_${nextApronId++}`;
     const texture = this.scene.textures.createCanvas(key, raster.width, raster.height);
     if (!texture) return;
     const pixels = texture.context.createImageData(raster.width, raster.height);
     const gravel = this.gravel;
-    writeBaseApron(pixels.data, raster, this.cells, this.metrics, materials, this.brightness,
+    writeBaseApron(pixels.data, raster, this.footprint, this.metrics, materials, this.brightness,
       gravel ? (x, y) => gravel.coverageAt(x, y) : undefined);
     texture.context.putImageData(pixels, 0, 0);
     texture.refresh();

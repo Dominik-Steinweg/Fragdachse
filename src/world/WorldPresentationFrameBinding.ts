@@ -79,6 +79,8 @@ import { TRAIN } from '../train/TrainConfig';
 import { TrainLightOccluderSource, type TrainSegmentRect } from '../train/TrainLightOccluderSource';
 import type { TrainRenderer } from '../train/TrainRenderer';
 import type { WorldMetrics } from './WorldMetrics';
+import type { FogSurfaceStamp } from '../effects/groundFog/FogSurfaceMask';
+import type { StructureRect } from '../arena/StructureOutline';
 import type { WorldPersistentBaseSite } from './WorldRuntimeContext';
 import {
   toPersistentBaseGravelZone,
@@ -280,6 +282,10 @@ export interface WorldPresentationFrameBindingInput {
   readonly syncTurretLights: (inArena: boolean) => void;
   readonly syncBaseLights: (inArena: boolean) => void;
   readonly getBaseShadowCells: () => Iterable<Phaser.GameObjects.Image>;
+  /** Geometry above the walkable ground on which the fog is cut; shadows keep `getBaseShadowCells`. */
+  readonly getFogSurfaceStamps: () => Iterable<FogSurfaceStamp>;
+  /** World-pixel outline rects of live structures; figure shadows are not received on their roofs. */
+  readonly getStructureRects: () => readonly StructureRect[];
   readonly getSynchronizedNow: () => number;
 }
 
@@ -791,7 +797,7 @@ export class WorldPresentationFrameBinding {
     if (fog) {
       const quality = getGraphicsQualityController(this.input.scene);
       fog.enabled = quality?.getGroundFogEnabled() ?? true; fog.quality = quality?.getLevel() ?? 'high';
-      fog.setSurfaceImages([...this.input.getBaseShadowCells()]);
+      fog.setSurfaceStamps([...this.input.getFogSurfaceStamps()]);
       fog.setRockCoverage(this.input.getArenaResult()?.rockVisualSystem?.getFormationCoverage ?? null);
       this.input.getArenaResult()?.rockVisualSystem?.flush();
       fog.prepare(this.input.lighting.getTimeOfDayMinutes(), getVisibleWorldView(this.input.scene.cameras.main));
@@ -876,7 +882,7 @@ export class WorldPresentationFrameBinding {
     const trainRenderer = showWorld ? this.input.getTrainVisual() : null;
     const train = trainRenderer?.getShadowState() ?? null;
     fog.captureTrain(deltaMs, train, train && trainRenderer ? trainRenderer.computeSegYs(train.y, train.dir) : []);
-    fog.setSurfaceImages([...this.input.getBaseShadowCells()]);
+    fog.setSurfaceStamps([...this.input.getFogSurfaceStamps()]);
     fog.setRockCoverage(this.input.getArenaResult()?.rockVisualSystem?.getFormationCoverage ?? null);
     // Publish dirty geometry/GPU repair before the fog samples the borrowed field.
     this.input.getArenaResult()?.rockVisualSystem?.flush();
@@ -1134,6 +1140,7 @@ export class WorldPresentationFrameBinding {
     }
 
     this.input.shadow.syncBaseShadows(this.input.getBaseShadowCells());
+    this.input.shadow.syncStructureReceiverRects(this.input.getStructureRects());
     this.input.shadow.syncReactivePropShadows(this.reactivePropShadowCells());
     this.input.shadow.syncStaticProfile(
       this.input.getSynchronizedNow(),

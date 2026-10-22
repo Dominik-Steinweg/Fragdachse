@@ -2,6 +2,27 @@ import { FORMATION, FORMATION_SIDE } from '../../arena/rocks/RockFormationField'
 import { HORIZON_BLEND_GLSL } from '../../arena/rocks/FormationHorizonTransition';
 import { FOG_ROCK_LIGHTING } from './FogRockLighting';
 
+/**
+ * One image stamped into the fog surface mask: geometry standing above the walkable ground (base
+ * plates, later a structure's `solid.png`) on which the fog is cut. A Phaser Image is a stamp.
+ */
+export interface FogSurfaceStamp {
+  readonly active: boolean;
+  readonly visible: boolean;
+  readonly alpha: number;
+  readonly x: number;
+  readonly y: number;
+  readonly displayWidth: number;
+  readonly displayHeight: number;
+  readonly scaleX: number;
+  readonly scaleY: number;
+  readonly originX: number;
+  readonly originY: number;
+  readonly rotation: number;
+  readonly texture: { readonly key: string };
+  readonly frame: { readonly name: string };
+}
+
 /** R: mineral alpha, G: resident geometry, B: fog radiance retention, A: bases. Data, never PMA colour.
  * Mineral alpha is sampled at the final composite as well, independently of the
  * reduced fog material and the deliberately broad base-image feather. */

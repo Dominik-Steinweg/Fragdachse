@@ -31,8 +31,9 @@ vi.mock('../src/ui/RadialActionMenu', () => ({ RadialActionMenu: class {
 } }));
 import { InputSystem } from '../src/systems/InputSystem';
 import { lobbyBuildingCandidates, lobbyMenuBlockedLabel, lobbyMenuDenial } from '../src/systems/LobbyBuildingInteraction';
-import { LOBBY_BUILDINGS } from '../src/config/authoring/lobbyBuildings';
-import { CELL_SIZE } from '../src/config';
+import { LOBBY_BUILDINGS, LOBBY_BUILDING_INTERACTION_RANGE_PX, lobbyBuildingWorldRects } from '../src/config/authoring/lobbyBuildings';
+import { nearestStructurePoint, structureBounds } from '../src/arena/StructureOutline';
+import { CELL_SIZE, PLAYER_SIZE } from '../src/config';
 import type { FireControlPlacementPreview } from '../src/types';
 import type { FireControlSnapshot } from '../src/systems/fireControl/FireControlSnapshot';
 import type { RadialActionState } from '../src/systems/RadialActionModel';
@@ -397,29 +398,74 @@ describe('focus loss during charged input', () => {
 });
 
 describe('shared Shift interaction', () => {
+  const lobbyProvider = (metrics = resolveActiveArenaWorldMetrics()) =>
+    (player: { x: number; y: number }) => lobbyBuildingCandidates(metrics, 1, player);
+
   it.each(['upgrades', 'base', 'items', 'merchant'] as const)('opens only the displayed local %s menu in range and consumes a held Shift once', menu => {
-    const candidates = lobbyBuildingCandidates(resolveActiveArenaWorldMetrics(), 1);
-    const candidate = candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === menu)!;
-    const position = { x: candidate.x - 40, y: candidate.y };
+    const metrics = resolveActiveArenaWorldMetrics();
+    const building = LOBBY_BUILDINGS.find(entry => entry.menu === menu)!;
+    const bounds = structureBounds(lobbyBuildingWorldRects(metrics, building));
+    // West of the outline's upper corner, aiming east at the wall.
+    const position = { x: bounds.left - 40, y: bounds.top + 8 };
     const f = createSystem(position);
     const open = vi.fn(), network = vi.fn();
     Object.assign(f.bridge, { getWorldDescriptor: () => ({ worldRevision: 1 }),
       getLocalWorldParticipation: () => 'interactive', sendBurrowRequest: network,
       sendShootingRangeRequest: network, sendTurretControlRequest: network });
-    f.system.setupLobbyMenuProvider({ candidates: () => candidates, open });
+    f.system.setupLobbyMenuProvider({ candidates: lobbyProvider(metrics), open });
     expect(f.system.getInteractionCandidate()).toMatchObject({ kind: 'lobby-menu', menu });
     f.keys.keyShift.isDown = true; f.keys.keyShift.justDown = true;
     f.system.update(); f.system.update();
     expect(open).toHaveBeenCalledExactlyOnceWith(menu);
     expect(network).not.toHaveBeenCalled();
-    position.x = candidate.x - candidate.radius - 1;
+    position.x = bounds.left - LOBBY_BUILDING_INTERACTION_RANGE_PX - 1;
     expect(f.system.getInteractionCandidate()).toBeNull();
-    position.x = candidate.x - 40;
+    position.x = bounds.left - 40;
     f.system.setInputEnabled(false);
     expect(f.system.getInteractionCandidate()).toBeNull();
     f.keys.keyShift.justDown = true; f.system.update();
     expect(open).toHaveBeenCalledTimes(1);
   });
+
+  it.each(LOBBY_BUILDINGS.flatMap(building => (['N', 'E', 'S', 'W'] as const).map(side => [building.menu, side] as const)))(
+    'selects the %s structure from its %s side when facing it or along it, never when facing away', (menu, side) => {
+      const metrics = resolveActiveArenaWorldMetrics();
+      const building = LOBBY_BUILDINGS.find(entry => entry.menu === menu)!;
+      const rects = lobbyBuildingWorldRects(metrics, building);
+      const bounds = structureBounds(rects);
+      const gap = PLAYER_SIZE / 2 + 4;
+      // Off the side's centre, in front of a straight wall (a niche corner would be the nearest point).
+      const alongX = bounds.left + 24, alongY = bounds.top + 20;
+      const position = side === 'N' ? { x: alongX, y: bounds.top - gap } : side === 'S' ? { x: alongX, y: bounds.bottom + gap }
+        : side === 'W' ? { x: bounds.left - gap, y: alongY } : { x: bounds.right + gap, y: alongY };
+      expect(nearestStructurePoint(rects, position.x, position.y).distance).toBe(gap);
+      const inward = { N: Math.PI / 2, S: -Math.PI / 2, W: 0, E: Math.PI }[side];
+      const f = createSystem(position);
+      const open = vi.fn();
+      Object.assign(f.bridge, { getWorldDescriptor: () => ({ worldRevision: 1 }), getLocalWorldParticipation: () => 'interactive' });
+      f.system.setupLobbyMenuProvider({ candidates: lobbyProvider(metrics), open });
+      for (let direction = 0; direction < 8; direction++) {
+        const offset = direction * Math.PI / 4;
+        f.system.setDiagnosticInput(inward + offset, null);
+        const candidate = f.system.getInteractionCandidate();
+        if (Math.cos(offset) > -0.5) {
+          expect(candidate, `${menu} ${side} aim ${direction * 45}°`).toMatchObject({ kind: 'lobby-menu', menu, footprint: bounds });
+        } else {
+          expect(candidate, `${menu} ${side} aim ${direction * 45}°`).toBeNull();
+        }
+      }
+      // The side's centre, a niche included, is an entrance as well.
+      const centre = side === 'N' || side === 'S' ? { x: (bounds.left + bounds.right) / 2, y: position.y }
+        : { x: position.x, y: (bounds.top + bounds.bottom) / 2 };
+      Object.assign(position, centre);
+      f.system.setDiagnosticInput(inward, null);
+      expect(f.system.getInteractionCandidate()).toMatchObject({ kind: 'lobby-menu', menu });
+      // Shift runs exactly the displayed structure from this side; the fixture's pointer keeps out.
+      f.system.setAimEnabled(false);
+      f.keys.keyShift.isDown = true; f.keys.keyShift.justDown = true;
+      f.system.update(); f.system.update();
+      expect(open).toHaveBeenCalledExactlyOnceWith(menu);
+    });
 
   it('keeps base editing host-only and presents locked menu reasons', () => {
     const access = { coop: true, ready: false, host: true, baseUnlocked: true, itemsUnlocked: true, dawnUnlocked: true };
@@ -435,12 +481,18 @@ describe('shared Shift interaction', () => {
   it('frames whole lobby buildings and shows a short personal denial before pressing', () => {
     const metrics = resolveActiveArenaWorldMetrics();
     const access = { coop: true, ready: false, host: false, baseUnlocked: true, itemsUnlocked: true, dawnUnlocked: true };
-    const candidates = lobbyBuildingCandidates(metrics, 1, menu => lobbyMenuBlockedLabel(menu, access));
+    const player = { x: metrics.offsetX, y: metrics.offsetY };
+    const candidates = lobbyBuildingCandidates(metrics, 1, player, menu => lobbyMenuBlockedLabel(menu, access));
+    expect(candidates.map(candidate => candidate.kind === 'lobby-menu' && candidate.menu).sort())
+      .toEqual(['base', 'items', 'merchant', 'upgrades']);
     for (const building of LOBBY_BUILDINGS) {
       const candidate = candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === building.menu)!;
-      const left = metrics.offsetX + building.gridX * CELL_SIZE, top = metrics.offsetY + building.gridY * CELL_SIZE;
-      expect(candidate.footprint).toEqual({ left, top, right: left + 4 * CELL_SIZE, bottom: top + 3 * CELL_SIZE });
-      expect(candidate).toMatchObject({ label: t('ui.lobbyBuilding.open'), subject: t(building.nameKey) });
+      const rects = lobbyBuildingWorldRects(metrics, building);
+      // The focus frames the outline; the approach point is its wall point nearest to the player.
+      expect(candidate.footprint).toEqual(structureBounds(rects));
+      const point = nearestStructurePoint(rects, player.x, player.y);
+      expect(candidate).toMatchObject({ x: point.x, y: point.y,
+        radius: LOBBY_BUILDING_INTERACTION_RANGE_PX, label: t('ui.lobbyBuilding.open'), subject: t(building.nameKey) });
     }
     expect(candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === 'base')!.blocked).toBe(t('ui.lobbyBuilding.blocked.host'));
     expect(candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === 'upgrades')!.blocked).toBeUndefined();

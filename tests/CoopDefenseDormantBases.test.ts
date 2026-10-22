@@ -197,9 +197,13 @@ describe('Coop-Defense dormant mission structures', () => {
     const specs = resolveWorldBases(getLobbyWorldDefinition(), TEST_WORLD_METRICS, { includePersistentBaseCore: false });
     const manager = new BaseManager(scene, specs, TEST_WORLD_METRICS, {}, true, false, null);
     expect(specs).toHaveLength(4);
-    expect(groupObjects).toHaveLength(specs.reduce((count, base) => count + base.cells.length, 0));
+    // Outlined structures collide with one body per outline rect, not one per occupied cell.
+    expect(groupObjects).toHaveLength(specs.reduce((count, base) => count + base.collisionRects!.length, 0));
+    expect(manager.getObstacleRectangles()).toHaveLength(groupObjects.length);
     for (const spec of specs) {
       expect(spec.surface).toBe('none');
+      expect(spec.collisionRects!.length).toBeLessThan(spec.cells.length);
+      expect(manager.getStructureRects()).toEqual(expect.arrayContaining([...spec.collisionRects!]));
       manager.applyDamage(spec.id, 1000);
       expect(manager.getStructureHp(spec.id)).toBe(spec.hpMax);
     }

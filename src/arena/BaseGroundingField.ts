@@ -4,11 +4,21 @@ import type { WorldMetrics } from '../world/WorldMetrics';
 import { SeededValueNoise } from './SeededValueNoise';
 import { groundMaterialPhase } from './GroundMaterialConfig';
 import type { GrassHeightMap, GroundMaterialPixels } from './GroundMaterialSamples';
+import { nearestStructurePoint, structureBounds } from './StructureOutline';
 
 export interface BaseApronMaterials {
   readonly soil: GroundMaterialPixels;
   readonly gravel: GroundMaterialPixels;
   readonly grassHeight: GrassHeightMap;
+}
+
+/**
+ * Ground footprint of a base: its cells, or for an outlined structure its world-pixel outline
+ * rects. With rects the apron follows the outline instead of the cell squares.
+ */
+export interface BaseGroundingFootprint {
+  readonly cells: readonly BaseVisualCell[];
+  readonly rects?: readonly { readonly x: number; readonly y: number; readonly width: number; readonly height: number }[];
 }
 
 /** World-pixel raster of one apron; its origin is the top-left world pixel. */
@@ -74,16 +84,24 @@ const smooth = (v: number): number => {
 
 /** World raster covering the footprint and the apron's full reach. */
 export function getBaseApronRaster(
-  cells: readonly BaseVisualCell[],
+  footprint: BaseGroundingFootprint,
   metrics: Pick<WorldMetrics, 'offsetX' | 'offsetY'>,
 ): BaseApronRaster | null {
+  const { cells, rects } = footprint;
+  const reach = BASE_APRON_REACH_PX;
+  if (rects) {
+    if (rects.length === 0) return null;
+    const bounds = structureBounds(rects);
+    const left = Math.floor(bounds.left) - reach, top = Math.floor(bounds.top) - reach;
+    return { worldX: left, worldY: top,
+      width: Math.ceil(bounds.right) + reach - left, height: Math.ceil(bounds.bottom) + reach - top };
+  }
   if (cells.length === 0) return null;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const cell of cells) {
     minX = Math.min(minX, cell.gridX); minY = Math.min(minY, cell.gridY);
     maxX = Math.max(maxX, cell.gridX + 1); maxY = Math.max(maxY, cell.gridY + 1);
   }
-  const reach = BASE_APRON_REACH_PX;
   return {
     worldX: metrics.offsetX + minX * CELL_SIZE - reach,
     worldY: metrics.offsetY + minY * CELL_SIZE - reach,
@@ -102,7 +120,7 @@ export function getBaseApronRaster(
 export function writeBaseApron(
   data: Uint8ClampedArray,
   raster: BaseApronRaster,
-  cells: readonly BaseVisualCell[],
+  footprint: BaseGroundingFootprint,
   metrics: Pick<WorldMetrics, 'offsetX' | 'offsetY'>,
   materials: BaseApronMaterials,
   /** Overall brightness; hostile bases sit on darker, void-stained ground. */
@@ -124,6 +142,10 @@ export function writeBaseApron(
   const lattice = new SeededValueNoise(APRON_SEED);
   const noise = (x: number, y: number, period: number, salt: number) => lattice.sample(x, y, period, salt);
   const { soil, gravel, grassHeight } = materials;
+  const { cells, rects } = footprint;
+  // Outline rects in the same metrics-relative frame as the pixel loop.
+  const outline = rects?.map(rect => ({ x: rect.x - metrics.offsetX, y: rect.y - metrics.offsetY,
+    width: rect.width, height: rect.height }));
   // Footprint occupancy on a small grid around the raster, so each pixel tests numbers only.
   // A cell further than this many cells away is beyond the apron's reach from any pixel.
   const ring = Math.ceil(BASE_APRON_REACH_PX / CELL_SIZE);
@@ -132,7 +154,7 @@ export function writeBaseApron(
   const gridCols = Math.ceil(raster.width / CELL_SIZE) + ring * 2 + 2;
   const gridRows = Math.ceil(raster.height / CELL_SIZE) + ring * 2 + 2;
   const occupied = new Uint8Array(gridCols * gridRows);
-  for (const cell of cells) occupied[(cell.gridY - gridTop) * gridCols + cell.gridX - gridLeft] = 1;
+  if (!outline) for (const cell of cells) occupied[(cell.gridY - gridTop) * gridCols + cell.gridX - gridLeft] = 1;
   const reach2 = BASE_APRON_REACH_PX * BASE_APRON_REACH_PX;
   for (let py = 0; py < raster.height; py++) {
     const y = raster.worldY + py + .5 - metrics.offsetY;
@@ -143,9 +165,12 @@ export function writeBaseApron(
     for (let px = 0; px < raster.width; px++) {
       const x = raster.worldX + px + .5 - metrics.offsetX;
       const gx = Math.floor(x / CELL_SIZE);
-      // Exact distance to the union of footprint squares (0 inside).
+      // Exact distance to the union of footprint squares or outline rects (0 inside).
       let nearest = reach2;
-      for (let dy = -ring; dy <= ring && nearest > 0; dy++) {
+      if (outline) {
+        const point = nearestStructurePoint(outline, x, y);
+        nearest = Math.min(reach2, point.distance * point.distance);
+      } else for (let dy = -ring; dy <= ring && nearest > 0; dy++) {
         const rowStart = (gy + dy - gridTop) * gridCols - gridLeft;
         const top = (gy + dy) * CELL_SIZE;
         const oy = top > y ? top - y : y > top + CELL_SIZE ? y - top - CELL_SIZE : 0;

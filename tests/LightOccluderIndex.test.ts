@@ -281,6 +281,30 @@ describe('LightOccluderIndex', () => {
     expect(collectExposedEdges(index, west.x, west.y, 200)[0].edges & EDGE_RIGHT).toBe(EDGE_RIGHT);
   });
 
+  it('übernimmt die authored Kanten von Konturrechtecken und lässt sie aus der Zellbelegung', () => {
+    // A 16-px niche outline whose rects do not sit on cells; a base cell touches its east face.
+    const origin = worldPosition(10, 10);
+    const left = origin.x - CELL_SIZE / 2, top = origin.y - CELL_SIZE / 2;
+    const rect = (x: number, y: number, width: number, height: number, edges: number) => ({
+      active: true, getData: (key: string) => key === 'occluderEdges' ? edges : undefined,
+      getBounds: (out?: { left: number; top: number; right: number; bottom: number }) =>
+        Object.assign(out ?? {}, { left: left + x, top: top + y, right: left + x + width, bottom: top + y + height }),
+    });
+    const all = EDGE_TOP | EDGE_BOTTOM | EDGE_LEFT | EDGE_RIGHT;
+    const outline = [rect(0, 0, 160, 40, all), rect(16, 40, 144, 48, EDGE_LEFT | EDGE_RIGHT), rect(0, 88, 160, 40, all)];
+    const neighbour = worldPosition(15, 11);
+    const index = new LightOccluderIndex({
+      rocks: () => null,
+      trunks: () => null,
+      baseCells: () => [...outline, new FakeBox(neighbour.x, neighbour.y)] as AnyBox,
+      baseGeneration: () => 0,
+    });
+    const edges = collectExposedEdges(index, origin.x, origin.y, 400);
+    expect(edges.map(entry => entry.edges)).toEqual([all, all, EDGE_LEFT | EDGE_RIGHT, all]);
+    // The outline never lands in the cell grid, so the touching base cell keeps its full silhouette.
+    expect(edges.find(entry => entry.left === neighbour.x - CELL_SIZE / 2)!.edges).toBe(all);
+  });
+
   it('führt Baumstämme als Kreis-Occluder', () => {
     const spot = worldPosition(3, 7);
     const trunk = { active: true, x: spot.x, y: spot.y, radius: 10 };

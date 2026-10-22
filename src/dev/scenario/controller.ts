@@ -243,7 +243,9 @@ export class DevScenarioController {
 
   constructor(private scene: Phaser.Scene, private runtime: ArenaRuntime,
     private setInput: (angle: number, trigger: WeaponSlot | null) => void,
-    private lobbyReady: () => boolean) {
+    private lobbyReady: () => boolean,
+    /** Live Shift focus of the local input, as the HUD presents it. */
+    private readonly interactionView: () => WorldInteractionView | null = () => null) {
     if (!isDevScenarioMode()) throw new Error('Dev entry required.');
     this.unregisterKrakenMap = registerKrakenAbyssMap();
     this.restoreTextureKeys = bindVisualTestTextureKeys(scene.textures);
@@ -260,6 +262,7 @@ export class DevScenarioController {
     bindBridgeReview(this, this.runtime);
     bindPortalReview(this, this.runtime);
     bindBloodReview(this, this.runtime);
+    bindLobbyBuildingReview(this, this.runtime, scene);
     let imported: DevScenario | null = null;
     try { imported = decodeScenario(location.hash); } catch (error) { this.fail(error); }
     this.panel = createScenarioPanel(this);
@@ -269,6 +272,7 @@ export class DevScenarioController {
     if (imported) { this.config = imported; this.panel.sync(); this.start(imported); }
   }
   requireReadyForBots(): void { this.requireReady(); }
+  readInteraction(): WorldInteractionView | null { return this.interactionView(); }
   isCurrentScenario(config: DevScenario): boolean { return !this.disposed && this.config === config; }
   hidesAim(): boolean { return this.state === 'ready' && this.config.hideAim; }
   private requireReady(): void {
@@ -1092,6 +1096,7 @@ export class DevScenarioController {
   }
   destroy(): void {
     releaseFireControlReview(this);
+    releaseLobbyBuildingReview(this);
     this.krakenPerformance?.stop(); this.unregisterKrakenPerformanceMap?.(); this.unregisterKrakenPerformanceMap = null;
     this.shapeDraft?.destroy(); this.shapeDraft = null;
     this.clearFigureSun();
@@ -1113,6 +1118,8 @@ export class DevScenarioController {
 }
 
 import { bindWatchtowerReview } from './WatchtowerReview';
+import { bindLobbyBuildingReview, releaseLobbyBuildingReview } from './LobbyBuildingReview';
+import type { WorldInteractionView } from '../../systems/WorldInteractionCandidate';
 import { bindBridgeReview } from './BridgeReview';
 import { bindPortalReview } from './PortalReview';
 import { bindBloodReview } from './BloodReview';

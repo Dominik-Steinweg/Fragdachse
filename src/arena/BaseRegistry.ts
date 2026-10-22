@@ -27,6 +27,13 @@ import {
 import type { WorldBaseDefinition, WorldDefinition } from '../config/authoring/WorldDefinition';
 import { toWorldDefinition } from '../config/authoring/coopDefenseAuthoringAdapter';
 import type { ArenaGenerationMapConfig } from './ArenaGenerator';
+import {
+  structureMovementCells,
+  structureOccupancyCells,
+  translateStructureRects,
+  validateStructureRects,
+  type StructureRect,
+} from './StructureOutline';
 
 export interface BaseTurretSpec extends TurretAimConfig {
   readonly id: string;
@@ -88,6 +95,13 @@ export interface BaseSpec {
   readonly dormantObjectiveId?: string;
   readonly turrets: readonly BaseTurretSpec[];
   readonly powerUpPedestals: readonly BasePowerUpPedestalSpec[];
+  /**
+   * World-pixel silhouette of an outlined structure. Set, collision bodies, light occlusion, fog
+   * and interaction follow these rects; `cells` stays the occupancy for placement and reservations.
+   */
+  readonly collisionRects?: readonly StructureRect[];
+  /** Cells whose centre lies inside the outline; cell-based movement reads these instead of `cells`. */
+  readonly movementCells?: readonly { gridX: number; gridY: number }[];
   readonly spawnCenter?: {
     readonly gridX: number;
     readonly gridY: number;
@@ -456,6 +470,28 @@ function resolveWorldBaseSpec(config: WorldBaseDefinition, metrics: WorldMetrics
     turrets: resolved.turrets,
     powerUpPedestals: [],
     spawnCenter: resolved.spawnCenter,
+    ...(config.structure ? resolveStructureOutline(config, metrics) : {}),
+  };
+}
+
+/** Outline in world pixels; an invalid outline is an authoring error, never clipped silently. */
+function resolveStructureOutline(config: WorldBaseDefinition, metrics: WorldMetrics): Pick<BaseSpec, 'collisionRects' | 'movementCells'> {
+  const structure = config.structure!;
+  const placement = resolveCoopDefenseBasePlacement(config as CoopBaseConfig, metrics);
+  const errors = validateStructureRects(structure, placement.width * CELL_SIZE, placement.height * CELL_SIZE);
+  if (errors.length > 0) throw new Error(`[BaseRegistry] Structure ${config.id} has an invalid outline: ${errors.join('; ')}`);
+  const occupancy = structureOccupancyCells(structure.rects).map(cell => `${cell.gridX}:${cell.gridY}`).sort();
+  const shape = placement.cells.map(cell => `${cell.gridX}:${cell.gridY}`).sort();
+  if (occupancy.join(',') !== shape.join(',')) {
+    throw new Error(`[BaseRegistry] Structure ${config.id} outline occupancy does not match its shape`);
+  }
+  // The outline moves with the same clamped origin as the structure's cells.
+  const { minGridX, minGridY } = clampOriginToGrid(placement.minGridX, placement.minGridY, placement.width, placement.height, metrics);
+  const origin = worldCellOrigin(metrics, minGridX, minGridY);
+  return {
+    collisionRects: translateStructureRects(structure.rects, origin.x, origin.y),
+    movementCells: structureMovementCells(structure.rects)
+      .map(cell => ({ gridX: minGridX + cell.gridX, gridY: minGridY + cell.gridY })),
   };
 }
 

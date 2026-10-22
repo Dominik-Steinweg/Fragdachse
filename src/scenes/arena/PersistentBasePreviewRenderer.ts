@@ -57,7 +57,7 @@ export class PersistentBasePreviewRenderer {
     const coreCells = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation);
     const surfaceCells = coreCells.filter((cell) => cell.domain === 'base-surface');
     this.cellImages.push(...createBaseSurfaceImages(this.scene, surfaceCells, metrics, 'base'));
-    this.grounding = new BaseGroundingRenderer(this.scene, surfaceCells, metrics, {
+    this.grounding = new BaseGroundingRenderer(this.scene, { cells: surfaceCells }, metrics, {
       gravel: gravel ? createPersistentBaseGravelCoverage(gravel, {
         offsetX: metrics.offsetX, offsetY: metrics.offsetY, width: metrics.widthPx, height: metrics.heightPx,
       }) : null,

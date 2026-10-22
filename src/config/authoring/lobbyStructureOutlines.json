@@ -1,0 +1,46 @@
+[
+  {
+    "id": "lobby-merchant-stall",
+    "revision": 0,
+    "sourceSha256": null,
+    "stepPx": 8,
+    "rects": [
+      { "x": 0, "y": 0, "width": 56, "height": 128, "edges": 15 },
+      { "x": 56, "y": 0, "width": 48, "height": 120, "edges": 3 },
+      { "x": 104, "y": 0, "width": 56, "height": 128, "edges": 15 }
+    ]
+  },
+  {
+    "id": "lobby-workshop",
+    "revision": 0,
+    "sourceSha256": null,
+    "stepPx": 8,
+    "rects": [
+      { "x": 0, "y": 0, "width": 160, "height": 40, "edges": 15 },
+      { "x": 8, "y": 40, "width": 152, "height": 48, "edges": 12 },
+      { "x": 0, "y": 88, "width": 160, "height": 40, "edges": 15 }
+    ]
+  },
+  {
+    "id": "lobby-yard",
+    "revision": 0,
+    "sourceSha256": null,
+    "stepPx": 8,
+    "rects": [
+      { "x": 0, "y": 0, "width": 56, "height": 128, "edges": 15 },
+      { "x": 56, "y": 8, "width": 48, "height": 120, "edges": 3 },
+      { "x": 104, "y": 0, "width": 56, "height": 128, "edges": 15 }
+    ]
+  },
+  {
+    "id": "lobby-armory",
+    "revision": 0,
+    "sourceSha256": null,
+    "stepPx": 8,
+    "rects": [
+      { "x": 0, "y": 0, "width": 160, "height": 40, "edges": 15 },
+      { "x": 8, "y": 40, "width": 152, "height": 48, "edges": 12 },
+      { "x": 0, "y": 88, "width": 160, "height": 40, "edges": 15 }
+    ]
+  }
+]
