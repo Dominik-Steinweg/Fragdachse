@@ -87,6 +87,9 @@ function status(controller: DevScenarioController, fixture: Fixture) {
     player,
     focus: focus ? { key: focus.key, subject: focus.subject, label: focus.label, blocked: focus.blocked } : null,
     openMenu: controller.readOpenLobbyMenu(),
+    // Live members of the lanes the structures' embers, sparks and smoke use.
+    particles: Object.fromEntries(Object.entries(fixture.runtime.getScenarioMeteorTargets().gpuVfx.getStats() ?? {})
+      .filter(([lane]) => lane === 'powerup-pedestal' || lane === 'train-smoke')),
     buildings: LOBBY_BUILDINGS.map(entry => {
       const rects = lobbyBuildingWorldRects(metrics, entry), bounds = structureBounds(rects);
       return {

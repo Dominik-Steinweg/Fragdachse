@@ -101,14 +101,6 @@ def slope_frame(x0, x1, y_ridge, y_eave, z_ridge, z_eave):
     return u, v, n, length
 
 
-def rotate_xy(points, quarter):
-    out = []
-    for x, y in points:
-        for _ in range(quarter % 4): x, y = -y, x
-        out.append((x, y))
-    return out
-
-
 def corrugated_slope(c, name, x0, x1, y_ridge, y_eave, z_ridge, z_eave, mats, seed=0, pitch=.13, sheet=.86, gap=.012):
     """Overlapping corrugated sheets with individual tilt, tone and occasional patch."""
     rng = random.Random(seed)
@@ -177,51 +169,6 @@ def gable_roof(c, x0, y0, x1, y1, eave, ridge, mats, style='corrugated', seed=0,
             tube(c, 'Gable barge board', [(x, ym, ridge + .04), (x, ye, eave - drop + .03)], .045, mats[-1] if style != 'corrugated' else mats[0], 6)
 
 
-def shed_roof(c, x0, y0, x1, y1, high, low, mats, style='corrugated', seed=0, overhang=.2, falls='south'):
-    """Single-pitch roof; `falls` names the low eave side."""
-    if falls == 'south':
-        args = (x0 - overhang, x1 + overhang, y1 + overhang * .4, y0 - overhang, high, low)
-    else:
-        args = (x0 - overhang, x1 + overhang, y0 - overhang * .4, y1 + overhang, high, low)
-    if style == 'corrugated': corrugated_slope(c, 'Shed corrugated roof sheet', *args, mats, seed)
-    else: shingle_slope(c, 'Shed roof shingle', *args, mats, seed)
-
-
-def hip_roof(c, x0, y0, x1, y1, eave, ridge, mats, seed=0, overhang=.2, seams=.62):
-    """Four sheet-steel faces with standing seams; ridge along X."""
-    ox0, ox1, oy0, oy1 = x0 - overhang, x1 + overhang, y0 - overhang, y1 + overhang
-    inset = (oy1 - oy0) / 2
-    r0, r1, ym = ox0 + inset, ox1 - inset, (oy0 + oy1) / 2
-    verts = [(ox0, oy0, eave), (ox1, oy0, eave), (ox1, oy1, eave), (ox0, oy1, eave), (r0, ym, ridge), (r1, ym, ridge)]
-    faces = [(0, 1, 5, 4), (2, 3, 4, 5), (1, 2, 5), (3, 0, 4)]
-    mesh = bpy.data.meshes.new('Hip roof sheet steel'); mesh.from_pydata(verts, [], faces); mesh.update()
-    ob = bpy.data.objects.new('Hip roof sheet steel', mesh); c.scene.collection.objects.link(ob)
-    mesh.materials.append(mats[0])
-    solid = ob.modifiers.new('Roof sheet thickness', 'SOLIDIFY'); solid.thickness = .04; solid.offset = -1
-    bev = ob.modifiers.new('Folded roof edges', 'BEVEL'); bev.width = .02; bev.segments = 2
-    rng = random.Random(seed)
-    # Standing seams across the long faces, and down the hips.
-    x = ox0 + seams
-    while x < ox1 - .1:
-        for side in (0, 1):
-            ye = oy0 if side == 0 else oy1
-            xt = min(max(x, r0), r1)
-            tube(c, 'Standing roof seam', [(x, ye, eave + .03), (xt, ym, ridge + .03)], .016, mats[-1], 6)
-        x += seams * rng.uniform(.92, 1.08)
-    for a, b in [((ox0, oy0), (r0, ym)), ((ox1, oy0), (r1, ym)), ((ox1, oy1), (r1, ym)), ((ox0, oy1), (r0, ym))]:
-        tube(c, 'Hip ridge roll', [(a[0], a[1], eave + .04), (b[0], b[1], ridge + .04)], .045, mats[-1], 8)
-    ridge_cap(c, r0, r1, ym, ridge + .02, mats[-1], .06)
-    # Weathering: a few replaced panels in a second tone.
-    for i in range(3):
-        px = rng.uniform(ox0 + .6, ox1 - .9); side = rng.choice((0, 1))
-        ye = oy0 + .45 if side == 0 else oy1 - .45
-        zz = eave + (ridge - eave) * .3
-        p = c.box('Replaced roof panel', (px, ye, zz + .045), (seams * .9, .7, .02), mats[1 % len(mats)], .01)
-        tilt = math.atan2(ridge - eave, inset)
-        p.rotation_euler.x = tilt if side == 0 else -tilt
-    return ob
-
-
 def plank_wall(c, a, b, z0, z1, mat, alt=None, thickness=.12, board=.18, seed=0):
     """Vertical boards between two plan points; tops stay visible under the eaves."""
     rng = random.Random(seed)
@@ -284,39 +231,11 @@ def skylight(c, x, y, z, w, l, tilt, p):
         bar.rotation_euler.x = tilt
 
 
-def canvas_awning(c, x0, y0, x1, y1, z_high, z_low, mat, p, sag=.08, falls='south', ropes=True):
-    if falls == 'south':
-        origin, u, v = (x0, y1, z_high), (1, 0, 0), Vector((0, y0 - y1, z_low - z_high)).normalized()
-        width, length = x1 - x0, math.hypot(y1 - y0, z_high - z_low)
-    else:
-        origin, u, v = (x0, y0, z_high), (1, 0, 0), Vector((0, y1 - y0, z_low - z_high)).normalized()
-        width, length = x1 - x0, math.hypot(y1 - y0, z_high - z_low)
-    n = Vector(u).cross(v)
-    if n.z < 0: n = -n
-    ob = grid_surface(c, 'Sagging canvas awning', origin, u, v, n, width, length,
-                      lambda s, t: -sag * math.sin(math.pi * s / width) * math.sin(math.pi * t / length)
-                      + .012 * math.sin(s * 9 + t * 4), mat, nu=40, nv=16, thickness=.012)
-    # Hem and scalloped front valance stay readable from above.
-    front = Vector(origin) + v * length
-    tube(c, 'Rolled awning hem', [tuple(front), tuple(front + Vector(u) * width)], .025, p['rope'], 8)
-    if ropes:
-        for x in (x0, x1):
-            tube(c, 'Awning guy rope', [(x, front.y, front.z), (x + (-.25 if x == x0 else .25), front.y - (.35 if falls == 'south' else -.35), .05)], .012, p['rope'], 6)
-    return ob
-
-
 def counter(c, x0, y0, x1, y1, h, p, top=None):
     slab(c, 'Counter carcass', x0, y0, x1, y1, 0, h - .06, p['oak'], .02)
     slab(c, 'Worn counter top', x0 - .04, y0 - .04, x1 + .04, y1 + .04, h - .06, h, top or p['timber'], .015)
     for k in range(int((x1 - x0) / .2)):
         tube(c, 'Counter top board joint', [(x0 + (k + 1) * .2, y0 - .03, h + .002), (x0 + (k + 1) * .2, y1 + .03, h + .002)], .006, p['tar'], 4)
-
-
-def gas_bottle(c, x, y, p, r=.13, h=.9, mat=None):
-    c.cylinder('Gas bottle body', (x, y, h / 2), r, h, mat or p['ochre'], 20)
-    c.ell('Gas bottle shoulder', (x, y, h), (r, r, r * .6), mat or p['ochre'])
-    c.cylinder('Gas bottle valve', (x, y, h + r * .55), .04, .08, p['brass'], 10)
-    annulus(c, 'Valve guard ring', (x, y, h + r * .7), .08, .06, .03, p['iron'], steps=12)
 
 
 def timber_stack(c, x, y, length, rows, cols, p, angle=0, beam_size=.16, seed=0):
@@ -335,30 +254,11 @@ def timber_stack(c, x, y, length, rows, cols, p, angle=0, beam_size=.16, seed=0)
                       (.06, (beam_size + .02) * cols, .03), p['tar'], .005).rotation_euler.z = angle
 
 
-def stone_blocks(c, x, y, p, n=4, seed=0):
-    rng = random.Random(seed)
-    for i in range(n):
-        bx, by = x + (i % 2) * .42, y + (i // 2) * .34
-        b = c.box('Cut stone block', (bx, by, .14), (.38, .30, .28), p['stone'], .03)
-        b.rotation_euler.z = rng.uniform(-.08, .08)
-    c.box('Cut stone block top', (x + .2, y + .17, .42), (.38, .30, .28), p['stone'], .03).rotation_euler.z = .12
-
-
 def pallet(c, x, y, p, w=1.0, d=.8):
     for k in range(5):
         c.box('Pallet deck board', (x - w / 2 + (k + .5) * w / 5, y, .11), (w / 5 - .03, d, .025), p['timber'] if k % 2 else p['oak'], .006)
     for yy in (-d / 2 + .06, 0, d / 2 - .06):
         c.box('Pallet stringer', (x, y + yy, .05), (w, .08, .09), p['oak'], .01)
-
-
-def sack_stack(c, x, y, p, n=5, seed=0, mat=None):
-    rng = random.Random(seed)
-    pallet(c, x, y, p)
-    for i in range(n):
-        layer = 0 if i < 3 else 1
-        k = i if layer == 0 else i - 3
-        sx = x + (k - (1 if layer == 0 else .5)) * .32
-        c.ell('Filled cement sack', (sx, y + rng.uniform(-.05, .05), .2 + layer * .17), (.17, .34, .10), mat or p['burlap'])
 
 
 def scrap_pile(c, x, y, r, p, seed=0, height=.55):
@@ -406,66 +306,6 @@ def strut(c, name, a, b, w, h, mat, bevel=.012):
     ob.rotation_mode = 'QUATERNION'
     ob.rotation_quaternion = Vector((1, 0, 0)).rotation_difference(d)
     return ob
-
-
-def lattice_jib(c, start, end, width, depth, p, mat, bays=10):
-    """Triangular crane truss: two bottom chords, one top chord and zigzag diagonals."""
-    a, b = Vector(start), Vector(end)
-    axis = (b - a).normalized()
-    side = axis.cross(Vector((0, 0, 1))).normalized() * width / 2
-    up = Vector((0, 0, depth))
-    for s in (side, -side):
-        strut(c, 'Jib bottom chord', a + s, b + s, .06, .06, mat)
-    strut(c, 'Jib top chord', a + up, b + up * .35, .06, .06, mat)
-    for k in range(bays):
-        t0, t1 = k / bays, (k + 1) / bays
-        p0, p1 = a + (b - a) * t0, a + (b - a) * t1
-        top = lambda t, q: q + up * (1 - .65 * t)
-        for s in (side, -side):
-            strut(c, 'Jib lattice diagonal', p0 + s, top((t0 + t1) / 2, (p0 + p1) / 2), .03, .03, mat)
-            strut(c, 'Jib lattice diagonal', p1 + s, top((t0 + t1) / 2, (p0 + p1) / 2), .03, .03, mat)
-        strut(c, 'Jib cross rung', p1 + side, p1 - side, .035, .035, mat)
-
-
-def wheelbarrow(c, x, y, angle, p):
-    ca, sa = math.cos(angle), math.sin(angle)
-    def at(u, v, z): return (x + ca * u - sa * v, y + sa * u + ca * v, z)
-    tray = plate(c, 'Wheelbarrow steel tray', (0, 0, 0), [(-.35, -.28), (.25, -.22), (.32, 0), (.25, .22), (-.35, .28)], .2, p['olive'], .04)
-    tray.location = at(0, 0, .45); tray.rotation_euler.z = angle
-    c.cylinder('Wheelbarrow tray contents', at(-.03, 0, .55), .2, .02, p['sand'], 16)
-    wheel = c.cylinder('Wheelbarrow wheel', at(.45, 0, .18), .18, .08, p['rubber'], 20)
-    wheel.rotation_euler = (math.pi / 2, 0, angle + math.pi / 2)
-    for v in (-.2, .2):
-        strut(c, 'Wheelbarrow handle', at(.45, v * .3, .2), at(-.8, v, .55), .045, .045, p['oak'])
-
-
-def camo_net(c, x0, y0, x1, y1, z_back, z_front, p, seed=0, coverage=.62, rope=True):
-    """Leaf-patch net over a rope grid; holes let the racks underneath read from above."""
-    rng = random.Random(seed)
-    def z_at(y): return z_front + (z_back - z_front) * (y - y0) / max(.01, y1 - y0)
-    if rope:
-        # Dark, sagging carrier ropes only along the frame; the net itself carries the leaves.
-        for y in (y0, y1):
-            tube(c, 'Net carrier rope', [(x0 + (x1 - x0) * t, y, z_at(y) - .06 * math.sin(math.pi * t)) for t in [i / 8 for i in range(9)]], .01, p['tar'], 4)
-        for k in range(4):
-            x = x0 + (x1 - x0) * k / 3
-            tube(c, 'Net carrier rope', [(x, y0, z_at(y0)), (x, y1, z_at(y1))], .01, p['tar'], 4)
-    mats = [p['camo_green'], p['camo_green'], p['olive'], p['camo_brown']]
-    # Clustered coverage: blobs of leaves with open gaps between them, never a uniform sheet.
-    blobs = [(rng.uniform(x0, x1), rng.uniform(y0, y1), rng.uniform(.35, .7)) for _ in range(int((x1 - x0) * (y1 - y0) * 1.6))]
-    count = int((x1 - x0) * (y1 - y0) * 70 * coverage)
-    placed = 0
-    while placed < count:
-        bx, by, br = blobs[rng.randrange(len(blobs))]
-        a = rng.uniform(0, math.tau); d = br * math.sqrt(rng.random())
-        lx, ly = bx + d * math.cos(a), by + d * math.sin(a)
-        if not (x0 <= lx <= x1 and y0 <= ly <= y1): continue
-        k = rng.uniform(.9, 1.6)
-        leaf = plate(c, 'Camouflage net leaf patch', (0, 0, 0), [(-.13 * k, -.05 * k), (0, -.09 * k), (.13 * k, -.03 * k), (.09 * k, .07 * k), (-.06 * k, .08 * k)],
-                     .008, mats[rng.randrange(len(mats))], .003)
-        leaf.location = (lx, ly, z_at(ly) + rng.uniform(-.04, .02) - .05 * math.sin(math.pi * (lx - x0) / (x1 - x0)))
-        leaf.rotation_euler = (rng.uniform(-.3, .3), rng.uniform(-.3, .3), rng.uniform(0, math.tau))
-        placed += 1
 
 
 def ridge_tent(c, x0, x1, y0, y1, z_ridge, z_eave, mat, p, poles=3, seed=0):

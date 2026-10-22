@@ -65,8 +65,8 @@ export class LobbyStructureFx {
     spec.lifeMs = 700 + Math.random() * 900;
     spec.x = emitter.x + (Math.random() - .5) * 18; spec.y = emitter.y + (Math.random() - .5) * 12;
     spec.vx = (Math.random() - .5) * 14; spec.vy = -10 - Math.random() * 18;
-    spec.scaleStart = .12 + Math.random() * .1; spec.scaleEnd = 0;
-    spec.alphaStart = .85; spec.alphaEnd = 0;
+    spec.scaleStart = .22 + Math.random() * .14; spec.scaleEnd = 0;
+    spec.alphaStart = 1; spec.alphaEnd = 0;
     spec.tint = Math.random() < .3 ? 0xffd27a : 0xff7a2a;
     this.system.spawn(spec, this.emberSource, nowMs);
   }
@@ -77,9 +77,9 @@ export class LobbyStructureFx {
     spec.x = emitter.x + (Math.random() - .5) * 6; spec.y = emitter.y + (Math.random() - .5) * 6;
     // Drift with a light, steady breeze; the plume widens and thins as it rises.
     spec.vx = 6 + Math.random() * 6; spec.vy = -4 - Math.random() * 5;
-    spec.scaleStart = .22 + Math.random() * .08; spec.scaleEnd = .7 + Math.random() * .25;
-    spec.alphaStart = .26; spec.alphaEnd = 0;
-    spec.tint = 0x8a8680;
+    spec.scaleStart = .45 + Math.random() * .15; spec.scaleEnd = 1.25 + Math.random() * .35;
+    spec.alphaStart = .68; spec.alphaEnd = 0;
+    spec.tint = 0xb0aba2;
     this.system.spawn(spec, this.smokeSource, nowMs);
   }
 
@@ -101,7 +101,7 @@ export class LobbyStructureFx {
       spec.lifeMs = 180 + Math.random() * 260;
       spec.x = x; spec.y = y;
       spec.vx = Math.cos(angle) * speed; spec.vy = Math.sin(angle) * speed;
-      spec.scaleStart = .16 + Math.random() * .1; spec.scaleEnd = .02;
+      spec.scaleStart = .28 + Math.random() * .14; spec.scaleEnd = .04;
       spec.alphaStart = 1; spec.alphaEnd = 0;
       spec.tint = tints[index % tints.length];
       this.system.spawn(spec, this.sparkSource, nowMs);
