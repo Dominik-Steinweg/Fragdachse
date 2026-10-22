@@ -463,8 +463,83 @@ def yard_hybrid(c, p):
                 lamp_table=(.58, -1.05, 2.1), lamp_floor_a=(X0 + .15 + w * .5, Y0 + .15 + h * .5, .32), hoist=apex)
 
 
+def base_tile(c, x, y, z, size, p, angle=0, tilt=0):
+    """One finished base floor tile as the base draws it: dark stone in a steel frame,
+    a cyan light strip inside the frame and the round centre motif. Cyan only lives here."""
+    from mathutils import Euler, Vector
+    turn = Euler((tilt, 0, angle))
+    parts = []
+    half = size / 2
+    parts.append(c.box('Base tile dark stone', (0, 0, .04), (size - .1, size - .1, .08), p['base_stone'], .015))
+    for sx, sy, w, h in [(0, half - .03, size, .06), (0, -half + .03, size, .06), (half - .03, 0, .06, size), (-half + .03, 0, .06, size)]:
+        parts.append(c.box('Base tile steel frame', (sx, sy, .06), (w, h, .1), p['base_steel'], .008))
+    for sx, sy, w, h in [(0, half - .085, size - .2, .022), (0, -half + .085, size - .2, .022), (half - .085, 0, .022, size - .2), (-half + .085, 0, .022, size - .2)]:
+        parts.append(c.box('Separate base cyan tile strip', (sx, sy, .085), (w, h, .012), p['cyan'], .003))
+    parts.append(annulus(c, 'Base tile ring motif', (0, 0, .085), size * .2, size * .14, .012, p['base_steel'], steps=28))
+    for ob in parts:
+        offset = turn.to_matrix() @ Vector(ob.location)
+        ob.rotation_euler = turn
+        ob.location = Vector((x, y, z)) + offset
+
+
+def yard_tiles(c, p):
+    """Bauhof F2: the yard makes the base's floor tiles. Tiles lie finished inside the frame,
+    stacked on a pallet and hanging from the hoist; cyan appears only as their light strips."""
+    X0, X1, Y0, Y1 = -2.35, .95, -.2, 1.9
+    for a, b in [((X0, Y0), (X1, Y0)), ((X1, Y0), (X1, Y1)), ((X0, Y1), (X1, Y1)), ((X0, Y0), (X0, Y1))]:
+        stone_course(c, a, b, 0, .28, p, int(a[0] * 7 + b[1] * 3) & 63, .34, .32)
+        strut(c, 'Oak sill beam', (a[0], a[1], .34), (b[0], b[1], .34), .16, .1, p['oak'])
+    # Joists carry the floor; finished base tiles cover the west part, the rest is still open.
+    x = X0 + .2
+    while x < X1 - .1:
+        strut(c, 'Floor joist', (x, Y0 + .1, .3), (x, Y1 - .1, .3), .1, .12, p['cut'])
+        x += .45
+    size = .98
+    for i in range(2):
+        for j in range(2):
+            base_tile(c, X0 + .2 + size * (i + .5), Y0 + .1 + size * (j + .5), .36, size, p)
+    base_tile(c, X0 + .2 + size * 2.5, Y0 + .1 + size * 1.5, .36, size, p)
+    # Timber frame and rafters as on the other buildings, first corrugated sheets on the north slope.
+    for px, py in [(X0, Y0), (X1, Y0), (X0, Y1), (X1, Y1), (-.7, Y0), (-.7, Y1)]:
+        post(c, px, py, 2.6, p, .08)
+    for a, b in [((X0, Y1), (X1, Y1)), ((X0, Y0), (X0, Y1)), ((X1, Y0), (X1, Y1)), ((X0, Y0), (X1, Y0))]:
+        strut(c, 'Wall top plate', (a[0], a[1], 2.62), (b[0], b[1], 2.62), .14, .14, p['oak'])
+    for a, b in [((X0, Y0 + .1), (X0 + .8, Y0 + .1)), ((X1 - .8, Y1 - .1), (X1, Y1 - .1))]:
+        strut(c, 'Wall knee brace', (a[0], a[1], .5), (b[0], b[1], 2.4), .08, .08, p['cut'])
+    ym = (Y0 + Y1) / 2
+    for x in (X0, X1): strut(c, 'King post', (x, ym, 2.62), (x, ym, 3.5), .12, .12, p['oak'])
+    strut(c, 'Ridge beam', (X0 - .1, ym, 3.55), (X1 + .1, ym, 3.55), .14, .16, p['oak'])
+    roof_slope_rafters(c, X0, X1, Y0 - .15, ym, 2.55, 3.55, p, .55)
+    roof_slope_rafters(c, X0, X1, Y1 + .15, ym, 2.55, 3.55, p, .55)
+    corrugated_slope(c, 'Newly laid roof sheet', X0 - .15, X0 + 1.55, ym, Y1 + .2, 3.62, 2.52, [p['tin'], p['rust'], p['tin']], 31)
+    # Timber scaffold east and a tripod hoist lowering the next tile into place.
+    for sx in (1.15, 1.6):
+        for sy in (Y0, ym, Y1): c.cylinder('Scaffold standard', (sx, sy, 1.15), .035, 2.3, p['oak'], 8)
+        strut(c, 'Scaffold ledger', (sx, Y0, 1.55), (sx, Y1, 1.55), .05, .05, p['oak'])
+    for k in range(3):
+        strut(c, 'Scaffold plank', (1.2 + k * .17, Y0 - .1, 1.62), (1.2 + k * .17, Y1 + .1, 1.62), .16, .04, p['timber'] if k != 1 else p['oak'], .006)
+    for sy in (Y0, Y1): strut(c, 'Scaffold diagonal', (1.15, sy, .05), (1.6, sy, 2.2), .04, .04, p['oak'])
+    apex = (2.05, 1.35, 2.9)
+    for gx, gy in [(1.75, 1.85), (2.45, 1.75), (2.15, .85)]: strut(c, 'Hoist tripod leg', (gx, gy, 0), apex, .07, .07, p['oak'])
+    c.box('Hoist pulley block', (apex[0], apex[1], apex[2] - .2), (.14, .12, .22), p['dark'], .02)
+    tube(c, 'Hoist rope', [(apex[0], apex[1], apex[2] - .3), (apex[0], apex[1], 1.45)], .016, p['rope'], 6)
+    for dx in (-.3, .3): tube(c, 'Tile sling', [(apex[0], apex[1], 1.45), (apex[0] + dx, apex[1], 1.22)], .01, p['rope'], 4)
+    base_tile(c, apex[0], apex[1], 1.15, .8, p, angle=.25, tilt=.06)
+    # Front yard: plan table, sawhorses, a pallet of finished tiles and squared timber.
+    drafting_table(c, -.8, -1.65, .4, -1.05, .95, p)
+    lamp_post(c, .58, -1.05, 2.0, p, (-.3, -.25))
+    sawhorse(c, -1.95, -1.25, p, math.pi / 2); sawhorse(c, -1.4, -1.25, p, math.pi / 2)
+    strut(c, 'Plank on sawhorses', (-2.15, -1.25, .72), (-1.15, -1.25, .72), .26, .05, p['timber'])
+    pallet(c, 1.5, -1.3, p, .95, .95)
+    for k in range(3): base_tile(c, 1.5 + .02 * k, -1.3 - .015 * k, .14 + k * .1, .86, p, angle=.03 * k)
+    timber_stack(c, 2.15, .15, 1.0, 2, 2, p, math.pi / 2, .16, 17)
+    return dict(staff=(-.2, -.62, 0), staff_facing=(-.2, -1.35, 0), plaque=(0, -2.25, 0), spark_saw=(-1.6, -1.25, .8),
+                lamp_table=(.28, -1.3, 1.75), hoist=apex, tile_glow=(X0 + 1.18, Y0 + 1.08, .45))
+
+
 def yard(c, p, variant):
     s = {}
+    if variant == 'f2': return yard_tiles(c, p)
     if variant == 'f': return yard_hybrid(c, p)
     if variant == 'e': return yard_base(c, p)
     if variant == 'c': return yard_frame(c, p)
