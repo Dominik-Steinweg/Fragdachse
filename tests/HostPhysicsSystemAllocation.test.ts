@@ -708,6 +708,26 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     expect(Math.hypot(vx, vy)).toBeCloseTo(100);
   });
 
+  it('blocks occupancy on static rock bodies, honours enable and sees members added in the same frame', () => {
+    const { system, scene } = createHarness();
+    (scene as unknown as { game: { loop: { frame: number } } }).game = { loop: { frame: 7 } };
+    const metrics = resolveActiveArenaWorldMetrics();
+    system.setWorldMetrics(metrics);
+    const body = (x: number, y: number) => ({ body: { enable: true, position: { x, y }, width: 32, height: 32,
+      get left() { return this.position.x; }, get right() { return this.position.x + this.width; },
+      get top() { return this.position.y; }, get bottom() { return this.position.y + this.height; } } });
+    const rocks = new Set([body(metrics.offsetX + 200, metrics.offsetY + 200)]);
+    const group = { children: rocks, getLength: () => rocks.size } as unknown as Phaser.Physics.Arcade.StaticGroup;
+    system.setRockGroup(group, null);
+    const cx = metrics.offsetX + 216, cy = metrics.offsetY + 216;
+    expect(system.canOccupyCircle(cx, cy, 8, false)).toBe(false);
+    expect(system.canOccupyCircle(cx + 60, cy, 8, false)).toBe(true);
+    [...rocks][0].body.enable = false;
+    expect(system.canOccupyCircle(cx, cy, 8, false)).toBe(true);
+    rocks.add(body(metrics.offsetX + 260, metrics.offsetY + 200));
+    expect(system.canOccupyCircle(cx + 60, cy, 8, false)).toBe(false);
+  });
+
   it('does not apply corner assistance to dash or forced movement', () => {
     const { system, players, getPlayerInput } = createHarness();
     const metrics = resolveActiveArenaWorldMetrics();

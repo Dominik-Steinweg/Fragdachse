@@ -445,11 +445,13 @@ export class HostPhysicsSystem {
     const cells = this.occupancyCells;
     for (const bucket of cells.values()) bucket.length = 0;
     for (const group of [this.rockGroup, this.trunkGroup, this.baseGroup]) {
-      for (const child of group?.getChildren() ?? []) {
+      // The member set itself: getChildren() copies it, and the body edge getters add calls per body.
+      for (const child of group?.children ?? []) {
         const body = (child as Phaser.GameObjects.GameObject & { body?: Phaser.Physics.Arcade.StaticBody }).body;
         if (!body) continue;
-        for (let cy = Math.floor(body.top / OCCUPANCY_CELL_PX); cy <= Math.floor(body.bottom / OCCUPANCY_CELL_PX); cy++) {
-          for (let cx = Math.floor(body.left / OCCUPANCY_CELL_PX); cx <= Math.floor(body.right / OCCUPANCY_CELL_PX); cx++) {
+        const left = body.position.x, top = body.position.y;
+        for (let cy = Math.floor(top / OCCUPANCY_CELL_PX); cy <= Math.floor((top + body.height) / OCCUPANCY_CELL_PX); cy++) {
+          for (let cx = Math.floor(left / OCCUPANCY_CELL_PX); cx <= Math.floor((left + body.width) / OCCUPANCY_CELL_PX); cx++) {
             const key = occupancyCellKey(cx, cy);
             let bucket = cells.get(key);
             if (!bucket) cells.set(key, bucket = []);
