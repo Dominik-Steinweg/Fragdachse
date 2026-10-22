@@ -1,3 +1,5 @@
+import type { EnemySpawnEmergencePort } from '../entities/EnemyManager';
+import { spawnZoneAlertLevel } from '../systems/CoopDefenseSpawnZoneAlerts';
 import type { KrakenState } from '../systems/KrakenState';
 import type { EnemyAreaClawEvent } from '../systems/EnemyClawAttack';
 import type { CombatPartHitReceipt } from '../combat/CombatPartContact';
@@ -9,6 +11,7 @@ import type {
   CoopDefenseRespawnBudgetPlayerState,
   CoopDefenseSecondaryObjectivePresentationState,
   SyncedCoopDefenseCarryItem,
+  SyncedSpawnZoneAlert,
 } from '../types';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { BossIntroState } from '../config/bossIntros';
@@ -67,6 +70,8 @@ export interface CoopMissionPresentationReadPort {
   readonly getSecondaryObjectivePresentationState: () => CoopDefenseSecondaryObjectivePresentationState | null;
   readonly getMissionProgressPresentationState: () => CoopDefenseMissionProgressPresentationState | null;
   readonly getPortalLinkState?: () => readonly import('../systems/portal/PortalLinkSystem').PortalLinkStateEntry[] | null;
+  /** Host-announced releases of spawn zones and spawn structures, in mission time. */
+  readonly getSpawnZoneAlerts?: () => readonly SyncedSpawnZoneAlert[];
   readonly getLocalRespawnBudgetState: () => CoopDefenseRespawnBudgetPlayerState | null;
   readonly getSynchronizedNow: () => number;
   readonly getArenaStartTime: () => number;
@@ -153,6 +158,10 @@ export interface CoopMissionPresentationUiPort {
     readonly syncBossPresence: (sources: readonly BossPresenceSource[], now: number) => void;
     /** Ob das Intro gerade das Erscheinen des Bosses inszeniert (ersetzt den Spawnblitz). */
     readonly bossIntroOwnsSpawn: (state: BossIntroState | null, now: number) => boolean;
+    /** Rise presenter of the World's spawn structures (GDD Spawnbauwerk V1), if any. */
+    readonly getSpawnEmergence?: () => EnemySpawnEmergencePort | null;
+    /** Announced charge (0..1) of each spawn structure; null while no Activity is presented. */
+    readonly setSpawnStructureCharge?: (charge: ((baseId: string) => number) | null) => void;
     /** Scene-lifetime visual objects are destroyed only with the Scene, never on Activity detach. */
     readonly destroy: () => void;
     readonly reset: () => void;
@@ -160,6 +169,8 @@ export interface CoopMissionPresentationUiPort {
 }
 
 const NO_DIRECTIONS: readonly CompassDirection8[] = [];
+/** A structure's charge fades this fast once its brood has risen. */
+const SPAWN_STRUCTURE_CHARGE_SETTLE_MS = 450;
 
 /**
  * Activity-scoped owner for the screen- and world-space Coop mission presentation.
@@ -179,6 +190,21 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       && this.ui.worldSpace.bossIntroOwnsSpawn(this.reads.getBossIntroState(), this.reads.getSynchronizedNow())
     : null;
 
+  /**
+   * Announced release of one spawn structure (GDD Spawnbauwerk V1): the host's structure alert
+   * builds up over its lead and settles quickly once the brood has risen.
+   */
+  private readonly spawnStructureCharge = (baseId: string): number => {
+    const runtime = this.runtime;
+    if (!runtime) return 0;
+    const now = runtime.getMissionNow(this.reads.getSynchronizedNow()) - this.reads.getArenaStartTime();
+    let level = 0;
+    for (const alert of this.reads.getSpawnZoneAlerts?.() ?? []) {
+      if (alert.structure && alert.zoneId === baseId) level = Math.max(level, spawnZoneAlertLevel(alert, now, SPAWN_STRUCTURE_CHARGE_SETTLE_MS));
+    }
+    return level;
+  };
+
   constructor(
     private readonly mapConfig: CoopDefenseMapConfig,
     private readonly reads: CoopMissionPresentationReadPort,
@@ -193,6 +219,8 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     this.clientCarryPresentationItems = null;
     this.ui.mapEvents.setMapEvents(this.mapConfig.mapEvents ?? []);
     runtime.enemyManager?.setSpawnEffectSuppressor(this.spawnEffectSuppressor);
+    runtime.enemyManager?.setSpawnEmergencePresenter(this.ui.worldSpace.getSpawnEmergence?.() ?? null);
+    this.ui.worldSpace.setSpawnStructureCharge?.(this.spawnStructureCharge);
     if (this.mapConfig.boss?.habitatId) {
       const claw = this.reads.subscribeAreaClaw?.(event => {
         if (!this.runtime || event.activityRevision !== this.runtime.descriptor.activityRevision
@@ -212,6 +240,8 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
   detach(): void {
     if (!this.runtime) return;
     this.runtime.enemyManager?.setSpawnEffectSuppressor(null);
+    this.runtime.enemyManager?.setSpawnEmergencePresenter(null);
+    this.ui.worldSpace.setSpawnStructureCharge?.(null);
     this.runtime = null;
     for (const release of this.releases) release(); this.releases = [];
     this.clearPresentation();
@@ -231,6 +261,9 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     }
     this.presentationActive = true;
     this.runtime.enemyManager?.setSpawnEffectSuppressor(this.spawnEffectSuppressor);
+    this.runtime.enemyManager?.setSpawnEmergencePresenter(this.ui.worldSpace.getSpawnEmergence?.() ?? null);
+    // The World's structures may be rebuilt under a running Activity; the input follows them.
+    this.ui.worldSpace.setSpawnStructureCharge?.(this.spawnStructureCharge);
 
     const elapsedMs = this.runtime.getMissionNow(this.reads.getSynchronizedNow()) - this.reads.getArenaStartTime();
     const missionProgress = this.reads.getMissionProgressPresentationState();
@@ -389,6 +422,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     this.ui.worldSpace.syncTurretWebs?.(frame.turretWebs ?? null, this.reads.getSynchronizedNow());
     // Der Gegner-Manager kann nach dem Attach neu entstehen; der Filter muss vor dem Snapshot sitzen.
     runtime.enemyManager?.setSpawnEffectSuppressor(this.spawnEffectSuppressor);
+    runtime.enemyManager?.setSpawnEmergencePresenter(this.ui.worldSpace.getSpawnEmergence?.() ?? null);
     if (frame.newSnapshot) {
       runtime.enemyManager?.applySnapshot(frame.enemySnapshot);
       const kraken = this.reads.getKrakenState?.();

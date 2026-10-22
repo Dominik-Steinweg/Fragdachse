@@ -1,26 +1,37 @@
-"""Hostile spawn structure (GDD Spawnbauwerk V1): a U of eight heavy stone blocks around a brood pit.
+"""Hostile spawn structure (GDD Spawnbauwerk V1): a dark armoured U around a brood pit.
 
 One Blender unit is one 32 px world cell. The pivot is the centre of the 2 x 2 brood pit, so the
 building and the separate pit asset share one anchor in every orientation. Built opening south
 (-Y), then turned about the pivot so the shared key light stays world-fixed:
 
-    y  2 ┌───┬───┬───┬───┐   back wall (4 blocks), brood heart in the middle
-       1 ├───┼───┴───┼───┤
-         │arm│  pit  │arm│   arms (2 blocks each), veins run toward the pit
+    y  2 ┌───────────────┐   back wall, brood heart in the middle
+       1 │   ┌───────┐   │
+         │arm│  pit  │arm│   arms, veins run toward the pit
       -1 └───┘       └───┘
         -2  -1   0   1   2 x
 
-Only the eight wall cells carry geometry, all of it inside |x|,|y| <= 1.97 on the cell grid: a dark
-mortar bed closes the joints, the outer and inner plinth edges stay hard and visible so the hitbox
-reads at 128 px. The void brood mass sits on top of the blocks with a stone rim left free, never on
-the pit. Only the veins and the heart emit (congruent passes `veins` and `core`).
+The body speaks the hostile base's language (base47blob_hostile): one continuous near-black armour
+slab with plated cells, a raised grey frame along every edge of the U and dashed violet light strips
+just inside it, so the hitbox outline glows like an enemy base. Everything stays inside |x|,|y| <=
+1.97 on the cell grid. Rough void brood grows along the wall centrelines, inside the strips.
+Emissive passes: `rim` (light strips), `veins` (brood veins), `core` (brood heart).
 `model.state` is intact/damaged/rubble and `model.outlet` the side the pit opens to.
 """
 import math
 import random
 import bpy
-from dawn_parts import surface, root, finish, bolt, tapered_tube
+from dawn_parts import surface, root, finish, tapered_tube
 from enemy_parts_b import plate
+from spawn_structure_concepts import BUILDINGS, ConceptKit
+
+OUTLET_TURN = {'south': 0.0, 'east': math.pi / 2, 'north': math.pi, 'west': -math.pi / 2}
+# VOID_PALETTE (src/config.ts): deep 0x6f16a8, primary 0xb347ff, bright 0xd98cff.
+VOID_DEEP, VOID_PRIMARY, VOID_BRIGHT = (111, 22, 168), (179, 71, 255), (217, 140, 255)
+WALL_CELLS = [(-1.5, 1.5), (-.5, 1.5), (.5, 1.5), (1.5, 1.5), (-1.5, .5), (-1.5, -.5), (1.5, .5), (1.5, -.5)]
+# The U on the cell grid, counter-clockwise (interior on the left of every edge).
+OUTLINE = [(-2, -1), (-1, -1), (-1, 1), (1, 1), (1, -1), (2, -1), (2, 2), (-2, 2)]
+MARGIN = .03         # 1 px inside the hitbox cells
+TOP = .3             # armour slab height
 
 
 def centred_plate(c, name, center, outline, thickness, material, bevel=.025):
@@ -29,26 +40,14 @@ def centred_plate(c, name, center, outline, thickness, material, bevel=.025):
     ob.location = center
     return ob
 
-OUTLET_TURN = {'south': 0.0, 'east': math.pi / 2, 'north': math.pi, 'west': -math.pi / 2}
-# VOID_PALETTE (src/config.ts): deep 0x6f16a8, primary 0xb347ff, bright 0xd98cff.
-VOID_DEEP, VOID_PRIMARY, VOID_BRIGHT = (111, 22, 168), (179, 71, 255), (217, 140, 255)
-# Wall cells (centre x, y) of the south-opening U.
-WALL_CELLS = [(-1.5, 1.5), (-.5, 1.5), (.5, 1.5), (1.5, 1.5), (-1.5, .5), (-1.5, -.5), (1.5, .5), (1.5, -.5)]
-EDGE = 1.97          # every part stays inside the hitbox cells (|x|,|y| <= 2), 1 px margin
-BLOCK = .93
-BLOCK_HEIGHT = .34
-TOP = BLOCK_HEIGHT + .05
-# Outline of the U mortar bed (south opening), slightly inset from the cell grid.
-U_OUTLINE = [(-EDGE, -.97), (-EDGE, EDGE), (EDGE, EDGE), (EDGE, -.97), (1.03, -.97), (1.03, .97), (-1.03, .97), (-1.03, -.97)]
-
 
 def damp(mat, roughness=.5):
     """Broken damp sheen for the brood mass, never hard plastic glints."""
     n, l = mat.node_tree.nodes, mat.node_tree.links
     bs = n['Principled BSDF']
     bs.inputs['Specular IOR Level'].default_value = .2
-    bs.inputs['Coat Weight'].default_value = .08
-    bs.inputs['Coat Roughness'].default_value = .42
+    bs.inputs['Coat Weight'].default_value = .1
+    bs.inputs['Coat Roughness'].default_value = .38
     noise = n.new('ShaderNodeTexNoise'); noise.inputs['Scale'].default_value = 15
     ramp = n.new('ShaderNodeMapRange')
     ramp.inputs['To Min'].default_value = roughness - .12; ramp.inputs['To Max'].default_value = roughness + .14
@@ -57,78 +56,115 @@ def damp(mat, roughness=.5):
 
 
 class Kit:
-    """Named matte roles; emission only on the void vein and heart roles."""
+    """Named matte roles; emission only on the rim strips, the veins and the heart."""
 
     def __init__(self, c, spec, state):
         lib = spec['model'].get('librarySurfaces', {})
         def m(name, rgb, wear=.3, emission=0):
             return surface(c, name, rgb, wear, emission, **lib.get(name, {}))
         dead = state == 'rubble'
-        self.stone = m('Weathered dark masonry block', (74, 72, 78), .42)
-        self.stone_alt = m('Soot-darkened masonry block', (60, 58, 64), .40)
-        self.stone_top = m('Worn block cap stone', (88, 85, 88), .36)
-        self.joint = m('Deep mortar joint', (20, 18, 24), 0)
-        self.iron = m('Blackened binding iron', (48, 45, 52), .34)
-        self.rust = m('Old rust bleed', (98, 54, 34), .45)
-        self.mass = damp(m('Void brood mass', (60, 22, 80), .14))
-        self.fold = damp(m('Bruised brood fold', (84, 34, 96), .12), .46)
-        self.egg = damp(m('Translucent brood egg', (118, 64, 132), .1), .4)
-        self.husk = m('Dried brood husk', (44, 34, 42), .30)
-        self.throat = m('Opaque brood throat', (14, 8, 20), 0)
-        self.bone = m('Weathered chitin tusk', (158, 146, 122), .34)
-        self.scorch = m('Soot and scorch crust', (28, 25, 26), .20)
-        # Energy roles: deep violet by day so they never read as neon; emission drives the night passes.
-        self.vein = m('Void brood vein', (140, 50, 200), 0, .0 if dead else .4)
+        self.armor = m('Blackened void armour', (31, 30, 35), .22)
+        self.panel = m('Void armour plate', (38, 37, 43), .2)
+        self.frame = m('Grey armour frame', (78, 76, 84), .3)
+        self.seam = m('Deep armour seam', (12, 11, 15), 0)
+        self.node = m('Dark frame node', (22, 21, 26), .1)
+        self.mass = damp(m('Void brood mass', (40, 18, 52), .12))
+        self.fold = damp(m('Bruised brood fold', (66, 28, 82), .1), .46)
+        self.egg = damp(m('Translucent brood egg', (70, 36, 88), .08), .4)
+        self.husk = m('Dried brood husk', (40, 30, 40), .3)
+        self.throat = m('Opaque brood throat', (12, 6, 18), 0)
+        self.chitin = m('Dark chitin hook', (74, 66, 76), .3)
+        self.scorch = m('Soot and scorch crust', (24, 22, 24), .2)
+        # Energy roles: the strips read violet by day like the enemy base; the night carries all three.
+        self.rim = m('Void rim seam', VOID_PRIMARY, 0, .0 if dead else .9)
+        self.vein = m('Void brood vein', (100, 34, 140), 0, .0 if dead else .3)
         self.heart = m('Void brood heart', VOID_PRIMARY, 0, .0 if dead else .8)
         self.spent = m('Spent void residue', VOID_DEEP, .1, .1 if dead else 0)
         if dead:
-            self.vein = self.heart = self.spent
+            self.rim = self.vein = self.heart = self.spent
 
 
 def turned(x, y, a):
     return x * math.cos(a) - y * math.sin(a), x * math.sin(a) + y * math.cos(a)
 
 
-def mortar_bed(c, k, rubble):
-    """Dark bed under the blocks: joints read as mortar and the U silhouette stays closed."""
-    plate(c, 'Mortar bed', (0, 0, .03), U_OUTLINE, .06, k.joint, .01)
+def edges():
+    """Every edge of the U with its start, unit direction, inward normal and length in cells."""
+    for a, b in zip(OUTLINE, OUTLINE[1:] + OUTLINE[:1]):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        length = math.hypot(dx, dy)
+        d = (dx / length, dy / length)
+        yield a, d, (-d[1], d[0]), int(round(length))
+
+
+def strip(c, name, a, d, n, t0, t1, off0, off1, z, thickness, material, bevel=.008):
+    """A strip along one edge, from t0 to t1 cells, between off0 and off1 inward from the edge."""
+    pts = [(a[0] + d[0] * t + n[0] * o, a[1] + d[1] * t + n[1] * o) for t, o in ((t0, off0), (t1, off0), (t1, off1), (t0, off1))]
+    return plate(c, name, (0, 0, z), pts, thickness, material, bevel)
+
+
+def inset_outline(offset):
+    """The U outline moved inward by `offset`, mitred at every corner."""
+    pts = []
+    count = len(OUTLINE)
+    for i in range(count):
+        p, prev, nxt = OUTLINE[i], OUTLINE[i - 1], OUTLINE[(i + 1) % count]
+        n1 = (-(p[1] - prev[1]), p[0] - prev[0]); l1 = math.hypot(*n1); n1 = (n1[0] / l1, n1[1] / l1)
+        n2 = (-(nxt[1] - p[1]), nxt[0] - p[0]); l2 = math.hypot(*n2); n2 = (n2[0] / l2, n2[1] / l2)
+        bis = (n1[0] + n2[0], n1[1] + n2[1])
+        scale = offset / max(.2, bis[0] * n1[0] + bis[1] * n1[1])
+        pts.append((p[0] + bis[0] * scale, p[1] + bis[1] * scale))
+    return pts
+
+
+def armour_body(c, k, rng, damaged, rubble):
+    """One continuous near-black slab; plated cells with chamfered corners like the base tiles."""
     if rubble:
-        plate(c, 'Exposed bed rubble', (0, 0, .07), [(x * .97, y * .97) for x, y in U_OUTLINE], .02, k.scorch, .005)
+        for x, y in WALL_CELLS:
+            h = TOP * rng.uniform(.35, .55)
+            s = rng.uniform(.38, .46)
+            pts = [(-s + rng.uniform(0, .12), -s), (s - rng.uniform(0, .12), -s), (s, s - rng.uniform(0, .12)), (-s, s)]
+            ob = centred_plate(c, 'Collapsed armour slab', (x + rng.uniform(-.04, .04), y + rng.uniform(-.04, .04), h / 2),
+                               pts, h, k.armor, .03)
+            ob.rotation_euler = (rng.uniform(-.12, .12), rng.uniform(-.12, .12), rng.uniform(-.25, .25))
+        plate(c, 'Exposed armour bed', (0, 0, .02), inset_outline(MARGIN), .04, k.seam, .01)
+        return
+    plate(c, 'Blackened void armour', (0, 0, TOP / 2), inset_outline(MARGIN), TOP, k.armor, .04)
+    for x, y in WALL_CELLS:
+        s, ch = .34, .1
+        pts = [(-s + ch, -s), (s - ch, -s), (s, -s + ch), (s, s - ch), (s - ch, s), (-s + ch, s), (-s, s - ch), (-s, -s + ch)]
+        if damaged and rng.random() < .3:
+            pts = [(px + rng.uniform(-.06, .06), py + rng.uniform(-.06, .06)) for px, py in pts]
+        plate(c, 'Void armour plate', (0, 0, TOP + .015), [(x + px, y + py) for px, py in pts], .03, k.panel, .012)
+    if damaged:
+        for i in range(5):
+            x, y = rng.choice(WALL_CELLS)
+            plate(c, 'Scorch crust patch', (0, 0, TOP + .035),
+                  [(x + px * .22, y + py * .16) for px, py in ((-1, -1), (1.1, -.8), (.9, 1), (-.8, .9))], .01, k.scorch, .004)
 
 
-def stone_block(c, k, rng, x, y, damaged, rubble):
-    """One heavy cell block: hewn sides, a worn cap and chipped corners when damaged."""
-    h = BLOCK_HEIGHT * rng.uniform(.93, 1.05) * (.5 if rubble else 1)
-    s = BLOCK * (rng.uniform(.82, .92) if rubble else 1)
-    chip = (lambda: rng.uniform(.06, .2)) if damaged else (lambda: rng.uniform(.01, .05))
-    half = s / 2
-    outline = [(-half + chip(), -half), (half - chip(), -half), (half, -half + chip()), (half, half - chip()),
-               (half - chip(), half), (-half + chip(), half), (-half, half - chip()), (-half, -half + chip())]
-    material = k.stone if rng.random() < .6 else k.stone_alt
-    block = plate(c, 'Weathered masonry block', (0, 0, h / 2 + .04), outline, h, material, .06)
-    cap = plate(c, 'Worn block cap stone', (0, 0, h + .06), [(px * .86, py * .86) for px, py in outline], .05, k.stone_top, .035)
-    g = bpy.data.objects.new('Masonry cell', None); c.scene.collection.objects.link(g)
-    for ob in (block, cap): ob.parent = g
-    g.location = (x + (rng.uniform(-.04, .04) if rubble else 0), y + (rng.uniform(-.04, .04) if rubble else 0), 0)
-    g.rotation_euler = ((rng.uniform(-.14, .14), rng.uniform(-.14, .14), rng.uniform(-.2, .2)) if rubble
-                        else (0, 0, rng.uniform(-.012, .012)))
-
-
-def binding_iron(c, k, rng, damaged):
-    """Riveted iron bands on the outer plinth faces: the hitbox border reads as a built edge."""
-    inset = EDGE - .035
-    runs = [((-inset, inset), (inset, inset)), ((-inset, inset), (-inset, -.95)), ((inset, inset), (inset, -.95))]
-    for i, ((x0, y0), (x1, y1)) in enumerate(runs):
-        length = math.hypot(x1 - x0, y1 - y0)
-        steps = max(2, round(length / .5))
-        for j in range(steps):
-            if damaged and i == 2 and j in (1, 2): continue
-            t0, t1 = j / steps + .015, (j + 1) / steps - .015
-            a = (x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0); b = (x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1)
-            dx, dy = b[0] - a[0], b[1] - a[1]; ln = math.hypot(dx, dy); nx, ny = -dy / ln * .03, dx / ln * .03
-            plate(c, 'Binding iron band', (0, 0, BLOCK_HEIGHT * .55),
-                  [(a[0] + nx, a[1] + ny), (b[0] + nx, b[1] + ny), (b[0] - nx, b[1] - ny), (a[0] - nx, a[1] - ny)], .09, k.iron, .01)
-            bolt(c, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, BLOCK_HEIGHT * .55 + .05, k.rust if rng.random() < .3 else k.iron, .028)
+def rim(c, k, rng, damaged, rubble):
+    """Raised grey frame on every edge and dashed violet light strips just inside it (base style)."""
+    if rubble:
+        for a, d, n, length in edges():
+            for cell in range(length):
+                if rng.random() < .5:
+                    strip(c, 'Broken frame bar', a, d, n, cell + .1, cell + rng.uniform(.4, .8), MARGIN, MARGIN + .07,
+                          TOP * .45, .05, k.frame)
+        return
+    for a, d, n, length in edges():
+        strip(c, 'Grey armour frame', a, d, n, 0, length, MARGIN, MARGIN + .065, TOP + .025, .05, k.frame, .012)
+        for cell in range(length):
+            # Damaged walls lose some strips; the remaining ones keep the hitbox outline legible.
+            if not (damaged and rng.random() < .22):
+                strip(c, 'Void rim seam', a, d, n, cell + .2, cell + .8, MARGIN + .085, MARGIN + .13, TOP + .02, .03, k.rim, .006)
+            if cell == 0: continue
+            node = c.cylinder('Dark frame node', (0, 0, 0), .045, .05, k.node, 8)
+            node.location = (a[0] + d[0] * cell + n[0] * (MARGIN + .107), a[1] + d[1] * cell + n[1] * (MARGIN + .107), TOP + .03)
+    # Corner nodes sit on the mitred inner corner of the strips, never outside the hitbox.
+    for x, y in inset_outline(MARGIN + .107):
+        node = c.cylinder('Dark frame node', (0, 0, 0), .05, .05, k.node, 8)
+        node.location = (x, y, TOP + .03)
 
 
 def lump(c, mat, x, y, z, sx, sy, sz, rng, name='Void brood lump', angle=None):
@@ -142,101 +178,81 @@ def lump(c, mat, x, y, z, sx, sy, sz, rng, name='Void brood lump', angle=None):
 
 
 def brood_mass(c, k, rng, damaged):
-    """One cohesive overgrowth: a ridge on the back wall that flows down both arms and thins out.
-
-    A stone rim of ~.15 BU stays free on the outer and inner faces, so the hard plinth edge carries
-    the hitbox outline and the soft mass reads as growth on the building.
-    """
-    for i in range(15):
-        x = -1.62 + i * 3.24 / 14 + rng.uniform(-.04, .04)
-        size = 1.0 - .18 * abs(x) / 1.6
-        lump(c, k.mass, x, 1.5 + rng.uniform(-.07, .07), TOP + .05, .27 * size, .31 * size, .2 * size, rng)
+    """Rough void brood along the wall centrelines, always inside the light strips."""
+    top = TOP + .04
+    for i in range(13):
+        x = -1.5 + i * 3.0 / 12 + rng.uniform(-.03, .03)
+        size = 1.0 - .15 * abs(x) / 1.5
+        lump(c, k.mass, x, 1.5 + rng.uniform(-.05, .05), top + .04, .22 * size, .23 * size, .17 * size, rng)
     for side in (-1, 1):
-        for i in range(7):
-            y = 1.15 - i * .27
-            size = 1.0 - i * .095
-            lump(c, k.mass, side * (1.5 + rng.uniform(-.05, .05)), y, TOP + .03, .25 * size, .24 * size, .16 * size, rng)
-    # Folds bind the ridge and lead the eye down the arms toward the opening.
+        for i in range(6):
+            size = 1.0 - i * .1
+            lump(c, k.mass, side * (1.5 + rng.uniform(-.04, .04)), 1.1 - i * .3, top + .02, .21 * size, .21 * size, .14 * size, rng)
     for side in (-1, 1):
-        for j in range(2):
-            pts = [(side * (.55 + .5 * j), 1.68, TOP + .2), (side * (1.35 + .1 * j), 1.62 - .05 * j, TOP + .22),
-                   (side * (1.6 - .12 * j), 1.0, TOP + .17), (side * (1.55 - .1 * j), .1, TOP + .13), (side * 1.48, -.55, TOP + .06)]
-            tapered_tube(c, 'Bruised brood fold', pts, [.05, .07, .06, .045, .015], k.fold, 10)
-    # Egg clusters at the back corners keep the brood identity of the former nest.
+        pts = [(side * .5, 1.62, top + .17), (side * 1.3, 1.62, top + .19), (side * 1.58, 1.0, top + .14),
+               (side * 1.55, .1, top + .11), (side * 1.48, -.5, top + .05)]
+        tapered_tube(c, 'Bruised brood fold', pts, [.045, .06, .05, .04, .012], k.fold, 10)
     for side in (-1, 1):
-        for (dx, dy, r) in ((0, 0, .15), (.2, -.12, .12), (-.06, -.24, .1)):
-            x, y = side * (1.55 - dx), 1.55 + dy
-            lump(c, k.egg, x, y, TOP + .22, r, r * .92, r * .8, rng, 'Translucent brood egg')
+        for (dx, dy, r) in ((0, 0, .13), (.17, -.1, .1), (-.05, -.21, .085)):
+            lump(c, k.egg, side * (1.55 - dx), 1.56 + dy, top + .2, r, r * .92, r * .8, rng, 'Translucent brood egg')
     if damaged:
         for i in range(4):
-            x, y = rng.uniform(-1.6, 1.6), rng.uniform(1.3, 1.7)
-            plate(c, 'Torn brood wound', (x, y, TOP + .3), [(-.13, -.08), (.14, -.06), (.11, .09), (-.1, .08)], .02, k.scorch, .005)
+            x, y = rng.uniform(-1.4, 1.4), rng.uniform(1.35, 1.65)
+            plate(c, 'Torn brood wound', (x, y, top + .26), [(-.1, -.06), (.11, -.05), (.09, .07), (-.08, .06)], .02, k.scorch, .005)
 
 
 def veins(c, k, rng, damaged):
-    """Fine veins in the brood membrane run from the heart along both arms toward the pit."""
+    """Fine glowing veins in the brood run from the heart along both arms toward the pit."""
+    top = TOP + .04
     routes = []
     for side in (-1, 1):
-        routes.append([(side * .3, 1.36, TOP + .3), (side * .9, 1.46, TOP + .27), (side * 1.38, 1.3, TOP + .25),
-                       (side * 1.5, .7, TOP + .19), (side * 1.46, .05, TOP + .15), (side * 1.36, -.6, TOP + .09)])
-        routes.append([(side * .2, 1.52, TOP + .28), (side * .7, 1.66, TOP + .26), (side * 1.22, 1.62, TOP + .24)])
+        routes.append([(side * .3, 1.4, top + .28), (side * .9, 1.48, top + .24), (side * 1.4, 1.36, top + .22),
+                       (side * 1.52, .7, top + .17), (side * 1.47, .05, top + .13), (side * 1.4, -.5, top + .08)])
     for i, pts in enumerate(routes):
         if damaged and i == 0: pts = pts[:4]
-        radii = [.026 - .016 * j / (len(pts) - 1) for j in range(len(pts))]
+        radii = [.018 - .01 * j / (len(pts) - 1) for j in range(len(pts))]
         tapered_tube(c, 'Void brood vein', pts, radii, k.vein, 8)
-        for j in range(1, len(pts) - 1):
-            x, y, z = pts[j]
-            off = rng.choice((-1, 1)) * rng.uniform(.1, .16)
-            end = (x + off, y + rng.uniform(-.1, .1), z - .02)
-            if abs(end[0]) < 1.12 and end[1] < 1.0: continue  # never over the pit
-            tapered_tube(c, 'Void brood vein', [(x, y, z), end], [.014, .005], k.vein, 6)
 
 
 def heart(c, k, rng, damaged, rubble):
-    """Brood heart in the back wall: a membrane sac under two chitin ribs, split lengthwise by a
-    glowing seam that points into the pit."""
+    """Brood heart on the back wall: a sac under two dark chitin ribs, split by a glowing seam."""
+    top = TOP + .04
     if rubble:
-        lump(c, k.husk, 0, 1.45, TOP + .02, .5, .36, .07, rng, 'Collapsed brood husk', 0.0)
-        c.ell('Spent heart residue', (0, 1.38, TOP + .06), (.06, .2, .03), k.spent)
+        lump(c, k.husk, 0, 1.48, top - .02, .4, .26, .06, rng, 'Collapsed brood husk', 0.0)
+        c.ell('Spent heart residue', (0, 1.46, top + .02), (.05, .16, .03), k.spent)
         return
-    lump(c, k.fold, 0, 1.45, TOP + .14, .44, .42, .28, rng, 'Brood heart sac')
-    seam = .3 if not damaged else .18
-    c.ell('Brood heart seam shadow', (0, 1.4, TOP + .36), (.075, seam + .04, .07), k.throat)
-    c.ell('Brood heart slit', (0, 1.38, TOP + .4), (.04, seam, .06), k.heart)
+    lump(c, k.fold, 0, 1.5, top + .12, .36, .3, .26, rng, 'Brood heart sac', 0.0)
+    seam = .22 if not damaged else .13
+    c.ell('Brood heart seam shadow', (0, 1.47, top + .33), (.065, seam + .03, .06), k.throat)
+    c.ell('Brood heart slit', (0, 1.46, top + .37), (.035, seam, .05), k.heart)
     for side in (-1, 1):
-        pts = [(side * .3, 1.86, TOP + .08), (side * .36, 1.66, TOP + .38), (side * .34, 1.38, TOP + .44),
-               (side * .26, 1.12, TOP + .3), (side * .2, .98, TOP + .12)]
-        tapered_tube(c, 'Heart clasp rib', pts, [.055, .05, .045, .03, .008], k.bone, 9)
+        pts = [(side * .26, 1.78, top + .08), (side * .31, 1.64, top + .33), (side * .29, 1.42, top + .38),
+               (side * .22, 1.24, top + .25), (side * .16, 1.2, top + .1)]
+        tapered_tube(c, 'Heart clasp rib', pts, [.045, .042, .036, .024, .006], k.chitin, 9)
 
 
-def tusks(c, k, rng, damaged):
-    """Two chitin tusks on the arm tips flank the opening and hook toward its centre."""
+def hooks(c, k, rng, damaged):
+    """Short chitin hooks on the arm tips curl toward the opening, inside the light strips."""
+    top = TOP + .04
     for side in (-1, 1):
-        if damaged and side == 1:
-            tapered_tube(c, 'Broken chitin tusk', [(side * 1.5, -.5, TOP), (side * 1.44, -.74, TOP + .14)], [.1, .07], k.bone, 9)
-            continue
-        pts = [(side * 1.58, -.42, TOP - .02), (side * 1.55, -.7, TOP + .16), (side * 1.4, -.86, TOP + .28),
-               (side * 1.2, -.9, TOP + .32), (side * 1.08, -.86, TOP + .3)]
-        tapered_tube(c, 'Weathered chitin tusk', pts, [.12, .1, .07, .035, .004], k.bone, 10)
-        tapered_tube(c, 'Tusk sinew wrap', [(side * 1.62, -.38, TOP + .02), (side * 1.5, -.52, TOP + .08), (side * 1.36, -.5, TOP + .04)],
-                     [.03, .035, .02], k.fold, 8)
+        if damaged and side == 1: continue
+        pts = [(side * 1.55, -.3, top + .04), (side * 1.52, -.52, top + .2), (side * 1.4, -.64, top + .26), (side * 1.27, -.62, top + .22)]
+        tapered_tube(c, 'Dark chitin hook', pts, [.075, .06, .035, .004], k.chitin, 9)
 
 
 def rubble_spill(c, k, rng):
-    for i in range(12):
+    for i in range(10):
         cell = rng.choice(WALL_CELLS)
-        x, y = cell[0] + rng.uniform(-.32, .32), cell[1] + rng.uniform(-.32, .32)
-        pts = [(rng.uniform(-.12, -.06), rng.uniform(-.1, -.04)), (rng.uniform(.06, .12), rng.uniform(-.1, -.04)),
-               (rng.uniform(.04, .1), rng.uniform(.05, .11)), (rng.uniform(-.1, -.04), rng.uniform(.04, .1))]
-        ob = centred_plate(c, 'Broken masonry chunk', (x, y, .2), pts, rng.uniform(.08, .14), k.stone, .02)
+        x, y = cell[0] + rng.uniform(-.3, .3), cell[1] + rng.uniform(-.3, .3)
+        pts = [(rng.uniform(-.1, -.05), rng.uniform(-.09, -.04)), (rng.uniform(.05, .1), rng.uniform(-.09, -.04)),
+               (rng.uniform(.04, .09), rng.uniform(.04, .1)), (rng.uniform(-.09, -.04), rng.uniform(.04, .09))]
+        ob = centred_plate(c, 'Broken armour chunk', (x, y, .2), pts, rng.uniform(.06, .1), k.panel, .015)
         ob.rotation_euler = (rng.uniform(-.4, .4), rng.uniform(-.4, .4), rng.uniform(0, math.tau))
-    for i in range(5):
-        cell = rng.choice(WALL_CELLS)
-        plate(c, 'Scorch crust patch', (cell[0] + rng.uniform(-.25, .25), cell[1] + rng.uniform(-.25, .25), .3),
-              [(-.18, -.11), (.2, -.09), (.16, .13), (-.14, .14)], .01, k.scorch, .004)
-    for side in (-1, 1):
-        lump(c, k.husk, side * 1.5, .25, .3, .3, .62, .05, rng, 'Deflated brood husk', 0.0)
-    lump(c, k.husk, 0, 1.5, .3, 1.45, .3, .05, rng, 'Deflated brood husk', 0.0)
+    # Spent brood lies in flat, torn patches on the slabs, never as whole bodies.
+    for x, y in WALL_CELLS:
+        if rng.random() < .4: continue
+        lump(c, k.husk, x + rng.uniform(-.12, .12), y + rng.uniform(-.12, .12), .2, rng.uniform(.12, .2), rng.uniform(.1, .16), .025, rng,
+             'Deflated brood husk')
 
 
 def build(c, spec):
@@ -246,19 +262,22 @@ def build(c, spec):
         raise ValueError(f'Unknown spawn structure model: {state}/{outlet}')
     rng = random.Random(f'spawn-structure-{state}')
     pivot = root(c)
-    k = Kit(c, spec, state)
-    damaged, rubble = state != 'intact', state == 'rubble'
-    mortar_bed(c, k, rubble)
-    for x, y in WALL_CELLS:
-        stone_block(c, k, rng, x, y, damaged, rubble)
-    if not rubble:
-        binding_iron(c, k, rng, damaged)
-        brood_mass(c, k, rng, damaged)
-        veins(c, k, rng, damaged)
-        tusks(c, k, rng, damaged)
+    concept = model.get('concept', 'armour')
+    if concept in BUILDINGS:
+        # Design drafts for the user's choice (intact only); see spawn_structure_concepts.py.
+        BUILDINGS[concept](c, ConceptKit(c, spec), random.Random(f'spawn-structure-concept-{concept}'))
     else:
-        rubble_spill(c, k, rng)
-    heart(c, k, rng, damaged, rubble)
+        k = Kit(c, spec, state)
+        damaged, rubble = state != 'intact', state == 'rubble'
+        armour_body(c, k, rng, damaged, rubble)
+        rim(c, k, rng, damaged, rubble)
+        if not rubble:
+            brood_mass(c, k, rng, damaged)
+            veins(c, k, rng, damaged)
+            hooks(c, k, rng, damaged)
+        else:
+            rubble_spill(c, k, rng)
+        heart(c, k, rng, damaged, rubble)
     turn = OUTLET_TURN[outlet]
     if turn:
         for ob in c.scene.objects:
@@ -268,7 +287,7 @@ def build(c, spec):
     mouth = bpy.data.objects.new('Spawn structure mouth socket', None); c.scene.collection.objects.link(mouth)
     mouth.location = (*turned(0, -1.0, turn), .05)
     core = bpy.data.objects.new('Brood heart socket', None); c.scene.collection.objects.link(core)
-    core.location = (*turned(0, 1.38, turn), TOP + .4)
+    core.location = (*turned(0, 1.46, turn), TOP + .41)
     result = finish(c, pivot)
     mouth.parent = pivot; core.parent = pivot
     result['sockets'] = {'mouth': mouth, 'core': core}

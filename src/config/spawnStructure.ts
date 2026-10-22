@@ -140,6 +140,8 @@ export function buildSpawnStructureShape(outlet: SpawnStructureOutlet): {
   };
 }
 
+/** Bodies of one tick rise one after another from the same pool. */
+export const SPAWN_STRUCTURE_RISE_STAGGER_MS = 300;
 /** Spacing (world px) between enemies that rise in the same tick, across the opening. */
 export const SPAWN_STRUCTURE_LANE_SPACING_PX = 14;
 /** Lanes stay within the inner half of the 64 px pit. */

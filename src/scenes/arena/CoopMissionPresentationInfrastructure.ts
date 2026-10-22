@@ -422,6 +422,10 @@ export class CoopMissionPresentationInfrastructure {
           input.renderers.bossPresence.sync(sources, now);
           input.renderers.voidHunterSparks.syncBosses(sources);
         },
+        getSpawnEmergence: () => (this.destroyed ? null : input.getBaseManager()?.spawnEmergence ?? null),
+        setSpawnStructureCharge: (charge) => {
+          if (!this.destroyed) input.getBaseManager()?.setSpawnStructureChargeProvider(charge && ((baseId) => charge(baseId)));
+        },
         bossIntroOwnsSpawn: (state, now) => !this.destroyed && (
           input.renderers.bossIntro.ownsSpawnAt(state, now)
           || input.renderers.voidHunterSparks.ownsSpawnAt(state, now)

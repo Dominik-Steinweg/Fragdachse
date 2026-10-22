@@ -16,6 +16,7 @@ const PIT_ASSET = getPipelineAsset(manifest.pit.id);
 
 export const SPAWN_STRUCTURE_TEXTURES = {
   building: BUILDING_ASSET.sheetTextureKey,
+  rim: manifest.building.emissive.rim.key,
   veins: manifest.building.emissive.veins.key,
   core: manifest.building.emissive.core.key,
   pit: PIT_ASSET.sheetTextureKey,
@@ -29,6 +30,7 @@ export function preloadSpawnStructureAssets(loader: Pick<Phaser.Loader.LoaderPlu
     endFrame: layout.frameCount - 1,
   });
   loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.building, BUILDING_ASSET.sheetPath, sheet(BUILDING_ASSET.layout));
+  loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.rim, manifest.building.emissive.rim.path, sheet(BUILDING_ASSET.layout));
   loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.veins, manifest.building.emissive.veins.path, sheet(BUILDING_ASSET.layout));
   loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.core, manifest.building.emissive.core.path, sheet(BUILDING_ASSET.layout));
   loader.spritesheet(SPAWN_STRUCTURE_TEXTURES.pit, PIT_ASSET.sheetPath, sheet(PIT_ASSET.layout));

@@ -54,7 +54,10 @@ export interface CoopDefenseRespawnBudgetState {
  * settles afterwards. Host mission time, like the encounter phases.
  */
 export interface SyncedSpawnZoneAlert {
+  /** World spawn zone, or with `structure` the base id of a spawn structure (GDD Spawnbauwerk V1). */
   zoneId: string;
+  /** The announced place is a spawn structure: it charges instead of a zone's haze thickening. */
+  structure?: true;
   fromMs: number;
   atMs: number;
   endMs: number | null;

@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { EnemyManager, EnemySpawnOptions } from '../entities/EnemyManager';
 import type { BaseSpec } from '../arena/BaseRegistry';
-import { getSpawnStructureOutletVector, resolveSpawnStructureLaneOffset } from '../config/spawnStructure';
+import { getSpawnStructureOutletVector, resolveSpawnStructureLaneOffset, SPAWN_STRUCTURE_RISE_STAGGER_MS } from '../config/spawnStructure';
 import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemyKind,
@@ -93,15 +93,15 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
 
   /**
    * Strukturgebundene Quelle: Die Gegner steigen eingegraben in der Mitte der Brutgrube auf, mehrere
-   * leicht quer zur Oeffnung versetzt, damit sie nicht exakt aufeinander erscheinen.
+   * leicht quer zur Oeffnung versetzt und nacheinander, damit sie nicht exakt aufeinander erscheinen.
    */
   hostSpawnPersistentStructureGroup(source: BaseSpec, kind: CoopDefenseEnemyKind, count: number): void {
     const area = source.spawnArea;
     if (!area || source.role !== 'spawn-point' || count <= 0) return;
-    const spawnOptions: EnemySpawnOptions = { spawnBurrowed: true };
     const opening = getSpawnStructureOutletVector(area.outlet);
     for (let index = 0; index < count; index += 1) {
       const offset = resolveSpawnStructureLaneOffset(index, count);
+      const spawnOptions: EnemySpawnOptions = { spawnBurrowed: true, burrowExtraMs: index * SPAWN_STRUCTURE_RISE_STAGGER_MS };
       this.enemyManager.hostSpawnAtWorld(
         area.x - opening.y * offset,
         area.y + opening.x * offset,

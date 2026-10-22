@@ -19,6 +19,9 @@ class SpawnStructureReview {
   private readonly renderer: SpawnStructureRenderer;
   private readonly views: SpawnStructureView[];
   private charge = 0;
+  private emergenceCount = 0;
+  private readonly pending: { enemyId: string; at: number }[] = [];
+  private autoEmergeAt: number | null = null;
 
   constructor(private readonly scene: Phaser.Scene, lighting: SpawnStructureLightingPort, centre: { x: number; y: number },
     rendererType: typeof SpawnStructureRenderer) {
@@ -45,6 +48,23 @@ class SpawnStructureReview {
 
   setCharge(charge: number): void { this.charge = Math.max(0, Math.min(1, charge)); }
 
+  /** Bodies rise through every active pool like a structure tick; `count` of them, 300 ms apart. */
+  emerge(count: number): void {
+    const now = this.scene.time.now;
+    for (const view of this.views) {
+      if (view.dormant || view.destroyed) continue;
+      for (let index = 0; index < count; index++) {
+        const enemyId = `review-body-${this.emergenceCount++}`;
+        const lane = (index - (count - 1) / 2) * 14;
+        const across = view.outlet === 'east' || view.outlet === 'west' ? { x: 0, y: lane } : { x: lane, y: 0 };
+        this.renderer.addEmergence(view.id, enemyId, across.x, across.y, now);
+        this.pending.push({ enemyId, at: now + 1200 + index * 300 });
+      }
+    }
+  }
+
+  setAutoEmerge(enabled: boolean): void { this.autoEmergeAt = enabled ? this.scene.time.now : null; }
+
   status() {
     return { charge: this.charge, structures: this.views.map(({ id, x, y, outlet, hp, dormant, destroyed }) => ({ id, x, y, outlet, hp, dormant, destroyed })) };
   }
@@ -55,7 +75,14 @@ class SpawnStructureReview {
   }
 
   private update(): void {
-    this.renderer.sync(this.views, this.scene.time.now);
+    const now = this.scene.time.now;
+    if (this.autoEmergeAt !== null && now >= this.autoEmergeAt) { this.emerge(1 + (this.emergenceCount % 2)); this.autoEmergeAt = now + 3200; }
+    for (let i = this.pending.length - 1; i >= 0; i--) {
+      if (now < this.pending[i].at) continue;
+      this.renderer.surfaceEmergence(this.pending[i].enemyId, now);
+      this.pending.splice(i, 1);
+    }
+    this.renderer.sync(this.views, now);
   }
 }
 
@@ -68,7 +95,10 @@ export function releaseSpawnStructureReview(controller: DevScenarioController): 
   fixtures.delete(controller);
 }
 
-/** window.devScenario.run({action:'spawnStructureReview', step:'show'|'charge'|'clear'|'status', gridX?, gridY?, charge?}). */
+/**
+ * window.devScenario.run({action:'spawnStructureReview', step:'show'|'charge'|'emerge'|'auto'|'clear'|'status',
+ *   gridX?, gridY?, charge?, count?, auto?}).
+ */
 export async function runSpawnStructureReview(controller: DevScenarioController, command: Record<string, unknown>): Promise<void> {
   const fixture = fixtures.get(controller);
   if (!fixture) throw new Error('Spawn structure review is not bound');
@@ -89,6 +119,8 @@ export async function runSpawnStructureReview(controller: DevScenarioController,
   const review = fixture.review;
   if (!review) throw new Error('Run spawnStructureReview step "show" first');
   if (step === 'charge') review.setCharge(typeof command.charge === 'number' ? command.charge : 0);
+  else if (step === 'emerge') review.emerge(typeof command.count === 'number' ? Math.max(1, Math.min(3, Math.round(command.count))) : 1);
+  else if (step === 'auto') review.setAutoEmerge(command.auto !== false);
   else if (step === 'clear') { review.destroy(); fixture.review = null; controller.lastAction = { spawnStructureReview: 'cleared' }; return; }
   controller.lastAction = { spawnStructureReview: review.status() };
 }

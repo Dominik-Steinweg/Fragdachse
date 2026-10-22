@@ -12,10 +12,13 @@ export const MAX_SPAWN_ZONE_ALERTS = 16;
 export function mergeSpawnZoneAlerts(alerts: readonly SyncedSpawnZoneAlert[]): SyncedSpawnZoneAlert[] {
   const byZone = new Map<string, SyncedSpawnZoneAlert>();
   for (const alert of alerts) {
-    const known = byZone.get(alert.zoneId);
-    if (!known) { byZone.set(alert.zoneId, { ...alert }); continue; }
-    byZone.set(alert.zoneId, {
+    // Zone and structure ids live in separate namespaces.
+    const key = spawnAlertPlaceKey(alert);
+    const known = byZone.get(key);
+    if (!known) { byZone.set(key, { ...alert }); continue; }
+    byZone.set(key, {
       zoneId: alert.zoneId,
+      ...(alert.structure ? { structure: true as const } : {}),
       fromMs: Math.min(known.fromMs, alert.fromMs),
       atMs: Math.min(known.atMs, alert.atMs),
       endMs: known.endMs === null || alert.endMs === null ? null : Math.max(known.endMs, alert.endMs),
@@ -29,7 +32,11 @@ export function mergeSpawnZoneAlerts(alerts: readonly SyncedSpawnZoneAlert[]): S
 
 /** Stable identity of a merged alert list for change-only publication. */
 export function spawnZoneAlertSignature(alerts: readonly SyncedSpawnZoneAlert[]): string {
-  return alerts.map(alert => `${alert.zoneId}:${alert.fromMs}:${alert.atMs}:${alert.endMs ?? 'open'}`).join('|');
+  return alerts.map(alert => `${spawnAlertPlaceKey(alert)}:${alert.fromMs}:${alert.atMs}:${alert.endMs ?? 'open'}`).join('|');
+}
+
+function spawnAlertPlaceKey(alert: SyncedSpawnZoneAlert): string {
+  return `${alert.structure ? 'structure' : 'zone'}:${alert.zoneId}`;
 }
 
 /**

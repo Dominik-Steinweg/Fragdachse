@@ -1,7 +1,7 @@
 {
   "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
   "notes": [
-    "Spawn structures (GDD Spawnbauwerk V1): the brood pit on the foundation layer under the walls' baked shadow, the U building on the structure layer, the vein, heart and pit-shimmer emissive passes above the light map like the other structure emissions."
+    "Spawn structures (GDD Spawnbauwerk V1): the brood pit on the foundation layer under the walls' baked shadow, the U building on the structure layer, the edge-strip, vein, heart and pit-glow emissive passes above the light map like the other structure emissions."
   ],
   "source": {
     "blends": [
@@ -25,6 +25,13 @@
       },
       {
         "key": "create/shimmer/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "create/rim/setDepth/0",
         "expression": "DEPTH_LIGHTING + 0.08",
         "blends": [
           "ADD"
@@ -111,6 +118,28 @@
       "role": "effect",
       "source": {
         "selector": "create/shimmer/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/spawnStructure/SpawnStructureRenderer.ts:create/rim/setDepth/0",
+      "owner": "effects/spawnStructure/SpawnStructureRenderer.ts",
+      "component": "create/rim/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "create/rim/setDepth/0",
         "expression": "DEPTH_LIGHTING + 0.08"
       }
     },

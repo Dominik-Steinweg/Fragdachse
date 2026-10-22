@@ -67,7 +67,7 @@ export class CoopDefenseEnemyBurrowSystem implements EnemyBurrowMovementSource {
     const options = typeof optionsOrNow === 'number' ? {} : optionsOrNow;
     const spawnNow = typeof optionsOrNow === 'number' ? optionsOrNow : now;
     if (options.spawnBurrowed) {
-      this.startBurrow(enemy, 'spawn-point', spawnNow + SPAWN_POINT_BURROW_DURATION_MS);
+      this.startBurrow(enemy, 'spawn-point', spawnNow + SPAWN_POINT_BURROW_DURATION_MS + Math.max(0, options.burrowExtraMs ?? 0));
       return;
     }
     const burrow = this.getBurrowConfig(enemy);

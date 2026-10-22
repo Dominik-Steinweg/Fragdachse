@@ -40,6 +40,8 @@ export function resolveSpawnPitState(view: SpawnStructureView): SpawnPitState {
 }
 
 export interface SpawnStructureGlow {
+  /** The violet edge strips along the hitbox, like the enemy base's accent glow. */
+  readonly rim: number;
   readonly veins: number;
   readonly core: number;
   readonly pit: number;
@@ -47,7 +49,7 @@ export interface SpawnStructureGlow {
   readonly lightIntensity: number;
 }
 
-const NO_GLOW: SpawnStructureGlow = { veins: 0, core: 0, pit: 0, lightRadiusPx: 0, lightIntensity: 0 };
+const NO_GLOW: SpawnStructureGlow = { rim: 0, veins: 0, core: 0, pit: 0, lightRadiusPx: 0, lightIntensity: 0 };
 
 /**
  * Emissive strengths 0..1 before the day/night factor. `charge` is the announced release (0..1):
@@ -56,11 +58,12 @@ const NO_GLOW: SpawnStructureGlow = { veins: 0, core: 0, pit: 0, lightRadiusPx: 
 export function resolveSpawnStructureGlow(view: SpawnStructureView, nowMs: number, charge: number): SpawnStructureGlow {
   if (view.destroyed) return { ...NO_GLOW, core: 0.18 };
   if (resolveSpawnPitState(view) === 'sealed') {
-    return { veins: 0.1, core: 0.22, pit: 0.12, lightRadiusPx: 64, lightIntensity: 0.12 };
+    return { rim: 0.7, veins: 0.1, core: 0.22, pit: 0.12, lightRadiusPx: 64, lightIntensity: 0.12 };
   }
   const c = Math.max(0, Math.min(1, charge));
   const breathe = 0.5 + 0.5 * Math.sin(nowMs * (0.0021 + 0.006 * c) + phaseOf(view.id));
   return {
+    rim: Math.min(1, 0.82 + 0.12 * breathe + 0.06 * c),
     veins: Math.min(1, 0.38 + 0.18 * breathe + 0.44 * c),
     core: Math.min(1, 0.55 + 0.2 * breathe + 0.25 * c),
     pit: Math.min(1, 0.3 + 0.15 * breathe + 0.55 * c),
@@ -70,8 +73,35 @@ export function resolveSpawnStructureGlow(view: SpawnStructureView, nowMs: numbe
 }
 
 /** Stable per-structure phase, so neighbouring structures never breathe in lockstep. */
-function phaseOf(id: string): number {
+export function phaseOf(id: string): number {
   let hash = 2166136261;
   for (const char of id) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
   return ((hash >>> 0) % 6283) / 1000;
+}
+
+/** A body rising from the pit: claimed when it is created underground, released when it surfaces. */
+export interface SpawnEmergence {
+  readonly enemyId: string;
+  /** Pit-local offset, world px. */
+  readonly x: number;
+  readonly y: number;
+  readonly claimedAt: number;
+  surfacedAt: number | null;
+}
+
+/** The ooze heaves over the hidden body for this long, then holds until it surfaces. */
+export const SPAWN_EMERGENCE_SWELL_MS = 1100;
+/** After surfacing the ooze parts, throws its droplets and closes again. */
+export const SPAWN_EMERGENCE_PART_MS = 900;
+
+/**
+ * Shader phase of one emergence (BroodPitShader): 0..0.74 while the body is still underground,
+ * 0.75..1 once it has surfaced; null when the opening has closed again.
+ */
+export function resolveSpawnEmergencePhase(emergence: SpawnEmergence, nowMs: number): number | null {
+  if (emergence.surfacedAt === null) {
+    return Math.min(0.74, Math.max(0, nowMs - emergence.claimedAt) / SPAWN_EMERGENCE_SWELL_MS * 0.74);
+  }
+  const parting = (nowMs - emergence.surfacedAt) / SPAWN_EMERGENCE_PART_MS;
+  return parting >= 1 ? null : 0.75 + Math.max(0, parting) * 0.25;
 }

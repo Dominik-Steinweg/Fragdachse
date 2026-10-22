@@ -117,6 +117,18 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
     expect(system.isBurrowed(enemy.id)).toBe(false);
   });
 
+  it('lets later bodies of one spawn-structure tick rise after the first', () => {
+    const enemy = createEnemy('rabid-badger');
+    const { system } = createSystem(enemy, () => true);
+
+    system.notifyEnemySpawned(enemy as unknown as EnemyEntity, { spawnBurrowed: true, burrowExtraMs: 300 }, 0);
+
+    system.hostUpdate(1_200);
+    expect(system.isBurrowed(enemy.id)).toBe(true);
+    system.hostUpdate(1_500);
+    expect(system.isBurrowed(enemy.id)).toBe(false);
+  });
+
   it('keeps tunnelling until the minimum distance AND free ground are reached', () => {
     const enemy = createEnemy('alien-badger', 0);
     const { system, collisionCalls } = createSystem(enemy, () => true);

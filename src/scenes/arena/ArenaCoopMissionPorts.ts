@@ -48,6 +48,7 @@ export function createArenaCoopMissionPresentationPort(
     getSecondaryObjectivePresentationState: () => bridge.getCoopDefenseSecondaryObjectivePresentationState(),
     getMissionProgressPresentationState: () => bridge.getCoopDefenseMissionProgressPresentationState(),
     getPortalLinkState: () => bridge.getCoopDefensePortalLinkState(),
+    getSpawnZoneAlerts: () => bridge.getCoopDefenseSpawnZoneAlerts(),
     getLocalRespawnBudgetState: () => bridge.getLocalCoopDefenseRespawnBudgetState(),
     getSynchronizedNow: () => bridge.getSynchronizedNow(),
     getArenaStartTime: () => bridge.getArenaStartTime(),

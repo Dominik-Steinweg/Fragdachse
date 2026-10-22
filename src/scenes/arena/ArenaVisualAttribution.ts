@@ -93,6 +93,7 @@ export const GRAPHICS_FAMILIES = {
   teleportEffects: ['PortalGpuLayer', 'VoidPortalRenderer'],
   tongueLash: ['TongueLashRenderer'],
   restHealTendrils: ['RestHealGpuLayer'],
+  broodPits: ['BroodPitGpuLayer'],
   bloodField: ['BloodFieldRenderer'],
   turretWebs: ['TurretWebGpuLayer'],
   beeSwarms: ['BeeSwarmGpuLayer'],

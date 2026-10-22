@@ -1,18 +1,18 @@
 import { VOID_PALETTE } from '../../config';
 
 /**
- * Brood pit membrane (GDD Spawnbauwerk V1). One quad per pit, centred on the pit; local p in px.
- * Instance: a [cx, cy, cornerX, cornerY], b [quad half px, membrane radius px, charge 0..1, state],
- * c [bulge0 x, y, t, seed], d [bulge1 x, y, t, bulge2 x], e [bulge2 y, t, -, -].
- * state: 0 sealed, 1 active, 2 dry. Bulge t < 0 is unused; 0..0.75 the membrane swells over a
- * rising body, 0.75..1 it tears, throws droplets that land as splats, and reseals.
+ * Brood pool surface (GDD Spawnbauwerk V1). One quad per pit, centred on the pool; local p in px.
+ * Instance: a [cx, cy, cornerX, cornerY], b [quad half px, pool radius px, charge 0..1, state],
+ * c [swell0 x, y, t, seed], d [swell1 x, y, t, swell2 x], e [swell2 y, t, -, -].
+ * state: 0 sealed, 1 active, 2 dry. Swell t < 0 is unused; 0..0.75 the black ooze heaves over a
+ * rising body, 0.75..1 it parts, throws droplets that land as splats, and closes again.
  *
- * Visual language: matte organic membrane, lit by the world. No ring, no rim glow, no swirl, no
- * stream: the only light is a violet shimmer from below that shows through stretched membrane and
- * the torn hole. Droplets rise and fall back (they fly out and land), never orbit.
+ * Visual language: viscous black-violet ooze, lit by the world. No ring, no rim glow, no swirl, no
+ * stream: the only light is a violet glow from the depth that shows through the thinned ooze and
+ * the opening. Droplets rise and fall back (they fly out and land), never orbit.
  *
- * Pass 0 (DEPTH.BASE_GROUNDING + 0.12, lit material): wet undulation, bulges, tear, droplets.
- * Pass 1 (DEPTH_LIGHTING + 0.07, emissive): subsurface glow under bulges, in the tear and on charge.
+ * Pass 0 (DEPTH.BASE_GROUNDING + 0.12, lit material): heaving surface, swells, opening, droplets.
+ * Pass 1 (DEPTH_LIGHTING + 0.07, emissive): depth glow under swells, in the opening and on charge.
  */
 const vec3 = (color: number) => `vec3(${((color >> 16) & 255) / 255}, ${((color >> 8) & 255) / 255}, ${(color & 255) / 255})`;
 

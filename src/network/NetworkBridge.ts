@@ -261,7 +261,7 @@ const KEY_COOP_ENCOUNTER_PRESENTATION = 'cep'; // global reliable: CoopDefenseEn
 const KEY_COOP_MAP_EVENT_PRESENTATION = 'cme'; // global reliable: CoopDefenseMapEventPresentationState | null
 const KEY_COOP_SECONDARY_OBJECTIVE_PRESENTATION = 'cso'; // global reliable: Objective-Presentationseinträge | null
 const KEY_COOP_MISSION_PROGRESS_PRESENTATION = 'cmp'; // global reliable: route/checkpoint snapshot | null
-const KEY_COOP_SPAWN_ZONE_ALERTS = 'csz'; // global reliable: SyncedSpawnZoneAlert[] | null
+const KEY_COOP_SPAWN_ZONE_ALERTS = 'csz'; // global reliable: SyncedSpawnZoneAlert[] | null (zones and spawn structures)
 const KEY_COOP_SPAWN_PLACES = 'csp'; // global reliable: SyncedSpawnPlaceState | null
 const KEY_COOP_PORTAL_LINKS = 'cpl'; // global reliable: WirePortalLinkState | null (generator portal lifecycle)
 const MAX_COOP_SPAWN_PLACE_IDS = 64;
@@ -6117,11 +6117,13 @@ function sanitizeSpawnZoneAlerts(raw: unknown): readonly SyncedSpawnZoneAlert[] 
   const alerts: SyncedSpawnZoneAlert[] = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object') return NO_SPAWN_ZONE_ALERTS;
-    const { zoneId, fromMs, atMs, endMs } = entry as Partial<SyncedSpawnZoneAlert>;
+    const { zoneId, structure, fromMs, atMs, endMs } = entry as Partial<SyncedSpawnZoneAlert>;
     const time = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
-    if (!isSpawnZoneId(zoneId) || alerts.some(alert => alert.zoneId === zoneId) || !time(fromMs) || !time(atMs) || fromMs > atMs
+    // Zones and spawn structures are separate namespaces; one alert per place.
+    if (!isSpawnZoneId(zoneId) || (structure !== undefined && structure !== true)
+      || alerts.some(alert => alert.zoneId === zoneId && alert.structure === structure) || !time(fromMs) || !time(atMs) || fromMs > atMs
       || (endMs !== null && (!time(endMs) || endMs < fromMs))) return NO_SPAWN_ZONE_ALERTS;
-    alerts.push({ zoneId, fromMs, atMs, endMs: endMs ?? null });
+    alerts.push({ zoneId, ...(structure ? { structure } : {}), fromMs, atMs, endMs: endMs ?? null });
   }
   return alerts;
 }

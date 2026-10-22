@@ -88,7 +88,10 @@ export class CoopMissionVoidDanger implements ActivityVoidDanger {
     const step = Number.isFinite(this.alertTime) ? Math.max(0, now - this.alertTime) : 0;
     this.alertTime = now;
     const targets = new Map<string, number>();
-    for (const alert of this.ports.getSpawnZoneAlerts()) targets.set(alert.zoneId, spawnZoneAlertLevel(alert, now, ALERT_SETTLE_MS));
+    // Spawn structures charge themselves (SpawnStructureRenderer); only zones thicken their haze.
+    for (const alert of this.ports.getSpawnZoneAlerts()) {
+      if (!alert.structure) targets.set(alert.zoneId, spawnZoneAlertLevel(alert, now, ALERT_SETTLE_MS));
+    }
     for (const zoneId of new Set([...targets.keys(), ...this.shown.keys()])) {
       const target = targets.get(zoneId) ?? 0, shown = this.shown.get(zoneId) ?? 0;
       let swell = this.swells.get(zoneId);

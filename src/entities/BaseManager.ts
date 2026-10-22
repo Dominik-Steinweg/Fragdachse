@@ -29,6 +29,7 @@ import type { WorldIntegrityMutationResult } from '../world/WorldIntegrityMutati
 import { SpawnStructureRenderer, type SpawnStructureShadowCell } from '../effects/spawnStructure/SpawnStructureRenderer';
 import type { SpawnStructureView } from '../effects/spawnStructure/SpawnStructureModel';
 import { worldCellCenter } from '../world/WorldMetrics';
+import { CELL_SIZE } from '../config';
 
 /**
  * Verwaltet die world-owned Base-Geometrie und bindet bei Bedarf genau einen Activity-Overlay.
@@ -175,6 +176,7 @@ export class BaseManager {
         if (this.activeActivityBinding !== binding) return;
         this.activeActivityBinding = null;
         this.burnRenderer?.clear();
+        this.structureRenderer?.clearEmergences();
         this.snapshotSeen.clear();
         for (const entity of this.entities) entity.clearActivityOverlay();
         this.rebuildActivityIndexes();
@@ -208,6 +210,27 @@ export class BaseManager {
   setSpawnStructureChargeProvider(charge: ((baseId: string, nowMs: number) => number) | null): void {
     this.structureRenderer?.setChargeProvider(charge);
   }
+
+  /**
+   * Presentation port for bodies created underground (EnemyManager): a body inside a living spawn
+   * structure's pit rises through its brood pool instead of the generic burrow dust.
+   */
+  readonly spawnEmergence = {
+    claim: (enemyId: string, x: number, y: number): boolean => {
+      const renderer = this.structureRenderer;
+      if (!renderer) return false;
+      for (const { entity } of this.spawnStructures) {
+        const area = entity.getSpec().spawnArea!;
+        const half = area.widthCells * CELL_SIZE / 2;
+        if (entity.isDestroyed() || Math.abs(x - area.x) > half || Math.abs(y - area.y) > half) continue;
+        renderer.addEmergence(entity.id, enemyId, x - area.x, y - area.y, this.scene.time.now);
+        return true;
+      }
+      return false;
+    },
+    surfaced: (enemyId: string): void => this.structureRenderer?.surfaceEmergence(enemyId, this.scene.time.now),
+    release: (enemyId: string): void => this.structureRenderer?.releaseEmergence(enemyId),
+  };
 
   /** Wall cells of the spawn structures as shadow casters (their sprites are not cell images). */
   getSpawnStructureShadowCells(): Iterable<SpawnStructureShadowCell> {

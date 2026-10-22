@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": "draft-a",
+  "revision": "draft-b",
   "pivot": "both canvases are centred on the brood pit centre; one Blender unit is one 32 px world cell",
   "emissiveEncoding": "white RGB, alpha = emission intensity; congruent with the sheet layout; tint and blend (ADD) at runtime",
   "sockets": "normalized full-canvas x/y (0..1, y down), z in Blender units",
@@ -35,16 +35,22 @@
     ],
     "frameOrder": "index = stateIndex * outlets.length + outletIndex",
     "emissive": {
+      "rim": {
+        "key": "construction_spawn_structure_emissive_rim",
+        "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-rim.png",
+        "sha256": "bcb288d78728172b7edeeb67a3878852a5d18d58f6f46d74291e987439da75c6",
+        "content": "dashed violet light strips along every edge of the U (hostile base style); none in rubble"
+      },
       "veins": {
         "key": "construction_spawn_structure_emissive_veins",
         "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-veins.png",
-        "sha256": "cb899e70c6f6f68f349ffc86cc4be6116910949c61099db180b5e2ef80925dc6",
+        "sha256": "827e0b19a4ee0b82cb5f63d49705f04fed82d8398e391ebac29c07a595966b62",
         "content": "brood veins along both arms toward the pit"
       },
       "core": {
         "key": "construction_spawn_structure_emissive_core",
         "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-core.png",
-        "sha256": "27dd88ea5b201451f795c762d22889a3faa202db0fc093270127b22fc3c90795",
+        "sha256": "939ad93e4735e4847e3d1df2471388a15f764bf5382e2716acf64481065aeb66",
         "content": "brood heart slit; spent residue in rubble"
       }
     },
@@ -61,8 +67,8 @@
           },
           "core": {
             "x": 0.5,
-            "y": 0.824706,
-            "z": 0.79
+            "y": 0.843529,
+            "z": 0.71
           }
         }
       },
@@ -77,9 +83,9 @@
             "z": 0.05
           },
           "core": {
-            "x": 0.175294,
+            "x": 0.156471,
             "y": 0.5,
-            "z": 0.79
+            "z": 0.71
           }
         }
       },
@@ -95,8 +101,8 @@
           },
           "core": {
             "x": 0.5,
-            "y": 0.175294,
-            "z": 0.79
+            "y": 0.156471,
+            "z": 0.71
           }
         }
       },
@@ -111,9 +117,9 @@
             "z": 0.05
           },
           "core": {
-            "x": 0.824706,
+            "x": 0.843529,
             "y": 0.5,
-            "z": 0.79
+            "z": 0.71
           }
         }
       },
@@ -129,8 +135,8 @@
           },
           "core": {
             "x": 0.5,
-            "y": 0.824706,
-            "z": 0.79
+            "y": 0.843529,
+            "z": 0.71
           }
         }
       },
@@ -145,9 +151,9 @@
             "z": 0.05
           },
           "core": {
-            "x": 0.175294,
+            "x": 0.156471,
             "y": 0.5,
-            "z": 0.79
+            "z": 0.71
           }
         }
       },
@@ -163,8 +169,8 @@
           },
           "core": {
             "x": 0.5,
-            "y": 0.175294,
-            "z": 0.79
+            "y": 0.156471,
+            "z": 0.71
           }
         }
       },
@@ -179,9 +185,9 @@
             "z": 0.05
           },
           "core": {
-            "x": 0.824706,
+            "x": 0.843529,
             "y": 0.5,
-            "z": 0.79
+            "z": 0.71
           }
         }
       },
@@ -197,8 +203,8 @@
           },
           "core": {
             "x": 0.5,
-            "y": 0.824706,
-            "z": 0.79
+            "y": 0.843529,
+            "z": 0.71
           }
         }
       },
@@ -213,9 +219,9 @@
             "z": 0.05
           },
           "core": {
-            "x": 0.175294,
+            "x": 0.156471,
             "y": 0.5,
-            "z": 0.79
+            "z": 0.71
           }
         }
       },
@@ -231,8 +237,8 @@
           },
           "core": {
             "x": 0.5,
-            "y": 0.175294,
-            "z": 0.79
+            "y": 0.156471,
+            "z": 0.71
           }
         }
       },
@@ -247,9 +253,9 @@
             "z": 0.05
           },
           "core": {
-            "x": 0.824706,
+            "x": 0.843529,
             "y": 0.5,
-            "z": 0.79
+            "z": 0.71
           }
         }
       }
@@ -283,8 +289,8 @@
       "glow": {
         "key": "construction_spawn_brood_pit_emissive_glow",
         "path": "./assets/sprites/pipeline-v2/spawn-brood-pit/emissive-glow.png",
-        "sha256": "fb99344b88827bcd5ef5aedfcffd829305defd2ca62a97a3db6f50ac5eb40b82",
-        "content": "faint subsurface shimmer between the membrane folds; none when dry"
+        "sha256": "2bfd65a33ff390bb488e38188b7e2d333f414426bd13c227c84b64e6fffe4e4b",
+        "content": "faint depth glow in the brood pool; none when sealed or dry"
       }
     },
     "frames": [
@@ -293,9 +299,9 @@
         "state": "sealed",
         "sockets": {
           "orifice": {
-            "x": 0.5,
-            "y": 0.5,
-            "z": 0.1
+            "x": 0.526667,
+            "y": 0.517778,
+            "z": 0.06
           }
         }
       },
@@ -304,9 +310,9 @@
         "state": "active",
         "sockets": {
           "orifice": {
-            "x": 0.5,
-            "y": 0.5,
-            "z": 0.1
+            "x": 0.526667,
+            "y": 0.517778,
+            "z": 0.06
           }
         }
       },
@@ -315,9 +321,9 @@
         "state": "dry",
         "sockets": {
           "orifice": {
-            "x": 0.5,
-            "y": 0.5,
-            "z": 0.1
+            "x": 0.526667,
+            "y": 0.517778,
+            "z": 0.06
           }
         }
       }

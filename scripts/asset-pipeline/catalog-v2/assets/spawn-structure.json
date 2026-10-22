@@ -14,8 +14,8 @@
     0.5
   ],
   "description": {
-    "silhouette": "Hostile spawn structure: a U of eight heavy stone blocks (one per hitbox cell) around a free 2 x 2 brood pit, opening toward the defended base. Hard plinth edges outside and inside, void brood mass on top, a brood heart in the back wall and two chitin tusks flanking the opening.",
-    "colors": "Matte dark weathered masonry and blackened binding iron; bruised aubergine brood mass; a single motivated violet accent (VOID_PALETTE) in the veins and the heart only.",
+    "silhouette": "Hostile spawn structure: one continuous dark armour U (eight hitbox cells) around a free 2 x 2 brood pit, opening toward the defended base. A raised grey frame and dashed violet light strips run along every edge like on the enemy base; rough void brood, a brood heart and two chitin hooks sit inside the strips.",
+    "colors": "Near-black void armour plates and a grey frame in the style of the hostile base tiles; dark aubergine brood; violet (VOID_PALETTE) only in the edge strips, veins and heart.",
     "anatomy": "Strict orthographic plan view, no ground or baked shadow. 1 BU = one 32 px cell; the pivot is the pit centre; the canvas covers 4.25 x 4.25 cells. Intact, damaged and rubble states x four opening directions share one canvas; emission is authored only on the veins and the heart."
   },
   "requiredClips": [],
@@ -25,82 +25,50 @@
     "state": "intact",
     "outlet": "south",
     "librarySurfaces": {
-      "Weathered dark masonry block": {
-        "family": "stone",
-        "scale": 0.5,
-        "grime": 0.4,
-        "edgewear": 0.14,
-        "saturation": 0.2,
-        "value": 0.32,
-        "tint": 0.25
-      },
-      "Worn block cap stone": {
+      "Blackened void armour": {
         "family": "stone",
         "scale": 0.5,
         "grime": 0.3,
+        "edgewear": 0.08,
+        "saturation": 0.15,
+        "value": 0.09,
+        "tint": 0.5
+      },
+      "Void armour plate": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.25,
+        "edgewear": 0.12,
+        "saturation": 0.15,
+        "value": 0.12,
+        "tint": 0.45
+      },
+      "Grey armour frame": {
+        "family": "stone",
+        "scale": 0.6,
+        "grime": 0.3,
         "edgewear": 0.2,
-        "saturation": 0.2,
-        "value": 0.4,
-        "tint": 0.2
-      },
-      "Blackened binding iron": {
-        "family": "iron",
-        "scale": 0.55,
-        "grime": 0.35,
-        "edgewear": 0.18,
-        "saturation": 0.5,
-        "value": 0.55,
-        "tint": 0.35
-      },
-      "Old rust bleed": {
-        "family": "iron",
-        "scale": 0.42,
-        "grime": 0.12,
-        "edgewear": 0.04,
-        "value": 0.85
+        "saturation": 0.1,
+        "value": 0.34,
+        "tint": 0.4
       },
       "Void brood mass": {
         "family": "dawnPaint",
         "scale": 0.42,
-        "grime": 0.1,
-        "edgewear": 0.02,
-        "saturation": 1.05,
-        "value": 0.85,
-        "tint": 0.25
+        "grime": 0.12,
+        "edgewear": 0.0,
+        "saturation": 0.9,
+        "value": 0.6,
+        "tint": 0.35
       },
       "Bruised brood fold": {
         "family": "dawnPaint",
         "scale": 0.42,
         "grime": 0.06,
-        "edgewear": 0.02,
-        "saturation": 1.0,
-        "value": 1.1,
-        "tint": 0.2
-      },
-      "Dried brood husk": {
-        "family": "dawnPaint",
-        "scale": 0.42,
-        "grime": 0.3,
-        "edgewear": 0.05,
-        "saturation": 0.3,
-        "value": 0.6
-      },
-      "Weathered chitin tusk": {
-        "family": "bone",
-        "scale": 0.42,
-        "grime": 0.16,
-        "edgewear": 0.06,
-        "saturation": 0.7,
-        "tint": 0.15
-      },
-      "Soot-darkened masonry block": {
-        "family": "stone",
-        "scale": 0.5,
-        "grime": 0.5,
-        "edgewear": 0.12,
-        "saturation": 0.2,
-        "value": 0.3,
-        "tint": 0.3
+        "edgewear": 0.0,
+        "saturation": 0.95,
+        "value": 0.85,
+        "tint": 0.25
       },
       "Translucent brood egg": {
         "family": "dawnPaint",
@@ -108,7 +76,16 @@
         "grime": 0.04,
         "edgewear": 0.0,
         "saturation": 0.9,
-        "value": 1.35
+        "value": 0.7,
+        "tint": 0.45
+      },
+      "Dried brood husk": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.3,
+        "edgewear": 0.05,
+        "saturation": 0.3,
+        "value": 0.5
       },
       "Opaque brood throat": {
         "family": "dawnPaint",
@@ -116,14 +93,59 @@
         "grime": 0.2,
         "edgewear": 0.0,
         "tint": 0.9
+      },
+      "Dark chitin hook": {
+        "family": "bone",
+        "scale": 0.42,
+        "grime": 0.3,
+        "edgewear": 0.05,
+        "saturation": 0.4,
+        "value": 0.45,
+        "tint": 0.45
+      },
+      "Splintered obsidian": {
+        "family": "stone",
+        "scale": 0.6,
+        "grime": 0.1,
+        "edgewear": 0.05,
+        "saturation": 0.3,
+        "value": 0.05,
+        "tint": 0.75
+      },
+      "Dark brood works metal": {
+        "family": "stone",
+        "scale": 0.55,
+        "grime": 0.35,
+        "edgewear": 0.18,
+        "saturation": 0.1,
+        "value": 0.14,
+        "tint": 0.45
+      },
+      "Blackened pipe": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.4,
+        "edgewear": 0.2,
+        "saturation": 0.1,
+        "value": 0.11,
+        "tint": 0.5
+      },
+      "Brood tank glass": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.02,
+        "edgewear": 0.0,
+        "saturation": 1.0,
+        "value": 0.6,
+        "tint": 0.5
       }
-    }
+    },
+    "concept": "armour"
   },
   "orthoScale": 4.25,
   "textures": {
     "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
     "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
-    "iron": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
     "bone": "art/poc/dawn/textures/library/bone-weathered-02.png",
     "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
     "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"

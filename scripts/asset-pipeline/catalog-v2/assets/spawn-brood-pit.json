@@ -14,9 +14,9 @@
     0.5
   ],
   "description": {
-    "silhouette": "Free 2 x 2 spawn surface inside the spawn structure's U: a low stone lip around a sunken matte brood membrane drawn into radial folds around a closed puckered orifice.",
-    "colors": "Dark basin stone, bruised aubergine membrane and folds, a faint deep-violet shimmer only between the folds; never a glowing rim.",
-    "anatomy": "Strict orthographic plan view at ground level, no baked shadow. 1 BU = one 32 px cell, pivot = pit centre shared with spawn-structure; canvas 2.25 x 2.25 cells. States sealed/active/dry; a runtime shader animates bulges and the tear."
+    "silhouette": "Free 2 x 2 spawn surface inside the spawn structure's U: sunken dark armour floor plates burst open by an irregular pool of black-violet brood ooze, broken plates tipped up around it and a clutch of eggs at one edge.",
+    "colors": "Darker continuation of the building's near-black armour; black-violet ooze with a wet sheen; a faint deep-violet depth glow only. No frame or light strips: those mark the walls.",
+    "anatomy": "Strict orthographic plan view at ground level, no baked shadow. 1 BU = one 32 px cell, pivot = pit centre shared with spawn-structure; canvas 2.25 x 2.25 cells. States sealed/active/dry; a runtime shader animates swells and the splash."
   },
   "requiredClips": [],
   "production": "reference",
@@ -24,52 +24,168 @@
   "model": {
     "state": "active",
     "librarySurfaces": {
-      "Brood pit membrane": {
-        "family": "dawnPaint",
+      "Sunken void armour floor": {
+        "family": "stone",
         "scale": 0.5,
-        "grime": 0.12,
-        "edgewear": 0.0,
-        "saturation": 1.1,
-        "value": 0.55,
-        "tint": 0.3
+        "grime": 0.35,
+        "edgewear": 0.08,
+        "saturation": 0.15,
+        "value": 0.07,
+        "tint": 0.55
       },
-      "Brood pit fold": {
+      "Broken floor plate": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.3,
+        "edgewear": 0.2,
+        "saturation": 0.15,
+        "value": 0.12,
+        "tint": 0.35
+      },
+      "Violet ooze film": {
         "family": "dawnPaint",
         "scale": 0.5,
-        "grime": 0.06,
+        "grime": 0.05,
         "edgewear": 0.0,
         "saturation": 1.0,
-        "value": 0.9,
-        "tint": 0.25
+        "value": 0.45,
+        "tint": 0.4
+      },
+      "Translucent brood egg": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.04,
+        "edgewear": 0.0,
+        "saturation": 0.9,
+        "value": 0.7,
+        "tint": 0.45
       },
       "Dormant brood crust": {
         "family": "bone",
         "scale": 0.5,
         "grime": 0.5,
         "edgewear": 0.05,
-        "saturation": 0.4,
-        "value": 0.5,
-        "tint": 0.4
+        "saturation": 0.3,
+        "value": 0.35,
+        "tint": 0.5
       },
-      "Spent pit ash": {
+      "Spent brood residue": {
         "family": "stone",
         "scale": 0.5,
         "grime": 0.6,
         "edgewear": 0.05,
         "saturation": 0.1,
-        "value": 0.35,
-        "tint": 0.5
+        "value": 0.12,
+        "tint": 0.6
       },
-      "Low brood rim": {
+      "Black brood ooze": {
         "family": "dawnPaint",
         "scale": 0.5,
-        "grime": 0.3,
+        "grime": 0.2,
         "edgewear": 0.0,
         "saturation": 0.8,
-        "value": 0.6,
+        "value": 0.14,
+        "tint": 0.8
+      },
+      "Splintered obsidian": {
+        "family": "stone",
+        "scale": 0.6,
+        "grime": 0.1,
+        "edgewear": 0.05,
+        "saturation": 0.3,
+        "value": 0.05,
+        "tint": 0.75
+      },
+      "Dark brood works metal": {
+        "family": "stone",
+        "scale": 0.55,
+        "grime": 0.35,
+        "edgewear": 0.18,
+        "saturation": 0.1,
+        "value": 0.14,
+        "tint": 0.45
+      },
+      "Blackened pipe": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.4,
+        "edgewear": 0.2,
+        "saturation": 0.1,
+        "value": 0.11,
+        "tint": 0.5
+      },
+      "Blackened void armour": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.3,
+        "edgewear": 0.08,
+        "saturation": 0.15,
+        "value": 0.09,
+        "tint": 0.5
+      },
+      "Void armour plate": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.25,
+        "edgewear": 0.12,
+        "saturation": 0.15,
+        "value": 0.12,
+        "tint": 0.45
+      },
+      "Grey armour frame": {
+        "family": "stone",
+        "scale": 0.6,
+        "grime": 0.3,
+        "edgewear": 0.2,
+        "saturation": 0.1,
+        "value": 0.34,
         "tint": 0.4
+      },
+      "Void brood mass": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.12,
+        "edgewear": 0.0,
+        "saturation": 0.9,
+        "value": 0.6,
+        "tint": 0.35
+      },
+      "Bruised brood fold": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.06,
+        "edgewear": 0.0,
+        "saturation": 0.95,
+        "value": 0.85,
+        "tint": 0.25
+      },
+      "Opaque brood throat": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.2,
+        "edgewear": 0.0,
+        "tint": 0.9
+      },
+      "Dark chitin hook": {
+        "family": "bone",
+        "scale": 0.42,
+        "grime": 0.3,
+        "edgewear": 0.05,
+        "saturation": 0.4,
+        "value": 0.45,
+        "tint": 0.45
+      },
+      "Brood tank glass": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.02,
+        "edgewear": 0.0,
+        "saturation": 1.0,
+        "value": 0.6,
+        "tint": 0.5
       }
-    }
+    },
+    "concept": "pool"
   },
   "orthoScale": 2.25,
   "textures": {

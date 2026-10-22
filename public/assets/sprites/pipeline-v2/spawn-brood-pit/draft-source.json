@@ -4,28 +4,28 @@
   "masters": [
     {
       "state": "sealed",
-      "previewInputHash": "35d42916c540334816cb016ece91e352f3163623dd4bec4055044e56ef10a706",
-      "beauty": "24767c21ab52ce192138cbb06101f5d31ef003a4fb17f863e95eae29e8d603a8",
-      "emission-glow": "c2f7cc0469b7b7fc0380506b3c5744ae5761b84895b323c356c2fbd4fe6476cc"
+      "previewInputHash": "78243b685768ed5bb785328891390101435e7b5cdde1b75cb3001c41743bb640",
+      "beauty": "05dfcaf44f2762b606483dccdd7481eeab2e723b44230b300bfcedd551bb87bb",
+      "emission-glow": "86d26d81b8233321d027792e105b9b1257b91dc0cab1f7b15d8d94faf31b9c0f"
     },
     {
       "state": "active",
-      "previewInputHash": "f4ce46b8debfe8a095b36f8497ea3c79481e52554908ee3068f9e20b9c6b5bbc",
-      "beauty": "a95567a9750dcf6e28cba4b6a67a88b6646aebd7cc59ace8da474e79bf1de07b",
-      "emission-glow": "e813ca6983d341f2df0a43f8a21fc35bb15a09f1a41461e7b24f3b7e011d0bfa"
+      "previewInputHash": "9ef1357acc828af7676005e1c295a1bc09a83d75eab80027d55eaa057c791a6f",
+      "beauty": "6185f7ec1183f1e5463e8b499bfa68dcbb635d3441a983251ea54267c086993d",
+      "emission-glow": "dbb5b913e0934598a19b39c16e9754203e12e1086f88da4043a1493f722d9939"
     },
     {
       "state": "dry",
-      "previewInputHash": "3ef9b7435aadb71895e579121ad44a7bc9fa3b67ab14d7f5cd2eca8aebae3d99",
-      "beauty": "f76ee178503a3e2d536c582043c3bf3b1677d0ed7a23f6fdc628b1c419493997",
-      "emission-glow": "8a1f58befa470f0a01524f6cb5a02af680883a5b1bed0118459d8a232a8f0401"
+      "previewInputHash": "58c82874261fd0631a64c140fcf1b73793da9048c259b4e210708571e0d1800c",
+      "beauty": "120251df11b34bad8a0d0fdcad4a53b946af515c2606f20ef599b7c6660a3117",
+      "emission-glow": "4ef288fce60a3244bba69042efabbfacbc7a66bf4c7c9a1e7d6d7e73db8a3cd1"
     }
   ],
   "runtime": {
     "id": "spawn-brood-pit",
     "category": "construction",
     "gameIds": [],
-    "revision": "draft-a",
+    "revision": "draft-b",
     "variant": "standard",
     "sourceSize": 144,
     "textureKey": "construction_spawn_brood_pit",
@@ -52,8 +52,8 @@
     },
     "clips": [],
     "hashes": {
-      "idle": "861dc5688ad8fe8065d25125a974798bfc5cb6178987caebf00db0db20d92f76",
-      "sheet": "31e72a54937a725753304897c25cdef1b954fa96fcc351f837a7f84579a70913"
+      "idle": "f414eb7d5a2790769f14c388e2c8e99583e8377e4ba3318023680aa881bcf44b",
+      "sheet": "0dbb13c2890b3ee45dd33a1c18c7cab023ff5aa9f182557a8a3470e4634da7c4"
     }
   },
   "textures": {

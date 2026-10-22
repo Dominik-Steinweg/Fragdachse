@@ -18,14 +18,15 @@ const ASSETS = {
   building: {
     id: 'spawn-structure', textureKey: 'construction_spawn_structure', states: ['intact', 'damaged', 'rubble'],
     outlets: ['north', 'east', 'south', 'west'],
-    layers: { veins: ['Void brood vein'], core: ['Void brood heart', 'Spent void residue'] },
+    layers: { rim: ['Void rim seam'], veins: ['Void brood vein'], core: ['Void brood heart', 'Spent void residue'] },
     sockets: { mouth: 'Spawn structure mouth socket', core: 'Brood heart socket' },
-    content: { veins: 'brood veins along both arms toward the pit', core: 'brood heart slit; spent residue in rubble' },
+    content: { rim: 'dashed violet light strips along every edge of the U (hostile base style); none in rubble',
+      veins: 'brood veins along both arms toward the pit', core: 'brood heart slit; spent residue in rubble' },
   },
   pit: {
     id: 'spawn-brood-pit', textureKey: 'construction_spawn_brood_pit', states: ['sealed', 'active', 'dry'], outlets: [null],
-    layers: { glow: ['Brood pit shimmer'] }, sockets: { orifice: 'Brood orifice socket' },
-    content: { glow: 'faint subsurface shimmer between the membrane folds; none when dry' },
+    layers: { glow: ['Brood pool glow'] }, sockets: { orifice: 'Brood orifice socket' },
+    content: { glow: 'faint depth glow in the brood pool; none when sealed or dry' },
   },
 };
 const hash = data => createHash('sha256').update(data).digest('hex');
