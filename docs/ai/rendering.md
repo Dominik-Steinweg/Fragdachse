@@ -323,6 +323,31 @@ Kollaps-Ereignisse, die Portal-Lichter und die Zielansicht aus dem Terrain-Farb-
 - Die Darstellung entscheidet nichts: Übertritt, Gates und Kollaps-Wirkung gehören dem Transport
   (siehe [gameplay.md](gameplay.md)).
 
+## Lobby-Bauwerke
+
+Die vier Menü-Bauwerke der LobbyWorld entstehen je aus einem Blender-Export
+([export-lobby-structures.mjs](../../scripts/asset-pipeline/export-lobby-structures.mjs)): Beauty, Albedo,
+Elevation (Höhe + oktaedrische Normale), Emissionsschichten, Solid-Maske und Sockets im Manifest
+[lobby-structures.json](../../src/assets/manifests/lobby-structures.json). Aus derselben Solid-Maske wird die
+Kontur in [lobbyStructureOutlines.json](../../src/config/authoring/lobbyStructureOutlines.json) abgeleitet
+(`sourceSha256` bindet beide); Kollision, Nebelbarriere, Figurenschatten-Ausschluss und Shift-Annäherung lesen nur
+diese Kontur, nie Texturen zur Laufzeit.
+
+- [LobbyStructureRenderer](../../src/arena/lobbyStructures/LobbyStructureRenderer.ts) stellt den Körper ins
+  Wachturm-Band (`DEPTH.ROCKS + .15`); Decals, Blut und Bodenschatten liegen darunter, Sonnen-Composite, Lightmap
+  und Nebel-Composite darüber.
+- Licht am Material ist ein MULTIPLY-Relief über der Albedo mit derselben `formationResponse` wie die Felsen,
+  Eigenschatten aus der Höhe in Sonnenrichtung und Lampen-/Mondrelief über `surfaceNightResponse`. Sonne, Wolken,
+  Mond und Relieflampen leiht allein `WorldSunlightPresentation` (Ziel `structures`); Low zeigt die Beauty.
+- Der Bodenschatten ist ein Höhenfeld-Raymarch mit Peilung und Profil aus `ShadowSystem.getLongCasterFrame`;
+  er gehört nie in den Chunk-Bake.
+- Emissionsschichten liegen über der Lightmap (ADD, `emissiveAlpha`); `forge` und `cyan` tragen eine Tagesgrundhelligkeit,
+  `lamp` folgt `getArtificialLightFactor`. Socket-Lichter nutzen eigene Presets.
+- Die Solid-Maske ist der Nebel-Dachstempel (`getFogSurfaceStamps`); eine eigene Dunstschicht gibt es nicht.
+- Mitarbeiter sind reine Präsentation ohne Körper und Netzwerk:
+  [LobbyStaffModel](../../src/arena/lobbyStructures/LobbyStaffModel.ts) entscheidet Arbeit, Hinwenden und Gruß,
+  Clip-Marker lösen GPU-Funken über das gemeinsame `GpuVfxSystem` aus.
+
 ## Große World-Flächen
 
 Statische World-Flächen werden über Chunking und Streaming resident gehalten. [ChunkedRenderSurface.ts](../../src/arena/chunks/ChunkedRenderSurface.ts), [GroundSurfaceStreamer.ts](../../src/arena/chunks/GroundSurfaceStreamer.ts) und [RockOverlayStreamer.ts](../../src/arena/chunks/RockOverlayStreamer.ts) begrenzen sichtbare Arbeit, recyceln Ressourcen und veröffentlichen neu gebackene Flächen atomar.
