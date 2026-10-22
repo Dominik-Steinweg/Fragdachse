@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { preloadLobbyMerchantAssets } from './LobbyMerchantAssets';
+import { preloadLobbyStaffAssets } from './LobbyStaffAssets';
 import { preloadLobbyStructureAssets } from '../arena/lobbyStructures/LobbyStructureAssets';
 import { PIPELINE_ASSETS, pipelineAnimationKey, getPipelineSpriteScale, isPipelineBossTexture } from '../config/pipelineAssets';
 
@@ -93,7 +93,7 @@ export function getWalkingSheetForStaticTexture(staticTextureKey: string): Walki
 
 /** Queue walking sheets and the separate idle-only lobby decoration before scene creation. */
 export function preloadBadgerAnimationAssets(loader: Phaser.Loader.LoaderPlugin): void {
-  preloadLobbyMerchantAssets(loader);
+  preloadLobbyStaffAssets(loader);
   preloadLobbyStructureAssets(loader);
   for (const sheet of WALKING_SHEETS) {
     loader.spritesheet(sheet.textureKey, sheet.assetPath, {

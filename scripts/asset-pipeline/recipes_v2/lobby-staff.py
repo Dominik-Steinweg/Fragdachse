@@ -4,7 +4,7 @@ headgear sits on the rear dark bands. Hands keep the player's stable grip and ho
 """
 import math
 from recipes_v2 import badger as player
-from rigs_v2 import attach
+from rigs_v2 import attach, control
 from dawn_parts import surface, plate, beam, bolt, annulus, tube
 from weapon_surface_parts import paint_depth
 
@@ -115,6 +115,10 @@ def build(c, spec):
     body, head, held = ROLES[spec['model']['role']](c, m)
     attach(body, asset['parts']['body'])
     attach(head, asset['parts']['head'])
+    # The held tool turns about its own control at the grip; the hands stay rooted.
+    grip = control(c.scene, 'Held tool grip', location=(0, .72, 1.67), parent=asset['root'])
+    attach(held, grip)
+    asset['parts']['tool'] = grip
     attach([o for o in c.scene.objects if o.type == 'MESH' and o.parent is None], asset['root'])
     for ob in body + head + held: paint_depth(c, ob)
     return asset

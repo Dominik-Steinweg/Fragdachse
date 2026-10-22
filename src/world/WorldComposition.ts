@@ -176,6 +176,8 @@ export interface MaterializeWorldCompositionInput {
   readonly healthBars?: WorldHealthBarRenderer;
   readonly turretAnimations?: TurretAnimationController;
   readonly entityBurnGpu?: import('../effects/EntityBurnGpuController').EntityBurnGpuController;
+  /** Scene GPU particle backend; lobby structures emit embers, smoke and work sparks on it. */
+  readonly gpuVfx?: import('../effects/gpu/GpuVfxSystem').GpuVfxSystem;
 }
 
 export interface MaterializedWorldComposition {
@@ -249,7 +251,7 @@ export function materializeWorldComposition(
     });
   input.runtime.setPresentation(presentation);
   if (presentationRequired && isLobbyWorldDefinitionId(world.descriptor.definitionId) && !presentation.lobbyStructures) {
-    presentation.lobbyStructures = new LobbyStructureRenderer(input.scene, world.metrics);
+    presentation.lobbyStructures = new LobbyStructureRenderer(input.scene, world.metrics, input.gpuVfx ?? null);
   }
   materialization.setArena(arena, (built) => { ArenaBuilder.destroyGameplay(built); });
   arena.groundSurface?.setPersistentBaseGravel(input.persistentBaseGravel);

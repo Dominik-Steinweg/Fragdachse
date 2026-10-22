@@ -1,0 +1,113 @@
+{
+  "id": "lobby-staff-quartermaster",
+  "category": "character",
+  "gameIds": [],
+  "revision": "staff-d1",
+  "variant": "standard",
+  "sourceSize": 38,
+  "textureKey": "lobby_staff_quartermaster",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "displayScale": 1.1875,
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "idle",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "frameRate": 8,
+      "loop": true
+    },
+    {
+      "name": "work",
+      "frames": [
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40
+      ],
+      "frameRate": 10,
+      "loop": true,
+      "markers": {
+        "stamp": 11
+      }
+    },
+    {
+      "name": "greet",
+      "frames": [
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52
+      ],
+      "frameRate": 12,
+      "loop": false
+    }
+  ],
+  "sheetTextureKey": "lobby_staff_quartermaster_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/lobby-staff-quartermaster/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/lobby-staff-quartermaster/sheet.png",
+  "layout": {
+    "frameWidth": 38,
+    "frameHeight": 38,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 7,
+    "frameCount": 53,
+    "width": 336,
+    "height": 294
+  },
+  "hashes": {
+    "idle": "e27706a31ccefd523936480a885fbfa0284f67d11ac2de80e9fbba449cf413f1",
+    "sheet": "21b50b0c718e7aab78ceacefdcb2d27f0bb39cb234491dd6da98968fb1635f1a"
+  }
+}

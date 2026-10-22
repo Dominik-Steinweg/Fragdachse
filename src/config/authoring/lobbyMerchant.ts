@@ -4,7 +4,7 @@
  * Shift opens the merchant from any side of the stall.
  */
 export const LOBBY_MERCHANT = {
-  dealer: { displaySize: 38, textureKey: 'dawn_dealer' },
+  dealer: { displaySize: 38 },
   /** Distance to the nearest wall of a structure, in cells. */
   nameplate: { fullVisibilityCells: 4, hiddenAtCells: 9 },
 } as const;

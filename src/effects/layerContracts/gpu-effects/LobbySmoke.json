@@ -1,0 +1,24 @@
+{
+  "name": "LobbySmoke",
+  "contract": {
+    "id": "gpu:LobbySmoke",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "LobbySmoke",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      18.1
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect",
+    "lanes": [
+      "TrainSmoke"
+    ]
+  }
+}

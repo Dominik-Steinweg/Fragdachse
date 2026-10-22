@@ -22,7 +22,9 @@
     "animation": "Idle, work loop and greet clips; presentation only, no runtime collision."
   },
   "requiredClips": [
-    "idle"
+    "idle",
+    "work",
+    "greet"
   ],
   "production": "reference",
   "recipe": "lobby-staff",
@@ -110,6 +112,23 @@
         "chestLift": 0.014,
         "headFollow": 0.018
       }
+    },
+    {
+      "name": "work",
+      "motion": "staff_work_weigh",
+      "frameCount": 16,
+      "frameRate": 10,
+      "loop": true,
+      "markers": {
+        "tap": 9
+      }
+    },
+    {
+      "name": "greet",
+      "motion": "staff_greet",
+      "frameCount": 12,
+      "frameRate": 12,
+      "loop": false
     }
   ]
 }

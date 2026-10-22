@@ -2,7 +2,10 @@ import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH, DEPTH_LIGHTING } from '../../config';
 import { LOBBY_BUILDINGS, lobbyBuildingWorldRects, type LobbyMenu } from '../../config/authoring/lobbyBuildings';
 import { LOBBY_MERCHANT } from '../../config/authoring/lobbyMerchant';
-import { LOBBY_DEALER_ASSET, registerLobbyDealerIdle } from '../../animations/LobbyMerchantAssets';
+import { lobbyStaffAsset, lobbyStaffWorkMarkers, registerLobbyStaffClips } from '../../animations/LobbyStaffAssets';
+import type { GpuVfxSystem } from '../../effects/gpu/GpuVfxSystem';
+import { createLobbyStaffState, stepLobbyStaff, type LobbyStaffClip, type LobbyStaffState } from './LobbyStaffModel';
+import { LobbyStructureFx, type LobbyStructureBurst, type LobbyStructureEmitter } from './LobbyStructureFx';
 import type { WorldMetrics } from '../../world/WorldMetrics';
 import { t } from '../../i18n';
 import { WorldPlaque } from '../../ui/WorldPlaque';
@@ -20,7 +23,7 @@ import { nearestStructurePoint, structureBounds, type StructureRect } from '../S
 import { lobbyStructureAsset, lobbyStructureTextureKey, type LobbyStructureAsset, type LobbyStructureLayer } from './LobbyStructureAssets';
 import { LOBBY_STRUCTURE_RELIEF_FRAGMENT, LOBBY_STRUCTURE_SHADOW_FRAGMENT } from './lobbyStructureShaders';
 
-type LobbyLighting = Pick<LightingSystem, 'setLight' | 'releaseLight' | 'getArtificialLightFactor'>;
+type LobbyLighting = Pick<LightingSystem, 'setLight' | 'releaseLight' | 'getArtificialLightFactor'> & Partial<Pick<LightingSystem, 'pulse'>>;
 type LobbyShadows = Pick<ShadowSystem, 'getLongCasterFrame'>;
 
 /** Sun, clouds, moon relief and relief lamps lent by the World's sole sunlight owner. */
@@ -32,8 +35,10 @@ export interface LobbyStructureSunlight {
   readonly surfaceLights: SurfaceLightSource;
 }
 
-/** Gap between an outline's lower edge and its name plaque when no plaque socket exists. */
+/** Gap between an outline edge and its name plaque. */
 const NAMEPLATE_GAP_PX = 12;
+/** Half the plaque height: a plaque above the outline is placed by its centre, below by its top. */
+const NAMEPLATE_HALF_HEIGHT_PX = 8;
 /** Structure bodies stand in the watchtower band: decals, blood and ground shadows stay below. */
 export const LOBBY_STRUCTURE_DEPTH = DEPTH.ROCKS + 0.15;
 const RELIEF_DEPTH = LOBBY_STRUCTURE_DEPTH + 0.01;
@@ -44,6 +49,23 @@ const LAYER_LOOK: Record<LobbyStructureLayer, { day: number; night: number; flic
   lamp: { day: 0, night: 1, flicker: .05, hz: 1.3 },
   cyan: { day: .45, night: 1, flicker: .03, hz: .6 },
 };
+/** Ambient particle sources by socket name prefix. */
+const SOCKET_EMITTERS: readonly { prefix: string; kind: LobbyStructureEmitter['kind']; intervalMs: number }[] = [
+  { prefix: 'forge', kind: 'ember', intervalMs: 170 },
+  { prefix: 'chimney', kind: 'smoke', intervalMs: 420 },
+  { prefix: 'exhaust', kind: 'smoke', intervalMs: 900 },
+];
+/** Work markers that throw sparks or a glint: which marker, which burst and where. */
+const STAFF_BURSTS: Partial<Record<LobbyMenu, { marker: string; burst: LobbyStructureBurst; socket?: string }>> = {
+  upgrades: { marker: 'strike', burst: 'anvil', socket: 'spark_anvil' },
+  merchant: { marker: 'tap', burst: 'grind' },
+  items: { marker: 'stamp', burst: 'stamp' },
+};
+/** Tool reach in front of a staff member, for bursts without a socket. */
+const STAFF_REACH_PX = 14;
+/** Staff sheets share the player's 32 px reference size. */
+const STAFF_BASE_SIZE = 32;
+
 const SOCKET_LIGHTS: readonly { prefix: string; preset: LightPresetKey; layer: LobbyStructureLayer }[] = [
   { prefix: 'forge', preset: 'lobbyForgeGlow', layer: 'forge' },
   { prefix: 'lamp', preset: 'lobbyLampGlow', layer: 'lamp' },
@@ -80,6 +102,21 @@ interface StructureView {
   readonly lights: { key: string; preset: LightPresetKey; layer: LobbyStructureLayer; x: number; y: number; phase: number }[];
   readonly label: WorldPlaque;
   readonly stamp: FogSurfaceStamp;
+  readonly staff: StaffView | null;
+}
+
+interface StaffView {
+  readonly sprite: Phaser.GameObjects.Sprite;
+  readonly clips: Partial<Record<LobbyStaffClip, string>>;
+  readonly x: number;
+  readonly y: number;
+  readonly workHeading: number;
+  readonly greetDurationMs: number;
+  readonly state: LobbyStaffState;
+  /** 1-based animation frame index of the work marker, -1 without a burst. */
+  readonly markerFrame: number;
+  readonly burst: { kind: LobbyStructureBurst; x: number; y: number } | null;
+  lastFrame: number;
 }
 
 /**
@@ -92,7 +129,8 @@ export class LobbyStructureRenderer {
   private readonly views: StructureView[] = [];
   private readonly stamps: FogSurfaceStamp[] = [];
   private lighting: LobbyLighting | null = null;
-  private dealer: Phaser.GameObjects.Sprite | null = null;
+  private readonly fx: LobbyStructureFx | null = null;
+  private lastUpdate = -1;
   private sunlight: LobbyStructureSunlight | null = null;
   private readonly castFrame: LongCasterFrame = { x: 0, y: 1, lengthMult: 1, softnessMult: 1, opacityMult: 1, visible: true };
   private readonly surfaceLights = createSurfaceLightFrame();
@@ -103,8 +141,9 @@ export class LobbyStructureRenderer {
   private readonly optionsUniform = new Float32Array([0, 0, 1, 1]);
   private readonly shadeUniform = new Float32Array(2);
 
-  constructor(private readonly scene: Phaser.Scene, metrics: WorldMetrics) {
+  constructor(private readonly scene: Phaser.Scene, metrics: WorldMetrics, gpuVfx: GpuVfxSystem | null = null) {
     const lit = getGraphicsQualityProfile(scene).level !== 'low';
+    const emitters: LobbyStructureEmitter[] = [];
     LOBBY_BUILDINGS.forEach((building, index) => {
       const asset = lobbyStructureAsset(building.id);
       if (!asset || !scene.textures.exists(lobbyStructureTextureKey(asset, 'beauty'))) return;
@@ -126,30 +165,69 @@ export class LobbyStructureRenderer {
           x: originX + socket.x, y: originY + socket.y, phase: lights.length * .43 + index * .19 });
       }
       const bounds = structureBounds(rects);
+      // The plaque hangs outside the outline on the working front, never over the building.
       const plaque = asset.sockets.plaque;
+      const above = !!plaque && originY + plaque.y < (bounds.top + bounds.bottom) / 2;
       const label = new WorldPlaque(scene).setText(t(building.nameKey)).setPosition(
         plaque ? originX + plaque.x : (bounds.left + bounds.right) / 2,
-        plaque ? originY + plaque.y + NAMEPLATE_GAP_PX : bounds.bottom + NAMEPLATE_GAP_PX);
+        above ? bounds.top - NAMEPLATE_GAP_PX - NAMEPLATE_HALF_HEIGHT_PX : bounds.bottom + NAMEPLATE_GAP_PX);
       const stamp: FogSurfaceStamp = { active: true, visible: true, alpha: 1, x: left, y: top,
         displayWidth: size, displayHeight: size, scaleX: size / asset.sourceSize, scaleY: size / asset.sourceSize,
         originX: 0, originY: 0, rotation: 0, texture: { key: lobbyStructureTextureKey(asset, 'solid') }, frame: { name: '__BASE' } };
-      this.views.push({ menu: building.menu, asset, rects, originX, originY, body, relief, shadow, emission, lights, label, stamp });
+      for (const [name, socket] of Object.entries(asset.sockets)) {
+        const rule = SOCKET_EMITTERS.find(candidate => name.startsWith(candidate.prefix));
+        if (rule) emitters.push({ kind: rule.kind, x: originX + socket.x, y: originY + socket.y, intervalMs: rule.intervalMs });
+      }
+      const staff = this.makeStaff(building.menu, asset, originX, originY);
+      this.views.push({ menu: building.menu, asset, rects, originX, originY, body, relief, shadow, emission, lights, label, stamp, staff });
       this.stamps.push(stamp);
-      if (building.menu === 'merchant') this.placeDealer(asset, originX, originY);
     });
+    if (gpuVfx && this.views.length > 0) this.fx = new LobbyStructureFx(gpuVfx, emitters);
   }
 
-  /** The dealer keeps its idle sheet until the staff presentation replaces it. */
-  private placeDealer(asset: LobbyStructureAsset, originX: number, originY: number): void {
-    const staff = asset.sockets.staff, facing = asset.sockets.staff_facing;
-    if (!staff || !this.scene.textures.exists(LOBBY_DEALER_ASSET.sheetTextureKey)) return;
-    const idle = registerLobbyDealerIdle(this.scene.anims);
-    const x = originX + staff.x, y = originY + staff.y;
-    const angle = facing ? Math.atan2(facing.y - staff.y, facing.x - staff.x) : Math.PI / 2;
-    this.dealer = this.scene.add.sprite(x, y, LOBBY_DEALER_ASSET.sheetTextureKey)
-      .setOrigin(0.5).setDisplaySize(LOBBY_MERCHANT.dealer.displaySize, LOBBY_MERCHANT.dealer.displaySize)
-      .setRotation(angle + Math.PI / 2).setDepth(DEPTH.PLAYERS);
-    if (idle) this.dealer.play(idle);
+  /** Staff stand at their structure's `staff` socket facing the station; presentation only. */
+  private makeStaff(menu: LobbyMenu, asset: LobbyStructureAsset, originX: number, originY: number): StaffView | null {
+    const sheet = lobbyStaffAsset(menu), socket = asset.sockets.staff, facing = asset.sockets.staff_facing;
+    if (!sheet || !socket || !this.scene.textures.exists(sheet.sheetTextureKey)) return null;
+    const clips = registerLobbyStaffClips(this.scene.anims, sheet);
+    const x = originX + socket.x, y = originY + socket.y;
+    const workHeading = facing ? Math.atan2(facing.y - socket.y, facing.x - socket.x) : Math.PI / 2;
+    const size = STAFF_BASE_SIZE * (sheet.displayScale ?? 1);
+    const sprite = this.scene.add.sprite(x, y, sheet.sheetTextureKey).setOrigin(0.5).setDisplaySize(size, size)
+      .setRotation(workHeading + Math.PI / 2).setDepth(DEPTH.PLAYERS);
+    const greet = sheet.clips.find(clip => clip.name === 'greet');
+    const rule = STAFF_BURSTS[menu], marker = rule ? lobbyStaffWorkMarkers(sheet)[rule.marker] : undefined;
+    const at = rule?.socket ? asset.sockets[rule.socket] : undefined;
+    const burst = rule && marker !== undefined ? { kind: rule.burst,
+      x: at ? originX + at.x : x + Math.cos(workHeading) * STAFF_REACH_PX,
+      y: at ? originY + at.y : y + Math.sin(workHeading) * STAFF_REACH_PX } : null;
+    const view: StaffView = { sprite, clips, x, y, workHeading, state: createLobbyStaffState(workHeading),
+      greetDurationMs: greet ? greet.frames.length / greet.frameRate * 1000 : 0,
+      markerFrame: marker !== undefined ? marker + 1 : -1, burst, lastFrame: -1 };
+    if (clips.work) sprite.play(clips.work);
+    return view;
+  }
+
+  /** Behaviour step, clip switch and work-marker bursts of one staff member. */
+  private updateStaff(view: StructureView, staff: StaffView, player: { x: number; y: number } | null,
+    focusedMenu: LobbyMenu | null, now: number, deltaMs: number): void {
+    const previous = staff.state.clip;
+    stepLobbyStaff(staff.state, { now, deltaMs, x: staff.x, y: staff.y, workHeading: staff.workHeading, player,
+      focused: focusedMenu === view.menu, greetDurationMs: staff.greetDurationMs });
+    staff.sprite.setRotation(staff.state.heading + Math.PI / 2);
+    const clip = staff.state.clip;
+    if (clip !== previous) {
+      const key = staff.clips[clip] ?? staff.clips.idle;
+      if (key) staff.sprite.play(key);
+      staff.lastFrame = -1;
+    }
+    if (clip !== 'work' || !staff.burst || !this.fx) return;
+    const frame = staff.sprite.anims.currentFrame?.index ?? -1;
+    if (frame === staff.markerFrame && staff.lastFrame !== frame) {
+      this.fx.burst(staff.burst.kind, staff.burst.x, staff.burst.y);
+      if (staff.burst.kind === 'anvil') this.lighting?.pulse?.('lobbyForgeGlow', staff.burst.x, staff.burst.y, { durationMs: 180, intensity: .7, radiusPx: 90 });
+    }
+    staff.lastFrame = frame;
   }
 
   private makeRelief(asset: LobbyStructureAsset, left: number, top: number): Phaser.GameObjects.Shader {
@@ -206,7 +284,11 @@ export class LobbyStructureRenderer {
 
   update(localPlayer: { x: number; y: number } | null, activeMenu: LobbyMenu | null = null,
     lighting: LobbyLighting | null = null, shadows: LobbyShadows | null = null): void {
-    const seconds = this.scene.time.now / 1000;
+    const now = this.scene.time.now, seconds = now / 1000;
+    const deltaMs = this.lastUpdate < 0 ? 0 : Math.min(100, now - this.lastUpdate);
+    this.lastUpdate = now;
+    this.fx?.setActive(lighting !== null);
+    for (const view of this.views) if (view.staff) this.updateStaff(view, view.staff, localPlayer, activeMenu, now, deltaMs);
     // Names fade with the distance to the nearest wall, the same measure Shift uses.
     for (const { menu, rects, label } of this.views) label.setAlpha(localPlayer && activeMenu !== menu
       ? resolveLobbyStructureNameplateAlpha(nearestStructurePoint(rects, localPlayer.x, localPlayer.y).distance / CELL_SIZE) : 0);
@@ -255,8 +337,9 @@ export class LobbyStructureRenderer {
       view.body.destroy(); view.label.destroy();
       this.destroyQuad(view.relief); this.destroyQuad(view.shadow);
       for (const { image } of view.emission) image.destroy();
+      view.staff?.sprite.destroy();
     }
     this.views.length = 0; this.stamps.length = 0;
-    this.dealer?.destroy(); this.dealer = null;
+    this.fx?.destroy();
   }
 }

@@ -3009,6 +3009,7 @@ export class ArenaLifecycleCoordinator {
     const sunlightEnemies=()=>this.getWorldEnemyManager();
     const builtWorld = materializeWorldComposition({
       entityBurnGpu: this.renderers.entityBurnGpu,
+      gpuVfx: this.renderers.gpuVfx,
       turretAnimations: this.renderers.turretAnimations,
       scene: this.scene,
       runtime: worldRuntime,
