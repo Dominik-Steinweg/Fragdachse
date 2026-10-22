@@ -79,6 +79,8 @@ import { TRAIN } from '../train/TrainConfig';
 import { TrainLightOccluderSource, type TrainSegmentRect } from '../train/TrainLightOccluderSource';
 import type { TrainRenderer } from '../train/TrainRenderer';
 import type { WorldMetrics } from './WorldMetrics';
+import type { FogSurfaceStamp } from '../effects/groundFog/FogSurfaceMask';
+import type { StructureRect } from '../arena/StructureOutline';
 import type { WorldPersistentBaseSite } from './WorldRuntimeContext';
 import {
   toPersistentBaseGravelZone,
@@ -195,7 +197,7 @@ export interface WildlifeEnemySource {
 }
 
 export interface WorldPresentationFrameBindingInput {
-  readonly getLobbyMerchant?: () => Pick<import('../arena/LobbyMerchantRenderer').LobbyMerchantRenderer, 'update'> | null;
+  readonly getLobbyStructures?: () => Pick<import('../arena/lobbyStructures/LobbyStructureRenderer').LobbyStructureRenderer, 'update'> | null;
   readonly getLobbyInteractionMenu?: () => import('../config/authoring/lobbyBuildings').LobbyMenu | null;
   readonly enemyEyes?: import('../effects/EnemyEyeGlowRenderer').EnemyEyeGlowRenderer;
   readonly groundFog?: {
@@ -281,8 +283,10 @@ export interface WorldPresentationFrameBindingInput {
   readonly syncBaseLights: (inArena: boolean) => void;
   /** Base shadow casters: cell images plus the spawn structures' wall cells. */
   readonly getBaseShadowCells: () => Iterable<{ readonly x: number; readonly y: number; readonly active: boolean; readonly visible: boolean }>;
-  /** Base silhouettes for the ground fog's surface mask. */
-  readonly getBaseFogSurfaces: () => Iterable<Phaser.GameObjects.Image>;
+  /** Geometry above the walkable ground on which the fog is cut; shadows keep `getBaseShadowCells`. */
+  readonly getFogSurfaceStamps: () => Iterable<FogSurfaceStamp>;
+  /** World-pixel outline rects of live structures; figure shadows are not received on their roofs. */
+  readonly getStructureRects: () => readonly StructureRect[];
   readonly getSynchronizedNow: () => number;
 }
 
@@ -794,7 +798,7 @@ export class WorldPresentationFrameBinding {
     if (fog) {
       const quality = getGraphicsQualityController(this.input.scene);
       fog.enabled = quality?.getGroundFogEnabled() ?? true; fog.quality = quality?.getLevel() ?? 'high';
-      fog.setSurfaceImages([...this.input.getBaseFogSurfaces()]);
+      fog.setSurfaceStamps([...this.input.getFogSurfaceStamps()]);
       fog.setRockCoverage(this.input.getArenaResult()?.rockVisualSystem?.getFormationCoverage ?? null);
       this.input.getArenaResult()?.rockVisualSystem?.flush();
       fog.prepare(this.input.lighting.getTimeOfDayMinutes(), getVisibleWorldView(this.input.scene.cameras.main));
@@ -879,7 +883,7 @@ export class WorldPresentationFrameBinding {
     const trainRenderer = showWorld ? this.input.getTrainVisual() : null;
     const train = trainRenderer?.getShadowState() ?? null;
     fog.captureTrain(deltaMs, train, train && trainRenderer ? trainRenderer.computeSegYs(train.y, train.dir) : []);
-    fog.setSurfaceImages([...this.input.getBaseFogSurfaces()]);
+    fog.setSurfaceStamps([...this.input.getFogSurfaceStamps()]);
     fog.setRockCoverage(this.input.getArenaResult()?.rockVisualSystem?.getFormationCoverage ?? null);
     // Publish dirty geometry/GPU repair before the fog samples the borrowed field.
     this.input.getArenaResult()?.rockVisualSystem?.flush();
@@ -1091,8 +1095,8 @@ export class WorldPresentationFrameBinding {
     this.input.setLocalPlayerStatusRingActive(localPlayerVisuals && !spectator);
     this.input.setLocalPlayerWorldBarsVisible(!showWorld);
     const player = showWorld && localPlayerVisuals && !spectator ? this.input.getLocalPlayerSprite() : null;
-    this.input.getLobbyMerchant?.()?.update(player?.active ? player : null,
-      this.input.getLobbyInteractionMenu?.() ?? null, showWorld ? this.input.lighting : null);
+    this.input.getLobbyStructures?.()?.update(player?.active ? player : null,
+      this.input.getLobbyInteractionMenu?.() ?? null, showWorld ? this.input.lighting : null, this.input.shadow);
   }
 
   /** World-lokale Gravel-/Baustellenprojektion der persistenten Basis. */
@@ -1137,6 +1141,7 @@ export class WorldPresentationFrameBinding {
     }
 
     this.input.shadow.syncBaseShadows(this.input.getBaseShadowCells());
+    this.input.shadow.syncStructureReceiverRects(this.input.getStructureRects());
     this.input.shadow.syncReactivePropShadows(this.reactivePropShadowCells());
     this.input.shadow.syncStaticProfile(
       this.input.getSynchronizedNow(),
@@ -1237,7 +1242,7 @@ export class WorldPresentationFrameBinding {
       this.activityFogBaseline.fog.strength = this.activityFogBaseline.strength;
       this.activityFogBaseline = null;
     }
-    this.input.getLobbyMerchant?.()?.update(null);
+    this.input.getLobbyStructures?.()?.update(null);
     this.releaseFireControlCopyShots?.(); this.releaseFireControlCopyShots = null;
     this.fireControl?.destroy(); this.fireControl = null;
     this.fireControlPorts = null;

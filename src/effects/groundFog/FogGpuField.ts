@@ -18,7 +18,7 @@ import type { FogAirBinding } from './FogAirBinding';
 import { SUN_TUNING_DEFAULTS } from '../sunlight/SunTuning';
 import { setCloudUniforms } from '../sunlight/cloudShadow';
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
-import { FOG_SURFACE_FRAGMENT, fogSurfaceSize } from './FogSurfaceMask';
+import { FOG_SURFACE_FRAGMENT, fogSurfaceSize, type FogSurfaceStamp } from './FogSurfaceMask';
 import { resolveFogRockLighting } from './FogRockLighting';
 import { runWithScopedBlend } from '../../graphics/PhaserScopedBlend';
 
@@ -471,7 +471,7 @@ export class FogGpuField {
     renderer.glWrapper.update({blend:{enabled:true}});
   }
   render(view: FogRect, pixelWidth: number, pixelHeight: number, debug: FogDebug, interpolation: number,
-    surfaces: readonly Phaser.GameObjects.Image[] = [], quality: FogQuality = 'high',
+    surfaces: readonly FogSurfaceStamp[] = [], quality: FogQuality = 'high',
     trailWidth = pixelWidth, trailHeight = pixelHeight): void {
     if (!this.initialized || this.residency.overflow || this.destroyed) { this.hide(); return; }
     this.view = view; this.debug = debug; this.interpolation = interpolation; this.quality = quality;

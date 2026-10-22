@@ -117,6 +117,9 @@ export const GpuVfxEffectId = {
   RestHealMote: 103,
   RestHealSpark: 104,
   VoidPortal: 105,
+  LobbySpark: 106,
+  LobbyEmber: 107,
+  LobbySmoke: 108,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -750,6 +753,13 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.DeathGlow, importance: 'standard', release: 'linger' },
   { id: GpuVfxEffectId.VoidPortal, label: 'void.portal', lane: GpuVfxLaneId.ExplosionAccent,
     frame: GpuVfxFrameId.ExplosionSpark, importance: 'standard', release: 'kill-with-source' },
+  // Lobby structures: work sparks and forge embers above the light map, chimney smoke in the lit smoke band.
+  { id: GpuVfxEffectId.LobbySpark, label: 'lobby.spark', lane: GpuVfxLaneId.PowerUpPedestal,
+    frame: GpuVfxFrameId.ExplosionSpark, importance: 'decorative', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.LobbyEmber, label: 'lobby.ember', lane: GpuVfxLaneId.PowerUpPedestal,
+    frame: GpuVfxFrameId.DeathGlow, importance: 'decorative', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.LobbySmoke, label: 'lobby.smoke', lane: GpuVfxLaneId.TrainSmoke,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'decorative', release: 'kill-with-source' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

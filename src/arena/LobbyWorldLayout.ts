@@ -18,7 +18,13 @@ import {
 import type { DecalPlacement } from './DecalConfig';
 import { createOrganicDirtMargin } from './OrganicDirtMargin';
 import { CANOPY_ASSETS } from './trees/CanopyAssets';
-import { LOBBY_BUILDINGS, LOBBY_BUILDING_CLEAR_AREAS } from '../config/authoring/lobbyBuildings';
+import {
+  LOBBY_BUILDINGS,
+  LOBBY_BUILDING_CLEAR_AREAS,
+  lobbyBuildingOutline,
+  lobbyBuildingWorldRects,
+} from '../config/authoring/lobbyBuildings';
+import { nearestStructurePoint, structureOccupancyCells } from './StructureOutline';
 import { SHOOTING_RANGE } from '../shootingRange/ShootingRangeLayout';
 
 /**
@@ -64,6 +70,8 @@ const LOBBY_WORLD_SEED = 20260524;
 
 const GRID_COLS = LOBBY_WORLD_WIDTH_CELLS;
 const GRID_ROWS = LOBBY_WORLD_HEIGHT_CELLS;
+/** Grid-local pixel frame for authoring-time distance checks. */
+const GRID_FRAME = { offsetX: 0, offsetY: 0 } as const;
 
 const TITLE_TEXT = 'FRAGDACHSE';
 const TITLE_GAP = 1;
@@ -462,7 +470,6 @@ const ambientRockCutouts = new Set(points<RockCell>([
   [4, 14], [6, 14], [7, 14], [8, 14], [5, 15],
   [55, 10], [52, 11], [53, 11],
   [49, 12], [49, 13], [49, 14], [56, 13],
-  [57, 20], [58, 20], [57, 21], [58, 21],
   [21, 30], [22, 31], [41, 30],
 ]).map(cell => cellKey(cell.gridX, cell.gridY)));
 
@@ -481,6 +488,7 @@ const lobbyWater: WaterCell[] = [
     '###########',
     '###########',
   ]),
+  // Its southern tip ends above row 25, leaving a walkable ring north of the south-east structures.
   ...waterPatch(45, 15, [
     '...#####....',
     '..########..',
@@ -489,9 +497,7 @@ const lobbyWater: WaterCell[] = [
     '############',
     '############',
     '.###########',
-    '..##########',
     '..#########.',
-    '.##########.',
     '..########..',
     '....#####...',
   ]),
@@ -536,13 +542,52 @@ const dirtQuietZones: readonly GridRect[] = [BASE_CLEAR_ZONE];
 const lobbyRocks: RockCell[] = mergeUnique<RockCell>(titleRocks, ambientRocks);
 
 const lobbyTrees: TreeCell[] = excludeRectCells(
-  points<TreeCell>([[1, 4], [12, 18], [1, 23], [15, 31], [57, 4], [44, 13], [44, 27], [59, 24], [51, 31]]),
+  points<TreeCell>([[1, 4], [12, 18], [1, 23], [15, 31], [58, 1], [58, 16], [27, 31]]),
   [BASE_CLEAR_ZONE, titleTreeClearZone, SHOOTING_RANGE.clearArea, ...LOBBY_BUILDING_CLEAR_AREAS],
 ).filter(tree => LOBBY_BUILDINGS.every(building => {
-  const dx = Math.max(0, Math.abs(tree.gridX - (building.gridX + 1.5)) * CELL_SIZE - 64);
-  const dy = Math.max(0, Math.abs(tree.gridY - (building.gridY + 1)) * CELL_SIZE - 64);
-  return Math.hypot(dx, dy) > CANOPY_RADIUS * Math.max(...CANOPY_ASSETS.map(asset => asset.displayScale));
+  // Even a fully opaque crown stays off the outline; grid-local pixels suffice for the distance.
+  const crownX = (tree.gridX + .5) * CELL_SIZE, crownY = (tree.gridY + .5) * CELL_SIZE;
+  return nearestStructurePoint(lobbyBuildingWorldRects(GRID_FRAME, building), crownX, crownY).distance
+    > CANOPY_RADIUS * Math.max(...CANOPY_ASSETS.map(asset => asset.displayScale));
 }));
+
+/**
+ * Trodden paths from the spawn plaza to the front of each structure: waypoint polylines of one
+ * to two cells width that wander a little. Ground detail only; they never block.
+ */
+const LOBBY_TRAILS: readonly (readonly (readonly [number, number])[])[] = [
+  [[31, 15], [37, 12], [43, 10]],
+  [[31, 15], [38, 13], [46, 13], [52, 13], [55, 12]],
+  [[31, 17], [38, 21], [43, 25], [48, 26], [55, 26]],
+  [[31, 17], [37, 23], [43, 28]],
+];
+
+function trailCells(waypoints: readonly (readonly [number, number])[], seed: number): DirtCell[] {
+  const rng = createLobbyRng(seed);
+  const cells: DirtCell[] = [];
+  for (let i = 1; i < waypoints.length; i++) {
+    const [fromX, fromY] = waypoints[i - 1], [toX, toY] = waypoints[i];
+    const steps = Math.max(Math.abs(toX - fromX), Math.abs(toY - fromY));
+    const sideX = Math.abs(toY - fromY) > Math.abs(toX - fromX) ? 1 : 0;
+    for (let step = 0; step <= steps; step++) {
+      const gridX = Math.round(fromX + (toX - fromX) * step / steps);
+      const gridY = Math.round(fromY + (toY - fromY) * step / steps);
+      cells.push({ gridX, gridY });
+      // The trail widens to two cells on one side or the other, never into a straight band.
+      const roll = rng();
+      if (roll < .55) {
+        const side = roll < .3 ? -1 : 1;
+        cells.push({ gridX: gridX + side * sideX, gridY: gridY + side * (1 - sideX) });
+      }
+    }
+  }
+  return cells.filter(cell => cell.gridX >= 0 && cell.gridY >= 0 && cell.gridX < GRID_COLS && cell.gridY < GRID_ROWS);
+}
+
+const lobbyBuildingCellKeys = new Set(LOBBY_BUILDINGS.flatMap(building => structureOccupancyCells(lobbyBuildingOutline(building).rects)
+  .map(cell => cellKey(building.gridX + cell.gridX, building.gridY + cell.gridY))));
+const lobbyTrails: DirtCell[] = LOBBY_TRAILS.flatMap((trail, index) => trailCells(trail, LOBBY_WORLD_SEED + 307 + index * 31))
+  .filter(cell => !lobbyBuildingCellKeys.has(cellKey(cell.gridX, cell.gridY)));
 
 const lobbyDirt: DirtCell[] = excludeWater(mergeUnique<DirtCell>(
   excludeRectCells(
@@ -560,6 +605,8 @@ const lobbyDirt: DirtCell[] = excludeWater(mergeUnique<DirtCell>(
     maxRows: GRID_ROWS,
     rng: createLobbyRng(LOBBY_WORLD_SEED + 223),
   }),
+  // Trodden paths cross the base reserve as ground detail.
+  lobbyTrails,
 ));
 
 const lobbyDecals: DecalCell[] = excludeWater(generateLobbyDecals(

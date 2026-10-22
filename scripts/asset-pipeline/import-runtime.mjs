@@ -40,6 +40,10 @@ export const REACTIVE_PROP_TEXTURE_KEYS = Object.freeze({
   'reactive-bee-hive': 'reactive_prop_bee_hive_straw',
 });
 
+// Lobby staff: decorative idle/work/greet sheets bound by menu in src/animations/LobbyStaffAssets.ts.
+export const LOBBY_STAFF_TEXTURE_KEYS = Object.freeze(Object.fromEntries(
+  ['smith', 'foreman', 'quartermaster', 'dealer'].map(role => [`lobby-staff-${role}`, `lobby_staff_${role}`])));
+
 // Dawn's fleeing scavenger uses enemy naming and eye anchors, but has no attack.
 export const DAWN_ENEMY_TEXTURE_KEYS = Object.freeze({ enemy_dawn_scavenger: 'enemy_dawn_scavenger' });
 
@@ -96,7 +100,7 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
       copies.push({ file, destination: `public/${folder}/${name}` });
       hashes[field] = hash;
     }
-    const textureKey = REACTIVE_PROP_TEXTURE_KEYS[entry.id] ?? DAWN_ENEMY_TEXTURE_KEYS[entry.id] ?? DAWN_TEXTURE_KEYS[entry.id] ?? (isBossRuntime(entry) ? (entry.textureKey ?? BOSS_TEXTURE_KEYS[entry.id])
+    const textureKey = REACTIVE_PROP_TEXTURE_KEYS[entry.id] ?? DAWN_ENEMY_TEXTURE_KEYS[entry.id] ?? DAWN_TEXTURE_KEYS[entry.id] ?? LOBBY_STAFF_TEXTURE_KEYS[entry.id] ?? (isBossRuntime(entry) ? (entry.textureKey ?? BOSS_TEXTURE_KEYS[entry.id])
       : entry.category === 'boss-part' ? entry.id.replaceAll('-', '_')
       : entry.category === 'construction' ? `construction_${entry.gameIds[0]}`
       : entry.category === 'companion' ? entry.id.replaceAll('-', '_')
@@ -116,7 +120,7 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
       clips: selected.clips.map(({ name, frames, frameRate, loop, markers, start, end, next }) => ({ name, frames, frameRate, loop,
         ...(markers ? { markers } : {}), ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}), ...(next !== undefined ? { next } : {}) })),
       ...(!isBossRuntime(entry) ? {
-        sheetTextureKey: `${textureKey}_${DAWN_TEXTURE_KEYS[entry.id] || REACTIVE_PROP_TEXTURE_KEYS[entry.id] ? 'sheet' : ['weapon', 'utility'].includes(entry.category) ? 'static' : entry.category === 'turret' ? 'animated' : 'walking'}`,
+        sheetTextureKey: `${textureKey}_${DAWN_TEXTURE_KEYS[entry.id] || REACTIVE_PROP_TEXTURE_KEYS[entry.id] || LOBBY_STAFF_TEXTURE_KEYS[entry.id] ? 'sheet' : ['weapon', 'utility'].includes(entry.category) ? 'static' : entry.category === 'turret' ? 'animated' : 'walking'}`,
         idlePath: `./${folder}/idle.png`, sheetPath: `./${folder}/sheet.png`, layout: selected.layout, hashes,
       } : {}),
     };

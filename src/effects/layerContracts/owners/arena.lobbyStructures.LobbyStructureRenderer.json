@@ -1,0 +1,163 @@
+{
+  "owner": "arena/lobbyStructures/LobbyStructureRenderer.ts",
+  "notes": [
+    "Lobby structure bodies, their relief multiply and the dealer stand in the watchtower band; the height-field ground shadow uses the long-caster band; emissive layers sit just above the light map."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.MULTIPLY"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/body/setDepth/0",
+        "expression": "LOBBY_STRUCTURE_DEPTH",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/emission/setDepth/0",
+        "expression": "EMISSION_DEPTH",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "makeStaff/sprite/setDepth/0",
+        "expression": "DEPTH.PLAYERS",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "makeRelief/this.scene.add/setDepth/0",
+        "expression": "RELIEF_DEPTH",
+        "blends": [
+          "MULTIPLY"
+        ]
+      },
+      {
+        "key": "makeShadow/this.scene.add/setDepth/0",
+        "expression": "STRUCTURE_SHADOW.layerDepth",
+        "blends": [
+          "MULTIPLY"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:arena/lobbyStructures/LobbyStructureRenderer.ts:module/body/setDepth/0",
+      "owner": "arena/lobbyStructures/LobbyStructureRenderer.ts",
+      "component": "module/body/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/body/setDepth/0",
+        "expression": "LOBBY_STRUCTURE_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:arena/lobbyStructures/LobbyStructureRenderer.ts:module/emission/setDepth/0",
+      "owner": "arena/lobbyStructures/LobbyStructureRenderer.ts",
+      "component": "module/emission/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/emission/setDepth/0",
+        "expression": "EMISSION_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:arena/lobbyStructures/LobbyStructureRenderer.ts:makeStaff/sprite/setDepth/0",
+      "owner": "arena/lobbyStructures/LobbyStructureRenderer.ts",
+      "component": "makeStaff/sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "makeStaff/sprite/setDepth/0",
+        "expression": "DEPTH.PLAYERS"
+      }
+    },
+    {
+      "id": "cpu:arena/lobbyStructures/LobbyStructureRenderer.ts:makeRelief/this.scene.add/setDepth/0",
+      "owner": "arena/lobbyStructures/LobbyStructureRenderer.ts",
+      "component": "makeRelief/this.scene.add/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.16
+      ],
+      "blends": [
+        "MULTIPLY"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "makeRelief/this.scene.add/setDepth/0",
+        "expression": "RELIEF_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:arena/lobbyStructures/LobbyStructureRenderer.ts:makeShadow/this.scene.add/setDepth/0",
+      "owner": "arena/lobbyStructures/LobbyStructureRenderer.ts",
+      "component": "makeShadow/this.scene.add/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        8.65
+      ],
+      "blends": [
+        "MULTIPLY"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "makeShadow/this.scene.add/setDepth/0",
+        "expression": "STRUCTURE_SHADOW.layerDepth"
+      }
+    }
+  ]
+}

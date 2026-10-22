@@ -18,7 +18,7 @@ Der Host veröffentlicht die Participation. joining, interactive, observer und l
 
 [PlayerCapabilities.ts](../../src/world/PlayerCapabilities.ts) beschreibt die fachliche Erlaubnis in einzelnen Domänen, etwa Bewegung, Combat, Platzierung, Dismantling, Interaktion, Missionsaktionen und Kamerasteuerung. [InputPolicy.ts](../../src/world/InputPolicy.ts) entscheidet daraus zusammen mit lokalem UI-, Countdown- und Diagnosezustand, welche Eingabe angeboten wird. Der Host revalidiert die Aktion unabhängig davon.
 
-Shift-Interaktionen mit Weltobjekten (Turm bemannen, Wachturm, Lobby-Gebäude, Schießstand) laufen über genau einen Kandidatenvertrag, [WorldInteractionCandidate.ts](../../src/systems/WorldInteractionCandidate.ts). `x`, `y` und `radius` steuern die blick- und distanzgewichtete Auswahl in [WorldInteractionSelection.ts](../../src/systems/WorldInteractionSelection.ts). `footprint`, `label`, `subject` und optional `blocked` steuern die Darstellung. Sichtbar wird der Fokus ausschließlich über [WorldInteractionRenderer.ts](../../src/effects/WorldInteractionRenderer.ts): Klammern um die echte Grundfläche, eine Plakette mit Tastenkappe und dezente Marken an weiteren erreichbaren Zielen. Ein neues interagierbares Objekt liefert einen Kandidaten mit Grundfläche und baut keinen eigenen Marker und keinen eigenen Shift-Pfad. Shift führt genau den angezeigten Kandidaten aus.
+Shift-Interaktionen mit Weltobjekten (Turm bemannen, Wachturm, Lobby-Gebäude, Schießstand) laufen über genau einen Kandidatenvertrag, [WorldInteractionCandidate.ts](../../src/systems/WorldInteractionCandidate.ts). `x`, `y` und `radius` steuern die blick- und distanzgewichtete Auswahl in [WorldInteractionSelection.ts](../../src/systems/WorldInteractionSelection.ts); bei Objekten mit Grundfläche ist der Annäherungspunkt der dem Spieler nächste Punkt dieser Grundfläche (bei Bauwerken mit Kontur über `nearestStructurePoint` aus [StructureOutline.ts](../../src/arena/StructureOutline.ts)), damit jede Seite ein Zugang ist und `radius` ab der Wand misst. `footprint`, `label`, `subject` und optional `blocked` steuern die Darstellung. Sichtbar wird der Fokus ausschließlich über [WorldInteractionRenderer.ts](../../src/effects/WorldInteractionRenderer.ts): Klammern um die echte Grundfläche, eine Plakette mit Tastenkappe und dezente Marken an weiteren erreichbaren Zielen. Ein neues interagierbares Objekt liefert einen Kandidaten mit Grundfläche und baut keinen eigenen Marker und keinen eigenen Shift-Pfad. Shift führt genau den angezeigten Kandidaten aus.
 
 ## World, Activity und Runde
 
@@ -51,6 +51,18 @@ ersetzt pro Frame die gewöhnliche Bewegung. Ein Override ist standardmäßig ex
 Nekromantie-Verbündeter routet und greift dann nicht an. `keepsRouting` markiert einen Owner, der
 den Körper nur hält (ruhende Hüpfer): Verbündete routen weiter, melden ihren Steuerpunkt und greifen
 an, laufen aber nicht. Dies sichert [NecromancyLifecycle.test.ts](../../tests/NecromancyLifecycle.test.ts).
+
+Die Coop-Activity stuft feindliche Gegner einmal pro Host-Frame nach ihrem Abstand zu allen Sichtfeldern
+ein ([EnemyAiDetail.ts](../../src/systems/navigation/EnemyAiDetail.ts)); Anker sind alle Spieler, auch tote,
+dazu Köder und Bosse. Außerhalb jedes Sichtfelds samt Randband lenkt ein Gegner ohne Sichtprüfung und
+Gedränge-Bewertung, hält aber Abstand zu Körpern vor ihm, damit Engstellen den Strom wie bei voller Stufe
+dosieren; Ziele vergleicht er seltener, während die Route zum gebundenen Ziel im gewöhnlichen Takt aktuell bleibt.
+Nur die gewöhnliche Wegfolge in `EnemyManager.hostUpdateMovement` und das `EnemyIntentSystem` lesen diese
+Stufe; Angriffe, Spezialbewegungen, Ausweichen, Physik und Replikation nie. Kämpfende, durchbrechende,
+amphibische, verbündete und Boss-Einheiten bleiben voll. Ein neues Spezialverhalten, das aus der Distanz zu
+einem Spieler beginnt, trägt seine Reichweite in `resolveEnemyEngagementReachPx` ein, damit das Randband sie
+abdeckt. Dies sichern [EnemyAiDetail.test.ts](../../tests/EnemyAiDetail.test.ts),
+[EnemySeparationGrid.test.ts](../../tests/EnemySeparationGrid.test.ts) und die Intent-Tests.
 
 Verfolgungsgedächtnis gehört dem `EnemyIntentSystem`. Der Zielkatalog trennt dafür die Erlaubnis,
 eine beobachtete Spielerposition zu behalten, vom Zugriff auf ein aktuelles Angriffsziel.

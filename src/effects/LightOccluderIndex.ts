@@ -29,7 +29,10 @@ export interface LightOccluderSources {
   readonly rocks: () => readonly (RockPhysicsProxy | null)[] | null;
   /** Baumstämme als Kreis-Occluder. */
   readonly trunks: () => readonly ObstacleCircleBody[] | null;
-  /** Zell-Rechtecke lebender Basen; zerstörte Basen liefern bereits nichts mehr. */
+  /**
+   * Zell-Rechtecke lebender Basen; zerstörte Basen liefern bereits nichts mehr. Konturrechtecke
+   * eines Bauwerks tragen ihre freiliegenden Kanten als Datenwert `occluderEdges`.
+   */
   readonly baseCells: () => readonly Phaser.GameObjects.Rectangle[] | null;
   readonly barrierCells?: () => readonly Phaser.GameObjects.Rectangle[] | null;
   /**
@@ -73,6 +76,8 @@ export class LightOccluderIndex {
   private rectExposedEdges = new Uint8Array(0);
   /** Verbund je Rechteck, parallel zu `rectData`. */
   private rectGroup = new Uint8Array(0);
+  /** Authored Kantenmaske je Rechteck oder -1 für Zell-Occluder, parallel zu `rectData`. */
+  private rectAuthoredEdges = new Int8Array(0);
   private rectCount = 0;
 
   /** Zellbelegung des Arena-Grids: 0 = frei, sonst der Verbund der Zelle. */
@@ -212,6 +217,7 @@ export class LightOccluderIndex {
     if (this.rectData.length < rectCount * 4) this.rectData = new Float64Array(rectCount * 4);
     if (this.rectExposedEdges.length < rectCount) this.rectExposedEdges = new Uint8Array(rectCount);
     if (this.rectGroup.length < rectCount) this.rectGroup = new Uint8Array(rectCount);
+    if (this.rectAuthoredEdges.length < rectCount) this.rectAuthoredEdges = new Int8Array(rectCount);
     if (this.circleData.length < circleCount * 3) this.circleData = new Float64Array(circleCount * 3);
     this.rectCount = rectCount;
     this.circleCount = circleCount;
@@ -220,18 +226,22 @@ export class LightOccluderIndex {
     for (const rock of rocks) {
       if (!rock?.active) continue;
       this.rectGroup[rectIndex] = GROUP_ROCK;
+      this.rectAuthoredEdges[rectIndex] = -1;
       this.writeRect(rectIndex, rock);
       rectIndex += 1;
     }
     for (const cell of baseCells) {
       if (!cell.active) continue;
       this.rectGroup[rectIndex] = GROUP_BASE;
+      const edges = cell.getData?.('occluderEdges');
+      this.rectAuthoredEdges[rectIndex] = typeof edges === 'number' ? edges : -1;
       this.writeRect(rectIndex, cell);
       rectIndex += 1;
     }
     for (const cell of barrierCells) {
       if (!cell.active) continue;
       this.rectGroup[rectIndex] = GROUP_BARRIER;
+      this.rectAuthoredEdges[rectIndex] = -1;
       this.writeRect(rectIndex, cell);
       rectIndex += 1;
     }
@@ -269,6 +279,9 @@ export class LightOccluderIndex {
    * belegten Zellen desselben Verbunds existiert im fertigen Bild gar nicht und darf
    * deshalb weder Schatten werfen noch den Lichtsaum unterbrechen – sonst zeichnete sich
    * das Gitter als Treppenmuster in den Block.
+   *
+   * Konturrechtecke eines Bauwerks sitzen nicht auf Zellen: Sie bringen ihre freiliegenden
+   * Kanten aus dem Authoring mit und bleiben aus der Zellbelegung heraus.
    */
   private buildExposedEdges(): void {
     this.cellCols = Math.max(1, Math.round(ARENA_WIDTH / CELL_SIZE));
@@ -281,11 +294,16 @@ export class LightOccluderIndex {
     }
 
     for (let rect = 0; rect < this.rectCount; rect += 1) {
+      if (this.rectAuthoredEdges[rect] >= 0) continue;
       const cell = this.cellIndexOf(rect);
       if (cell >= 0) this.cellGroups[cell] = this.rectGroup[rect];
     }
 
     for (let rect = 0; rect < this.rectCount; rect += 1) {
+      if (this.rectAuthoredEdges[rect] >= 0) {
+        this.rectExposedEdges[rect] = this.rectAuthoredEdges[rect];
+        continue;
+      }
       const offset = rect * 4;
       const gridX = Math.floor((this.rectData[offset] - ARENA_OFFSET_X) / CELL_SIZE + 0.5);
       const gridY = Math.floor((this.rectData[offset + 1] - ARENA_OFFSET_Y) / CELL_SIZE + 0.5);

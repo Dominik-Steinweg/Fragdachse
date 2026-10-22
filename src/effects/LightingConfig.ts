@@ -770,6 +770,50 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0,
     flickerHz: 0,
   },
+  /** Open forge of the lobby workshop: warm, flickering, burns by day as well; shapes nearby relief. */
+  lobbyForgeGlow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 150,
+    color: 0xff8a3a,
+    intensity: 0.95,
+    durationMs: 0,
+    decayExponent: 1.2,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0.18,
+    flickerHz: 7,
+    surfaceRelief: true,
+  },
+  /** Lanterns and windows of the lobby structures; gated by the artificial-light factor. */
+  lobbyLampGlow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 112,
+    color: 0xffc477,
+    intensity: 0.85,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0.05,
+    flickerHz: 1.3,
+    surfaceRelief: true,
+  },
+  /** The light strip of finished base floor tiles in the yard: small, cool, steady. */
+  lobbyTileGlow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 64,
+    color: 0x8fd8ff,
+    intensity: 0.5,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 1,
+    flickerAmount: 0.03,
+    flickerHz: 0.6,
+  },
   /**
    * Ruhiges Standlicht einer Basis in ihrer Teamfarbe. Groß und schwach – es soll die
    * Basis bei Dunkelheit erkennbar machen, nicht die Umgebung ausleuchten.

@@ -1,4 +1,5 @@
 import { ENEMY_BURST_PRESETS } from '../../config/enemyBurstPresets';
+import type { StructureRect } from '../../arena/StructureOutline';
 import { CELL_SIZE, VOID_PALETTE } from '../../config';
 import { warmupKrakenShaders } from '../../effects/kraken/KrakenShaderWarmup';
 import { restrictStructureOccupant } from '../../world/PlayerCapabilities';
@@ -217,6 +218,9 @@ import {
   toPersistentBaseGravelZone,
   type PersistentBaseVisualSite,
 } from '../../persistentBase/PersistentBasePresentation';
+
+/** Shared empty answer for worlds without outlined structures. */
+const NO_STRUCTURE_RECTS: readonly StructureRect[] = [];
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
 
@@ -443,7 +447,7 @@ export class ArenaLifecycleCoordinator {
         return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start);
       };
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
-        getLobbyMerchant: () => this.worldRuntime?.presentation?.lobbyMerchant ?? null,
+        getLobbyStructures: () => this.worldRuntime?.presentation?.lobbyStructures ?? null,
         getLobbyInteractionMenu: () => {
           const candidate = this.ctx.inputSystem.getInteractionCandidate();
           return candidate?.kind === 'lobby-menu' ? candidate.menu : null;
@@ -551,16 +555,20 @@ export class ArenaLifecycleCoordinator {
             if (manager) yield* manager.getSpawnStructureShadowCells();
           })();
         },
-        getBaseFogSurfaces: () => {
+        // Base plates, the spawn structures' skeletons and the solid stamps of outlined structures.
+        getFogSurfaceStamps: () => {
           const manager = this.worldRuntime?.materialization?.bases ?? null;
           const bases = manager?.getBases() ?? [];
           const preview = this.persistentBasePreviewRenderer.getSurfaceImages();
+          const structures = this.worldRuntime?.presentation?.lobbyStructures?.getFogSurfaceStamps() ?? [];
           return (function* () {
             for (const base of bases) yield* base.getSurfaceImages();
             yield* preview;
             if (manager) yield* manager.getSpawnStructureFogSurfaces();
+            yield* structures;
           })();
         },
+        getStructureRects: () => this.worldRuntime?.materialization?.bases?.getStructureRects() ?? NO_STRUCTURE_RECTS,
         getSynchronizedNow: () => bridge.getSynchronizedNow(),
       }));
     },
@@ -3005,6 +3013,7 @@ export class ArenaLifecycleCoordinator {
     const sunlightEnemies=()=>this.getWorldEnemyManager();
     const builtWorld = materializeWorldComposition({
       entityBurnGpu: this.renderers.entityBurnGpu,
+      gpuVfx: this.renderers.gpuVfx,
       turretAnimations: this.renderers.turretAnimations,
       scene: this.scene,
       runtime: worldRuntime,

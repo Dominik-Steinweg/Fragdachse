@@ -1887,6 +1887,11 @@ export interface SyncedAk47StrategicTarget {
 }
 
 export interface SyncedBurningGroundCell {
+  /**
+   * Identitaet nur innerhalb einer Seite: Der Host vergibt sie in Zuendreihenfolge, Clients leiten
+   * sie aus Stil und Rasterzelle ab. Weder zwischen Host und Client vergleichen noch eine
+   * Reihenfolge daraus ableiten.
+   */
   id: number;
   gridX: number;
   gridY: number;

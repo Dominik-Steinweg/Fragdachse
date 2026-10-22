@@ -1,0 +1,116 @@
+{
+  "id": "lobby-staff-smith",
+  "category": "character",
+  "gameIds": [],
+  "revision": "staff-v3",
+  "variant": "standard",
+  "sourceSize": 76,
+  "textureKey": "lobby_staff_smith",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "displayScale": 1.1875,
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "idle",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "frameRate": 8,
+      "loop": true,
+      "end": "rest"
+    },
+    {
+      "name": "work",
+      "frames": [
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40
+      ],
+      "frameRate": 12,
+      "loop": true,
+      "markers": {
+        "strike": 10
+      },
+      "end": "rest"
+    },
+    {
+      "name": "greet",
+      "frames": [
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52
+      ],
+      "frameRate": 12,
+      "loop": false,
+      "end": "rest"
+    }
+  ],
+  "sheetTextureKey": "lobby_staff_smith_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/lobby-staff-smith/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/lobby-staff-smith/sheet.png",
+  "layout": {
+    "frameWidth": 76,
+    "frameHeight": 76,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 7,
+    "frameCount": 53,
+    "width": 640,
+    "height": 560
+  },
+  "hashes": {
+    "idle": "d0df3c65b80e4a76c73bcd5ac626b961e208e28104032fd331302b84b55f22d8",
+    "sheet": "b1ecff8eaa1a91701ba6a650c46db2c0ccc3c3299af41068e086b5e3c8c0232f"
+  }
+}

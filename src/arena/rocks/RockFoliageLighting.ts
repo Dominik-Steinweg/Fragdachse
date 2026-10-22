@@ -1,5 +1,6 @@
 import { CLOUD_SHADOW_GLSL, setCloudUniforms, type SunCloudState } from '../../effects/sunlight/cloudShadow';
 import * as Phaser from 'phaser';
+import { installDirtyUniformApply } from '../../graphics/DirtyUniformApply';
 import { HORIZON_BLEND_GLSL } from './FormationHorizonTransition';
 import { FORMATION, FORMATION_SIDE } from './RockFormationField';
 import { FORMATION_RESPONSE_GLSL, MINERAL_CAVITY_GLSL } from './rockFormationShader';
@@ -139,8 +140,9 @@ export class RockFoliageLighting {
     // ProgramFactory owns programs by shader/addition names. Keep the material
     // key stable across World lifetimes; only its per-node VAO/buffers are ours.
     batch.programManager.addAddition(ROCK_FOLIAGE_MATERIAL);
-    const setCloud=(name:string,value:unknown)=>batch.programManager.setUniform(name,value);
+    const set = installDirtyUniformApply(batch.programManager, renderer);
     const setup = batch.setupUniforms;
+    let sharedFrame = -1, sharedBinding: FormationReceiverBinding | null = null;
     batch.setupUniforms = (context): void => {
       setup.call(batch, context);
       const binding = this.binding, texture = this.currentTexture;
@@ -152,21 +154,25 @@ export class RockFoliageLighting {
       this.chunk[2] = frame.cutWidth; this.chunk[3] = frame.cutHeight;
       this.uv[0] = frame.u0; this.uv[1] = frame.v0;
       this.uv[2] = frame.u1-frame.u0; this.uv[3] = frame.v1-frame.v0;
-      setCloudUniforms(setCloud,binding.clouds);
-      const programs = batch.programManager;
-      programs.setUniform('uFoliageFrame', binding.frame);
-      programs.setUniform('uFoliageSun', binding.sun);
-      programs.setUniform('uFoliageOptions', binding.options);
-      programs.setUniform('uMineralResponse', Number(binding.mineralResponse===true));
-      programs.setUniform('uFineMineral', Number(binding.fineMineral===true));
-      programs.setUniform('uFoliageChunk', this.chunk);
-      programs.setUniform('uFoliageUV', this.uv);
-      programs.setUniform('uFoliageField', 1);
-      programs.setUniform('uFoliageLookup', 2);
-      programs.setUniform('uFoliageOcclusion', 3);
-      programs.setUniform('uMineralHeight', 4);
-      programs.setUniform('uHorizonPrevious',5);
-      programs.setUniform('uHorizonBlend[0]',binding.horizonBlend??this.neutralHorizonBlend);
+      set('uFoliageChunk', this.chunk);
+      set('uFoliageUV', this.uv);
+      // The formation updates its borrowed uniforms outside rendering: one upload per frame.
+      const loopFrame = this.scene.game?.loop?.frame ?? NaN;
+      if (loopFrame !== sharedFrame || binding !== sharedBinding) {
+        sharedFrame = loopFrame; sharedBinding = binding;
+        setCloudUniforms(set,binding.clouds);
+        set('uFoliageFrame', binding.frame);
+        set('uFoliageSun', binding.sun);
+        set('uFoliageOptions', binding.options);
+        set('uMineralResponse', Number(binding.mineralResponse===true));
+        set('uFineMineral', Number(binding.fineMineral===true));
+        set('uFoliageField', 1);
+        set('uFoliageLookup', 2);
+        set('uFoliageOcclusion', 3);
+        set('uMineralHeight', 4);
+        set('uHorizonPrevious',5);
+        set('uHorizonBlend[0]',binding.horizonBlend??this.neutralHorizonBlend);
+      }
       renderer.glTextureUnits.bind((binding.horizonPrevious??binding.field).source[0].glTexture,5);
       renderer.glTextureUnits.bind(binding.field.source[0].glTexture, 1);
       renderer.glTextureUnits.bind(binding.lookup.source[0].glTexture, 2);

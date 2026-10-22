@@ -47,6 +47,9 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
   let subphases: PerformanceWindow[] = [];
   let bossWindow: { id: string; fromMs: number } | null = null;
   let spawnCandidates: readonly { x: number; y: number }[] | null = null;
+  let enemyRing: { readonly min: number; readonly max: number } = fixture.enemySpawnRadius;
+  let nextReturnAt = 0, returnCursor = 0;
+  const outsideView = new Set<string>();
   let nextResourceAt = 0, maximumAdrenaline = 0;
   let nextVisualBurst = 0;
   const originalZoom = { x: scene.cameras.main.zoomX, y: scene.cameras.main.zoomY };
@@ -125,6 +128,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
           (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE, view)) visible++;
       }
       counters.voidFireCells = total;
+      counters.visibleVoidFireCells = visible;
       counters.permanentVoidFireCells = permanent;
       peak('voidFireCellsPeak', total); peak('visibleVoidFireCellsPeak', visible);
       if (measureVoidFire) {
@@ -168,8 +172,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
   };
   const spawnEnemies = (count: number) => {
     const candidates = spawnCandidates ??= flow.navigationLabPort.getFreePositions(18)
-      .filter(p => Math.hypot(p.x - playerPosition.x, p.y - playerPosition.y) >= fixture.enemySpawnRadius.min
-        && Math.hypot(p.x - playerPosition.x, p.y - playerPosition.y) < fixture.enemySpawnRadius.max);
+      .filter(p => Math.hypot(p.x - playerPosition.x, p.y - playerPosition.y) >= enemyRing.min
+        && Math.hypot(p.x - playerPosition.x, p.y - playerPosition.y) < enemyRing.max);
     if (candidates.length < count) throw new Error('Insufficient fixed enemy spawn positions');
     // Stable dispersion and species mix. Population never depends on achieved FPS.
     // All fixture species pursue players on a map without an allied mission base.
@@ -179,6 +183,32 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       if (!flow.navigationLabPort.spawnEnemy(p.x, p.y, kinds[i % kinds.length], false)) throw new Error('Enemy spawn failed');
     }
     add('spawnedEnemies', count);
+  };
+  /**
+   * Far start: enemies that reached the player go back to a far start, so the fixed population keeps
+   * walking in from outside the view. Counts how many are outside the view and how many entered it.
+   */
+  const returnArrivedEnemies = (measuring: boolean) => {
+    const now = performance.now();
+    if (now < nextReturnAt || !spawnCandidates?.length) return;
+    nextReturnAt = now + fixture.farEnemyReturnIntervalMs;
+    const view = getVisibleWorldView(scene.cameras.main, cameraView);
+    let outside = 0;
+    for (const enemy of flow.navigationLabPort.readEnemies()) {
+      if (enemy.faction !== 'hostile') continue;
+      if (Math.hypot(enemy.x - playerPosition.x, enemy.y - playerPosition.y) <= fixture.farEnemyReturnRadius) {
+        returnCursor = (returnCursor + 97) % spawnCandidates.length;
+        const start = spawnCandidates[returnCursor];
+        if (flow.navigationLabPort.teleportEnemy(enemy.id, start.x, start.y)) {
+          outsideView.add(enemy.id); outside++;
+          if (measuring) add('returnedEnemies');
+        }
+        continue;
+      }
+      if (!isWorldPointInsideView(enemy.x, enemy.y, view)) { outsideView.add(enemy.id); outside++; }
+      else if (outsideView.delete(enemy.id) && measuring) add('enemiesEnteredView');
+    }
+    if (measuring) { peak('enemiesOutsideViewPeak', outside); counters.enemiesOutsideViewLast = outside; }
   };
   const startSiege = () => {
     if (counters.siegeAttackers) return;
@@ -195,6 +225,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     nextBuildAt = 0; nextCombatShotAt = 0; nextWaveAt = fixture.combatWaveIntervalMs; seenLakes.clear();
     nextVisualBurst = 0;
     spawnCandidates = null; nextResourceAt = 0;
+    enemyRing = test.enemyStart === 'far' ? fixture.farEnemySpawnRadius : fixture.enemySpawnRadius;
+    nextReturnAt = 0; returnCursor = 0; outsideView.clear();
     maximumAdrenaline = flow.weaponBalanceLabPort.getMaxAdrenaline(localId());
     removeWorldObserver?.(); removeWorldObserver = null;
     targets.clear(); counters = {}; builds = 0; heldAt = null; temporaryId = undefined;
@@ -296,7 +328,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     const now = performance.now();
     if (test.kind === 'boss' || test.kind === 'campaign') maintainTargets();
     observe();
-    if (test.kind === 'campaign' && !(counters.voidFireCells > 0 && flow.getEnemyCount() > 0)) {
+    // The sweep starts outside the view; measure once the fire has reached the visible clearing.
+    if (test.kind === 'campaign' && !(counters.visibleVoidFireCells > 0 && flow.getEnemyCount() > 0)) {
       if (now - preparationAt > fixture.voidFire.preparationTimeoutMs) throw new Error(`${test.id}: cp8 fire or encounter missing: ${JSON.stringify(counters)}`);
       return false;
     }
@@ -450,6 +483,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
         flow.navigationLabPort.removeEnemies();
       }
       maintainTargets(); observe((test.kind === 'hazard' || test.kind === 'boss' || test.kind === 'campaign') && stage === 'measure');
+      if (test.enemyStart === 'far' && stage !== 'tail') returnArrivedEnemies(stage === 'measure');
       if (stage === 'warmup') { input(); return; }
       if (stage === 'tail') { input(); return; }
       if (test.kind === 'boss') {
@@ -515,7 +549,12 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
         input();
       } else if (test.kind === 'campaign') {
         // Hold the cp8 position and shoot the nearest living enemy at the combat cadence.
+        // Knockback would otherwise carry the camera away from the clearing between runs.
         const player = players.getPlayer(localId())!;
+        if (Math.hypot(player.x - playerPosition.x, player.y - playerPosition.y) > 64) {
+          flow.navigationLabPort.placePlayer(playerPosition.x, playerPosition.y);
+          add('playerReanchors');
+        }
         let nearest = Infinity;
         aimPosition = point(230, 46);
         flow.getMovementEnemyVisuals().forEach(enemy => {
@@ -540,11 +579,20 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       const ready = test.kind === 'environment' ? routeIndex === route.length
         : test.kind === 'pickup' ? counters.clearedRouteReached === 1
         : test.kind === 'combat' ? counters.combatWaves >= Math.ceil(duration / fixture.combatWaveIntervalMs)
-          && elapsed >= nextWaveAt && counters.combatShots >= Math.ceil(duration / 350) : true;
+          && elapsed >= nextWaveAt && counters.combatShots >= Math.ceil(duration / 350)
+        // A far start must actually bring enemies into view during the window.
+        : test.enemyStart === 'far' ? counters.enemiesEnteredView > 0 : true;
       if (!ready && elapsed > duration + 60_000) throw new Error(`${test.id}: required route or combat actions stalled for sixty seconds`);
       return ready;
     },
     finishCase(test) {
+      if (test.enemyStart === 'far') {
+        // Evidence that the far AI tier was active; cumulative since the mission started.
+        const navigation = flow.navigationLabPort.getNavigationMetrics();
+        counters.navFarSolves = navigation.farSolves ?? 0;
+        counters.navFarSteeringReuses = navigation.farSteeringReuses ?? 0;
+        counters.navFarNarrowScans = navigation.farNarrowScans ?? 0;
+      }
       if (bossWindow) subphases.push({ id: `${test.id}.${bossWindow.id}`, kind: 'measurement',
         caseVersion: test.version, fromMs: bossWindow.fromMs, toMs: performance.now(), load: { ...counters } });
       if (clearedRouteAt !== null) subphases.push({ id: `${test.id}.cleared-route`, kind: 'measurement',

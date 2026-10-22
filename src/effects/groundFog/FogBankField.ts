@@ -11,8 +11,9 @@ export class FogBankField {
   private readonly mineral=new Uint8Array(FULL*FULL);
   build(terrain:FogTerrainModel,cx:number,cy:number,out:Uint8Array,stride:number,ox:number,oy:number,keepPrevious=false,presentation?:Uint8Array):void {
     for(let y=0;y<FULL;y++)for(let x=0;x<FULL;x++) {
-      const gx=Math.floor((cx*512+(x-HALO+.5)*STEP)/CELL_SIZE),gy=Math.floor((cy*512+(y-HALO+.5)*STEP)/CELL_SIZE);
-      const blocked=gx<0||gy<0||gx>=terrain.cols||gy>=terrain.rows||terrain.blocked[gy*terrain.cols+gx]>0;
+      const px=cx*512+(x-HALO+.5)*STEP,py=cy*512+(y-HALO+.5)*STEP;
+      const gx=Math.floor(px/CELL_SIZE),gy=Math.floor(py/CELL_SIZE);
+      const blocked=terrain.isBlockedAt(px,py);
       const i=y*FULL+x;this.solid[i]=blocked?0:1e4;this.open[i]=blocked?1e4:0;
       this.solidSource[i]=blocked?i:-1;this.openSource[i]=blocked?-1:i;
       const cell=gy*terrain.cols+gx;

@@ -24,6 +24,7 @@ import { makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
 import type { SyncedBaseTurretState } from '../types';
 import { createBaseSurfaceImages, getBaseLightSpots } from './BaseVisuals';
 import { BaseGroundingRenderer } from '../arena/BaseGroundingRenderer';
+import { nearestStructurePoint } from '../arena/StructureOutline';
 import type { PersistentBaseGravelCoverage } from '../arena/PersistentBaseGravelField';
 import { BaseAccentGlowRenderer } from '../arena/BaseAccentGlowRenderer';
 import {
@@ -53,7 +54,8 @@ export interface BaseTurretRuntimeState extends TurretAimConfig {
  * Owns:
  *   - Pro Basis-Zelle optional ein 47-Blob-Autotile-Sprite (statt früher: ein Tint-Rect).
  *   - Pro Basis-Zelle immer einen 32×32-StaticBody (alle in derselben StaticGroup),
- *     damit auch konkave Formen physikalisch korrekt abgedeckt werden.
+ *     damit auch konkave Formen physikalisch korrekt abgedeckt werden. Ein Bauwerk mit
+ *     Kontur (`collisionRects`) bekommt stattdessen einen StaticBody pro Konturrechteck.
  *   - Eine HP-Bar unter der Bounding-Box der gesamten Basis.
  *
  * Zerstörung:
@@ -148,6 +150,21 @@ export class BaseEntity {
   /** Creates the collision/runtime representation exactly once. */
   private createRuntimeRepresentation(): void {
     if (this.cellBodies.length > 0) return;
+    if (this.spec.collisionRects) {
+      // One body per outline rect; light occlusion reads the authored exposed edges.
+      for (const rect of this.spec.collisionRects) {
+        const body = this.scene.add.rectangle(rect.x + rect.width / 2, rect.y + rect.height / 2,
+          rect.width, rect.height, 0x000000, 0);
+        body.setData('baseId', this.spec.id);
+        body.setData('occluderEdges', rect.edges);
+        this.scene.physics.add.existing(body, true);
+        const staticBody = body.body as Phaser.Physics.Arcade.StaticBody;
+        staticBody.setSize(rect.width, rect.height);
+        staticBody.updateFromGameObject();
+        this.cellBodies.push(body);
+      }
+      return;
+    }
     for (const cell of this.spec.cells) {
       const worldX = this.metrics.offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = this.metrics.offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
@@ -173,9 +190,13 @@ export class BaseEntity {
     // Spawnbauwerke zeichnet der SpawnStructureRenderer des BaseManagers (GDD Spawnbauwerk V1).
     if (this.spec.surface !== 'none' && this.role !== 'spawn-point') {
       this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
-      this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics,
+      this.grounding = new BaseGroundingRenderer(this.scene, { cells: this.spec.cells }, this.metrics,
         { hostile, gravel: this.groundGravel });
       this.accentGlow = new BaseAccentGlowRenderer(this.scene, this.cellImages, cellTexture);
+    } else if (this.spec.collisionRects) {
+      // Outlined structures bring their own art, but sit in the same compacted ground.
+      this.grounding = new BaseGroundingRenderer(this.scene,
+        { cells: this.spec.cells, rects: this.spec.collisionRects }, this.metrics, { hostile, gravel: this.groundGravel });
     }
 
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
@@ -271,6 +292,7 @@ export class BaseEntity {
    */
   getNearestSurfacePoint(x: number, y: number): { x: number; y: number; distance: number } | null {
     if (this.isInert() || this.spec.cells.length === 0) return null;
+    if (this.spec.collisionRects) return nearestStructurePoint(this.spec.collisionRects, x, y);
     let bestX = 0;
     let bestY = 0;
     let bestDistSq = Number.POSITIVE_INFINITY;

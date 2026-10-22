@@ -160,6 +160,7 @@ function fakeBindingInput(
       isStaticReadyForView: vi.fn(() => false),
       syncStaticProfile: vi.fn(),
       syncBaseShadows: vi.fn(),
+      syncStructureReceiverRects: vi.fn(),
       syncDynamicShadows: vi.fn(),
       clear: vi.fn(),
     } as never,
@@ -188,7 +189,8 @@ function fakeBindingInput(
     syncTurretLights: vi.fn(),
     syncBaseLights: vi.fn(),
     getBaseShadowCells: () => [],
-    getBaseFogSurfaces: () => [],
+    getFogSurfaceStamps: () => [],
+    getStructureRects: () => [],
     getSynchronizedNow: () => 0,
     ...overrides,
   };
@@ -202,7 +204,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     const player = { active: true, x: 200, y: 300 };
     let attached = true;
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene(), {
-      getLobbyMerchant: () => merchant,
+      getLobbyStructures: () => merchant,
       getLocalPlayerSprite: () => player as never,
       isLocalPlayerAttachedToWorld: () => attached,
     }));
@@ -370,7 +372,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
   it('restores World fog after an Activity overlay, replacement, and teardown', () => {
     const scene = Object.assign(makeFakeGpuVfxScene(), { cameras: { main: fakeCamera() } });
     const makeFog = (strength: number) => ({ strength, captureMotion: vi.fn(), captureTrain: vi.fn(),
-      setSurfaceImages: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn(), setTint: vi.fn() });
+      setSurfaceStamps: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn(), setTint: vi.fn() });
     const first = makeFog(0.6), second = makeFog(0.8);
     let fog = first, strength: number | undefined, tint: readonly [number, number, number] | undefined;
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
@@ -401,7 +403,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
   it('feeds ground fog the displayed train pose and disconnects it when hidden or destroyed', () => {
     const gpuScene = makeFakeGpuVfxScene();
     const scene = Object.assign(gpuScene, { cameras: { main: fakeCamera() } });
-    const fog = { captureMotion: vi.fn(), captureTrain: vi.fn(), setSurfaceImages: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn(), setTint: vi.fn() };
+    const fog = { captureMotion: vi.fn(), captureTrain: vi.fn(), setSurfaceStamps: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn(), setTint: vi.fn() };
     const pose = { alive: true, x: 500, y: 700, dir: 1 as const, hp: 100, maxHp: 100 };
     const visual = { getShadowState: vi.fn(() => pose), computeSegYs: vi.fn(() => [700, 500, 240]) };
     const input = fakeBindingInput(scene as never, {
@@ -1016,8 +1018,7 @@ describe('WorldRuntime – dedizierter Slot fuer den Frame-Binding', () => {
 describe('Detach-Reihenfolge – FrameBinding faellt vor dem Handoff, der Handoff vor dem Runtime-Teardown', () => {
   it('releases live HP bindings before a static handoff and isolates a later World', () => {
     const { scene } = healthBarTestScene();
-    const renderer = new WorldHealthBarRenderer(scene, () => 0, HEALTH_BAR_TUNING,
-      { prewarmEnemyViews: 0, maxFreeViews: 2 });
+    const renderer = new WorldHealthBarRenderer(scene, () => 0, HEALTH_BAR_TUNING);
     const owner = runtime();
     renderer.openWorld(owner);
     const old = renderer.bind(enemyHealthBarStyle(true, 40), 100, 100, 0, 0)!;

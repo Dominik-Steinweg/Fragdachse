@@ -5,71 +5,27 @@
     "cameras": [],
     "sites": [
       {
-        "key": "borrowView/view.background/setDepth/0",
-        "expression": "s.backgroundDepth",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "borrowView/view.trail/setDepth/0",
-        "expression": "(s.backgroundDepth + s.fillDepth) / 2",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "borrowView/view.fill/setDepth/0",
-        "expression": "s.fillDepth",
+        "key": "layer/image/setDepth/0",
+        "expression": "style.fillDepth",
         "blends": [
           "NORMAL"
         ]
       }
     ],
     "bindings": {
-      "s.backgroundDepth": [
-        5.8,
-        9.35,
-        11,
-        18.5
-      ],
-      "s.fillDepth": [
+      "style.fillDepth": [
         6,
         9.4,
         12,
         18.6
-      ],
-      "(s.backgroundDepth + s.fillDepth) / 2": [
-        5.9,
-        9.375,
-        11.5,
-        18.55
       ]
     }
   },
   "cpuLayers": [
     {
-      "id": "cpu:effects/health/WorldHealthBarRenderer.ts:borrowView/view.background/setDepth/0",
+      "id": "cpu:effects/health/WorldHealthBarRenderer.ts:layer/image/setDepth/0",
       "owner": "effects/health/WorldHealthBarRenderer.ts",
-      "component": "borrowView/view.background/setDepth/0",
-      "height": "ground",
-      "lighting": "material",
-      "camera": "world",
-      "depths": [],
-      "blends": [
-        "NORMAL"
-      ],
-      "profiles": [],
-      "role": "delegate",
-      "source": {
-        "selector": "borrowView/view.background/setDepth/0",
-        "expression": "s.backgroundDepth"
-      }
-    },
-    {
-      "id": "cpu:effects/health/WorldHealthBarRenderer.ts:borrowView/view.trail/setDepth/0",
-      "owner": "effects/health/WorldHealthBarRenderer.ts",
-      "component": "borrowView/view.trail/setDepth/0",
+      "component": "layer/image/setDepth/0",
       "height": "body",
       "lighting": "material",
       "camera": "world",
@@ -80,26 +36,8 @@
       "profiles": [],
       "role": "delegate",
       "source": {
-        "selector": "borrowView/view.trail/setDepth/0",
-        "expression": "(s.backgroundDepth + s.fillDepth) / 2"
-      }
-    },
-    {
-      "id": "cpu:effects/health/WorldHealthBarRenderer.ts:borrowView/view.fill/setDepth/0",
-      "owner": "effects/health/WorldHealthBarRenderer.ts",
-      "component": "borrowView/view.fill/setDepth/0",
-      "height": "body",
-      "lighting": "material",
-      "camera": "world",
-      "depths": [],
-      "blends": [
-        "NORMAL"
-      ],
-      "profiles": [],
-      "role": "delegate",
-      "source": {
-        "selector": "borrowView/view.fill/setDepth/0",
-        "expression": "s.fillDepth"
+        "selector": "layer/image/setDepth/0",
+        "expression": "style.fillDepth"
       }
     }
   ]

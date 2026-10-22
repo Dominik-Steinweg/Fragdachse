@@ -17,10 +17,12 @@ import { addCharacterMaterialAddition } from '../effects/CharacterMaterialLighti
 import { STATUS_RING_FILL_FRAGMENT_SOURCE, STATUS_RING_FILL_SHADER_NAME, STATUS_RING_FRAGMENT_SOURCE,
   STATUS_RING_SHADER_NAME } from '../effects/living/statusRingShader';
 import { beginShaderPrograms } from './compileShaderPrograms';
+import { getBarSdfProgramManager } from '../effects/bars/BarSdfGpu';
 import { disposeShaderWarmupNode } from './disposeShaderWarmupNode';
 
 /** Link the real lobby materials while assets load, plus the local player's first-appearance programs
- * (character material, status ring) that otherwise link when entering the training ground. Only the program cache is
+ * (character material, status ring, the shared bar SDF of HUD and world health bars) that otherwise
+ * link when entering the training ground or on the first damage. Only the program cache is
  * published; textures, World data, uniforms and visible draws remain with their
  * ordinary owners. The returned barrier must finish before World construction. */
 export function warmupWorldMaterials(scene: Phaser.Scene): () => void {
@@ -48,7 +50,11 @@ export function warmupWorldMaterials(scene: Phaser.Scene): () => void {
       [VOID_CREEP_GROUND_SHADER_NAME,VOID_CREEP_GROUND_FRAGMENT],[VOID_CREEP_ROCK_SHADER_NAME,VOID_CREEP_ROCK_FRAGMENT],
       [VOID_CREEP_GLOW_SHADER_NAME,VOID_CREEP_GLOW_FRAGMENT],[VOID_SPORE_MOTES_SHADER_NAME,VOID_SPORE_MOTES_FRAGMENT]])
       quads.push(new Phaser.GameObjects.Shader(scene,{name:shaderName,shaderName,fragmentSource},0,0,1,1));
-    const finish=beginShaderPrograms(renderer,[...batches.map(b=>b.programManager),...quads.map(q=>q.renderNode.programManager)]);
+    // Renderer-lifetime batch handler: only its program is linked here, it stays for its owners.
+    let bars:Phaser.Renderer.WebGL.ProgramManager|null=null;
+    try{bars=getBarSdfProgramManager(scene);}catch(error){console.warn('[WorldMaterials] Bar program unavailable.',error);}
+    const finish=beginShaderPrograms(renderer,[...batches.map(b=>b.programManager),...quads.map(q=>q.renderNode.programManager),
+      ...(bars?[bars]:[])]);
     return ()=>{
       try{finish();}catch(error){console.warn('[WorldMaterials] Precompile failed; using normal initialization.',error);}
     };

@@ -12,7 +12,9 @@ import { getGraphicsQualityController, getGraphicsQualityProfile } from '../grap
 import { LivingBreathDriver } from '../effects/living/LivingBreathDriver';
 import { LivingFieldTexture } from '../effects/living/LivingFieldTexture';
 import { LIVING_FIELD_UNITS_PER_BAR_HEIGHT } from '../effects/living/livingFieldShader';
-import { buildRoundedRectClipBands, type LivingBarRoundedClip, type LivingClipRect } from '../effects/living/livingClipGeometry';
+import { resolveLivingClip, type LivingBarRoundedClip } from '../effects/living/livingClipGeometry';
+import { attachBarSdf, type BarSdfSource } from '../effects/bars/BarSdfGpu';
+import { BAR_SDF_KIND, createBarSdfInstance, setLivingInstance, type BarSdfInstance } from '../effects/bars/barSdfInstance';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 
 export type { LivingBarRoundedClip } from '../effects/living/livingClipGeometry';
@@ -122,31 +124,26 @@ export interface LivingBarEffectOpts {
 const COMPACT_SAMPLE_WEIGHTS = [1, 0.75, 0.55] as const;
 const BAR_SAMPLE_WEIGHTS = [1] as const;
 
-interface LivingFieldTile {
-  readonly image: Phaser.GameObjects.Image;
-  readonly bounds: LivingClipRect;
-  readonly sourceX: number;
-  readonly sourceY: number;
-  readonly sampleWeight: number;
-  readonly gradientLeft: number;
-  readonly gradientRight: number;
-  tintStart: number;
-  tintEnd: number;
+/** One weighted window of the shared field, in field texels at the bar origin. */
+interface LivingFieldSample {
+  readonly u: number;
+  readonly v: number;
+  readonly weight: number;
 }
 
 /**
  * Lebendiger Balken-Effekt für HUD, Menüs und Overlays.
  *
  * Der Effekt zeigt ein Fenster der szenenweit geteilten {@link LivingFieldTexture}: ein einziger
- * Shader-Quad rendert das Blob-Feld offscreen, jeder Balken ist danach nur noch ein additiv
- * getintetes `Image`. Eine zusätzliche Instanz kostet damit einen batchbaren Quad statt vieler
- * CPU-aktualisierter Partikel.
+ * Shader-Quad rendert das Blob-Feld offscreen, jeder Balken ist danach genau ein additives
+ * `Image` des gemeinsamen Balken-SDF-Programms (`BarSdfGpu`). Es tastet das Feld selbst ab und
+ * maskiert analytisch mit der abgerundeten Kontur und dem Füllrechteck, ohne Kacheln oder
+ * Streifen, auch für runde Knoten und Buttons.
  *
  * Zwei Dinge, die beim Ändern zählen:
  * - Die Blobgröße hängt an der Balkenhöhe, nicht an der Balkenbreite: eine Balkenhöhe entspricht
- *   `LIVING_FIELD_UNITS_PER_BAR_HEIGHT` Feldeinheiten. Ein sehr breiter Balken wird deshalb aus
- *   mehreren Kacheln zusammengesetzt statt gestreckt — das Feld ist in X periodisch, die Kacheln
- *   stoßen nahtlos aneinander.
+ *   `LIVING_FIELD_UNITS_PER_BAR_HEIGHT` Feldeinheiten. Ein sehr breiter Balken wiederholt das in X
+ *   periodische Feld nahtlos, statt es zu strecken.
  * - Im `low`-Profil entsteht gar nichts: kein Image, keine Aura, keine Atem-Anmeldung. Ohne den
  *   Schalter bliebe sonst die Feldtextur für einen unsichtbaren Balken am Rendern.
  */
@@ -175,7 +172,10 @@ export class LivingBarEffect {
   private field: LivingFieldTexture | null = null;
   private fieldActive = false;
   private breathDriver: LivingBreathDriver | null = null;
-  private tiles: LivingFieldTile[] = [];
+  private window: Phaser.GameObjects.Image | null = null;
+  private source: BarSdfSource | null = null;
+  private readonly instances: BarSdfInstance[] = [];
+  private samples: LivingFieldSample[] = [];
   /** Bildschirmpixel je Texturpixel. */
   private imageScale = 1;
   private energyIntensity = 0;
@@ -236,12 +236,18 @@ export class LivingBarEffect {
     this.destroyTiles();
   }
 
+  /** The contour the field is masked with: the authored shape, or the bar rectangle itself. */
+  private get clipShape(): LivingBarRoundedClip {
+    return this.opts?.clipShape ?? { kind: 'roundedRect', x: this.barX, y: this.barY,
+      width: this.fullWidth, height: this.barHeight, radius: 0 };
+  }
+
   private createTiles(): void {
     if (this.field || this.destroyed) return;
 
     const rect = { x: this.barX, y: this.barY, width: this.fullWidth, height: this.barHeight };
-    const bands = this.opts?.clipShape ? buildRoundedRectClipBands(this.opts.clipShape, rect) : [rect];
-    if (!Number.isFinite(this.barX) || !Number.isFinite(this.barY) || bands.length === 0) return;
+    const resolved = resolveLivingClip(this.clipShape, rect);
+    if (!Number.isFinite(this.barX) || !Number.isFinite(this.barY) || !resolved) return;
 
     const field = LivingFieldTexture.get(this.scene);
     // Ohne WebGL-Shader (Tests, exotische Kontexte) bleibt der Effekt still, statt einen
@@ -273,42 +279,36 @@ export class LivingBarEffect {
       }
     }
 
+    const samples: LivingFieldSample[] = [];
     for (let sample = 0; sample < weights.length; sample += 1) {
       const cropTop = verticalRange * (sample === 0 ? variation
         : variantFraction(this.barX + sample * 37, this.barY, this.palette.mid + keyHash));
-      // Fitting windows need no wrap; very shallow fills retain periodic X-tiling.
+      // Fitting windows need no wrap; very shallow fills repeat the X-periodic field seamlessly.
       const sourceRange = sourceWidth <= textureWidth ? textureWidth - sourceWidth : textureWidth;
-      let sourceX = compact ? sourceRange * (sample + variation) / weights.length : 0;
-      let covered = 0;
-      while (covered < this.fullWidth) {
-        const segmentWidth = Math.min(this.fullWidth - covered, (textureWidth - sourceX) * this.imageScale);
-        const segmentLeft = this.barX + covered;
-        const segmentRight = segmentLeft + segmentWidth;
-        for (const band of bands) {
-          const left = Math.max(band.x, segmentLeft);
-          const right = Math.min(band.x + band.width, segmentRight);
-          if (right <= left) continue;
-          const sx = sourceX + (left - segmentLeft) / this.imageScale;
-          const sy = cropTop + (band.y - this.barY) / this.imageScale;
-          const image = this.scene.add.image(left - sx * this.imageScale, band.y - sy * this.imageScale, field.getTextureKey())
-            .setOrigin(0, 0)
-            .setScale(this.imageScale)
-            .setBlendMode(Phaser.BlendModes.ADD)
-            .setVisible(false);
-          if (this.opts?.scrollFactor !== undefined) image.setScrollFactor(this.opts.scrollFactor);
-          this.container.addAt(image, insertionIndex++);
-          this.tiles.push({
-            image, sourceX: sx, sourceY: sy, sampleWeight: weights[sample],
-            bounds: { x: left, y: band.y, width: right - left, height: band.height },
-            gradientLeft: compact ? this.barX : segmentLeft,
-            gradientRight: compact ? this.barX + this.fullWidth : segmentRight,
-            tintStart: 0, tintEnd: 1,
-          });
-        }
-        covered += segmentWidth;
-        sourceX = 0;
-      }
+      const sourceX = compact ? sourceRange * (sample + variation) / weights.length : 0;
+      samples.push({ u: sourceX, v: cropTop, weight: weights[sample] });
     }
+    this.samples = samples;
+
+    const clip = resolved.clip;
+    const window = this.scene.add.image(clip.x, clip.y, '__WHITE')
+      .setOrigin(0, 0)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
+    // Size (not scale) of the contour: filters, bounds and input see the real footprint.
+    window.setSize(clip.width, clip.height);
+    if (this.opts?.scrollFactor !== undefined) window.setScrollFactor(this.opts.scrollFactor);
+    this.container.addAt(window, insertionIndex);
+    const textureKey = field.getTextureKey();
+    const textures = this.scene.textures;
+    this.source = {
+      instances: this.instances, count: 0, unitWidth: clip.width, unitHeight: clip.height,
+      texture: () => (textures.exists(textureKey) ? textures.get(textureKey) : null),
+    };
+    this.instances.length = 0;
+    for (let i = 0; i < samples.length; i++) this.instances.push(createBarSdfInstance(BAR_SDF_KIND.living));
+    attachBarSdf(window, this.source);
+    this.window = window;
 
     this.applyEnergyVisuals();
   }
@@ -328,7 +328,7 @@ export class LivingBarEffect {
 
   private applyEnergyVisuals(): void {
     const energy = this.energyIntensity;
-    for (const tile of this.tiles) this.applyTileEnergy(tile);
+    this.writeInstances();
 
     if (this.breathAura) {
       this.breathAura
@@ -359,43 +359,38 @@ export class LivingBarEffect {
     this.syncPresentation();
   }
 
-  private applyTileEnergy(tile: LivingFieldTile): void {
+  /**
+   * Writes every field sample for the current fill. The tint runs from the energized dark to the
+   * energized light colour across the filled width; the clip contour and the fill rectangle mask
+   * the window analytically. Returns whether any part of the fill lies inside the contour.
+   */
+  private writeInstances(): boolean {
+    const source = this.source;
+    if (!source) return false;
+    const width = Math.min(this.filledWidth, this.fullWidth);
+    const fill = { x: this.barX, y: this.barY, width, height: this.barHeight };
+    const resolved = width > 0 ? resolveLivingClip(this.clipShape, fill) : null;
+    if (!resolved) {
+      source.count = 0;
+      return false;
+    }
     const energy = this.energyIntensity;
     const dark = energyTint(this.palette.dark, this.palette.light, energy * 0.28);
     const light = energyTint(this.palette.light, 0xffffff, energy * 0.72);
-    const left = energyTint(dark, light, tile.tintStart);
-    const right = energyTint(dark, light, tile.tintEnd);
-    tile.image.setTint(left, right, left, right)
-      .setAlpha(this.baseIntensity * (1 + energy * 0.2) * tile.sampleWeight);
-  }
-
-  private applyCrop(width: number): boolean {
-    const fillRight = this.barX + width;
-    let visible = false;
-    for (const tile of this.tiles) {
-      const right = Math.min(tile.bounds.x + tile.bounds.width, fillRight);
-      if (right <= tile.bounds.x) {
-        tile.image.setVisible(false);
-        continue;
-      }
-      const gradientWidth = Math.min(fillRight, tile.gradientRight) - tile.gradientLeft;
-      const tintStart = (tile.bounds.x - tile.gradientLeft) / gradientWidth;
-      const tintEnd = (right - tile.gradientLeft) / gradientWidth;
-      if (tile.tintStart !== tintStart || tile.tintEnd !== tintEnd) {
-        tile.tintStart = tintStart;
-        tile.tintEnd = tintEnd;
-        this.applyTileEnergy(tile);
-      }
-      tile.image.setCrop(tile.sourceX, tile.sourceY,
-        (right - tile.bounds.x) / this.imageScale, tile.bounds.height / this.imageScale);
-      tile.image.setVisible(true);
-      visible = true;
-    }
-    return visible;
+    const clip = { ...resolved.clip, x: 0, y: 0 };
+    const local = { x: fill.x - resolved.clip.x, y: fill.y - resolved.clip.y, width: fill.width, height: fill.height };
+    const texelsPerUnit = 1 / this.imageScale;
+    const alpha = this.baseIntensity * (1 + energy * 0.2);
+    this.samples.forEach((sample, index) => {
+      setLivingInstance(this.instances[index], clip, local, { u: sample.u, v: sample.v, texelsPerUnit },
+        dark, light, alpha * sample.weight);
+    });
+    source.count = this.samples.length;
+    return true;
   }
 
   private hideTiles(): void {
-    for (const tile of this.tiles) tile.image.setVisible(false);
+    this.window?.setVisible(false);
   }
 
   private setFieldActive(active: boolean): void {
@@ -407,8 +402,9 @@ export class LivingBarEffect {
 
   private syncPresentation(): void {
     const show = !this.destroyed && this.enabled && this.active && this.filledWidth > 4 && this.baseIntensity > 0;
-    const visible = show && this.applyCrop(Math.min(this.filledWidth, this.fullWidth));
-    if (!visible) this.hideTiles();
+    const visible = show && this.writeInstances();
+    if (visible) this.window?.setVisible(true);
+    else this.hideTiles();
     this.setFieldActive(visible);
     if (visible) {
       this.ensureGlowVisual();
@@ -418,8 +414,11 @@ export class LivingBarEffect {
 
   private destroyTiles(): void {
     this.setFieldActive(false);
-    for (const tile of this.tiles) tile.image.destroy();
-    this.tiles = [];
+    this.window?.destroy();
+    this.window = null;
+    this.source = null;
+    this.instances.length = 0;
+    this.samples = [];
     this.field?.release();
     this.field = null;
   }

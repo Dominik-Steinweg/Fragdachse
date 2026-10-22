@@ -12,6 +12,14 @@ import type {
 } from '../types';
 import type { CoopMissionRuntime } from './CoopMissionRuntime';
 import { mergeSpawnZoneAlerts, spawnZoneAlertSignature } from '../systems/CoopDefenseSpawnZoneAlerts';
+import type { EnemyEntity } from '../entities/EnemyEntity';
+import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
+import {
+  EnemyAiDetailTiers,
+  resolveEnemyAiDetailOptions,
+  resolveEnemyEngagementReachPx,
+  type EnemyAiDetailSource,
+} from '../systems/navigation/EnemyAiDetail';
 
 /** Eine Figur der laufenden World, so weit die Coop-Mission sie liest. */
 export interface CoopMissionPlayerView {
@@ -119,6 +127,14 @@ export class CoopMissionHostUpdate {
   private lastSecondaryObjectivePresentationSignature: string | null = null;
   private lastSpawnZoneAlertSignature: string | null = null;
   private lastSpawnPlaceSignature: string | null = null;
+  /** Lives with this Activity's host order; rebuilt with the next Activity. */
+  private readonly aiDetail = new EnemyAiDetailTiers(resolveEnemyAiDetailOptions(
+    resolveEnemyEngagementReachPx(Object.values(COOP_DEFENSE_ENEMY_CONFIGS))));
+  private aiDetailNow = 0;
+  private readonly hostileTargetProbes = new WeakMap<EnemyEntity, {
+    readonly resolvePosition: () => { x: number; y: number };
+    readonly isTargetable: () => boolean;
+  }>();
 
   constructor(
     private readonly runtime: CoopMissionRuntime,
@@ -148,11 +164,38 @@ export class CoopMissionHostUpdate {
       metrics.navWorkerComputeMs = this.runtime.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0;
     }
     const intentStarted = metrics ? performance.now() : 0;
+    const aiDetail = this.updateAiDetail(nowMs);
     this.runtime.coopDefenseDecoyTargetSystem?.updateLocks();
-    this.runtime.enemyIntents?.update(this.runtime.enemyManager?.getAllEnemies() ?? [], nowMs);
+    this.runtime.enemyIntents?.update(this.runtime.enemyManager?.getAllEnemies() ?? [], nowMs, aiDetail);
     if (metrics) metrics.navIntentMs = performance.now() - intentStarted;
-    this.runCombatPhase(deltaMs, nowMs, countdownActive, weaponBalanceLabActive, metrics);
+    this.runCombatPhase(deltaMs, nowMs, countdownActive, weaponBalanceLabActive, metrics, aiDetail);
   }
+
+  /**
+   * Which hostile enemies are far from everything a player can see this frame.
+   *
+   * Every player's camera is an anchor, dead players included (their view holds where they fell),
+   * as are decoys and bosses (intro cameras frame them). Enemies that fight, breach, swim or lead
+   * keep full detail wherever they are.
+   */
+  private updateAiDetail(nowMs: number): EnemyAiDetailSource | null {
+    const enemyManager = this.runtime.enemyManager;
+    const geometry = this.runtime.flowFieldCoordinator?.getGeometry();
+    if (!enemyManager || !geometry) { this.aiDetail.clear(); return null; }
+    const tiers = this.aiDetail, enemies = enemyManager.getAllEnemies();
+    tiers.beginFrame(geometry.snapshot);
+    for (const player of this.port.getPlayers()) tiers.addAnchor(player.x, player.y);
+    for (const decoy of this.port.getDecoyTargets()) tiers.addAnchor(decoy.x, decoy.y);
+    for (const enemy of enemies) if (enemy.sprite.active && enemy.isBoss()) tiers.addAnchor(enemy.sprite.x, enemy.sprite.y);
+    this.aiDetailNow = nowMs;
+    tiers.classify(enemies, this.keepsFullAiDetail);
+    return tiers;
+  }
+
+  private readonly keepsFullAiDetail = (enemy: EnemyEntity): boolean => enemy.faction !== 'hostile'
+    || !enemy.sprite.active || enemy.isBoss() || enemy.isAmphibious()
+    || (this.runtime.enemyIntents?.getBreach(enemy.id) ?? null) !== null
+    || (this.runtime.coopDefenseEnemyAttackSystem?.getCurrentTarget(enemy.id, this.aiDetailNow) ?? null) !== null;
 
   /** Einmaliger synchroner Erstaufbau der Navigation im verborgenen Ladezustand. */
   prepareStartupCaches(nowMs: number): void {
@@ -219,6 +262,7 @@ export class CoopMissionHostUpdate {
     countdownActive: boolean,
     weaponBalanceLabActive: boolean,
     metrics: CoopMissionNavigationMetrics | null,
+    aiDetail: EnemyAiDetailSource | null,
   ): void {
     let measuredAt = metrics ? performance.now() : 0;
     // Spider phases (alert, rush, telegraph, leap, spit) and contact blasts precede movement in this frame.
@@ -257,6 +301,7 @@ export class CoopMissionHostUpdate {
       this.port.getSmokeSystem(),
       this.runtime.coopDefenseDecoyTargetSystem,
       this.runtime.coopDefenseEnemyAttackSystem,
+      aiDetail,
     );
     if (metrics) { metrics.enemyMovementMs = performance.now() - measuredAt; measuredAt = performance.now(); }
     if (!countdownActive) this.runtime.necromancySystem?.hostUpdate(nowMs, deltaMs);
@@ -368,11 +413,16 @@ export class CoopMissionHostUpdate {
       const candidates: EnemyAiTargetCandidate[] = [];
       for (const enemy of this.runtime.enemyManager?.getAllEnemies() ?? []) {
         if (enemy.faction !== 'hostile') continue;
-        candidates.push({
-          kind: 'hostile-enemy', id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
+        // The live probes only read the entity, so they are built once per enemy, not per frame.
+        let probes = this.hostileTargetProbes.get(enemy);
+        if (!probes) this.hostileTargetProbes.set(enemy, probes = {
           resolvePosition: () => ({ x: enemy.sprite.x, y: enemy.sprite.y }),
           isTargetable: () => enemy.faction === 'hostile' && enemy.sprite.active
             && enemy.getHp() > 0 && !enemy.isBurrowed(),
+        });
+        candidates.push({
+          kind: 'hostile-enemy', id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
+          resolvePosition: probes.resolvePosition, isTargetable: probes.isTargetable,
         });
       }
       for (const player of this.port.getPlayers()) {

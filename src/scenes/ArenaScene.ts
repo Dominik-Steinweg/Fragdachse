@@ -1276,7 +1276,10 @@ export class ArenaScene extends Phaser.Scene {
       });
       void import('../dev/scenario/controller').then(({ DevScenarioController }) => {
         if (!disposed) this.devScenario = new DevScenarioController(this, this.arenaRuntime,
-          (angle, trigger) => inputSystem.setDiagnosticInput(angle, trigger), () => this.lobbyOverlay.isRevealComplete());
+          (angle, trigger) => inputSystem.setDiagnosticInput(angle, trigger), () => this.lobbyOverlay.isRevealComplete(),
+          () => inputSystem.getInteractionView(),
+          () => this.coopDefenseUpgradesOverlay?.isOpen() ? 'upgrades' : this.itemsOverlay?.isOpen() ? 'items'
+            : this.lobbyOverlay.isMerchantOpen() ? 'merchant' : this.baseEditor ? 'base' : null);
       }).catch(error => { console.error('[Dev scenario]', error); });
     }
     if (__PERFORMANCE_LAB__) {
@@ -1407,14 +1410,14 @@ export class ArenaScene extends Phaser.Scene {
       });
     });
     inputSystem.setupLobbyMenuProvider({
-      candidates: () => {
+      candidates: player => {
         const world = this.arenaRuntime.getWorldDescriptor();
         const metrics = this.arenaRuntime.getWorldMetrics();
         if (!world || !metrics || !isLobbyWorldDefinitionId(world.definitionId)
           || bridge.getGamePhase() !== 'LOBBY' || this.isWorldMenuBlocking()
           || bridge.getLocalWorldParticipation() !== 'interactive') return [];
         const access = this.lobbyMenuAccessState();
-        return lobbyBuildingCandidates(metrics, world.worldRevision, menu => lobbyMenuBlockedLabel(menu, access));
+        return lobbyBuildingCandidates(metrics, world.worldRevision, player, menu => lobbyMenuBlockedLabel(menu, access));
       },
       open: menu => this.openLobbyMenu(menu),
     });
@@ -1648,7 +1651,7 @@ export class ArenaScene extends Phaser.Scene {
       gameplayActive: worldActive && (!activityActive || gameplayActive),
       countdownActive,
       uiBlocking: optionsOpen,
-      diagnosticsArena: weaponBalanceLabArena || isDevScenarioMode() || (__PERFORMANCE_LAB__
+      diagnosticsArena: weaponBalanceLabArena || (isDevScenarioMode() && !this.devScenario?.humanInput) || (__PERFORMANCE_LAB__
         && (!!window.__FD_PERF_REQUEST__ || this.networkProbe)),
     });
     if (worldActive && localWorldPresentation.required && countdownActive) {

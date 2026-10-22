@@ -182,9 +182,10 @@ Resets sind stille Baselines, unveraenderte Refreshes keine Treffer. Der
 [HealthBarFeedbackModel](../../src/effects/health/HealthBarFeedbackModel.ts) besitzt nur lokale
 Feedbackzeit und Sichtbarkeit, keine Health-Authority. Der
 [WorldHealthBarRenderer](../../src/effects/health/WorldHealthBarRenderer.ts) wird einmal nach
-Zustands- und Positionssynchronisation vom Combat-Presentation-Controller getaktet. Seine
-View-Pools sind scene-langlebig; Entity-Bindings und ihre HP-Historie enden mit dem jeweiligen
-Owner. Der World-Presentation-Frame-Binding loest die verbleibenden World-Bindings vor dem
+Zustands- und Positionssynchronisation vom Combat-Presentation-Controller getaktet. Er zeichnet
+alle sichtbaren Balken einer Familie als Instanzen eines gemeinsamen SDF-Layers
+([BarSdfGpu](../../src/effects/bars/BarSdfGpu.ts), ein Draw je Familie und Tiefe); diese Layer
+sind scene-langlebig, Entity-Bindings und ihre HP-Historie enden mit dem jeweiligen Owner. Der World-Presentation-Frame-Binding loest die verbleibenden World-Bindings vor dem
 statischen Handoff. HP null verbirgt die Anzeige, invalidiert aber noch nicht das Handle:
 Die echte Entity-Entfernung bleibt beim Lifecycle-Owner. Die Consumer- und Handoff-Vertraege
 sichern [WorldHealthBarConsumers.test.ts](../../tests/integration/WorldHealthBarConsumers.test.ts)
@@ -322,6 +323,31 @@ Kollaps-Ereignisse, die Portal-Lichter und die Zielansicht aus dem Terrain-Farb-
   eingereichten Ende und seinem Partner (`playFlashAt`); ein Punkt ohne Ende bleibt ungerichtet.
 - Die Darstellung entscheidet nichts: Übertritt, Gates und Kollaps-Wirkung gehören dem Transport
   (siehe [gameplay.md](gameplay.md)).
+
+## Lobby-Bauwerke
+
+Die vier Menü-Bauwerke der LobbyWorld entstehen je aus einem Blender-Export
+([export-lobby-structures.mjs](../../scripts/asset-pipeline/export-lobby-structures.mjs)): Beauty, Albedo,
+Elevation (Höhe + oktaedrische Normale), Emissionsschichten, Solid-Maske und Sockets im Manifest
+[lobby-structures.json](../../src/assets/manifests/lobby-structures.json). Aus derselben Solid-Maske wird die
+Kontur in [lobbyStructureOutlines.json](../../src/config/authoring/lobbyStructureOutlines.json) abgeleitet
+(`sourceSha256` bindet beide); Kollision, Nebelbarriere, Figurenschatten-Ausschluss und Shift-Annäherung lesen nur
+diese Kontur, nie Texturen zur Laufzeit.
+
+- [LobbyStructureRenderer](../../src/arena/lobbyStructures/LobbyStructureRenderer.ts) stellt den Körper ins
+  Wachturm-Band (`DEPTH.ROCKS + .15`); Decals, Blut und Bodenschatten liegen darunter, Sonnen-Composite, Lightmap
+  und Nebel-Composite darüber.
+- Licht am Material ist ein MULTIPLY-Relief über der Albedo mit derselben `formationResponse` wie die Felsen,
+  Eigenschatten aus der Höhe in Sonnenrichtung und Lampen-/Mondrelief über `surfaceNightResponse`. Sonne, Wolken,
+  Mond und Relieflampen leiht allein `WorldSunlightPresentation` (Ziel `structures`); Low zeigt die Beauty.
+- Der Bodenschatten ist ein Höhenfeld-Raymarch mit Peilung und Profil aus `ShadowSystem.getLongCasterFrame`;
+  er gehört nie in den Chunk-Bake.
+- Emissionsschichten liegen über der Lightmap (ADD, `emissiveAlpha`); `forge` und `cyan` tragen eine Tagesgrundhelligkeit,
+  `lamp` folgt `getArtificialLightFactor`. Socket-Lichter nutzen eigene Presets.
+- Die Solid-Maske ist der Nebel-Dachstempel (`getFogSurfaceStamps`); eine eigene Dunstschicht gibt es nicht.
+- Mitarbeiter sind reine Präsentation ohne Körper und Netzwerk:
+  [LobbyStaffModel](../../src/arena/lobbyStructures/LobbyStaffModel.ts) entscheidet Arbeit, Hinwenden und Gruß,
+  Clip-Marker lösen GPU-Funken über das gemeinsame `GpuVfxSystem` aus.
 
 ## Große World-Flächen
 

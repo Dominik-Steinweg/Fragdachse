@@ -1,0 +1,24 @@
+{
+  "name": "LobbyEmber",
+  "contract": {
+    "id": "gpu:LobbyEmber",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "LobbyEmber",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.56
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "PowerUpPedestal"
+    ]
+  }
+}

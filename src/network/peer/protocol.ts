@@ -38,9 +38,13 @@
 // Reactive props: the required rp key carries explosive-barrel phases (index, phase code, progress byte).
 // Recharging reactive props: rp carries recharge phases and progress; required sw slice (bee swarms of
 // hives, one entry per swarm); sc carries the puffball dust styles.
+// Burning ground: fg carries base64 run-length blobs keyed by style and raster cell (full f, delta d)
+// and the warning band as full w or changed cells wd instead of JSON tuples with host ids.
+// Lobby structures: host physics and fog follow checked-in building outlines that the layout
+// fingerprint does not cover.
 // Spawn structures: csz also announces spawn structures (structure: true, zoneId = base id); spawn
-// points are the canonical U with the pit centre as spawn point.
-export const PEER_PROTOCOL_VERSION = 46;
+// points are the canonical carcass footprint with the brood pit centre as spawn point.
+export const PEER_PROTOCOL_VERSION = 48;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

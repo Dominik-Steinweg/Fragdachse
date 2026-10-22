@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts/asset-pipe
 from pose_validation_v2 import (EPSILON, require, near, matrix_values, set_frame, action_curves,
     animation_owners, snapshot, different_meshes, assert_same_pose, hierarchy_root,
     fixed_presentation, assert_fixed_presentation, assert_geometry_bounds, assert_clip_boundary,
-    rest_hold, required_moving_rigged)
+    rest_hold, required_moving_rigged, planted_motion)
 from contracts_v2 import validate_clips, validate_extensions
 from socket_anchors import sample_sockets, validate_socket_frames
 
@@ -188,7 +188,7 @@ def verify(scene, manifest, report, source_folder):
             movement.update(different_meshes(first, state))
             changed = different_meshes(idle, state)
             require(not changed.intersection(stable_upper), f'Player upper body moved: {sorted(changed.intersection(stable_upper))}')
-            if clip['motion'] == 'player_idle':
+            if planted_motion(clip['motion']):
                 require(not changed.intersection(roles['left_leg'] | roles['right_leg']), 'Breathing moves planted feet')
             moved.update(changed)
             # The transformed, evaluated vertices must remain inside the same
@@ -244,7 +244,8 @@ def verify(scene, manifest, report, source_folder):
     if stable_upper:
         checks.append({'name': 'player_weapon_grips_stay_fixed' if stable_grip else 'player_upper_body_stays_fixed', 'passed': True, 'meshes': len(stable_upper)})
     if balanced_player:
-        required_roles = ('head', 'arms', 'body') if all(c['motion'] == 'player_idle' for c in manifest['clips']) else tuple(roles)
+        # Standing staff work with planted feet, like breathing players; walkers move every role.
+        required_roles = ('head', 'arms', 'body') if all(planted_motion(c['motion']) for c in manifest['clips']) else tuple(roles)
         require(all(roles[role].issubset(moved_all) for role in required_roles), 'Balanced player contains unanimated required geometry roles')
         checks.append({'name': 'balanced_player_whole_body_motion', 'passed': True, 'roles': {role: len(names) for role, names in roles.items()}})
     if bases:

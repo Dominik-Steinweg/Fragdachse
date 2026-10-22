@@ -3,6 +3,7 @@ import { createSunTuning, resolveSunAtmosphere, SunAtmosphereClock } from '../sr
 import { describe, expect, it } from 'vitest';
 import { FogBankField, fogPileEnvelope, fogShoreRamp, fogDayWeight, snapshotFogBoundary } from '../src/effects/groundFog/FogBankField';
 import { FogTerrainModel } from '../src/effects/groundFog/FogTerrainModel';
+import { rasterizeStructure, translateStructureRects, type StructureRect } from '../src/arena/StructureOutline';
 import { validateSunTuning } from '../src/effects/sunlight/SunTuning';
 
 const decode=(data:Uint8Array,x:number,y:number)=>((data[(y*64+x)*4]*256+data[(y*64+x)*4+1])/65535-.5)*128;
@@ -59,6 +60,35 @@ describe('fog bank boundary contracts',()=>{
     for(let y=0;y<64;y++)for(let x=0;x<64;x++)expect(Math.abs(decode(a,x,y))).toBeLessThanOrEqual(64);
     terrain.removeObstacle('rock');field.build(terrain,1,0,b,64,0,0);
     expect(decode(b,0,33)).toBeCloseTo(64);
+  });
+  it('follows a structure outline at 8 px: barrier equals its raster, the signed distance crosses zero on it',()=>{
+    const frame={offsetX:70,offsetY:90,width:1024,height:512};
+    const terrain=new FogTerrainModel(frame,[]);
+    const local:StructureRect[]=[{x:0,y:0,width:160,height:40,edges:15},{x:16,y:40,width:144,height:48,edges:12},{x:0,y:88,width:160,height:40,edges:15}];
+    const ox=8*32,oy=2*32,world=translateStructureRects(local,frame.offsetX+ox,frame.offsetY+oy);
+    terrain.setFineObstacle('base:hall',world,true);
+    expect(terrain.changed.size).toBe(0);
+    const raster=rasterizeStructure(local);
+    for(let row=-2;row<raster.rows+2;row++)for(let col=-2;col<raster.cols+2;col++) {
+      const inside=row>=0&&col>=0&&row<raster.rows&&col<raster.cols&&raster.mask[row*raster.cols+col]===1;
+      expect(terrain.isBlockedAt(ox+col*8+4,oy+row*8+4),`${col},${row}`).toBe(inside);
+      expect(terrain.sample(ox+col*8+4,oy+row*8+4)[0]).toBe(inside?0:255);
+    }
+    const field=new FogBankField(),sdf=new Uint8Array(64*64*4);
+    field.build(terrain,0,0,sdf,64,0,0);
+    const at=(col:number,row:number)=>decode(sdf,ox/8+col,oy/8+row);
+    for(let row=0;row<raster.rows;row++)for(let col=0;col<raster.cols;col++) {
+      const inside=raster.mask[row*raster.cols+col]===1;
+      expect(Math.sign(at(col,row))).toBe(inside?-1:1);
+    }
+    // Sample centres sit 4 px either side of every outline edge, so the zero crossing is the edge.
+    for(const [col,row,outCol,outRow] of [[0,0,-1,0],[0,0,0,-1],[19,10,20,10],[2,6,1,6],[10,15,10,16]]) {
+      expect(at(col,row)).toBeCloseTo(-4,1);expect(at(outCol,outRow)).toBeCloseTo(4,1);
+    }
+    terrain.acknowledge();
+    terrain.setFineObstacle('base:hall',[]);
+    expect(terrain.changed.size).toBe(20);expect(terrain.isBlockedAt(ox+84,oy+68)).toBe(false);
+    expect(terrain.sample(ox+84,oy+68)[2]).toBe(255);
   });
   it('snapshots interrupted topology fades without jumping to either endpoint',()=>{
     const data=new Uint8Array([255,255,0,0]);snapshotFogBoundary(data,.5);

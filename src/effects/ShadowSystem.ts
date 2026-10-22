@@ -5,7 +5,7 @@ import { quantizeSunAzimuth, type SunPathState } from './sunlight/SunPath';
 import type { SunCloudState } from './sunlight/cloudShadow';
 import { CharacterMeshShadowRenderer } from './CharacterMeshShadowRenderer';
 import { EnemyMeshShadowRenderer } from './EnemyMeshShadowRenderer';
-import { CharacterShadowReceiver } from './CharacterShadowReceiver';
+import { CharacterShadowReceiver, STRUCTURE_RECEIVER_TEXEL_PX, type CharacterShadowReceiverRect } from './CharacterShadowReceiver';
 import { writeShadowCellHull } from './sunlight/ShadowProjection';
 import {
   ARENA_OFFSET_X,
@@ -104,6 +104,11 @@ const STATIC_SHADOW_CASTERS: ReadonlyArray<{
   { config: SHADOW_CASTERS.trunk, group: 'trees' },
   { config: SHADOW_CASTERS.canopy, group: 'trees' },
 ];
+/** Cast bearing (unit, world px) and current shadow profile, lent per frame. */
+export interface LongCasterFrame {
+  x: number; y: number; lengthMult: number; softnessMult: number; opacityMult: number; visible: boolean;
+}
+
 /** Leere Kandidatenliste ohne Layout – spart eine Allokation je Region. */
 const EMPTY_INDEX_LIST: readonly number[] = [];
 const EMPTY_RUNTIME_ROCKS: readonly SyncedPlaceableRock[] = [];
@@ -217,14 +222,15 @@ export class ShadowSystem {
   private syncFigureReceiver(): CharacterShadowReceiver | null {
     if (!this.characterClouds || !this.lastStaticLayout) return null;
     if (!this.figureReceiver) {
-      this.figureReceiver = new CharacterShadowReceiver(this.scene, this.getStaticWorldBounds());
+      this.figureReceiver = new CharacterShadowReceiver(this.scene, this.getStaticWorldBounds(),
+        this.structureReceiverRects.length > 0 ? STRUCTURE_RECEIVER_TEXEL_PX : CELL_SIZE);
       this.characterReceiverDirty = true;
     }
     if (this.characterReceiverDirty) {
       const options = this.lastStaticOptions;
       this.figureReceiver.update(this.lastStaticLayout, options.offsetX ?? ARENA_OFFSET_X,
         options.offsetY ?? ARENA_OFFSET_Y, options.rockVisibilityPredicate, options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS,
-        this.baseCells.values(), this.collapsedBridges);
+        this.baseCells.values(), this.collapsedBridges, this.structureReceiverRects);
       this.characterReceiverDirty = false;
     }
     return this.figureReceiver;
@@ -248,6 +254,18 @@ export class ShadowSystem {
   }
   private characterReceiverDirty = true;
   private collapsedBridges: ReadonlySet<string> = new Set();
+  private structureReceiverRects: readonly CharacterShadowReceiverRect[] = [];
+  /**
+   * Structure roofs receive no figure shadows. Their outlines sit on an 8-px grid, so the receiver
+   * switches to finer texels while structures exist; that swap rebuilds the figure shadows.
+   */
+  syncStructureReceiverRects(rects: readonly CharacterShadowReceiverRect[]): void {
+    if (rects === this.structureReceiverRects) return;
+    const finer = rects.length > 0, wasFiner = this.structureReceiverRects.length > 0;
+    this.structureReceiverRects = rects;
+    if (finer !== wasFiner && this.figureReceiver) this.destroyFigureShadows();
+    this.characterReceiverDirty = true;
+  }
   /** Bridge decks receive figure shadows while they stand; the World bridge owner reports collapses. */
   setCollapsedBridges(ids: ReadonlySet<string>): void {
     if (ids.size === this.collapsedBridges.size && [...ids].every((id) => this.collapsedBridges.has(id))) return;
@@ -319,6 +337,19 @@ export class ShadowSystem {
     );
     this.enemyCasters++;
   };
+
+  /**
+   * Bearing and day/night profile the long static casters use this frame, for owners that draw
+   * their own height-field shadows (lobby structures). Never allocates; `visible` mirrors the
+   * World's shadow switch.
+   */
+  getLongCasterFrame(out: LongCasterFrame): LongCasterFrame {
+    const direction = this.sunDirection ?? WORLD_SHADOW_CONFIG.lightDirection;
+    out.x = direction.x; out.y = direction.y;
+    out.lengthMult = this.profile.lengthMult; out.softnessMult = this.profile.softnessMult;
+    out.opacityMult = this.profile.opacityMult; out.visible = this.shadowsVisible;
+    return out;
+  }
 
   /** Dynamic and long static casters follow the continuous cast bearing every frame;
    * short contact casters keep the throttled baked steps. The cast arc continues
