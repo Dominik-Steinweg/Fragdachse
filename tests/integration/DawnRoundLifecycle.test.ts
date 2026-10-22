@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', async () => {
   const { createRequire } = await import('node:module');
   const require = createRequire(new URL('../../node_modules/phaser/src/geom/index.js', import.meta.url));
-  // Phaser's installed numeric geometry has no browser dependency.
-  return { Geom: require('./index'), Math: require('../math') };
+  // Phaser's installed numeric geometry and blend-mode constants have no browser dependency.
+  return { Geom: require('./index'), Math: require('../math'), BlendModes: require('../renderer/BlendModes') };
 });
 import {
   PERSISTENT_BASE_MAX_AREA_STAGE,
