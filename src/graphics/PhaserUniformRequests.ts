@@ -27,7 +27,9 @@ export class UniformRequestMap {
   values(): unknown[] { return [...this.map.values()]; }
   getArray(): unknown[] { return this.values(); }
   each(callback: RequestCallback): this {
-    for (const [name, value] of this.map) if (callback(name, value) === false) break;
+    // forEach avoids an entry array per request on every program bind; `false` still stops.
+    let stopped = false;
+    this.map.forEach((value, name) => { if (!stopped && callback(name, value) === false) stopped = true; });
     return this;
   }
 }
