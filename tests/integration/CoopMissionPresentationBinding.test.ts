@@ -163,7 +163,7 @@ describe('CoopMissionPresentationBinding', () => {
     const enemy = { sprite: { x: 1, y: 2, setVisible: hide }, getAimAngle: () => 0,
       getAreaClawState: () => ({ revision: 0, attack: null }), getHp: () => 60, getMaxHp: () => 100, setVulnerable() {} };
     const manager = { getCombatTargetRef: () => localTarget, applyKrakenState: apply, getEnemy: () => enemy,
-      getAllEnemies: () => [], setSpawnEffectSuppressor() {}, applySnapshot() {}, updateClientInterpolation() {} };
+      getAllEnemies: () => [], setSpawnEffectSuppressor() {}, setSpawnEmergencePresenter() {}, applySnapshot() {}, updateClientInterpolation() {} };
     f.runtime.setEnemyManager(manager as never);
     Object.assign(f.reads, { getKrakenState: () => state,
       subscribeAreaClaw: vi.fn(() => releaseClaw), subscribePartHit: vi.fn(() => releaseHit) });
@@ -261,6 +261,7 @@ describe('CoopMissionPresentationBinding', () => {
       destroy: () => undefined,
       setVisualSink: () => undefined,
       setSpawnEffectSuppressor: () => undefined,
+      setSpawnEmergencePresenter: () => undefined,
     } as never;
     runtime.setEnemyManager(enemyManager);
 
