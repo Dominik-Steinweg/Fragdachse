@@ -30,10 +30,7 @@ export function createAuthoredTerrainGuard(
   const reservationRadius = resolvePersistentBaseReservationRadiusCells(persistentBase?.maxAreaStage);
   const baseRegions = bases.map(base => {
     const { width, height } = getBaseShapeDimensions(base.shape);
-    const origin = getBaseOriginForArena(base.anchor, width, height, cols, rows);
-    // Match runtime base placement; the editor separately rejects bases requiring clamping.
-    const x = Math.max(0, Math.min(origin.gridX, cols - width));
-    const y = Math.max(0, Math.min(origin.gridY, rows - height));
+    const { gridX: x, gridY: y } = resolveAuthoredBaseOrigin(base, cols, rows);
     const offsets = base.shape.kind === 'rectangle'
       ? Array.from({ length: width * height }, (_, i) => ({ gridX: i % width, gridY: Math.floor(i / width) }))
       : base.shape.cells;
@@ -110,6 +107,20 @@ export function normalizeCoopDefenseWater(config: WaterAuthoring, cols: number, 
   }
   // Canonical order makes equivalent area unions independent of rectangle order.
   return areas === undefined ? result : result.sort((a, b) => a.gridY - b.gridY || a.gridX - b.gridX);
+}
+
+/** Shape origin as runtime places it; the editor separately rejects bases requiring clamping. */
+export function resolveAuthoredBaseOrigin(
+  base: { readonly anchor: CoopBaseAnchor; readonly shape: CoopBaseShape },
+  cols: number,
+  rows: number,
+): { gridX: number; gridY: number } {
+  const { width, height } = getBaseShapeDimensions(base.shape);
+  const origin = getBaseOriginForArena(base.anchor, width, height, cols, rows);
+  return {
+    gridX: Math.max(0, Math.min(origin.gridX, cols - width)),
+    gridY: Math.max(0, Math.min(origin.gridY, rows - height)),
+  };
 }
 
 function getBaseShapeDimensions(shape: CoopBaseShape): { width: number; height: number } {

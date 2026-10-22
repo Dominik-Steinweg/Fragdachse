@@ -933,8 +933,10 @@ export class ArenaGenerator {
         const area = zoneArea(sourceConfig.zoneId);
         if (area) sourceGroups.push(this.getSpawnAreaCells(area, blocked, baseCells, bases));
       } else {
-        const source = bases.find((base) => base.id === sourceConfig.baseId);
-        if (source?.spawnCenter) sourceGroups.push([source.spawnCenter]);
+        // Gegner steigen in der Brutgrube auf und verlassen sie durch die Oeffnung.
+        const area = bases.find((base) => base.id === sourceConfig.baseId)?.spawnArea;
+        if (area) sourceGroups.push(area.mouth.filter((cell) => !blocked[cell.gridY]?.[cell.gridX]
+          && !baseCells.has(this.cellKey(cell.gridX, cell.gridY))));
       }
     }
     if (mapConfig.boss) {

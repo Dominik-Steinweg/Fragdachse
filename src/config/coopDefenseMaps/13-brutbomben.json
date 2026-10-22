@@ -231,12 +231,16 @@
             "gridY": 2
           },
           {
+            "gridX": 0,
+            "gridY": 3
+          },
+          {
             "gridX": 1,
-            "gridY": 2
+            "gridY": 3
           },
           {
             "gridX": 2,
-            "gridY": 2
+            "gridY": 3
           }
         ]
       },
@@ -280,12 +284,16 @@
             "gridY": 2
           },
           {
+            "gridX": 0,
+            "gridY": 3
+          },
+          {
             "gridX": 1,
-            "gridY": 2
+            "gridY": 3
           },
           {
             "gridX": 2,
-            "gridY": 2
+            "gridY": 3
           }
         ]
       },
@@ -303,7 +311,7 @@
       "anchor": {
         "kind": "grid",
         "gridX": 4,
-        "gridY": 18
+        "gridY": 17
       },
       "shape": {
         "kind": "cells",
@@ -329,12 +337,16 @@
             "gridY": 2
           },
           {
+            "gridX": 0,
+            "gridY": 3
+          },
+          {
             "gridX": 1,
-            "gridY": 2
+            "gridY": 3
           },
           {
             "gridX": 2,
-            "gridY": 2
+            "gridY": 3
           }
         ]
       },
@@ -378,12 +390,16 @@
             "gridY": 2
           },
           {
+            "gridX": 0,
+            "gridY": 3
+          },
+          {
             "gridX": 1,
-            "gridY": 2
+            "gridY": 3
           },
           {
             "gridX": 2,
-            "gridY": 2
+            "gridY": 3
           }
         ]
       },

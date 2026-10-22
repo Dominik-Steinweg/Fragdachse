@@ -154,45 +154,7 @@
       "clearingRadiusCells": 5,
       "structure": {
         "role": "spawn-point",
-        "faction": "hostile",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 0,
-            "gridY": 1
-          },
-          {
-            "gridX": 2,
-            "gridY": 1
-          },
-          {
-            "gridX": 0,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          }
-        ],
-        "spawnCenter": {
-          "gridX": 1,
-          "gridY": 1
-        }
+        "faction": "hostile"
       },
       "tiers": [
         {

@@ -11,8 +11,6 @@ import {
   COOP_DEFENSE_BASE_HP_BAR_GAP,
   COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL,
   DEPTH,
-  TEAM_BLUE_COLOR,
-  VOID_PALETTE,
 } from '../config';
 import type { CoopBaseFaction, CoopBaseTurretWeaponId } from '../config/coopDefenseMaps';
 import { UTILITY_CONFIGS, type PlaceableTurretUtilityConfig } from '../loadout/LoadoutConfig';
@@ -103,8 +101,6 @@ export class BaseEntity {
    * ausleuchten. Einmal aus den Bounds abgeleitet.
    */
   private readonly lightSpots: readonly { readonly x: number; readonly y: number; readonly radius: number }[];
-  private spawnCenterMarker: Phaser.GameObjects.Graphics | null = null;
-  private spawnCenterTween: Phaser.Tweens.Tween | null = null;
   private currentHp: number;
   private hpBaselineRevision = 0;
   private maxHp: number;
@@ -192,29 +188,6 @@ export class BaseEntity {
       this.turretAnimations?.bind(turret.id, image, turret.weaponId);
       image.setDisplaySize(visual.displaySize, visual.displaySize);
       this.turretImages.set(turret.id, image);
-    }
-
-    if (this.spec.role === 'spawn-point' && this.spec.spawnCenter) {
-      const marker = this.scene.add.graphics()
-        .setPosition(this.spec.spawnCenter.x, this.spec.spawnCenter.y)
-        .setDepth(DEPTH.BASES + 2);
-      marker.lineStyle(2, hostile ? VOID_PALETTE.primary : TEAM_BLUE_COLOR, 0.78);
-      marker.strokeCircle(0, 0, CELL_SIZE * 0.34);
-      marker.lineStyle(1, hostile ? VOID_PALETTE.bright : 0xb7e9ff, 0.75);
-      marker.strokeCircle(0, 0, CELL_SIZE * 0.18);
-      marker.lineBetween(-CELL_SIZE * 0.48, 0, CELL_SIZE * 0.48, 0);
-      marker.lineBetween(0, -CELL_SIZE * 0.48, 0, CELL_SIZE * 0.48);
-      registerGraphicsObject(this.scene, 'baseMarkers', marker);
-      this.spawnCenterMarker = marker;
-      this.spawnCenterTween = this.scene.tweens.add({
-        targets: marker,
-        alpha: { from: 0.45, to: 1 },
-        scale: { from: 0.92, to: 1.08 },
-        duration: 760,
-        ease: 'Sine.easeInOut',
-        yoyo: true,
-        repeat: -1,
-      });
     }
 
     // ── 2) HP-Bar (eine pro Basis, unter der Bounding-Box) ─────────────
@@ -380,12 +353,6 @@ export class BaseEntity {
     if (this.presentation) this.createPresentationRepresentation();
   }
 
-  getSpawnCenterWorldPosition(): { x: number; y: number } | null {
-    return this.isInert() || !this.spec.spawnCenter
-      ? null
-      : { x: this.spec.spawnCenter.x, y: this.spec.spawnCenter.y };
-  }
-
   getTurrets(): readonly BaseTurretRuntimeState[] {
     if (this.isInert()) return [];
     return this.spec.turrets.map((turret) => ({
@@ -538,7 +505,6 @@ export class BaseEntity {
         if (image.active) image.destroy();
       }
       this.turretImages.clear();
-      if (this.spawnCenterMarker?.active) this.spawnCenterMarker.setVisible(false);
       this.healthBars?.suppress(this.healthBar, true);
     } catch (error) {
       console.error('[BaseEntity] Destruction presentation failed', error);
@@ -575,8 +541,6 @@ export class BaseEntity {
     }
     this.turretImages.clear();
     this.turretAngles.clear();
-    this.spawnCenterTween?.stop();
-    if (this.spawnCenterMarker?.active) this.spawnCenterMarker.destroy();
     this.healthBars?.release(this.healthBar);
     this.healthBar = null;
   }
@@ -601,10 +565,6 @@ export class BaseEntity {
     this.turretImages.clear();
     this.vulnerableMarker?.destroy();
     this.vulnerableMarker = null;
-    this.spawnCenterTween?.stop();
-    this.spawnCenterTween = null;
-    if (this.spawnCenterMarker?.active) this.spawnCenterMarker.destroy();
-    this.spawnCenterMarker = null;
     this.healthBars?.release(this.healthBar);
     this.healthBar = null;
   }

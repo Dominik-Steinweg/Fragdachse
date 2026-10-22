@@ -3,6 +3,7 @@ import { commitFocused, element, type EditorEnvironment } from '../ui';
 import type { PreviewResult } from '../preview/generate';
 import { LAYERS, mapMetrics, mapObjects, moveMapObject, type MapObject } from './objects';
 import { getSpawnFrontInwardVector } from '../../../../src/utils/spawnFront';
+import { getSpawnStructureOutletVector } from '../../../../src/config/spawnStructure';
 import { FRONT_LABELS } from '../../shared/spawns';
 import { pickMapObject } from './selection';
 
@@ -120,6 +121,7 @@ export class MapCanvas {
       if (item.cells) { c.fillStyle = color + '70'; for (const cell of item.cells) c.fillRect(cell.gridX, cell.gridY, 1, 1); }
       else c.fillRect(item.x, item.y, item.w, item.h);
       c.strokeRect(item.x, item.y, item.w, item.h);
+      if (item.spawnPit) this.paintSpawnPit(c, item.spawnPit);
     }
     c.setLineDash([]);
     if (selected && !item.readonly) {
@@ -129,6 +131,17 @@ export class MapCanvas {
       for (const point of points) c.fillRect(point.x - size / 2, point.y - size / 2, size, size);
     }
     if (selected || this.scale > 14) { c.font = `${11 / this.scale}px system-ui`; c.fillStyle = '#eee7d7'; c.fillText(item.label, item.x, item.y - 5 / this.scale); }
+  }
+  /** Brood pit of a spawn structure plus an arrow out of its opening. */
+  private paintSpawnPit(c: CanvasRenderingContext2D, pit: NonNullable<MapObject['spawnPit']>): void {
+    const out = getSpawnStructureOutletVector(pit.outlet);
+    const cx = pit.x + pit.w / 2, cy = pit.y + pit.h / 2;
+    c.save(); c.setLineDash([]); c.fillStyle = '#b06cff55'; c.fillRect(pit.x, pit.y, pit.w, pit.h);
+    c.strokeStyle = '#d9a8ff'; c.lineWidth = 2 / this.scale; c.beginPath();
+    const tipX = cx + out.x * 1.6, tipY = cy + out.y * 1.6;
+    c.moveTo(cx, cy); c.lineTo(tipX, tipY);
+    c.moveTo(tipX - out.x * .45 - out.y * .35, tipY - out.y * .45 + out.x * .35); c.lineTo(tipX, tipY);
+    c.lineTo(tipX - out.x * .45 + out.y * .35, tipY - out.y * .45 - out.x * .35); c.stroke(); c.restore();
   }
   private lastWorld = { x: 0, y: 0 };
   private paintFront(c: CanvasRenderingContext2D, item: MapObject, selected: boolean): void {

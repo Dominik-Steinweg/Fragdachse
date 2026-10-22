@@ -228,7 +228,7 @@ function composeWorldAuthoring(template: DawnArenaTemplate, sites: readonly Reso
   return {
     ...template.world,
     mapId: toDawnMapId(template.id),
-    bases: sites.map(toSiteStructure),
+    bases: sites.map((site) => toSiteStructure(template, site)),
     siteClearings: sites.map((site): CoopDefenseMapSiteClearingConfig => ({
       id: site.siteId,
       gridX: site.slot.anchor.gridX,
@@ -241,14 +241,17 @@ function composeWorldAuthoring(template: DawnArenaTemplate, sites: readonly Reso
   };
 }
 
-/** Bauwerk der Site; `dormant` ist das Activity-Overlay, das der Adapter abspaltet. */
-function toSiteStructure(site: ResolvedDawnSite): CoopBaseConfig {
+/**
+ * Bauwerk der Site; `dormant` ist das Activity-Overlay, das der Adapter abspaltet. Ein Brutnest
+ * oeffnet seine Grube zur Basis, wohin seine Gegner laufen.
+ */
+function toSiteStructure(template: DawnArenaTemplate, site: ResolvedDawnSite): CoopBaseConfig {
   const { structure } = site.archetype;
-  const placement = resolveDawnSiteStructurePlacement(structure, site.slot.anchor);
+  const placement = resolveDawnSiteStructurePlacement(structure, site.slot.anchor, template.world.persistentBase.anchor);
   return {
     id: site.baseId,
-    // Site props draw the structures; the portal renderer draws the generator.
-    surface: 'none',
+    // Site props draw the outposts and the portal renderer the generator; spawn structures own their look.
+    ...(structure.role === 'spawn-point' ? {} : { surface: 'none' as const }),
     hpMax: site.tier.hpMax,
     faction: structure.faction,
     role: structure.role,
@@ -256,7 +259,7 @@ function toSiteStructure(site: ResolvedDawnSite): CoopBaseConfig {
     ...(site.archetype.objectiveType === 'carry' ? {} : { dormant: true }),
     anchor: { kind: 'grid', gridX: placement.anchor.gridX, gridY: placement.anchor.gridY },
     shape: { kind: 'cells', cells: placement.cells },
-    ...(structure.spawnCenter ? { spawnCenter: structure.spawnCenter } : {}),
+    ...(placement.spawnCenter ? { spawnCenter: placement.spawnCenter } : {}),
   };
 }
 
