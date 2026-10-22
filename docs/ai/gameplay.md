@@ -52,6 +52,17 @@ Nekromantie-Verbündeter routet und greift dann nicht an. `keepsRouting` markier
 den Körper nur hält (ruhende Hüpfer): Verbündete routen weiter, melden ihren Steuerpunkt und greifen
 an, laufen aber nicht. Dies sichert [NecromancyLifecycle.test.ts](../../tests/NecromancyLifecycle.test.ts).
 
+Die Coop-Activity stuft feindliche Gegner einmal pro Host-Frame nach ihrem Abstand zu allen Sichtfeldern
+ein ([EnemyAiDetail.ts](../../src/systems/navigation/EnemyAiDetail.ts)); Anker sind alle Spieler, auch tote,
+dazu Köder und Bosse. Außerhalb jedes Sichtfelds samt Randband lenkt ein Gegner ohne Gedränge-Ausweichen
+und vergleicht Ziele seltener, während die Route zum gebundenen Ziel im gewöhnlichen Takt aktuell bleibt.
+Nur die gewöhnliche Wegfolge in `EnemyManager.hostUpdateMovement` und das `EnemyIntentSystem` lesen diese
+Stufe; Angriffe, Spezialbewegungen, Ausweichen, Physik und Replikation nie. Kämpfende, durchbrechende,
+amphibische, verbündete und Boss-Einheiten bleiben voll. Ein neues Spezialverhalten, das aus der Distanz zu
+einem Spieler beginnt, trägt seine Reichweite in `resolveEnemyEngagementReachPx` ein, damit das Randband sie
+abdeckt. Dies sichern [EnemyAiDetail.test.ts](../../tests/EnemyAiDetail.test.ts),
+[EnemySeparationGrid.test.ts](../../tests/EnemySeparationGrid.test.ts) und die Intent-Tests.
+
 Verfolgungsgedächtnis gehört dem `EnemyIntentSystem`. Der Zielkatalog trennt dafür die Erlaubnis,
 eine beobachtete Spielerposition zu behalten, vom Zugriff auf ein aktuelles Angriffsziel.
 Einbuddeln erhält nur die Erinnerung; unterirdische Positionen aktualisieren sie nicht.
