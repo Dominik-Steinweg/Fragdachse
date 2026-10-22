@@ -209,19 +209,22 @@ export const SHADOW_CASTERS = {
     footprintWidthPx: PLAYER_SIZE,
     footprintHeightPx: PLAYER_SIZE,
   },
-  /** Reaktive Map-Objekte (Fässer): kurzer runder Kontaktschatten unter dem Sprite. */
+  /** Reaktive Map-Objekte (Fässer): runder Schatten, der sichtbar neben dem Sprite hervortritt. */
   reactiveProp: {
     enabled: true,
     layerDepth: DEPTH.ROCKS + 0.12,
-    castHeightPx: 7,
-    opacity: 0.46,
-    softnessPx: 3,
+    // Long enough to step out beside the 32 px sprite; a pure contact shadow hides under the barrel.
+    castHeightPx: 24,
+    // Above 1 on purpose: the blur layers only sum to about half of this value in the core.
+    opacity: 1.3,
+    softnessPx: 2,
     blurLayers: 6,
     stretch: 0.9,
+    // Inside the drawn rim: a wider footprint peeks out on the sun-facing side of the barrel.
     inflatePx: 0,
     shape: 'circle',
-    footprintWidthPx: 25,
-    footprintHeightPx: 25,
+    footprintWidthPx: 24,
+    footprintHeightPx: 24,
   },
   turret: {
     enabled: true,
