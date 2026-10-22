@@ -55,12 +55,12 @@ def main():
     args = ap.parse_args()
     folder = Path(args.folder)
     badger = Image.open(args.badger).convert('RGBA') if args.badger else None
-    rows = [r.split(':', 1) for r in args.rows.split(',')]
-    variants = args.variants.split(',')
+    # Row: id:Label or id:Label:v1+v2 (per-row variants override --variants).
+    rows = [(r.split(':') + [''])[:3] for r in args.rows.split(',')]
     cells = []
-    for rid, label in rows:
+    for rid, label, own in rows:
         row = []
-        for v in variants:
+        for v in (own.split('+') if own else args.variants.split(',')):
             d = folder / f'{rid}-{v}'
             top = Image.open(d / 'top.png').convert('RGBA')
             oblique = Image.open(d / 'oblique.png').convert('RGBA')

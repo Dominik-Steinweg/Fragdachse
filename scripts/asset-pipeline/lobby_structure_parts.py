@@ -25,6 +25,11 @@ def palette(c, spec):
         rust2=m('Weathered rust sheet', (98, 74, 56), .40),
         tin=m('Galvanized roof sheet', (118, 122, 116), .42),
         paving=m('Worn paving stone', (100, 98, 90), .38),
+        camo_green=m('Camouflage leaf green', (54, 64, 40), .22),
+        camo_brown=m('Camouflage leaf brown', (86, 70, 48), .22),
+        container=m('Faded container paint', (96, 102, 92), .40),
+        brick=m('Fired clay brick', (128, 76, 58), .30),
+        sand=m('Builder sand', (164, 146, 108), .15),
         slate=m('Slate shingle', (72, 76, 78), .26),
         shingle=m('Split wood shingle', (98, 80, 60), .30),
         canvas=m('Weathered canvas', (156, 140, 104), .25),
@@ -383,6 +388,76 @@ def lamp_post(c, x, y, h, p, arm=(0, -.35)):
     beam(c, 'Lamp bracket arm', (x, y), (x + arm[0], y + arm[1]), .04, h - .05, p['dark'])
     from dawn_lobby_details import lantern
     lantern(c, x + arm[0], y + arm[1], h - .32, p)
+
+
+def strut(c, name, a, b, w, h, mat, bevel=.012):
+    """A squared member between two 3-D points (rafters, chords, braces)."""
+    a, b = Vector(a), Vector(b)
+    d = b - a
+    ob = c.box(name, tuple((a + b) / 2), (d.length, w, h), mat, bevel)
+    ob.rotation_mode = 'QUATERNION'
+    ob.rotation_quaternion = Vector((1, 0, 0)).rotation_difference(d)
+    return ob
+
+
+def lattice_jib(c, start, end, width, depth, p, mat, bays=10):
+    """Triangular crane truss: two bottom chords, one top chord and zigzag diagonals."""
+    a, b = Vector(start), Vector(end)
+    axis = (b - a).normalized()
+    side = axis.cross(Vector((0, 0, 1))).normalized() * width / 2
+    up = Vector((0, 0, depth))
+    for s in (side, -side):
+        strut(c, 'Jib bottom chord', a + s, b + s, .06, .06, mat)
+    strut(c, 'Jib top chord', a + up, b + up * .35, .06, .06, mat)
+    for k in range(bays):
+        t0, t1 = k / bays, (k + 1) / bays
+        p0, p1 = a + (b - a) * t0, a + (b - a) * t1
+        top = lambda t, q: q + up * (1 - .65 * t)
+        for s in (side, -side):
+            strut(c, 'Jib lattice diagonal', p0 + s, top((t0 + t1) / 2, (p0 + p1) / 2), .03, .03, mat)
+            strut(c, 'Jib lattice diagonal', p1 + s, top((t0 + t1) / 2, (p0 + p1) / 2), .03, .03, mat)
+        strut(c, 'Jib cross rung', p1 + side, p1 - side, .035, .035, mat)
+
+
+def wheelbarrow(c, x, y, angle, p):
+    ca, sa = math.cos(angle), math.sin(angle)
+    def at(u, v, z): return (x + ca * u - sa * v, y + sa * u + ca * v, z)
+    tray = plate(c, 'Wheelbarrow steel tray', (0, 0, 0), [(-.35, -.28), (.25, -.22), (.32, 0), (.25, .22), (-.35, .28)], .2, p['olive'], .04)
+    tray.location = at(0, 0, .45); tray.rotation_euler.z = angle
+    c.cylinder('Wheelbarrow tray contents', at(-.03, 0, .55), .2, .02, p['sand'], 16)
+    wheel = c.cylinder('Wheelbarrow wheel', at(.45, 0, .18), .18, .08, p['rubber'], 20)
+    wheel.rotation_euler = (math.pi / 2, 0, angle + math.pi / 2)
+    for v in (-.2, .2):
+        strut(c, 'Wheelbarrow handle', at(.45, v * .3, .2), at(-.8, v, .55), .045, .045, p['oak'])
+
+
+def camo_net(c, x0, y0, x1, y1, z_back, z_front, p, seed=0, coverage=.62, rope=True):
+    """Leaf-patch net over a rope grid; holes let the racks underneath read from above."""
+    rng = random.Random(seed)
+    def z_at(y): return z_front + (z_back - z_front) * (y - y0) / max(.01, y1 - y0)
+    if rope:
+        # Dark, sagging carrier ropes only along the frame; the net itself carries the leaves.
+        for y in (y0, y1):
+            tube(c, 'Net carrier rope', [(x0 + (x1 - x0) * t, y, z_at(y) - .06 * math.sin(math.pi * t)) for t in [i / 8 for i in range(9)]], .01, p['tar'], 4)
+        for k in range(4):
+            x = x0 + (x1 - x0) * k / 3
+            tube(c, 'Net carrier rope', [(x, y0, z_at(y0)), (x, y1, z_at(y1))], .01, p['tar'], 4)
+    mats = [p['camo_green'], p['camo_green'], p['olive'], p['camo_brown']]
+    # Clustered coverage: blobs of leaves with open gaps between them, never a uniform sheet.
+    blobs = [(rng.uniform(x0, x1), rng.uniform(y0, y1), rng.uniform(.35, .7)) for _ in range(int((x1 - x0) * (y1 - y0) * 1.6))]
+    count = int((x1 - x0) * (y1 - y0) * 70 * coverage)
+    placed = 0
+    while placed < count:
+        bx, by, br = blobs[rng.randrange(len(blobs))]
+        a = rng.uniform(0, math.tau); d = br * math.sqrt(rng.random())
+        lx, ly = bx + d * math.cos(a), by + d * math.sin(a)
+        if not (x0 <= lx <= x1 and y0 <= ly <= y1): continue
+        k = rng.uniform(.9, 1.6)
+        leaf = plate(c, 'Camouflage net leaf patch', (0, 0, 0), [(-.13 * k, -.05 * k), (0, -.09 * k), (.13 * k, -.03 * k), (.09 * k, .07 * k), (-.06 * k, .08 * k)],
+                     .008, mats[rng.randrange(len(mats))], .003)
+        leaf.location = (lx, ly, z_at(ly) + rng.uniform(-.04, .02) - .05 * math.sin(math.pi * (lx - x0) / (x1 - x0)))
+        leaf.rotation_euler = (rng.uniform(-.3, .3), rng.uniform(-.3, .3), rng.uniform(0, math.tau))
+        placed += 1
 
 
 def socket(c, name, x, y, z):
