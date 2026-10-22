@@ -1649,7 +1649,7 @@ export class ArenaScene extends Phaser.Scene {
       gameplayActive: worldActive && (!activityActive || gameplayActive),
       countdownActive,
       uiBlocking: optionsOpen,
-      diagnosticsArena: weaponBalanceLabArena || isDevScenarioMode() || (__PERFORMANCE_LAB__
+      diagnosticsArena: weaponBalanceLabArena || (isDevScenarioMode() && !this.devScenario?.humanInput) || (__PERFORMANCE_LAB__
         && (!!window.__FD_PERF_REQUEST__ || this.networkProbe)),
     });
     if (worldActive && localWorldPresentation.required && countdownActive) {

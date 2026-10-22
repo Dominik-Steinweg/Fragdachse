@@ -55,6 +55,11 @@ export class DevScenarioController {
   aim: GridPoint = { gridX: 10, gridY: 10 };
   zoom = 1;
   cameraAtTarget = false;
+  /**
+   * Hands world input back to the human (or a pointer/keyboard driver) instead of the scenario.
+   * Only the lobby building review sets it; every scenario start takes input back.
+   */
+  humanInput = false;
   private worldLighting: WorldLightingMeasurement | null = null;
   private enemyMeshReview: EnemyMeshReview | null = null;
   private shapeDraft: ShapeDraftSpawn | null = null;
@@ -287,6 +292,7 @@ export class DevScenarioController {
     this.lastAction = { ok: false, error: this.message };
   }
   start(value: unknown): void {
+    this.humanInput = false;
     releaseFireControlReview(this);
     this.shapeDraft?.destroy(); this.shapeDraft = null;
     this.clearFigureSun();

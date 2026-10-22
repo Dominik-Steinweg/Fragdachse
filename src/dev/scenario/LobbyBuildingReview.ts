@@ -8,6 +8,7 @@ import { isLobbyWorldDefinitionId } from '../../config/authoring/lobbyWorld';
 import { nearestStructurePoint, structureBounds } from '../../arena/StructureOutline';
 import { isCoopDefenseMode } from '../../gameModes';
 import { getVisibleWorldView } from '../../graphics/CameraWorldView';
+import { getStoredCoopDefenseProgress, restoreStoredCoopDefenseProgress } from '../../utils/localPreferences';
 
 type Side = 'N' | 'E' | 'S' | 'W';
 const SIDES: readonly Side[] = ['N', 'E', 'S', 'W'];
@@ -82,6 +83,7 @@ function status(controller: DevScenarioController, fixture: Fixture) {
   const player = fixture.runtime.navigationLabPort.getPlayerPosition();
   const focus = controller.readInteraction()?.focus ?? null;
   return {
+    participation: bridge.getLocalWorldParticipation(),
     player,
     focus: focus ? { key: focus.key, subject: focus.subject, label: focus.label, blocked: focus.blocked } : null,
     openMenu: controller.readOpenLobbyMenu(),
@@ -106,8 +108,8 @@ async function waitForPlayer(runtime: ArenaRuntime, timeoutMs: number): Promise<
 
 /**
  * window.devScenario.run({action:'lobbyBuildingReview', step}) with step 'start',
- * 'approach:<menu>:<N|E|S|W>', 'time:<hh:mm>', 'fog:<strength>', 'quality:<level>', 'overlay:<on|off>'
- * or 'status'. Shift itself is pressed by the driver, exactly like a player.
+ * 'approach:<menu>:<N|E|S|W>', 'time:<hh:mm>', 'fog:<strength>', 'quality:<level>', 'overlay:<on|off>', 'unlock'
+ * or 'status'. The review hands world input to the driver: aim, walking and Shift are real input.
  */
 export async function runLobbyBuildingReview(controller: DevScenarioController, command: Record<string, unknown>): Promise<void> {
   const fixture = fixtures.get(controller);
@@ -121,6 +123,8 @@ export async function runLobbyBuildingReview(controller: DevScenarioController, 
       if (bridge.isHost() && !isCoopDefenseMode(bridge.getGameMode())) bridge.setGameMode('coop_defense');
       runtime.requestLocalWorldParticipation(true);
       await waitForPlayer(runtime, 20000);
+      // Pointer, movement keys and Shift reach the real input path, exactly like a player's.
+      controller.humanInput = true;
       drawOverlay(fixture);
       break;
     case 'approach': {
@@ -149,6 +153,13 @@ export async function runLobbyBuildingReview(controller: DevScenarioController, 
       const strength = Number(args[0]);
       if (!fog || !Number.isFinite(strength) || strength < 0 || strength > 3) throw new Error('Nebelstärke 0…3 erwartet.');
       fog.strength = strength;
+      break;
+    }
+    case 'unlock': {
+      // The dev tab keeps its own isolated storage; unlocking here never touches a real profile.
+      const progress = getStoredCoopDefenseProgress();
+      restoreStoredCoopDefenseProgress({ ...progress, itemsUnlocked: true, persistentBaseUnlocked: true,
+        dawn: { ...progress.dawn, debugUnlocked: true } });
       break;
     }
     case 'quality': controller.setQuality(args[0] as Parameters<DevScenarioController['setQuality']>[0]); break;
