@@ -25,6 +25,7 @@ from enemy_parts_b import plate
 from spawn_structure_concepts import BUILDINGS, ConceptKit
 import spawn_structure_concepts2 as second_round
 import spawn_structure_concepts3 as third_round
+from spawn_structure_carcass import CarcassKit, build_carcass
 
 OUTLET_TURN = {'south': 0.0, 'east': math.pi / 2, 'north': math.pi, 'west': -math.pi / 2}
 # VOID_PALETTE (src/config.ts): deep 0x6f16a8, primary 0xb347ff, bright 0xd98cff.
@@ -265,7 +266,9 @@ def build(c, spec):
     rng = random.Random(f'spawn-structure-{state}')
     pivot = root(c)
     concept = model.get('concept', 'armour')
-    if concept in third_round.BUILDINGS:
+    if concept == 'carcass':
+        build_carcass(c, CarcassKit(c, spec), random.Random('spawn-structure-carcass'))
+    elif concept in third_round.BUILDINGS:
         third_round.BUILDINGS[concept](c, third_round.ConceptKit3(c, spec), random.Random(f'spawn-structure-concept-{concept}'))
     elif concept in second_round.BUILDINGS:
         second_round.BUILDINGS[concept](c, second_round.ConceptKit2(c, spec), random.Random(f'spawn-structure-concept-{concept}'))

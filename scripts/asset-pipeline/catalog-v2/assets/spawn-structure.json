@@ -1,12 +1,12 @@
 {
   "id": "spawn-structure",
-  "label": "Spawnbauwerk (feindlich, U)",
+  "label": "Brutkadaver (Spawnbauwerk)",
   "category": "construction",
   "gameIds": [],
-  "reference": "scripts/asset-pipeline/references/spawn-structure.png",
-  "targetSize": 136,
+  "reference": "tools/source-art/spawn-structure/concept.png",
+  "targetSize": 256,
   "sourceSizes": [
-    272
+    512
   ],
   "forward": "south",
   "pivot": [
@@ -14,9 +14,9 @@
     0.5
   ],
   "description": {
-    "silhouette": "Hostile spawn structure: one continuous dark armour U (eight hitbox cells) around a free 2 x 2 brood pit, opening toward the defended base. A raised grey frame and dashed violet light strips run along every edge like on the enemy base; rough void brood, a brood heart and two chitin hooks sit inside the strips.",
-    "colors": "Near-black void armour plates and a grey frame in the style of the hostile base tiles; dark aubergine brood; violet (VOID_PALETTE) only in the edge strips, veins and heart.",
-    "anatomy": "Strict orthographic plan view, no ground or baked shadow. 1 BU = one 32 px cell; the pivot is the pit centre; the canvas covers 4.25 x 4.25 cells. Intact, damaged and rubble states x four opening directions share one canvas; emission is authored only on the veins and the heart."
+    "silhouette": "A giant long-dead beast curled into an open ring on 6 x 6 cells: open ribcage over the back, spine with spikes on the outer edge, a long flat snout end lower left and the jaw end curling in lower right; the two-cell gap between them faces the outlet.",
+    "colors": "Bleached grey-beige cracked hide and bone, torn holes with dark violet flesh; no light strips, the violet comes from the brood nest it encloses.",
+    "anatomy": "Strict orthographic plan view, painted (tools/source-art/spawn-structure, cut by spawn-structure-painted.py). 32 px per cell, pivot = nest centre shared with spawn-brood-pit; canvas 8 x 8 cells, opening south, turned at runtime. States intact/damaged/rubble."
   },
   "requiredClips": [],
   "production": "reference",
@@ -324,9 +324,9 @@
         "tint": 0.3
       }
     },
-    "concept": "armour"
+    "concept": "carcass"
   },
-  "orthoScale": 4.25,
+  "orthoScale": 8,
   "textures": {
     "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
     "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",

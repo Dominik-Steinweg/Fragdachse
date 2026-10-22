@@ -1,12 +1,12 @@
 {
   "id": "spawn-brood-pit",
-  "label": "Brutgrube des Spawnbauwerks",
+  "label": "Brutnest und Kriechboden des Spawnbauwerks",
   "category": "construction",
   "gameIds": [],
-  "reference": "scripts/asset-pipeline/references/spawn-structure.png",
-  "targetSize": 72,
+  "reference": "tools/source-art/spawn-structure/concept.png",
+  "targetSize": 320,
   "sourceSizes": [
-    144
+    640
   ],
   "forward": "south",
   "pivot": [
@@ -14,9 +14,9 @@
     0.5
   ],
   "description": {
-    "silhouette": "Free 2 x 2 spawn surface inside the spawn structure's U: sunken dark armour floor plates burst open by an irregular pool of black-violet brood ooze, broken plates tipped up around it and a clutch of eggs at one edge.",
-    "colors": "Darker continuation of the building's near-black armour; black-violet ooze with a wet sheen; a faint deep-violet depth glow only. No frame or light strips: those mark the walls.",
-    "anatomy": "Strict orthographic plan view at ground level, no baked shadow. 1 BU = one 32 px cell, pivot = pit centre shared with spawn-structure; canvas 2.25 x 2.25 cells. States sealed/active/dry; a runtime shader animates swells and the splash."
+    "silhouette": "A dense nest of glossy dark violet eggs in black-violet slime inside the carcass ring, on a round dark void creep stain that reaches beyond the carcass and frays out into the ground.",
+    "colors": "Black-violet slime and creep with fine violet veins, glossy violet egg highlights; dull crusted when sealed, grey dried husks when dry.",
+    "anatomy": "Strict orthographic plan view at ground level, painted (tools/source-art/spawn-structure). 32 px per cell, pivot = nest centre shared with spawn-structure; canvas 10 x 10 cells. States sealed/active/dry; a runtime shader animates the swells."
   },
   "requiredClips": [],
   "production": "reference",
@@ -371,7 +371,7 @@
     },
     "concept": "pool"
   },
-  "orthoScale": 2.25,
+  "orthoScale": 10,
   "textures": {
     "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
     "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",

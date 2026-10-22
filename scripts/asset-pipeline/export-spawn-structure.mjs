@@ -1,6 +1,9 @@
-// Spawn structure (GDD Spawnbauwerk V1): the U building and its brood pit as two congruent sheet assets.
+// Spawn structure (GDD Spawnbauwerk V1): the building and its brood pit as two congruent sheet assets.
 //   node scripts/asset-pipeline/export-spawn-structure.mjs render --label <prefix> [--blender <exe>]
 //   node scripts/asset-pipeline/export-spawn-structure.mjs export --label <prefix>
+//   node scripts/asset-pipeline/export-spawn-structure.mjs painted --label <prefix>
+// `painted` packs the Brutkadaver layers cut from the concept image (spawn-structure-painted.py):
+// one frame per state, opening south; the runtime turns the canvases toward the other openings.
 // Render uses the normal preview runner (same camera, lights, materials) once per frame variant and
 // structure-passes.py for the emissive layers and sockets. Export never re-renders. Both assets share
 // the pivot (pit centre) and the scale (32 px per Blender unit), so the runtime stacks them exactly.
@@ -149,8 +152,88 @@ async function exportSheets(label) {
   console.log(`manifest ${MANIFEST}`);
 }
 
+const PAINTED = {
+  building: { ...ASSETS.building, outlets: [null],
+    content: { rim: 'the flank facing the nest catches its violet light', veins: 'torn hide and crevices, pulse with an announced release',
+      core: 'violet flesh in the tears; spent residue in rubble' } },
+  pit: { ...ASSETS.pit, content: { glow: 'egg highlights and creep veins; none when dry' } },
+};
+
+/** One painted asset: congruent colour and emissive frames per state, already at source size. */
+async function exportPaintedAsset(asset, label, catalog, registry) {
+  const spec = catalog.find(a => a.id === asset.id);
+  const folder = path.join(repoRoot, 'art/poc/spawn-structure/painted', label, asset.id);
+  const { canvasCells, sourceSize: size, sockets } = JSON.parse(await readFile(path.join(folder, 'sockets.json'), 'utf8'));
+  if (size !== spec.sourceSizes[0] || canvasCells * 32 !== spec.targetSize) throw Error(`${asset.id}: painted canvas does not match the catalog`);
+  const color = [], passes = Object.fromEntries(Object.keys(asset.content).map(name => [name, []])), frames = [], masters = [];
+  for (const state of asset.states) {
+    const beauty = await readFile(path.join(folder, `${state}.png`));
+    const meta = await sharp(beauty).metadata();
+    if (meta.width !== size || meta.height !== size) throw Error(`${asset.id}/${state}: expected ${size}px`);
+    color.push(beauty);
+    const master = { state, beauty: hash(beauty) };
+    for (const name of Object.keys(asset.content)) {
+      const pass = await readFile(path.join(folder, `${state}-emission-${name}.png`));
+      passes[name].push(pass);
+      master[`emission-${name}`] = hash(pass);
+    }
+    frames.push({ index: frames.length, state, sockets });
+    masters.push(master);
+  }
+  const publicDir = `assets/sprites/pipeline-v2/${asset.id}`;
+  const directory = path.join(repoRoot, 'public', publicDir);
+  await mkdir(directory, { recursive: true });
+  const sheet = await packSheet(color, size);
+  const files = { 'idle.png': color[0], 'sheet.png': sheet.buffer };
+  const emissiveEntries = {};
+  for (const [name, frameBuffers] of Object.entries(passes)) {
+    const packed = await packSheet(frameBuffers, size);
+    files[`emissive-${name}.png`] = packed.buffer;
+    emissiveEntries[name] = { key: `${asset.textureKey}_emissive_${name}`, path: `./${publicDir}/emissive-${name}.png`,
+      sha256: hash(packed.buffer), content: asset.content[name] };
+  }
+  for (const [name, data] of Object.entries(files)) await writeFile(path.join(directory, name), data);
+  const runtime = {
+    id: asset.id, category: spec.category, gameIds: spec.gameIds, revision: label, variant: 'standard', sourceSize: size,
+    textureKey: asset.textureKey, sheetTextureKey: `${asset.textureKey}_sheet`,
+    runtimeContract: 'sheet', forward: spec.forward, pivot: spec.pivot, idleFrame: 0,
+    idlePath: `./${publicDir}/idle.png`, sheetPath: `./${publicDir}/sheet.png`, layout: sheet.layout, clips: [],
+    hashes: { idle: hash(color[0]), sheet: hash(sheet.buffer) },
+  };
+  registry.assets = [...registry.assets.filter(a => a.id !== asset.id), runtime];
+  await writeFile(path.join(directory, 'draft-source.json'), JSON.stringify({
+    quality: 'painted-concept-cut', targetSize: spec.targetSize, masters, runtime, sources: 'tools/source-art/spawn-structure',
+    export: { script: 'scripts/asset-pipeline/export-spawn-structure.mjs painted', cut: 'scripts/asset-pipeline/spawn-structure-painted.py', sharp: sharp.versions },
+  }, null, 2) + '\n');
+  console.log(`${publicDir}: ${color.length} frames of ${size}px, sheet ${sheet.layout.width}x${sheet.layout.height}`);
+  return {
+    id: asset.id, displaySize: spec.targetSize, sourceSize: size, canvasCells,
+    textureKey: runtime.textureKey, sheetTextureKey: runtime.sheetTextureKey, layout: sheet.layout,
+    states: asset.states, frameOrder: 'index = stateIndex', emissive: emissiveEntries, frames,
+  };
+}
+
+async function exportPainted(label) {
+  const catalog = (await readDemandCatalog(repoRoot)).assets;
+  const registry = await readPipelineRegistry(repoRoot);
+  const building = await exportPaintedAsset(PAINTED.building, label, catalog, registry);
+  const pit = await exportPaintedAsset(PAINTED.pit, label, catalog, registry);
+  await writePipelineRegistry(repoRoot, registry);
+  const manifest = {
+    version: 1, revision: label,
+    pivot: 'both canvases are centred on the brood nest centre at 32 px per world cell, opening south',
+    rotation: 'runtime: turn both canvases clockwise by quarter turns toward the outlet (src/config/spawnStructure.ts)',
+    emissiveEncoding: 'white RGB, alpha = emission intensity; congruent with the sheet layout; tint and blend (ADD) at runtime',
+    sockets: 'normalized full-canvas x/y (0..1, y down) of the south-facing canvas',
+    building, pit,
+  };
+  await writeFile(path.join(repoRoot, MANIFEST), JSON.stringify(manifest, null, 2) + '\n');
+  console.log(`manifest ${MANIFEST}`);
+}
+
 const { values, positionals } = parseArgs({ allowPositionals: true, options: { label: { type: 'string' }, blender: { type: 'string' } } });
 const label = identifier(values.label);
 if (positionals[0] === 'render') await render(label, values.blender);
 else if (positionals[0] === 'export') await exportSheets(label);
-else throw Error('Usage: export-spawn-structure.mjs render|export --label <prefix>');
+else if (positionals[0] === 'painted') await exportPainted(label);
+else throw Error('Usage: export-spawn-structure.mjs render|export|painted --label <prefix>');

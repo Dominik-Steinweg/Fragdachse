@@ -1,7 +1,8 @@
 /**
- * Canonical spawn structure (GDD Spawnbauwerk V1): a feindlicher Spawnpunkt ist immer ein U aus
- * 4x3 Zellen. Nur die 8 Wandzellen sind Basiszellen mit Hitbox; die 2x2-Innenflaeche ist die
- * Brutgrube, aus der die Gegner steigen, und oeffnet sich ueber zwei Zellen zur Seite `outlet`.
+ * Canonical spawn structure (GDD Spawnbauwerk V1): a feindlicher Spawnpunkt ist immer der Brutkadaver,
+ * ein zum Ring eingerolltes Riesentier auf 6x6 Zellen. Nur die 23 Koerperzellen sind Basiszellen mit
+ * Hitbox; die 2x3-Innenflaeche ist das Brutnest, aus dem die Gegner steigen, und oeffnet sich ueber
+ * zwei Zellen zwischen Schnauze und Kiefer zur Seite `outlet`.
  *
  * Authored bleiben `shape.cells` und `spawnCenter` (eine Zelle der Innenflaeche). Alles Weitere
  * wird hier aus genau einer Vorlage je Ausrichtung abgeleitet, damit Authoring, World,
@@ -28,9 +29,9 @@ export interface SpawnStructureTemplate {
   readonly outlet: SpawnStructureOutlet;
   readonly widthCells: number;
   readonly heightCells: number;
-  /** The 8 wall cells, relative to the shape origin. */
+  /** The body cells (hitbox), relative to the shape origin. */
   readonly cells: readonly SpawnStructureCell[];
-  /** The 2x2 brood pit, relative to the shape origin. */
+  /** The brood nest (walkable, no hitbox), relative to the shape origin. */
   readonly area: SpawnStructureRect;
   /** The two free cells directly in front of the opening, relative to the shape origin. */
   readonly mouth: readonly SpawnStructureCell[];
@@ -50,11 +51,27 @@ export interface ResolvedSpawnStructureArea {
   readonly mouth: readonly SpawnStructureCell[];
 }
 
-/** Long side of the U; the short side is one cell shorter. */
-export const SPAWN_STRUCTURE_LONG_SIDE_CELLS = 4;
+/** Width of the opening between snout and jaw. */
 export const SPAWN_STRUCTURE_AREA_CELLS = 2;
-/** Largest body (diameter, world px) a structure source may release into the 64 px pit. */
+/** Largest body (diameter, world px) a structure source may release through the 64 px opening. */
 export const SPAWN_STRUCTURE_MAX_ENEMY_DIAMETER_PX = 56;
+
+/**
+ * Body cells of the carcass opening south, traced from the painted sprite (more than half covered):
+ * spine and ribcage across the top, the snout end lower left, the jaw end curling lower right.
+ */
+const SOUTH_BODY = [
+  '.####.',
+  '######',
+  '##..##',
+  '##..##',
+  '##..##',
+  '....#.',
+] as const;
+const SOUTH_AREA: SpawnStructureRect = { gridX: 2, gridY: 2, widthCells: 2, heightCells: 3 };
+const SOUTH_MOUTH: readonly SpawnStructureCell[] = [{ gridX: 2, gridY: 5 }, { gridX: 3, gridY: 5 }];
+/** Quarter turns clockwise from the south-facing template (screen axes, y down). */
+const OUTLET_QUARTER_TURNS: Record<SpawnStructureOutlet, number> = { south: 0, west: 1, north: 2, east: 3 };
 
 const OUTLET_VECTORS: Record<SpawnStructureOutlet, { x: number; y: number }> = {
   north: { x: 0, y: -1 },
@@ -64,31 +81,28 @@ const OUTLET_VECTORS: Record<SpawnStructureOutlet, { x: number; y: number }> = {
 };
 
 function buildTemplate(outlet: SpawnStructureOutlet): SpawnStructureTemplate {
-  const horizontal = outlet === 'east' || outlet === 'west';
-  const widthCells = horizontal ? 3 : 4;
-  const heightCells = horizontal ? 4 : 3;
-  const area: SpawnStructureRect = {
-    gridX: outlet === 'west' ? 0 : 1,
-    gridY: outlet === 'north' ? 0 : 1,
-    widthCells: SPAWN_STRUCTURE_AREA_CELLS,
-    heightCells: SPAWN_STRUCTURE_AREA_CELLS,
-  };
-  const inArea = (x: number, y: number): boolean => x >= area.gridX && x < area.gridX + area.widthCells
-    && y >= area.gridY && y < area.gridY + area.heightCells;
-  const cells: SpawnStructureCell[] = [];
-  for (let y = 0; y < heightCells; y++) {
-    for (let x = 0; x < widthCells; x++) {
-      if (!inArea(x, y)) cells.push({ gridX: x, gridY: y });
-    }
+  let widthCells: number = SOUTH_BODY[0].length;
+  let heightCells: number = SOUTH_BODY.length;
+  let cells: SpawnStructureCell[] = [];
+  SOUTH_BODY.forEach((row, gridY) => [...row].forEach((mark, gridX) => { if (mark === '#') cells.push({ gridX, gridY }); }));
+  let area = SOUTH_AREA;
+  let mouth = [...SOUTH_MOUTH];
+  for (let turn = 0; turn < OUTLET_QUARTER_TURNS[outlet]; turn++) {
+    // One quarter turn clockwise: (x, y) -> (h - 1 - y, x); the opening moves south -> west -> north -> east.
+    const h = heightCells;
+    const turnCell = (cell: SpawnStructureCell): SpawnStructureCell => ({ gridX: h - 1 - cell.gridY, gridY: cell.gridX });
+    cells = cells.map(turnCell);
+    mouth = mouth.map(turnCell);
+    area = { gridX: h - area.gridY - area.heightCells, gridY: area.gridX, widthCells: area.heightCells, heightCells: area.widthCells };
+    [widthCells, heightCells] = [heightCells, widthCells];
   }
-  const mouth: SpawnStructureCell[] = [];
-  for (let index = 0; index < SPAWN_STRUCTURE_AREA_CELLS; index++) {
-    if (outlet === 'north') mouth.push({ gridX: area.gridX + index, gridY: -1 });
-    else if (outlet === 'south') mouth.push({ gridX: area.gridX + index, gridY: heightCells });
-    else if (outlet === 'west') mouth.push({ gridX: -1, gridY: area.gridY + index });
-    else mouth.push({ gridX: widthCells, gridY: area.gridY + index });
-  }
+  cells.sort((a, b) => a.gridY - b.gridY || a.gridX - b.gridX);
   return { outlet, widthCells, heightCells, cells, area, mouth };
+}
+
+/** Sprite rotation (radians, clockwise on screen) that turns the south-facing art toward `outlet`. */
+export function getSpawnStructureRotation(outlet: SpawnStructureOutlet): number {
+  return OUTLET_QUARTER_TURNS[outlet] * Math.PI / 2;
 }
 
 const TEMPLATES: Record<SpawnStructureOutlet, SpawnStructureTemplate> = {
@@ -128,7 +142,7 @@ export function isSpawnStructureAreaCell(template: SpawnStructureTemplate, cell:
     && cell.gridY >= area.gridY && cell.gridY < area.gridY + area.heightCells;
 }
 
-/** Authoring form of an U opening toward `outlet`; `spawnCenter` is the area's first cell. */
+/** Authoring form of the carcass opening toward `outlet`; `spawnCenter` is the area's first cell. */
 export function buildSpawnStructureShape(outlet: SpawnStructureOutlet): {
   readonly cells: readonly SpawnStructureCell[];
   readonly spawnCenter: SpawnStructureCell;
@@ -144,7 +158,7 @@ export function buildSpawnStructureShape(outlet: SpawnStructureOutlet): {
 export const SPAWN_STRUCTURE_RISE_STAGGER_MS = 300;
 /** Spacing (world px) between enemies that rise in the same tick, across the opening. */
 export const SPAWN_STRUCTURE_LANE_SPACING_PX = 14;
-/** Lanes stay within the inner half of the 64 px pit. */
+/** Lanes stay within the inner half of the 64 px wide nest. */
 const SPAWN_STRUCTURE_MAX_LANE_OFFSET_PX = 16;
 
 /** Deterministic offset across the opening for the `index`-th of `count` enemies of one tick. */

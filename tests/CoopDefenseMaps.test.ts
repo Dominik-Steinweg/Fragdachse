@@ -29,6 +29,7 @@ import {
 import { shouldDelayFirstPedestalSpawn } from '../src/powerups/PowerUpConfig';
 import { type PersistentBaseAreaStage } from '../src/persistentBase/PersistentBaseCore';
 import { resolveWorldBases } from '../src/arena/BaseRegistry';
+import { getSpawnStructureTemplate } from '../src/config/spawnStructure';
 import { toWorldDefinition } from '../src/config/authoring/coopDefenseAuthoringAdapter';
 import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 import { formatTimeOfDay, parseTimeOfDay } from '../src/effects/TimeOfDay';
@@ -443,10 +444,10 @@ describe('Coop defense map progression', () => {
         };
         expect(isCoopDefenseBaseObstacleClearanceCell(edgeCell.gridX, edgeCell.gridY, specs)).toBe(true);
         if (spec.role === 'spawn-point') {
-          // Kanonisches U: die 2x2-Grube ist frei, und beide Zellen vor der Oeffnung bleiben begehbar.
+          // Kanonischer Brutkadaver: das Nest ist frei, und beide Zellen vor der Oeffnung bleiben begehbar.
           const area = spec.spawnArea!;
           expect(area, `${map.mapId}:${spec.id}`).toBeDefined();
-          expect(spec.cells).toHaveLength(8);
+          expect(spec.cells).toHaveLength(getSpawnStructureTemplate(area.outlet).cells.length);
           for (let y = area.minGridY; y < area.minGridY + area.heightCells; y++) {
             for (let x = area.minGridX; x < area.minGridX + area.widthCells; x++) {
               expect(isCoopDefenseBaseCell(x, y, specs), `${map.mapId}:${spec.id} pit ${x}_${y}`).toBe(false);

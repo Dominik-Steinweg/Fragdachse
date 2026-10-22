@@ -1,33 +1,30 @@
 {
-  "quality": "accepted-authoring-preview",
-  "targetSize": 72,
+  "quality": "painted-concept-cut",
+  "targetSize": 320,
   "masters": [
     {
       "state": "sealed",
-      "previewInputHash": "78243b685768ed5bb785328891390101435e7b5cdde1b75cb3001c41743bb640",
-      "beauty": "05dfcaf44f2762b606483dccdd7481eeab2e723b44230b300bfcedd551bb87bb",
-      "emission-glow": "86d26d81b8233321d027792e105b9b1257b91dc0cab1f7b15d8d94faf31b9c0f"
+      "beauty": "f5ea346cc890337b3aca7f115103b589ef5d90e6a5c6139b7330ae325af1c439",
+      "emission-glow": "67c2a266de52d715e59754fec3a0212961ae5552d0418c2fad907300ee4550cf"
     },
     {
       "state": "active",
-      "previewInputHash": "9ef1357acc828af7676005e1c295a1bc09a83d75eab80027d55eaa057c791a6f",
-      "beauty": "6185f7ec1183f1e5463e8b499bfa68dcbb635d3441a983251ea54267c086993d",
-      "emission-glow": "dbb5b913e0934598a19b39c16e9754203e12e1086f88da4043a1493f722d9939"
+      "beauty": "fd7278f8d1b5d87b613d445a41f1e53fc47f125f04fb64f267687b7c4cd945fe",
+      "emission-glow": "8010ad3e99699e002a1e29bd3b3a0ab22877a20b0c138d7e2cad3a6ca0d1af50"
     },
     {
       "state": "dry",
-      "previewInputHash": "58c82874261fd0631a64c140fcf1b73793da9048c259b4e210708571e0d1800c",
-      "beauty": "120251df11b34bad8a0d0fdcad4a53b946af515c2606f20ef599b7c6660a3117",
-      "emission-glow": "4ef288fce60a3244bba69042efabbfacbc7a66bf4c7c9a1e7d6d7e73db8a3cd1"
+      "beauty": "34fdba255c9fcb1325f3e42205dc0637e8511b4b671f563374174e2e623ecae6",
+      "emission-glow": "7f87d55409c0317fdba73b4fd230d1afe0444653b3779556098b1c78e5f4781b"
     }
   ],
   "runtime": {
     "id": "spawn-brood-pit",
     "category": "construction",
     "gameIds": [],
-    "revision": "draft-b",
+    "revision": "carcass-p1",
     "variant": "standard",
-    "sourceSize": 144,
+    "sourceSize": 640,
     "textureKey": "construction_spawn_brood_pit",
     "sheetTextureKey": "construction_spawn_brood_pit_sheet",
     "runtimeContract": "sheet",
@@ -40,32 +37,26 @@
     "idlePath": "./assets/sprites/pipeline-v2/spawn-brood-pit/idle.png",
     "sheetPath": "./assets/sprites/pipeline-v2/spawn-brood-pit/sheet.png",
     "layout": {
-      "frameWidth": 144,
-      "frameHeight": 144,
+      "frameWidth": 640,
+      "frameHeight": 640,
       "margin": 2,
       "spacing": 4,
       "columns": 3,
       "rows": 1,
       "frameCount": 3,
-      "width": 444,
-      "height": 148
+      "width": 1932,
+      "height": 644
     },
     "clips": [],
     "hashes": {
-      "idle": "f414eb7d5a2790769f14c388e2c8e99583e8377e4ba3318023680aa881bcf44b",
-      "sheet": "0dbb13c2890b3ee45dd33a1c18c7cab023ff5aa9f182557a8a3470e4634da7c4"
+      "idle": "f5ea346cc890337b3aca7f115103b589ef5d90e6a5c6139b7330ae325af1c439",
+      "sheet": "21d3717740cf411e72abbb887d2c36c6260febd31f4ea6ee3eff12bb93edeca2"
     }
   },
-  "textures": {
-    "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
-    "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
-    "bone": "art/poc/dawn/textures/library/bone-weathered-02.png",
-    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
-    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
-  },
+  "sources": "tools/source-art/spawn-structure",
   "export": {
-    "script": "scripts/asset-pipeline/export-spawn-structure.mjs",
-    "passes": "scripts/asset-pipeline/structure-passes.py",
+    "script": "scripts/asset-pipeline/export-spawn-structure.mjs painted",
+    "cut": "scripts/asset-pipeline/spawn-structure-painted.py",
     "sharp": {
       "aom": "3.9.1",
       "archive": "3.7.4",

@@ -109,15 +109,20 @@ describe('Water terrain contracts', () => {
     };
     const map = normalizeCoopDefenseMapConfig(raw);
     const input = resolveArenaGenerationInput('coop_defense', resolveWorldMetrics(getArenaMetricsProfile('coop_defense', 'ARENA', map.arenaWidthCells, map.arenaHeightCells)));
+    const cells = raw.bases[0].shape.kind === 'cells' ? raw.bases[0].shape.cells : [];
+    const right = 30 + Math.max(...cells.map(c => c.gridX));
+    const bottom = 20 + Math.max(...cells.map(c => c.gridY));
     const ring = (minX: number, maxX: number, minY: number, maxY: number) => [
       [minX, minY], [31, minY], [maxX, minY], [minX, 21], [maxX, 21], [minX, maxY], [31, maxY], [maxX, maxY],
     ].map(([gridX, gridY]) => ({ gridX, gridY }));
-    // The east-facing spawn structure is one row taller than the 3x3 courtyard.
-    const bottom = role === 'spawn-point' ? 23 : 22;
-    const allowed = ring(28, 34, 18, bottom + 2);
+    // The inner cell: the 3x3 courtyard's centre, or the spawn structure's brood nest.
+    const inner = role === 'spawn-point'
+      ? { gridX: 30 + SPAWN_STRUCTURE.spawnCenter.gridX, gridY: 20 + SPAWN_STRUCTURE.spawnCenter.gridY }
+      : { gridX: 31, gridY: 21 };
+    const allowed = ring(28, right + 2, 18, bottom + 2);
     expect(normalizeCoopDefenseMapConfig({ ...raw, water: allowed }).water).toEqual(allowed);
     expect(ArenaGenerator.generate(183, input, { ...map, water: allowed }).water).toEqual(allowed);
-    for (const cell of [...ring(29, 33, 19, bottom + 1), { gridX: 31, gridY: 21 }]) {
+    for (const cell of [...ring(29, right + 1, 19, bottom + 1), inner]) {
       expect(() => normalizeCoopDefenseMapConfig({ ...raw, water: [cell] })).toThrow(/base clearance/);
       expect(() => normalizeCoopDefenseMapConfig({ ...raw, waterAreas: [{ ...cell, widthCells: 1, heightCells: 1 }] })).toThrow(/base clearance/);
       expect(() => ArenaGenerator.generate(183, input, { ...map, water: [cell] })).toThrow(/base clearance/);

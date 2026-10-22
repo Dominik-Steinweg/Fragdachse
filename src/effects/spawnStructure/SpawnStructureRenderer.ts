@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_LIGHTING, VOID_PALETTE } from '../../config';
+import { getSpawnStructureRotation } from '../../config/spawnStructure';
 import { resolveDawnSitePropHitFlash, type DawnSitePropHitFlash } from '../../arena/DawnSitePropModel';
 import type { LightingSystem } from '../LightingSystem';
 import {
@@ -25,8 +26,8 @@ export interface SpawnStructureShadowCell {
 const HIT_FLASH_TINT = 0x5a3a6a;
 /** Emissive passes keep a visible floor by day; the night carries their full strength. */
 const EMISSIVE_DAY_FLOOR = 0.4;
-/** The edge strips stay strong by day: they outline the hitbox like the enemy base's light strips. */
-const RIM_DAY_FLOOR = 0.75;
+/** The nest's light on the inner flank stays faint by day. */
+const RIM_DAY_FLOOR = 0.3;
 /** The animated pool surface: quad half size (room for the droplets) and pool radius, px. */
 const POOL_QUAD_HALF_PX = 52;
 const POOL_RADIUS_PX = 21;
@@ -45,10 +46,10 @@ interface StructureVisual {
 }
 
 /**
- * Presentation owner of every hostile spawn structure (GDD Spawnbauwerk V1), in every mode: the U
- * building over the hitbox cells and the brood pit in its opening, both from one asset family. The
- * walls speak the enemy base's armour with violet edge strips along the hitbox, the walkable pit is a
- * burst brood pool, and nothing here borrows the portal look. World-owned through BaseManager; Activity inputs (announced releases) are pushed in.
+ * Presentation owner of every hostile spawn structure (GDD Spawnbauwerk V1), in every mode: the
+ * Brutkadaver over the hitbox cells and the brood nest with its creep stain inside the curl, both
+ * from one painted asset family turned toward the outlet. Nothing here borrows the portal look.
+ * World-owned through BaseManager; Activity inputs (announced releases) are pushed in.
  */
 export class SpawnStructureRenderer {
   private readonly visuals = new Map<string, StructureVisual>();
@@ -108,12 +109,12 @@ export class SpawnStructureRenderer {
     this.pool.begin(nowMs);
     for (const view of views) {
       const visual = this.visuals.get(view.id) ?? this.create(view);
-      const state = resolveSpawnStructureBuildingState(view);
-      const frame = spawnStructureBuildingFrame(state, view.outlet);
-      for (const part of [visual.body, visual.rim, visual.veins, visual.core]) part.setFrame(frame).setPosition(view.x, view.y);
+      const frame = spawnStructureBuildingFrame(resolveSpawnStructureBuildingState(view));
+      const turn = getSpawnStructureRotation(view.outlet);
+      for (const part of [visual.body, visual.rim, visual.veins, visual.core]) part.setFrame(frame).setPosition(view.x, view.y).setRotation(turn);
       const pitFrame = spawnPitFrame(resolveSpawnPitState(view));
-      visual.pit.setFrame(pitFrame).setPosition(view.x, view.y);
-      visual.shimmer.setFrame(pitFrame).setPosition(view.x, view.y);
+      visual.pit.setFrame(pitFrame).setPosition(view.x, view.y).setRotation(turn);
+      visual.shimmer.setFrame(pitFrame).setPosition(view.x, view.y).setRotation(turn);
       for (const cell of visual.shadows) cell.active = !view.destroyed;
 
       if (visual.hpRevision !== view.hpRevision) { visual.flash = undefined; visual.hpRevision = view.hpRevision; }
@@ -125,7 +126,6 @@ export class SpawnStructureRenderer {
       const glow = resolveSpawnStructureGlow(view, nowMs, charge);
       this.pool.add({ x: view.x, y: view.y, halfSize: POOL_QUAD_HALF_PX, radius: POOL_RADIUS_PX, charge,
         state: PIT_STATE_CODE[resolveSpawnPitState(view)], seed: phaseOf(view.id) / 6.283, swells: this.resolveSwells(view.id, nowMs) });
-      // The edge strips carry the hitbox outline by day as well, like the enemy base's accent glow.
       visual.rim.setTint(VOID_PALETTE.primary).setAlpha(glow.rim * Math.max(RIM_DAY_FLOOR, night));
       visual.veins.setTint(VOID_PALETTE.primary).setAlpha(glow.veins * emissive);
       visual.core.setTint(VOID_PALETTE.bright).setAlpha(glow.core * emissive);
@@ -197,7 +197,7 @@ export class SpawnStructureRenderer {
     const image = (key: string, size: number) => this.scene.add.image(view.x, view.y, key, 0).setOrigin(0.5).setDisplaySize(size, size);
     const buildingSize = SPAWN_STRUCTURE_BUILDING.displaySize;
     const pitSize = SPAWN_STRUCTURE_PIT.displaySize;
-    // The pit lies on the foundation layer, under the walls' baked shadow (DEPTH.BASES - 0.35).
+    // The nest and its creep stain lie on the foundation layer, under the carcass.
     const basin = this.scene.add.image(view.x, view.y, SPAWN_STRUCTURE_TEXTURES.pit, 0).setDisplaySize(pitSize, pitSize)
       .setDepth(DEPTH.BASE_GROUNDING + 0.1);
     const body = this.scene.add.image(view.x, view.y, SPAWN_STRUCTURE_TEXTURES.building, 0).setDisplaySize(buildingSize, buildingSize)

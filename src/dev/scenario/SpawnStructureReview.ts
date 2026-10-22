@@ -29,14 +29,15 @@ class SpawnStructureReview {
     this.renderer.setLighting(lighting);
     this.renderer.setChargeProvider(() => this.charge);
     const layout: [SpawnStructureOutlet, ReviewState, number, number][] = [
-      ...SPAWN_STRUCTURE_OUTLETS.map((outlet, i): [SpawnStructureOutlet, ReviewState, number, number] => [outlet, 'active', (i - 1.5) * 5.5, -3]),
-      ['south', 'sealed', -5.5, 3], ['south', 'damaged', 0, 3], ['south', 'rubble', 5.5, 3],
+      ...SPAWN_STRUCTURE_OUTLETS.map((outlet, i): [SpawnStructureOutlet, ReviewState, number, number] => [outlet, 'active', (i - 1.5) * 8, -5]),
+      ['south', 'sealed', -8, 5], ['south', 'damaged', 0, 5], ['south', 'rubble', 8, 5],
     ];
     this.views = layout.map(([outlet, state, dx, dy], index) => {
       const x = Math.round(centre.x / CELL_SIZE + dx) * CELL_SIZE, y = Math.round(centre.y / CELL_SIZE + dy) * CELL_SIZE;
       const template = getSpawnStructureTemplate(outlet);
-      // Pit centre on a cell corner; wall cells relative to the template's pit.
-      const originX = x - (template.area.gridX + 1) * CELL_SIZE, originY = y - (template.area.gridY + 1) * CELL_SIZE;
+      // Nest centre at (x, y); body cells relative to the template's nest.
+      const originX = x - (template.area.gridX + template.area.widthCells / 2) * CELL_SIZE;
+      const originY = y - (template.area.gridY + template.area.heightCells / 2) * CELL_SIZE;
       return {
         id: `review-${index}`, x, y, outlet, maxHp: 100, hp: state === 'damaged' ? 30 : state === 'rubble' ? 0 : 100,
         dormant: state === 'sealed', destroyed: state === 'rubble', live: true, hpRevision: 0,

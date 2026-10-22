@@ -6,7 +6,7 @@ import type { SpawnStructureOutlet } from '../../config/spawnStructure';
  */
 export interface SpawnStructureView {
   readonly id: string;
-  /** Brood pit centre: the shared pivot of the building and the pit asset. */
+  /** Brood nest centre: the shared pivot of the carcass and the nest asset. */
   readonly x: number;
   readonly y: number;
   readonly outlet: SpawnStructureOutlet;
@@ -18,7 +18,7 @@ export interface SpawnStructureView {
   readonly live: boolean;
   /** Changes when HP is re-baselined (Activity bound or reset), so feedback never replays. */
   readonly hpRevision: number;
-  /** World centres of the eight wall cells (the hitbox); stable per structure. */
+  /** World centres of the body cells (the hitbox); stable per structure. */
   readonly wallCells: readonly { readonly x: number; readonly y: number }[];
 }
 
@@ -40,7 +40,7 @@ export function resolveSpawnPitState(view: SpawnStructureView): SpawnPitState {
 }
 
 export interface SpawnStructureGlow {
-  /** The violet edge strips along the hitbox, like the enemy base's accent glow. */
+  /** The nest's violet light on the carcass flank facing it. */
   readonly rim: number;
   readonly veins: number;
   readonly core: number;

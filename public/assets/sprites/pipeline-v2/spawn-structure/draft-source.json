@@ -1,123 +1,36 @@
 {
-  "quality": "accepted-authoring-preview",
-  "targetSize": 136,
+  "quality": "painted-concept-cut",
+  "targetSize": 256,
   "masters": [
     {
       "state": "intact",
-      "outlet": "north",
-      "previewInputHash": "766fd202e02d511943722c40fd4ac6109a7348cb57a2eece5c287a9deb440e98",
-      "beauty": "a923600f883ac91c23cd58fdb8a106a4296a7db35efbdae9d65410c8d355da37",
-      "emission-rim": "8c87969a652875ae67ae1d7d263061cb484799aa82f3c1e92270532627a29004",
-      "emission-veins": "97ccfe5559289f6564237dc7074f11c5fe9c737b92f1b90ae7e75451829d3cbb",
-      "emission-core": "6e9d583c28d28aa124b46b0a43daefb257ceb3768f5b3b3b5cb3c8fe22e423a6"
-    },
-    {
-      "state": "intact",
-      "outlet": "east",
-      "previewInputHash": "a2e0bf80e43c77b51fede8cf4f5f43a4d4fb5c675b15d46d0f35a6d04445b04f",
-      "beauty": "805e776e03c0ebc4501acee726dc8231b877dfb1f9adf3c3a37beb0c19f2871c",
-      "emission-rim": "26474fd4877185f456684fd3685c3a98e161b7f11da69c27ff24f78712d9756e",
-      "emission-veins": "ffdc45b89f7f40a5310ffd82c987c69ae3125c98f97ca5a4a161607be85ea36e",
-      "emission-core": "a08b352639d180f28cc80704de46ad922444a8350adf1efcbf3b80de6e0cb410"
-    },
-    {
-      "state": "intact",
-      "outlet": "south",
-      "previewInputHash": "3fbee4bebbfc6cef32abb7646ac5c9e61639eb56a41f587971762c05b52aa768",
-      "beauty": "2abcbeda650bf01c2a8bcf11c8c9a301b8cc45fb1aa602ae92fb12d1e4de5921",
-      "emission-rim": "cc8e2d138888a4159714e6cfbaa2ce6cc6c112dc7b1d3502f8f4bbae050e47d4",
-      "emission-veins": "233ce975621fe80e89a0568c0365b4b35157a3ffae47b99c982e52eaedd460df",
-      "emission-core": "a4cb3697a70531458320def0ba2ad273c1e88358bfd3361e4b6f1e90333cccf6"
-    },
-    {
-      "state": "intact",
-      "outlet": "west",
-      "previewInputHash": "3336fffb34bd2d05791720f61b313d26ca9776ff12dd47255f052daa0b9e4244",
-      "beauty": "b575cd158f3b778a98ec664527c9671fd65d573383b60f021a9f8724ac075e4c",
-      "emission-rim": "8291f561765bf35b30a443587f48d5948b588018627fb4bee599ee56074cc676",
-      "emission-veins": "42016ff835fc3ec216c38a4404722754e430b0fab6833323cb6bff31fb7475f4",
-      "emission-core": "fb4ae9baf951c7820f906f1088b01b0410e297788573ac47c6611acde31a7e4d"
+      "beauty": "46f8da64ec561933316c1c5f250052d1bdd56b4983ab7666f6709f5495b14ebf",
+      "emission-rim": "b6bd1890d94a34d97cd204018e2eaec2e28b39ab9fbc6106e1fbb38647b82cac",
+      "emission-veins": "3ca4428c39116e2ba82b1796bd18b1365e88cb2af43a004133660c2e8520e04d",
+      "emission-core": "05f537645690af880bdf5ad0ba455b151346efc87fe2a9a3b0641b95c8c97171"
     },
     {
       "state": "damaged",
-      "outlet": "north",
-      "previewInputHash": "48ebc7d9cb6faf9058517aa59f200789f06eb33072d82399999ff14985f781bc",
-      "beauty": "3e3ed7c4df371113388fa2d4cd8dac4ea12ce6cf03850c16e3651a1d355eb0b0",
-      "emission-rim": "03a5ff80b2884b7435d42cdba1f309640655207c65dcdd68e2b2aeb4e93732f5",
-      "emission-veins": "c4330713880e7ca5b29a103147cd504d5087bfe265a151564c62ae11ea0bd0ee",
-      "emission-core": "88b54a08a0cfade6b9cea20db4316a468279c69277df43c95bfd53d5941137fc"
-    },
-    {
-      "state": "damaged",
-      "outlet": "east",
-      "previewInputHash": "ca725cd01d95eb879a5dd7223fd023cff954fff2affe5c8725cd15cf102e0e38",
-      "beauty": "f82eddcf09c8738b7f3b0abd38056e78c6496fc20589e870aac9219560f587d3",
-      "emission-rim": "ee5dc50070f8d83031e7084012055184ed7bc18d3500632b45d4ee5280a7a511",
-      "emission-veins": "57252eb5f424154e0da8ffa3bc6873365a1a701c301a56486d12a22603935900",
-      "emission-core": "bad1c41d7ec4e1a477e87a976fc661b51173bc18f6a687493af8e2dcc097ace2"
-    },
-    {
-      "state": "damaged",
-      "outlet": "south",
-      "previewInputHash": "e430f9e33fa3efb34a9e6de3e811791a7709b560c9b13817e4c9dfb8293dc228",
-      "beauty": "6dc82730a6043397db66d59355d7e82cfc8aae1ed720f8d8348b747289e0f64e",
-      "emission-rim": "57a90bbbabecf69279e912f333ef663467dd0b30f9ba54c4a11757b88373ab97",
-      "emission-veins": "2ffe24195d3b112e2e4a83017b57b4d2a297d056ad2e232cdf2dfb546b0d3e1a",
-      "emission-core": "5729b09bc3870f55ca12c0bb3c817909f85cf67da7ad0980b76f005f8383da49"
-    },
-    {
-      "state": "damaged",
-      "outlet": "west",
-      "previewInputHash": "5cc1aa7275f5731a8a3d3a920d0105dfdc9624b971e673ea77f29b590a6d50cc",
-      "beauty": "27546e8868f1065511fee8a09201292d813782a3d0e59cb7ca03a52360984f1c",
-      "emission-rim": "d50fd4f5b00247d55e2ac5010e2e0483b3cb9289cf74695a6e2b4ce5ceaf7d0e",
-      "emission-veins": "aedd58a0d288c358e7a19a36e06939fb7a79b0073ef23847eb0f06c1d24f1b00",
-      "emission-core": "82f4d7cccca15be45a41ee877cce79c89badaa005f3d6ae43e42c75123014dce"
+      "beauty": "1857c8ccaaf2021d351f18304a9136e61e05cc77b9ab73fb19fd6989f4339638",
+      "emission-rim": "5e80384ace1a8d925a89a9a76cc1d9d996bea50c8b72d3386aae863fadba9c5c",
+      "emission-veins": "a9cbd2413568f47f9c81e12ae4fe12ff362dc54fa74c5b5336272058d303360d",
+      "emission-core": "4c39d410ab1a70416d64f4eb6f2648e66865a70f8e46f9b42abff956fa8cdd4b"
     },
     {
       "state": "rubble",
-      "outlet": "north",
-      "previewInputHash": "47681db6a44575cea3363835179fd8be8edb8da35dcfb74ee75cb020b7f5ba45",
-      "beauty": "4eeb342a6797d1caa29d476d3e83c0cdb5cda53879c0599a83572ad4a7b97b96",
-      "emission-rim": "b141fd5fb74417e703e3ee70bf8e386028cf9c96120e7c7c771452f5a86d5cf8",
-      "emission-veins": "4ef4b720cfd8d6c2792af377c5b318d5e5e068a9c2fd6cb3c0dfde7123c20614",
-      "emission-core": "81e76c0a842716089d901178d551a8a9060c8114576a5ee564ba6fc1850373cb"
-    },
-    {
-      "state": "rubble",
-      "outlet": "east",
-      "previewInputHash": "d17fc021a51473a85933ee717990d1bdf8c549fd4c8d5ac73d01db0774bffeb3",
-      "beauty": "bbc201cf3832abfa0b0b3801f38e7119fff07e46b4323626b4956871c44a1648",
-      "emission-rim": "2e31704c36dee7f15a2d6be7bdb151e99aae44dd3fe09e3f4fefe7bf09e2df8a",
-      "emission-veins": "7b3ff96e16ce77f7f5012810d4af45adad2beb32d2fbaeea863d6174132b1a3f",
-      "emission-core": "eb5165bbd428bd0198e52078ba2f50bba73a03f818cf038404af3586accaa1d0"
-    },
-    {
-      "state": "rubble",
-      "outlet": "south",
-      "previewInputHash": "2dd6d3484073167833c49fe9c317a1cae5c318071c4a8cf7614f1ba54113c58a",
-      "beauty": "512dc6888d5676385e5dbc5a0650de945e562799011fccb1b042a35a5ae2a888",
-      "emission-rim": "7475ee18cbb5e7d1dafc5a5f3618ad4375a19cce6baecc791b978077f7be081c",
-      "emission-veins": "f4841e5f5121fb1b294694340dd4d2f124a011a44143249a834b186b15aa235e",
-      "emission-core": "4c6c21bf5e04425c5c29bd364a7dc8e7070967079f747607666affbde9d9d221"
-    },
-    {
-      "state": "rubble",
-      "outlet": "west",
-      "previewInputHash": "a0829bb26220b675ea63019a07612de26f6a90fbfb3aed8ff18e975b1010bc56",
-      "beauty": "f4bb41d4b0cbd19444fb6234e23f86a3817d63c7dcab9e36d34d61abba7e684f",
-      "emission-rim": "c14bd6ce1b08b343042dab224c445173872a8fbf531d7a0e9816e65090408449",
-      "emission-veins": "e2465f4c42fa5f31c4b3f76ef5e5ec9e476e473305a56e953fc5ba789c759cc2",
-      "emission-core": "0f3dbed422d9774361252f2cd78779317426d62d9040439fac250aa022f7ca05"
+      "beauty": "01468af006137a83e949931e746e9811f2090b6a45b07191cb8db3c196dd0ea8",
+      "emission-rim": "19be67199feb5fb419ae53c60479d3e9cc6c1ff90c6fcf2b7a5bc756f8511f0b",
+      "emission-veins": "15761ab6939c10d70cda6e3189803ef38510228efb99c951f584224d8af70233",
+      "emission-core": "2d45ec17150c97c58d6aeb23905e5cf77e123fac72a03278272df808a3c67f79"
     }
   ],
   "runtime": {
     "id": "spawn-structure",
     "category": "construction",
     "gameIds": [],
-    "revision": "draft-b",
+    "revision": "carcass-p1",
     "variant": "standard",
-    "sourceSize": 272,
+    "sourceSize": 512,
     "textureKey": "construction_spawn_structure",
     "sheetTextureKey": "construction_spawn_structure_sheet",
     "runtimeContract": "sheet",
@@ -130,32 +43,26 @@
     "idlePath": "./assets/sprites/pipeline-v2/spawn-structure/idle.png",
     "sheetPath": "./assets/sprites/pipeline-v2/spawn-structure/sheet.png",
     "layout": {
-      "frameWidth": 272,
-      "frameHeight": 272,
+      "frameWidth": 512,
+      "frameHeight": 512,
       "margin": 2,
       "spacing": 4,
-      "columns": 8,
-      "rows": 2,
-      "frameCount": 12,
-      "width": 2208,
-      "height": 552
+      "columns": 3,
+      "rows": 1,
+      "frameCount": 3,
+      "width": 1548,
+      "height": 516
     },
     "clips": [],
     "hashes": {
-      "idle": "422c84171951fe1e4e08d17ea0aa315841494474b3790ed5f59f50b4356964ec",
-      "sheet": "04eda58e3d9c0a298fae89654e8f12b61c922c2a59e93bbb07df6261431d6d43"
+      "idle": "46f8da64ec561933316c1c5f250052d1bdd56b4983ab7666f6709f5495b14ebf",
+      "sheet": "41856742d48e142147a93010332e5f55332de5fa799efe47669f9fc53febce6a"
     }
   },
-  "textures": {
-    "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
-    "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
-    "bone": "art/poc/dawn/textures/library/bone-weathered-02.png",
-    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
-    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
-  },
+  "sources": "tools/source-art/spawn-structure",
   "export": {
-    "script": "scripts/asset-pipeline/export-spawn-structure.mjs",
-    "passes": "scripts/asset-pipeline/structure-passes.py",
+    "script": "scripts/asset-pipeline/export-spawn-structure.mjs painted",
+    "cut": "scripts/asset-pipeline/spawn-structure-painted.py",
     "sharp": {
       "aom": "3.9.1",
       "archive": "3.7.4",
