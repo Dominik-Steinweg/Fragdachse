@@ -27,7 +27,7 @@ import { resolveCoopDefenseMapConfig, resolveWorldDefinition } from './WorldDefi
 import { generateWorldLayout } from './WorldLayout';
 import { WorldMaterialization } from './WorldMaterialization';
 import { WorldPresentationBinding } from './WorldPresentationBinding';
-import { LobbyMerchantRenderer } from '../arena/LobbyMerchantRenderer';
+import { LobbyStructureRenderer } from '../arena/lobbyStructures/LobbyStructureRenderer';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import type { WorldPresentationHandoff } from './WorldPresentationHandoff';
 import { PersistentBaseWorldBinding, type PersistentBaseWorldBindingSink } from './PersistentBaseWorldBinding';
@@ -248,8 +248,8 @@ export function materializeWorldComposition(
       destroyPresentation: (shown) => { ArenaBuilder.destroyPresentation(shown); },
     });
   input.runtime.setPresentation(presentation);
-  if (presentationRequired && isLobbyWorldDefinitionId(world.descriptor.definitionId) && !presentation.lobbyMerchant) {
-    presentation.lobbyMerchant = new LobbyMerchantRenderer(input.scene, world.metrics);
+  if (presentationRequired && isLobbyWorldDefinitionId(world.descriptor.definitionId) && !presentation.lobbyStructures) {
+    presentation.lobbyStructures = new LobbyStructureRenderer(input.scene, world.metrics);
   }
   materialization.setArena(arena, (built) => { ArenaBuilder.destroyGameplay(built); });
   arena.groundSurface?.setPersistentBaseGravel(input.persistentBaseGravel);
@@ -296,7 +296,7 @@ export function materializeWorldComposition(
       canopies:arena.canopyObjects,water:arena.waterSurface,wildlife:arena.wildlife,
       fog:presentation.groundFog,lighting:input.lighting,shadow:sunlight.shadow,postFx:sunlight.postFx,
       get enemyShadows(){return sunlight.enemyShadows;},layout,worldContext:world,
-      moonlight:world.definition?.moonlight??null,
+      moonlight:world.definition?.moonlight??null,structures:presentation.lobbyStructures,
     }));
   }
   return {

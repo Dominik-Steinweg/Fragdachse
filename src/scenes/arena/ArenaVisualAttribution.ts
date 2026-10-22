@@ -105,7 +105,6 @@ export const GRAPHICS_FAMILIES = {
   placementPreview: ['PlacementPreviewRenderer', 'PersistentBaseVisuals', 'TurretRangePreviewVisual'],
   rockTools: ['WorldHealthBarRenderer'],
   gameplayHud: ['ArenaHUD', 'HudCard', 'HudStatusStrip', 'CoopDefenseTutorialPanel', 'CoopDefenseObjectiveAnnouncement', 'RoundStartCountdownView'],
-  lobbyBuildings: ['LobbyMerchantRenderer'],
 } as const;
 
 export type ClassicParticleFamily = keyof typeof CLASSIC_PARTICLE_FAMILIES;

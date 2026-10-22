@@ -447,7 +447,7 @@ export class ArenaLifecycleCoordinator {
         return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start);
       };
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
-        getLobbyMerchant: () => this.worldRuntime?.presentation?.lobbyMerchant ?? null,
+        getLobbyStructures: () => this.worldRuntime?.presentation?.lobbyStructures ?? null,
         getLobbyInteractionMenu: () => {
           const candidate = this.ctx.inputSystem.getInteractionCandidate();
           return candidate?.kind === 'lobby-menu' ? candidate.menu : null;
@@ -553,13 +553,15 @@ export class ArenaLifecycleCoordinator {
             yield* preview;
           })();
         },
-        // Base plates for now; outlined structures add their solid stamp once their art has one.
+        // Base plates and the solid stamps of outlined structures.
         getFogSurfaceStamps: () => {
           const bases = this.worldRuntime?.materialization?.bases?.getBases() ?? [];
           const preview = this.persistentBasePreviewRenderer.getSurfaceImages();
+          const structures = this.worldRuntime?.presentation?.lobbyStructures?.getFogSurfaceStamps() ?? [];
           return (function* () {
             for (const base of bases) yield* base.getSurfaceImages();
             yield* preview;
+            yield* structures;
           })();
         },
         getStructureRects: () => this.worldRuntime?.materialization?.bases?.getStructureRects() ?? NO_STRUCTURE_RECTS,

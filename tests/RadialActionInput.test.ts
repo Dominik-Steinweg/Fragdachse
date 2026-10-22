@@ -434,8 +434,11 @@ describe('shared Shift interaction', () => {
       const rects = lobbyBuildingWorldRects(metrics, building);
       const bounds = structureBounds(rects);
       const gap = PLAYER_SIZE / 2 + 4;
-      // Off the side's centre, in front of a straight wall (a niche corner would be the nearest point).
-      const alongX = bounds.left + 24, alongY = bounds.top + 20;
+      // In front of the middle of the longest straight wall on that side (a corner would be the nearest point).
+      const facing = rects.filter(rect => side === 'N' ? rect.y === bounds.top : side === 'S' ? rect.y + rect.height === bounds.bottom
+        : side === 'W' ? rect.x === bounds.left : rect.x + rect.width === bounds.right)
+        .sort((a, b) => (side === 'N' || side === 'S' ? b.width - a.width : b.height - a.height))[0];
+      const alongX = facing.x + facing.width / 2, alongY = facing.y + facing.height / 2;
       const position = side === 'N' ? { x: alongX, y: bounds.top - gap } : side === 'S' ? { x: alongX, y: bounds.bottom + gap }
         : side === 'W' ? { x: bounds.left - gap, y: alongY } : { x: bounds.right + gap, y: alongY };
       expect(nearestStructurePoint(rects, position.x, position.y).distance).toBe(gap);

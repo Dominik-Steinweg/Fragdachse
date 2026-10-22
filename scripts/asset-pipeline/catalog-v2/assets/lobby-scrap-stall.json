@@ -24,7 +24,6 @@
   "recipe": "lobby-structure",
   "model": {
     "structure": "scrap_stall",
-    "variant": "a",
     "librarySurfaces": {
       "Weathered oak": {
         "family": "wood",
@@ -271,7 +270,8 @@
         "tint": 0.7,
         "value": 1.1
       }
-    }
+    },
+    "turn": 0
   },
   "orthoScale": 6,
   "textures": {

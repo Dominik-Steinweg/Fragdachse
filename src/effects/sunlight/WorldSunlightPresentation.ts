@@ -39,6 +39,7 @@ import type { FogAirBinding } from '../groundFog/FogAirBinding';
 import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
 import { type RockLightingState } from '../../arena/rocks/RockLightingState';
 import { CANOPY_ASSETS, canopyVariant } from '../../arena/trees/CanopyAssets';
+import type { LobbyStructureSunlight } from '../../arena/lobbyStructures/LobbyStructureRenderer';
 
 export interface WorldSunlightTargets {
  ground: ArenaBuilderResult['groundSurface'];
@@ -56,6 +57,8 @@ export interface WorldSunlightTargets {
  worldContext: WorldRuntimeContext;
  /** Authored World moon (map JSON); absent means the production moon. */
  moonlight?: WorldMoonlight | null;
+ /** Lobby structures: relief and self-shadow under the same sun, clouds, moon and lamps as the rocks. */
+ structures?: { setSunlight(sunlight: LobbyStructureSunlight | null): void } | null;
 }
 type Targets = WorldSunlightTargets;
 /** Activity moonlight (Dawn blood moon): ambient hue and an optional override of the moon islands. */
@@ -120,6 +123,7 @@ export class WorldSunlightPresentation {
   targets.rocks?.setFormationOptions(true,true,this.clouds);
   targets.rocks?.setSurfaceLights((x,y,width,height,out)=>targets.lighting.sampleSurfaceLights(x,y,width,height,out));
   targets.water?.setNightLight(this.waterNight);
+  targets.structures?.setSunlight(this.structureLight);
   // Lamps shape the rock front along the resident V7 contour (N-4).
   {const rocks=targets.rocks;targets.lighting.setRockCoverage(rocks?()=>rocks.getFormationCoverage():null);}
   {
@@ -193,6 +197,10 @@ export class WorldSunlightPresentation {
  readonly waterNight={night:0,lights:(x:number,y:number,width:number,height:number,out:SurfaceLightFrame)=>
   this.targets.lighting.sampleSurfaceLights(x,y,width,height,out,getGraphicsQualityProfile(this.scene).sunlight.surfaceLights)};
  private moonTimeSec=0;
+ /** Moon direction and relief for the lobby structures, written with the rocks' moon. */
+ private readonly structureMoon=new Float32Array(4);
+ private readonly structureLight:LobbyStructureSunlight={state:this.sunState,clouds:this.clouds,moon:this.structureMoon,
+  surfaceLights:(x,y,width,height,out)=>this.targets.lighting.sampleSurfaceLights(x,y,width,height,out,getGraphicsQualityProfile(this.scene).sunlight.surfaceLights)};
  /**
   * `synchronizedNowMs` drives the moon islands so every peer sees the same openings (N-3);
   * without it (standalone editors) the pausable presentation time is used.
@@ -300,6 +308,8 @@ export class WorldSunlightPresentation {
  private syncMoonSky(targets:Targets,minute:number):void {
   const sky=resolveMoonSky(minute,targets.moonlight,this.moonWeight>0?this.moon:null,this.moonWeight,this.moonSky);
   targets.rocks?.setMoonLight(writeMoonDirection(this.sunPath.castAzimuth,this.moonDirection),sky.relief);
+  for(let i=0;i<3;i++)this.structureMoon[i]=this.moonDirection[i];
+  this.structureMoon[3]=Number.isFinite(sky.relief)?Math.max(0,sky.relief):0;
   // The layer lives as long as this presentation: dusk and dawn only switch it, never rebuild it.
   if(!sky.active){targets.lighting.setAmbientLayer(null);return;}
   const tuning=this.moonClouds.tuning;
@@ -416,6 +426,7 @@ export class WorldSunlightPresentation {
   this.sunComposite?.destroy();this.sunComposite=null;this.clouds.cache=undefined;this.clouds.sunPath=undefined;
   t.lighting.setSunAmbient(null);t.postFx.setSunGrade(null);
   t.rocks?.setMoonLight(this.moonDirection,0);
+  t.structures?.setSunlight(null);
   if(this.moonLight){t.lighting.setAmbientLayer(null);this.moonLight.destroy();this.moonLight=null;}
  }
 }

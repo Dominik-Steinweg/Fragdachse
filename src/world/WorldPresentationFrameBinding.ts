@@ -197,7 +197,7 @@ export interface WildlifeEnemySource {
 }
 
 export interface WorldPresentationFrameBindingInput {
-  readonly getLobbyMerchant?: () => Pick<import('../arena/LobbyMerchantRenderer').LobbyMerchantRenderer, 'update'> | null;
+  readonly getLobbyStructures?: () => Pick<import('../arena/lobbyStructures/LobbyStructureRenderer').LobbyStructureRenderer, 'update'> | null;
   readonly getLobbyInteractionMenu?: () => import('../config/authoring/lobbyBuildings').LobbyMenu | null;
   readonly enemyEyes?: import('../effects/EnemyEyeGlowRenderer').EnemyEyeGlowRenderer;
   readonly groundFog?: {
@@ -1094,8 +1094,8 @@ export class WorldPresentationFrameBinding {
     this.input.setLocalPlayerStatusRingActive(localPlayerVisuals && !spectator);
     this.input.setLocalPlayerWorldBarsVisible(!showWorld);
     const player = showWorld && localPlayerVisuals && !spectator ? this.input.getLocalPlayerSprite() : null;
-    this.input.getLobbyMerchant?.()?.update(player?.active ? player : null,
-      this.input.getLobbyInteractionMenu?.() ?? null, showWorld ? this.input.lighting : null);
+    this.input.getLobbyStructures?.()?.update(player?.active ? player : null,
+      this.input.getLobbyInteractionMenu?.() ?? null, showWorld ? this.input.lighting : null, this.input.shadow);
   }
 
   /** World-lokale Gravel-/Baustellenprojektion der persistenten Basis. */
@@ -1241,7 +1241,7 @@ export class WorldPresentationFrameBinding {
       this.activityFogBaseline.fog.strength = this.activityFogBaseline.strength;
       this.activityFogBaseline = null;
     }
-    this.input.getLobbyMerchant?.()?.update(null);
+    this.input.getLobbyStructures?.()?.update(null);
     this.releaseFireControlCopyShots?.(); this.releaseFireControlCopyShots = null;
     this.fireControl?.destroy(); this.fireControl = null;
     this.fireControlPorts = null;

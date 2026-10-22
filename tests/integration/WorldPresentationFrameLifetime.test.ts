@@ -204,7 +204,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     const player = { active: true, x: 200, y: 300 };
     let attached = true;
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene(), {
-      getLobbyMerchant: () => merchant,
+      getLobbyStructures: () => merchant,
       getLocalPlayerSprite: () => player as never,
       isLocalPlayerAttachedToWorld: () => attached,
     }));

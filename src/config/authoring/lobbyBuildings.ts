@@ -25,14 +25,14 @@ const OUTLINES = outlines as readonly LobbyStructureOutlineEntry[];
 /**
  * The four menu structures east of the spawn, outside the persistent base reserve, each about
  * 5x4 cells with walkable ground all around. Collision, fog and focus follow the authored outline
- * in `lobbyStructureOutlines.json`; the shape is that outline's cell occupancy. The sprites are
- * provisional stand-ins until the dedicated building assets replace them.
+ * in `lobbyStructureOutlines.json`; the shape is that outline's cell occupancy. Art and outline come
+ * from the same Blender export (`src/assets/manifests/lobby-structures.json`).
  */
 export const LOBBY_BUILDINGS = [
-  { id: 'lobby-merchant-stall', menu: 'merchant', gridX: 53, gridY: 8, textureKey: 'construction_dawn_dealer_stall', nameKey: 'ui.dawn.dealerName' },
-  { id: 'lobby-workshop', menu: 'upgrades', gridX: 44, gridY: 8, textureKey: 'construction_dawn_lobby_workshop', nameKey: 'ui.lobbyBuilding.workshop' },
-  { id: 'lobby-yard', menu: 'base', gridX: 53, gridY: 27, textureKey: 'construction_dawn_lobby_yard', nameKey: 'ui.lobbyBuilding.yard' },
-  { id: 'lobby-armory', menu: 'items', gridX: 44, gridY: 27, textureKey: 'construction_dawn_lobby_armory', nameKey: 'ui.lobbyBuilding.armory' },
+  { id: 'lobby-merchant-stall', menu: 'merchant', gridX: 53, gridY: 8, nameKey: 'ui.dawn.dealerName' },
+  { id: 'lobby-workshop', menu: 'upgrades', gridX: 44, gridY: 8, nameKey: 'ui.lobbyBuilding.workshop' },
+  { id: 'lobby-yard', menu: 'base', gridX: 53, gridY: 27, nameKey: 'ui.lobbyBuilding.yard' },
+  { id: 'lobby-armory', menu: 'items', gridX: 44, gridY: 27, nameKey: 'ui.lobbyBuilding.armory' },
 ] as const;
 
 export type LobbyBuilding = typeof LOBBY_BUILDINGS[number];

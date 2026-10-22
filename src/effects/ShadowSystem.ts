@@ -104,6 +104,11 @@ const STATIC_SHADOW_CASTERS: ReadonlyArray<{
   { config: SHADOW_CASTERS.trunk, group: 'trees' },
   { config: SHADOW_CASTERS.canopy, group: 'trees' },
 ];
+/** Cast bearing (unit, world px) and current shadow profile, lent per frame. */
+export interface LongCasterFrame {
+  x: number; y: number; lengthMult: number; softnessMult: number; opacityMult: number; visible: boolean;
+}
+
 /** Leere Kandidatenliste ohne Layout – spart eine Allokation je Region. */
 const EMPTY_INDEX_LIST: readonly number[] = [];
 const EMPTY_RUNTIME_ROCKS: readonly SyncedPlaceableRock[] = [];
@@ -332,6 +337,19 @@ export class ShadowSystem {
     );
     this.enemyCasters++;
   };
+
+  /**
+   * Bearing and day/night profile the long static casters use this frame, for owners that draw
+   * their own height-field shadows (lobby structures). Never allocates; `visible` mirrors the
+   * World's shadow switch.
+   */
+  getLongCasterFrame(out: LongCasterFrame): LongCasterFrame {
+    const direction = this.sunDirection ?? WORLD_SHADOW_CONFIG.lightDirection;
+    out.x = direction.x; out.y = direction.y;
+    out.lengthMult = this.profile.lengthMult; out.softnessMult = this.profile.softnessMult;
+    out.opacityMult = this.profile.opacityMult; out.visible = this.shadowsVisible;
+    return out;
+  }
 
   /** Dynamic and long static casters follow the continuous cast bearing every frame;
    * short contact casters keep the throttled baked steps. The cast arc continues

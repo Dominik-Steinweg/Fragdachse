@@ -111,6 +111,18 @@ export const WATCHTOWER_SHADOW_FOOTPRINT = (() => {
     centerOffsetY: (minY + height / 2 - .5) * CELL_SIZE };
 })();
 
+/**
+ * Lobby structures cast from their own height field (elevation pass), drawn by their renderer in
+ * the long-caster band with the shared bearing and profile. Never part of the chunk bake.
+ */
+export const STRUCTURE_SHADOW = {
+  layerDepth: DEPTH.ROCKS - 0.35,
+  opacity: 0.54,
+  softnessPx: 6,
+  /** Shadow reach is bounded so a low sun never needs an unbounded quad. */
+  maxReachPx: 6 * CELL_SIZE,
+} as const;
+
 export const SHADOW_CASTERS = {
   watchtower: {
     enabled: true,

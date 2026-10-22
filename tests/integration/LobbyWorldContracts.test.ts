@@ -25,6 +25,7 @@ import {
   isLobbyBaseReservedCell,
 } from '../../src/arena/LobbyWorldLayout';
 import { LOBBY_MERCHANT } from '../../src/config/authoring/lobbyMerchant';
+import { lobbyStructureAsset } from '../../src/arena/lobbyStructures/LobbyStructureAssets';
 import { resolvePersistentBaseReservationRadiusCells } from '../../src/persistentBase/PersistentBaseCore';
 import { RockHpRegistry } from '../../src/arena/RockHpRegistry';
 import { SHOOTING_RANGE, insideRangeRect, shootingRangeControlPosition } from '../../src/shootingRange/ShootingRangeLayout';
@@ -258,7 +259,7 @@ describe('LobbyWorld – authored Geometrie', () => {
     }
   });
 
-  it('keeps every structure outside the base reservation and the dealer at the stall, unroofed and uncovered', () => {
+  it('keeps every structure outside the base reservation and its staff inside the outline, uncovered', () => {
     const definition = getLobbyWorldDefinition();
     const site = definition.persistentBaseSite!;
     const radius = resolvePersistentBaseReservationRadiusCells(site.maxAreaStage);
@@ -268,17 +269,17 @@ describe('LobbyWorld – authored Geometrie', () => {
         expect(Math.max(Math.abs(cell.gridX - site.anchor.gridX), Math.abs(cell.gridY - site.anchor.gridY))).toBeGreaterThan(radius);
       }
     }
-    const dealer = LOBBY_MERCHANT.dealer;
-    const stall = LOBBY_BUILDINGS.find(building => building.menu === 'merchant')!;
-    const rects = lobbyBuildingWorldRects(world.metrics, stall);
-    const position = worldCellCenter(world.metrics, dealer.gridX, dealer.gridY);
-    expect(isInsideStructure(rects, position.x, position.y)).toBe(false);
-    expect(nearestStructurePoint(rects, position.x, position.y).distance).toBeLessThan(dealer.displaySize / 2);
-    // Even a fully opaque crown must not cover the dealer.
+    // Staff stand inside the outline (no body of their own, nobody walks through them) and no crown covers them.
+    const staffSize = LOBBY_MERCHANT.dealer.displaySize;
     const canopyReach = CANOPY_RADIUS * Math.max(...CANOPY_ASSETS.map(asset => asset.displayScale));
-    for (const tree of layout.trees) {
-      expect(Math.hypot(tree.gridX - dealer.gridX, tree.gridY - dealer.gridY) * CELL_SIZE)
-        .toBeGreaterThan(canopyReach + dealer.displaySize * Math.SQRT1_2);
+    for (const building of LOBBY_BUILDINGS) {
+      const staff = lobbyStructureAsset(building.id)!.sockets.staff;
+      const x = world.metrics.offsetX + building.gridX * CELL_SIZE + staff.x, y = world.metrics.offsetY + building.gridY * CELL_SIZE + staff.y;
+      expect(isInsideStructure(lobbyBuildingWorldRects(world.metrics, building), x, y), building.id).toBe(true);
+      for (const tree of layout.trees) {
+        const crown = worldCellCenter(world.metrics, tree.gridX, tree.gridY);
+        expect(Math.hypot(crown.x - x, crown.y - y), building.id).toBeGreaterThan(canopyReach + staffSize * Math.SQRT1_2);
+      }
     }
   });
 

@@ -1,0 +1,273 @@
+{
+  "structures": {
+    "lobby-workshop": {
+      "asset": "lobby-workshop",
+      "sourceSize": 384,
+      "displaySize": 192,
+      "canvasOffset": {
+        "x": -16,
+        "y": -32
+      },
+      "turn": 0,
+      "heightPx": {
+        "min": 0,
+        "max": 144
+      },
+      "layers": [
+        "forge",
+        "lamp"
+      ],
+      "sockets": {
+        "staff": {
+          "x": 92.2,
+          "y": 99.2,
+          "z": 0
+        },
+        "staff_facing": {
+          "x": 72,
+          "y": 102.4,
+          "z": 0
+        },
+        "plaque": {
+          "x": 80,
+          "y": 136,
+          "z": 0
+        },
+        "forge": {
+          "x": 25.6,
+          "y": 100.8,
+          "z": 25.6
+        },
+        "chimney": {
+          "x": 27.2,
+          "y": 24,
+          "z": 128
+        },
+        "spark_anvil": {
+          "x": 72,
+          "y": 102.4,
+          "z": 32
+        },
+        "spark_grind": {
+          "x": 144.6,
+          "y": 96,
+          "z": 27.2
+        },
+        "lamp_front": {
+          "x": 146.6,
+          "y": 124.2,
+          "z": 59.2
+        },
+        "window_skylight": {
+          "x": 110.4,
+          "y": 56,
+          "z": 92.8
+        }
+      },
+      "sha256": {
+        "beauty": "36e86e9526c30da22cb4f8e815572a77aedcffcd92ab3564a3f4d549911a8da9",
+        "albedo": "273048032d0fbe93975cff2e2bc85a4334442f5aa5694c922701b08fc1969b5d",
+        "elevation": "6f2e603bffd20d32d2938957094ba72c929581c174008150358543852921c58c",
+        "solid": "934d1071b2611c37e51df4101ae59770a11e8e97c58296ca1797af9c20785903",
+        "emission-forge": "2802fefa7b24a67a59d77f9c89c10d705735b493f0229ba2e71e493e2359b318",
+        "emission-lamp": "5f385a7c74515c22ba0443336d2f471b8ca48ef7cd133374c111e5f74a1547c9"
+      }
+    },
+    "lobby-yard": {
+      "asset": "lobby-yard",
+      "sourceSize": 384,
+      "displaySize": 192,
+      "canvasOffset": {
+        "x": -16,
+        "y": -32
+      },
+      "turn": 2,
+      "heightPx": {
+        "min": 0,
+        "max": 144
+      },
+      "layers": [
+        "lamp",
+        "cyan"
+      ],
+      "sockets": {
+        "staff": {
+          "x": 86.4,
+          "y": 44.2,
+          "z": 0
+        },
+        "staff_facing": {
+          "x": 86.4,
+          "y": 20.8,
+          "z": 0
+        },
+        "plaque": {
+          "x": 80,
+          "y": -8,
+          "z": 0
+        },
+        "spark_saw": {
+          "x": 131.2,
+          "y": 24,
+          "z": 25.6
+        },
+        "lamp_table": {
+          "x": 71,
+          "y": 22.4,
+          "z": 56
+        },
+        "hoist": {
+          "x": 14.4,
+          "y": 107.2,
+          "z": 92.8
+        },
+        "tile_glow": {
+          "x": 117.4,
+          "y": 92.2,
+          "z": 14.4
+        }
+      },
+      "sha256": {
+        "beauty": "93f391bdc00d5711998fda5f71334cd95370dcf35cb9198f1dae8c2f25b96bc3",
+        "albedo": "2c28ab8192b5e7a505d755c8239febc57c0d65d11e09e4b3f1c7015767b969c7",
+        "elevation": "a29806d730d13c31c1513d31f6b1eeb9d0f6240663ef1f0aa556ebad58f5fbfc",
+        "solid": "7b3c222501bdd18b4b0ee09bc47cef233af18cfa054c0669ad047e36b4f1a5fb",
+        "emission-lamp": "a4fab11fe6f293472c3b9a270044a0e6a07a768298cfc46037074fae40e98957",
+        "emission-cyan": "d122e70b89add3e2f8ab34895767eecd44ad51545451b71ea93e8d16ffdfa588"
+      }
+    },
+    "lobby-armory": {
+      "asset": "lobby-armory",
+      "sourceSize": 384,
+      "displaySize": 192,
+      "canvasOffset": {
+        "x": -16,
+        "y": -32
+      },
+      "turn": 2,
+      "heightPx": {
+        "min": 0,
+        "max": 144
+      },
+      "layers": [
+        "lamp"
+      ],
+      "sockets": {
+        "staff": {
+          "x": 80,
+          "y": 61.4,
+          "z": 0
+        },
+        "staff_facing": {
+          "x": 80,
+          "y": 32,
+          "z": 0
+        },
+        "plaque": {
+          "x": 80,
+          "y": -8,
+          "z": 0
+        },
+        "lamp_front": {
+          "x": 75.2,
+          "y": 12.8,
+          "z": 57.6
+        },
+        "lamp_tent": {
+          "x": 80,
+          "y": 83.2,
+          "z": 51.2
+        },
+        "glint_helmet": {
+          "x": 65.6,
+          "y": 37.8,
+          "z": 41.6
+        },
+        "glint_cuirass": {
+          "x": 96,
+          "y": 37.8,
+          "z": 35.2
+        }
+      },
+      "sha256": {
+        "beauty": "9ae8cc74353ccc4fcc91067740fd7e06b07c287b08af4a6e2a9904ecb6ca91ef",
+        "albedo": "d89fdcc13172173e9173bda885c7d756d81cef74801f1714342eb2eb901777b8",
+        "elevation": "dcfac23a9b43318c56ee21d5631c127f42b0c63259c091c59116378c345de6ee",
+        "solid": "4c28b495d35194e968157f401abc75e59ea7ba863fc966dfef53120ebd5e2326",
+        "emission-lamp": "aa2413f96ded6aa1cd2e62adfb53b0f9c71639e55e1193ee76cb1582d1ef11c7"
+      }
+    },
+    "lobby-merchant-stall": {
+      "asset": "lobby-scrap-stall",
+      "sourceSize": 384,
+      "displaySize": 192,
+      "canvasOffset": {
+        "x": -16,
+        "y": -32
+      },
+      "turn": 0,
+      "heightPx": {
+        "min": 0,
+        "max": 144
+      },
+      "layers": [
+        "lamp"
+      ],
+      "sockets": {
+        "staff": {
+          "x": 34.6,
+          "y": 87,
+          "z": 0
+        },
+        "staff_facing": {
+          "x": 34.6,
+          "y": 115.2,
+          "z": 0
+        },
+        "plaque": {
+          "x": 80,
+          "y": 137.6,
+          "z": 0
+        },
+        "spark_grind": {
+          "x": 86.4,
+          "y": 112,
+          "z": 19.2
+        },
+        "exhaust": {
+          "x": 104,
+          "y": 104,
+          "z": 44.8
+        },
+        "lamp_wagon": {
+          "x": 116.8,
+          "y": 19.2,
+          "z": 43.2
+        },
+        "lamp_string_a": {
+          "x": 23.7,
+          "y": 126.4,
+          "z": 48
+        },
+        "lamp_string_b": {
+          "x": 44.2,
+          "y": 126.4,
+          "z": 46.4
+        },
+        "lamp_string_c": {
+          "x": 64.3,
+          "y": 126.4,
+          "z": 48
+        }
+      },
+      "sha256": {
+        "beauty": "c52f1f6e103e6e2297efbe8a93b4e02ff42694cf3dec9b3b6ca34912f8bb1ecf",
+        "albedo": "f263c64f3f97eb24ccd4b1acced2b10efa6fcfd766f546e487b16e951a51d58f",
+        "elevation": "b44dc1332057876ec677001529d4b7c67b35b78a45ce03df8bdea999340f41dc",
+        "solid": "8ccab7ba29d74982f1f3de46a3d676bdf90b457575045c5347679638f179095d",
+        "emission-lamp": "3ef1bba930492dc92872fa958492393d2051d052eeb347c8d8f62f4f5626b8e5"
+      }
+    }
+  },
+  "revision": "draft-r1"
+}
