@@ -234,6 +234,10 @@ export class BloodFieldModel {
       const cell = this.pools.get(((gx & 0xffff) << 16) | (gy & 0xffff));
       if (!cell) continue;
       for (const slot of cell) {
+        // Cheap reject first: the displayed radius never exceeds max(r0, r1).
+        const dx = this.word(slot, W.x) - feed.x, dy = this.word(slot, W.y) - feed.y, d2 = dx * dx + dy * dy;
+        const bound = Math.max(this.word(slot, W.r0), this.word(slot, W.r1)) * feed.growCore;
+        if (d2 > bound * bound || d2 >= growDistance * growDistance) continue;
         if (this.word(slot, W.channel) !== feed.channel || this.forcedFade[slot]) continue;
         if (!this.sameColor(slot, feed.color)) continue;
         const endMs = this.ms(this.word(slot, W.end)), shrinkMs = this.word(slot, W.shrink) * 1000;
