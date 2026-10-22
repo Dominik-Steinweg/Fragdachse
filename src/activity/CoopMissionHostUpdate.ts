@@ -131,6 +131,10 @@ export class CoopMissionHostUpdate {
   private readonly aiDetail = new EnemyAiDetailTiers(resolveEnemyAiDetailOptions(
     resolveEnemyEngagementReachPx(Object.values(COOP_DEFENSE_ENEMY_CONFIGS))));
   private aiDetailNow = 0;
+  private readonly hostileTargetProbes = new WeakMap<EnemyEntity, {
+    readonly resolvePosition: () => { x: number; y: number };
+    readonly isTargetable: () => boolean;
+  }>();
 
   constructor(
     private readonly runtime: CoopMissionRuntime,
@@ -409,11 +413,16 @@ export class CoopMissionHostUpdate {
       const candidates: EnemyAiTargetCandidate[] = [];
       for (const enemy of this.runtime.enemyManager?.getAllEnemies() ?? []) {
         if (enemy.faction !== 'hostile') continue;
-        candidates.push({
-          kind: 'hostile-enemy', id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
+        // The live probes only read the entity, so they are built once per enemy, not per frame.
+        let probes = this.hostileTargetProbes.get(enemy);
+        if (!probes) this.hostileTargetProbes.set(enemy, probes = {
           resolvePosition: () => ({ x: enemy.sprite.x, y: enemy.sprite.y }),
           isTargetable: () => enemy.faction === 'hostile' && enemy.sprite.active
             && enemy.getHp() > 0 && !enemy.isBurrowed(),
+        });
+        candidates.push({
+          kind: 'hostile-enemy', id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
+          resolvePosition: probes.resolvePosition, isTargetable: probes.isTargetable,
         });
       }
       for (const player of this.port.getPlayers()) {
