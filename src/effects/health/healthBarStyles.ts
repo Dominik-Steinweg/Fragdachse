@@ -11,8 +11,17 @@ export const HEALTH_BAR_TUNING: HealthBarFeedbackTuning = {
   healEmphasisMs: 160, // Single refreshed emphasis; never a pulse queue.
   healEmphasisStrength: 0.25,
 };
-export const HEALTH_BAR_POOL = { prewarmEnemyViews: 50, maxFreeViews: 100 };
 export const HEALTH_BAR_TRAIL = { color: 0xfff1d6, alpha: 0.9 };
+/** Recessed channel behind the fill: warm near-black, so a red fill keeps its contrast on any ground. */
+export const HEALTH_BAR_BACKING = { color: 0x2a2420, alpha: 0.88 };
+/**
+ * Shared SDF shape of all world bars (units = world pixels). Softly rounded ends and a narrow dark
+ * rim keep the bar readable on meadow, gravel, fog and void without reading as a cartoon pill.
+ */
+export const HEALTH_BAR_SHAPE = {
+  radiusPerHeight: 0.4, maxRadius: 3, outlineWidth: 1, outlineAlpha: 0.55,
+  gloss: 0.12, edge: 0.45, shade: 0.3,
+};
 export type HealthBarFamily = 'enemyStatus' | 'playerStatus' | 'baseMarkers' | 'rockTools';
 export interface HealthBarStyle {
   readonly family: HealthBarFamily;
