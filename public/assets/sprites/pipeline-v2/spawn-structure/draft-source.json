@@ -1,0 +1,180 @@
+{
+  "quality": "accepted-authoring-preview",
+  "targetSize": 136,
+  "masters": [
+    {
+      "state": "intact",
+      "outlet": "north",
+      "previewInputHash": "3c0b1606a195aea12fa65055aea5eb9557e27e2d915088eb102d7eb110d3bf5f",
+      "beauty": "3813b2124281c9e75b9fb34e662c6ad52a042dc7fbaeceaa31268461d3f95b32",
+      "emission-veins": "66401dfe39ff58c35478847524a53d9ed5a6681458de1f7ad9a2831d6de4b0bb",
+      "emission-core": "c8f114e612c78a1dfce33ec85cc7638b41e817e183e01e0dacf932a0f02a4667"
+    },
+    {
+      "state": "intact",
+      "outlet": "east",
+      "previewInputHash": "eaaff6a0464dc49885f16a7515ad783b171c0396596ce5dd851ac3da8c3e4c2f",
+      "beauty": "f7060c60f7f4a298954adad627d9e27be8cbf0d0c9876b74d3bacffbf0e7adfc",
+      "emission-veins": "921a5bda5b6f63749109aaae26f8cbe0dc8f5b2ca56214c0183be54f4d76aa84",
+      "emission-core": "c8bed69b04311dca62c6848f30dd58c9cfa401f1b460bcdbd7c8edde59a6046d"
+    },
+    {
+      "state": "intact",
+      "outlet": "south",
+      "previewInputHash": "0c462845bbb11987f12c03bfa324049932e99e62ca5112f0ff1e350deea26770",
+      "beauty": "1049625b6f56c834961812d5220e62ac9fd7e8bb22f2f511842190db984e6753",
+      "emission-veins": "b0d54e3bcad48fb06fa8e0c7a9fc6b24fe464086c8e1ddfe587da5da836545a9",
+      "emission-core": "ff9152151c3289599fcc04ed03394e14b95f3285b1d543ebe9a53910d4dc3e0a"
+    },
+    {
+      "state": "intact",
+      "outlet": "west",
+      "previewInputHash": "50a83f0f9eb6a4c5025694e705213141c46987554719c6403f2a16571914bd29",
+      "beauty": "86c50813a523052c7f57e3215fbbdcb13dbcdaedd086c1264212afa64fb35f84",
+      "emission-veins": "592788aa105c0bd94907dab02b159c70a42ecc582f67d3e094a1fa4461fda6ce",
+      "emission-core": "c506be50fc3ff255ac13d0eb5087021c184dd74c45ca1c591a0d5e2fd5ed7ca2"
+    },
+    {
+      "state": "damaged",
+      "outlet": "north",
+      "previewInputHash": "d4f307c0a6b66460051602bd2c4fae444c576bc6caf6a82205ac1d5765dddceb",
+      "beauty": "4676365911507dc407ff2bff3fe9d0dc476da14fc9870b8ef1abe2c98a217b1d",
+      "emission-veins": "d042927a7232f0022e6f916f74f123089a2c8d63eb6a004dd1b3571d98367fb3",
+      "emission-core": "216906221832657e3e2ffa418e9110790895915dc29446e508872f9387f53b30"
+    },
+    {
+      "state": "damaged",
+      "outlet": "east",
+      "previewInputHash": "aa20f873fc7f146577c5aa9732c4fbec8d403b0b7126bfbee0818b9828667247",
+      "beauty": "103ba8232c03114eb17621c4bba2b587748d3882ce4bb8e689711dbd17e757cf",
+      "emission-veins": "bec21ec64482a233086ca36a8e142ec176b2f0fb98abf46b9b49682d4b29d7ee",
+      "emission-core": "1e1111352b8bbee3f2507c063ceab133837974f4cca01826ad4b5d19ffec8e9b"
+    },
+    {
+      "state": "damaged",
+      "outlet": "south",
+      "previewInputHash": "c356982a35d5a2f5604613900a49e93cbc2772f4ef9a477d3f43ecae7e738b17",
+      "beauty": "96f141fcd97ad17610943f5c591f7756144b75633e5547b752064248afe8df99",
+      "emission-veins": "01467e6c0b0708a05c28505a6145a45836ed6596c37d3d58b6b7a58ac73e0679",
+      "emission-core": "ea2af150ab7e1f7f1a1a1be03c22dab5b03443cfd0a8fedfa9224d1757289c4f"
+    },
+    {
+      "state": "damaged",
+      "outlet": "west",
+      "previewInputHash": "04c33d3f9b3af561aa5ff088eb49ffe09a6bbb59352fd9a52e79519a7116d89a",
+      "beauty": "1a74c8a3ca2d0c152c5886adfe549e925e4affdd5648ee97c9c44ab3bae4edac",
+      "emission-veins": "e7e0b30ce28b4da4ef23d10a7f2e76d97fc3a187b7c01fc43f503963c7eb5936",
+      "emission-core": "4c4573226e8415c180eb504211c3e98c1961fb3fddbc627c6ffb2595fb8f7ba2"
+    },
+    {
+      "state": "rubble",
+      "outlet": "north",
+      "previewInputHash": "19bc8f7f266f9031ddecd6c9042130e852f4af968137fd723d4484d1f1cc49eb",
+      "beauty": "6cca2c2fecb3d722d3dc20c2f3d7d1937d072f4702eeb0e9f387ea537be0f21a",
+      "emission-veins": "ef4870eb312d0d2a310e2b5c7c2f861071599d1498cb8a3841430908fe8d07d8",
+      "emission-core": "46a72c8520e01e3fa16494493862cd75a00142aa9ed87c1492593ca9aec3c205"
+    },
+    {
+      "state": "rubble",
+      "outlet": "east",
+      "previewInputHash": "3c5014de4a4a279d0d44fa4f22a1f5dfd4049e3bffcbe10f36776546cf07879a",
+      "beauty": "1803960fa64aa84318082165dfacaeaebb6180c7c68f419b00b9c481455bf537",
+      "emission-veins": "acd094bf8994756016c86a163471b59de99a2a026a5e3f8b040897c7fa8309b3",
+      "emission-core": "2adb2194e9f7bab17cbb42d2f136644db7e8f6686200e9914c2f51b34c68db70"
+    },
+    {
+      "state": "rubble",
+      "outlet": "south",
+      "previewInputHash": "27552ae9b5d8b04fdf7191322f54096f9e291cab17a5dceabf4a0b2ebecd599a",
+      "beauty": "27015a7690442cb3fd6c0b5b0d13541f1cc20895f46f5f37fbe7becb224fc041",
+      "emission-veins": "c2566168ef8529c8bee7e57c4cc8ddcc6b58fc6549fa4f3535f810ba4cdf22d6",
+      "emission-core": "70f613bc99e702492dc1141daece4e95e34126a7f300d544666eb1849620f739"
+    },
+    {
+      "state": "rubble",
+      "outlet": "west",
+      "previewInputHash": "a5396c2846a8e35403f5f3084fbd3f198f485b60cbf43e6d6f02e4e641705c5e",
+      "beauty": "eb41e6681d06f365f03bdbd61aef74d8dbdf2c3d1a315f834ec5cd0805f08d5c",
+      "emission-veins": "b6caa1a34652d4c75e732be745c2d4c0168a5a8daffe384f36bbf4f33b1599fd",
+      "emission-core": "2c419d2cf94c7524eec73f3b033a507cefd65e5b86067907d9ec78b4189468d5"
+    }
+  ],
+  "runtime": {
+    "id": "spawn-structure",
+    "category": "construction",
+    "gameIds": [],
+    "revision": "draft-a",
+    "variant": "standard",
+    "sourceSize": 272,
+    "textureKey": "construction_spawn_structure",
+    "sheetTextureKey": "construction_spawn_structure_sheet",
+    "runtimeContract": "sheet",
+    "forward": "south",
+    "pivot": [
+      0.5,
+      0.5
+    ],
+    "idleFrame": 0,
+    "idlePath": "./assets/sprites/pipeline-v2/spawn-structure/idle.png",
+    "sheetPath": "./assets/sprites/pipeline-v2/spawn-structure/sheet.png",
+    "layout": {
+      "frameWidth": 272,
+      "frameHeight": 272,
+      "margin": 2,
+      "spacing": 4,
+      "columns": 8,
+      "rows": 2,
+      "frameCount": 12,
+      "width": 2208,
+      "height": 552
+    },
+    "clips": [],
+    "hashes": {
+      "idle": "4a316b42b624bf2363967b0f6903e78d7fb2adf1dfb65d578a8ed03e93377300",
+      "sheet": "07ee7e6e7efe542ff71f1e69c9658a931ece36a873fc1c8c58ba0c3b7391c336"
+    }
+  },
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
+    "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
+    "iron": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
+    "bone": "art/poc/dawn/textures/library/bone-weathered-02.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
+  },
+  "export": {
+    "script": "scripts/asset-pipeline/export-spawn-structure.mjs",
+    "passes": "scripts/asset-pipeline/structure-passes.py",
+    "sharp": {
+      "aom": "3.9.1",
+      "archive": "3.7.4",
+      "cairo": "1.18.0",
+      "cgif": "0.4.1",
+      "exif": "0.6.24",
+      "expat": "2.6.2",
+      "ffi": "3.4.6",
+      "fontconfig": "2.15.0",
+      "freetype": "2.13.2",
+      "fribidi": "1.0.15",
+      "glib": "2.81.1",
+      "harfbuzz": "9.0.0",
+      "heif": "1.18.2",
+      "highway": "1.2.0",
+      "imagequant": "2.4.1",
+      "lcms": "2.16",
+      "mozjpeg": "4.1.5",
+      "pango": "1.54.0",
+      "pixman": "0.43.4",
+      "png": "1.6.43",
+      "proxy-libintl": "0.4",
+      "rsvg": "2.58.93",
+      "spng": "0.7.4",
+      "tiff": "4.6.0",
+      "vips": "8.15.3",
+      "webp": "1.4.0",
+      "xml": "2.13.3",
+      "zlib-ng": "2.2.1",
+      "sharp": "0.33.5"
+    }
+  }
+}

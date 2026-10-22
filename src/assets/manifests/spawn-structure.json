@@ -1,0 +1,326 @@
+{
+  "version": 1,
+  "revision": "draft-a",
+  "pivot": "both canvases are centred on the brood pit centre; one Blender unit is one 32 px world cell",
+  "emissiveEncoding": "white RGB, alpha = emission intensity; congruent with the sheet layout; tint and blend (ADD) at runtime",
+  "sockets": "normalized full-canvas x/y (0..1, y down), z in Blender units",
+  "building": {
+    "id": "spawn-structure",
+    "displaySize": 136,
+    "sourceSize": 272,
+    "canvasCells": 4.25,
+    "textureKey": "construction_spawn_structure",
+    "sheetTextureKey": "construction_spawn_structure_sheet",
+    "layout": {
+      "frameWidth": 272,
+      "frameHeight": 272,
+      "margin": 2,
+      "spacing": 4,
+      "columns": 8,
+      "rows": 2,
+      "frameCount": 12,
+      "width": 2208,
+      "height": 552
+    },
+    "states": [
+      "intact",
+      "damaged",
+      "rubble"
+    ],
+    "outlets": [
+      "north",
+      "east",
+      "south",
+      "west"
+    ],
+    "frameOrder": "index = stateIndex * outlets.length + outletIndex",
+    "emissive": {
+      "veins": {
+        "key": "construction_spawn_structure_emissive_veins",
+        "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-veins.png",
+        "sha256": "cb899e70c6f6f68f349ffc86cc4be6116910949c61099db180b5e2ef80925dc6",
+        "content": "brood veins along both arms toward the pit"
+      },
+      "core": {
+        "key": "construction_spawn_structure_emissive_core",
+        "path": "./assets/sprites/pipeline-v2/spawn-structure/emissive-core.png",
+        "sha256": "27dd88ea5b201451f795c762d22889a3faa202db0fc093270127b22fc3c90795",
+        "content": "brood heart slit; spent residue in rubble"
+      }
+    },
+    "frames": [
+      {
+        "index": 0,
+        "state": "intact",
+        "outlet": "north",
+        "sockets": {
+          "mouth": {
+            "x": 0.5,
+            "y": 0.264706,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.5,
+            "y": 0.824706,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 1,
+        "state": "intact",
+        "outlet": "east",
+        "sockets": {
+          "mouth": {
+            "x": 0.735294,
+            "y": 0.5,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.175294,
+            "y": 0.5,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 2,
+        "state": "intact",
+        "outlet": "south",
+        "sockets": {
+          "mouth": {
+            "x": 0.5,
+            "y": 0.735294,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.5,
+            "y": 0.175294,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 3,
+        "state": "intact",
+        "outlet": "west",
+        "sockets": {
+          "mouth": {
+            "x": 0.264706,
+            "y": 0.5,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.824706,
+            "y": 0.5,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 4,
+        "state": "damaged",
+        "outlet": "north",
+        "sockets": {
+          "mouth": {
+            "x": 0.5,
+            "y": 0.264706,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.5,
+            "y": 0.824706,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 5,
+        "state": "damaged",
+        "outlet": "east",
+        "sockets": {
+          "mouth": {
+            "x": 0.735294,
+            "y": 0.5,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.175294,
+            "y": 0.5,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 6,
+        "state": "damaged",
+        "outlet": "south",
+        "sockets": {
+          "mouth": {
+            "x": 0.5,
+            "y": 0.735294,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.5,
+            "y": 0.175294,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 7,
+        "state": "damaged",
+        "outlet": "west",
+        "sockets": {
+          "mouth": {
+            "x": 0.264706,
+            "y": 0.5,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.824706,
+            "y": 0.5,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 8,
+        "state": "rubble",
+        "outlet": "north",
+        "sockets": {
+          "mouth": {
+            "x": 0.5,
+            "y": 0.264706,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.5,
+            "y": 0.824706,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 9,
+        "state": "rubble",
+        "outlet": "east",
+        "sockets": {
+          "mouth": {
+            "x": 0.735294,
+            "y": 0.5,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.175294,
+            "y": 0.5,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 10,
+        "state": "rubble",
+        "outlet": "south",
+        "sockets": {
+          "mouth": {
+            "x": 0.5,
+            "y": 0.735294,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.5,
+            "y": 0.175294,
+            "z": 0.79
+          }
+        }
+      },
+      {
+        "index": 11,
+        "state": "rubble",
+        "outlet": "west",
+        "sockets": {
+          "mouth": {
+            "x": 0.264706,
+            "y": 0.5,
+            "z": 0.05
+          },
+          "core": {
+            "x": 0.824706,
+            "y": 0.5,
+            "z": 0.79
+          }
+        }
+      }
+    ]
+  },
+  "pit": {
+    "id": "spawn-brood-pit",
+    "displaySize": 72,
+    "sourceSize": 144,
+    "canvasCells": 2.25,
+    "textureKey": "construction_spawn_brood_pit",
+    "sheetTextureKey": "construction_spawn_brood_pit_sheet",
+    "layout": {
+      "frameWidth": 144,
+      "frameHeight": 144,
+      "margin": 2,
+      "spacing": 4,
+      "columns": 3,
+      "rows": 1,
+      "frameCount": 3,
+      "width": 444,
+      "height": 148
+    },
+    "states": [
+      "sealed",
+      "active",
+      "dry"
+    ],
+    "frameOrder": "index = stateIndex",
+    "emissive": {
+      "glow": {
+        "key": "construction_spawn_brood_pit_emissive_glow",
+        "path": "./assets/sprites/pipeline-v2/spawn-brood-pit/emissive-glow.png",
+        "sha256": "fb99344b88827bcd5ef5aedfcffd829305defd2ca62a97a3db6f50ac5eb40b82",
+        "content": "faint subsurface shimmer between the membrane folds; none when dry"
+      }
+    },
+    "frames": [
+      {
+        "index": 0,
+        "state": "sealed",
+        "sockets": {
+          "orifice": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.1
+          }
+        }
+      },
+      {
+        "index": 1,
+        "state": "active",
+        "sockets": {
+          "orifice": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.1
+          }
+        }
+      },
+      {
+        "index": 2,
+        "state": "dry",
+        "sockets": {
+          "orifice": {
+            "x": 0.5,
+            "y": 0.5,
+            "z": 0.1
+          }
+        }
+      }
+    ]
+  }
+}

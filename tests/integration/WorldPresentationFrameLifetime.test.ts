@@ -188,6 +188,7 @@ function fakeBindingInput(
     syncTurretLights: vi.fn(),
     syncBaseLights: vi.fn(),
     getBaseShadowCells: () => [],
+    getBaseFogSurfaces: () => [],
     getSynchronizedNow: () => 0,
     ...overrides,
   };

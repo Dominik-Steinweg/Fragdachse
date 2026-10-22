@@ -542,11 +542,23 @@ export class ArenaLifecycleCoordinator {
           else this.worldRuntime?.materialization?.bases?.releaseLights();
         },
         getBaseShadowCells: () => {
-          const bases = this.worldRuntime?.materialization?.bases?.getBases() ?? [];
+          const manager = this.worldRuntime?.materialization?.bases ?? null;
+          const bases = manager?.getBases() ?? [];
           const preview = this.persistentBasePreviewRenderer.getSurfaceImages();
           return (function* () {
             for (const base of bases) yield* base.getSurfaceImages();
             yield* preview;
+            if (manager) yield* manager.getSpawnStructureShadowCells();
+          })();
+        },
+        getBaseFogSurfaces: () => {
+          const manager = this.worldRuntime?.materialization?.bases ?? null;
+          const bases = manager?.getBases() ?? [];
+          const preview = this.persistentBasePreviewRenderer.getSurfaceImages();
+          return (function* () {
+            for (const base of bases) yield* base.getSurfaceImages();
+            yield* preview;
+            if (manager) yield* manager.getSpawnStructureFogSurfaces();
           })();
         },
         getSynchronizedNow: () => bridge.getSynchronizedNow(),

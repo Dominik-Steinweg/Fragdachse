@@ -1,0 +1,35 @@
+{
+  "id": "spawn-brood-pit",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "draft-a",
+  "variant": "standard",
+  "sourceSize": 144,
+  "textureKey": "construction_spawn_brood_pit",
+  "sheetTextureKey": "construction_spawn_brood_pit_sheet",
+  "runtimeContract": "sheet",
+  "forward": "south",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "idlePath": "./assets/sprites/pipeline-v2/spawn-brood-pit/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/spawn-brood-pit/sheet.png",
+  "layout": {
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 3,
+    "rows": 1,
+    "frameCount": 3,
+    "width": 444,
+    "height": 148
+  },
+  "clips": [],
+  "hashes": {
+    "idle": "861dc5688ad8fe8065d25125a974798bfc5cb6178987caebf00db0db20d92f76",
+    "sheet": "31e72a54937a725753304897c25cdef1b954fa96fcc351f837a7f84579a70913"
+  }
+}

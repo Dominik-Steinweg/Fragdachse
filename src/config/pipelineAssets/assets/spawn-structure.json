@@ -1,0 +1,35 @@
+{
+  "id": "spawn-structure",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "draft-a",
+  "variant": "standard",
+  "sourceSize": 272,
+  "textureKey": "construction_spawn_structure",
+  "sheetTextureKey": "construction_spawn_structure_sheet",
+  "runtimeContract": "sheet",
+  "forward": "south",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "idlePath": "./assets/sprites/pipeline-v2/spawn-structure/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/spawn-structure/sheet.png",
+  "layout": {
+    "frameWidth": 272,
+    "frameHeight": 272,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 12,
+    "width": 2208,
+    "height": 552
+  },
+  "clips": [],
+  "hashes": {
+    "idle": "4a316b42b624bf2363967b0f6903e78d7fb2adf1dfb65d578a8ed03e93377300",
+    "sheet": "07ee7e6e7efe542ff71f1e69c9658a931ece36a873fc1c8c58ba0c3b7391c336"
+  }
+}

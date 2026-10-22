@@ -170,7 +170,8 @@ export class BaseEntity {
     const cellTexture = hostile ? 'base_hostile' : 'base';
 
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
-    if (this.spec.surface !== 'none') {
+    // Spawnbauwerke zeichnet der SpawnStructureRenderer des BaseManagers (GDD Spawnbauwerk V1).
+    if (this.spec.surface !== 'none' && this.role !== 'spawn-point') {
       this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
       this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics,
         { hostile, gravel: this.groundGravel });
@@ -196,7 +197,10 @@ export class BaseEntity {
     if (!this.damageable) return;
     const bounds = getBaseWorldBounds(this.spec.region, this.metrics);
     const centerX = bounds.x + bounds.width / 2;
-    const hpBarY = bounds.y + bounds.height + COOP_DEFENSE_BASE_HP_BAR_GAP;
+    // An opening to the south would put the bar into the path of the rising enemies; it moves above.
+    const hpBarY = this.spec.spawnArea?.outlet === 'south'
+      ? bounds.y - COOP_DEFENSE_BASE_HP_BAR_GAP
+      : bounds.y + bounds.height + COOP_DEFENSE_BASE_HP_BAR_GAP;
     if (!this.healthBars?.isValid(this.healthBar)) {
       this.healthBar = this.healthBars?.bind(baseHealthBarStyle(this.hpBarWidth, this.hpBarFill),
         this.currentHp, this.maxHp, centerX, hpBarY) ?? null;
@@ -206,7 +210,8 @@ export class BaseEntity {
 
   /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist. */
   getLightSpots(): readonly { x: number; y: number; radius: number }[] {
-    return !this.presentation || this.spec.surface === 'none' || this.isInert() ? EMPTY_LIGHT_SPOTS : this.lightSpots;
+    return !this.presentation || this.spec.surface === 'none' || this.role === 'spawn-point' || this.isInert()
+      ? EMPTY_LIGHT_SPOTS : this.lightSpots;
   }
 
   /** Liefert alle Zell-Kollisions-Rectangles (für StaticGroup-Aufnahme & LoS). */

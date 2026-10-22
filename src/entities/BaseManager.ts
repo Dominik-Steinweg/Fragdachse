@@ -26,6 +26,9 @@ import {
   getPersistentBaseGravelStateKey,
 } from '../arena/PersistentBaseGravelField';
 import type { WorldIntegrityMutationResult } from '../world/WorldIntegrityMutation';
+import { SpawnStructureRenderer, type SpawnStructureShadowCell } from '../effects/spawnStructure/SpawnStructureRenderer';
+import type { SpawnStructureView } from '../effects/spawnStructure/SpawnStructureModel';
+import { worldCellCenter } from '../world/WorldMetrics';
 
 /**
  * Verwaltet die world-owned Base-Geometrie und bindet bei Bedarf genau einen Activity-Overlay.
@@ -60,6 +63,7 @@ export class BaseManager {
   private getSecondaryObjectiveState: ((objectiveId: string) => CoopDefenseSecondaryObjectiveState | null) | null = null;
   private obstacleGeneration = 0;
   private readonly presentation: boolean;
+  private readonly scene: Phaser.Scene;
   private lighting: LightingSystem | null = null;
   private readonly litBaseKeys = new Set<string>();
   private readonly destructionRenderer: BaseDestructionRenderer | null;
@@ -73,6 +77,10 @@ export class BaseManager {
   /** Projection of the live base entities, rebuilt only when obstacleGeneration changes. */
   private movementBlockedCells: Set<number> | null = null;
   private movementBlockedCellsGeneration = -1;
+  /** One presentation owner for every spawn structure, in every mode (GDD Spawnbauwerk V1). */
+  private readonly structureRenderer: SpawnStructureRenderer | null;
+  private readonly spawnStructures: { readonly entity: BaseEntity; readonly wallCells: readonly { x: number; y: number }[] }[] = [];
+  private readonly structureViews: SpawnStructureView[] = [];
 
   constructor(
     scene: Phaser.Scene,
@@ -86,6 +94,7 @@ export class BaseManager {
     burnGpu: EntityBurnGpuController | null = null,
   ) {
     this.presentation = presentation;
+    this.scene = scene;
     this.burnRenderer = presentation && burnGpu ? new BaseBurnRenderer(scene, burnGpu) : null;
     this.worldMetrics = metrics;
     this.group = scene.physics.add.staticGroup();
@@ -99,7 +108,11 @@ export class BaseManager {
       for (const body of entity.getCellBodies()) {
         this.group.add(body);
       }
+      if (spec.spawnArea) {
+        this.spawnStructures.push({ entity, wallCells: spec.cells.map((cell) => worldCellCenter(metrics, cell.gridX, cell.gridY)) });
+      }
     }
+    this.structureRenderer = presentation && this.spawnStructures.length > 0 ? new SpawnStructureRenderer(scene) : null;
   }
 
   /** Registriert den Zerstörungs-Callback (vom ArenaLifecycleCoordinator). */
@@ -188,6 +201,22 @@ export class BaseManager {
 
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+    this.structureRenderer?.setLighting(lighting);
+  }
+
+  /** Activity input: announced release of a spawn structure (0..1); cleared when the Activity detaches. */
+  setSpawnStructureChargeProvider(charge: ((baseId: string, nowMs: number) => number) | null): void {
+    this.structureRenderer?.setChargeProvider(charge);
+  }
+
+  /** Wall cells of the spawn structures as shadow casters (their sprites are not cell images). */
+  getSpawnStructureShadowCells(): Iterable<SpawnStructureShadowCell> {
+    return this.structureRenderer?.getShadowCells() ?? [];
+  }
+
+  /** Spawn structure buildings for the ground fog's surface mask. */
+  getSpawnStructureFogSurfaces(): Iterable<Phaser.GameObjects.Image> {
+    return this.structureRenderer?.getFogSurfaces() ?? [];
   }
 
   /**
@@ -212,6 +241,7 @@ export class BaseManager {
    */
   syncLights(): void {
     this.burnRenderer?.sync(this.entities, this.worldMetrics, this.lighting);
+    this.syncSpawnStructures();
     const lighting = this.lighting;
     if (!this.presentation || !lighting) return;
 
@@ -244,9 +274,25 @@ export class BaseManager {
     for (const key of seen) this.litBaseKeys.add(key);
   }
 
+  private syncSpawnStructures(): void {
+    if (!this.structureRenderer) return;
+    const views = this.structureViews;
+    views.length = 0;
+    const live = this.activeActivityBinding !== null;
+    for (const { entity, wallCells } of this.spawnStructures) {
+      const area = entity.getSpec().spawnArea!;
+      views.push({
+        id: entity.id, x: area.x, y: area.y, outlet: area.outlet, hp: entity.getHp(), maxHp: entity.getMaxHp(),
+        dormant: entity.isDormant(), destroyed: entity.isDestroyed(), live, hpRevision: entity.getHpBaselineRevision(), wallCells,
+      });
+    }
+    this.structureRenderer.sync(views, this.scene.time.now);
+  }
+
   /** Gibt alle Basislichter frei (Teardown). */
   releaseLights(): void {
     this.burnRenderer?.clear();
+    this.structureRenderer?.releaseLights();
     if (!this.lighting) return;
     for (const key of this.litBaseKeys) this.lighting.releaseLight(key);
     this.litBaseKeys.clear();
@@ -481,6 +527,7 @@ export class BaseManager {
     this.activeActivityBinding?.detach();
     this.destroyed = true;
     this.releaseLights();
+    this.structureRenderer?.destroy();
     this.destructionRenderer?.destroy();
     for (const entity of this.entities) entity.destroy();
     this.entities.length = 0;

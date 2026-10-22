@@ -1,0 +1,90 @@
+{
+  "id": "spawn-brood-pit",
+  "label": "Brutgrube des Spawnbauwerks",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/spawn-structure.png",
+  "targetSize": 72,
+  "sourceSizes": [
+    144
+  ],
+  "forward": "south",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Free 2 x 2 spawn surface inside the spawn structure's U: a low stone lip around a sunken matte brood membrane drawn into radial folds around a closed puckered orifice.",
+    "colors": "Dark basin stone, bruised aubergine membrane and folds, a faint deep-violet shimmer only between the folds; never a glowing rim.",
+    "anatomy": "Strict orthographic plan view at ground level, no baked shadow. 1 BU = one 32 px cell, pivot = pit centre shared with spawn-structure; canvas 2.25 x 2.25 cells. States sealed/active/dry; a runtime shader animates bulges and the tear."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "spawn-brood-pit",
+  "model": {
+    "state": "active",
+    "librarySurfaces": {
+      "Brood pit membrane": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.12,
+        "edgewear": 0.0,
+        "saturation": 1.1,
+        "value": 0.55,
+        "tint": 0.3
+      },
+      "Brood pit fold": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.06,
+        "edgewear": 0.0,
+        "saturation": 1.0,
+        "value": 0.9,
+        "tint": 0.25
+      },
+      "Dormant brood crust": {
+        "family": "bone",
+        "scale": 0.5,
+        "grime": 0.5,
+        "edgewear": 0.05,
+        "saturation": 0.4,
+        "value": 0.5,
+        "tint": 0.4
+      },
+      "Spent pit ash": {
+        "family": "stone",
+        "scale": 0.5,
+        "grime": 0.6,
+        "edgewear": 0.05,
+        "saturation": 0.1,
+        "value": 0.35,
+        "tint": 0.5
+      },
+      "Low brood rim": {
+        "family": "dawnPaint",
+        "scale": 0.5,
+        "grime": 0.3,
+        "edgewear": 0.0,
+        "saturation": 0.8,
+        "value": 0.6,
+        "tint": 0.4
+      }
+    }
+  },
+  "orthoScale": 2.25,
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
+    "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
+    "bone": "art/poc/dawn/textures/library/bone-weathered-02.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Basin stone and brood membrane (Dawn library), matte damp",
+      "textureStrength": 1,
+      "formShadowStrength": 0.8
+    }
+  },
+  "clips": []
+}

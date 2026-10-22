@@ -860,6 +860,23 @@ export const LIGHT_PRESETS = {
     flickerHz: 1.8,
   },
   /**
+   * Spawnbauwerk (GDD Spawnbauwerk V1): gedämpftes violettes Licht aus Brutherz und Grube. Bewusst
+   * ohne Portal-Flackern; der Renderer liefert Radius und Intensität aus Zustand und Aufladung.
+   */
+  broodPit: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 110,
+    color: 0xb347ff,
+    intensity: 0.45,
+    durationMs: 0,
+    decayExponent: 1.2,
+    occludes: false,
+    priority: 4,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
+  /**
    * Gemeinsames Dauerlicht aller Portale (Translokator, Feuerleitung, Generator-Portale). Farbe,
    * Radius und Stärke setzt die Portal-Darstellung je Stil und Öffnung.
    */

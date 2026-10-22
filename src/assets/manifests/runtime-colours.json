@@ -1045,6 +1045,18 @@
       "visiblePixelSha256": "bc84926fb8676525ebf3834cdee0333e9bb3c73bf3aa94b5b86c6120b0c57f1d",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/spawn-structure/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/spawn-structure/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/spawn-structure/sheet.png",
+      "width": 2208,
+      "height": 552,
+      "sourceBytes": 872888,
+      "downloadBytes": 466084,
+      "sourceSha256": "07ee7e6e7efe542ff71f1e69c9658a931ece36a873fc1c8c58ba0c3b7391c336",
+      "sha256": "24d8e5fcf90d75e08442baab7021c1b7c8cbc6a1d6d98bfb497600c87702a383",
+      "visiblePixelSha256": "a93056f30cd77d6be34817816c1af071af55ca06e6aacdf8973604b35d6d8326",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/tesla/sheet.png": {
       "file": "assets/sprites/pipeline-v2/tesla/sheet.webp",
       "source": "assets/sprites/pipeline-v2/tesla/sheet.png",

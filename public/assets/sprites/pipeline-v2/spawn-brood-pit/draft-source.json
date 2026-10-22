@@ -1,0 +1,101 @@
+{
+  "quality": "accepted-authoring-preview",
+  "targetSize": 72,
+  "masters": [
+    {
+      "state": "sealed",
+      "previewInputHash": "35d42916c540334816cb016ece91e352f3163623dd4bec4055044e56ef10a706",
+      "beauty": "24767c21ab52ce192138cbb06101f5d31ef003a4fb17f863e95eae29e8d603a8",
+      "emission-glow": "c2f7cc0469b7b7fc0380506b3c5744ae5761b84895b323c356c2fbd4fe6476cc"
+    },
+    {
+      "state": "active",
+      "previewInputHash": "f4ce46b8debfe8a095b36f8497ea3c79481e52554908ee3068f9e20b9c6b5bbc",
+      "beauty": "a95567a9750dcf6e28cba4b6a67a88b6646aebd7cc59ace8da474e79bf1de07b",
+      "emission-glow": "e813ca6983d341f2df0a43f8a21fc35bb15a09f1a41461e7b24f3b7e011d0bfa"
+    },
+    {
+      "state": "dry",
+      "previewInputHash": "3ef9b7435aadb71895e579121ad44a7bc9fa3b67ab14d7f5cd2eca8aebae3d99",
+      "beauty": "f76ee178503a3e2d536c582043c3bf3b1677d0ed7a23f6fdc628b1c419493997",
+      "emission-glow": "8a1f58befa470f0a01524f6cb5a02af680883a5b1bed0118459d8a232a8f0401"
+    }
+  ],
+  "runtime": {
+    "id": "spawn-brood-pit",
+    "category": "construction",
+    "gameIds": [],
+    "revision": "draft-a",
+    "variant": "standard",
+    "sourceSize": 144,
+    "textureKey": "construction_spawn_brood_pit",
+    "sheetTextureKey": "construction_spawn_brood_pit_sheet",
+    "runtimeContract": "sheet",
+    "forward": "south",
+    "pivot": [
+      0.5,
+      0.5
+    ],
+    "idleFrame": 0,
+    "idlePath": "./assets/sprites/pipeline-v2/spawn-brood-pit/idle.png",
+    "sheetPath": "./assets/sprites/pipeline-v2/spawn-brood-pit/sheet.png",
+    "layout": {
+      "frameWidth": 144,
+      "frameHeight": 144,
+      "margin": 2,
+      "spacing": 4,
+      "columns": 3,
+      "rows": 1,
+      "frameCount": 3,
+      "width": 444,
+      "height": 148
+    },
+    "clips": [],
+    "hashes": {
+      "idle": "861dc5688ad8fe8065d25125a974798bfc5cb6178987caebf00db0db20d92f76",
+      "sheet": "31e72a54937a725753304897c25cdef1b954fa96fcc351f837a7f84579a70913"
+    }
+  },
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
+    "stone": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
+    "bone": "art/poc/dawn/textures/library/bone-weathered-02.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
+  },
+  "export": {
+    "script": "scripts/asset-pipeline/export-spawn-structure.mjs",
+    "passes": "scripts/asset-pipeline/structure-passes.py",
+    "sharp": {
+      "aom": "3.9.1",
+      "archive": "3.7.4",
+      "cairo": "1.18.0",
+      "cgif": "0.4.1",
+      "exif": "0.6.24",
+      "expat": "2.6.2",
+      "ffi": "3.4.6",
+      "fontconfig": "2.15.0",
+      "freetype": "2.13.2",
+      "fribidi": "1.0.15",
+      "glib": "2.81.1",
+      "harfbuzz": "9.0.0",
+      "heif": "1.18.2",
+      "highway": "1.2.0",
+      "imagequant": "2.4.1",
+      "lcms": "2.16",
+      "mozjpeg": "4.1.5",
+      "pango": "1.54.0",
+      "pixman": "0.43.4",
+      "png": "1.6.43",
+      "proxy-libintl": "0.4",
+      "rsvg": "2.58.93",
+      "spng": "0.7.4",
+      "tiff": "4.6.0",
+      "vips": "8.15.3",
+      "webp": "1.4.0",
+      "xml": "2.13.3",
+      "zlib-ng": "2.2.1",
+      "sharp": "0.33.5"
+    }
+  }
+}

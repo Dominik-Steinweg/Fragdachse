@@ -41,7 +41,8 @@ export class DawnSitePropRenderer {
     this.sites = plan.sites.flatMap(site => {
       const baseId = toDawnSiteBaseId(site.slotId);
       const base = bases.find(entry => entry.id === baseId);
-      if (!base || base.cells.length === 0) return [];
+      // Spawn structures own their presentation (SpawnStructureRenderer, GDD Spawnbauwerk V1).
+      if (!base || base.cells.length === 0 || base.role === 'spawn-point') return [];
       const bounds = getBaseWorldBounds(base.region, metrics);
       return [{ ...site, baseId, objectiveId: toDawnSiteObjectiveId(site.slotId),
         x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }];
