@@ -62,8 +62,9 @@ export function validateManifestV2(m) {
     names.add(clip.name);
   }
   validateClipContracts(m.clips);
+  // Stationary decoration (dealer, lobby staff) never walks: idle is required, work/greet may follow.
   const decorativeIdle = m.category === 'character' && Array.isArray(m.gameIds) && m.gameIds.length === 0
-    && Array.isArray(m.requiredClips) && m.requiredClips.length === 1 && m.requiredClips[0] === 'idle';
+    && Array.isArray(m.requiredClips) && m.requiredClips.includes('idle') && !m.requiredClips.includes('move');
   const required = decorativeIdle ? 'idle' : ['weapon', 'utility', 'construction', 'companion', 'powerup', 'boss-part'].includes(m.category) ? null : m.category === 'turret' ? 'fire' : 'move';
   if (required && !names.has(required)) throw new Error(`Required ${required} clip missing`);
   if (decorativeIdle && !m.clips.find(c => c.name === 'idle').loop) throw new Error('Decorative idle must loop');

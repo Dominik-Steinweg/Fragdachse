@@ -154,10 +154,14 @@ def rest_hold(clip):
     return clip.get('motion') == 'dawn_extractor_idle' and clip['name'] == 'idle' and clip['loop']
 
 
+def planted_motion(motion):
+    return motion == 'player_idle' or str(motion).startswith('staff_')
+
+
 def required_moving_rigged(meshes, rigged, clips):
-    # An idle-only breathing actor must keep its feet planted. Full locomotion
-    # still requires every weighted limb to move, as before.
-    if clips and all(clip.get('motion') == 'player_idle' for clip in clips):
+    # An idle-only breathing actor, or staff working at a station, must keep its feet planted.
+    # Full locomotion still requires every weighted limb to move, as before.
+    if clips and all(planted_motion(clip.get('motion')) for clip in clips):
         planted = {ob.name for ob in meshes if ob.get('motionRole') in ('left_leg', 'right_leg')}
         require(bool(planted), 'Breathing actor needs explicit planted leg roles')
         return rigged - planted
@@ -213,7 +217,7 @@ def validate_animation(scene, asset, spec, clips, frames):
             last = sample(frames[index]['blenderFrame'])
             if rest_hold(clip):
                 assert_same_pose(rest, last, 'Inactive hold must preserve geometry and emission')
-            if clip.get('motion') == 'player_idle':
+            if planted_motion(clip.get('motion')):
                 planted = {ob.name for ob in meshes if ob.get('motionRole') in ('left_leg', 'right_leg')}
                 require(not different_meshes(rest, last).intersection(planted), 'Breathing moves planted feet')
             moved.update(different_meshes(first, last))
