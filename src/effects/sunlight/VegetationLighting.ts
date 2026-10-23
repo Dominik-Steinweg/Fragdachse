@@ -100,6 +100,9 @@ export class VegetationLighting {
    this.uv[0]=f.u0;this.uv[1]=f.v0;this.uv[2]=f.u1-f.u0;this.uv[3]=f.v1-f.v0;
    this.world[0]=image.x;this.world[1]=image.y;this.world[2]=image.width;this.world[3]=image.height;
    renderer.glTextureUnits.bind(r.wrapper,1);set('uVegUV',this.uv);set('uVegWorld',this.world);
+   // Texture units are not uniforms: batches drawn between two chunks may take unit 8,
+   // and the canopy term would then read alpha from a foreign texture (shadows vanish).
+   state.cache?.bind();
    // Sun, cloud and tuning values are the same for every chunk of a frame.
    const frame=this.scene.game?.loop?.frame??NaN;if(frame===sharedFrame&&state===sharedState)return;
    sharedFrame=frame;sharedState=state;

@@ -173,6 +173,8 @@ export class RockFoliageLighting {
         set('uHorizonPrevious',5);
         set('uHorizonBlend[0]',binding.horizonBlend??this.neutralHorizonBlend);
       }
+      // The cloud field's unit 8 can be taken by batches drawn between two chunks.
+      binding.clouds?.cache?.bind();
       renderer.glTextureUnits.bind((binding.horizonPrevious??binding.field).source[0].glTexture,5);
       renderer.glTextureUnits.bind(binding.field.source[0].glTexture, 1);
       renderer.glTextureUnits.bind(binding.lookup.source[0].glTexture, 2);

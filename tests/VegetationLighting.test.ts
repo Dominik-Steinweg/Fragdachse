@@ -104,3 +104,11 @@ it('turns shadow sampling off on medium without rebuilding and keeps the offset 
  h.image.customRenderNodes.Submitter.run({},h.image);expect(last('uVegShadow')).toBe(0);
  expect(h.light.stats.bakes).toBe(1);h.light.destroy();
 });
+it('rebinds the cloud field for every chunk draw of a frame, not only the first',()=>{
+ const h=fixture();h.draw.mockImplementation((_layer,x,y,size,writer)=>writer.raw.fill(.5));
+ const bind=vi.fn();h.clouds.cache={world:[0,0,1,1],bind};h.scene.game={loop:{frame:7}};
+ h.light.schedule(h.image,'groundCover');h.scheduler.drain();
+ // Texture units are global GL state: batches between two chunks may take the field's unit.
+ h.image.customRenderNodes.Submitter.run({},h.image);h.image.customRenderNodes.Submitter.run({},h.image);
+ expect(bind.mock.calls.length).toBeGreaterThanOrEqual(2);h.light.destroy();
+});
