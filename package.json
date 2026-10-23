@@ -68,6 +68,7 @@
     "predeploy": "npm run build",
     "deploy": "node scripts/deploy-pages.mjs -d dist",
     "deploy:current": "npm run build && node scripts/deploy-pages.mjs -d dist -e current --add",
+    "deploy:next": "npm run build && node scripts/deploy-pages.mjs -d dist -e next",
     "balance:editor": "vite --config tools/balance-editor/vite.config.ts --open",
     "build:balance-editor": "tsc -p tools/balance-editor/tsconfig.json && vite build --config tools/balance-editor/vite.config.ts",
     "map:editor": "vite --config tools/map-editor/vite.config.ts --open",
