@@ -1,0 +1,527 @@
+{
+  "frames": {
+    "hover/0000": {
+      "frame": {
+        "x": 2,
+        "y": 2,
+        "w": 43,
+        "h": 65
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 85,
+        "y": 151,
+        "w": 43,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 1,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0001": {
+      "frame": {
+        "x": 49,
+        "y": 2,
+        "w": 44,
+        "h": 65
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 84,
+        "y": 151,
+        "w": 44,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 2,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0002": {
+      "frame": {
+        "x": 97,
+        "y": 2,
+        "w": 47,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 81,
+        "y": 153,
+        "w": 47,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 3,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0003": {
+      "frame": {
+        "x": 148,
+        "y": 2,
+        "w": 54,
+        "h": 61
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 74,
+        "y": 155,
+        "w": 54,
+        "h": 61
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 4,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0004": {
+      "frame": {
+        "x": 206,
+        "y": 2,
+        "w": 63,
+        "h": 59
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 65,
+        "y": 157,
+        "w": 63,
+        "h": 59
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 5,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0005": {
+      "frame": {
+        "x": 273,
+        "y": 2,
+        "w": 70,
+        "h": 56
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 58,
+        "y": 160,
+        "w": 70,
+        "h": 56
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 6,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0006": {
+      "frame": {
+        "x": 347,
+        "y": 2,
+        "w": 74,
+        "h": 54
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 54,
+        "y": 162,
+        "w": 74,
+        "h": 54
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 7,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0007": {
+      "frame": {
+        "x": 425,
+        "y": 2,
+        "w": 74,
+        "h": 53
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 54,
+        "y": 163,
+        "w": 74,
+        "h": 53
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 8,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0008": {
+      "frame": {
+        "x": 503,
+        "y": 2,
+        "w": 71,
+        "h": 52
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 57,
+        "y": 164,
+        "w": 71,
+        "h": 52
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 9,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0009": {
+      "frame": {
+        "x": 578,
+        "y": 2,
+        "w": 64,
+        "h": 53
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 64,
+        "y": 163,
+        "w": 64,
+        "h": 53
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 10,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0010": {
+      "frame": {
+        "x": 646,
+        "y": 2,
+        "w": 57,
+        "h": 55
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 71,
+        "y": 161,
+        "w": 57,
+        "h": 55
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 11,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0011": {
+      "frame": {
+        "x": 707,
+        "y": 2,
+        "w": 50,
+        "h": 57
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 78,
+        "y": 159,
+        "w": 50,
+        "h": 57
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 12,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0012": {
+      "frame": {
+        "x": 761,
+        "y": 2,
+        "w": 45,
+        "h": 60
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 83,
+        "y": 156,
+        "w": 45,
+        "h": 60
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 13,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0013": {
+      "frame": {
+        "x": 810,
+        "y": 2,
+        "w": 41,
+        "h": 62
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 87,
+        "y": 154,
+        "w": 41,
+        "h": 62
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 14,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0014": {
+      "frame": {
+        "x": 855,
+        "y": 2,
+        "w": 40,
+        "h": 64
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 88,
+        "y": 152,
+        "w": 40,
+        "h": 64
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 15,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    },
+    "hover/0015": {
+      "frame": {
+        "x": 899,
+        "y": 2,
+        "w": 41,
+        "h": 65
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 87,
+        "y": 151,
+        "w": 41,
+        "h": 65
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 16,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    }
+  },
+  "meta": {
+    "app": "Fragdachse V2",
+    "version": "1",
+    "image": "elevation-hover-0.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 942,
+      "h": 69
+    },
+    "scale": "1"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "tool": "Built-in image_gen",
+  "assets": [
+    {
+      "key": "match_results_banner",
+      "source": "result-banner.png",
+      "prompt": "Use case: stylized-concept. Asset type: production game UI result banner, isolated transparent PNG. Create a wide horizontal EMPTY wooden victory sign for a woodland arena shooter, like a premium hand-painted fantasy game interface. Straight-on flat UI view. Aspect ratio 3:1. A broad dark walnut wooden plaque with thin warm bronze carved wooden edging, clipped corners, beautiful restrained wood grain. Small clusters of green ivy and twisted vines concentrated at the left and right ends and a few leaves along top edge. Center 70 percent must remain dark, quiet empty wood for dynamically rendered large result text. Entire sign fits within image with small transparent margin. Genuine transparent background, clean alpha. No text, no letters, no symbols, no characters, no scenery, no drop shadow outside the object. Rich natural brown wood, olive green ivy, muted antique gold highlights. Shape should occupy most of canvas width and central two thirds of height; avoid excessive foliage."
+    }
+  ]
+}

@@ -1,0 +1,314 @@
+{
+  "schemaVersion": 1,
+  "generator": "built-in image_gen",
+  "date": "2026-10-14",
+  "register": "Druck / Holz- und Linolschnitt",
+  "artDirection": "docs/GDDs/Fragdachse_From_Dachs_Till_Dawn_Art_Direction_V1.md",
+  "references": [
+    "art/poc/dawn/style/C-portrait.png",
+    "art/poc/dawn/style/C-keyart.png",
+    "art/poc/dawn/style/style-C-board.png",
+    "art/poc/dawn/style/C-icon-scrap.png",
+    "art/poc/dawn/style/C-icon-threat.png"
+  ],
+  "paletteException": "Auftrag S-3 fordert für Nacht und Niederlage orangefarbenes Licht/Feuer plus violette Augen ausdrücklich. Die kleinen violetten Druckmarken sind die dokumentierte Ausnahme zur Ein-Akzent-Regel der Art Direction.",
+  "assets": [
+    {
+      "key": "dealer-portrait",
+      "original": "dealer-portrait.png",
+      "selectedCandidate": "art/poc/dawn/art/dealer-portrait-01.png",
+      "selected": 1,
+      "selectionReason": "Die asymmetrische Dreiviertelansicht vermeidet die frontale Symmetrie von 02; Dachsmaske, Brillenringe, Narbe und rotes Halstuch bleiben bei 128 px klar.",
+      "widths": [
+        128,
+        256,
+        512
+      ],
+      "aspectRatio": [
+        1,
+        1
+      ],
+      "candidates": [
+        {
+          "file": "art/poc/dawn/art/dealer-portrait-01.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Square 1:1, 1024x1024. Bust portrait of an OLD scarred European BADGER scrap dealer, unmistakable two black facial stripes and broad white central stripe, short rounded ears, welding goggles resting on forehead fully visible above eyebrows, worn leather apron, muted red #8f2f24 neckerchief as ONLY chromatic accent, suspicious cunning narrow eyes, closed mouth, absolutely no smile. Dark print-plate background. Clear goggles as two broad rings, scarf as one large red shape, head dominates so all remain recognizable at 128 pixels. Variant 01: Three-quarter head facing right, tilted shoulder, one prominent scar crossing cheek, broad quiet black background.",
+          "reference": "art/poc/dawn/style/C-portrait.png",
+          "review": "Gewählt: markante Dachsmaske und misstrauischer Seitenblick, gut getrennte Brille und Halstuch.",
+          "generated": {
+            "width": 1254,
+            "height": 1254,
+            "sha256": "636e6bc0fe8c9e1e4ba746a689c8aac6a6ea65cebd3e094344c0ca419afa9adc"
+          },
+          "normalizationCrop": {
+            "left": 0,
+            "top": 0,
+            "width": 1254,
+            "height": 1254
+          },
+          "sha256": "636e6bc0fe8c9e1e4ba746a689c8aac6a6ea65cebd3e094344c0ca419afa9adc"
+        },
+        {
+          "file": "art/poc/dawn/art/dealer-portrait-02.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Square 1:1, 1024x1024. Bust portrait of an OLD scarred European BADGER scrap dealer, unmistakable two black facial stripes and broad white central stripe, short rounded ears, welding goggles resting on forehead fully visible above eyebrows, worn leather apron, muted red #8f2f24 neckerchief as ONLY chromatic accent, suspicious cunning narrow eyes, closed mouth, absolutely no smile. Dark print-plate background. Clear goggles as two broad rings, scarf as one large red shape, head dominates so all remain recognizable at 128 pixels. Variant 02: Almost frontal but distinctly asymmetric head turned slightly left, one nicked ear, heavy eyebrows, large simple scarf knot off centre, boldest simplified ink shapes.",
+          "reference": "art/poc/dawn/style/C-portrait.png",
+          "review": "Sehr lesbar, aber frontal und fast spiegelgleich; weniger eigenständiger Charakter.",
+          "generated": {
+            "width": 1254,
+            "height": 1254,
+            "sha256": "c8a039c5ee492a606504a5839dc40e3162fad3a77cb4f1965354cf37b31dad04"
+          },
+          "normalizationCrop": {
+            "left": 0,
+            "top": 0,
+            "width": 1254,
+            "height": 1254
+          },
+          "sha256": "c8a039c5ee492a606504a5839dc40e3162fad3a77cb4f1965354cf37b31dad04"
+        },
+        {
+          "file": "art/poc/dawn/art/dealer-portrait-03.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Square 1:1, 1024x1024. Bust portrait of an OLD scarred European BADGER scrap dealer, unmistakable two black facial stripes and broad white central stripe, short rounded ears, welding goggles resting on forehead fully visible above eyebrows, worn leather apron, muted red #8f2f24 neckerchief as ONLY chromatic accent, suspicious cunning narrow eyes, closed mouth, absolutely no smile. Dark print-plate background. Clear goggles as two broad rings, scarf as one large red shape, head dominates so all remain recognizable at 128 pixels. Variant 03: Low-set broad bust and broad muzzle facing left, worn patched apron upper bib visible, jagged cheek scar, goggles angled across brow.",
+          "reference": "art/poc/dawn/style/C-portrait.png",
+          "review": "Gute Schnittflächen, doch die linke Brillenlinse wird in der stärkeren Drehung schmaler.",
+          "generated": {
+            "width": 1254,
+            "height": 1254,
+            "sha256": "e5bdd46c599c6c33dc026d6251d95868ff4ddb5a06b85c06c6fe1a31a949b998"
+          },
+          "normalizationCrop": {
+            "left": 0,
+            "top": 0,
+            "width": 1254,
+            "height": 1254
+          },
+          "sha256": "e5bdd46c599c6c33dc026d6251d95868ff4ddb5a06b85c06c6fe1a31a949b998"
+        }
+      ],
+      "sha256": "636e6bc0fe8c9e1e4ba746a689c8aac6a6ea65cebd3e094344c0ca419afa9adc",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "key": "dawn-keyart",
+      "original": "dawn-keyart.png",
+      "selectedCandidate": "art/poc/dawn/art/dawn-keyart-03.png",
+      "selected": 3,
+      "selectionReason": "Die große Basis und einzelne Torlampe bleiben in der Modus-Kachel lesbar, während das linke Drittel die ruhigste zusammenhängende Textfläche bietet.",
+      "widths": [
+        960,
+        1920
+      ],
+      "aspectRatio": [
+        16,
+        9
+      ],
+      "candidates": [
+        {
+          "file": "art/poc/dawn/art/dawn-keyart-01.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Landscape EXACT 16:9, 2048x1152. Night forest clearing viewed obliquely from above. Fortified badger base: patched timber shack with battered corrugated roof inside rough log palisade, squat watch platform, one single orange #d9822b gate lamp. A few tiny muted purple #7a4a7f pairs of enemy eyes in the black forest, printed dots not digital glow. Almost imperceptible thin dawn horizon. Put the base in RIGHT TWO THIRDS. LEFT THIRD stays dark quiet low-detail uninterrupted forest ink for later text overlay, no lettering in image. Orange lamp is the sole appreciable light source, tightly bounded carved light patch. Somber siege anticipation. Variant 01: Broad angular clearing, base at right centre, diagonal path entering lower right, quiet left third.",
+          "reference": "art/poc/dawn/style/C-keyart.png",
+          "review": "Stimmige Nacht, aber heller linker Baumstumpf stört den Textbereich.",
+          "generated": {
+            "width": 1672,
+            "height": 941,
+            "sha256": "19e5b4702797b92858072aa4b36b4bed7d106ee3a23151048427ef865a976028"
+          },
+          "normalizationCrop": {
+            "left": 4,
+            "top": 2,
+            "width": 1664,
+            "height": 936
+          },
+          "sha256": "af8335f2f8f9181f214dc07b378e86442a13b4e60f2033539b2344e8337a0fd4"
+        },
+        {
+          "file": "art/poc/dawn/art/dawn-keyart-02.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Landscape EXACT 16:9, 2048x1152. Night forest clearing viewed obliquely from above. Fortified badger base: patched timber shack with battered corrugated roof inside rough log palisade, squat watch platform, one single orange #d9822b gate lamp. A few tiny muted purple #7a4a7f pairs of enemy eyes in the black forest, printed dots not digital glow. Almost imperceptible thin dawn horizon. Put the base in RIGHT TWO THIRDS. LEFT THIRD stays dark quiet low-detail uninterrupted forest ink for later text overlay, no lettering in image. Orange lamp is the sole appreciable light source, tightly bounded carved light patch. Somber siege anticipation. Variant 02: Higher oblique viewpoint, compact irregular oval palisade right of centre, broken diagonal trunks framing lower right, wide dark forest to left.",
+          "reference": "art/poc/dawn/style/C-keyart.png",
+          "review": "Ruhiger Grund, jedoch kleinere Basis und verstreutere Blickführung.",
+          "generated": {
+            "width": 1672,
+            "height": 941,
+            "sha256": "2a5e701cff39ac323edb96adf2f23dd2d6cb54627ffae6747e7e0e80837196f4"
+          },
+          "normalizationCrop": {
+            "left": 4,
+            "top": 2,
+            "width": 1664,
+            "height": 936
+          },
+          "sha256": "9f154e024ef1a05bbe88369b31748481ab1cc8b730b97beaf6da82606f56cee0"
+        },
+        {
+          "file": "art/poc/dawn/art/dawn-keyart-03.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Landscape EXACT 16:9, 2048x1152. Night forest clearing viewed obliquely from above. Fortified badger base: patched timber shack with battered corrugated roof inside rough log palisade, squat watch platform, one single orange #d9822b gate lamp. A few tiny muted purple #7a4a7f pairs of enemy eyes in the black forest, printed dots not digital glow. Almost imperceptible thin dawn horizon. Put the base in RIGHT TWO THIRDS. LEFT THIRD stays dark quiet low-detail uninterrupted forest ink for later text overlay, no lettering in image. Orange lamp is the sole appreciable light source, tightly bounded carved light patch. Somber siege anticipation. Variant 03: Closer broad base at lower right, rear watch platform, faint horizon high at top, a few bold foreground stump silhouettes, left remains quiet.",
+          "reference": "art/poc/dawn/style/C-keyart.png",
+          "review": "Gewählt: große rechte Basis, dunkle linke Textfläche, sparsame Augen und Lampe.",
+          "generated": {
+            "width": 1672,
+            "height": 941,
+            "sha256": "9029ffa2730d7b74622e9bfeedd595c0c0b2a162d94b92a900d3b22e16be18bf"
+          },
+          "normalizationCrop": {
+            "left": 4,
+            "top": 2,
+            "width": 1664,
+            "height": 936
+          },
+          "sha256": "4230cd97390041bf5cd6a66a754674a103dccb100b67d75a6057edccda7b6a85"
+        }
+      ],
+      "sha256": "4230cd97390041bf5cd6a66a754674a103dccb100b67d75a6057edccda7b6a85",
+      "width": 1664,
+      "height": 936
+    },
+    {
+      "key": "dawn-victory",
+      "original": "dawn-victory.png",
+      "selectedCandidate": "art/poc/dawn/art/dawn-victory-02.png",
+      "selected": 2,
+      "selectionReason": "Der deutlich zusammengesunkene Dachs vor dem stehenden Tor, Dachschäden und kalte Schieferflächen erzählen erschöpftes Überleben ohne Siegerpose.",
+      "widths": [
+        960,
+        1920
+      ],
+      "aspectRatio": [
+        16,
+        9
+      ],
+      "candidates": [
+        {
+          "file": "art/poc/dawn/art/dawn-victory-01.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Landscape EXACT 16:9, 2048x1152. Dawn over the SAME battered but STILL STANDING badger forest base, patched timber shack with corrugated roof within rough palisade and squat watch platform. Several exhausted European badgers with distinct black-white face stripes: one sitting with bowed shoulders, one leaning wearily on a fence, one slowly carrying a repair plank. Thin smoke rising in carved broken ribbons, splintered but upright gate. First cold light in muted slate #4a5157 and bone, no orange sunshine, no colored magical effects. No cheering, no heroic pose, no flags, no celebration, no sentimental kitsch. Viewed obliquely from above. Base right of centre and quieter left third, cold restrained survival. Variant 01: Wider aftermath composition, three tired badgers near gate, light as a thin flat grey strip above dark pines.",
+          "reference": "art/poc/dawn/style/C-keyart.png",
+          "review": "Gute Erzählung, doch Figuren und Schäden bleiben in der weiteren Ansicht kleiner.",
+          "generated": {
+            "width": 1672,
+            "height": 941,
+            "sha256": "ef40dd270b77cacd08b5351b3d60a543fc878cac040be2345fed496c468ad004"
+          },
+          "normalizationCrop": {
+            "left": 4,
+            "top": 2,
+            "width": 1664,
+            "height": 936
+          },
+          "sha256": "06366abe5c3ee6ec30a4bcd4f9ac5494c351aae7716ef8e5fd19ce0f621e6348"
+        },
+        {
+          "file": "art/poc/dawn/art/dawn-victory-02.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Landscape EXACT 16:9, 2048x1152. Dawn over the SAME battered but STILL STANDING badger forest base, patched timber shack with corrugated roof within rough palisade and squat watch platform. Several exhausted European badgers with distinct black-white face stripes: one sitting with bowed shoulders, one leaning wearily on a fence, one slowly carrying a repair plank. Thin smoke rising in carved broken ribbons, splintered but upright gate. First cold light in muted slate #4a5157 and bone, no orange sunshine, no colored magical effects. No cheering, no heroic pose, no flags, no celebration, no sentimental kitsch. Viewed obliquely from above. Base right of centre and quieter left third, cold restrained survival. Variant 02: Slightly closer courtyard view, seated exhausted badger clearly readable beside standing gate, thin smoke drifts right, ragged roof silhouette.",
+          "reference": "art/poc/dawn/style/C-keyart.png",
+          "review": "Gewählt: erschöpfte Körperhaltung, lesbare Schäden, stehendes Tor und kühler Morgen.",
+          "generated": {
+            "width": 1672,
+            "height": 941,
+            "sha256": "a02ffd5b323a776f8aa033b471f3fa254c5f63cc4e91faa6c01630ccc7ded4c1"
+          },
+          "normalizationCrop": {
+            "left": 4,
+            "top": 2,
+            "width": 1664,
+            "height": 936
+          },
+          "sha256": "276ed3ebc8cedae05dfb3179b7666b76396d4e38b19c054afa81cae69136cdc3"
+        },
+        {
+          "file": "art/poc/dawn/art/dawn-victory-03.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Landscape EXACT 16:9, 2048x1152. Dawn over the SAME battered but STILL STANDING badger forest base, patched timber shack with corrugated roof within rough palisade and squat watch platform. Several exhausted European badgers with distinct black-white face stripes: one sitting with bowed shoulders, one leaning wearily on a fence, one slowly carrying a repair plank. Thin smoke rising in carved broken ribbons, splintered but upright gate. First cold light in muted slate #4a5157 and bone, no orange sunshine, no colored magical effects. No cheering, no heroic pose, no flags, no celebration, no sentimental kitsch. Viewed obliquely from above. Base right of centre and quieter left third, cold restrained survival. Variant 03: High oblique clearing, two seated badgers at palisade and one repairing gate, pale cold horizon, strong chipped timber shapes.",
+          "reference": "art/poc/dawn/style/C-keyart.png",
+          "review": "Die Sonnenscheibe und zusätzliche Torwärme wirken feierlicher und weniger kalt.",
+          "generated": {
+            "width": 1672,
+            "height": 941,
+            "sha256": "4d2e7effadfaa9399cfdb210be15267e9cf0862d876535a684ccef0e20485817"
+          },
+          "normalizationCrop": {
+            "left": 4,
+            "top": 2,
+            "width": 1664,
+            "height": 936
+          },
+          "sha256": "edbcb726a35e1f4f86612326026086054c520f4b1b6bf8d6a8486260381bcc33"
+        }
+      ],
+      "sha256": "276ed3ebc8cedae05dfb3179b7666b76396d4e38b19c054afa81cae69136cdc3",
+      "width": 1664,
+      "height": 936
+    },
+    {
+      "key": "dawn-defeat",
+      "original": "dawn-defeat.png",
+      "selectedCandidate": "art/poc/dawn/art/dawn-defeat-03.png",
+      "selected": 3,
+      "selectionReason": "Das eingestürzte Dach und der gebrochene Wachturm bilden die klarste zerstörte Silhouette; kleine Feuer und violette Augen halten die Niederlage ernst.",
+      "widths": [
+        960,
+        1920
+      ],
+      "aspectRatio": [
+        16,
+        9
+      ],
+      "candidates": [
+        {
+          "file": "art/poc/dawn/art/dawn-defeat-01.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Landscape EXACT 16:9, 2048x1152. Night aftermath: the SAME badger forest base HAS FALLEN. Timber shack corrugated roof collapsed, breached rough log palisade, snapped squat watch platform. Burning remnants with small restrained orange #d9822b flames at the structural wreckage, black carved smoke. Tiny muted purple #7a4a7f pairs of enemy eyes surround the clearing in forest darkness, no visible monster bodies. Serious sombre loss, not horror excess, no gore, skulls or corpses, no huge inferno. View obliquely from above. Wreckage in right two thirds, left third quiet dark forest for later text. Large collapsed silhouettes must clearly distinguish from standing victory base. Variant 01: Collapsed roof slab diagonal across broken gate, small fire at right centre, eyes distributed irregularly along tree line.",
+          "reference": "art/poc/dawn/style/C-keyart.png",
+          "review": "Gut lesbarer Dacheinsturz, aber etwas kompakter Trümmerhaufen.",
+          "generated": {
+            "width": 1672,
+            "height": 941,
+            "sha256": "540097958e8691ebbaa5d8bd9441407fe4f75c17e157a89b233e2da32082a074"
+          },
+          "normalizationCrop": {
+            "left": 4,
+            "top": 2,
+            "width": 1664,
+            "height": 936
+          },
+          "sha256": "399e0de8fbc7ac1d0138c1397414d748e35ee949724adc48e53701d1485721ba"
+        },
+        {
+          "file": "art/poc/dawn/art/dawn-defeat-02.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Landscape EXACT 16:9, 2048x1152. Night aftermath: the SAME badger forest base HAS FALLEN. Timber shack corrugated roof collapsed, breached rough log palisade, snapped squat watch platform. Burning remnants with small restrained orange #d9822b flames at the structural wreckage, black carved smoke. Tiny muted purple #7a4a7f pairs of enemy eyes surround the clearing in forest darkness, no visible monster bodies. Serious sombre loss, not horror excess, no gore, skulls or corpses, no huge inferno. View obliquely from above. Wreckage in right two thirds, left third quiet dark forest for later text. Large collapsed silhouettes must clearly distinguish from standing victory base. Variant 02: Higher view of broken palisade ring, flattened shack and snapped lookout, sparse embers, eyes close to dark edges.",
+          "reference": "art/poc/dawn/style/C-keyart.png",
+          "review": "Viele kleine Brandstellen und Details zerstreuen den Blick.",
+          "generated": {
+            "width": 1672,
+            "height": 941,
+            "sha256": "f44749619cbe17a95d77b41e73b2b503ada3758f1074caf57583c0d08d15bdef"
+          },
+          "normalizationCrop": {
+            "left": 4,
+            "top": 2,
+            "width": 1664,
+            "height": 936
+          },
+          "sha256": "c5b8b7d642523f9a288f3d9e0a2da67bf66278f4f1f8d71f70665a9303642fbc"
+        },
+        {
+          "file": "art/poc/dawn/art/dawn-defeat-03.png",
+          "prompt": "Use case: stylized-concept. Fragdachse From Dachs Till Dawn, DRUCK register. Genuine hand-carved woodcut / linocut relief print, bold irregular carved shapes, selective broad gouge marks and wood grain in the ink, matte charcoal #1b1a17 and soot brown #2a241d, bone #d9cfb6, muted umber #5a4632. Heavy functional asymmetric forms, weathered forest warfare, serious field-manual plate. Restrained coarse detail, large readable masses before texture. No airbrush, gradients, photographic lighting, bloom, soft vignette, glossy plastic, microdetail noise, comic outlines, cute expressions, mirror symmetry, lettering, logo or watermark. Full bleed artwork without typography or decorative frame. Use the supplied style reference for ink language, NOT its exact layout. Landscape EXACT 16:9, 2048x1152. Night aftermath: the SAME badger forest base HAS FALLEN. Timber shack corrugated roof collapsed, breached rough log palisade, snapped squat watch platform. Burning remnants with small restrained orange #d9822b flames at the structural wreckage, black carved smoke. Tiny muted purple #7a4a7f pairs of enemy eyes surround the clearing in forest darkness, no visible monster bodies. Serious sombre loss, not horror excess, no gore, skulls or corpses, no huge inferno. View obliquely from above. Wreckage in right two thirds, left third quiet dark forest for later text. Large collapsed silhouettes must clearly distinguish from standing victory base. Variant 03: Closer wreckage, leaning fallen watch platform and charred roof ribs, restrained low flames, dark forest encroaching behind.",
+          "reference": "art/poc/dawn/style/C-keyart.png",
+          "review": "Gewählt: große gebrochene Strukturen, klare Bresche und zurückhaltendes Feuer.",
+          "generated": {
+            "width": 1672,
+            "height": 941,
+            "sha256": "a973cabd71ce1781b81b18e50241fd365f4a2eb55548e267698c959fc6deb6f1"
+          },
+          "normalizationCrop": {
+            "left": 4,
+            "top": 2,
+            "width": 1664,
+            "height": 936
+          },
+          "sha256": "383f3552f8eaab176052edb999259bcc44b27747ff504e54776e248dfd4ccf47"
+        }
+      ],
+      "sha256": "383f3552f8eaab176052edb999259bcc44b27747ff504e54776e248dfd4ccf47",
+      "width": 1664,
+      "height": 936
+    }
+  ]
+}

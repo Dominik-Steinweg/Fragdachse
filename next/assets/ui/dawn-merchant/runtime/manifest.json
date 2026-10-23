@@ -1,0 +1,1720 @@
+{
+  "version": 1,
+  "namespace": "dawn-merchant",
+  "designSpace": {
+    "width": 1920,
+    "height": 1080
+  },
+  "masterScale": 2,
+  "sharpVersion": "0.33.5",
+  "sources": {
+    "materials": {
+      "file": "sources/materials.png",
+      "sha256": "2e92fb323470dfa3f8bb7e20a7f4638783cb90f0892f5fb7098080b3e5d443d0"
+    },
+    "corner": {
+      "file": "sources/corner.png",
+      "sha256": "2110116c7c9f2d2a686a10795d583d0f949b76c14c0e9082d0b8b9189c703253"
+    },
+    "icons": {
+      "file": "sources/icons.png",
+      "sha256": "1231c192e71d0dddcbd6655c9ba7334c7d73b0c1e6c5d170f76c708e10fb55e0"
+    },
+    "panorama": {
+      "file": "sources/panorama.png",
+      "sha256": "65ff623daf5624a24cfcd4f8a52bb41efd6fa89d57c1feea16eb009f60c28db2"
+    }
+  },
+  "assets": {
+    "window-frame": {
+      "key": "dawn-merchant/window-frame",
+      "original": "../window-frame.png",
+      "originalWidth": 512,
+      "originalHeight": 512,
+      "sha256": "2a0764192baf2464fe5a2174943ad4f7f7c75baa92afcaca56caf8a942c1648d",
+      "width": 256,
+      "height": 256,
+      "insets": {
+        "left": 64,
+        "top": 64,
+        "right": 64,
+        "bottom": 64
+      },
+      "contentInsets": {
+        "left": 28,
+        "top": 28,
+        "right": 28,
+        "bottom": 28
+      },
+      "borderWidth": 24,
+      "tile": null,
+      "transparentCenter": true,
+      "usage": "Äußerer Fensterrahmen; Innenfläche separat darunter kacheln.",
+      "exports": [
+        {
+          "key": "dawn-merchant/window-frame@1x",
+          "file": "window-frame@1x.webp",
+          "scale": 1,
+          "width": 256,
+          "height": 256,
+          "insets": {
+            "left": 64,
+            "top": 64,
+            "right": 64,
+            "bottom": 64
+          },
+          "sha256": "eab3525154df136d2b054a9ec91dd6b6f4edb358fd9ffcd4afc3b5456c2a4c62"
+        },
+        {
+          "key": "dawn-merchant/window-frame@2x",
+          "file": "window-frame@2x.webp",
+          "scale": 2,
+          "width": 512,
+          "height": 512,
+          "insets": {
+            "left": 128,
+            "top": 128,
+            "right": 128,
+            "bottom": 128
+          },
+          "sha256": "1a01a555c4b3a271cb17fd1f2a1ed3a3fb044d36974e1aa941ded91cfbbe53b7"
+        }
+      ]
+    },
+    "panel-fill": {
+      "key": "dawn-merchant/panel-fill",
+      "original": "../panel-fill.png",
+      "originalWidth": 512,
+      "originalHeight": 512,
+      "sha256": "c20165c6155294ada0b251001ed30565fde9520b151d425b35269086d662bb60",
+      "width": 256,
+      "height": 256,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": "xy",
+      "transparentCenter": false,
+      "usage": "Ruhige Holzkohle-/Papierfläche hinter Text; in X und Y kacheln.",
+      "exports": [
+        {
+          "key": "dawn-merchant/panel-fill@1x",
+          "file": "panel-fill@1x.webp",
+          "scale": 1,
+          "width": 256,
+          "height": 256,
+          "insets": null,
+          "sha256": "d8f3747d6543d2aa32db5efd485823648e91879154727265f36e94fc0f0f57f7"
+        },
+        {
+          "key": "dawn-merchant/panel-fill@2x",
+          "file": "panel-fill@2x.webp",
+          "scale": 2,
+          "width": 512,
+          "height": 512,
+          "insets": null,
+          "sha256": "6a699f5447257a740a4d4a5b73f8b317cfb7eebb9e0c0db826a07aaa0cf4d161"
+        }
+      ]
+    },
+    "header-panorama": {
+      "key": "dawn-merchant/header-panorama",
+      "original": "../header-panorama.png",
+      "originalWidth": 2048,
+      "originalHeight": 320,
+      "sha256": "e711e3cc93c9f10aea4aae82849905d566936384e4c5e068f4d155c10d1306bb",
+      "width": 1024,
+      "height": 160,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": "x",
+      "transparentCenter": false,
+      "usage": "Sekundäres Walddekor im Kopf; horizontal kacheln, bei wenig Höhe beschneiden.",
+      "exports": [
+        {
+          "key": "dawn-merchant/header-panorama@1x",
+          "file": "header-panorama@1x.webp",
+          "scale": 1,
+          "width": 1024,
+          "height": 160,
+          "insets": null,
+          "sha256": "a8dd2ced1cc0dd8891f3124bcf9e45b75f0368238a1832e98df385471768a109"
+        },
+        {
+          "key": "dawn-merchant/header-panorama@2x",
+          "file": "header-panorama@2x.webp",
+          "scale": 2,
+          "width": 2048,
+          "height": 320,
+          "insets": null,
+          "sha256": "b79cd60e0a5ededd1ee8d3b5dea8df3ca82e8aad5797553574afe697072ce9fa"
+        }
+      ]
+    },
+    "category-row-normal": {
+      "key": "dawn-merchant/category-row-normal",
+      "original": "../category-row-normal.png",
+      "originalWidth": 576,
+      "originalHeight": 112,
+      "sha256": "509eb4d5c0bf5d644cdcf0721e82b422af8c8e794ec1a5462026e0d1900af1d1",
+      "width": 288,
+      "height": 56,
+      "insets": {
+        "left": 16,
+        "top": 12,
+        "right": 16,
+        "bottom": 12
+      },
+      "contentInsets": {
+        "left": 16,
+        "top": 10,
+        "right": 16,
+        "bottom": 10
+      },
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Kategorie: Platz für separates Icon, Label und Zähler. Zustand normal.",
+      "exports": [
+        {
+          "key": "dawn-merchant/category-row-normal@1x",
+          "file": "category-row-normal@1x.webp",
+          "scale": 1,
+          "width": 288,
+          "height": 56,
+          "insets": {
+            "left": 16,
+            "top": 12,
+            "right": 16,
+            "bottom": 12
+          },
+          "sha256": "46247795fa59e99fa1069f0be1e8159a7fffcae3787485de9582b8b010aedf1d"
+        },
+        {
+          "key": "dawn-merchant/category-row-normal@2x",
+          "file": "category-row-normal@2x.webp",
+          "scale": 2,
+          "width": 576,
+          "height": 112,
+          "insets": {
+            "left": 32,
+            "top": 24,
+            "right": 32,
+            "bottom": 24
+          },
+          "sha256": "ef72c18206286abca7a18d1cc3ac0c89aa711c1a3d8a18cb695570ca6576315b"
+        }
+      ]
+    },
+    "category-row-hover": {
+      "key": "dawn-merchant/category-row-hover",
+      "original": "../category-row-hover.png",
+      "originalWidth": 576,
+      "originalHeight": 112,
+      "sha256": "1df7eb495e19bd7c1e42bf7b4c524a965ffd3d99823d2a54caefffb081454b33",
+      "width": 288,
+      "height": 56,
+      "insets": {
+        "left": 16,
+        "top": 12,
+        "right": 16,
+        "bottom": 12
+      },
+      "contentInsets": {
+        "left": 16,
+        "top": 10,
+        "right": 16,
+        "bottom": 10
+      },
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Kategorie: Platz für separates Icon, Label und Zähler. Zustand hover.",
+      "exports": [
+        {
+          "key": "dawn-merchant/category-row-hover@1x",
+          "file": "category-row-hover@1x.webp",
+          "scale": 1,
+          "width": 288,
+          "height": 56,
+          "insets": {
+            "left": 16,
+            "top": 12,
+            "right": 16,
+            "bottom": 12
+          },
+          "sha256": "16f78c7be0a9e531d3526732746d2fd85f83775b60d9d9c593f7b10f56d87534"
+        },
+        {
+          "key": "dawn-merchant/category-row-hover@2x",
+          "file": "category-row-hover@2x.webp",
+          "scale": 2,
+          "width": 576,
+          "height": 112,
+          "insets": {
+            "left": 32,
+            "top": 24,
+            "right": 32,
+            "bottom": 24
+          },
+          "sha256": "3d2538314dffa5642523c3b3687c49c878daaeb744e93b343b89f87a474604b1"
+        }
+      ]
+    },
+    "category-row-active": {
+      "key": "dawn-merchant/category-row-active",
+      "original": "../category-row-active.png",
+      "originalWidth": 576,
+      "originalHeight": 112,
+      "sha256": "f962c363c24e6692e961c78497b1f7a3372ad9cdcdc996aede7a79b7db27b749",
+      "width": 288,
+      "height": 56,
+      "insets": {
+        "left": 16,
+        "top": 12,
+        "right": 16,
+        "bottom": 12
+      },
+      "contentInsets": {
+        "left": 16,
+        "top": 10,
+        "right": 16,
+        "bottom": 10
+      },
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Kategorie: Platz für separates Icon, Label und Zähler. Zustand active.",
+      "exports": [
+        {
+          "key": "dawn-merchant/category-row-active@1x",
+          "file": "category-row-active@1x.webp",
+          "scale": 1,
+          "width": 288,
+          "height": 56,
+          "insets": {
+            "left": 16,
+            "top": 12,
+            "right": 16,
+            "bottom": 12
+          },
+          "sha256": "7fc0b09252986119bb3dec404b0602b50d58a3e543d9f614321781236c6400ab"
+        },
+        {
+          "key": "dawn-merchant/category-row-active@2x",
+          "file": "category-row-active@2x.webp",
+          "scale": 2,
+          "width": 576,
+          "height": 112,
+          "insets": {
+            "left": 32,
+            "top": 24,
+            "right": 32,
+            "bottom": 24
+          },
+          "sha256": "c141eedb0a71823065b93b06b949e2dcf942e701a4776dff5a4641d92e263380"
+        }
+      ]
+    },
+    "subcategory-row-normal": {
+      "key": "dawn-merchant/subcategory-row-normal",
+      "original": "../subcategory-row-normal.png",
+      "originalWidth": 576,
+      "originalHeight": 112,
+      "sha256": "6dc08667a930443c27651db5838e4befdb6f05dcc4cc5fa512f12c84569f051e",
+      "width": 288,
+      "height": 56,
+      "insets": {
+        "left": 32,
+        "top": 12,
+        "right": 16,
+        "bottom": 12
+      },
+      "contentInsets": {
+        "left": 32,
+        "top": 10,
+        "right": 16,
+        "bottom": 10
+      },
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Unterkategorie: 16px transparente Einrückung eingebaut; Inhalt zusätzlich ab x=32. Zustand normal.",
+      "exports": [
+        {
+          "key": "dawn-merchant/subcategory-row-normal@1x",
+          "file": "subcategory-row-normal@1x.webp",
+          "scale": 1,
+          "width": 288,
+          "height": 56,
+          "insets": {
+            "left": 32,
+            "top": 12,
+            "right": 16,
+            "bottom": 12
+          },
+          "sha256": "7553da5a9454928390009d11e0fc5da5d722cdb9dacd139cceb9b57ea9d9dc19"
+        },
+        {
+          "key": "dawn-merchant/subcategory-row-normal@2x",
+          "file": "subcategory-row-normal@2x.webp",
+          "scale": 2,
+          "width": 576,
+          "height": 112,
+          "insets": {
+            "left": 64,
+            "top": 24,
+            "right": 32,
+            "bottom": 24
+          },
+          "sha256": "2537fa0a01983a8e1fa7631b4ee71e234188f5ff323adb50809560005502fb7f"
+        }
+      ]
+    },
+    "subcategory-row-hover": {
+      "key": "dawn-merchant/subcategory-row-hover",
+      "original": "../subcategory-row-hover.png",
+      "originalWidth": 576,
+      "originalHeight": 112,
+      "sha256": "bb050de07af993df4a00ef6b995ad92ccf961613d0f4127a756fff64006686ae",
+      "width": 288,
+      "height": 56,
+      "insets": {
+        "left": 32,
+        "top": 12,
+        "right": 16,
+        "bottom": 12
+      },
+      "contentInsets": {
+        "left": 32,
+        "top": 10,
+        "right": 16,
+        "bottom": 10
+      },
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Unterkategorie: 16px transparente Einrückung eingebaut; Inhalt zusätzlich ab x=32. Zustand hover.",
+      "exports": [
+        {
+          "key": "dawn-merchant/subcategory-row-hover@1x",
+          "file": "subcategory-row-hover@1x.webp",
+          "scale": 1,
+          "width": 288,
+          "height": 56,
+          "insets": {
+            "left": 32,
+            "top": 12,
+            "right": 16,
+            "bottom": 12
+          },
+          "sha256": "a3872c8da4f3c1df50afaa8bbbf9c6b5691918a3cef51e79d80b04975124af7e"
+        },
+        {
+          "key": "dawn-merchant/subcategory-row-hover@2x",
+          "file": "subcategory-row-hover@2x.webp",
+          "scale": 2,
+          "width": 576,
+          "height": 112,
+          "insets": {
+            "left": 64,
+            "top": 24,
+            "right": 32,
+            "bottom": 24
+          },
+          "sha256": "caf55220310f88e2d09625542771e73c951a811cbe4842cdf515f2a26f07d43e"
+        }
+      ]
+    },
+    "subcategory-row-active": {
+      "key": "dawn-merchant/subcategory-row-active",
+      "original": "../subcategory-row-active.png",
+      "originalWidth": 576,
+      "originalHeight": 112,
+      "sha256": "46fa73d9f5c1d3043017d6a1835f8c1c2af5ccc69efee47941f26da885d42264",
+      "width": 288,
+      "height": 56,
+      "insets": {
+        "left": 32,
+        "top": 12,
+        "right": 16,
+        "bottom": 12
+      },
+      "contentInsets": {
+        "left": 32,
+        "top": 10,
+        "right": 16,
+        "bottom": 10
+      },
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Unterkategorie: 16px transparente Einrückung eingebaut; Inhalt zusätzlich ab x=32. Zustand active.",
+      "exports": [
+        {
+          "key": "dawn-merchant/subcategory-row-active@1x",
+          "file": "subcategory-row-active@1x.webp",
+          "scale": 1,
+          "width": 288,
+          "height": 56,
+          "insets": {
+            "left": 32,
+            "top": 12,
+            "right": 16,
+            "bottom": 12
+          },
+          "sha256": "d7dfa4188f0e59e6b7cb102089d45119264dcd69aae5a5b9b129227e8cab3ece"
+        },
+        {
+          "key": "dawn-merchant/subcategory-row-active@2x",
+          "file": "subcategory-row-active@2x.webp",
+          "scale": 2,
+          "width": 576,
+          "height": 112,
+          "insets": {
+            "left": 64,
+            "top": 24,
+            "right": 32,
+            "bottom": 24
+          },
+          "sha256": "775d4051e9ac9bda139bbc0546307f6bffe1d8b60491663ff6d51c3f26fafc2d"
+        }
+      ]
+    },
+    "card-frame-normal": {
+      "key": "dawn-merchant/card-frame-normal",
+      "original": "../card-frame-normal.png",
+      "originalWidth": 400,
+      "originalHeight": 440,
+      "sha256": "78f273449edb71c89bbb65a3c2b67585d21dcee766a3577c699891cd75ebd5cb",
+      "width": 200,
+      "height": 220,
+      "insets": {
+        "left": 28,
+        "top": 28,
+        "right": 28,
+        "bottom": 28
+      },
+      "contentInsets": {
+        "left": 12,
+        "top": 12,
+        "right": 12,
+        "bottom": 12
+      },
+      "borderWidth": 5,
+      "tile": null,
+      "transparentCenter": true,
+      "usage": "Transparenter Kartenrahmen normal; Füllung und Angebotsinhalt separat. Status sitzt im festen rechten oberen Eck.",
+      "exports": [
+        {
+          "key": "dawn-merchant/card-frame-normal@1x",
+          "file": "card-frame-normal@1x.webp",
+          "scale": 1,
+          "width": 200,
+          "height": 220,
+          "insets": {
+            "left": 28,
+            "top": 28,
+            "right": 28,
+            "bottom": 28
+          },
+          "sha256": "b1375deee60f92bd7b843e890595761186e2ea59282d8964666bb8fa064192d9"
+        },
+        {
+          "key": "dawn-merchant/card-frame-normal@2x",
+          "file": "card-frame-normal@2x.webp",
+          "scale": 2,
+          "width": 400,
+          "height": 440,
+          "insets": {
+            "left": 56,
+            "top": 56,
+            "right": 56,
+            "bottom": 56
+          },
+          "sha256": "3d18a4a5454137a289dff358f57e52bb387cf3c8159b830c45f4083b798fa92f"
+        }
+      ]
+    },
+    "card-frame-hover": {
+      "key": "dawn-merchant/card-frame-hover",
+      "original": "../card-frame-hover.png",
+      "originalWidth": 400,
+      "originalHeight": 440,
+      "sha256": "11830e8761c4c5cecdaf8c143a327880f8ba5a516f7e65f2722352b8b7e04337",
+      "width": 200,
+      "height": 220,
+      "insets": {
+        "left": 28,
+        "top": 28,
+        "right": 28,
+        "bottom": 28
+      },
+      "contentInsets": {
+        "left": 12,
+        "top": 12,
+        "right": 12,
+        "bottom": 12
+      },
+      "borderWidth": 5,
+      "tile": null,
+      "transparentCenter": true,
+      "usage": "Transparenter Kartenrahmen hover; Füllung und Angebotsinhalt separat. Status sitzt im festen rechten oberen Eck.",
+      "exports": [
+        {
+          "key": "dawn-merchant/card-frame-hover@1x",
+          "file": "card-frame-hover@1x.webp",
+          "scale": 1,
+          "width": 200,
+          "height": 220,
+          "insets": {
+            "left": 28,
+            "top": 28,
+            "right": 28,
+            "bottom": 28
+          },
+          "sha256": "83d900d4a6a9583a127b3d064b1fe3860b0dd15dd9e8235e729ec829c9890a27"
+        },
+        {
+          "key": "dawn-merchant/card-frame-hover@2x",
+          "file": "card-frame-hover@2x.webp",
+          "scale": 2,
+          "width": 400,
+          "height": 440,
+          "insets": {
+            "left": 56,
+            "top": 56,
+            "right": 56,
+            "bottom": 56
+          },
+          "sha256": "3f9ca651b74246e618cc4acbba0be80985ec97cb2438a07bd151df54c22d9853"
+        }
+      ]
+    },
+    "card-frame-selected": {
+      "key": "dawn-merchant/card-frame-selected",
+      "original": "../card-frame-selected.png",
+      "originalWidth": 400,
+      "originalHeight": 440,
+      "sha256": "e416a19fd81255ff1d4f4e7bacac7333535715b20e2a8aab0a93dabab5e8ba7e",
+      "width": 200,
+      "height": 220,
+      "insets": {
+        "left": 28,
+        "top": 28,
+        "right": 28,
+        "bottom": 28
+      },
+      "contentInsets": {
+        "left": 12,
+        "top": 12,
+        "right": 12,
+        "bottom": 12
+      },
+      "borderWidth": 5,
+      "tile": null,
+      "transparentCenter": true,
+      "usage": "Transparenter Kartenrahmen selected; Füllung und Angebotsinhalt separat. Status sitzt im festen rechten oberen Eck.",
+      "exports": [
+        {
+          "key": "dawn-merchant/card-frame-selected@1x",
+          "file": "card-frame-selected@1x.webp",
+          "scale": 1,
+          "width": 200,
+          "height": 220,
+          "insets": {
+            "left": 28,
+            "top": 28,
+            "right": 28,
+            "bottom": 28
+          },
+          "sha256": "7837e9e4c55999fd48fe9ded70989621972981c9f063595d9706ae9bd4e9cdd8"
+        },
+        {
+          "key": "dawn-merchant/card-frame-selected@2x",
+          "file": "card-frame-selected@2x.webp",
+          "scale": 2,
+          "width": 400,
+          "height": 440,
+          "insets": {
+            "left": 56,
+            "top": 56,
+            "right": 56,
+            "bottom": 56
+          },
+          "sha256": "2c1c91d0b8ea99094d4bdf8ac8896e413581861381d6eb91f8b31ddde1d63286"
+        }
+      ]
+    },
+    "card-frame-locked": {
+      "key": "dawn-merchant/card-frame-locked",
+      "original": "../card-frame-locked.png",
+      "originalWidth": 400,
+      "originalHeight": 440,
+      "sha256": "fabc65092870a6549cfd36b0cdf8c1fe756263592c372d340fdcecdb7fc60d7a",
+      "width": 200,
+      "height": 220,
+      "insets": {
+        "left": 28,
+        "top": 28,
+        "right": 28,
+        "bottom": 28
+      },
+      "contentInsets": {
+        "left": 12,
+        "top": 12,
+        "right": 12,
+        "bottom": 12
+      },
+      "borderWidth": 5,
+      "tile": null,
+      "transparentCenter": true,
+      "usage": "Transparenter Kartenrahmen locked; Füllung und Angebotsinhalt separat. Status sitzt im festen rechten oberen Eck.",
+      "exports": [
+        {
+          "key": "dawn-merchant/card-frame-locked@1x",
+          "file": "card-frame-locked@1x.webp",
+          "scale": 1,
+          "width": 200,
+          "height": 220,
+          "insets": {
+            "left": 28,
+            "top": 28,
+            "right": 28,
+            "bottom": 28
+          },
+          "sha256": "9200cdde20ea663aff9b02a236eb9a204bb7b8a075f2512ca5ef3118549093ec"
+        },
+        {
+          "key": "dawn-merchant/card-frame-locked@2x",
+          "file": "card-frame-locked@2x.webp",
+          "scale": 2,
+          "width": 400,
+          "height": 440,
+          "insets": {
+            "left": 56,
+            "top": 56,
+            "right": 56,
+            "bottom": 56
+          },
+          "sha256": "8f5d348a91fe44eb5d1f02c87498e65b614746572fe60f7548a41f56023855d2"
+        }
+      ]
+    },
+    "card-frame-owned": {
+      "key": "dawn-merchant/card-frame-owned",
+      "original": "../card-frame-owned.png",
+      "originalWidth": 400,
+      "originalHeight": 440,
+      "sha256": "5f821cf7e555a81f2dfd2a8c1c8b7c5334c7b81eb08de07422c6f4937f57744d",
+      "width": 200,
+      "height": 220,
+      "insets": {
+        "left": 28,
+        "top": 28,
+        "right": 28,
+        "bottom": 28
+      },
+      "contentInsets": {
+        "left": 12,
+        "top": 12,
+        "right": 12,
+        "bottom": 12
+      },
+      "borderWidth": 5,
+      "tile": null,
+      "transparentCenter": true,
+      "usage": "Transparenter Kartenrahmen owned; Füllung und Angebotsinhalt separat. Status sitzt im festen rechten oberen Eck.",
+      "exports": [
+        {
+          "key": "dawn-merchant/card-frame-owned@1x",
+          "file": "card-frame-owned@1x.webp",
+          "scale": 1,
+          "width": 200,
+          "height": 220,
+          "insets": {
+            "left": 28,
+            "top": 28,
+            "right": 28,
+            "bottom": 28
+          },
+          "sha256": "39638eadca2dc2986e5237856c955ba9f7bbc985f16780fd7243ad5dcb7b1a47"
+        },
+        {
+          "key": "dawn-merchant/card-frame-owned@2x",
+          "file": "card-frame-owned@2x.webp",
+          "scale": 2,
+          "width": 400,
+          "height": 440,
+          "insets": {
+            "left": 56,
+            "top": 56,
+            "right": 56,
+            "bottom": 56
+          },
+          "sha256": "c9633e948a549744cf4dc1c3f9383f8cc3ce2e47702fdc11d342b9d80b04d41b"
+        }
+      ]
+    },
+    "card-rarity-white": {
+      "key": "dawn-merchant/card-rarity-white",
+      "original": "../card-rarity-white.png",
+      "originalWidth": 400,
+      "originalHeight": 440,
+      "sha256": "511725db29a47f7beac162517af6a78579517ae8ccd152959878531be4c247e5",
+      "width": 200,
+      "height": 220,
+      "insets": {
+        "left": 28,
+        "top": 28,
+        "right": 28,
+        "bottom": 28
+      },
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": true,
+      "usage": "Matte white-Innenkante; über dem Kartenrahmen, unter Status/Badge. Kein Leuchten.",
+      "exports": [
+        {
+          "key": "dawn-merchant/card-rarity-white@1x",
+          "file": "card-rarity-white@1x.webp",
+          "scale": 1,
+          "width": 200,
+          "height": 220,
+          "insets": {
+            "left": 28,
+            "top": 28,
+            "right": 28,
+            "bottom": 28
+          },
+          "sha256": "1f4118c319d5c741684144dedce995d2ae538ef69b756c91960512482a5dd141"
+        },
+        {
+          "key": "dawn-merchant/card-rarity-white@2x",
+          "file": "card-rarity-white@2x.webp",
+          "scale": 2,
+          "width": 400,
+          "height": 440,
+          "insets": {
+            "left": 56,
+            "top": 56,
+            "right": 56,
+            "bottom": 56
+          },
+          "sha256": "9be8f2d458e2ebf2418b8ee56e5873f077457a4d7995eb49f7d9729852752196"
+        }
+      ]
+    },
+    "card-rarity-blue": {
+      "key": "dawn-merchant/card-rarity-blue",
+      "original": "../card-rarity-blue.png",
+      "originalWidth": 400,
+      "originalHeight": 440,
+      "sha256": "aee40248334d1bbb5122315917aa9e6b8a40ea1b2bacb4e4517235e5773ec505",
+      "width": 200,
+      "height": 220,
+      "insets": {
+        "left": 28,
+        "top": 28,
+        "right": 28,
+        "bottom": 28
+      },
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": true,
+      "usage": "Matte blue-Innenkante; über dem Kartenrahmen, unter Status/Badge. Kein Leuchten.",
+      "exports": [
+        {
+          "key": "dawn-merchant/card-rarity-blue@1x",
+          "file": "card-rarity-blue@1x.webp",
+          "scale": 1,
+          "width": 200,
+          "height": 220,
+          "insets": {
+            "left": 28,
+            "top": 28,
+            "right": 28,
+            "bottom": 28
+          },
+          "sha256": "4d7123774aa43ceab09752f81d4a1207dac8fe12b75a415b6d3cd29464f10e1b"
+        },
+        {
+          "key": "dawn-merchant/card-rarity-blue@2x",
+          "file": "card-rarity-blue@2x.webp",
+          "scale": 2,
+          "width": 400,
+          "height": 440,
+          "insets": {
+            "left": 56,
+            "top": 56,
+            "right": 56,
+            "bottom": 56
+          },
+          "sha256": "cef5a8c157b19d05ff170981483c63fce4852857ec7a1649f2ffba9a4b125e21"
+        }
+      ]
+    },
+    "card-rarity-yellow": {
+      "key": "dawn-merchant/card-rarity-yellow",
+      "original": "../card-rarity-yellow.png",
+      "originalWidth": 400,
+      "originalHeight": 440,
+      "sha256": "13cc77f687770d1e0674dc3d48a30e80544c0f6d70598244c6c7842a3f093228",
+      "width": 200,
+      "height": 220,
+      "insets": {
+        "left": 28,
+        "top": 28,
+        "right": 28,
+        "bottom": 28
+      },
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": true,
+      "usage": "Matte yellow-Innenkante; über dem Kartenrahmen, unter Status/Badge. Kein Leuchten.",
+      "exports": [
+        {
+          "key": "dawn-merchant/card-rarity-yellow@1x",
+          "file": "card-rarity-yellow@1x.webp",
+          "scale": 1,
+          "width": 200,
+          "height": 220,
+          "insets": {
+            "left": 28,
+            "top": 28,
+            "right": 28,
+            "bottom": 28
+          },
+          "sha256": "abdb37af558a861883d1634a2bbed54fe6af4eb8f4d78a483ff6ddec46235a4d"
+        },
+        {
+          "key": "dawn-merchant/card-rarity-yellow@2x",
+          "file": "card-rarity-yellow@2x.webp",
+          "scale": 2,
+          "width": 400,
+          "height": 440,
+          "insets": {
+            "left": 56,
+            "top": 56,
+            "right": 56,
+            "bottom": 56
+          },
+          "sha256": "828898bf134101b25968fa9b912ddf14ba06845352b485deb66c836598793a36"
+        }
+      ]
+    },
+    "badge-new": {
+      "key": "dawn-merchant/badge-new",
+      "original": "../badge-new.png",
+      "originalWidth": 96,
+      "originalHeight": 96,
+      "sha256": "600934d283f2fa2cbddb155438b9b83f798e0c577d5bb6062a63595fc95f0b48",
+      "width": 48,
+      "height": 48,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Textloses rotes Drucksiegel mit Stern; NEU als zugänglichen UI-Text ergänzen.",
+      "exports": [
+        {
+          "key": "dawn-merchant/badge-new@1x",
+          "file": "badge-new@1x.webp",
+          "scale": 1,
+          "width": 48,
+          "height": 48,
+          "insets": null,
+          "sha256": "8ada343ce6a2110757669ab82ab03e98ea51685c8f8d8fbd14dfdc05e298a5aa"
+        },
+        {
+          "key": "dawn-merchant/badge-new@2x",
+          "file": "badge-new@2x.webp",
+          "scale": 2,
+          "width": 96,
+          "height": 96,
+          "insets": null,
+          "sha256": "d0144c8d6a4bdb2cd7291598853aa1ba2120d6abfcc837b426d4634e918d1ab7"
+        }
+      ]
+    },
+    "stamp-purchased": {
+      "key": "dawn-merchant/stamp-purchased",
+      "original": "../stamp-purchased.png",
+      "originalWidth": 440,
+      "originalHeight": 128,
+      "sha256": "e609e87c4fe10aae22017317f21ffc4b4942de35107eb29a681c0a1c90dbf4f2",
+      "width": 220,
+      "height": 64,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Temporärer Kaufstempel GEKAUFT; nach bestätigtem Kauf einblenden. Nicht 9-slicen.",
+      "exports": [
+        {
+          "key": "dawn-merchant/stamp-purchased@1x",
+          "file": "stamp-purchased@1x.webp",
+          "scale": 1,
+          "width": 220,
+          "height": 64,
+          "insets": null,
+          "sha256": "79e0b694390673cf8ed747f3e801280afb6173f1698a165bf7d5961e30f1b1bd"
+        },
+        {
+          "key": "dawn-merchant/stamp-purchased@2x",
+          "file": "stamp-purchased@2x.webp",
+          "scale": 2,
+          "width": 440,
+          "height": 128,
+          "insets": null,
+          "sha256": "f02b56449be265c72ae47139c15e08eed30cdff4140b68819365f9de0a553c0f"
+        }
+      ]
+    },
+    "stamp-purchased-blank": {
+      "key": "dawn-merchant/stamp-purchased-blank",
+      "original": "../stamp-purchased-blank.png",
+      "originalWidth": 440,
+      "originalHeight": 128,
+      "sha256": "a679c40a7a308d966567ae5d6f7bcdfada409b26c1d559683eda97b693506007",
+      "width": 220,
+      "height": 64,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Textlose Kaufstempel-Alternative mit Häkchen. Nicht 9-slicen.",
+      "exports": [
+        {
+          "key": "dawn-merchant/stamp-purchased-blank@1x",
+          "file": "stamp-purchased-blank@1x.webp",
+          "scale": 1,
+          "width": 220,
+          "height": 64,
+          "insets": null,
+          "sha256": "dcef2d719c888aadaab0c27dc1da35d526d269b43c9c2573997a03264a51f3cb"
+        },
+        {
+          "key": "dawn-merchant/stamp-purchased-blank@2x",
+          "file": "stamp-purchased-blank@2x.webp",
+          "scale": 2,
+          "width": 440,
+          "height": 128,
+          "insets": null,
+          "sha256": "b1a5c9868612b3d80b7dc660eafd92ab565415c4623c1982009101e992072c17"
+        }
+      ]
+    },
+    "button-buy-normal": {
+      "key": "dawn-merchant/button-buy-normal",
+      "original": "../button-buy-normal.png",
+      "originalWidth": 512,
+      "originalHeight": 112,
+      "sha256": "c684ec15a03435c11eac0d162d30f23da2a7f0dcc16afc2fe7d156a243204a02",
+      "width": 256,
+      "height": 56,
+      "insets": {
+        "left": 12,
+        "top": 12,
+        "right": 12,
+        "bottom": 12
+      },
+      "contentInsets": {
+        "left": 20,
+        "top": 12,
+        "right": 20,
+        "bottom": 12
+      },
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Textloser Kaufen-/Aktionsknopf normal; Label und optionales Cart-Icon separat.",
+      "exports": [
+        {
+          "key": "dawn-merchant/button-buy-normal@1x",
+          "file": "button-buy-normal@1x.webp",
+          "scale": 1,
+          "width": 256,
+          "height": 56,
+          "insets": {
+            "left": 12,
+            "top": 12,
+            "right": 12,
+            "bottom": 12
+          },
+          "sha256": "07d2ca8a383132711efc153549572daa6f324d4e34093187f87e038b5dcf0f6e"
+        },
+        {
+          "key": "dawn-merchant/button-buy-normal@2x",
+          "file": "button-buy-normal@2x.webp",
+          "scale": 2,
+          "width": 512,
+          "height": 112,
+          "insets": {
+            "left": 24,
+            "top": 24,
+            "right": 24,
+            "bottom": 24
+          },
+          "sha256": "a855f489b46154d4fb19bba22ca99215944869db2ee0e129bc3dde2ca8285b79"
+        }
+      ]
+    },
+    "button-buy-hover": {
+      "key": "dawn-merchant/button-buy-hover",
+      "original": "../button-buy-hover.png",
+      "originalWidth": 512,
+      "originalHeight": 112,
+      "sha256": "f2cb2fffd0ec88b4dc079ccd87d32207d5a1872ca4f9ecde4dd7d37f9d6f6e3d",
+      "width": 256,
+      "height": 56,
+      "insets": {
+        "left": 12,
+        "top": 12,
+        "right": 12,
+        "bottom": 12
+      },
+      "contentInsets": {
+        "left": 20,
+        "top": 12,
+        "right": 20,
+        "bottom": 12
+      },
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Textloser Kaufen-/Aktionsknopf hover; Label und optionales Cart-Icon separat.",
+      "exports": [
+        {
+          "key": "dawn-merchant/button-buy-hover@1x",
+          "file": "button-buy-hover@1x.webp",
+          "scale": 1,
+          "width": 256,
+          "height": 56,
+          "insets": {
+            "left": 12,
+            "top": 12,
+            "right": 12,
+            "bottom": 12
+          },
+          "sha256": "aac14865d1b2e4ddad905f9067779f354a6959088ce927c58daec0a4cf6ec1cd"
+        },
+        {
+          "key": "dawn-merchant/button-buy-hover@2x",
+          "file": "button-buy-hover@2x.webp",
+          "scale": 2,
+          "width": 512,
+          "height": 112,
+          "insets": {
+            "left": 24,
+            "top": 24,
+            "right": 24,
+            "bottom": 24
+          },
+          "sha256": "5ce2783300cac2db4ec48f55c6a07391e9a4ac8ff63c5eb7d31520ababbad146"
+        }
+      ]
+    },
+    "button-buy-disabled": {
+      "key": "dawn-merchant/button-buy-disabled",
+      "original": "../button-buy-disabled.png",
+      "originalWidth": 512,
+      "originalHeight": 112,
+      "sha256": "8e406b6a9f29d2e24abee8c2af90924f9b8b941d4c7751b3ba071c3b21670836",
+      "width": 256,
+      "height": 56,
+      "insets": {
+        "left": 12,
+        "top": 12,
+        "right": 12,
+        "bottom": 12
+      },
+      "contentInsets": {
+        "left": 20,
+        "top": 12,
+        "right": 20,
+        "bottom": 12
+      },
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Textloser Kaufen-/Aktionsknopf disabled; Label und optionales Cart-Icon separat.",
+      "exports": [
+        {
+          "key": "dawn-merchant/button-buy-disabled@1x",
+          "file": "button-buy-disabled@1x.webp",
+          "scale": 1,
+          "width": 256,
+          "height": 56,
+          "insets": {
+            "left": 12,
+            "top": 12,
+            "right": 12,
+            "bottom": 12
+          },
+          "sha256": "7d8a0341d19dafe193c032a437b9af1d3d81f9aaa76aa3b40ac3e07508efd019"
+        },
+        {
+          "key": "dawn-merchant/button-buy-disabled@2x",
+          "file": "button-buy-disabled@2x.webp",
+          "scale": 2,
+          "width": 512,
+          "height": 112,
+          "insets": {
+            "left": 24,
+            "top": 24,
+            "right": 24,
+            "bottom": 24
+          },
+          "sha256": "c3a971a46e9073b6e8b49e953a0c7d5743bbbdb36ac499509cd24574d0c4f496"
+        }
+      ]
+    },
+    "button-close": {
+      "key": "dawn-merchant/button-close",
+      "original": "../button-close.png",
+      "originalWidth": 96,
+      "originalHeight": 96,
+      "sha256": "7c21c73a30467f17b116a62da707f09c90a19b26c740e7caadd7122cd15d5603",
+      "width": 48,
+      "height": 48,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Fester Schließen-Knopf mit X; proportional skalieren.",
+      "exports": [
+        {
+          "key": "dawn-merchant/button-close@1x",
+          "file": "button-close@1x.webp",
+          "scale": 1,
+          "width": 48,
+          "height": 48,
+          "insets": null,
+          "sha256": "1ab0897bd59f46e1e8b32ad8ca455839ff5cc5f0d452de7f8033124549c8dc04"
+        },
+        {
+          "key": "dawn-merchant/button-close@2x",
+          "file": "button-close@2x.webp",
+          "scale": 2,
+          "width": 96,
+          "height": 96,
+          "insets": null,
+          "sha256": "a597039551dd938cccf9c32ca236da5e2ec033ac17a5058065d29ae0e1541dae"
+        }
+      ]
+    },
+    "icon-lock": {
+      "key": "dawn-merchant/icon-lock",
+      "original": "../icon-lock.png",
+      "originalWidth": 64,
+      "originalHeight": 64,
+      "sha256": "1091d6cd682f691b43f696ce3ffba613a1fdd02a7f0359d8620710b829c90286",
+      "width": 32,
+      "height": 32,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Freigestelltes lock-Drucksymbol; Knochenfarbe, ohne Fläche.",
+      "exports": [
+        {
+          "key": "dawn-merchant/icon-lock@1x",
+          "file": "icon-lock@1x.webp",
+          "scale": 1,
+          "width": 32,
+          "height": 32,
+          "insets": null,
+          "sha256": "dce5257dae41c933f68e4d8ee073fd6fc6ed43f87af5c90d151e39eed01351c8"
+        },
+        {
+          "key": "dawn-merchant/icon-lock@2x",
+          "file": "icon-lock@2x.webp",
+          "scale": 2,
+          "width": 64,
+          "height": 64,
+          "insets": null,
+          "sha256": "4fbf9667ff72fa6e1c87d86f056b721704aa06ff7c8b643dbb5d711fd5937b1a"
+        }
+      ]
+    },
+    "icon-check": {
+      "key": "dawn-merchant/icon-check",
+      "original": "../icon-check.png",
+      "originalWidth": 64,
+      "originalHeight": 64,
+      "sha256": "a56dc1435146a9492a689ef17b2fc5a1b67c3c788b38d30ad4c9995d4a2ef37e",
+      "width": 32,
+      "height": 32,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Freigestelltes check-Drucksymbol; Knochenfarbe, ohne Fläche.",
+      "exports": [
+        {
+          "key": "dawn-merchant/icon-check@1x",
+          "file": "icon-check@1x.webp",
+          "scale": 1,
+          "width": 32,
+          "height": 32,
+          "insets": null,
+          "sha256": "49d3c1f329530bb8cb94642d5b7ccd8f72ef408900bc3c25a2f16e4dbc8247b7"
+        },
+        {
+          "key": "dawn-merchant/icon-check@2x",
+          "file": "icon-check@2x.webp",
+          "scale": 2,
+          "width": 64,
+          "height": 64,
+          "insets": null,
+          "sha256": "22fa8d54d9a97335913d9bac087377058a4052c286efad86fac23fd497197f30"
+        }
+      ]
+    },
+    "icon-cart": {
+      "key": "dawn-merchant/icon-cart",
+      "original": "../icon-cart.png",
+      "originalWidth": 64,
+      "originalHeight": 64,
+      "sha256": "9be2f172846e390ee5cc323a0aace2a13f00096b96c919d6c4c1a87c15e525c8",
+      "width": 32,
+      "height": 32,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Freigestelltes cart-Drucksymbol; Knochenfarbe, ohne Fläche.",
+      "exports": [
+        {
+          "key": "dawn-merchant/icon-cart@1x",
+          "file": "icon-cart@1x.webp",
+          "scale": 1,
+          "width": 32,
+          "height": 32,
+          "insets": null,
+          "sha256": "2e62f0ea4aa6e8477d62bb11daae5248e1f9465b1bb301bc04bba3cddb30adf9"
+        },
+        {
+          "key": "dawn-merchant/icon-cart@2x",
+          "file": "icon-cart@2x.webp",
+          "scale": 2,
+          "width": 64,
+          "height": 64,
+          "insets": null,
+          "sha256": "9f22ff13eb4f01de00d12ff4e83b12a12aeff7e8eeab295702ee879919ad6651"
+        }
+      ]
+    },
+    "icon-search": {
+      "key": "dawn-merchant/icon-search",
+      "original": "../icon-search.png",
+      "originalWidth": 64,
+      "originalHeight": 64,
+      "sha256": "cb8530ad2a58701229e661004833125177b3fbe06b8b19d9254a3ad669f6dd1f",
+      "width": 32,
+      "height": 32,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Freigestelltes search-Drucksymbol; Knochenfarbe, ohne Fläche.",
+      "exports": [
+        {
+          "key": "dawn-merchant/icon-search@1x",
+          "file": "icon-search@1x.webp",
+          "scale": 1,
+          "width": 32,
+          "height": 32,
+          "insets": null,
+          "sha256": "cfa804355956df6240a3a4f9267dca04e5858553987fe3f21d131de62318078b"
+        },
+        {
+          "key": "dawn-merchant/icon-search@2x",
+          "file": "icon-search@2x.webp",
+          "scale": 2,
+          "width": 64,
+          "height": 64,
+          "insets": null,
+          "sha256": "d76365321c08d778b787d4f258a19036a25efb380cd4755449429caa733d544f"
+        }
+      ]
+    },
+    "icon-filter": {
+      "key": "dawn-merchant/icon-filter",
+      "original": "../icon-filter.png",
+      "originalWidth": 64,
+      "originalHeight": 64,
+      "sha256": "ae95209aa4925dc3c0ed4165480393457beb94338c4f8419b83019becb080de4",
+      "width": 32,
+      "height": 32,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Freigestelltes filter-Drucksymbol; Knochenfarbe, ohne Fläche.",
+      "exports": [
+        {
+          "key": "dawn-merchant/icon-filter@1x",
+          "file": "icon-filter@1x.webp",
+          "scale": 1,
+          "width": 32,
+          "height": 32,
+          "insets": null,
+          "sha256": "67e2faa9e9a76897bcad9f48bb72fb26a356f861b7b5e161dc9a3553ab4d6f09"
+        },
+        {
+          "key": "dawn-merchant/icon-filter@2x",
+          "file": "icon-filter@2x.webp",
+          "scale": 2,
+          "width": 64,
+          "height": 64,
+          "insets": null,
+          "sha256": "a3c224708491b7a6049d29cef7ff4c80564cb487fc7274565ee61a44d60a2720"
+        }
+      ]
+    },
+    "category-sensors": {
+      "key": "dawn-merchant/category-sensors",
+      "original": "../category-sensors.png",
+      "originalWidth": 128,
+      "originalHeight": 128,
+      "sha256": "e4278b1232dcf2aa13735e4e09ce26dcd311ef3e9340cb53bb62d5351abd604a",
+      "width": 64,
+      "height": 64,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Peilgerät mit Antenne und Rundskala.",
+      "exports": [
+        {
+          "key": "dawn-merchant/category-sensors@1x",
+          "file": "category-sensors@1x.webp",
+          "scale": 1,
+          "width": 64,
+          "height": 64,
+          "insets": null,
+          "sha256": "1bfc40a7e31cbce22f0f567f69b530425fe370e623b62a31fb7dd61330405a93"
+        },
+        {
+          "key": "dawn-merchant/category-sensors@2x",
+          "file": "category-sensors@2x.webp",
+          "scale": 2,
+          "width": 128,
+          "height": 128,
+          "insets": null,
+          "sha256": "d4edda8dac5198fda90c567bc0c7a5fb2a3f4792d3140efaa38aead462b21408"
+        }
+      ]
+    },
+    "category-supply": {
+      "key": "dawn-merchant/category-supply",
+      "original": "../category-supply.png",
+      "originalWidth": 128,
+      "originalHeight": 128,
+      "sha256": "911e8fa67cb4a24e7cf2ad6d98d7da697fc928a7ddbedc26e0a65d597475b876",
+      "width": 64,
+      "height": 64,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Versorgungskiste am Fallschirm.",
+      "exports": [
+        {
+          "key": "dawn-merchant/category-supply@1x",
+          "file": "category-supply@1x.webp",
+          "scale": 1,
+          "width": 64,
+          "height": 64,
+          "insets": null,
+          "sha256": "dbc6765bf7e188e7c20cef00b25fecef99278d00ef593edcb857cff43108b58d"
+        },
+        {
+          "key": "dawn-merchant/category-supply@2x",
+          "file": "category-supply@2x.webp",
+          "scale": 2,
+          "width": 128,
+          "height": 128,
+          "insets": null,
+          "sha256": "46443fb26b47f0c28474a3405747572f602af6f95d2e002794f001b8e4656870"
+        }
+      ]
+    },
+    "category-crafting": {
+      "key": "dawn-merchant/category-crafting",
+      "original": "../category-crafting.png",
+      "originalWidth": 128,
+      "originalHeight": 128,
+      "sha256": "d2f71c356f1a60dbd89548cc090fe4612d6f205a88e40453b83b12189d72dee4",
+      "width": 64,
+      "height": 64,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Gekreuzter Hammer und Zange.",
+      "exports": [
+        {
+          "key": "dawn-merchant/category-crafting@1x",
+          "file": "category-crafting@1x.webp",
+          "scale": 1,
+          "width": 64,
+          "height": 64,
+          "insets": null,
+          "sha256": "b3ae4004dd5c33fa124021aa6041529d0fc35e87112160cb42f4172e9249a365"
+        },
+        {
+          "key": "dawn-merchant/category-crafting@2x",
+          "file": "category-crafting@2x.webp",
+          "scale": 2,
+          "width": 128,
+          "height": 128,
+          "insets": null,
+          "sha256": "41751d59d4eb9f1bb5fd34d8640853ff3c72649c174193f64d03aedbf612a241"
+        }
+      ]
+    },
+    "pip-empty": {
+      "key": "dawn-merchant/pip-empty",
+      "original": "../pip-empty.png",
+      "originalWidth": 32,
+      "originalHeight": 32,
+      "sha256": "73cab2df74dedf4933e5e74892f2c775b162467d2d5a86f46e4d21f8881cbbde",
+      "width": 16,
+      "height": 16,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Leerer Stufen-Pip; Rautenform, proportional skalieren.",
+      "exports": [
+        {
+          "key": "dawn-merchant/pip-empty@1x",
+          "file": "pip-empty@1x.webp",
+          "scale": 1,
+          "width": 16,
+          "height": 16,
+          "insets": null,
+          "sha256": "0c2c3e2884aab243821b05fbdd82dab2cedeab4cd832032b7eff481de2425678"
+        },
+        {
+          "key": "dawn-merchant/pip-empty@2x",
+          "file": "pip-empty@2x.webp",
+          "scale": 2,
+          "width": 32,
+          "height": 32,
+          "insets": null,
+          "sha256": "1636f3b974ca1a59e940a8b0004478ba1570bbe624e6d6042bece17f8a3e5082"
+        }
+      ]
+    },
+    "pip-filled": {
+      "key": "dawn-merchant/pip-filled",
+      "original": "../pip-filled.png",
+      "originalWidth": 32,
+      "originalHeight": 32,
+      "sha256": "a813b5616dcd2120feab50298ee91829c3a7a78f8003f806b40b97b2b86ea504",
+      "width": 16,
+      "height": 16,
+      "insets": null,
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Gefüllter Stufen-Pip; Rautenform, proportional skalieren.",
+      "exports": [
+        {
+          "key": "dawn-merchant/pip-filled@1x",
+          "file": "pip-filled@1x.webp",
+          "scale": 1,
+          "width": 16,
+          "height": 16,
+          "insets": null,
+          "sha256": "cd5a43e1434874baf5238d1152143dd67815851ead3840f23c588bc968a1028b"
+        },
+        {
+          "key": "dawn-merchant/pip-filled@2x",
+          "file": "pip-filled@2x.webp",
+          "scale": 2,
+          "width": 32,
+          "height": 32,
+          "insets": null,
+          "sha256": "dbef6d2f1524fbde7510e9fd017268fbb0ce27372ef92e7a6e11423449880c4d"
+        }
+      ]
+    },
+    "scrollbar-track": {
+      "key": "dawn-merchant/scrollbar-track",
+      "original": "../scrollbar-track.png",
+      "originalWidth": 24,
+      "originalHeight": 256,
+      "sha256": "13cd8a79346dff151d6e3a7e49dee7ce492609394b5e8cdee6f4bb91b7552977",
+      "width": 12,
+      "height": 128,
+      "insets": {
+        "left": 3,
+        "top": 8,
+        "right": 3,
+        "bottom": 8
+      },
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Vertikale Schiene; feste Breite, Höhe über 9-Slice anpassen.",
+      "exports": [
+        {
+          "key": "dawn-merchant/scrollbar-track@1x",
+          "file": "scrollbar-track@1x.webp",
+          "scale": 1,
+          "width": 12,
+          "height": 128,
+          "insets": {
+            "left": 3,
+            "top": 8,
+            "right": 3,
+            "bottom": 8
+          },
+          "sha256": "1fa9c842bff41e858d139af9cd1cd2f7dd83bc88965aa7e132b838d28c9a355e"
+        },
+        {
+          "key": "dawn-merchant/scrollbar-track@2x",
+          "file": "scrollbar-track@2x.webp",
+          "scale": 2,
+          "width": 24,
+          "height": 256,
+          "insets": {
+            "left": 6,
+            "top": 16,
+            "right": 6,
+            "bottom": 16
+          },
+          "sha256": "8e56f3c0887c94323e73c2ab700cc7a367aa203cf04ac52509bef914fd61a493"
+        }
+      ]
+    },
+    "scrollbar-thumb": {
+      "key": "dawn-merchant/scrollbar-thumb",
+      "original": "../scrollbar-thumb.png",
+      "originalWidth": 16,
+      "originalHeight": 96,
+      "sha256": "b129ede754825065ab1208407eb05eb4e230e6d84073d9b110123cdd8824c7ae",
+      "width": 8,
+      "height": 48,
+      "insets": {
+        "left": 2,
+        "top": 18,
+        "right": 2,
+        "bottom": 18
+      },
+      "contentInsets": null,
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Vertikaler Griff; mindestens 37px sichtbare Höhe und größere unsichtbare Trefferfläche.",
+      "exports": [
+        {
+          "key": "dawn-merchant/scrollbar-thumb@1x",
+          "file": "scrollbar-thumb@1x.webp",
+          "scale": 1,
+          "width": 8,
+          "height": 48,
+          "insets": {
+            "left": 2,
+            "top": 18,
+            "right": 2,
+            "bottom": 18
+          },
+          "sha256": "7ef68d61d7c447855f1dcb7d5310373da689f0db19f53aab7ca783e22e8c136f"
+        },
+        {
+          "key": "dawn-merchant/scrollbar-thumb@2x",
+          "file": "scrollbar-thumb@2x.webp",
+          "scale": 2,
+          "width": 16,
+          "height": 96,
+          "insets": {
+            "left": 4,
+            "top": 36,
+            "right": 4,
+            "bottom": 36
+          },
+          "sha256": "05a60c0cfcefcfada7d718626bd98083d04b8fb353cb71cc878e980c6a0c5f0f"
+        }
+      ]
+    },
+    "field-search": {
+      "key": "dawn-merchant/field-search",
+      "original": "../field-search.png",
+      "originalWidth": 640,
+      "originalHeight": 96,
+      "sha256": "d0bdf07675e6a7df4010dab376ac4327689af9a773bab8e5a57eabc5bd7287b0",
+      "width": 320,
+      "height": 48,
+      "insets": {
+        "left": 10,
+        "top": 10,
+        "right": 10,
+        "bottom": 10
+      },
+      "contentInsets": {
+        "left": 14,
+        "top": 10,
+        "right": 14,
+        "bottom": 10
+      },
+      "borderWidth": null,
+      "tile": null,
+      "transparentCenter": false,
+      "usage": "Textloses Suchfeld; Lupe links separat, auch als Filterfeld verwendbar.",
+      "exports": [
+        {
+          "key": "dawn-merchant/field-search@1x",
+          "file": "field-search@1x.webp",
+          "scale": 1,
+          "width": 320,
+          "height": 48,
+          "insets": {
+            "left": 10,
+            "top": 10,
+            "right": 10,
+            "bottom": 10
+          },
+          "sha256": "e5b9ebf1ebf60933066cdb93a5b3aafe6357aba3c54d06468e51870f7abc5b68"
+        },
+        {
+          "key": "dawn-merchant/field-search@2x",
+          "file": "field-search@2x.webp",
+          "scale": 2,
+          "width": 640,
+          "height": 96,
+          "insets": {
+            "left": 20,
+            "top": 20,
+            "right": 20,
+            "bottom": 20
+          },
+          "sha256": "488fd495f473c9795324b420d653c7ffe6f66f905a39a79d7c5d634ee02b8426"
+        }
+      ]
+    }
+  }
+}

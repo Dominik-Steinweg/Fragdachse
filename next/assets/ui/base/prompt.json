@@ -1,0 +1,14 @@
+{
+  "tool": "built-in image_gen",
+  "reference": "../upgrades/header.png",
+  "prompt": "Use case: style-transfer.\nAsset type: transparent fantasy game UI title plaque.\nRedesign the supplied wooden UI header as a NEW bespoke, more compact title frame for the persistent base screen. Keep the reference's hand-painted woodland RPG quality, warm dark oak grain, soft carved highlights, muted olive ivy, and restrained antique-brass accents. Make a sturdy horizontally elongated single oak plaque with chamfered ends, a substantial neatly carved wooden perimeter, subtle dark metal corner straps and tiny bronze rivets. Two tasteful ivy clusters overlap the outer left and right corners. The silhouette should feel well-crafted, grounded, and readable, with fine wood texture at real game-menu scale.\nComposition: exactly one plaque viewed straight on, orthographic, no perspective skew, centered and fully visible. Plaque width approximately 3.8 times its height, filling the image width with small safe margins. No duplicate panel, no hanging lower strip, no decorative badge or crest. Keep the central 60 percent of the wooden face calm, dark, flat and completely empty to receive the word BASIS rendered later by the game. The title is not baked into the artwork.\nActual transparent background with alpha, no checkerboard, no opaque backdrop, no lettering, no symbols, no watermark. No cast shadow beyond the silhouette. This is a finished game interface asset, not a mockup, not a photograph.",
+  "source": "header.png",
+  "runtime": {
+    "path": "runtime/header.webp",
+    "preparation": "Trim transparent margins, resize proportionally to width 1040, encode WebP quality 94 / alpha quality 100.",
+    "width": 1040,
+    "height": 218,
+    "displayWidth": 520,
+    "displayHeight": 109
+  }
+}

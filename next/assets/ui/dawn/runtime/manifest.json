@@ -1,0 +1,994 @@
+{
+  "paddingFraction": 0.0625,
+  "alphaThreshold": 1,
+  "sourceEdgeGuard": 2,
+  "assets": {
+    "scrap": {
+      "original": "scrap.png",
+      "sha256": "dd721f10a9c7a186782a35a3ad25210e4a8740b5f30ef8c5fc9e3f44d7d47a09",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/scrap-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1510
+        },
+        {
+          "file": "runtime/scrap-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4446
+        },
+        {
+          "file": "runtime/scrap-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 13286
+        }
+      ]
+    },
+    "threat": {
+      "original": "threat.png",
+      "sha256": "ddba0a8d507d883542d95dee2553aeb2b7047f261f5b7c698e3a6a9eacd8142d",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/threat-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1200
+        },
+        {
+          "file": "runtime/threat-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 3476
+        },
+        {
+          "file": "runtime/threat-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 9708
+        }
+      ]
+    },
+    "dealer-expansion": {
+      "original": "dealer-expansion.png",
+      "sha256": "d527f21b4ec6320b392d1891901e09afb9e147a0b17ab4fe41edd9009e8df01c",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-expansion-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1712
+        },
+        {
+          "file": "runtime/dealer-expansion-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5478
+        },
+        {
+          "file": "runtime/dealer-expansion-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18112
+        }
+      ]
+    },
+    "dealer-infrastructure": {
+      "original": "dealer-infrastructure.png",
+      "sha256": "e9edc743610db461789901ddbc761953b890b8606ec849b0e0c600c0916801ea",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-infrastructure-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1806
+        },
+        {
+          "file": "runtime/dealer-infrastructure-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5598
+        },
+        {
+          "file": "runtime/dealer-infrastructure-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 17630
+        }
+      ]
+    },
+    "dealer-upgrades": {
+      "original": "dealer-upgrades.png",
+      "sha256": "adf049f493cd7aaade1fc57dd15785b30e284646d81495e613d7c1103e93cd0f",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-upgrades-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1754
+        },
+        {
+          "file": "runtime/dealer-upgrades-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5394
+        },
+        {
+          "file": "runtime/dealer-upgrades-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15738
+        }
+      ]
+    },
+    "dealer-equipment": {
+      "original": "dealer-equipment.png",
+      "sha256": "daef666c87f89e8a27a88dd1559e2db7b9740f07820e2ae47de4f32d0de5dec3",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-equipment-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1814
+        },
+        {
+          "file": "runtime/dealer-equipment-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5788
+        },
+        {
+          "file": "runtime/dealer-equipment-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18794
+        }
+      ]
+    },
+    "recalibration-core": {
+      "original": "recalibration-core.png",
+      "sha256": "aef121ba942b3f9cbe7e273e27da9d8202c25ffb4b0c8fd4891c2d56b25bf284",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/recalibration-core-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1548
+        },
+        {
+          "file": "runtime/recalibration-core-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4844
+        },
+        {
+          "file": "runtime/recalibration-core-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15774
+        }
+      ]
+    },
+    "scrap-magnet": {
+      "original": "scrap-magnet.png",
+      "sha256": "3a73ba2ebcd30540d3f89ecf1ff9a07166476f15157e42294c32d604502980f5",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/scrap-magnet-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1494
+        },
+        {
+          "file": "runtime/scrap-magnet-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4530
+        },
+        {
+          "file": "runtime/scrap-magnet-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 14240
+        }
+      ]
+    },
+    "scrap-scanner": {
+      "original": "scrap-scanner.png",
+      "sha256": "911ce297d21b94b5f6359e0e32d7ba912f6787fea864eeed88ffbc25cd9a056a",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/scrap-scanner-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1400
+        },
+        {
+          "file": "runtime/scrap-scanner-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4296
+        },
+        {
+          "file": "runtime/scrap-scanner-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 13942
+        }
+      ]
+    },
+    "elite-swift": {
+      "original": "elite-swift.png",
+      "sha256": "9cc0fc9deadcd2b8c5e988e7095d3d51cac04d42249d0a765f18ca7e9c59e68f",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/elite-swift-16.webp",
+          "width": 16,
+          "height": 16,
+          "bytes": 574
+        },
+        {
+          "file": "runtime/elite-swift-24.webp",
+          "width": 24,
+          "height": 24,
+          "bytes": 1128
+        },
+        {
+          "file": "runtime/elite-swift-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1482
+        },
+        {
+          "file": "runtime/elite-swift-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4610
+        },
+        {
+          "file": "runtime/elite-swift-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15496
+        }
+      ]
+    },
+    "elite-armored": {
+      "original": "elite-armored.png",
+      "sha256": "4cfaffa7d7f3c40af5054c0ec7c74f33d8baa0cbc55e965e698284897827f053",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/elite-armored-16.webp",
+          "width": 16,
+          "height": 16,
+          "bytes": 528
+        },
+        {
+          "file": "runtime/elite-armored-24.webp",
+          "width": 24,
+          "height": 24,
+          "bytes": 850
+        },
+        {
+          "file": "runtime/elite-armored-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1300
+        },
+        {
+          "file": "runtime/elite-armored-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4138
+        },
+        {
+          "file": "runtime/elite-armored-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 14680
+        }
+      ]
+    },
+    "elite-volatile": {
+      "original": "elite-volatile.png",
+      "sha256": "b371d725e91fe7970a6a47ca8850d089bcdf392c0f301ff927493aa52ce3a3b7",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/elite-volatile-16.webp",
+          "width": 16,
+          "height": 16,
+          "bytes": 512
+        },
+        {
+          "file": "runtime/elite-volatile-24.webp",
+          "width": 24,
+          "height": 24,
+          "bytes": 868
+        },
+        {
+          "file": "runtime/elite-volatile-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1552
+        },
+        {
+          "file": "runtime/elite-volatile-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 3936
+        },
+        {
+          "file": "runtime/elite-volatile-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 11522
+        }
+      ]
+    },
+    "elite-regenerating": {
+      "original": "elite-regenerating.png",
+      "sha256": "f8c9b4e73b8f5b682cafcda2b1837e7ea109ef910a5dce21f9dcf16719ac4571",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/elite-regenerating-16.webp",
+          "width": 16,
+          "height": 16,
+          "bytes": 618
+        },
+        {
+          "file": "runtime/elite-regenerating-24.webp",
+          "width": 24,
+          "height": 24,
+          "bytes": 966
+        },
+        {
+          "file": "runtime/elite-regenerating-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1512
+        },
+        {
+          "file": "runtime/elite-regenerating-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4800
+        },
+        {
+          "file": "runtime/elite-regenerating-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15190
+        }
+      ]
+    },
+    "elite-shielding": {
+      "original": "elite-shielding.png",
+      "sha256": "f40b852acc83fd579de7eb4d7d847e593fceba87ac6004d3deb4ced8a849f9c4",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/elite-shielding-16.webp",
+          "width": 16,
+          "height": 16,
+          "bytes": 548
+        },
+        {
+          "file": "runtime/elite-shielding-24.webp",
+          "width": 24,
+          "height": 24,
+          "bytes": 1046
+        },
+        {
+          "file": "runtime/elite-shielding-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1632
+        },
+        {
+          "file": "runtime/elite-shielding-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4016
+        },
+        {
+          "file": "runtime/elite-shielding-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 13580
+        }
+      ]
+    },
+    "night-blood-moon": {
+      "original": "night-blood-moon.png",
+      "sha256": "36e07fa8da041fd86a9f77ea0e16a684e0a80372d68e7c2ceb3fc711137357a8",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/night-blood-moon-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1618
+        },
+        {
+          "file": "runtime/night-blood-moon-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4794
+        },
+        {
+          "file": "runtime/night-blood-moon-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15228
+        }
+      ]
+    },
+    "night-fog": {
+      "original": "night-fog.png",
+      "sha256": "65ab6640186acb009f0480653e605269a253e4c44f6387c07ae31bd47fc4613c",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/night-fog-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1500
+        },
+        {
+          "file": "runtime/night-fog-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4736
+        },
+        {
+          "file": "runtime/night-fog-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15126
+        }
+      ]
+    },
+    "night-bombers": {
+      "original": "night-bombers.png",
+      "sha256": "9ed9897d6d78f6df419975d23b2ecf708049db3072c64ca3252f01801785d2b0",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/night-bombers-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1484
+        },
+        {
+          "file": "runtime/night-bombers-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4262
+        },
+        {
+          "file": "runtime/night-bombers-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 13754
+        }
+      ]
+    },
+    "night-fire": {
+      "original": "night-fire.png",
+      "sha256": "75f256e4c9e5f41159123c1bfef9b6e71651e8aaf36b75b31df199063a49ef22",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/night-fire-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1864
+        },
+        {
+          "file": "runtime/night-fire-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5742
+        },
+        {
+          "file": "runtime/night-fire-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18230
+        }
+      ]
+    },
+    "dealer-portrait": {
+      "original": "dealer-portrait.png",
+      "sha256": "476ae5b10f7ec209258353d7ef7657752efd9fabd1ad569e295e8cef3ca1210f",
+      "backgroundMode": "transparent",
+      "crop": {
+        "left": 38,
+        "top": 0,
+        "width": 1193,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-portrait-256.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 56770
+        }
+      ]
+    },
+    "dealer-sub-base": {
+      "original": "dealer-sub-base.png",
+      "sha256": "d731ebec94c81c0843e2e916b1ea593351f2da2f33fdec5179627d3efd12c448",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-base-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1654
+        },
+        {
+          "file": "runtime/dealer-sub-base-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4984
+        },
+        {
+          "file": "runtime/dealer-sub-base-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15242
+        }
+      ],
+      "selectedCandidate": 4,
+      "source": "ui/icons-u7/candidates/dealer-sub-base-04.png",
+      "selectionReason": "Der vierte Kandidat ersetzt die feinen Palisadenstäbe durch breite Holzblöcke um einen offenen quadratischen Hof. Zwei große diagonale Außenpfeile bleiben bei 32 px deutlich. Er unterscheidet sich stärker vom bestehenden Icon mit vier hohen Einzelpfählen als 01–03.",
+      "minimumDisplaySize": 32
+    },
+    "dealer-sub-drones": {
+      "original": "dealer-sub-drones.png",
+      "sha256": "573dce11d8206bd510831984748b7d63bda356f8c68bbad7f8e90c21c57d932a",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-drones-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1596
+        },
+        {
+          "file": "runtime/dealer-sub-drones-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5100
+        },
+        {
+          "file": "runtime/dealer-sub-drones-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 16584
+        }
+      ],
+      "selectedCandidate": 2,
+      "source": "ui/icons-u7/candidates/dealer-sub-drones-02.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Der geätzte Quadkopter mit rechts aufrechtem Schraubenschlüssel bleibt bei 32 px lesbar. Die mechanische Materialität entspricht dem ernsten Druckregister; Variante 04 wirkt zu flach und comichaft.",
+      "minimumDisplaySize": 32
+    },
+    "dealer-sub-branches": {
+      "original": "dealer-sub-branches.png",
+      "sha256": "dc2ce51b0e5da684327b001149dc7c83c332de11a65493870109cc3c461fa546",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-branches-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1652
+        },
+        {
+          "file": "runtime/dealer-sub-branches-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5168
+        },
+        {
+          "file": "runtime/dealer-sub-branches-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 17348
+        }
+      ],
+      "selectedCandidate": 2,
+      "source": "ui/icons-u7/candidates/dealer-sub-branches-02.png",
+      "selectionReason": "Die drei quadratischen Knoten sitzen auf ungleichen Höhen an einem nach rechts verzweigten Stamm. Große Abstände halten die Hierarchie bei 32 px offen; die runden Enden von 01 wirken pflanzlicher, die gemischten Knoten von 03 unruhiger.",
+      "minimumDisplaySize": 32
+    },
+    "dealer-sub-boss-points": {
+      "original": "dealer-sub-boss-points.png",
+      "sha256": "9a699ab701722a31d85082d6cadde56973269deaf8fe02beb292fb0f7bc84e79",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-boss-points-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1860
+        },
+        {
+          "file": "runtime/dealer-sub-boss-points-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 6192
+        },
+        {
+          "file": "runtime/dealer-sub-boss-points-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 21042
+        }
+      ],
+      "selectedCandidate": 1,
+      "source": "ui/icons-u7/candidates/dealer-sub-boss-points-01.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Der geätzte Dachsschädel im Lorbeer passt in seiner Schnittstruktur zu branches 02. Die ernsthafte Trophäenwirkung entspricht der Art Direction; Variante 04 wirkt zu flach.",
+      "minimumDisplaySize": 32
+    },
+    "dealer-sub-round-offers": {
+      "original": "dealer-sub-round-offers.png",
+      "sha256": "a8d356a675ed89c8ca38d41fc88213bdbcdee06ad08000e8f928b0e9d1424a0a",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-round-offers-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1918
+        },
+        {
+          "file": "runtime/dealer-sub-round-offers-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5338
+        },
+        {
+          "file": "runtime/dealer-sub-round-offers-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18610
+        }
+      ],
+      "selectedCandidate": 1,
+      "source": "ui/icons-u7/candidates/dealer-sub-round-offers-01.png",
+      "selectionReason": "Die schmale, eingerissene Kartenform mit zwei Ausstanzungen bleibt als Marktzettel erkennbar. Der große rote Sonne/Mond-Stempel ist der einzige motivierte Akzent. 02 benötigt die feine Schnur; 03 wirkt eher wie ein gefaltetes Buch.",
+      "minimumDisplaySize": 32
+    },
+    "dealer-sub-crafting": {
+      "original": "dealer-sub-crafting.png",
+      "sha256": "39e0aba17c2fa1dc1284521005b731f73cb3d5c7a18417bdb1b92ef21543b609",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-crafting-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1778
+        },
+        {
+          "file": "runtime/dealer-sub-crafting-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5102
+        },
+        {
+          "file": "runtime/dealer-sub-crafting-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 17374
+        }
+      ],
+      "selectedCandidate": 3,
+      "source": "ui/icons-u7/candidates/dealer-sub-crafting-03.png",
+      "selectionReason": "Zwischen dem vollständigen Zahnrad und dem breiten Amboss bleibt ein dunkler Spalt. Beide Formen sind bei 32 px getrennt erkennbar; 01 und 02 verdecken einen Teil des Zahnrads hinter dem Amboss.",
+      "minimumDisplaySize": 32
+    },
+    "item-helmet": {
+      "original": "item-helmet.png",
+      "sha256": "08bad9cf70156c969aac19d5e78d46ba415a4c0d6d74637a03cd82881f9f06de",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/item-helmet-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1760
+        },
+        {
+          "file": "runtime/item-helmet-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5614
+        },
+        {
+          "file": "runtime/item-helmet-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18674
+        }
+      ],
+      "selectedCandidate": 3,
+      "source": "ui/icons-u7/candidates/item-helmet-03.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätzte Metallkappe mit Nietenband und getragenem Ledernackenschutz; ernsthafte Materialwirkung auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "minimumDisplaySize": 64
+    },
+    "item-gloves": {
+      "original": "item-gloves.png",
+      "sha256": "b03fae26086ebe57f3fca2cd513e04bd62b4bf3a54d1ff04aa13fa32bad2cb1d",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/item-gloves-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1874
+        },
+        {
+          "file": "runtime/item-gloves-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 6150
+        },
+        {
+          "file": "runtime/item-gloves-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18614
+        }
+      ],
+      "selectedCandidate": 3,
+      "source": "ui/icons-u7/candidates/item-gloves-03.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätztes Handschuhpaar mit Stoffflicken, Leder und Knöchelplatte; die getrennten Handschuhe wirken getragen und funktional auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "minimumDisplaySize": 64
+    },
+    "item-armor": {
+      "original": "item-armor.png",
+      "sha256": "23979cc1ffc97fb6e92a779e0aeed4df28d1132ae8d62b3eb24e5ea029c7d621",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/item-armor-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1978
+        },
+        {
+          "file": "runtime/item-armor-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 6666
+        },
+        {
+          "file": "runtime/item-armor-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 19470
+        }
+      ],
+      "selectedCandidate": 1,
+      "source": "ui/icons-u7/candidates/item-armor-01.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätzte Weste mit angenieteter Blechplatte, Ledergurt und geflicktem Stoff; die Materialität trägt den ernsten Söldner-Look auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "minimumDisplaySize": 64
+    },
+    "item-boots": {
+      "original": "item-boots.png",
+      "sha256": "ba4119e10fa44065c8213183cc52a624886e31810d0f0fff018334972b708e1d",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/item-boots-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1934
+        },
+        {
+          "file": "runtime/item-boots-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 6334
+        },
+        {
+          "file": "runtime/item-boots-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18882
+        }
+      ],
+      "selectedCandidate": 3,
+      "source": "ui/icons-u7/candidates/item-boots-03.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätztes versetztes Stiefelpaar mit breiten Zehen, Ledernähten und Stoffumschlägen; getragene Ausrüstung auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "minimumDisplaySize": 64
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "generator": "Built-in image_gen.imagegen",
+  "date": "2026-09-13",
+  "assets": [
+    {
+      "key": "forest_modal_frame_kit",
+      "file": "frame-kit.png",
+      "reference": "../lobby-forest/frame.png",
+      "source": "exec-d6d88e24-141f-4ccc-8585-b4491dc78565.png",
+      "iteration": 1,
+      "prompt": "Use case: stylized-concept. Generate one production videogame UI frame PNG with real transparency. Match the reference image's understated dark walnut wood, mossy olive ivy, delicate warm carved grain and frontal hand painted 2D style exactly. New object: a perfectly square thin wooden frame, straight horizontal and vertical rails, symmetric silhouette. Full square frame fully visible with only 1 percent transparent outer margin. Four beautiful small carved wood knot corners with restrained ivy clusters. No ivy or decorative medallions in the middle 60 percent of any rail: these middle rails must be quiet, straight uninterrupted wood, suitable for repeating/cropping to compose large landscape and portrait menu borders. Rail thickness 3 percent of full image width, corner ornament extent 12 percent. Thin, not chunky. No perspective, no drop shadow outside. Warm dark chocolate walnut, desaturated natural ivy green, NO lime, NO bright gold. Interior 85 percent of image entirely empty transparent alpha, exterior empty transparent alpha. No text, no UI controls, no interior painting, no backdrop, no checkerboard. Crisp highest quality hand-painted timber detail. The output will be split at runtime into fixed corners and rail sections, with uniform scale only."
+    }
+  ]
+}

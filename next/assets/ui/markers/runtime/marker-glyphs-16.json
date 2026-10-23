@@ -1,0 +1,208 @@
+{
+  "version": 2,
+  "sourceSize": 64,
+  "sourceMargin": 4,
+  "padding": 2,
+  "columns": 5,
+  "rows": 4,
+  "frameOrigin": "top-left",
+  "trimmed": false,
+  "glyphs": {
+    "base": {
+      "source": "../glyphs/base.svg",
+      "sha256": "178c4fa86412972a3896ab4b724c163a01c44a7a212a71d155d4a5e178eaedf8"
+    },
+    "boss": {
+      "source": "../glyphs/boss.svg",
+      "sha256": "13be4ca06072a2dccf6b98a909383cc8ff135d17620680a7b3187b3261aa9a9e"
+    },
+    "site-wreck": {
+      "source": "../glyphs/site-wreck.svg",
+      "sha256": "838ad5767faec52931213fb20d07d6850fc625475773aa71e998cca0c2d25b6c"
+    },
+    "site-extractor": {
+      "source": "../glyphs/site-extractor.svg",
+      "sha256": "e2036f68b4b6b57dace34f2c6bb7ef72a69fb85a2d6bab67a3ea5cd622ab859f"
+    },
+    "site-brood-nest": {
+      "source": "../glyphs/site-brood-nest.svg",
+      "sha256": "d05b0a4921424e832dc4007ef21e48fe92697452c443a60f100134442ce8b6d4"
+    },
+    "site-supply": {
+      "source": "../glyphs/site-supply.svg",
+      "sha256": "a44d3f1c770688ac184e34a1523a46a101874f254063d4d810b731116edf7aa0"
+    },
+    "site-scrap-heaps": {
+      "source": "../glyphs/site-scrap-heaps.svg",
+      "sha256": "afbb48172d1072b9db5bb8e81cbed0dd746347fc7bef28b82153d485a5a5180f"
+    },
+    "scavenger": {
+      "source": "../glyphs/scavenger.svg",
+      "sha256": "bfe69065ec1e2a811524cca3cc8169e822903e4e36f21f08cc328dc2ab3edb03"
+    },
+    "mission-destroy": {
+      "source": "../glyphs/mission-destroy.svg",
+      "sha256": "74480402aa51e2b987913fbebe704ca55b9ad7b24ef38aecb1b99be398ae66b2"
+    },
+    "mission-hold": {
+      "source": "../glyphs/mission-hold.svg",
+      "sha256": "b9a11f5c83958972a09635b95261cf268b4790c912141b2011ea42c78345ddc9"
+    },
+    "mission-carry": {
+      "source": "../glyphs/mission-carry.svg",
+      "sha256": "533a911d6d14bc941b35347c9a172629f1b0ef62a0f2075157939521bce59f58"
+    },
+    "crate": {
+      "source": "../glyphs/crate.svg",
+      "sha256": "bef6cc5f9926042c0e6cbca2d92022283a1b3554161d92e78e37268cb4b98e8f"
+    },
+    "flag": {
+      "source": "../glyphs/flag.svg",
+      "sha256": "fd8a38a7b95bcc6389da15e9f53f04b21ab1f71f00af1832af29247b5ec798b1"
+    },
+    "hazard": {
+      "source": "../glyphs/hazard.svg",
+      "sha256": "ad0fb9bd25780a2f8470cc9c1910a93bdf295c0468f253a091e3bf5df874c38d"
+    },
+    "timebomb": {
+      "source": "../glyphs/timebomb.svg",
+      "sha256": "bdacb60ea201dc4c69685f7fc80bfb4b3ced29460455f1f7107f18b8d1a55338"
+    },
+    "tool": {
+      "source": "../glyphs/tool.svg",
+      "sha256": "f2212ed85c8a3b8c669d3f6457527121297f9e41c1b259ecf5537f7d095342b9"
+    },
+    "check": {
+      "source": "../glyphs/check.svg",
+      "sha256": "7427850420afe6fdee0af217533d32dd41bf9e5d316d4204a9cd3d149934f46c"
+    },
+    "cross": {
+      "source": "../glyphs/cross.svg",
+      "sha256": "0faf94fe3f346976ba0d10ea2d004517ce39f352d817ce8e08fa11ea5abcd917"
+    },
+    "portal": {
+      "source": "../glyphs/portal.svg",
+      "sha256": "339ffd25547aea49e48779e06e0175ccd59ee6be1d00b81b5b5f296fc16aadc6"
+    }
+  },
+  "file": "marker-glyphs-16.webp",
+  "size": 16,
+  "width": 100,
+  "height": 80,
+  "frames": {
+    "base": {
+      "x": 2,
+      "y": 2,
+      "w": 16,
+      "h": 16
+    },
+    "boss": {
+      "x": 22,
+      "y": 2,
+      "w": 16,
+      "h": 16
+    },
+    "site-wreck": {
+      "x": 42,
+      "y": 2,
+      "w": 16,
+      "h": 16
+    },
+    "site-extractor": {
+      "x": 62,
+      "y": 2,
+      "w": 16,
+      "h": 16
+    },
+    "site-brood-nest": {
+      "x": 82,
+      "y": 2,
+      "w": 16,
+      "h": 16
+    },
+    "site-supply": {
+      "x": 2,
+      "y": 22,
+      "w": 16,
+      "h": 16
+    },
+    "site-scrap-heaps": {
+      "x": 22,
+      "y": 22,
+      "w": 16,
+      "h": 16
+    },
+    "scavenger": {
+      "x": 42,
+      "y": 22,
+      "w": 16,
+      "h": 16
+    },
+    "mission-destroy": {
+      "x": 62,
+      "y": 22,
+      "w": 16,
+      "h": 16
+    },
+    "mission-hold": {
+      "x": 82,
+      "y": 22,
+      "w": 16,
+      "h": 16
+    },
+    "mission-carry": {
+      "x": 2,
+      "y": 42,
+      "w": 16,
+      "h": 16
+    },
+    "crate": {
+      "x": 22,
+      "y": 42,
+      "w": 16,
+      "h": 16
+    },
+    "flag": {
+      "x": 42,
+      "y": 42,
+      "w": 16,
+      "h": 16
+    },
+    "hazard": {
+      "x": 62,
+      "y": 42,
+      "w": 16,
+      "h": 16
+    },
+    "timebomb": {
+      "x": 82,
+      "y": 42,
+      "w": 16,
+      "h": 16
+    },
+    "tool": {
+      "x": 2,
+      "y": 62,
+      "w": 16,
+      "h": 16
+    },
+    "check": {
+      "x": 22,
+      "y": 62,
+      "w": 16,
+      "h": 16
+    },
+    "cross": {
+      "x": 42,
+      "y": 62,
+      "w": 16,
+      "h": 16
+    },
+    "portal": {
+      "x": 62,
+      "y": 62,
+      "w": 16,
+      "h": 16
+    }
+  }
+}

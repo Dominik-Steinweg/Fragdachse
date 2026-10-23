@@ -1,0 +1,1281 @@
+{
+  "generator": "Integrated image_gen tool",
+  "date": "2026-10-14",
+  "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+  "sourceRoot": "art/poc/dawn/",
+  "selectionSource": "art/poc/dawn/icons/v2/selection.json",
+  "artDirection": "docs/GDDs/Fragdachse_From_Dachs_Till_Dawn_Art_Direction_V1.md",
+  "styleReferences": [
+    "art/poc/dawn/style/C-icon-scrap.png",
+    "art/poc/dawn/style/C-icon-threat.png",
+    "art/poc/dawn/style/style-C-board.png"
+  ],
+  "promptFidelity": "Full tool prompts per V2 icon candidate. Portrait retains historical provenance.",
+  "iconCommonPrompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. ",
+  "iconComposition": "Front-facing print emblems, square dark plate, subject approximately 85 percent; not world sprites.",
+  "backgroundDecision": "Uniform opaque charcoal printing plate: matches the style reference and maintains bone-ink contrast on walnut HUD and night forest floor. Preserve the authored margin; no second export border.",
+  "portraitCommonPrompt": "Gemeinsamer Prompt: moderner farbenfroher, texturierter, leicht stilisierter 2D-Look; weiche Kanten; europäischer Dachs; rostige, teils moosige Waldtechnik; klare Silhouette/Wertkontraste; matte Materialien. Keine Pixelrasterung, schwarzen Cartoon-Outlines, fotografischen Reflexe, Miniaturbeleuchtung, Schrift, Logos oder Wasserzeichen. Transparenter PNG-Hintergrund. Stände ausdrücklich orthografisch 90° von oben ohne Seitenwände, ungefähr 3×2-Spielzellen; Konzepte/Büsten in Dreiviertelansicht.",
+  "review": {
+    "board": "art/poc/dawn/icons/v2/set-board.png",
+    "hud": "#2a241d",
+    "forestSource": "art/poc/dawn/m3-concepts/night-mod-fog-02.png",
+    "forestCrop": {
+      "left": 820,
+      "top": 390,
+      "width": 660,
+      "height": 340
+    },
+    "forestCopy": "art/poc/dawn/icons/v2/forest-review.png",
+    "sizes": [
+      16,
+      24,
+      32,
+      48
+    ],
+    "eliteGrayscaleSizes": [
+      16,
+      24
+    ],
+    "method": "Local pixel-size comparison; no browser or gameplay test."
+  },
+  "assets": [
+    {
+      "key": "scrap",
+      "original": "scrap.png",
+      "source": "icons/v2/scrap-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "dd721f10a9c7a186782a35a3ad25210e4a8740b5f30ef8c5fc9e3f44d7d47a09",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 1,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "scrap",
+          "file": "scrap-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: scrap currency, one chunky bone six-tooth gear with a large dark central hole, crossed on its lower-right diagonal by ONE broad bent scrap sheet-metal strip in aged-paper ink, two large dark punched holes. Variant 01: nearly upright gear, rising diagonal sheet, broad negative spaces; clear overlap by charcoal cut.",
+          "sha256": "dd721f10a9c7a186782a35a3ad25210e4a8740b5f30ef8c5fc9e3f44d7d47a09"
+        },
+        {
+          "key": "scrap",
+          "file": "scrap-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: scrap currency: one chunky bone six-tooth gear with dark central hole crossed by ONE broad bent sheet-metal strip in aged-paper ink, two dark punched holes. Variant 02: Gear slightly rotated, shorter thick strip across lower half, two broad notch cuts.",
+          "sha256": "f28d7e0325148dfa62ea69739a40fe7c4e47f3443aeeed5d1ec1c95b551ad119"
+        },
+        {
+          "key": "scrap",
+          "file": "scrap-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: scrap currency: one chunky bone six-tooth gear with dark central hole crossed by ONE broad bent sheet-metal strip in aged-paper ink, two dark punched holes. Variant 03: Gear tilted left, wide angular sheet across middle-right, very sparse grain.",
+          "sha256": "85119b4752559c265fe51c298d3946cecf7fab63e67f31752eee35800614e1a2"
+        }
+      ],
+      "selectionReason": "Das große Zahnradloch und das klar abgesetzte diagonale Blech bleiben bei 24 px getrennt.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "threat",
+      "original": "threat.png",
+      "source": "icons/v2/threat-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "ddba0a8d507d883542d95dee2553aeb2b7047f261f5b7c698e3a6a9eacd8142d",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 1,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "threat",
+          "file": "threat-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: threat: broad bone crescent MOON ABOVE THREE bold parallel claw-slash cuts; bone monochrome, no enclosing frame. Variant 01: Crescent upper left, three rising diagonal slashes below.",
+          "sha256": "ddba0a8d507d883542d95dee2553aeb2b7047f261f5b7c698e3a6a9eacd8142d"
+        },
+        {
+          "key": "threat",
+          "file": "threat-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: threat: broad bone crescent MOON ABOVE THREE bold parallel claw-slash cuts; bone monochrome, no enclosing frame. Variant 02: Crescent centered in upper half, three near-vertical slightly slanted slashes below.",
+          "sha256": "6040e6c6ebd9c9b5702974c1f49061169f005100a1731b60e51c86fc855a8560"
+        },
+        {
+          "key": "threat",
+          "file": "threat-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: threat: broad bone crescent MOON ABOVE THREE bold parallel claw-slash cuts; bone monochrome, no enclosing frame. Variant 03: Wide low crescent upper half, three short broad diagonal claws in lower half.",
+          "sha256": "51df91c2b2e6f70cfa9605bd8a445a3c66439c657bfeca4c2c1f97fd03c4f9dc"
+        }
+      ],
+      "selectionReason": "Die seitliche Mondsichel sitzt deutlich über drei getrennten diagonalen Klauenspuren.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-expansion",
+      "original": "dealer-expansion.png",
+      "source": "icons/v2/dealer-expansion-03.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "d527f21b4ec6320b392d1891901e09afb9e147a0b17ab4fe41edd9009e8df01c",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 3,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "dealer-expansion",
+          "file": "dealer-expansion-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. Top-down PALISADE RING with chunky pointed stakes and TWO large arrows pointing OUTWARD; very simple. Variant 01: Arrows left and right through open sides of stake ring.",
+          "sha256": "a269d463b8cdbdc1e37e71c22ce53ede6cea7281c49ab3482b10eb477cfaa6c5"
+        },
+        {
+          "key": "dealer-expansion",
+          "file": "dealer-expansion-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. Top-down PALISADE RING with chunky pointed stakes and TWO large arrows pointing OUTWARD; very simple. Variant 02: Arrows upper-right and lower-left through broken palisade ring.",
+          "sha256": "7c060513105ff9c22ced25f747e96c4fa61c18a18feb1611f2ed4499c7077d6a"
+        },
+        {
+          "key": "dealer-expansion",
+          "file": "dealer-expansion-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. Top-down PALISADE RING with chunky pointed stakes and TWO large arrows pointing OUTWARD; very simple. Variant 03: Four broad pointed stakes around dark hole, two broad outward side arrows.",
+          "sha256": "d527f21b4ec6320b392d1891901e09afb9e147a0b17ab4fe41edd9009e8df01c"
+        }
+      ],
+      "selectionReason": "Vier kräftige Palisadenpfähle und zwei breite Außenpfeile ergeben die ruhigste Erweiterungsmarke.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-infrastructure",
+      "original": "dealer-infrastructure.png",
+      "source": "icons/v2/dealer-infrastructure-03.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "e9edc743610db461789901ddbc761953b890b8606ec849b0e0c600c0916801ea",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 3,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "dealer-infrastructure",
+          "file": "dealer-infrastructure-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. REPAIR DRONE with two short rotor bars and one oversized open-jaw WRENCH held below; no face or cute eyes. Variant 01: Squat drone upper half, diagonal wrench lower half.",
+          "sha256": "d93a144918d898d3ef79a22350d151d4d852d070dc66881853162ed39fdd30b4"
+        },
+        {
+          "key": "dealer-infrastructure",
+          "file": "dealer-infrastructure-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. REPAIR DRONE with two short rotor bars and one oversized open-jaw WRENCH held below; no face or cute eyes. Variant 02: Central compact drone, horizontal rotors, vertical wrench hangs down.",
+          "sha256": "2819229896f92dc0947aeb631bde84023088eba5047b950aaf63d21fc4cd024c"
+        },
+        {
+          "key": "dealer-infrastructure",
+          "file": "dealer-infrastructure-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. REPAIR DRONE with two short rotor bars and one oversized open-jaw WRENCH held below; no face or cute eyes. Variant 03: Wide simple drone silhouette, big diagonal wrench crosses its lower body.",
+          "sha256": "e9edc743610db461789901ddbc761953b890b8606ec849b0e0c600c0916801ea"
+        }
+      ],
+      "selectionReason": "Der breite Drohnenkörper und der große quer gehaltene Schlüssel trennen Fluggerät und Reparaturfunktion.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-upgrades",
+      "original": "dealer-upgrades.png",
+      "source": "icons/v2/dealer-upgrades-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "adf049f493cd7aaade1fc57dd15785b30e284646d81495e613d7c1103e93cd0f",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 2,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "dealer-upgrades",
+          "file": "dealer-upgrades-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. SKULL MEDAL / boss point, blunt skull with two large charcoal eye sockets and one simple jaw notch, short two ribbon tails at bottom. Variant 01: Large slightly tilted skull, two short angular ribbon tails.",
+          "sha256": "f9b1cace0460273a0d3fd6c1634b537141e1c960134d902d8bf332fe0d69b1f7"
+        },
+        {
+          "key": "dealer-upgrades",
+          "file": "dealer-upgrades-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. SKULL MEDAL / boss point, blunt skull with two large charcoal eye sockets and one simple jaw notch, short two ribbon tails at bottom. Variant 02: Broad skull, square eye holes, tiny two medal tails beneath.",
+          "sha256": "adf049f493cd7aaade1fc57dd15785b30e284646d81495e613d7c1103e93cd0f"
+        },
+        {
+          "key": "dealer-upgrades",
+          "file": "dealer-upgrades-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. SKULL MEDAL / boss point, blunt skull with two large charcoal eye sockets and one simple jaw notch, short two ribbon tails at bottom. Variant 03: Longer skull with broad brow, irregular eye sockets, short split ribbon.",
+          "sha256": "189545000600b6b2538e1e30ca6df20514563e1a78b62b1dbc44dae088b054fc"
+        }
+      ],
+      "selectionReason": "Der breite Schädel mit großen eckigen Augenhöhlen bleibt innerhalb der Medaille klein am eindeutigsten.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-equipment",
+      "original": "dealer-equipment.png",
+      "source": "icons/v2/dealer-equipment-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "daef666c87f89e8a27a88dd1559e2db7b9740f07820e2ae47de4f32d0de5dec3",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 1,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "dealer-equipment",
+          "file": "dealer-equipment-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. ARMORED GAUNTLET, heavy closed hand with thumb visibly projecting to side, three large bone armor plates separated by wide charcoal cuts. Variant 01: Upright clenched gauntlet, thumb on left, short flared cuff.",
+          "sha256": "daef666c87f89e8a27a88dd1559e2db7b9740f07820e2ae47de4f32d0de5dec3"
+        },
+        {
+          "key": "dealer-equipment",
+          "file": "dealer-equipment-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. ARMORED GAUNTLET, heavy closed hand with thumb visibly projecting to side, three large bone armor plates separated by wide charcoal cuts. Variant 02: Gauntlet tilted right, projecting thumb, broad wrist cuff.",
+          "sha256": "a9adcf6f8b273741f49efaf02346a47c057650f418d4d6a72be60d0fd12bb5a8"
+        },
+        {
+          "key": "dealer-equipment",
+          "file": "dealer-equipment-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared dealer family frame: a rough round carved plaque, thin broken bone outer ring over umber disk, charcoal interior; frame width only 5% of canvas, central glyph huge. No extra accent. ARMORED GAUNTLET, heavy closed hand with thumb visibly projecting to side, three large bone armor plates separated by wide charcoal cuts. Variant 03: Upright armored fist with blocky knuckles, large hooked thumb and split cuff.",
+          "sha256": "1bb7c0fb8e12cb15bd40402f701910fbc28bd8ebfcde757f96937fdc14b8ff3a"
+        }
+      ],
+      "selectionReason": "Der seitlich abgesetzte Daumen und die breiten Panzerplatten ergeben eine klare Handschuhform.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "recalibration-core",
+      "original": "recalibration-core.png",
+      "source": "icons/v2/recalibration-core-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "aef121ba942b3f9cbe7e273e27da9d8202c25ffb4b0c8fd4891c2d56b25bf284",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 2,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "recalibration-core",
+          "file": "recalibration-core-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Rare technology: huge faceted CRYSTAL CORE enclosed by TWO broad intersecting GIMBAL RINGS. Cyan #5fb3b0 on the crystal only, sole cyan icon in set. Bone rings and charcoal voids, NO shine or light effects. Variant 01: Upright thick cyan diamond inside two wide angled oval rings.",
+          "sha256": "a1361ab2a54f69f638a505b24d0ce51a7bc75d8be53b2726f318d67d74bb5e72"
+        },
+        {
+          "key": "recalibration-core",
+          "file": "recalibration-core-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Rare technology: huge faceted CRYSTAL CORE enclosed by TWO broad intersecting GIMBAL RINGS. Cyan #5fb3b0 on the crystal only, sole cyan icon in set. Bone rings and charcoal voids, NO shine or light effects. Variant 02: Short hexagonal cyan crystal, outer upright ring and diagonal gimbal ring.",
+          "sha256": "aef121ba942b3f9cbe7e273e27da9d8202c25ffb4b0c8fd4891c2d56b25bf284"
+        },
+        {
+          "key": "recalibration-core",
+          "file": "recalibration-core-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Rare technology: huge faceted CRYSTAL CORE enclosed by TWO broad intersecting GIMBAL RINGS. Cyan #5fb3b0 on the crystal only, sole cyan icon in set. Bone rings and charcoal voids, NO shine or light effects. Variant 03: Tall cyan diamond, one broad horizontal and one diagonal gimbal ring.",
+          "sha256": "6fd667135b16ba5bd891a86b17f438c89ed8c7cf6e6f28fdd42f380dfb4b2304"
+        }
+      ],
+      "selectionReason": "Der kompakte Cyan-Kern bleibt zwischen den zwei kräftigen Kardanringen als eigene Fläche sichtbar.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "scrap-magnet",
+      "original": "scrap-magnet.png",
+      "source": "icons/v2/scrap-magnet-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "3a73ba2ebcd30540d3f89ecf1ff9a07166476f15157e42294c32d604502980f5",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 1,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "scrap-magnet",
+          "file": "scrap-magnet-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: A big HORSESHOE MAGNET with two contrasting bone pole ends and TWO large attracted scrap chips hovering across its opening. Aged-paper magnet body, bone pole ends. No accent, no sparks. Variant 01: Upright U opening up, two big scraps above.",
+          "sha256": "3a73ba2ebcd30540d3f89ecf1ff9a07166476f15157e42294c32d604502980f5"
+        },
+        {
+          "key": "scrap-magnet",
+          "file": "scrap-magnet-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: A big HORSESHOE MAGNET with two contrasting bone pole ends and TWO large attracted scrap chips hovering across its opening. Aged-paper magnet body, bone pole ends. No accent, no sparks. Variant 02: U tilted slightly right, two angular scrap pieces near upper tips.",
+          "sha256": "3a97e00c844f0b2d4a8719534b8922ec5fcce3b3609ace01f4f6bfabf18f66ed"
+        },
+        {
+          "key": "scrap-magnet",
+          "file": "scrap-magnet-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: A big HORSESHOE MAGNET with two contrasting bone pole ends and TWO large attracted scrap chips hovering across its opening. Aged-paper magnet body, bone pole ends. No accent, no sparks. Variant 03: Broad squared U magnet, two large bolt-like scraps between open poles.",
+          "sha256": "9293e055c99ccf7ae9992776131c81fbaff10d4f1cc220149a2b8204e4f89f32"
+        }
+      ],
+      "selectionReason": "Die aufrechte offene Hufeisenform mit hellen Polen und zwei angezogenen Teilen liest sich am schnellsten.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "scrap-scanner",
+      "original": "scrap-scanner.png",
+      "source": "icons/v2/scrap-scanner-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "911ce297d21b94b5f6359e0e32d7ba912f6787fea864eeed88ffbc25cd9a056a",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 2,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "scrap-scanner",
+          "file": "scrap-scanner-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Compact rugged DIRECTION-FINDER / RADAR device: huge circular charcoal screen with ONE broad bone sweep wedge and ONE separated solid bone ECHO DOT; short antenna, aged-paper casing. No grid, no cyan, no orange. Variant 01: Square squat case, round radar face, one upper-left stub antenna.",
+          "sha256": "1a9ee2b12d77a1618417e71e77d6c13006b0bdba69a953582cf8f69c173e6d4e"
+        },
+        {
+          "key": "scrap-scanner",
+          "file": "scrap-scanner-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Compact rugged DIRECTION-FINDER / RADAR device: huge circular charcoal screen with ONE broad bone sweep wedge and ONE separated solid bone ECHO DOT; short antenna, aged-paper casing. No grid, no cyan, no orange. Variant 02: Round thick radar case with one antenna, big sector and isolated echo dot.",
+          "sha256": "911ce297d21b94b5f6359e0e32d7ba912f6787fea864eeed88ffbc25cd9a056a"
+        },
+        {
+          "key": "scrap-scanner",
+          "file": "scrap-scanner-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Compact rugged DIRECTION-FINDER / RADAR device: huge circular charcoal screen with ONE broad bone sweep wedge and ONE separated solid bone ECHO DOT; short antenna, aged-paper casing. No grid, no cyan, no orange. Variant 03: Slightly tilted square case, huge round screen, broad sweep and echo.",
+          "sha256": "11c2cbbb491c6cf3af46d42a7c758545b63047dccce226c32ea20732f424bad0"
+        }
+      ],
+      "selectionReason": "Der große Radarschirm trennt Suchsektor und einzelnes Echo auch bei 24 px.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "elite-swift",
+      "original": "elite-swift.png",
+      "source": "icons/v2/elite-swift-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "9cc0fc9deadcd2b8c5e988e7095d3d51cac04d42249d0a765f18ca7e9c59e68f",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 1,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "elite-swift",
+          "file": "elite-swift-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. DOUBLE CHEVRON, two thick separate upward bone chevrons, enormous dark gap. Variant 01: Wide low chevrons with blunt ends.",
+          "sha256": "9cc0fc9deadcd2b8c5e988e7095d3d51cac04d42249d0a765f18ca7e9c59e68f"
+        },
+        {
+          "key": "elite-swift",
+          "file": "elite-swift-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. DOUBLE CHEVRON, two thick separate upward bone chevrons, enormous dark gap. Variant 02: Steeper double chevrons, broad arms and clear gap.",
+          "sha256": "8e7612901c517a66848bd3dcc5cd923fe81e0a532f67bf60c5cb4c4837b4ad80"
+        },
+        {
+          "key": "elite-swift",
+          "file": "elite-swift-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. DOUBLE CHEVRON, two thick separate upward bone chevrons, enormous dark gap. Variant 03: Slightly uneven hand-cut chevrons, stout arms.",
+          "sha256": "63da97a2d2f4f678545a503068f4ccdcc6ccfb0e22274aecc16a0dac239c212e"
+        }
+      ],
+      "selectionReason": "Breite flache Doppel-Chevrons behalten bei 16 px ihren deutlichen Zwischenraum.",
+      "sizes": [
+        16,
+        24,
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "elite-armored",
+      "original": "elite-armored.png",
+      "source": "icons/v2/elite-armored-03.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "4cfaffa7d7f3c40af5054c0ec7c74f33d8baa0cbc55e965e698284897827f053",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 3,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "elite-armored",
+          "file": "elite-armored-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. PLATE SHIELD, one broad SOLID bone plate with flat top, clipped shoulders and pointed lower tip; one wide dark vertical seam. Must look filled and heavy. Variant 01: Squat broad shield, strong center seam.",
+          "sha256": "3a76057bc77d4a201453f0c022f2da4c1b63cdab10198e1caafd40ed4554a129"
+        },
+        {
+          "key": "elite-armored",
+          "file": "elite-armored-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. PLATE SHIELD, one broad SOLID bone plate with flat top, clipped shoulders and pointed lower tip; one wide dark vertical seam. Must look filled and heavy. Variant 02: Large shield with angular shoulder cutouts and one seam.",
+          "sha256": "75735227e3a3dc05d6ebe1f8bf3d845bd2ac90fcb9195fc1ab4ff382a497a05a"
+        },
+        {
+          "key": "elite-armored",
+          "file": "elite-armored-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. PLATE SHIELD, one broad SOLID bone plate with flat top, clipped shoulders and pointed lower tip; one wide dark vertical seam. Must look filled and heavy. Variant 03: Wide heavy pentagonal plate, short central cut.",
+          "sha256": "4cfaffa7d7f3c40af5054c0ec7c74f33d8baa0cbc55e965e698284897827f053"
+        }
+      ],
+      "selectionReason": "Die massive geschlossene Schildplatte und ihr Mittelschnitt bleiben auch in Graustufen bei 16 px erkennbar.",
+      "sizes": [
+        16,
+        24,
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "elite-volatile",
+      "original": "elite-volatile.png",
+      "source": "icons/v2/elite-volatile-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "b371d725e91fe7970a6a47ca8850d089bcdf392c0f301ff927493aa52ce3a3b7",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 1,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "elite-volatile",
+          "file": "elite-volatile-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. SPARK STAR, four very broad pointed rays around solid center with deep charcoal gaps; unmistakable explosive star silhouette. Variant 01: Four-point irregular star, vertical ray longest.",
+          "sha256": "b371d725e91fe7970a6a47ca8850d089bcdf392c0f301ff927493aa52ce3a3b7"
+        },
+        {
+          "key": "elite-volatile",
+          "file": "elite-volatile-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. SPARK STAR, four very broad pointed rays around solid center with deep charcoal gaps; unmistakable explosive star silhouette. Variant 02: Four broad diagonally leaning rays, compact solid center.",
+          "sha256": "2bf13b662fcd23b71a95e37a67a823def238837a5743d4e51ff136b8dc0be982"
+        },
+        {
+          "key": "elite-volatile",
+          "file": "elite-volatile-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. SPARK STAR, four very broad pointed rays around solid center with deep charcoal gaps; unmistakable explosive star silhouette. Variant 03: Four-point star with broad top and side rays, sparse cut on one ray.",
+          "sha256": "40489ac406026beccde572ed72def28004885b9c90f44866f084db1b316613b4"
+        }
+      ],
+      "selectionReason": "Der zusammenhängende vierstrahlige Funkenstern liest sich bei 16 px klarer als die geteilten Varianten.",
+      "sizes": [
+        16,
+        24,
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "elite-regenerating",
+      "original": "elite-regenerating.png",
+      "source": "icons/v2/elite-regenerating-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "f8c9b4e73b8f5b682cafcda2b1837e7ea109ef910a5dce21f9dcf16719ac4571",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 1,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "elite-regenerating",
+          "file": "elite-regenerating-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. Thick upright BONE CROSS plus ONE stout curling VINE and one large leaf. Cross dominates, leaf secondary, no medical text. Variant 01: Broad plus cross, single vine hooks up right side.",
+          "sha256": "f8c9b4e73b8f5b682cafcda2b1837e7ea109ef910a5dce21f9dcf16719ac4571"
+        },
+        {
+          "key": "elite-regenerating",
+          "file": "elite-regenerating-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. Thick upright BONE CROSS plus ONE stout curling VINE and one large leaf. Cross dominates, leaf secondary, no medical text. Variant 02: Thick cross, stout vine curls underneath and large leaf on left.",
+          "sha256": "354703cb2a2f84aee455b2ffc57331417d5a91e091e4ab7affb09fbad785aada"
+        },
+        {
+          "key": "elite-regenerating",
+          "file": "elite-regenerating-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. Thick upright BONE CROSS plus ONE stout curling VINE and one large leaf. Cross dominates, leaf secondary, no medical text. Variant 03: Wide cross, one leafy hook wraps lower-right arm.",
+          "sha256": "03cbfc102d19cd3f538dca1df498ac660c9c180d8d305674907b5187829dbcc2"
+        }
+      ],
+      "selectionReason": "Das dominante Kreuz bleibt bei 16 px erkennbar, während die seitliche Ranke die Heilform ergänzt.",
+      "sizes": [
+        16,
+        24,
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "elite-shielding",
+      "original": "elite-shielding.png",
+      "source": "icons/v2/elite-shielding-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "f40b852acc83fd579de7eb4d7d847e593fceba87ac6004d3deb4ced8a849f9c4",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 2,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "elite-shielding",
+          "file": "elite-shielding-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. OPEN OUTLINE SHIELD beneath a separate thick protective DOME ARC. Shield interior charcoal, dome clearly detached by wide gap; distinct from solid armored plate. Variant 01: Small open U-point shield below large semicircular dome.",
+          "sha256": "920cc1afbde445990f3b44b002ff92069ad91b28f3d560956ae4e379479df850"
+        },
+        {
+          "key": "elite-shielding",
+          "file": "elite-shielding-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. OPEN OUTLINE SHIELD beneath a separate thick protective DOME ARC. Shield interior charcoal, dome clearly detached by wide gap; distinct from solid armored plate. Variant 02: Open broad V-bottom shield beneath detached flat-topped dome arc.",
+          "sha256": "f40b852acc83fd579de7eb4d7d847e593fceba87ac6004d3deb4ced8a849f9c4"
+        },
+        {
+          "key": "elite-shielding",
+          "file": "elite-shielding-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared elite family frame: flat clipped-corner square plaque with eight straight rough-cut sides, thin muted sickly violet #7a4a7f perimeter, charcoal interior. Huge bone glyph takes 70% canvas. Violet is the ONLY accent. Glyph MUST remain distinct in grayscale at 16px; no decorative inner border. OPEN OUTLINE SHIELD beneath a separate thick protective DOME ARC. Shield interior charcoal, dome clearly detached by wide gap; distinct from solid armored plate. Variant 03: Thick outlined pointed shield, low wide protective dome above.",
+          "sha256": "0dce9e60cec5a90e4688145b99119302ebeaf3b0381072afc107f94eca6c4eb0"
+        }
+      ],
+      "selectionReason": "Der offene Schild und der separate flache Kuppelbogen unterscheiden sich bei 16 px von der massiven Panzerplatte.",
+      "sizes": [
+        16,
+        24,
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "night-blood-moon",
+      "original": "night-blood-moon.png",
+      "source": "icons/v2/night-blood-moon-03.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "36e07fa8da041fd86a9f77ea0e16a684e0a80372d68e7c2ceb3fc711137357a8",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 3,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "night-blood-moon",
+          "file": "night-blood-moon-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for a survival game. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. RED MOON: one massive crescent moon in muted scarf-red #8f2f24, a broad bone cut along its outer edge supports contrast. Red is ONLY accent. Variant 01: Large left crescent, open right, angular horns. CRITICAL CONTENT LIMIT: Render ONLY the single weather/fire/moon symbol specified above and its thin circular frame. Absolutely NO animals, NO badgers, NO faces, NO people, NO characters, NO figures, NO scene, NO landscape, NO logs, NO additional emblems. The icon is an extremely simple single pictogram occupying the whole medallion interior.",
+          "sha256": "308ce66c99a19cf744d136b40cbce52304b7da58b38b5254711184b8401bcd4d"
+        },
+        {
+          "key": "night-blood-moon",
+          "file": "night-blood-moon-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for a survival game. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. RED MOON: one massive crescent moon in muted scarf-red #8f2f24, a broad bone cut along its outer edge supports contrast. Red is ONLY accent. Variant 02: Low broad crescent tipped slightly left. CRITICAL CONTENT LIMIT: Render ONLY the single weather/fire/moon symbol specified above and its thin circular frame. Absolutely NO animals, NO badgers, NO faces, NO people, NO characters, NO figures, NO scene, NO landscape, NO logs, NO additional emblems. The icon is an extremely simple single pictogram occupying the whole medallion interior.",
+          "sha256": "2d41bab46318f9fa075a3355a556b72df5c9d6dc8eb3bfa7b95919fcfb5b1bc6"
+        },
+        {
+          "key": "night-blood-moon",
+          "file": "night-blood-moon-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for a survival game. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. RED MOON: one massive crescent moon in muted scarf-red #8f2f24, a broad bone cut along its outer edge supports contrast. Red is ONLY accent. Variant 03: Large right-facing crescent with short bold tips and one broad cut. CRITICAL CONTENT LIMIT: Render ONLY the single weather/fire/moon symbol specified above and its thin circular frame. Absolutely NO animals, NO badgers, NO faces, NO people, NO characters, NO figures, NO scene, NO landscape, NO logs, NO additional emblems. The icon is an extremely simple single pictogram occupying the whole medallion interior.",
+          "sha256": "36e07fa8da041fd86a9f77ea0e16a684e0a80372d68e7c2ceb3fc711137357a8"
+        }
+      ],
+      "selectionReason": "Die breite rote Sichel bleibt bei 24 px klar vom dünnen Medaillonrand getrennt.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "night-fog",
+      "original": "night-fog.png",
+      "source": "icons/v2/night-fog-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "65ab6640186acb009f0480653e605269a253e4c44f6387c07ae31bd47fc4613c",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 2,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "night-fog",
+          "file": "night-fog-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for a survival game. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. FOG WISPS in broad slate #4a5157 horizontal bands across a large bone moon, charcoal negative gaps; slate ONLY accent, no luminous mist. Variant 01: Two thick staggered horizontal fog bars over lower half of moon. CRITICAL CONTENT LIMIT: Render ONLY the single weather/fire/moon symbol specified above and its thin circular frame. Absolutely NO animals, NO badgers, NO faces, NO people, NO characters, NO figures, NO scene, NO landscape, NO logs, NO additional emblems. The icon is an extremely simple single pictogram occupying the whole medallion interior.",
+          "sha256": "33b74b9c76a351dfbf06ddb8531d136cc3c91b5b5be8b64ca56b795a48dd5172"
+        },
+        {
+          "key": "night-fog",
+          "file": "night-fog-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for a survival game. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. FOG WISPS in broad slate #4a5157 horizontal bands across a large bone moon, charcoal negative gaps; slate ONLY accent, no luminous mist. Variant 02: Three broad stepped fog bands crossing moon, upper moon clear. CRITICAL CONTENT LIMIT: Render ONLY the single weather/fire/moon symbol specified above and its thin circular frame. Absolutely NO animals, NO badgers, NO faces, NO people, NO characters, NO figures, NO scene, NO landscape, NO logs, NO additional emblems. The icon is an extremely simple single pictogram occupying the whole medallion interior.",
+          "sha256": "65ab6640186acb009f0480653e605269a253e4c44f6387c07ae31bd47fc4613c"
+        },
+        {
+          "key": "night-fog",
+          "file": "night-fog-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for a survival game. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. FOG WISPS in broad slate #4a5157 horizontal bands across a large bone moon, charcoal negative gaps; slate ONLY accent, no luminous mist. Variant 03: Two curling broad fog ribbons across bone disk, very simple. CRITICAL CONTENT LIMIT: Render ONLY the single weather/fire/moon symbol specified above and its thin circular frame. Absolutely NO animals, NO badgers, NO faces, NO people, NO characters, NO figures, NO scene, NO landscape, NO logs, NO additional emblems. The icon is an extremely simple single pictogram occupying the whole medallion interior.",
+          "sha256": "76bdc346393901e5e73ae07c1ca993df363a79f54dc2e8c6573eb5801dd14850"
+        }
+      ],
+      "selectionReason": "Der ruhige Mond und drei breite Schieferbänder zeigen Nebel ohne störende Kraterdetails.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "night-bombers",
+      "original": "night-bombers.png",
+      "source": "icons/v2/night-bombers-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "9ed9897d6d78f6df419975d23b2ecf708049db3072c64ca3252f01801785d2b0",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 2,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "night-bombers",
+          "file": "night-bombers-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. BOMBER AIRCRAFT SILHOUETTE, top-view broad wings, tail and thick fuselage, single muted lamp-orange #d9822b bomb lozenge beneath; bone plane dominates, orange ONLY accent. Variant 01: Very broad straight wings, squared tail, one orange falling bomb below.",
+          "sha256": "425a3719d44bdfe561d38b210382833b5c09da69d6477539063a1bba4d31e2b0"
+        },
+        {
+          "key": "night-bombers",
+          "file": "night-bombers-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. BOMBER AIRCRAFT SILHOUETTE, top-view broad wings, tail and thick fuselage, single muted lamp-orange #d9822b bomb lozenge beneath; bone plane dominates, orange ONLY accent. Variant 02: Swept broad wings, heavy central fuselage, one orange bomb below.",
+          "sha256": "9ed9897d6d78f6df419975d23b2ecf708049db3072c64ca3252f01801785d2b0"
+        },
+        {
+          "key": "night-bombers",
+          "file": "night-bombers-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. BOMBER AIRCRAFT SILHOUETTE, top-view broad wings, tail and thick fuselage, single muted lamp-orange #d9822b bomb lozenge beneath; bone plane dominates, orange ONLY accent. Variant 03: Chunky cross-wing bomber with unmistakable tail, one orange bomb below.",
+          "sha256": "7e086e1571bf304a90fed3cf428ba0441fefcc119ba755175313ad9121c73a93"
+        }
+      ],
+      "selectionReason": "Die breiten gepfeilten Tragflächen halten die Bomber-Silhouette bei 24 px zusammen.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "night-fire",
+      "original": "night-fire.png",
+      "source": "icons/v2/night-fire-03.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "75f256e4c9e5f41159123c1bfef9b6e71651e8aaf36b75b31df199063a49ef22",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "druck-v2",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 3,
+      "promptSource": "art/poc/dawn/icons/v2/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts for the final three candidates; reference images visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "night-fire",
+          "file": "night-fire-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for a survival game. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. FLAME FRONT: three broad joined tongues of muted lamp-orange #d9822b flame, bone cut defining inner flame; orange ONLY accent. Variant 01: Tall central tongue and two shorter outward leaning side tongues. CRITICAL CONTENT LIMIT: Render ONLY the single weather/fire/moon symbol specified above and its thin circular frame. Absolutely NO animals, NO badgers, NO faces, NO people, NO characters, NO figures, NO scene, NO landscape, NO logs, NO additional emblems. The icon is an extremely simple single pictogram occupying the whole medallion interior.",
+          "sha256": "d1d085ee422b52c5d7183a21483e10e0b6bb568c4147c90ef4d272b7f0f64ac1"
+        },
+        {
+          "key": "night-fire",
+          "file": "night-fire-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for Fragdachse From Dachs Till Dawn. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. FLAME FRONT: three broad joined tongues of muted lamp-orange #d9822b flame, bone cut defining inner flame; orange ONLY accent. Variant 02: Asymmetric three-tongue flame front, tallest tongue on left.",
+          "sha256": "d4c2b6740b6de8822db00d8390e84a77e4d735a1959d6842df1645c4f1638ac2"
+        },
+        {
+          "key": "night-fire",
+          "file": "night-fire-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon for a survival game. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. Bold flat cut-paper-like ink masses, rough gouge-cut edges and a FEW broad woodgrain cuts, visibly handmade asymmetric carving. Bone ink #d9cfb6 and aged-paper #c8b98f with muted umber #5a4632 on a uniform opaque charcoal #1b1a17 square printing plate. Subject fills 85% of square, 7.5% clean charcoal margin. Very bold primary silhouette readable at 24px; minimum major stroke/gap 8% of image. Front-on flat emblem. NO 3D, bevels, glossy surfaces, highlights, gradients, glow, airbrush, vignette, tiny noise, lettering, logos, watermark, ornamental clutter. All forms carved from 2-3 solid ink colors plus charcoal ground. Match inspected style-C reference's strong bone silhouettes, but simplify texture to preserve small-size clarity. Subject: Shared night family frame: rough circular medallion with thin broken bone perimeter, charcoal interior, large central glyph. ONLY specified one accent, no second accent. FLAME FRONT: three broad joined tongues of muted lamp-orange #d9822b flame, bone cut defining inner flame; orange ONLY accent. Variant 03: Broad low joined flame base, three uneven rising tongues. CRITICAL CONTENT LIMIT: Render ONLY the single weather/fire/moon symbol specified above and its thin circular frame. Absolutely NO animals, NO badgers, NO faces, NO people, NO characters, NO figures, NO scene, NO landscape, NO logs, NO additional emblems. The icon is an extremely simple single pictogram occupying the whole medallion interior.",
+          "sha256": "75f256e4c9e5f41159123c1bfef9b6e71651e8aaf36b75b31df199063a49ef22"
+        }
+      ],
+      "selectionReason": "Drei ungleich hohe verbundene Flammen bilden eine breite, bei 24 px klare Feuerfront.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-portrait",
+      "original": "dealer-portrait.png",
+      "source": "dealer/candidates/dealer-portrait-01.png",
+      "sha256": "476ae5b10f7ec209258353d7ef7657752efd9fabd1ad569e295e8cef3ca1210f",
+      "date": "2026-10-13",
+      "promptSource": "dealer/candidates/README.md",
+      "promptCore": "Gerissener älterer Dachs, gehobene Braue, Schweißerbrille und Orangeschal.",
+      "selectionReason": "Brille auf der Stirn, warmes Halstuch, gerissen-freundlicher Blick; passt zur Figur aus Konzept 02 und zum Holz-/Efeu-Lobbystil. Für die Produktion an Konzept 02 angleichen (Mütze, rotes Halstuch).",
+      "sizes": [
+        256
+      ]
+    },
+    {
+      "key": "dealer-sub-base",
+      "runtimeTextureKey": "dawn-ui-dealer-sub-base",
+      "original": "dealer-sub-base.png",
+      "source": "ui/icons-u7/candidates/dealer-sub-base-04.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "d731ebec94c81c0843e2e916b1ea593351f2da2f33fdec5179627d3efd12c448",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "icons-u7",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 4,
+      "promptSource": "art/poc/dawn/ui/icons-u7/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts; existing Dawn originals visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "dealer-sub-base",
+          "file": "dealer-sub-base-01.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. BASE EXPANSION: a CLOSED PALISADE RING shown as a flat overhead fortification plan, thick irregular wooden stakes forming a hollow square ring with a clear central courtyard, three large arrows pointing OUTWARD diagonally. NOT upright tall fence posts; distinguish this ground-plan from the existing four vertical-post fence emblem. Variant 01: Square enclosure, arrows at upper left, upper right and bottom.",
+          "sha256": "748ecb860c800119b0988c062c870605b68d1e26726f83dd1401fc4e87a2517b"
+        },
+        {
+          "key": "dealer-sub-base",
+          "file": "dealer-sub-base-02.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. BASE EXPANSION: a CLOSED PALISADE RING shown as a flat overhead fortification plan, thick irregular wooden stakes forming a hollow square ring with a clear central courtyard, three large arrows pointing OUTWARD diagonally. NOT upright tall fence posts; distinguish this ground-plan from the existing four vertical-post fence emblem. Variant 02: Hexagonal enclosure of stout timber blocks, arrows at left right and top.",
+          "sha256": "b6dafd8cfd9ec8262085f9f3e4ab219daf4435635c4edad0fa07105606b74afb"
+        },
+        {
+          "key": "dealer-sub-base",
+          "file": "dealer-sub-base-03.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. BASE EXPANSION: a CLOSED PALISADE RING shown as a flat overhead fortification plan, thick irregular wooden stakes forming a hollow square ring with a clear central courtyard, three large arrows pointing OUTWARD diagonally. NOT upright tall fence posts; distinguish this ground-plan from the existing four vertical-post fence emblem. Variant 03: Squat irregular diamond enclosure, two broad diagonal outward arrows.",
+          "sha256": "47a7912598ef1259a483d55de280af1d2621690e146e66767bad70eeb7a96c1e"
+        },
+        {
+          "key": "dealer-sub-base",
+          "file": "dealer-sub-base-04.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. EXTREMELY BOLD FLAT CUT-PAPER-LIKE SOLID INK MASSES. Bone ink #d9cfb6, aged-paper #c8b98f, muted umber #5a4632 on opaque uniform charcoal #1b1a17. Main motif fills 75% of square, surrounded by rough circular BONE AND UMBER DOUBLE RING frame filling 92% of square. Frame bone band 3% of canvas width; uneven and roughly gouged. Central primary strokes and dark separation gaps at least 7% of canvas width. Maximum five broad gouges in each large solid shape. Main subject mostly solid bone, no shading hatching. This must be a SIMPLE BOLD PICTOGRAM read at 32 pixels, NOT an intricate illustration. Shape first. Rough irregular cut edges, sparse broad woodgrain. NO dimensional modeling, no rendered volume, no 3D lighting, no fine scratches, no rivet clutter, no microdetail, no speckles, no gradients, no gloss, no glow, no vignette, no cartoon outlines, no text. Neutral bone and umber only. A hollow closed SQUARE RING OF WOODEN PALISADE STAKES seen as a flat ground plan. Only THREE VERY BROAD WOODEN BLOCKS on each side, no tiny pickets, central empty square courtyard. TWO HUGE DIAGONAL ARROWS pointing OUTWARD at upper left and upper right. Thick wall masses and arrows must remain very clear. No upright tall perspective posts, no four separate towers. Central courtyard 35% canvas width.",
+          "sha256": "d731ebec94c81c0843e2e916b1ea593351f2da2f33fdec5179627d3efd12c448"
+        }
+      ],
+      "selectionReason": "Der vierte Kandidat ersetzt die feinen Palisadenstäbe durch breite Holzblöcke um einen offenen quadratischen Hof. Zwei große diagonale Außenpfeile bleiben bei 32 px deutlich. Er unterscheidet sich stärker vom bestehenden Icon mit vier hohen Einzelpfählen als 01–03.",
+      "boardReason": "Breite Holzsegmente + offener quadratischer Hof + zwei Aussenpfeile; kraeftiger als die feinen Varianten 01-03.",
+      "minimumDisplaySize": 32,
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-sub-drones",
+      "runtimeTextureKey": "dawn-ui-dealer-sub-drones",
+      "original": "dealer-sub-drones.png",
+      "source": "ui/icons-u7/candidates/dealer-sub-drones-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "573dce11d8206bd510831984748b7d63bda356f8c68bbad7f8e90c21c57d932a",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "icons-u7",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 2,
+      "promptSource": "art/poc/dawn/ui/icons-u7/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts; existing Dawn originals visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "dealer-sub-drones",
+          "file": "dealer-sub-drones-01.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. SMALL REPAIR DRONE carrying ONE large open-jaw WRENCH: compact tough riveted rotor machine, no face or eyes, no cute robot. Wrench must be obvious. Simplify all mechanical parts. No cyan. Variant 01: Single large overhead rotor, squat body with wrench hanging diagonally.",
+          "sha256": "f03154ea4227d6c12770a4ac5395fe5181498b24c47b9643161444173c8126e0"
+        },
+        {
+          "key": "dealer-sub-drones",
+          "file": "dealer-sub-drones-02.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. SMALL REPAIR DRONE carrying ONE large open-jaw WRENCH: compact tough riveted rotor machine, no face or eyes, no cute robot. Wrench must be obvious. Simplify all mechanical parts. No cyan. Variant 02: Two short side rotors, compact body, large wrench vertical at right.",
+          "sha256": "573dce11d8206bd510831984748b7d63bda356f8c68bbad7f8e90c21c57d932a"
+        },
+        {
+          "key": "dealer-sub-drones",
+          "file": "dealer-sub-drones-03.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. SMALL REPAIR DRONE carrying ONE large open-jaw WRENCH: compact tough riveted rotor machine, no face or eyes, no cute robot. Wrench must be obvious. Simplify all mechanical parts. No cyan. Variant 03: Asymmetric box body, large rotor cap, wrench cradled horizontally below.",
+          "sha256": "6a89027502cad9f234c36d99bda99a3c2b2456af26c1cf63412e78398120de6a"
+        },
+        {
+          "key": "dealer-sub-drones",
+          "file": "dealer-sub-drones-04.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. EXTREMELY BOLD FLAT CUT-PAPER-LIKE SOLID INK MASSES. Bone ink #d9cfb6, aged-paper #c8b98f, muted umber #5a4632 on opaque uniform charcoal #1b1a17. Main motif fills 75% of square, surrounded by rough circular BONE AND UMBER DOUBLE RING frame filling 92% of square. Frame bone band 3% of canvas width; uneven and roughly gouged. Central primary strokes and dark separation gaps at least 7% of canvas width. Maximum five broad gouges in each large solid shape. Main subject mostly solid bone, no shading hatching. This must be a SIMPLE BOLD PICTOGRAM read at 32 pixels, NOT an intricate illustration. Shape first. Rough irregular cut edges, sparse broad woodgrain. NO dimensional modeling, no rendered volume, no 3D lighting, no fine scratches, no rivet clutter, no microdetail, no speckles, no gradients, no gloss, no glow, no vignette, no cartoon outlines, no text. Neutral bone and umber only. A very small squat REPAIR DRONE with TWO SIMPLE FLAT PROPELLER BARS above it, ONE LARGE UPRIGHT OPEN-JAW WRENCH at right. Large BONE hexagonal body with TWO dark vent cuts, no eyes or face. One simple bent repair arm holding the wrench. NO screws, panels, joints, wheels, hatching, shadows. Wrench and drone must each be an extremely bold solid silhouette.",
+          "sha256": "636749d8872d81aa886860e677d6db2c44b08629c6e3b53a92f1df5ba04506fc"
+        }
+      ],
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Der geätzte Quadkopter mit rechts aufrechtem Schraubenschlüssel bleibt bei 32 px lesbar. Die mechanische Materialität entspricht dem ernsten Druckregister; Variante 04 wirkt zu flach und comichaft.",
+      "boardReason": "Geaetzter Quadkopter + aufrechter Schluessel; Leit-Auswahl gemaess Art Direction, bei 32 px lesbar.",
+      "minimumDisplaySize": 32,
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-sub-branches",
+      "runtimeTextureKey": "dawn-ui-dealer-sub-branches",
+      "original": "dealer-sub-branches.png",
+      "source": "ui/icons-u7/candidates/dealer-sub-branches-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "dc2ce51b0e5da684327b001149dc7c83c332de11a65493870109cc3c461fa546",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "icons-u7",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 2,
+      "promptSource": "art/poc/dawn/ui/icons-u7/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts; existing Dawn originals visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "dealer-sub-branches",
+          "file": "dealer-sub-branches-01.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. UPGRADE BRANCHES: an actual gnarled TREE TRUNK dividing into broad branch paths ending in THREE large upgrade NODE shapes; chart-like branching hierarchy. No leaves, no skull, no tools. Wide dark separation between terminal nodes. Variant 01: Forked trunk, three round terminal nodes at unequal heights.",
+          "sha256": "d6dc30241bf8991d8a67de785b1e251f9cbaf47908a60ef548dc39f4881bb273"
+        },
+        {
+          "key": "dealer-sub-branches",
+          "file": "dealer-sub-branches-02.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. UPGRADE BRANCHES: an actual gnarled TREE TRUNK dividing into broad branch paths ending in THREE large upgrade NODE shapes; chart-like branching hierarchy. No leaves, no skull, no tools. Wide dark separation between terminal nodes. Variant 02: Trunk bends right, three square terminal nodes connected by thick branch strokes.",
+          "sha256": "dc2ce51b0e5da684327b001149dc7c83c332de11a65493870109cc3c461fa546"
+        },
+        {
+          "key": "dealer-sub-branches",
+          "file": "dealer-sub-branches-03.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. UPGRADE BRANCHES: an actual gnarled TREE TRUNK dividing into broad branch paths ending in THREE large upgrade NODE shapes; chart-like branching hierarchy. No leaves, no skull, no tools. Wide dark separation between terminal nodes. Variant 03: Heavy low root splitting into three branches, two diamond and one round node.",
+          "sha256": "03d9b3bec81bbc71014763a3cf9770c1ce23bf1ceb803cef03e8278790d8f043"
+        }
+      ],
+      "selectionReason": "Die drei quadratischen Knoten sitzen auf ungleichen Höhen an einem nach rechts verzweigten Stamm. Große Abstände halten die Hierarchie bei 32 px offen; die runden Enden von 01 wirken pflanzlicher, die gemischten Knoten von 03 unruhiger.",
+      "boardReason": "Asymmetrischer Stamm mit drei klar getrennten quadratischen Knoten; Hierarchie bleibt bei 32 px lesbar.",
+      "minimumDisplaySize": 32,
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-sub-boss-points",
+      "runtimeTextureKey": "dawn-ui-dealer-sub-boss-points",
+      "original": "dealer-sub-boss-points.png",
+      "source": "ui/icons-u7/candidates/dealer-sub-boss-points-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "9a699ab701722a31d85082d6cadde56973269deaf8fe02beb292fb0f7bc84e79",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "icons-u7",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 1,
+      "promptSource": "art/poc/dawn/ui/icons-u7/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts; existing Dawn originals visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "dealer-sub-boss-points",
+          "file": "dealer-sub-boss-points-01.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. BOSS POINT TROPHY: a BADGER SKULL MEDALLION enclosed by a sparse LAUREL WREATH. Clearly animal skull with elongated snout and two prominent canine teeth, narrow cranium; NOT human skull. Laurel 3 large leaves per side. No gore, no crown, no ribbons. Variant 01: Badger skull at slight diagonal, laurel cupping below.",
+          "sha256": "9a699ab701722a31d85082d6cadde56973269deaf8fe02beb292fb0f7bc84e79"
+        },
+        {
+          "key": "dealer-sub-boss-points",
+          "file": "dealer-sub-boss-points-02.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. BOSS POINT TROPHY: a BADGER SKULL MEDALLION enclosed by a sparse LAUREL WREATH. Clearly animal skull with elongated snout and two prominent canine teeth, narrow cranium; NOT human skull. Laurel 3 large leaves per side. No gore, no crown, no ribbons. Variant 02: Long narrow badger skull facing front, asymmetric laurel.",
+          "sha256": "2a03172d746ae7655d75c65fe5fdf323f1f2b9352a11dfcc3104f4369b177e6c"
+        },
+        {
+          "key": "dealer-sub-boss-points",
+          "file": "dealer-sub-boss-points-03.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. BOSS POINT TROPHY: a BADGER SKULL MEDALLION enclosed by a sparse LAUREL WREATH. Clearly animal skull with elongated snout and two prominent canine teeth, narrow cranium; NOT human skull. Laurel 3 large leaves per side. No gore, no crown, no ribbons. Variant 03: Animal skull in bold side profile facing right, three laurel leaves each side.",
+          "sha256": "fd7025a3ae169a3cfbaa06ee54111aa1cb7b74b57bc55c036db160c2c9c709a4"
+        },
+        {
+          "key": "dealer-sub-boss-points",
+          "file": "dealer-sub-boss-points-04.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. EXTREMELY BOLD FLAT CUT-PAPER-LIKE SOLID INK MASSES. Bone ink #d9cfb6, aged-paper #c8b98f, muted umber #5a4632 on opaque uniform charcoal #1b1a17. Main motif fills 75% of square, surrounded by rough circular BONE AND UMBER DOUBLE RING frame filling 92% of square. Frame bone band 3% of canvas width; uneven and roughly gouged. Central primary strokes and dark separation gaps at least 7% of canvas width. Maximum five broad gouges in each large solid shape. Main subject mostly solid bone, no shading hatching. This must be a SIMPLE BOLD PICTOGRAM read at 32 pixels, NOT an intricate illustration. Shape first. Rough irregular cut edges, sparse broad woodgrain. NO dimensional modeling, no rendered volume, no 3D lighting, no fine scratches, no rivet clutter, no microdetail, no speckles, no gradients, no gloss, no glow, no vignette, no cartoon outlines, no text. Neutral bone and umber only. A BADGER SKULL TROPHY in side profile facing right, cranium and long snout form ONE VERY LARGE BONE silhouette with ONE huge charcoal eye socket and dark jaw gap, two coarse teeth only. No anatomical fine detail. A laurel wreath of THREE VERY LARGE SOLID LEAVES each side encloses skull, no veins. Animal skull, not human. Flat printed trophy mark.",
+          "sha256": "4cd48bdcc94a9edfb49e57b07d03ad47c316cce92c9e090b2894f6c9b781e5ef"
+        }
+      ],
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Der geätzte Dachsschädel im Lorbeer passt in seiner Schnittstruktur zu branches 02. Die ernsthafte Trophäenwirkung entspricht der Art Direction; Variante 04 wirkt zu flach.",
+      "boardReason": "Geaetzter Dachsschaedel im Lorbeer; Leit-Auswahl gemaess Art Direction, passend zu branches 02.",
+      "minimumDisplaySize": 32,
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-sub-round-offers",
+      "runtimeTextureKey": "dawn-ui-dealer-sub-round-offers",
+      "original": "dealer-sub-round-offers.png",
+      "source": "ui/icons-u7/candidates/dealer-sub-round-offers-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "a8d356a675ed89c8ca38d41fc88213bdbcdee06ad08000e8f928b0e9d1424a0a",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "icons-u7",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 1,
+      "promptSource": "art/poc/dawn/ui/icons-u7/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts; existing Dawn originals visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "dealer-sub-round-offers",
+          "file": "dealer-sub-round-offers-01.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. OFFER OF THE ROUND: a single worn MARKET PAPER TICKET with a very large SUN/MOON STAMP. One muted merchant-red #8f2f24 stamp is the ONLY accent. Sun/moon stamp shows a bone crescent enclosing half-sun rays against red ink disk. No letters or numerals, no lines pretending to be writing. Variant 01: Tall torn paper ticket tilted left, large red sun/moon stamp at center.",
+          "sha256": "a8d356a675ed89c8ca38d41fc88213bdbcdee06ad08000e8f928b0e9d1424a0a"
+        },
+        {
+          "key": "dealer-sub-round-offers",
+          "file": "dealer-sub-round-offers-02.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. OFFER OF THE ROUND: a single worn MARKET PAPER TICKET with a very large SUN/MOON STAMP. One muted merchant-red #8f2f24 stamp is the ONLY accent. Sun/moon stamp shows a bone crescent enclosing half-sun rays against red ink disk. No letters or numerals, no lines pretending to be writing. Variant 02: Squat hanging paper tag with punched hole, red sun/moon stamp near base.",
+          "sha256": "b69f4f0a73249628f27be406447d6f2afcd2f9f8d75637d026ba6bca2bef99e0"
+        },
+        {
+          "key": "dealer-sub-round-offers",
+          "file": "dealer-sub-round-offers-03.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. OFFER OF THE ROUND: a single worn MARKET PAPER TICKET with a very large SUN/MOON STAMP. One muted merchant-red #8f2f24 stamp is the ONLY accent. Sun/moon stamp shows a bone crescent enclosing half-sun rays against red ink disk. No letters or numerals, no lines pretending to be writing. Variant 03: Broad folded market slip tilted right, large red sun/moon seal covering lower right.",
+          "sha256": "19db0a26e2d2c9a37be39c51f2b4a9c9b66d7a8429947df601b57f098b10909a"
+        }
+      ],
+      "selectionReason": "Die schmale, eingerissene Kartenform mit zwei Ausstanzungen bleibt als Marktzettel erkennbar. Der große rote Sonne/Mond-Stempel ist der einzige motivierte Akzent. 02 benötigt die feine Schnur; 03 wirkt eher wie ein gefaltetes Buch.",
+      "boardReason": "Schmaler Marktzettel mit Ausstanzungen und grossem Sonne/Mond-Siegel; Haendlerrot als einziger Akzent.",
+      "minimumDisplaySize": 32,
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-sub-crafting",
+      "runtimeTextureKey": "dawn-ui-dealer-sub-crafting",
+      "original": "dealer-sub-crafting.png",
+      "source": "ui/icons-u7/candidates/dealer-sub-crafting-03.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "39e0aba17c2fa1dc1284521005b731f73cb3d5c7a18417bdb1b92ef21543b609",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "icons-u7",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 3,
+      "promptSource": "art/poc/dawn/ui/icons-u7/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts; existing Dawn originals visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "dealer-sub-crafting",
+          "file": "dealer-sub-crafting-01.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. CRAFTING / RECALIBRATION: a massive ANVIL with one simple SIX-TOOTH GEAR behind it. Large familiar anvil silhouette with pointed horn, waist and block foot; gear has a large dark hole. No extra tools or spark, no cyan. Variant 01: Anvil horn left, large gear rising behind right shoulder.",
+          "sha256": "b2e3b3b2993af1f857ddac942cec1bc64cefcda823108dc7a082477379ee8d0e"
+        },
+        {
+          "key": "dealer-sub-crafting",
+          "file": "dealer-sub-crafting-02.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. CRAFTING / RECALIBRATION: a massive ANVIL with one simple SIX-TOOTH GEAR behind it. Large familiar anvil silhouette with pointed horn, waist and block foot; gear has a large dark hole. No extra tools or spark, no cyan. Variant 02: Anvil horn right, gear off-center behind left half.",
+          "sha256": "50e69c127b17a2381ef1a2a8fa8eb60c20252cf1479c2a30276b84949f2d5fa8"
+        },
+        {
+          "key": "dealer-sub-crafting",
+          "file": "dealer-sub-crafting-03.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. CRAFTING / RECALIBRATION: a massive ANVIL with one simple SIX-TOOTH GEAR behind it. Large familiar anvil silhouette with pointed horn, waist and block foot; gear has a large dark hole. No extra tools or spark, no cyan. Variant 03: Wide low anvil with compact complete gear immediately above, separated by dark gap.",
+          "sha256": "39e0aba17c2fa1dc1284521005b731f73cb3d5c7a18417bdb1b92ef21543b609"
+        }
+      ],
+      "selectionReason": "Zwischen dem vollständigen Zahnrad und dem breiten Amboss bleibt ein dunkler Spalt. Beide Formen sind bei 32 px getrennt erkennbar; 01 und 02 verdecken einen Teil des Zahnrads hinter dem Amboss.",
+      "boardReason": "Vollstaendiges Zahnrad ueber breitem Amboss; dunkler Spalt bewahrt beide Formen bei 32 px.",
+      "minimumDisplaySize": 32,
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "item-helmet",
+      "runtimeTextureKey": "dawn-ui-item-helmet",
+      "original": "item-helmet.png",
+      "source": "ui/icons-u7/candidates/item-helmet-03.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "08bad9cf70156c969aac19d5e78d46ba415a4c0d6d74637a03cd82881f9f06de",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "icons-u7",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 3,
+      "promptSource": "art/poc/dawn/ui/icons-u7/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts; existing Dawn originals visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "item-helmet",
+          "file": "item-helmet-01.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT HELMET: an empty worn BADGER MERCENARY HELMET, dented sheet-metal bowl, short brim, functional leather neck guard with two coarse stitch cuts, ear accommodation, no head or face. Neutral bone/umber, NO rarity color, no insignia. Variant 01: Low asymmetric steel pot helmet with broad brim and a hanging leather chin strap.",
+          "sha256": "5f28dab652e09c868fcc6bd55f4094f907a0cfeedbb0f5cb8b2b5bf9c416ac0b"
+        },
+        {
+          "key": "item-helmet",
+          "file": "item-helmet-02.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT HELMET: an empty worn BADGER MERCENARY HELMET, dented sheet-metal bowl, short brim, functional leather neck guard with two coarse stitch cuts, ear accommodation, no head or face. Neutral bone/umber, NO rarity color, no insignia. Variant 02: Patched steel helmet with broad side ear flaps and short brow lip.",
+          "sha256": "f53769cdf77865ed799ea2dc0e166f26f9f68142c51c0e71f585cca99857dfb4"
+        },
+        {
+          "key": "item-helmet",
+          "file": "item-helmet-03.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT HELMET: an empty worn BADGER MERCENARY HELMET, dented sheet-metal bowl, short brim, functional leather neck guard with two coarse stitch cuts, ear accommodation, no head or face. Neutral bone/umber, NO rarity color, no insignia. Variant 03: Dented round helmet, one large repaired plate, short cloth neck drape.",
+          "sha256": "08bad9cf70156c969aac19d5e78d46ba415a4c0d6d74637a03cd82881f9f06de"
+        },
+        {
+          "key": "item-helmet",
+          "file": "item-helmet-04.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. EXTREMELY BOLD FLAT CUT-PAPER-LIKE SOLID INK MASSES. Bone ink #d9cfb6, aged-paper #c8b98f, muted umber #5a4632 on opaque uniform charcoal #1b1a17. Main motif fills 75% of square, surrounded by rough circular BONE AND UMBER DOUBLE RING frame filling 92% of square. Frame bone band 3% of canvas width; uneven and roughly gouged. Central primary strokes and dark separation gaps at least 7% of canvas width. Maximum five broad gouges in each large solid shape. Main subject mostly solid bone, no shading hatching. This must be a SIMPLE BOLD PICTOGRAM read at 32 pixels, NOT an intricate illustration. Shape first. Rough irregular cut edges, sparse broad woodgrain. NO dimensional modeling, no rendered volume, no 3D lighting, no fine scratches, no rivet clutter, no microdetail, no speckles, no gradients, no gloss, no glow, no vignette, no cartoon outlines, no text. Neutral bone and umber only. A worn mercenary HELMET, one solid BONE bowl with ONE large dark dent cut and a broad slanted brim. Two UMBER leather neck flaps below, each with ONE thick bone stitch. No face or head. Only FIVE broad cuts TOTAL on the metal. Empty helmet silhouette, broad functional form, no ornamental detail. One dark open chin strap loop.",
+          "sha256": "b776384198f196c2be1f00d4a59985584ae3475377a5446f38838f6ef1b58eaf"
+        }
+      ],
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätzte Metallkappe mit Nietenband und getragenem Ledernackenschutz; ernsthafte Materialwirkung auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "boardReason": "Geaetzte Metallkappe + Ledernackenschutz; Leit-Auswahl gemaess Art Direction, Karten ab 64 px.",
+      "minimumDisplaySize": 64,
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "item-gloves",
+      "runtimeTextureKey": "dawn-ui-item-gloves",
+      "original": "item-gloves.png",
+      "source": "ui/icons-u7/candidates/item-gloves-03.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "b03fae26086ebe57f3fca2cd513e04bd62b4bf3a54d1ff04aa13fa32bad2cb1d",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "icons-u7",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 3,
+      "promptSource": "art/poc/dawn/ui/icons-u7/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts; existing Dawn originals visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "item-gloves",
+          "file": "item-gloves-01.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT GLOVES: a PAIR OF WORN WORK GLOVES for a badger mercenary, leather cuffs, sturdy short fingers, coarse fabric patch and a single sheet-metal knuckle plate. Distinct from the existing upright armored fist category icon: show two relaxed gloves, not a fist. Neutral bone/umber, NO rarity color. Variant 01: Two gloves splayed obliquely, thumbs clearly out to either side.",
+          "sha256": "3858bd8e680c058a1564dc8f614620dff7f5e4f4d1364b9a0a09b195f8dc3f9b"
+        },
+        {
+          "key": "item-gloves",
+          "file": "item-gloves-02.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT GLOVES: a PAIR OF WORN WORK GLOVES for a badger mercenary, leather cuffs, sturdy short fingers, coarse fabric patch and a single sheet-metal knuckle plate. Distinct from the existing upright armored fist category icon: show two relaxed gloves, not a fist. Neutral bone/umber, NO rarity color. Variant 02: One large glove palm forward with thumb apart, second glove peeking behind at diagonal.",
+          "sha256": "d97b5222492a28189fb69296bac53263b78b87a7243f2fa2b5862c88a90ec26a"
+        },
+        {
+          "key": "item-gloves",
+          "file": "item-gloves-03.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT GLOVES: a PAIR OF WORN WORK GLOVES for a badger mercenary, leather cuffs, sturdy short fingers, coarse fabric patch and a single sheet-metal knuckle plate. Distinct from the existing upright armored fist category icon: show two relaxed gloves, not a fist. Neutral bone/umber, NO rarity color. Variant 03: Two short gloves hanging fingers downward from broad cuffs, one tilted.",
+          "sha256": "b03fae26086ebe57f3fca2cd513e04bd62b4bf3a54d1ff04aa13fa32bad2cb1d"
+        },
+        {
+          "key": "item-gloves",
+          "file": "item-gloves-04.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. EXTREMELY BOLD FLAT CUT-PAPER-LIKE SOLID INK MASSES. Bone ink #d9cfb6, aged-paper #c8b98f, muted umber #5a4632 on opaque uniform charcoal #1b1a17. Main motif fills 75% of square, surrounded by rough circular BONE AND UMBER DOUBLE RING frame filling 92% of square. Frame bone band 3% of canvas width; uneven and roughly gouged. Central primary strokes and dark separation gaps at least 7% of canvas width. Maximum five broad gouges in each large solid shape. Main subject mostly solid bone, no shading hatching. This must be a SIMPLE BOLD PICTOGRAM read at 32 pixels, NOT an intricate illustration. Shape first. Rough irregular cut edges, sparse broad woodgrain. NO dimensional modeling, no rendered volume, no 3D lighting, no fine scratches, no rivet clutter, no microdetail, no speckles, no gradients, no gloss, no glow, no vignette, no cartoon outlines, no text. Neutral bone and umber only. A PAIR of worn mercenary LEATHER GLOVES hanging fingers downward, clearly separated by a large charcoal gap. Each glove is one SOLID BONE silhouette, clearly separated thumb; three thick charcoal finger separation slits, a broad UMBER cuff with ONE bone patch. One broad DARK RECTANGULAR KNUCKLE PLATE cut. Only two scuff cuts per glove, no shading or stitches. Not fists.",
+          "sha256": "19f179f49cf02527ffbde984964ae9daf126a90c5cc98e061da87fe3dd309136"
+        }
+      ],
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätztes Handschuhpaar mit Stoffflicken, Leder und Knöchelplatte; die getrennten Handschuhe wirken getragen und funktional auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "boardReason": "Geaetztes Handschuhpaar mit Flicken und Knoechelplatte; Leit-Auswahl, Karten ab 64 px.",
+      "minimumDisplaySize": 64,
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "item-armor",
+      "runtimeTextureKey": "dawn-ui-item-armor",
+      "original": "item-armor.png",
+      "source": "ui/icons-u7/candidates/item-armor-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "23979cc1ffc97fb6e92a779e0aeed4df28d1132ae8d62b3eb24e5ea029c7d621",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "icons-u7",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 1,
+      "promptSource": "art/poc/dawn/ui/icons-u7/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts; existing Dawn originals visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "item-armor",
+          "file": "item-armor-01.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT ARMOR: a short wide BADGER MERCENARY TORSO VEST, empty garment, patched thick fabric and leather straps with one broad dented sheet-metal breastplate. Broad armholes and visible neck hole, no arms, head or body. Neutral bone/umber, NO rarity color, no insignia. Variant 01: Broad sleeveless vest, off-center rectangular metal chest plate and one belt.",
+          "sha256": "23979cc1ffc97fb6e92a779e0aeed4df28d1132ae8d62b3eb24e5ea029c7d621"
+        },
+        {
+          "key": "item-armor",
+          "file": "item-armor-02.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT ARMOR: a short wide BADGER MERCENARY TORSO VEST, empty garment, patched thick fabric and leather straps with one broad dented sheet-metal breastplate. Broad armholes and visible neck hole, no arms, head or body. Neutral bone/umber, NO rarity color, no insignia. Variant 02: Squared shoulder vest, split front hem, asymmetrical overlapping chest plates.",
+          "sha256": "a042ad642a21abc550357b135e2f38ac50732f92affea1449c31260530dbf225"
+        },
+        {
+          "key": "item-armor",
+          "file": "item-armor-03.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT ARMOR: a short wide BADGER MERCENARY TORSO VEST, empty garment, patched thick fabric and leather straps with one broad dented sheet-metal breastplate. Broad armholes and visible neck hole, no arms, head or body. Neutral bone/umber, NO rarity color, no insignia. Variant 03: Short bulky cloth jerkin, dark neck aperture, central dented breastplate and side strap.",
+          "sha256": "3f6093309b253d49c94a6ef52652174ee7aab43aeb13a7f397fa56273a577ff6"
+        },
+        {
+          "key": "item-armor",
+          "file": "item-armor-04.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. EXTREMELY BOLD FLAT CUT-PAPER-LIKE SOLID INK MASSES. Bone ink #d9cfb6, aged-paper #c8b98f, muted umber #5a4632 on opaque uniform charcoal #1b1a17. Main motif fills 75% of square, surrounded by rough circular BONE AND UMBER DOUBLE RING frame filling 92% of square. Frame bone band 3% of canvas width; uneven and roughly gouged. Central primary strokes and dark separation gaps at least 7% of canvas width. Maximum five broad gouges in each large solid shape. Main subject mostly solid bone, no shading hatching. This must be a SIMPLE BOLD PICTOGRAM read at 32 pixels, NOT an intricate illustration. Shape first. Rough irregular cut edges, sparse broad woodgrain. NO dimensional modeling, no rendered volume, no 3D lighting, no fine scratches, no rivet clutter, no microdetail, no speckles, no gradients, no gloss, no glow, no vignette, no cartoon outlines, no text. Neutral bone and umber only. A short broad mercenary ARMOR VEST, empty, front-facing, no body. Bone outer silhouette with two wide dark armholes and a broad dark neck aperture. One SOLID BONE RECTANGULAR BREASTPLATE, just THREE broad chipped cuts, UMBER cloth lower hem and ONE broad diagonal leather strap. Asymmetric patched workwear. No buckles, no rivets, no shading or stitch texture.",
+          "sha256": "e2958c596c192e60113885fd8be35b6fab64600567e91bf3154aa4072406b07c"
+        }
+      ],
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätzte Weste mit angenieteter Blechplatte, Ledergurt und geflicktem Stoff; die Materialität trägt den ernsten Söldner-Look auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "boardReason": "Geaetzte Weste mit Blechplatte, Ledergurt und Stoffflicken; Leit-Auswahl, Karten ab 64 px.",
+      "minimumDisplaySize": 64,
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "item-boots",
+      "runtimeTextureKey": "dawn-ui-item-boots",
+      "original": "item-boots.png",
+      "source": "ui/icons-u7/candidates/item-boots-03.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "ba4119e10fa44065c8213183cc52a624886e31810d0f0fff018334972b708e1d",
+      "date": "2026-10-14",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "icons-u7",
+      "backgroundMode": "dark-print-plate",
+      "selectedCandidate": 3,
+      "promptSource": "art/poc/dawn/ui/icons-u7/generation-prompts.json; revision-prompts.json",
+      "promptFidelity": "Full exact built-in prompts; existing Dawn originals visually inspected, not attached as edit inputs.",
+      "candidatePrompts": [
+        {
+          "key": "item-boots",
+          "file": "item-boots-01.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT BOOTS: a PAIR OF WORN BADGER MERCENARY BOOTS, squat broad toes, heavy sole, patched leather and folded cloth gaiter cuffs, one large strap rather than tiny laces. Neutral bone/umber, NO rarity color. Variant 01: Two stout boots in side profile offset, toes facing right, distinct gap.",
+          "sha256": "0c1f6e97769426eda79b1764cbbb45f0c64298709cffdaf33932f0a0a78a3331"
+        },
+        {
+          "key": "item-boots",
+          "file": "item-boots-02.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT BOOTS: a PAIR OF WORN BADGER MERCENARY BOOTS, squat broad toes, heavy sole, patched leather and folded cloth gaiter cuffs, one large strap rather than tiny laces. Neutral bone/umber, NO rarity color. Variant 02: One broad boot facing forward and second boot in side profile facing right.",
+          "sha256": "107593a9ab89a94e87ad600c6cffc67a1a1eafe5b651b88ca581a3b69f4d07bc"
+        },
+        {
+          "key": "item-boots",
+          "file": "item-boots-03.png",
+          "prompt": "Use case: stylized-concept. Generate ONE square production UI icon, hand-carved WOODCUT / LINOCUT, grim woodland-war field-manual print. Bold flat bone #d9cfb6 and aged-paper #c8b98f ink masses, muted umber #5a4632 secondary cuts, opaque uniform charcoal #1b1a17 square printing plate. Rough gouged edges, few broad woodgrain incisions, restrained ink texture; no fine noisy microdetail. Huge simple silhouette readable at 32 px. A rough thin circular bone and umber merchant medallion frame, occupying 90% of square; central subject large with wide charcoal gaps. No perfect mirror symmetry. Flat frontal printed emblem, not a scene. No gradients, glossy highlights, glow, bloom, airbrush, cartoon outlines, cute design, lettering, logos or watermark. Keep all imagery inside square with 5% charcoal edge margin. No colored accents unless explicitly specified. ITEM SLOT BOOTS: a PAIR OF WORN BADGER MERCENARY BOOTS, squat broad toes, heavy sole, patched leather and folded cloth gaiter cuffs, one large strap rather than tiny laces. Neutral bone/umber, NO rarity color. Variant 03: Two ankle boots diagonally offset, tall folded cuffs, broad soles and blunt toes.",
+          "sha256": "ba4119e10fa44065c8213183cc52a624886e31810d0f0fff018334972b708e1d"
+        },
+        {
+          "key": "item-boots",
+          "file": "item-boots-04.png",
+          "prompt": "Use case: stylized-concept. Create ONE square production UI icon. HAND-CARVED WOODCUT / LINOCUT PRINT, grim folklore field-manual plate. EXTREMELY BOLD FLAT CUT-PAPER-LIKE SOLID INK MASSES. Bone ink #d9cfb6, aged-paper #c8b98f, muted umber #5a4632 on opaque uniform charcoal #1b1a17. Main motif fills 75% of square, surrounded by rough circular BONE AND UMBER DOUBLE RING frame filling 92% of square. Frame bone band 3% of canvas width; uneven and roughly gouged. Central primary strokes and dark separation gaps at least 7% of canvas width. Maximum five broad gouges in each large solid shape. Main subject mostly solid bone, no shading hatching. This must be a SIMPLE BOLD PICTOGRAM read at 32 pixels, NOT an intricate illustration. Shape first. Rough irregular cut edges, sparse broad woodgrain. NO dimensional modeling, no rendered volume, no 3D lighting, no fine scratches, no rivet clutter, no microdetail, no speckles, no gradients, no gloss, no glow, no vignette, no cartoon outlines, no text. Neutral bone and umber only. A PAIR of broad worn mercenary BOOTS in flat SIDE PROFILE, toes to right, one offset upwards. Both clearly separated. Two VERY BOLD BONE silhouettes, long thick soles, only TWO broad DARK cuts defining a broad leather strap and a cloth cuff on each. No laces, no rivets, no shading. Four thick woodgrain gouges TOTAL. Big blunt toes and functional heavy silhouette.",
+          "sha256": "9e782000f234feb776794e95bd42cf265f79a0cbb978c8cb28cebc64f8d915d9"
+        }
+      ],
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätztes versetztes Stiefelpaar mit breiten Zehen, Ledernähten und Stoffumschlägen; getragene Ausrüstung auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "boardReason": "Geaetztes Stiefelpaar mit Ledernaehten und Stoffumschlaegen; Leit-Auswahl, Karten ab 64 px.",
+      "minimumDisplaySize": 64,
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    }
+  ],
+  "u7Review": {
+    "board": "art/poc/dawn/ui/icons-u7/board.png",
+    "selectionSource": "art/poc/dawn/ui/icons-u7/selection.json",
+    "selectionDirection": "Leit-Auswahl: geätzt statt flach, Art Direction. Items auf Karten ab 64 px; 32 px ist für Items nicht maßgeblich.",
+    "references": [
+      "dealer-expansion",
+      "dealer-infrastructure",
+      "dealer-upgrades",
+      "dealer-equipment",
+      "scrap",
+      "recalibration-core"
+    ],
+    "sizes": [
+      32,
+      64,
+      128
+    ],
+    "merchantProbe": "Static composition of unmodified dawn-merchant 1x runtime textures; no browser or runtime integration.",
+    "replacement": {
+      "dawn-merchant/category-crafting": "dawn-ui-dealer-sub-crafting"
+    },
+    "scopeCommand": "npm run assets:dawn-ui -- --u7"
+  }
+}

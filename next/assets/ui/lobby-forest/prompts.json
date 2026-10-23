@@ -1,0 +1,159 @@
+{
+  "generator": "Integrated image_gen tool",
+  "date": "2026-09-12",
+  "reference": "User's woodland lobby concept (style reference, not pixel recreation).",
+  "assets": [
+    {
+      "key": "medallion",
+      "prompt": "Use case: stylized-concept. Create ONE production game UI portrait rim: a very simple, thin, completely closed continuous CIRCULAR ring made from dark walnut wood. Front-facing orthographic, no perspective. Slender joined curved wooden segments with subtle natural bark grain, dark warm brown and quiet grey-brown highlights, matte hand-painted woodland game style. Thickness only 2 percent of the ring diameter. A clean continuous circle, no breaks or gaps anywhere, modest natural irregularity in wood surface but correct circular silhouette. Completely NO ivy, NO leaves, NO vines, NO foliage, no pegs, no studs, no gems, no metal, no extra decorative objects, no text and no character. The open circular centre occupies at least 90 percent of diameter, and is entirely empty TRUE ALPHA TRANSPARENT. The entire exterior is also true transparent PNG alpha, no white or black matte, no checkerboard drawing, no drop shadow. Square canvas with 5 percent transparent margin around full ring. Intended as a subtle semi-transparent outline around an existing 100-pixel badger portrait, displayed 140 by 140 pixels. Keep the wood understated, cohesive and delicate, not an ornate bulky frame.",
+      "initialPrompt": "Create ONE production woodland fantasy game UI asset: a circular medallion FRAME with a completely alpha-transparent circular hole and alpha-transparent exterior. Front-facing orthographic flat view, 512x512 square. Thin carved walnut ring with warm amber edge highlights, surrounded by a luxuriant radial wreath of crisp moss-green and sage leaves, little ivy stems, hand-painted high quality stylized game art. The ring's inner transparent hole must cover the central 62 percent of image diameter, ring outer diameter 74 percent, leaves span up to 94 percent. Smooth coherent circle, no perspective, no figure or emblem in center, no glass, no fill, no background, no text, no black disc, no checkerboard. Crisp clean alpha edges, no pixel art. Matches warm brown wood and lush green ivy fantasy menu frames.",
+      "source": "exec-8dad07f1-ddb1-4c2e-8516-3f979e92c39e.png",
+      "runtime": "Unmodified generated PNG, displayed with 0.7 alpha around the live preview."
+    },
+    {
+      "key": "leaves",
+      "prompt": "ONE production 2D woodland fantasy UI ornament on genuine alpha-transparent background: a small sweeping ivy branch arranged along an L-shaped corner. Square 512x512 composition, branch follows bottom edge then curves upward along right edge; central upper-left region is completely transparent. Crisp hand-painted sage and moss-green leaves with golden-green highlights and curled warm brown twig, abundant but compact foliage, polished stylized game illustration matching walnut wood fantasy menu frames. Front-facing flat orthographic view, no perspective, no text, no frame, no ground, no checkerboard or colored matte, no loose particles, no shadows outside the branch. Complete uncropped ornament isolated with transparent margins."
+    },
+    {
+      "key": "frame",
+      "prompt": "Transparent-background PNG, ONE tall open rectangular woodland game UI frame. Portrait aspect ratio exactly 596:832, ideally 1192x1664. Premium hand-painted carved dark walnut timber with quiet warm brown highlights, muted deep ivy-green vines and sage leaf veins, NOT bright yellow or neon green. Thin straight parallel side rails, luxuriant compact ivy concentrated OUTSIDE at four rounded branch-knot corners, little ivy along outer rails. The transparent rectangular opening occupies at least 87% of image width: all left/right timber and leaves fit in the outermost 6% each, no inward projecting leaves. Narrow top title rail 6% of image height, bottom rail 4%. Flat frontal view, no perspective, no taper. A matching pair of menus will use this same frame at 596x832, detailed crisp painterly leaves and natural wood must not appear stretched. Full frame fits uncropped near canvas edges with tiny transparent margin. Empty centre and exterior genuinely alpha transparent. No backing, no illustration, no text, no checkerboard, no white or black background.",
+      "source": "exec-02213e3f-bbc1-494e-b4b4-c951324f8cdd.png"
+    },
+    {
+      "key": "wood",
+      "prompt": "One seamless square material tile: premium hand-painted woodland game UI dark walnut wood, flat frontal orthographic surface, opaque edge to edge. Rich smoky brown heartwood with graceful broad horizontal grain and two small elongated knots, gently carved groove shadows and restrained brown honey highlights. Matches old twisted walnut branches wrapped in muted ivy. Dark, warm, matte, low contrast and restful behind ivory labels, no orange or gold glare, no lime or green tint. Readable grain at 40px height without scratchy noise. No border, no bevel, no objects, no writing, no foliage, no lighting hotspot, no perspective; seamless repeating edges.",
+      "source": "exec-033909b8-8ec5-4ed8-8f7d-572153f45020.png"
+    },
+    {
+      "key": "ready",
+      "prompt": "Transparent-background PNG. ONE low very wide wooden fantasy UI button border, actual object aspect ratio 6:1. On a wide 3:1 transparent canvas, the frame must occupy the MIDDLE HALF of canvas height only, with EMPTY TRANSPARENT margins above and below. Long slender horizontal DARK WALNUT rails, small curved wooden endcaps and muted deep green ivy leaves only at the two ends. Hand-painted premium woodland game art, same quiet brown walnut and deep muted ivy palette. Thin warm bronze inner edge. Straight parallel top and bottom beams, rounded rectangular hole. Centre of frame is a large completely transparent empty hole; will later contain a bright green button fill, no fill here. Ensure actual outer frame silhouette is six times as wide as tall, LOW and elegant, not a tall box. No text, no backdrop, no checkerboard; all outside the thin frame and whole interior genuinely alpha transparent. Front facing no perspective, whole object uncropped.",
+      "source": "exec-d02de17b-4f8a-44ac-a19d-68c18e856218.png"
+    },
+    {
+      "key": "world",
+      "prompt": "Transparent background PNG of ONE standalone woodland training-ground sign button FRAME, exact 4:1 landscape aspect ratio ideally 1400x350 pixels. Premium hand-painted game UI, a small rounded rectangular sign made from intertwined dark walnut branches, subtly mossy, deep muted ivy leaves tucked around left/right end knots. Flat front facing, no perspective. A modest wooden peg detail at each end, narrow carved warm brown edges, deep forest green leaves with sage veins, never neon or lime. Empty transparent horizontal label opening occupies 78% of width and 60% of height. Unique charming freestanding object for center bottom of game screen, calm clean silhouette. Full object uncropped, minimal outer transparent margin, long broad open center with no artwork. No text, no target icon, no scene, no backing or white/black background; genuine RGBA transparent centre and exterior.",
+      "source": "exec-270bbe1c-fd25-4844-8554-f165c9a2a4ee.png"
+    },
+    {
+      "key": "relief",
+      "prompt": "A transparent-background PNG of a monochrome BLACK INK STENCIL: two cartoon European badgers duelling with AK47 rifles, facing each other from left and right. Expressive long snouts, characteristic striped badger faces, stout bodies and paws, two whole figures. Bold solid black shapes and clean open transparent cutouts for stripes and rifle details. Stylish hand-cut linocut game emblem, crisp outlines, no shading. Entire composition isolated on real transparent alpha background, landscape 3:2. No lettering, no colored background, no glow, no shadow.",
+      "source": "exec-b27dc4bc-db49-409b-bd43-c22d6e6bec82.png",
+      "runtime": "The black ink stencil uses Phaser 4 FILL tint and low alpha. Native PNG pixels are unchanged."
+    },
+    {
+      "key": "buttonFrame",
+      "prompt": "Use case: stylized-concept. Generate one production game UI asset: a restrained hand-painted dark walnut wooden rectangular button FRAME only, perfectly front-on, 3 to 1 width-to-height object ratio. Matches a mature forest game UI: deep warm brown carved timber, muted bark highlights, subtle tiny grain, softly rounded joined corners. Thin rails, only about 7 percent of the frame height thick; corners simple round bevels, very tiny wooden pegs, no ivy foliage on this small utility button. Top and bottom rails perfectly straight and consistent thickness, their middle stretches visually seamless for tiling in a 9-slice UI renderer. Side rails equally plain. Empty center completely transparent. No wooden panel in center, no text or icons. Frame object centered on a wide canvas, fill most canvas width, no perspective, no shadow outside silhouette, no gold or metallic outlining, no yellow or orange bright highlights. True transparent PNG alpha around outside and inside opening, no white background and no checkerboard drawing. High-quality painterly dark walnut material coherent with elaborate walnut-and-muted-ivy menu borders, but with much quieter decoration to remain legible at 190 by 36 pixels.",
+      "source": "exec-81b32843-ba37-4dc3-8189-586356bbc1b8.png",
+      "runtime": "Native transparent margins trimmed through registry crop; four fixed corners and uniformly scaled, cropped edge repeats. Centre is filled from wood.png at runtime."
+    }
+  ],
+  "iterationNotes": [
+    "Initial five-asset set generated separately with integrated image_gen.",
+    "Browser iterations refined grain visibility, medallion readability, muted walnut/ivy palette, title alignment and margins.",
+    "Cards enlarged to 666x832 design pixels while preserving 484-pixel content width. Final frame authored at 4:5 and uniformly scaled in full; no sliced or stretched foliage. Glass and blur are inset behind the wood; footer controls remain clear of the bottom rail.",
+    "Intermediate edits with opaque or painted checkerboard backgrounds were rejected. The final medallion and frame were newly generated transparent PNGs.",
+    "Selected PNGs copied unchanged. Runtime Canvas texture caches handle proportional display-size resampling and repeated wood grain.",
+    "Replaced the preview wreath with a sparse open twig. Added a shared generated walnut border for ordinary wood buttons with fixed corners and repeating grain. Room copy now uses wood; roster and loadout fields remain untextured. Removed card headings and moved name/colour controls below the preview. Training-ground fill follows its asymmetrical opening.",
+    "Replaced the sparse ivy twig with a continuous bare walnut ring. The large frames now sit above card content, including late roster entries and player controls; popup roots remain above the frames. Metadata rows share roster bounds and the cards sit slightly closer to the screen edges."
+  ],
+  "intermediatePrompts": [
+    {
+      "asset": "medallion",
+      "prompt": "Revise this woodland UI portrait ring to read beautifully at only 124 pixels square. Retain the truly alpha-transparent central circular hole and exterior. Simplify the foliage to around 16 broad, clearly painted moss-green leaves, no dense tiny buds or filigree. Thicker irregular carved walnut branch ring with warm amber edge lighting, restrained old gold glints, a little ivy curling over bottom-left and upper-right. The large central opening occupies 62 percent diameter. Flat front-facing perfect circle, no perspective. High quality hand-painted game asset, organic forest style, clean anti-aliased alpha edges. No background, no text, no figure, no checkerboard. Give leaves larger calm colored shapes instead of tiny bright veins.",
+      "reason": "Rejected: opaque white background"
+    },
+    {
+      "asset": "medallion",
+      "prompt": "Make a production transparent PNG cutout of this exact wooden leaf ring. Preserve the painted ring and leaves exactly. REMOVE ALL white background, BOTH the entire central circular white hole AND every white region outside the leaves. Replace white with genuine fully transparent alpha, not black, grey, or a checkerboard illustration. The central point and every pixel within the inner circular hole must have alpha 0. The exterior corners must have alpha 0. Clean antialiased cutout edges. This is an overlay around a live game portrait, so NO opaque backing is acceptable. Output PNG RGBA with real transparency. No other visual changes.",
+      "reason": "Rejected: painted checkerboard and saturated palette"
+    },
+    {
+      "asset": "frame",
+      "prompt": "Edit ONLY the first image (tall rectangular game UI frame), preserving its exact shape, transparent opening, width and rail geometry. The second ivy ornament and third circular medallion are MATERIAL AND PALETTE references, not extra assets to output. Replace the first frame's bright lime/yellow leaves and pale orange timber with the same muted dark ivy-green leaves and deep warm walnut wood as those references. Use proper pointed ivy leaves with quiet sage veins, large readable painted shapes, soft low saturation moss greens, NO luminous lime leaves. Wood is rich dark walnut, restrained narrow amber bevel highlights, NOT orange or pale yellow planks. Keep the wide plain top plank for runtime title text, the thin straight side rails and small round corner branch knots. Keep the foliage lush but confined to rails and corners. A coherent elegant hand-painted woodland game interface, clear substantial volumes, no photorealistic noise or pixel art. NO lettering or symbols. VERY IMPORTANT output real RGBA transparent PNG: the entire inner rectangular opening and all pixels outside the frame must have alpha zero, no white or black backing, no illustration in the centre, no checkerboard. Output just the one full tall portrait frame, uncropped.",
+      "reason": "Rejected: painted checkerboard"
+    },
+    {
+      "asset": "frame",
+      "prompt": "Create ONE production game UI asset on a TRANSPARENT BACKGROUND: an open tall rectangular woodland FRAME, portrait aspect ratio 540:800, front-facing orthographic flat view. High-quality hand-painted fantasy wood and ivy matching an elegant forest game interface. Deep dark walnut timber, brown shadows and sparingly used narrow amber carved highlights. MUTED DARK ivy green leaves with quiet sage veins, restrained moss tones, no bright lime or neon leaves. Thin straight branch side rails, round branch knots at all four corners, broad ivy leaf groups at the corners, a few ivy sprigs down the edges. A plain wide horizontal wooden TOP TITLE PLANK, without text. Empty centre covers central 80 percent of width. Left and right rails stay within the outer 10 percent of width, bottom rail within bottom 7 percent height, top plank within top 10 percent height. The entire inner opening and exterior are actually alpha transparent. No scene, no glass fill, no backing, no lettering, no white or black rectangle, no checkerboard texture. Complete frame uncropped, a little transparent margin around edges. Polished substantial carved volumes, no perspective, no pixel art.",
+      "reason": "Replaced: tall frame required resizing populated edge spans"
+    },
+    {
+      "asset": "frame",
+      "prompt": "TRANSPARENT BACKGROUND, one complete game UI card FRAME. Portrait image, exact aspect ratio 4:5, 1280 by 1600 pixels. Front-facing flat orthographic hand-painted woodland fantasy interface. Create a generously open rectangular walnut frame with substantial straight timber rails about 65 pixels thick near the left and right outer edges. Frame outside margin only 12 pixels. Empty transparent inner opening at least 1060 pixels wide. The full TOP TITLE PLANK is about 100 pixels tall, long plain wood centre, no writing. Bottom rail about 55 pixels thick. Soft round corner branch knots and lush but compact IVY leaf clusters at corners, slender ivy winds on the side timbers; keep vines on the wood and never inside the empty opening. Palette: deep warm walnut brown, dark subdued moss-green ivy with quiet sage veins, narrow subtle amber wood edges. Mature and elegant, never lime green, neon, pale orange or overlit. Match a dark walnut ring with broad ivy leaves. Clear broad hand-painted shapes that remain legible at half resolution, no fine noisy texture. Straight parallel rails, no perspective taper. Really transparent alpha in the ENTIRE rectangular opening and OUTSIDE the frame. No glass, no interior illustration, no background, no letters, no symbols, no checkerboard. This is a ready-to-use RGBA game overlay frame, not a screenshot or a mockup.",
+      "reason": "Replaced: opening and title plank did not leave enough content space"
+    }
+  ],
+  "revisions": [
+    {
+      "date": "2026-09-12",
+      "purpose": "Narrow proportional cards, dedicated ready/training frames, subdued walnut and persistent badger duel.",
+      "previousAssets": [
+        {
+          "key": "frame",
+          "prompt": "Transparent background PNG, a single open rectangular fantasy woodland UI frame, EXACT 4:5 portrait aspect ratio. Thin carved dark walnut timbers with muted deep ivy-green foliage. The EMPTY TRANSPARENT OPENING is enormous: 90 percent of the total image WIDTH, and 88 percent of the total image HEIGHT. Each straight side rail plus foliage fits inside the outermost 5 percent of image width. The straight top title plank is only 6 percent of image height; bottom rail 4 percent. Do not make a thick picture frame. No inward-projecting leaves: keep all foliage in that slim outer border. Four small organic round branch knots with ivy, restrained leafy vines along sides, dark walnut grain and narrow amber bevels, sage leaf veins, no lime or bright green. Premium hand-painted game art, front facing, flat orthographic, no perspective. Suitable for a transparent game menu at 640x800 pixels with live content covering its wide interior. Straight parallel edges, square rectangle with softly rounded corner joints, uncropped frame to the canvas edges, tiny transparent outer margin. No letters, no scene, no figure, no fill, no backing, no black or white background, no checkerboard. REAL alpha-transparent background including the full central opening. Generate at 1280x1600 pixels if possible.",
+          "initialPrompt": "Create ONE production game UI asset: an ornate woodland panel FRAME, front-facing orthographic flat 2D view, tall portrait aspect ratio 540:800, ideally 1080x1600 pixels. High-quality hand-painted stylized fantasy wood, warm walnut and amber carved highlights, moss-green ivy winding around branches, abundant crisp leaf clusters especially the four corners, subtle round wooden knots at the corners. Like a polished forest-themed game interface. IMPORTANT engineering constraints: the entire very large rectangular inner opening is genuinely alpha TRANSPARENT, as is the area outside the frame. NO background, NO glass fill, NO scene in the opening, NO checkerboard baked into image, NO shadows cast across the opening. Frame occupies only the outermost 4 percent of width at left/right and 3 percent of height at bottom. Top rail can occupy 7 percent of height, a mostly plain horizontal plank usable behind a title. Leaves must stay within the thin frame envelope, so the center 90 percent of width is empty. Straight parallel rails, rounded corners, flat face with painted bevels, no perspective taper. No text, symbols, lettering, badges or figures. Complete uncropped frame with a tiny transparent margin. Cohesive rich but readable, no photorealism, no pixel art.",
+          "source": "exec-b7fc4686-7ba5-49c9-84ee-71723a426bde.png"
+        },
+        {
+          "key": "wood",
+          "prompt": "Revise this woodland UI walnut material. Keep seamless square, opaque, flat front-facing, warm dark walnut palette and hand-painted quality. Make the grain much broader and simpler so it remains clearly legible on a game button only 40 pixels tall. Use graceful long carved horizontal grain strokes and 2 or 3 medium elongated knots, dark grooves and subtle honey highlights. Less fine noise, no mottling, more confident painterly shapes. Even lighting edge-to-edge, seamless tileable edges, no border, no letters, no objects. This is a material tile used below text, so keep contrast moderate and polished, with no bright hotspot.",
+          "initialPrompt": "Create ONE seamless square material tile for hand-painted woodland fantasy game UI buttons: front-facing orthographic, fine horizontal walnut wood grain with subdued amber strokes, dark warm brown, very low contrast across the surface, smooth polished but visibly hand-painted timber. 1024x1024 pixels, opaque, edge-to-edge seamlessly tileable left-right and top-bottom. No border, no bevel, no frame, no cracks that divide the image, no knots larger than 3 percent of width, no text, no objects, no plants, no lighting hotspot or perspective. Fine grain must remain attractive at small button sizes. Matches lush mossy carved walnut woodland UI, restrained texture supports easily readable light labels.",
+          "source": "exec-a8b8c168-6fc5-4c90-9c09-27a5fef38935.png"
+        },
+        {
+          "key": "relief",
+          "prompt": "ONE flat monochrome woodland relief graphic for the empty lower region of a fantasy game lobby panel. Landscape 2:1 aspect ratio, ideally 1024x512. Genuine alpha-transparent background. Silhouette illustration in a SINGLE muted ochre-olive hue: a stylized European badger head in profile centered within a loose arc of pine trees and fern fronds. Looks like a tasteful shallow carved woodcut emblem, broad clean shapes and sparse fine details, calm and low visual complexity, no text or lettering, no border, no colored background, no solid rectangle, no photograph, no perspective, no black fill. Outer tree/fern silhouettes organically taper away into transparency. This will be displayed at very low opacity behind no text, so use readable simple silhouettes and transparent negative spaces within the badger's characteristic facial stripes."
+        }
+      ],
+      "discarded": [
+        {
+          "key": "ready",
+          "prompt": "Transparent background PNG of ONE extra-wide low woodland game button FRAME, exact 6:1 aspect ratio, ideally 1800x300 pixels. Straight horizontal thin carved DARK WALNUT upper/lower rails, graceful rounded organic endcaps with compact muted deep ivy-green leaves and curled vines. Premium hand-painted game UI, frontal flat view, no perspective. A slender aged bronze inner lip, NOT gold glare. All wood and leaves stay in the outer border; centre completely alpha transparent for a bright green interactive fill and text added in code. Long central opening occupies 85% of width and 66% of height. Strong beautiful distinct heroic shape but horizontal, restrained foliage at ends, no leaves over central text area. Complete uncropped object fills the panoramic canvas. No text, no symbols, no background or checkerboard, authentic smooth alpha around all edges and centre.",
+          "source": "exec-5066b3d9-a695-4520-989f-bb5e35e7f581.png",
+          "reason": "Frame too tall for the reserved action area."
+        },
+        {
+          "key": "relief",
+          "prompt": "Transparent background PNG, wide 3:2 MONOCHROME woodcut illustration for a woodland arena-shooter game lobby. TWO stylized anthropomorphic European badgers in a dynamic playful standoff, one at left facing right, one at right facing left, each holding an AK47-like rifle toward the other; sturdy badger bodies, pointed snouts, distinctive broad stripe markings cut out as transparent negative space, expressive determined characters, no clothing that obscures their badger identity. A sparse arc of pines and fern leaves behind them, organically tapered edges. Premium hand-drawn carved relief, chunky confident silhouette shapes with a few elegant hatching marks. Use ONLY a single muted ochre-brown ink color for all marks on real alpha transparent background, no gradients or multiple colors. Keep central silhouettes clear at small display size. No gore, no blood, no muzzle flash, no frame, no text, no white/black fill, no checkerboard. Cohesive game emblem, not realistic animals or photograph.",
+          "source": "exec-ee0773f4-02f2-4d9d-b266-0afb0a981f11.png",
+          "reason": "Weak internal contrast and unwanted background haze."
+        },
+        {
+          "key": "relief",
+          "prompt": "A crisp single-ink woodcut emblem on a TRANSPARENT background PNG. Two anthropomorphic European BADGERS facing each other, both aiming AK47-style rifles. Stout bodies, long snouts, prominent striped faces, determined playful game characters. One on left and one on right, whole bodies visible with paws. Sparse pine and fern silhouettes frame their feet. Solid flat warm taupe-brown shapes, fully opaque ink, with clearly TRANSPARENT cutouts for facial stripes, eyes and spaces between limbs. Bold graphic silhouette, broad simplified shapes and few carved line details, not tiny hairs. This is an isolated one-color printed game emblem, NO background, NO paper, NO rectangle, NO glow, NO gradients, NO blur, NO shadow. Transparent outside and between figures. No lettering, no gore. Wide 3:2 composition, clean readable shapes. High-quality stylized hand-drawn woodcut.",
+          "source": "exec-1b3ca5ef-f090-4b61-8f95-a1d6f6f7da88.png",
+          "reason": "Insufficiently distinct stencil marks."
+        },
+        {
+          "key": "relief",
+          "prompt": "Transparent-background PNG LOGO. A bold screenprinted emblem in solid light tan ink: two cartoon European badger warriors facing each other, each aiming a recognizable AK47 rifle at the other. Distinctive long badger snouts and striped faces, small ears, stocky bodies and paws. Clear handsome graphic silhouettes with generous transparent negative-space cutouts for the face stripes, eyes, arms and rifles. Few stylized pine branches at their feet. Limited detail, chunky hand-cut linocut style, powerful clean stencil design, consistent 100% opaque tan ink everywhere. Transparent background, sharp antialiased silhouette edges. Horizontal 3:2 composition. No lettering. No gradients, no shading, no smoky effects, no haze, no glow. This is flat graphic logo artwork, NOT an embossed relief, NOT a low-opacity watermark.",
+          "source": "exec-d3db26ed-d35e-4e82-bf34-05d4dbefb750.png",
+          "reason": "Cream illustration retained brown body fills and haze."
+        },
+        {
+          "key": "relief",
+          "prompt": "Extract ONLY the LIGHT CREAM ink shapes of the two badgers and their rifles from this image. Make EVERYTHING ELSE fully alpha transparent: remove all brown/tan body fills, all brown shadows, ALL glow and ALL background haze including inside the bodies. Preserve the light cream face stripes, outline fur tufts, paws, gun stocks and gun details exactly as clean solid opaque shapes. This must be a true stencil cutout with transparent negative space, a SINGLE color cream drawing floating on empty alpha. The result is not a silhouette filled with brown. No new shadow or background, no matte, no checkerboard. Preserve composition and crisp line work; actual RGBA transparency for every dark/brown pixel. Output transparent PNG.",
+          "source": "exec-eaf4ef41-70b0-4033-9959-a9c87315517b.png",
+          "reason": "Extraction returned an opaque RGB checkerboard."
+        }
+      ]
+    }
+  ],
+  "previousAssets": [
+    {
+      "key": "medallion",
+      "prompt": "A transparent-background PNG game UI asset: one circular open wooden ring surrounded by 16 broad ivy leaves. Front-facing, flat orthographic, square composition. The circular centre is an empty transparent hole taking up 62% of the diameter; outside the ring is also transparent. Hand-painted high quality woodland fantasy style, deep warm walnut carved wood with narrow amber edges, substantial organic branch volumes, muted dark moss-green ivy with quiet sage veins. Calm earthy colours, not bright or neon. Broad readable leaf shapes suitable for display at 124px. No lettering, no figure, no scene, no backdrop, no white disc, no checkerboard pattern. The entire ring fits inside the image without cropping. Create the isolated ring as a genuine RGBA cutout on a transparent background, with smooth antialiased edges.",
+      "initialPrompt": "Create ONE production woodland fantasy game UI asset: a circular medallion FRAME with a completely alpha-transparent circular hole and alpha-transparent exterior. Front-facing orthographic flat view, 512x512 square. Thin carved walnut ring with warm amber edge highlights, surrounded by a luxuriant radial wreath of crisp moss-green and sage leaves, little ivy stems, hand-painted high quality stylized game art. The ring's inner transparent hole must cover the central 62 percent of image diameter, ring outer diameter 74 percent, leaves span up to 94 percent. Smooth coherent circle, no perspective, no figure or emblem in center, no glass, no fill, no background, no text, no black disc, no checkerboard. Crisp clean alpha edges, no pixel art. Matches warm brown wood and lush green ivy fantasy menu frames.",
+      "source": "exec-0a1439d8-719a-4ceb-af54-b39636e3b19b.png",
+      "reason": "Replaced the dense wreath with a delicate twig rim and two leaves, as requested."
+    },
+    {
+      "key": "medallion",
+      "prompt": "Use case: stylized-concept. Create one production game UI asset: an extremely simple delicate circular player portrait rim, viewed perfectly front-on. One slim curved dark walnut twig forming an almost complete circle, with a tiny break and exactly two small desaturated ivy leaves at the lower right. Restrained hand-painted woodland style, warm dark brown bark and muted grey-olive foliage, subtle soft highlights, no yellow gold, no luminous greens. The twig thickness is only 2 percent of the whole diameter, the empty interior is 90 percent of the diameter. Elegant airy silhouette, no bulky wreath, no rope, no gems, no decorative curls, no text, no character, no background or plate. Square canvas, circle centered with 5 percent clear margin. True transparent PNG alpha outside and throughout the entire circular opening; no white background, no checkerboard illustration. Intended to display at 140 by 140 pixels around an existing badger character.",
+      "initialPrompt": "Create ONE production woodland fantasy game UI asset: a circular medallion FRAME with a completely alpha-transparent circular hole and alpha-transparent exterior. Front-facing orthographic flat view, 512x512 square. Thin carved walnut ring with warm amber edge highlights, surrounded by a luxuriant radial wreath of crisp moss-green and sage leaves, little ivy stems, hand-painted high quality stylized game art. The ring's inner transparent hole must cover the central 62 percent of image diameter, ring outer diameter 74 percent, leaves span up to 94 percent. Smooth coherent circle, no perspective, no figure or emblem in center, no glass, no fill, no background, no text, no black disc, no checkerboard. Crisp clean alpha edges, no pixel art. Matches warm brown wood and lush green ivy fantasy menu frames.",
+      "source": "exec-01011c48-9e2f-4862-ba6b-51edb456c286.png",
+      "runtime": "Unmodified generated PNG, displayed with 0.7 alpha around the live preview.",
+      "reason": "User requested a continuous wooden ring without any ivy or leaves."
+    }
+  ]
+}

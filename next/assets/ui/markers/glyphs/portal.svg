@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <g fill="#fff" fill-rule="evenodd">
+    <path d="M32 4a28 28 0 1 0 .01 0ZM32 11a21 21 0 1 1 -.01 0Z"/>
+  </g>
+  <g fill="#fff">
+    <path d="M32 11C42 12 48 21 44 29C42 23 37 18 32 17Z"/>
+    <path transform="rotate(120 32 32)" d="M32 11C42 12 48 21 44 29C42 23 37 18 32 17Z"/>
+    <path transform="rotate(240 32 32)" d="M32 11C42 12 48 21 44 29C42 23 37 18 32 17Z"/>
+    <path d="M32 25a7 7 0 1 0 .01 0Z"/>
+  </g>
+</svg>

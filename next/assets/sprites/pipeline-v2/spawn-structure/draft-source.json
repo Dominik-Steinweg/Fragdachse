@@ -1,0 +1,100 @@
+{
+  "quality": "blender-render-draft",
+  "targetSize": 288,
+  "masters": [
+    {
+      "state": "intact",
+      "outlet": "north",
+      "beauty": "4ac9e9f721de6f74b994fbaad5e14c9fc4efaeeaa8fde16d762ddf6fbc4cb133",
+      "emit": "16a55d90d5cb7443bf1e4fb7d521241df1c7066b6c287d3e31efb190207ab164"
+    },
+    {
+      "state": "intact",
+      "outlet": "east",
+      "beauty": "662f512acafc2aed3eeb0d5cbccc568667b686b37746fbd724b16c0ff086b2cf",
+      "emit": "980fc85e711b58c1683d1e66ad6ca212a2c6a933864f1e15a11fb3d79397c108"
+    },
+    {
+      "state": "intact",
+      "outlet": "south",
+      "beauty": "71822c629fae1e5d106033ddc1b08b6c12f21d4782c1e28b16e4d2686b7011bb",
+      "emit": "e966489b407e1bd4d161b81327556d6eb8b4224287f66a63725d80b04637ad61"
+    },
+    {
+      "state": "intact",
+      "outlet": "west",
+      "beauty": "99ef3b4d9a9e6d282414f4ea0f12bb1548c6e88560e42b451bc60df3743c5014",
+      "emit": "a2f70d3239110ce4196de5e00901874ea79bcff4aca5e375052c48f4855c4264"
+    }
+  ],
+  "runtime": {
+    "id": "spawn-structure",
+    "category": "construction",
+    "gameIds": [],
+    "revision": "v9",
+    "variant": "standard",
+    "sourceSize": 432,
+    "textureKey": "construction_spawn_structure",
+    "sheetTextureKey": "construction_spawn_structure_sheet",
+    "runtimeContract": "sheet",
+    "forward": "south",
+    "pivot": [
+      0.5,
+      0.5
+    ],
+    "idleFrame": 0,
+    "idlePath": "./assets/sprites/pipeline-v2/spawn-structure/idle.png",
+    "sheetPath": "./assets/sprites/pipeline-v2/spawn-structure/sheet.png",
+    "layout": {
+      "frameWidth": 432,
+      "frameHeight": 432,
+      "margin": 2,
+      "spacing": 4,
+      "columns": 4,
+      "rows": 1,
+      "frameCount": 4,
+      "width": 1744,
+      "height": 436
+    },
+    "clips": [],
+    "hashes": {
+      "idle": "51e4ac4f762e1410f22b4cd2b527f4fba6742aae0fde40c628b6dcb02dae598f",
+      "sheet": "d34643ac717e09434151d9a59e95d36e4d90dd861195509c02fd4275aadfadc6"
+    }
+  },
+  "sources": "scripts/asset-pipeline/spawn-carcass (README.md)",
+  "export": {
+    "script": "scripts/asset-pipeline/export-spawn-structure.mjs blender",
+    "sharp": {
+      "aom": "3.9.1",
+      "archive": "3.7.4",
+      "cairo": "1.18.0",
+      "cgif": "0.4.1",
+      "exif": "0.6.24",
+      "expat": "2.6.2",
+      "ffi": "3.4.6",
+      "fontconfig": "2.15.0",
+      "freetype": "2.13.2",
+      "fribidi": "1.0.15",
+      "glib": "2.81.1",
+      "harfbuzz": "9.0.0",
+      "heif": "1.18.2",
+      "highway": "1.2.0",
+      "imagequant": "2.4.1",
+      "lcms": "2.16",
+      "mozjpeg": "4.1.5",
+      "pango": "1.54.0",
+      "pixman": "0.43.4",
+      "png": "1.6.43",
+      "proxy-libintl": "0.4",
+      "rsvg": "2.58.93",
+      "spng": "0.7.4",
+      "tiff": "4.6.0",
+      "vips": "8.15.3",
+      "webp": "1.4.0",
+      "xml": "2.13.3",
+      "zlib-ng": "2.2.1",
+      "sharp": "0.33.5"
+    }
+  }
+}
