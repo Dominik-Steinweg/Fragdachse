@@ -64,6 +64,12 @@ export class PeerSendQueue {
 
   resume = (): void => { this.pump(); };
 
+  /** Bytes, die noch nicht an den Kanal übergeben wurden (wartend plus Rest der laufenden Nachricht). Nur Diagnose. */
+  get queuedBytes(): number {
+    const active = this.active;
+    return this.waitingBytes + (active ? Math.max(0, active.item.payload.bytes.length - active.offset) : 0);
+  }
+
   close(): void {
     this.closed = true;
     if (this.timer !== null) clearTimeout(this.timer);

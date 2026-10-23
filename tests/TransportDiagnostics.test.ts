@@ -5,9 +5,11 @@ import {
   median,
   readSelectedPairStats,
   type DiagnosableLink,
+  type RecentSendSample,
 } from '../src/network/peer/TransportDiagnostics';
 import {
   PEER_DIAGNOSTICS_BACKPRESSURE_BYTES,
+  PEER_DIAGNOSTICS_BACKPRESSURE_STALL_MS,
   PEER_DIAGNOSTICS_POLL_MS,
   PEER_DIAGNOSTICS_SAMPLE_WINDOW,
 } from '../src/config';
@@ -33,7 +35,7 @@ function candidatePairReport(localType: string, remoteType: string, extra: Recor
       bytesReceived: 4096,
       ...extra,
     },
-    { id: 'L1', type: 'local-candidate', candidateType: localType },
+    { id: 'L1', type: 'local-candidate', candidateType: localType, protocol: 'udp', networkType: 'ethernet' },
     { id: 'R1', type: 'remote-candidate', candidateType: remoteType },
   ]);
 }
@@ -49,6 +51,7 @@ class FakeLink implements DiagnosableLink {
   reliableChannel = new FakeChannel() as unknown as RTCDataChannel;
   unreliableChannel = new FakeChannel() as unknown as RTCDataChannel;
   droppedFastCount = 0;
+  recentSends: RecentSendSample[] = [];
   closed = false;
   iceConnectionState: RTCIceConnectionState = 'connected';
   connectionState: RTCPeerConnectionState = 'connected';
@@ -132,6 +135,8 @@ describe('readSelectedPairStats', () => {
     expect(stats).toEqual({
       localCandidateType: 'srflx',
       remoteCandidateType: 'host',
+      localProtocol: 'udp',
+      localNetworkType: 'ethernet',
       rttMs: 24,
       responsesReceived: 1,
       bytesSent: 2048,
@@ -291,6 +296,55 @@ describe('TransportDiagnostics', () => {
     expect(harness.diagnostics.getSnapshots()[0].backpressure).toBe(true);
     expect(consoleWarn).toHaveBeenCalledTimes(1);
     consoleWarn.mockRestore();
+  });
+
+  it('separates a drained send burst from a channel that stops draining', () => {
+    const harness = createHarness();
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const reliable = harness.link.reliableChannel as unknown as FakeChannel;
+    harness.link.recentSends = [{ atMs: Date.now(), channel: 'rel', message: { t: 'b', g: [['gsi', {}]] }, wireBytes: 70_000 }];
+
+    reliable.bufferedAmount = PEER_DIAGNOSTICS_BACKPRESSURE_BYTES + 1;
+    harness.diagnostics.update();
+    expect(consoleWarn).toHaveBeenCalledTimes(1);
+    expect(String(consoleWarn.mock.calls[0][0])).toContain('Kanal rel');
+    expect(String(consoleWarn.mock.calls[0][0])).toContain('rel:b[gsi] 70000 B');
+
+    reliable.bufferedAmount = 0;
+    harness.advance(16);
+    harness.diagnostics.update();
+    expect(String(consoleInfo.mock.calls.at(-1)?.[0])).toContain('abgeflossen: Kanal rel nach 16 ms');
+
+    harness.advance(10_000);
+    reliable.bufferedAmount = PEER_DIAGNOSTICS_BACKPRESSURE_BYTES + 1;
+    harness.diagnostics.update();
+    harness.advance(PEER_DIAGNOSTICS_BACKPRESSURE_STALL_MS);
+    harness.diagnostics.update();
+    harness.diagnostics.update();
+
+    expect(consoleWarn).toHaveBeenCalledTimes(3);
+    expect(String(consoleWarn.mock.calls[2][0])).toContain('fließt nicht ab');
+    consoleWarn.mockRestore();
+    consoleInfo.mockRestore();
+  });
+
+  it('logs the selected ice path once and again when it changes', async () => {
+    const harness = createHarness();
+    const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await harness.poll();
+    harness.advance(PEER_DIAGNOSTICS_POLL_MS);
+    await harness.poll();
+    expect(consoleInfo).toHaveBeenCalledTimes(1);
+    expect(String(consoleInfo.mock.calls[0][0])).toContain('lokal=host/udp/ethernet, remote=host');
+
+    harness.link.setReport(candidatePairReport('srflx', 'srflx'));
+    harness.advance(PEER_DIAGNOSTICS_POLL_MS);
+    await harness.poll();
+    expect(consoleInfo).toHaveBeenCalledTimes(2);
+    expect(String(consoleInfo.mock.calls[1][0])).toContain('gewechselt');
+    consoleInfo.mockRestore();
   });
 
   it('drops records of links that are gone', () => {

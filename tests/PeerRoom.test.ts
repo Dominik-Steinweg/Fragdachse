@@ -1230,6 +1230,7 @@ describe('PeerRoom disconnects', () => {
 
   it('closes a silent link after the heartbeat timeout but keeps the resume grace period', async () => {
     vi.useFakeTimers();
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
       const network = new FakeNetwork();
       const host = await createHostRoom(network);
@@ -1242,12 +1243,14 @@ describe('PeerRoom disconnects', () => {
       await vi.advanceTimersByTimeAsync(PEER_HEARTBEAT_INTERVAL_MS + PEER_HEARTBEAT_TIMEOUT_MS);
 
       expect(hostLink.closed).toBe(true);
+      expect(consoleWarn.mock.calls.some(([text]) => String(text).includes('Heartbeat-Timeout'))).toBe(true);
       expect(host.room.getPlayerIds().sort()).toEqual(['p0', 'p1']);
       expect(host.quit).toEqual([]);
 
       await vi.advanceTimersByTimeAsync(PEER_RESUME_GRACE_MS);
       expect(host.quit).toEqual(['p1']);
     } finally {
+      consoleWarn.mockRestore();
       vi.useRealTimers();
     }
   });

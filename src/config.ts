@@ -1433,6 +1433,15 @@ export const PEER_DIAGNOSTICS_SAMPLE_WINDOW = 60;
  * Mitspielern vorliegen.
  */
 export const PEER_DIAGNOSTICS_BACKPRESSURE_BYTES = 64 * 1024;
+/**
+ * Bleibt ein Sendepuffer so lange über der Schwelle, fließt der Kanal nicht mehr ab. Ein
+ * einzelner großer Sendestoß ist auf einer direkten Verbindung nach wenigen Frames leer.
+ */
+export const PEER_DIAGNOSTICS_BACKPRESSURE_STALL_MS = 1_000;
+/** Mindestabstand zwischen zwei Rückstau-Meldungen je Verbindung, damit Stöße das Log nicht fluten. */
+export const PEER_DIAGNOSTICS_BACKPRESSURE_LOG_INTERVAL_MS = 5_000;
+/** Anzahl der zuletzt gesendeten Nachrichten, die eine Rückstau-Meldung als Kontext mitführt. */
+export const PEER_DIAGNOSTICS_RECENT_SENDS = 12;
 
 // State-Keys und RPC-Namen sind intern in NetworkBridge gekapselt.
 

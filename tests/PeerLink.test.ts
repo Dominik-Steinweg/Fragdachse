@@ -370,6 +370,7 @@ describe('PeerLink native connection state', () => {
 
   it('tolerates a short disconnected blip and closes if it persists', async () => {
     vi.useFakeTimers();
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
       const peerConnection = new FakePeerConnection();
       const { connection, onClose } = await openTestLink(peerConnection);
@@ -389,7 +390,9 @@ describe('PeerLink native connection state', () => {
       await vi.advanceTimersByTimeAsync(PEER_DISCONNECTED_GRACE_MS);
       expect(onClose).toHaveBeenCalledTimes(1);
       expect(connection.open).toBe(false);
+      expect(String(consoleWarn.mock.calls.at(-1)?.[0])).toContain(`länger als ${PEER_DISCONNECTED_GRACE_MS} ms disconnected`);
     } finally {
+      consoleWarn.mockRestore();
       vi.useRealTimers();
     }
   });

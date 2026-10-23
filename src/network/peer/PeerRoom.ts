@@ -855,9 +855,10 @@ export class PeerRoom {
 
   private ensureHeartbeatTimer(): void {
     if (this.destroyed || this.heartbeatTimer !== null || this.links.size === 0) return;
+    const dueAt = Date.now() + PEER_HEARTBEAT_INTERVAL_MS;
     this.heartbeatTimer = globalThis.setTimeout(() => {
       this.heartbeatTimer = null;
-      this.runHeartbeat();
+      this.runHeartbeat(dueAt);
       this.ensureHeartbeatTimer();
     }, PEER_HEARTBEAT_INTERVAL_MS);
 
@@ -866,12 +867,18 @@ export class PeerRoom {
     timer.unref?.();
   }
 
-  private runHeartbeat(): void {
+  private runHeartbeat(dueAt: number): void {
     if (this.destroyed) return;
     const now = Date.now();
     for (const link of [...this.links]) {
       const lastHeartbeat = this.lastHeartbeatAt.get(link) ?? now;
       if (now - lastHeartbeat >= PEER_HEARTBEAT_TIMEOUT_MS) {
+        // A late timer means this side's own main thread stalled; the silence may be local.
+        console.warn(
+          `[PeerRoom] Heartbeat-Timeout: seit ${now - lastHeartbeat} ms kein Heartbeat `
+          + `(peer=${link.remotePeerId}, player=${link.playerId || '-'}, ${this.transport.isHost ? 'Host' : 'Client'}, `
+          + `eigener Timer ${Math.max(0, now - dueAt)} ms verspätet). Link wird geschlossen.`,
+        );
         link.close();
         continue;
       }

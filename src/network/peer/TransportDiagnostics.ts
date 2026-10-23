@@ -11,11 +11,39 @@
  */
 import {
   PEER_DIAGNOSTICS_BACKPRESSURE_BYTES,
+  PEER_DIAGNOSTICS_BACKPRESSURE_LOG_INTERVAL_MS,
+  PEER_DIAGNOSTICS_BACKPRESSURE_STALL_MS,
   PEER_DIAGNOSTICS_POLL_MS,
   PEER_DIAGNOSTICS_SAMPLE_WINDOW,
 } from '../../config';
+import type { PeerChannelKind, PeerMessage } from './protocol';
 
 export type IceCandidateType = 'host' | 'srflx' | 'prflx' | 'relay';
+
+/** Eine vollständig an den Kanal übergebene Nachricht – Kontext für Rückstau-Meldungen. */
+export interface RecentSendSample {
+  atMs: number;
+  channel: PeerChannelKind;
+  message: PeerMessage;
+  wireBytes: number;
+}
+
+/** Kurzform für das Log: Batches mit ihren Keys, RPCs mit ihrem Namen. */
+export function describePeerMessage(message: PeerMessage): string {
+  if (message.t === 'rpc') return `rpc:${message.n}`;
+  if (message.t !== 'b') return message.t;
+  const keys = new Set<string>();
+  for (const [key] of message.g ?? []) keys.add(key);
+  for (const [, key] of message.p ?? []) keys.add(key);
+  return `b[${[...keys].join(',')}]`;
+}
+
+export function formatRecentSends(samples: readonly RecentSendSample[], nowMs: number): string {
+  if (samples.length === 0) return 'keine';
+  return samples
+    .map((sample) => `${sample.channel}:${describePeerMessage(sample.message)} ${sample.wireBytes} B vor ${nowMs - sample.atMs} ms`)
+    .join(' | ');
+}
 
 export interface LinkDiagnostics {
   /** Spiel-seitige Spieler-ID der Gegenseite; leer, solange der Handshake läuft. */
@@ -68,6 +96,10 @@ export interface DiagnosableLink {
   readonly reliableChannel: RTCDataChannel | undefined;
   readonly unreliableChannel: RTCDataChannel | null;
   readonly droppedFastCount: number;
+  /** Kontext für Rückstau-Meldungen; fehlt bei Test-Links ohne Sendepfad. */
+  readonly recentSends?: readonly RecentSendSample[];
+  readonly reliableQueuedBytes?: number;
+  readonly fastQueuedBytes?: number;
   /** Wird nur bei abgelehnten Relay-Verbindungen benutzt. */
   close(): void;
 }
@@ -84,6 +116,9 @@ export interface TransportDiagnosticsDeps {
 interface PolledStats {
   localCandidateType: IceCandidateType | null;
   remoteCandidateType: IceCandidateType | null;
+  /** Transportprotokoll und Netzwerkart des lokalen Kandidaten, soweit der Browser sie liefert. */
+  localProtocol: string | null;
+  localNetworkType: string | null;
   rttMs: number | null;
   /**
    * Anzahl beantworteter STUN-Prüfungen. Steigt sie, liegt eine *neue* RTT-Messung vor.
@@ -102,14 +137,28 @@ interface LinkRecord {
   rttSampleCount: number;
   stats: PolledStats | null;
   lastIceState: RTCIceConnectionState | null;
+  iceBrokenAtMs: number | null;
   disconnects: number;
-  backpressureSeen: boolean;
+  backpressure: Record<PeerChannelKind, BackpressureEpisode | null>;
+  lastBackpressureLogAtMs: number | null;
+  loggedPath: string | null;
   relayReported: boolean;
+}
+
+/** Zeitraum, in dem ein Sendepuffer durchgehend über der Beobachtungsschwelle liegt. */
+interface BackpressureEpisode {
+  startedAtMs: number;
+  peakBytes: number;
+  /** Nur gemeldete Episoden melden auch Stillstand und Abfluss. */
+  logged: boolean;
+  stallLogged: boolean;
 }
 
 const EMPTY_STATS: PolledStats = {
   localCandidateType: null,
   remoteCandidateType: null,
+  localProtocol: null,
+  localNetworkType: null,
   rttMs: null,
   responsesReceived: 0,
   bytesSent: 0,
@@ -199,8 +248,11 @@ export class TransportDiagnostics {
         rttSampleCount: 0,
         stats: null,
         lastIceState: null,
+        iceBrokenAtMs: null,
         disconnects: 0,
-        backpressureSeen: false,
+        backpressure: { rel: null, fast: null },
+        lastBackpressureLogAtMs: null,
+        loggedPath: null,
         relayReported: false,
       };
       this.records.set(link.remotePeerId, record);
@@ -239,23 +291,84 @@ export class TransportDiagnostics {
       record.lastIceState = state;
       if (previous !== null && (state === 'disconnected' || state === 'failed')) {
         record.disconnects++;
+        record.iceBrokenAtMs ??= this.now();
         console.warn(`[Transport] ICE-Zustand ${previous} -> ${state} (peer ${link.remotePeerId}).`);
+      } else if (record.iceBrokenAtMs !== null && (state === 'connected' || state === 'completed')) {
+        console.info(`[Transport] ICE-Zustand ${previous} -> ${state}, erholt nach ${this.now() - record.iceBrokenAtMs} ms (peer ${link.remotePeerId}).`);
+        record.iceBrokenAtMs = null;
       }
     }
   }
 
   private trackBackpressure(links: readonly DiagnosableLink[]): void {
     for (const link of links) {
-      const buffered = Math.max(
-        link.reliableChannel?.bufferedAmount ?? 0,
-        link.unreliableChannel?.bufferedAmount ?? 0,
-      );
-      if (buffered < PEER_DIAGNOSTICS_BACKPRESSURE_BYTES) continue;
-      const record = this.record(link);
-      if (record.backpressureSeen) continue;
-      record.backpressureSeen = true;
-      console.warn(`[Transport] Sendepuffer waechst (${buffered} B, peer ${link.remotePeerId}).`);
+      this.trackChannelBackpressure(link, 'rel', link.reliableChannel?.bufferedAmount ?? 0, link.reliableQueuedBytes);
+      this.trackChannelBackpressure(link, 'fast', link.unreliableChannel?.bufferedAmount ?? 0, link.fastQueuedBytes);
     }
+  }
+
+  /**
+   * Trennt einen kurzen Sendestoß von einem Kanal, der nicht mehr abfließt: gemeldet werden
+   * Beginn (mit den zuletzt gesendeten Nachrichten), Stillstand nach fester Dauer und Abfluss.
+   */
+  private trackChannelBackpressure(
+    link: DiagnosableLink,
+    channel: PeerChannelKind,
+    buffered: number,
+    queued: number | undefined,
+  ): void {
+    const existing = this.records.get(link.remotePeerId)?.backpressure[channel] ?? null;
+    if (buffered < PEER_DIAGNOSTICS_BACKPRESSURE_BYTES && !existing) return;
+    const record = this.record(link);
+    const now = this.now();
+    const queuedText = queued === undefined ? '' : `, ${queued} B in eigener Warteschlange`;
+    const episode = record.backpressure[channel];
+
+    if (!episode) {
+      const logged = record.lastBackpressureLogAtMs === null
+        || now - record.lastBackpressureLogAtMs >= PEER_DIAGNOSTICS_BACKPRESSURE_LOG_INTERVAL_MS;
+      record.backpressure[channel] = { startedAtMs: now, peakBytes: buffered, logged, stallLogged: false };
+      if (!logged) return;
+      record.lastBackpressureLogAtMs = now;
+      console.warn(
+        `[Transport] Sendepuffer hoch: Kanal ${channel}, ${buffered} B${queuedText} (peer ${link.remotePeerId}). `
+        + `Zuletzt gesendet: ${formatRecentSends(link.recentSends ?? [], Date.now())}.`,
+      );
+      return;
+    }
+
+    const durationMs = now - episode.startedAtMs;
+    if (buffered < PEER_DIAGNOSTICS_BACKPRESSURE_BYTES) {
+      record.backpressure[channel] = null;
+      if (episode.logged) {
+        console.info(`[Transport] Sendepuffer abgeflossen: Kanal ${channel} nach ${durationMs} ms, Spitze ${episode.peakBytes} B (peer ${link.remotePeerId}).`);
+      }
+      return;
+    }
+
+    episode.peakBytes = Math.max(episode.peakBytes, buffered);
+    if (episode.logged && !episode.stallLogged && durationMs >= PEER_DIAGNOSTICS_BACKPRESSURE_STALL_MS) {
+      episode.stallLogged = true;
+      const iceState = link.peerConnection?.iceConnectionState ?? '?';
+      console.warn(
+        `[Transport] Sendepuffer fließt nicht ab: Kanal ${channel} seit ${durationMs} ms über der Schwelle, `
+        + `jetzt ${buffered} B${queuedText}, ICE ${iceState} (peer ${link.remotePeerId}). `
+        + `Zuletzt gesendet: ${formatRecentSends(link.recentSends ?? [], Date.now())}.`,
+      );
+    }
+  }
+
+  /** Meldet den gewählten Pfad einmal und bei jedem Wechsel des Kandidatenpaars. */
+  private trackPath(link: DiagnosableLink, record: LinkRecord, stats: PolledStats): void {
+    if (stats.localCandidateType === null) return;
+    const local = [stats.localCandidateType, stats.localProtocol, stats.localNetworkType].filter(Boolean).join('/');
+    const path = `lokal=${local}, remote=${stats.remoteCandidateType ?? '?'}`;
+    if (record.loggedPath === path) return;
+    const previous = record.loggedPath;
+    record.loggedPath = path;
+    const rtt = stats.rttMs === null ? '' : `, RTT ${stats.rttMs.toFixed(1)} ms`;
+    const change = previous === null ? '' : `gewechselt (vorher ${previous}) `;
+    console.info(`[Transport] ICE-Pfad ${change}${path}${rtt} (peer ${link.remotePeerId}).`);
   }
 
   private async pollAll(links: readonly DiagnosableLink[]): Promise<void> {
@@ -276,6 +389,7 @@ export class TransportDiagnostics {
     const stats = readSelectedPairStats(report);
     const record = this.record(link);
     record.stats = stats;
+    this.trackPath(link, record, stats);
 
     // Nur echte Neumessungen zaehlen. 0 ms ist dabei ein gueltiger Wert – im selben LAN
     // oder gar auf demselben Rechner liegt die RTT unter einer Millisekunde.
@@ -353,6 +467,8 @@ interface CandidateStatsLike {
   id: string;
   type: string;
   candidateType?: string;
+  protocol?: string;
+  networkType?: string;
 }
 
 interface TransportStatsLike {
@@ -394,6 +510,8 @@ export function readSelectedPairStats(report: RTCStatsReport): PolledStats {
   return {
     localCandidateType: toCandidateType(local?.candidateType),
     remoteCandidateType: toCandidateType(remote?.candidateType),
+    localProtocol: typeof local?.protocol === 'string' ? local.protocol : null,
+    localNetworkType: typeof local?.networkType === 'string' ? local.networkType : null,
     // WebRTC liefert Sekunden, angezeigt werden Millisekunden.
     rttMs: typeof pair.currentRoundTripTime === 'number' ? pair.currentRoundTripTime * 1000 : null,
     responsesReceived: pair.responsesReceived ?? 0,
