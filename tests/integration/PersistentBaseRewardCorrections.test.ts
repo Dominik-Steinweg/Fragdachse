@@ -422,7 +422,7 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
     expect(rewardStore.placeReward({
       rewardId: 'base_spore_turret',
       relativeGridX: 3,
-      relativeGridY: 1,
+      relativeGridY: 2,
       angle: 0,
     })).toBe(true);
     let baseInert = false;

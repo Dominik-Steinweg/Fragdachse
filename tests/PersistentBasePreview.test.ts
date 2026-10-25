@@ -65,7 +65,7 @@ describe('Persistent-Base-Vorschau – Presentation', () => {
     const preview = resolveCoopDefenseMapPersistentBasePreview(getCoopDefenseMapConfig('1'))!;
     const core = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation);
 
-    expect(core.filter((cell) => cell.domain === 'base-surface')).toHaveLength(20);
+    expect(core.filter((cell) => cell.domain === 'base-surface')).toHaveLength(12);
     expect(core.filter((cell) => cell.domain === 'courtyard-build-area')).toHaveLength((PERSISTENT_BASE_CORE_SIZE_CELLS - 2) ** 2);
     expect(preview.buildArea).toEqual(DEFAULT_PERSISTENT_BASE_BUILD_AREA);
   });
@@ -91,8 +91,8 @@ describe('Persistent-Base-Vorschau – Presentation', () => {
     const metrics = resolveWorldMetrics(getAuthoredWorldMetricsProfile(260, 33));
 
     renderer.sync(preview, metrics);
-    expect(images.filter((image) => image.key === 'base')).toHaveLength(20);
-    expect(renderer.getSurfaceImages()).toHaveLength(20);
+    expect(images.filter((image) => image.key === 'base')).toHaveLength(12);
+    expect(renderer.getSurfaceImages()).toHaveLength(12);
     expect(images.some(image => image.key === 'test-base-accent')).toBe(true);
     expect(scene.events.listenerCount('postupdate')).toBe(1);
     const surfaceCells = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation)

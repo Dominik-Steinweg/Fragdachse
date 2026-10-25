@@ -105,6 +105,7 @@ import {
   type PersistentBaseRewardId,
   type PersistentBaseRewardState,
 } from '../persistentBase/PersistentBaseRewardTypes';
+import { relocateStrandedBaseSurfaceRewards } from '../persistentBase/PersistentBasePlacementRules';
 import {
   DEFAULT_PERSISTENT_BASE_AREA_STAGE,
   isCampaignPersistentBaseAreaStage,
@@ -913,8 +914,9 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   if (!persistentBase) return null;
   const persistentBaseRewardUnlocks = sanitizePersistentBaseRewardIds(coop.persistentBaseRewardUnlocks);
   if (!persistentBaseRewardUnlocks) return null;
-  const persistentBaseRewardState = sanitizePersistentBaseRewardState(coop.persistentBaseRewardState);
-  if (!persistentBaseRewardState) return null;
+  const storedRewardState = sanitizePersistentBaseRewardState(coop.persistentBaseRewardState);
+  if (!storedRewardState) return null;
+  const persistentBaseRewardState = relocateStrandedBaseSurfaceRewards(storedRewardState);
   const ownerId = document.profile.ownerId;
   const personalBaseContribution = sanitizePersistentPlayerBaseContribution(coop.personalBaseContribution);
   // Der Beitrag gehoert genau diesem Profil. Eine fremde ownerId waere ein Save aus einem anderen

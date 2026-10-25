@@ -46,7 +46,9 @@
 // lobbyDawnUnlocked, and none stand before the persistent base.
 // Spawn structures: csz also announces spawn structures (structure: true, zoneId = base id); spawn
 // points are the canonical carcass footprint with the brood pit centre as spawn point.
-export const PEER_PROTOCOL_VERSION = 49;
+// Persistent base core: four 3-cell corner bastions and 3-cell entrances (12 base cells instead of
+// 20); host and client derive the core collision from code that the layout fingerprint does not cover.
+export const PEER_PROTOCOL_VERSION = 50;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

@@ -68,12 +68,12 @@ describe('PersistentBaseCore – kanonische Form', () => {
   });
 
   it('teilt die Flaeche in feste Basis, Innenhof und Eingang', () => {
-    expect(getCanonicalPersistentBaseCoreCells('base-surface')).toHaveLength(20);
+    expect(getCanonicalPersistentBaseCoreCells('base-surface')).toHaveLength(12);
     expect(getCanonicalPersistentBaseCoreCells('courtyard-build-area')).toHaveLength((PERSISTENT_BASE_CORE_SIZE_CELLS - 2) ** 2);
-    expect(getCanonicalPersistentBaseCoreCells('entrance')).toHaveLength(4);
+    expect(getCanonicalPersistentBaseCoreCells('entrance')).toHaveLength(12);
   });
 
-  it('bildet vier mittige, ein Rasterfeld grosse Eingaenge', () => {
+  it('bildet vier mittige, drei Rasterfelder breite Eingaenge zwischen Eck-Bastionen', () => {
     const rows: string[] = [];
     for (let relativeGridY = -3; relativeGridY <= 3; relativeGridY += 1) {
       let row = '';
@@ -84,13 +84,13 @@ describe('PersistentBaseCore – kanonische Form', () => {
       rows.push(row);
     }
     expect(rows).toEqual([
-      'BBBEBBB',
-      'BHHHHHB',
+      'BBEEEBB',
       'BHHHHHB',
       'EHHHHHE',
+      'EHHHHHE',
+      'EHHHHHE',
       'BHHHHHB',
-      'BHHHHHB',
-      'BBBEBBB',
+      'BBEEEBB',
     ]);
   });
 
@@ -166,9 +166,9 @@ describe('PersistentBaseCore – Ausrichtung', () => {
       expect(cells).toHaveLength(PERSISTENT_BASE_CORE_SIZE_CELLS ** 2);
       // Die Domainverteilung ist eine Eigenschaft der Form, nicht ihrer Lage im Raum.
       for (const [domain, count] of [
-        ['base-surface', 20],
+        ['base-surface', 12],
         ['courtyard-build-area', 25],
-        ['entrance', 4],
+        ['entrance', 12],
       ] as const) {
         expect(cells.filter((cell) => cell.domain === domain), orientation).toHaveLength(count);
       }
@@ -185,17 +185,18 @@ describe('PersistentBaseCore – Ausrichtung', () => {
 
     for (const orientation of PERSISTENT_BASE_ORIENTATIONS) {
       expect(entranceOf(orientation).map((cell) => `${cell.gridX}:${cell.gridY}`).sort()).toEqual([
-        '37:40',
-        '40:37',
-        '40:43',
-        '43:40',
+        '37:39', '37:40', '37:41',
+        '39:37', '39:43',
+        '40:37', '40:43',
+        '41:37', '41:43',
+        '43:39', '43:40', '43:41',
       ]);
     }
   });
 
   it('loest Reward-Offsets immer kanonisch und genau einmal in World-Zellen auf', () => {
     const anchor = { gridX: 40, gridY: 40 };
-    const canonicalSurfaceCell = { relativeGridX: -3, relativeGridY: -1 };
+    const canonicalSurfaceCell = { relativeGridX: -3, relativeGridY: -2 };
     const openLeft = resolvePersistentBaseCell(
       anchor,
       canonicalSurfaceCell.relativeGridX,
@@ -209,8 +210,8 @@ describe('PersistentBaseCore – Ausrichtung', () => {
       'open-up',
     );
 
-    expect(openLeft).toEqual({ gridX: 37, gridY: 39, domain: 'base-surface' });
-    expect(openUp).toEqual({ gridX: 41, gridY: 37, domain: 'base-surface' });
+    expect(openLeft).toEqual({ gridX: 37, gridY: 38, domain: 'base-surface' });
+    expect(openUp).toEqual({ gridX: 42, gridY: 37, domain: 'base-surface' });
 
     const canonicalPedestalCell = { relativeGridX: 1, relativeGridY: 0 };
     const pedestalOpenUp = resolvePersistentBaseCell(
@@ -238,7 +239,7 @@ describe('PersistentBaseCore – dieselbe Basis an verschiedenen Ankern', () => 
     expect(getPersistentBaseCoreOrigin({ gridX: 24, gridY: 20 })).toEqual({ gridX: 21, gridY: 17 });
     // Die Shape-Offsets sind auf (0,0) normalisiert, damit sie zum Basisvertrag passen.
     const offsets = getPersistentBaseCoreSurfaceOffsets();
-    expect(offsets).toHaveLength(20);
+    expect(offsets).toHaveLength(12);
     expect(Math.min(...offsets.map((offset) => offset.gridX))).toBe(0);
     expect(Math.min(...offsets.map((offset) => offset.gridY))).toBe(0);
     expect(Math.max(...offsets.map((offset) => offset.gridX))).toBe(6);
@@ -278,7 +279,7 @@ describe('PersistentBaseCore – Uebergang in den Basisvertrag', () => {
     // Genau daran haengt, dass anker-relative Konstruktionen jede Map ueberleben.
     expect(resolved.region).toEqual({ minGridX: 27, maxGridX: 33, minGridY: 13, maxGridY: 19 });
     expect(getPersistentBaseAnchor(resolved)).toEqual(site.anchor);
-    expect(resolved.cells).toHaveLength(20);
+    expect(resolved.cells).toHaveLength(12);
     expect(resolved.persistentReservationRadiusCells).toBeGreaterThan(0);
   });
 

@@ -181,13 +181,16 @@ export interface PersistentBaseCoreWorldCell {
   readonly domain: PersistentBaseCellDomain;
 }
 
+/** Halbe Breite eines Eingangs: Mittelzelle plus je eine Zelle zu beiden Seiten, also 3 Felder. */
+const ENTRANCE_HALF_WIDTH_CELLS = 1;
+
 function resolveCanonicalDomain(relativeGridX: number, relativeGridY: number): PersistentBaseCellDomain {
   const isBoundaryCell = Math.abs(relativeGridX) === CORE_EXTENT_CELLS
     || Math.abs(relativeGridY) === CORE_EXTENT_CELLS;
   const isCenteredSideCell = (
-    relativeGridX === 0 && Math.abs(relativeGridY) === CORE_EXTENT_CELLS
+    Math.abs(relativeGridX) <= ENTRANCE_HALF_WIDTH_CELLS && Math.abs(relativeGridY) === CORE_EXTENT_CELLS
   ) || (
-    relativeGridY === 0 && Math.abs(relativeGridX) === CORE_EXTENT_CELLS
+    Math.abs(relativeGridY) <= ENTRANCE_HALF_WIDTH_CELLS && Math.abs(relativeGridX) === CORE_EXTENT_CELLS
   );
   if (isCenteredSideCell) return 'entrance';
   if (isBoundaryCell) return 'base-surface';
@@ -212,17 +215,18 @@ function buildCanonicalCells(): PersistentBaseCoreCell[] {
  * Die kanonische 7x7-Grundflaeche (Default-Ausrichtung `open-left`):
  *
  * ```
- *   B B B E B B B      B = base-surface          (20 Zellen)
+ *   B B E E E B B      B = base-surface          (12 Zellen)
  *   B H H H H H B      H = courtyard-build-area  (25 Zellen)
- *   B H H H H H B      E = entrance              ( 4 Zellen)
+ *   E H H H H H E      E = entrance              (12 Zellen)
+ *   E H H H H H E
  *   E H H H H H E
  *   B H H H H H B
- *   B H H H H H B
- *   B B B E B B B
+ *   B B E E E B B
  * ```
  *
- * Die vier mittleren Randzellen sind offene Eingaenge. Die Ecken und die uebrigen Randzellen
- * bilden die feste Basisflaeche. Die aktive Bauzone wird separat aus der Area-Stufe aufgeloest.
+ * Je Seite ist ein drei Felder breiter Eingang offen. Uebrig bleiben vier Eck-Bastionen aus je
+ * drei Zellen (L-Form); sie bilden die feste Basisflaeche und sind untereinander nicht verbunden.
+ * Die aktive Bauzone wird separat aus der Area-Stufe aufgeloest.
  */
 export const CANONICAL_PERSISTENT_BASE_CORE_CELLS: readonly PersistentBaseCoreCell[] =
   Object.freeze(buildCanonicalCells());

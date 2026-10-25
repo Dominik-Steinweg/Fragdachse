@@ -215,6 +215,14 @@ Runtime-IDs, HP, Cooldowns und temporäre Beziehungsdaten bleiben aus dem Bluepr
 authored Site liefert den Anker; die aktive Build Area kommt aus der World-Stage. Generator-
 Reservation und Baurecht bleiben getrennte Begriffe.
 
+Die Form des Basiskerns und die Domains seiner Zellen beschreibt ausschließlich
+[`PersistentBaseCore.ts`](../../src/persistentBase/PersistentBaseCore.ts): vier Eck-Bastionen als
+`base-surface` und drei Felder breite Eingänge als `entrance`. Gespeichert werden nur kanonische
+Offsets. Verliert eine gespeicherte `base-surface`-Reward-Zelle durch eine Formänderung ihre Domain,
+setzt der Ladepfad das Reward auf die nächste freie Basiszelle um oder macht es wieder unplatziert
+([`relocateStrandedBaseSurfaceRewards`](../../src/persistentBase/PersistentBasePlacementRules.ts)).
+Ein Reward bleibt nie unsichtbar platziert.
+
 Verwaltungsrechte hängen an der Herkunft des Objekts, nicht an der Klasse des handelnden Spielers.
 Ein base-owned Reward gehört der Host-Basis; jeder berechtigte Coop-Spieler darf es platzieren,
 verschieben und zurückbauen, ohne dadurch persönliches Ownership zu erwerben. Persönliche
