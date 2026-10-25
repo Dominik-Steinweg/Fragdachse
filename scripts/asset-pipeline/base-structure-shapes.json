@@ -1,0 +1,14 @@
+{
+  "description": "Friendly cell shapes of the campaign maps for concept sheets; origin = top-left grid cell on the sheet, rows top to bottom.",
+  "sheet": [22, 10],
+  "outposts": [
+    { "label": "06/10/12/13 Turm-Vorposten", "origin": [1, 1], "rows": ["#"] },
+    { "label": "07/16 Sanitäts-/Versorgungsposten", "origin": [3, 1], "rows": ["##", "#."] },
+    { "label": "00 Hauptbasis, 14 Haltepunkt", "origin": [6, 1], "rows": ["##", "##"] },
+    { "label": "05/12 Mittelbasis", "origin": [9, 1], "rows": ["##", ".#", "##"] },
+    { "label": "12 Versorgungsbasis", "origin": [12, 1], "rows": ["##.", ".##", "..#", ".##", "##."] },
+    { "label": "01 Tutorial-Vorposten", "origin": [16, 1], "rows": ["####", "####", "####", "####"] },
+    { "label": "08 Bastion (gedreht)", "origin": [1, 7], "rows": ["#######"] },
+    { "label": "04/13/14 Mittelbasis", "origin": [9, 5], "rows": ["##", ".#", ".#", "##"] }
+  ]
+}
