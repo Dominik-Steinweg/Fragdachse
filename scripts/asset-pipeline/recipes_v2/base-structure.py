@@ -1,6 +1,6 @@
 """Rustic persistent base core, outpost sets and the 47-mask kit (1 BU = 1 m = 1 cell = 32 px).
 
-model = {style: burg|fort|hut|camp, layout: core|outposts|kit, variant: 0, conceptGround: false}
+model = {style: burg|fort|feld|wall, layout: core|outposts|kit, variant: 0, conceptGround: false}
 
 - core: the 12 base-surface cells of the 7 x 7 persistent core (four 3-cell corner bastions,
   3-cell entrances), centred on the pivot. Cells are seeded by position: this is the master.
@@ -9,15 +9,15 @@ model = {style: burg|fort|hut|camp, layout: core|outposts|kit, variant: 0, conce
 - kit: every one of the 47 masks as a lone centre cell on a 2 m pitch, 7 per row, in the order of
   `all_masks()`. Only the centre cell is built; its geometry never leaves the cell.
 
-`conceptGround` adds meadow and the style's courtyard ground for concept boards only; those
-objects carry `fdConceptOnly` and never belong to a runtime pass.
+`conceptGround` adds the style's courtyard ground (fading into the game ground) for concept
+boards only; those objects carry `fdConceptOnly` and never belong to a runtime pass.
 """
 import json
 import random
 from pathlib import Path
 from dawn_parts import root, finish, material_factory
 from lobby_structure_parts import socket
-from base_structure_parts import mask_of, all_masks, cell_seed, flat_sheet
+from base_structure_parts import mask_of, all_masks, cell_seed
 from base_styles import STYLES, courtyard_ground
 
 CORE = [(x, y) for y in range(7) for x in range(7)
@@ -58,7 +58,6 @@ def build(c, spec):
         cells = set(CORE)
         for gx, gy in sorted(cells):
             style.cell(gx, gy, gx - 3.0, 3.0 - gy, mask_of(cells, gx, gy), random.Random(cell_seed(gx, gy, variant)))
-        ground = (-6.0, -6.0, 6.0, 6.0)
         courtyard = (-3.8, -3.8, 3.8, 3.8)
     elif layout == 'outposts':
         w, h = SHAPES['sheet']
@@ -66,20 +65,16 @@ def build(c, spec):
             for gx, gy in sorted(cells):
                 mask = mask_of(cells, gx, gy)
                 style.cell(gx, gy, gx + .5 - w / 2, h / 2 - gy - .5, mask, random.Random(cell_seed(mask, 0, variant)))
-        ground = (-w / 2 - .5, -h / 2 - .5, w / 2 + .5, h / 2 + .5)
         courtyard = None
     else:
         for index, mask in enumerate(all_masks()):
             col, row = index % 7, index // 7
             style.cell(col, row, (col - 3) * 2.0, (3 - row) * 2.0, mask, random.Random(cell_seed(mask, 0, variant)))
-        ground = courtyard = None
+        courtyard = None
     style.flush()
-    if model.get('conceptGround') and ground:
-        meadow = flat_sheet(c, 'Concept lobby meadow', *ground, -.004, m('Concept meadow', (60, 76, 42), .2))
-        meadow['fdConceptOnly'] = True
-        if courtyard:
-            for ob in courtyard_ground(c, model['style'], m, courtyard, random.Random(17)):
-                ob['fdConceptOnly'] = True
+    if model.get('conceptGround') and courtyard:
+        for ob in courtyard_ground(c, model['style'], m, courtyard, random.Random(17)):
+            ob['fdConceptOnly'] = True
     asset = finish(c, pivot)
     side_uvs(asset['parts']['meshes'])
     asset['sockets'] = {name: socket(c, name, *xyz) for name, xyz in style.sockets.items()}

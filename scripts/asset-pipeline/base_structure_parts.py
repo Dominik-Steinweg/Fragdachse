@@ -166,9 +166,13 @@ class Batch:
         g['faces'].extend(tuple(base + i for i in f) for f in faces)
         g['smooth'].extend(smooth)
 
-    def box(self, loc, size, mat, bevel=.01, rot=None):
+    def box(self, loc, size, mat, bevel=.01, rot=None, jitter=0.0, rng=None):
+        """`jitter` moves every corner by up to that many metres, for hand-cut stones and planks."""
         x, y, z = (s / 2 for s in size)
         local = [(-x, -y, -z), (x, -y, -z), (x, y, -z), (-x, y, -z), (-x, -y, z), (x, -y, z), (x, y, z), (-x, y, z)]
+        if jitter and rng:
+            local = [(px + rng.uniform(-jitter, jitter), py + rng.uniform(-jitter, jitter), pz + rng.uniform(-jitter, jitter) * .6)
+                     for px, py, pz in local]
         faces = [(0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
         self._add(mat, bevel, local, faces, [False] * 6, loc, rot)
 

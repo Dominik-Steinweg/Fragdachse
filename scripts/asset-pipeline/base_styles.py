@@ -1,18 +1,20 @@
 """Four rustic base styles on the shared cell/quadrant kit (base_structure_parts).
 
-Every style builds one cell from its mask: a body over the quadrant regions, an edge treatment
-along exposed sides, a corner piece and per-cell features. Features use the coarse cell class, so
-the persistent core (four 3-cell corner bastions) reads as a corner structure with two short arms
-ending at the gates. Small parts go through one Batch per style; sockets name lights and particle
-sources: lamp_* / window_* (warm lamp light), fire_* (open fire), chimney_* (smoke).
+Every base cell is a turret emplacement: base turrets (32-40 px, wider than the 32 px cell) stand
+on its centre. So each style builds a flat platform with a clear turret pad in the middle and
+keeps everything taller low and on the exposed outer edges: a parapet, palisade, sandbag wall or
+rampart toe. Corners get small accents only; gate ends carry the lights. Sockets name lights and
+particle sources: lamp_* (warm lamp light), fire_* (open fire), chimney_* (smoke).
 """
 import math
-from dawn_parts import plate
-from base_structure_parts import (Batch, quadrants, cell_class, end_direction, corner_direction, side_normals,
-                                  height_sheet, flat_sheet, mesh_object, cone, pyramid_roof, scatter_rects)
+from base_structure_parts import (Batch, quadrants, cell_class, end_direction, corner_direction,
+                                  height_sheet, cone, scatter_rects)
 
 
 class Style:
+    HALF = .49   # body half width: neighbouring cells meet on the cell line
+    PAD = .3     # turret pad radius; nothing but the pad stands inside it
+
     def __init__(self, c, m):
         self.c, self.p, self.sockets, self.b = c, self.palette(m), {}, Batch(c)
 
@@ -21,6 +23,7 @@ class Style:
 
     def cell(self, gx, gy, cx, cy, mask, rng):
         for q in quadrants(cx, cy, mask): self.quadrant(q, rng)
+        self.pad(cx, cy, rng)
         self.feature(cell_class(mask), cx, cy, mask, rng)
 
     def feature(self, kind, cx, cy, mask, rng):
@@ -29,404 +32,444 @@ class Style:
     def flush(self):
         return self.b.flush(type(self).__name__)
 
-    # Shared small parts -----------------------------------------------------------
-    def brazier(self, x, y, z, r=.15, rng=None):
+    def bolts(self, cx, cy, z, radius, count, mat, size=.018):
+        for i in range(count):
+            a = math.tau * (i + .5) / count
+            self.b.cylinder((cx + radius * math.cos(a), cy + radius * math.sin(a), z), size, .02, mat, 6, 0)
+
+    def brazier(self, x, y, z, r, rng):
         b, p = self.b, self.p
-        b.cylinder((x, y, z + .08), r, .16, p['iron'], 14, .008)
-        b.cylinder((x, y, z + .17), r + .012, .025, p['dark'], 14, .004)
-        b.cylinder((x, y, z + .165), r - .025, .02, p['ember'], 14, 0)
-        for i in range(6):
-            a = i * 2.4 + (rng.uniform(0, 1) if rng else 0)
-            d = (r - .06) * (.3 + .7 * ((i * 37) % 10) / 10)
-            b.ell((x + d * math.cos(a), y + d * math.sin(a), z + .185), (.03, .026, .018), p['coal'], 8, 5)
-        self.socket('fire', x, y, z + .3)
+        b.cylinder((x, y, z + .07), r, .14, p['iron'], 12, .006)
+        b.cylinder((x, y, z + .145), r - .02, .02, p['ember'], 12, 0)
+        for i in range(5):
+            a = i * 2.4 + rng.uniform(0, 1)
+            d = (r - .04) * rng.uniform(.2, .9)
+            b.ell((x + d * math.cos(a), y + d * math.sin(a), z + .16), (.022, .02, .014), p['coal'], 8, 4)
+        self.socket('fire', x, y, z + .25)
 
     def lantern(self, x, y, z):
         b, p = self.b, self.p
-        b.cylinder((x, y, z + .2), .075, .04, p['brass'], 12, .006)
-        b.cylinder((x, y, z + .1), .055, .16, p['lamp'], 12, 0)
-        self.socket('lamp', x, y, z + .1)
+        b.cylinder((x, y, z + .16), .06, .035, p['brass'], 10, .005)
+        b.cylinder((x, y, z + .08), .045, .13, p['lamp'], 10, 0)
+        self.socket('lamp', x, y, z + .08)
 
 
-# -- Burg: fieldstone curtain wall, crenellated parapet, round corner towers ---------
+# -- Steinbastion: fieldstone platform, crenellated parapet, iron turret ring ---------------
 
 class Burg(Style):
-    HALF = .46
-    WZ, PZ, MZ, PW = 2.7, 3.0, 3.34, .17
+    PZ, PH, MH, EW = .8, 1.16, 1.42, .16
 
     def palette(self, m):
         return dict(
-            stone=m('Curtain fieldstone', (118, 114, 102), .4), walk=m('Wall walk flagstone', (140, 134, 120), .35),
-            walk2=m('Worn paving stone', (112, 108, 98), .38), slate=m('Slate shingle', (92, 98, 104), .26),
-            slate2=m('Dark slate shingle', (66, 70, 78), .26), moss=m('Masonry moss', (66, 78, 41), .5),
-            ivy=m('Ivy leaves', (50, 68, 36), .3), iron=m('Forged iron', (96, 100, 98), .25), dark=m('Soot iron', (43, 44, 39), .18),
+            stone=m('Curtain fieldstone', (122, 117, 104), .4), walk=m('Wall walk flagstone', (146, 140, 124), .35),
+            walk2=m('Worn paving stone', (118, 113, 101), .38), slate=m('Slate shingle', (88, 94, 100), .26),
+            moss=m('Masonry moss', (66, 80, 40), .5), ivy=m('Ivy leaves', (48, 66, 34), .3), iron=m('Forged iron', (92, 96, 94), .25),
+            dark=m('Soot iron', (43, 44, 39), .18), padstone=m('Dark cobblestone', (96, 94, 86), .4),
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
             brass=m('Worn brass fittings', (158, 119, 61), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7))
 
     def quadrant(self, q, rng):
-        b, p = self.b, self.p
-        H, E, PW = self.HALF, self.HALF, self.PW
+        b, p, H, EW = self.b, self.p, self.HALF, self.EW
         for a0, b0, a1, b1 in q.regions(H):
-            b.box(q.p((a0 + a1) / 2, (b0 + b1) / 2, self.WZ / 2), q.dims(a1 - a0, b1 - b0, self.WZ), p['stone'], .01)
+            b.box(q.p((a0 + a1) / 2, (b0 + b1) / 2, (self.PZ - .04) / 2), q.dims(a1 - a0, b1 - b0, self.PZ - .04), p['stone'], .015)
             self.flagstones(q, (a0, b0, a1, b1), rng)
-        for qe, a0, a1 in q.edges(E):
+        for qe, a0, a1 in q.edges(H):
             if a1 - a0 < .02: continue
-            b.box(qe.p((a0 + a1) / 2, E - PW / 2, (self.WZ + self.PZ) / 2), qe.dims(a1 - a0, PW, self.PZ - self.WZ), p['stone'], .012)
-            for centre in (0, .5):
-                lo, hi = max(a0, centre - .15), min(a1, centre + .15)
-                if q.kind == 'outer': hi = min(hi, E - .27)
-                if hi - lo > .06:
-                    b.box(qe.p((lo + hi) / 2, E - PW / 2, (self.PZ + self.MZ) / 2), qe.dims(hi - lo, PW + .01, self.MZ - self.PZ), p['stone'], .015)
-        if q.has_corner():
-            b.box(q.p(E - PW / 2, E - PW / 2, (self.WZ + self.PZ) / 2), (PW, PW, self.PZ - self.WZ), p['stone'], .012)
-            if q.kind == 'outer':
-                b.box(q.p(E - .12, E - .12, (self.PZ + self.MZ) / 2), (.24, .24, self.MZ - self.PZ), p['stone'], .015)
-        inner = [tuple(q.p(a0, b0)[:2]) + tuple(q.p(a1, b1)[:2]) for a0, b0, a1, b1 in q.regions(H - PW)]
-        for x, y in scatter_rects(inner, rng, rng.randrange(0, 3)):
-            s = rng.uniform(.05, .1)
-            b.ell((x, y, self.WZ + .05), (s, s * rng.uniform(.6, 1), .022), p['moss'], 10, 5)
-        if q.kind in ('straight', 'outer') and rng.random() < .35:
-            b.ell(q.p(rng.uniform(.05, .3), E - .05, self.MZ - .08), q.dims(rng.uniform(.1, .16), .07, .06), p['ivy'], 10, 5)
+            self.parapet(qe, a0, a1, rng)
+        if q.kind == 'outer':
+            self.block(q, H - EW, H, H - EW, H, self.PH, rng)
+            b.box(q.p(H - .12, H - .12, (self.PH + self.MH + .04) / 2), (.24, .24, self.MH + .04 - self.PH), p['stone'], .015, None, .012, rng)
+        elif q.kind == 'inner':
+            self.block(q, H - EW, .5, H - EW, H, self.PH, rng)
+            self.block(q.turned(), H - EW, .5, H - EW, H, self.PH, rng)
+        for x, y in scatter_rects([q.p(.08, H - EW - .1)[:2] + q.p(.45, H - EW - .02)[:2]], rng, rng.randrange(0, 3)):
+            if math.hypot(x - q.cx, y - q.cy) > self.PAD + .04:
+                s = rng.uniform(.03, .06)
+                b.ell((x, y, self.PZ + .03), (s, s * .7, .016), p['moss'], 8, 4)
+        if q.kind == 'straight' and rng.random() < .3:
+            b.ell(q.p(rng.uniform(.05, .45), H - .01, self.PH - .12), q.dims(rng.uniform(.08, .14), .05, .12), p['ivy'], 8, 5)
+
+    def block(self, q, a0, a1, b0, b1, top, rng):
+        self.b.box(q.p((a0 + a1) / 2, (b0 + b1) / 2, (self.PZ - .04 + top) / 2), q.dims(a1 - a0, b1 - b0, top - self.PZ + .04),
+                   self.p['stone'], .012, None, .01, rng)
+
+    def parapet(self, q, a0, a1, rng):
+        """Single stones of the breastwork, then merlons centred on cell centres and cell lines."""
+        H, EW = self.HALF, self.EW
+        a = a0
+        while a < a1 - .02:
+            w = min(rng.uniform(.16, .26), a1 - a)
+            self.b.box(q.p(a + w / 2, H - EW / 2, (self.PZ - .04 + self.PH) / 2 + rng.uniform(-.01, .01)),
+                       q.dims(w - .012, EW, self.PH - self.PZ + .04), self.p['stone'], .012, None, .012, rng)
+            a += w
+        for centre in (0, .5):
+            lo, hi = max(a0, centre - .13), min(a1, centre + .13)
+            if q.kind == 'outer': hi = min(hi, H - .27)
+            if hi - lo > .06:
+                self.b.box(q.p((lo + hi) / 2, H - EW / 2, (self.PH + self.MH) / 2), q.dims(hi - lo, EW + .01, self.MH - self.PH),
+                           self.p['stone'], .015, None, .012, rng)
 
     def flagstones(self, q, rect, rng):
         a0, b0, a1, b1 = rect
         bb = b0
         while bb < b1 - .03:
-            h = min(rng.uniform(.17, .28), b1 - bb)
+            h = min(rng.uniform(.16, .26), b1 - bb)
             a = a0
             while a < a1 - .03:
-                w = min(rng.uniform(.17, .32), a1 - a)
-                self.b.box(q.p(a + w / 2, bb + h / 2, self.WZ + .02 + rng.uniform(0, .012)), q.dims(w - .022, h - .022, .04),
-                           self.p['walk'] if rng.random() > .3 else self.p['walk2'], .008)
+                w = min(rng.uniform(.16, .3), a1 - a)
+                self.b.box(q.p(a + w / 2, bb + h / 2, self.PZ - .02 + rng.uniform(0, .01)), q.dims(w - .02, h - .02, .04),
+                           self.p['walk'] if rng.random() > .3 else self.p['walk2'], .008, None, .008, rng)
                 a += w
             bb += h
 
-    def tower(self, cx, cy, radius, height=3.9):
-        c, p = self.c, self.p
-        self.b.cylinder((cx, cy, height / 2), radius, height, p['stone'], 28, .01)
-        top, courses, rim = height + 1.6, 8, .49
-        for k in range(courses):
-            r0 = rim - k * rim / courses
-            r1 = max(rim - (k + 1) * rim / courses, .015)
-            z0 = height - .06 + (top - height) * k / courses
-            z1 = height - .06 + (top - height) * (k + 1) / courses
-            cone(c, 'Tower slate course', (cx, cy), r0, z0, z1, p['slate'] if k % 2 else p['slate2'], 28, r1, k * .11)
-        self.b.ell((cx, cy, top + .03), (.045, .045, .06), p['iron'], 10, 5)
-        self.socket('window', cx, cy, 2.2)
+    def pad(self, cx, cy, rng):
+        b, p, z = self.b, self.p, self.PZ
+        b.cylinder((cx, cy, z + .02), self.PAD, .05, p['iron'], 32, .006)
+        b.cylinder((cx, cy, z + .035), self.PAD - .045, .05, p['padstone'], 32, .006)
+        self.bolts(cx, cy, z + .05, self.PAD - .022, 12, p['dark'], .014)
 
     def feature(self, kind, cx, cy, mask, rng):
         b, p = self.b, self.p
-        if kind in ('corner', 'isolated'):
-            self.tower(cx, cy, .44 if kind == 'corner' else .4)
+        if kind == 'corner':
+            dx, dy = corner_direction(mask)
+            x, y = cx + dx * .34, cy + dy * .34
+            b.cylinder((x, y, (self.MH + .1) / 2), .15, self.MH + .1, p['stone'], 20, .01)
+            cone(self.c, 'Bartizan slate cap', (x, y), .17, self.MH + .08, self.MH + .5, p['slate'], 20)
+            self.socket('lamp', cx + dx * .52, cy + dy * .52, 1.1)
         elif kind == 'end':
-            # The wall ends in a squat pier with a fire basket that marks the gate.
             dx, dy = end_direction(mask)
-            px, py = cx + dx * .22, cy + dy * .22
-            b.box((px, py, 1.62), (.5, .5, 3.24), p['stone'], .015)
-            for ox, oy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
-                b.box((px + ox * .19, py + oy * .19, 3.36), (.12, .12, .24), p['stone'], .01)
-            self.brazier(px, py, 3.24, .13, rng)
-            self.socket('lamp', cx + dx * .52, cy + dy * .52, 2.0)
+            x, y = cx + dx * .34, cy + dy * .34
+            b.box((x, y, (self.MH + .2) / 2), (.28, .28, self.MH + .2), p['stone'], .015, None, .01, rng)
+            self.brazier(x, y, self.MH + .2, .1, rng)
 
 
-# -- Westernfort: sharpened log palisade, plank walkway, blockhouses -------------------
+# -- Palisadenschanze: plank deck, low sharpened palisade, timber turntable ------------------
 
 class Fort(Style):
-    R, LINE = .11, .375
-    LZ, WZ = 2.3, 1.55
+    PZ, R = .7, .085
 
     def palette(self, m):
         return dict(
             bark=m('Bark log', (82, 64, 46), .35), cut=m('Cut log end', (156, 126, 88), .3), plank=m('Silvered timber', (140, 128, 106), .3),
-            oak=m('Weathered oak', (104, 84, 60), .32), tar=m('Dark tarred timber', (58, 50, 42), .2),
-            shingle=m('Split wood shingle', (98, 80, 60), .3), shingle2=m('Old wood shingle', (86, 72, 56), .3),
-            iron=m('Forged iron', (96, 100, 98), .25), dark=m('Soot iron', (43, 44, 39), .18), rope=m('Hemp cord', (142, 128, 94), .3),
+            oak=m('Weathered oak', (104, 84, 60), .32), tar=m('Dark tarred timber', (58, 50, 42), .2), rope=m('Hemp cord', (142, 128, 94), .3),
+            iron=m('Forged iron', (92, 96, 94), .25), dark=m('Soot iron', (43, 44, 39), .18),
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
-            brass=m('Worn brass fittings', (158, 119, 61), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7),
-            burlap=m('Sandbag burlap', (132, 116, 82), .3))
+            brass=m('Worn brass fittings', (158, 119, 61), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7))
 
-    def log(self, x, y, rng):
-        r = self.R + rng.uniform(-.012, .008)
-        h = self.LZ + rng.uniform(-.14, .12)
-        self.b.cylinder((x, y, h / 2), r, h, self.p['bark'], 12, .01, None, rng.uniform(0, 1))
-        cone(self.c, 'Sharpened log tip', (x + rng.uniform(-.01, .01), y + rng.uniform(-.01, .01)), r, h, h + .22, self.p['cut'], 9, 0, rng.uniform(0, 1))
+    def log(self, x, y, rng, r=None, top=None):
+        r = r or self.R + rng.uniform(-.01, .008)
+        h = top or self.PZ + .72 + rng.uniform(-.08, .08)
+        self.b.cylinder((x, y, h / 2), r, h, self.p['bark'], 10, .008, None, rng.uniform(0, 1))
+        cone(self.c, 'Sharpened log tip', (x + rng.uniform(-.008, .008), y + rng.uniform(-.008, .008)), r, h, h + .15, self.p['cut'], 8, 0, rng.uniform(0, 1))
 
     def quadrant(self, q, rng):
-        b, p = self.b, self.p
-        L, R = self.LINE, self.R
-        deck = L - R - .015
+        b, p, H, R = self.b, self.p, self.HALF, self.R
+        deck = H - 2 * R
         for a0, b0, a1, b1 in q.regions(deck):
             a = a0
             while a < a1 - .02:
-                w = min(.125, a1 - a)
-                b.box(q.p(a + w / 2, (b0 + b1) / 2, self.WZ + rng.uniform(0, .012)), q.dims(w - .012, b1 - b0 + .02, .045),
-                      p['plank'] if rng.random() > .3 else p['oak'], .006)
+                w = min(.118, a1 - a)
+                b.box(q.p(a + w / 2, (b0 + b1) / 2, self.PZ - .025), q.dims(w - .014, b1 - b0 + .01, .045),
+                      p['plank'] if rng.random() > .35 else p['oak'], .006, None, .006, rng)
                 a += w
-        for qe, a0, a1 in q.edges(L):
-            for a in (.125, .375):
-                if a0 - 1e-6 <= a <= a1 + 1e-6 and (q.kind == 'straight' or a < L - .01):
-                    self.log(*qe.p(a, L)[:2], rng)
+        line = H - R
+        for qe, a0, a1 in q.edges(H):
+            for a in (.083, .25, .417):
+                if a0 - 1e-6 <= a <= a1 + 1e-6 and (q.kind == 'straight' or a < line - .12):
+                    self.log(*qe.p(a, line)[:2], rng)
+            if a1 - a0 > .05:
+                b.cylinder(qe.p((a0 + a1) / 2, line - R - .03, self.PZ + .4), .028, a1 - a0, p['tar'], 8, .004, qe.along())
         if q.has_corner():
-            self.log(*q.p(L, L)[:2], rng)
-        if q.kind == 'straight' and rng.random() < .3:
-            b.ell(q.p(rng.uniform(.1, .4), deck - .08, self.WZ + .08), q.dims(.2, .12, .08), p['burlap'], 10, 5)
+            self.log(*q.p(line, line)[:2], rng, self.R + .02)
 
-    def blockhouse(self, cx, cy, mask, half=.47):
-        c, b, p = self.c, self.b, self.p
-        b.box((cx, cy, 1.4), (half * 2 - .04, half * 2 - .04, 2.8), p['bark'], .02)
-        pyramid_roof(c, 'Blockhouse shingle roof', (cx, cy), half + .015, 2.75, 3.75, p['shingle'])
-        for k in range(1, 5):
-            s = half + .015 - k * (half / 5)
-            z = 2.75 + k * (1.0 / 5) + .02
-            for sx, sy, w, h in ((0, 1, 2 * s, .05), (0, -1, 2 * s, .05), (1, 0, .05, 2 * s), (-1, 0, .05, 2 * s)):
-                b.box((cx + sx * s, cy + sy * s, z), (w, h, .03), p['shingle2'], .005)
-        for sx, sy in ((1, 1), (-1, 1), (-1, -1), (1, -1)):
-            b.rod((cx, cy, 3.78), (cx + sx * (half + .01), cy + sy * (half + .01), 2.77), .03, p['tar'], 6)
-        dx, dy = corner_direction(mask)
-        self.socket('lamp', cx + dx * .55, cy + dy * .55, 1.9)
+    def pad(self, cx, cy, rng):
+        b, p, z = self.b, self.p, self.PZ
+        b.cylinder((cx, cy, z + .04), self.PAD, .08, p['cut'], 32, .012, None, rng.uniform(0, 1))
+        b.cylinder((cx, cy, z + .045), self.PAD + .012, .05, p['iron'], 32, .004)
+        b.cylinder((cx, cy, z + .085), self.PAD - .01, .01, p['cut'], 32, 0)
+        self.bolts(cx, cy, z + .09, self.PAD - .05, 6, p['dark'], .016)
 
     def feature(self, kind, cx, cy, mask, rng):
         b, p = self.b, self.p
-        if kind in ('corner', 'isolated'):
-            self.blockhouse(cx, cy, mask, .47 if kind == 'corner' else .44)
+        if kind == 'corner':
+            dx, dy = corner_direction(mask)
+            x, y = cx + dx * (self.HALF - self.R - .02), cy + dy * (self.HALF - self.R - .02)
+            self.log(x, y, rng, .12, self.PZ + 1.0)
+            b.rod((x, y, self.PZ + .95), (x - dx * .16, y - dy * .16, self.PZ + .95), .015, p['dark'], 6)
+            self.lantern(x - dx * .16, y - dy * .16, self.PZ + .68)
         elif kind == 'end':
             dx, dy = end_direction(mask)
-            gx, gy = cx + dx * .31, cy + dy * .31
-            b.box((gx, gy, 1.55), (.32, .32, 3.1), p['oak'], .02)
-            b.box((gx, gy, 3.12), (.36, .36, .05), p['tar'], .01)
-            b.rod((gx - dy * .3, gy + dx * .3, 1.2), (gx, gy, 2.5), .04, p['tar'], 6)
-            self.brazier(gx, gy, 3.14, .12, rng)
+            x, y = cx + dx * .34, cy + dy * .34
+            b.box((x, y, (self.PZ + 1.0) / 2), (.24, .24, self.PZ + 1.0), p['oak'], .015, None, .008, rng)
+            b.box((x, y, self.PZ + 1.02), (.27, .27, .04), p['tar'], .006)
+            self.brazier(x, y, self.PZ + 1.04, .085, rng)
 
 
-# -- Waldhütte: hipped shingle roofs following the cells, stone chimneys ----------------
+# -- Feldstellung: sandbag walls, earth floor, steel turret plate, oil-drum fire ------------
 
-class Hut(Style):
-    HALF, EZ, SLOPE = .48, 1.9, 1.5
-
-    @property
-    def RZ(self): return self.EZ + self.SLOPE * self.HALF
+class Feld(Style):
+    PZ, BAG = .05, (.29, .17, .12)
 
     def palette(self, m):
         return dict(
-            shingle=m('Split wood shingle', (104, 84, 62), .3), shingle2=m('Old wood shingle', (88, 74, 58), .3),
-            mossy=m('Mossy shingle', (82, 84, 56), .35), under=m('Roof boarding', (60, 50, 40), .2), ridge=m('Weathered oak', (104, 84, 60), .32),
-            stone=m('Fieldstone', (118, 118, 108), .4), mortar=m('Lime mortar bed', (98, 94, 84), .3), dark=m('Soot iron', (43, 44, 39), .18),
-            moss=m('Masonry moss', (64, 78, 40), .5), iron=m('Forged iron', (96, 100, 98), .25),
-            brass=m('Worn brass fittings', (158, 119, 61), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7),
-            ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1))
+            bag=m('Sandbag burlap', (138, 120, 84), .3), bag2=m('Wet sandbag burlap', (112, 98, 70), .3),
+            earth=m('Trampled earth', (96, 80, 60), .25), plate=m('Faded container paint', (92, 98, 74), .4),
+            iron=m('Forged iron', (92, 96, 94), .25), dark=m('Soot iron', (43, 44, 39), .18), rust=m('Rusted drum', (118, 78, 50), .45),
+            net=m('Camouflage net', (70, 76, 50), .3), leaf=m('Camouflage leaf brown', (92, 74, 50), .25), leaf2=m('Camouflage leaf green', (60, 72, 42), .25),
+            crate=m('Olive tarpaulin', (88, 94, 64), .3), plank=m('Weathered oak', (104, 84, 60), .32),
+            ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
+            brass=m('Worn brass fittings', (158, 119, 61), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7))
 
-    def roof_z(self, q, a, b):
-        return self.EZ + self.SLOPE * min(q.depth(a, b, self.HALF), self.HALF)
+    def bag(self, x, y, z, along, rng, scale=1.0):
+        L, W, Hh = (s * scale for s in self.BAG)
+        rot = (rng.uniform(-.05, .05), rng.uniform(-.05, .05), along + rng.uniform(-.08, .08))
+        self.b.ell((x, y, z), (L / 2, W / 2, Hh / 2), self.p['bag'] if rng.random() > .3 else self.p['bag2'], 12, 6, rot)
 
     def quadrant(self, q, rng):
-        c, b, p, H = self.c, self.b, self.p, self.HALF
-        for rect in q.regions(H):
-            height_sheet(c, 'Roof boarding', q, rect, lambda a, bb: self.roof_z(q, a, bb) - .02, p['under'], .05, .03, False)
-        if q.kind == 'full':
-            for x, y in scatter_rects([tuple(q.p(0, 0)[:2]) + tuple(q.p(.5, .5)[:2])], rng, 3):
-                s = rng.uniform(.08, .16)
-                b.ell((x, y, self.RZ + .02), (s, s * .8, .03), p['moss'], 10, 5)
-        d = .035
-        while d < H - .02:
-            edge = H - d
-            if q.kind == 'straight': runs = [(q, 0, .5)]
-            elif q.kind == 'outer': runs = [(q, 0, edge), (q.turned(), 0, edge)]
-            elif q.kind == 'inner': runs = [(q, edge, .5), (q.turned(), edge, .5)]
-            else: runs = []
-            for qe, a0, a1 in runs:
-                a = a0 + rng.uniform(-.04, 0)
-                while a < a1 - .015:
-                    lo = max(a, a0)
-                    w = min(rng.uniform(.11, .19), a1 - lo)
-                    if w > .02:
-                        z = self.EZ + self.SLOPE * d + .012 + rng.uniform(0, .008)
-                        mossy = rng.random() < .12 + .35 * (d < .12)
-                        mat = p['mossy'] if mossy else (p['shingle'] if rng.random() > .35 else p['shingle2'])
-                        b.box(qe.p(lo + w / 2, edge, z), qe.dims(w - .012, .1, .018), mat, .004, qe.tilt(self.SLOPE))
-                    a = lo + w
-            d += .072
-        if q.kind == 'straight' and (q.sx > 0 if q.swap else q.sy > 0):
-            b.cylinder(q.p(.25, 0, self.RZ + .025), .05, .52, p['ridge'], 10, .01, q.along())
-        if q.kind == 'outer':
-            b.rod(q.p(0, 0, self.RZ + .03), q.p(H, H, self.EZ + .03), .028, p['ridge'], 6)
-        if q.kind != 'full' and rng.random() < .45:
-            a, bb = rng.uniform(.05, .4), rng.uniform(.08, H - .06)
-            if q.depth(a, bb, H) > 0:
-                s = rng.uniform(.06, .12)
-                b.ell(q.p(a, bb, self.roof_z(q, a, bb) + .03), (s, s * .7, .025), p['moss'], 10, 5)
+        b, p, H = self.b, self.p, self.HALF
+        for a0, b0, a1, b1 in q.regions(H):
+            b.box(q.p((a0 + a1) / 2, (b0 + b1) / 2, self.PZ / 2), q.dims(a1 - a0, b1 - b0, self.PZ), p['earth'], .01)
+        rows = ((H - .08, 4), (H - .22, 2))  # outer row four courses high, inner step two
+        for qe, a0, a1 in q.edges(H):
+            along = math.pi / 2 if qe.swap else 0.0
+            # Running bond: even courses centre on .125/.375, odd ones on 0/.25. A bag on the
+            # quadrant line a = 0 belongs to one quadrant only; none reaches the cell line.
+            owner = (qe.sy if qe.swap else qe.sx) > 0
+            for bpos, courses in rows:
+                if q.kind == 'inner' and bpos < H - .1: continue
+                for k in range(courses):
+                    for a in ((.0, .25) if k % 2 else (.125, .375)):
+                        if a == 0 and not owner: continue
+                        if not a0 - 1e-6 <= a <= a1 + 1e-6 or (q.kind != 'straight' and a > a1 - .14): continue
+                        self.bag(*qe.p(a, bpos)[:2], self.PZ + .055 + k * .1, along, rng)
+        if q.has_corner():
+            for k in range(4):
+                self.bag(*q.p(H - .1, H - .1)[:2], self.PZ + .055 + k * .1, math.pi / 4 * (1 if q.sx * q.sy > 0 else -1), rng, .95)
 
-    def chimney(self, x, y, rng):
-        b, p = self.b, self.p
-        b.box((x, y, 2.4), (.36, .36, 1.9), p['stone'], .02)
-        for k in range(4):
-            for ox, oy in ((.0, .19), (.19, .0), (.0, -.19), (-.19, .0)):
-                b.box((x + ox, y + oy, 1.75 + k * .4 + rng.uniform(0, .1)), (.3 if ox == 0 else .05, .05 if ox == 0 else .3, .16), p['stone'], .015)
-        b.box((x, y, 3.38), (.44, .44, .06), p['mortar'], .01)
-        b.box((x, y, 3.41), (.18, .18, .02), p['dark'], .003)
-        self.socket('chimney', x, y, 3.45)
+    def pad(self, cx, cy, rng):
+        b, p, z = self.b, self.p, self.PZ
+        b.cylinder((cx, cy, z + .025), self.PAD, .05, p['plate'], 8, .006, None, math.pi / 8)
+        b.cylinder((cx, cy, z + .055), .1, .03, p['dark'], 16, .004)
+        self.bolts(cx, cy, z + .055, self.PAD - .04, 8, p['iron'], .015)
+        for i in range(4):
+            a = i * math.pi / 2 + math.pi / 4
+            b.box((cx + .18 * math.cos(a), cy + .18 * math.sin(a), z + .052), (.12, .02, .006), p['dark'], 0, (0, 0, a))
+
+    def net(self, cx, cy, dx, dy, rng):
+        """Camouflage net thrown over the corner wall: a sagging sheet with scraps of leaf cloth."""
+        H = self.HALF
+        q = quadrants(cx, cy, 0)[[(1, 1), (-1, 1), (-1, -1), (1, -1)].index((dx, dy))]
+        height_sheet(self.c, 'Camouflage net', q, (.2, .2, H, H),
+                     lambda a, b: .5 + .06 * math.sin(a * 17) * math.sin(b * 13), self.p['net'], .04, .01, True)
+        for x, y in scatter_rects([q.p(.22, .22)[:2] + q.p(H - .02, H - .02)[:2]], rng, 14):
+            s = rng.uniform(.03, .06)
+            self.b.ell((x, y, .56), (s, s * .6, .01), self.p['leaf'] if rng.random() > .5 else self.p['leaf2'], 6, 3, (0, 0, rng.uniform(0, 3)))
 
     def feature(self, kind, cx, cy, mask, rng):
-        # Window light falls out of the walls under the eaves, so it sits just beyond each open side.
-        sides = side_normals(mask)
-        if kind in ('corner', 'isolated', 'junction'):
-            self.chimney(cx, cy, rng)
+        b, p = self.b, self.p
+        if kind == 'corner':
+            dx, dy = corner_direction(mask)
+            self.net(cx, cy, dx, dy, rng)
+            self.lantern(cx + dx * .39, cy + dy * .39, .56)
         elif kind == 'end':
             dx, dy = end_direction(mask)
-            self.socket('lamp', cx + dx * .58, cy + dy * .58, 1.5)
-            sides = [s for s in sides if s != (dx, dy)]
-        elif kind == 'straight' and rng.random() >= .6:
-            sides = []
-        for nx, ny in sides:
-            self.socket('window', cx + nx * .6, cy + ny * .6, .8)
+            x, y = cx + dx * .36, cy + dy * .36
+            b.cylinder((x, y, .32), .13, .62, p['rust'], 16, .008)
+            b.cylinder((x, y, .64), .135, .025, p['dark'], 16, .004)
+            self.brazier(x, y, .5, .11, rng)
 
 
-# -- Pfadfinderlager: lashed pole fence, tarp lean-tos, Kohten -----------------------
+# -- Wallanlage: turfed earth rampart, stone turret stand, log toe and stakes ---------------
 
-class Camp(Style):
-    LINE, HALF, TZ0, TZ1 = .43, .43, 1.0, 1.72
+class Wall(Style):
+    TOE, TOP = .06, .56
 
     def palette(self, m):
         return dict(
-            pole=m('Peeled pine pole', (150, 126, 92), .3), pole2=m('Weathered pole', (122, 104, 80), .3), rope=m('Hemp cord', (150, 134, 98), .3),
-            tarp=m('Ochre tarp canvas', (156, 128, 76), .25), tarp2=m('Khaki tarp canvas', (128, 120, 88), .25),
-            kohte=m('Kohte canvas', (64, 56, 48), .25), seam=m('Kohte seam', (44, 40, 36), .2),
-            pennant=m('Pennant red canvas', (146, 58, 44), .25), pennant2=m('Pennant yellow canvas', (176, 146, 70), .25),
-            iron=m('Forged iron', (96, 100, 98), .25), dark=m('Soot iron', (43, 44, 39), .18), wood=m('Old oak', (110, 88, 62), .3),
-            cut=m('Exposed timber', (145, 122, 87), .3), brass=m('Worn brass fittings', (158, 119, 61), .3),
-            lamp=m('Separate lantern emission', (244, 153, 53), .01, .7), ember=m('Separate forge ember', (230, 96, 24), .05, .9),
-            coal=m('Forge coal', (30, 29, 25), .1))
+            turf=self.turf(), stone=m('Fieldstone', (120, 118, 106), .4), walk=m('Wall walk flagstone', (146, 140, 124), .35),
+            bark=m('Bark log', (82, 64, 46), .35), cut=m('Cut log end', (156, 126, 88), .3), iron=m('Forged iron', (92, 96, 94), .25),
+            dark=m('Soot iron', (43, 44, 39), .18), tuft=m('Turf tuft', (58, 74, 36), .3), tuft2=m('Dry turf tuft', (104, 98, 62), .3),
+            ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
+            brass=m('Worn brass fittings', (158, 119, 61), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7))
 
-    def tarp_z(self, q, a, b):
-        t = min(q.depth(a, b, self.HALF), self.HALF) / self.HALF
-        sag = .05 * math.sin(math.pi * min(a, .5) / .5) * (q.kind != 'full')
-        return self.TZ0 + (self.TZ1 - self.TZ0) * t - sag
+    def turf(self):
+        """Grass on the gentle crest, bare earth on the steep flanks (by surface normal)."""
+        import bpy
+        from dawn_parts import linear
+        mat = bpy.data.materials.new('Rampart turf')
+        mat.use_nodes = True
+        n, l = mat.node_tree.nodes, mat.node_tree.links
+        bsdf = n['Principled BSDF']; bsdf.inputs['Roughness'].default_value = .9
+        geo = n.new('ShaderNodeNewGeometry')
+        split = n.new('ShaderNodeSeparateXYZ'); l.new(geo.outputs['Normal'], split.inputs[0])
+        steep = n.new('ShaderNodeMapRange'); steep.inputs['From Min'].default_value = .35; steep.inputs['From Max'].default_value = .6
+        l.new(split.outputs['Z'], steep.inputs['Value'])
+        noise = n.new('ShaderNodeTexNoise'); noise.inputs['Scale'].default_value = 9; noise.inputs['Detail'].default_value = 6
+        l.new(geo.outputs['Position'], noise.inputs['Vector'])
+        grass = n.new('ShaderNodeValToRGB')
+        grass.color_ramp.elements[0].color = (*linear((38, 54, 26)), 1); grass.color_ramp.elements[1].color = (*linear((74, 92, 44)), 1)
+        l.new(noise.outputs['Fac'], grass.inputs[0])
+        earth = n.new('ShaderNodeValToRGB')
+        earth.color_ramp.elements[0].color = (*linear((70, 56, 40)), 1); earth.color_ramp.elements[1].color = (*linear((112, 92, 66)), 1)
+        l.new(noise.outputs['Fac'], earth.inputs[0])
+        mix = n.new('ShaderNodeMixRGB'); l.new(steep.outputs['Result'], mix.inputs[0])
+        l.new(earth.outputs['Color'], mix.inputs[1]); l.new(grass.outputs['Color'], mix.inputs[2])
+        l.new(mix.outputs['Color'], bsdf.inputs['Base Color'])
+        bump = n.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .5; bump.inputs['Distance'].default_value = .01
+        fine = n.new('ShaderNodeTexNoise'); fine.inputs['Scale'].default_value = 140; l.new(geo.outputs['Position'], fine.inputs['Vector'])
+        l.new(fine.outputs['Fac'], bump.inputs['Height']); l.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
+        return mat
 
-    def post(self, x, y, rng, h=1.3):
-        b, p = self.b, self.p
-        b.cylinder((x, y, h / 2), .045, h, p['pole'] if rng.random() > .3 else p['pole2'], 10, .008)
-        b.ell((x, y, h), (.04, .04, .02), p['cut'], 8, 4)
-        b.cylinder((x, y, h - .17), .062, .05, p['rope'], 12, .01)
+    def berm(self, q, a, b):
+        d = min(q.depth(a, b, self.HALF), .42)
+        return self.TOE + (self.TOP - self.TOE) * math.sin(math.pi / 2 * d / .42) ** 1.4
 
-    def quadrant(self, q, rng, tarp=True):
-        c, b, p, L = self.c, self.b, self.p, self.LINE
-        if tarp:
-            mat = p['tarp'] if (int(q.cx * 3 + q.cy * 7) % 3) else p['tarp2']
-            for rect in q.regions(self.HALF):
-                height_sheet(c, 'Tarp lean-to', q, rect, lambda a, bb: self.tarp_z(q, a, bb), mat, .045, .015, True)
-            if q.kind == 'straight' and (q.sx > 0 if q.swap else q.sy > 0):
-                b.cylinder(q.p(.25, 0, self.TZ1 + .03), .028, .52, p['pole'], 8, .006, q.along())
-        for qe, a0, a1 in q.edges(L):
-            if a1 - a0 < .02: continue
-            b.cylinder(qe.p((a0 + a1) / 2, L, 1.1), .022, a1 - a0 + .01, p['pole2'], 8, .004, qe.along())
-            if a0 <= .25 <= a1 and (q.kind == 'straight' or .25 < L - .1):
-                self.post(*qe.p(.25, L)[:2], rng)
+    def quadrant(self, q, rng):
+        b, p, H = self.b, self.p, self.HALF
+        for rect in q.regions(H):
+            height_sheet(self.c, 'Rampart turf', q, rect, lambda a, bb: self.berm(q, a, bb), p['turf'], .04, .05, True)
+        for qe, a0, a1 in q.edges(H):
+            if a1 - a0 < .03: continue
+            b.cylinder(qe.p((a0 + a1) / 2, H - .055, .055), .055, a1 - a0 + .01, p['bark'], 10, .006, qe.along())
+            if a0 <= .25 <= a1 and (q.kind == 'straight' or .25 < H - .15):
+                x, y, _ = qe.p(.25, H - .1)
+                b.cylinder((x, y, .14), .028, .28, p['bark'], 8, .004)
+                b.ell((x, y, .28), (.028, .028, .02), p['cut'], 6, 3)
         if q.has_corner():
-            self.post(*q.p(L, L)[:2], rng, 1.38)
+            x, y, _ = q.p(H - .07, H - .07)
+            b.cylinder((x, y, .16), .045, .32, p['bark'], 8, .006)
+        for x, y in scatter_rects([q.p(.04, .04)[:2] + q.p(.48, H - .08)[:2]], rng, rng.randrange(2, 6)):
+            if math.hypot(x - q.cx, y - q.cy) < self.PAD + .1: continue
+            s = rng.uniform(.025, .05)
+            a, bb = abs(x - q.cx), abs(y - q.cy)
+            if q.swap: a, bb = bb, a
+            b.ell((x, y, self.berm(q, a, bb) + .01), (s, s, .03), p['tuft'] if rng.random() > .3 else p['tuft2'], 8, 4)
 
-    def cell(self, gx, gy, cx, cy, mask, rng):
-        kind = cell_class(mask)
-        for q in quadrants(cx, cy, mask): self.quadrant(q, rng, kind not in ('corner', 'isolated'))
-        self.feature(kind, cx, cy, mask, rng)
-
-    def kohte(self, cx, cy, radius=.47):
-        c, b, p = self.c, self.b, self.p
-        sides, top = 8, 2.25
-        cone(c, 'Kohte canvas cone', (cx, cy), radius, .02, top, p['kohte'], sides, .07, math.pi / 8)
-        for i in range(sides):
-            a = math.pi / 8 + i * math.tau / sides
-            b.rod((cx + .08 * math.cos(a), cy + .08 * math.sin(a), top + .01), (cx + radius * math.cos(a), cy + radius * math.sin(a), .04), .012, p['seam'], 5)
-        b.cylinder((cx, cy, top - .02), .07, .03, p['coal'], 12, 0)
-        b.ell((cx, cy, top - .25), (.05, .05, .02), p['ember'], 8, 4)
-        for sx in (-1, 1):
-            b.rod((cx - .2 * sx, cy - .2, top - .12), (cx + .2 * sx, cy + .2, top + .12), .022, p['pole'], 6)
-        self.socket('chimney', cx, cy, top + .1)
+    def pad(self, cx, cy, rng):
+        b, p = self.b, self.p
+        b.cylinder((cx, cy, (self.TOP + .06) / 2), self.PAD + .02, self.TOP + .06, p['stone'], 28, .02)
+        b.cylinder((cx, cy, self.TOP + .07), self.PAD - .02, .03, p['stone'], 28, .008)
+        b.cylinder((cx, cy, self.TOP + .072), self.PAD - .035, .03, p['iron'], 28, .004)
+        b.cylinder((cx, cy, self.TOP + .078), self.PAD - .065, .03, p['stone'], 28, .006)
+        self.bolts(cx, cy, self.TOP + .09, self.PAD - .05, 8, p['dark'], .014)
 
     def feature(self, kind, cx, cy, mask, rng):
         b, p = self.b, self.p
-        if kind in ('corner', 'isolated'):
-            self.kohte(cx, cy, .47 if kind == 'corner' else .43)
-            # Firelight spills out of the door, which faces away from the corner (into the camp).
+        if kind == 'corner':
             dx, dy = corner_direction(mask)
-            self.socket('fire', cx - dx * .45, cy - dy * .45, .35)
+            x, y = cx + dx * .4, cy + dy * .4
+            b.cylinder((x, y, .5), .04, 1.0, p['bark'], 8, .006)
+            self.lantern(x, y, 1.0)
         elif kind == 'end':
             dx, dy = end_direction(mask)
-            fx, fy = cx + dx * .28 - dy * .2, cy + dy * .28 + dx * .2
-            b.cylinder((fx, fy, 1.7), .035, 3.4, p['pole'], 8, .006)
-            # The pennant hangs into the cell and lies broad from above.
-            tip = (fx - dx * .42 + dy * .08, fy - dy * .42 - dx * .08)
-            plate(self.c, 'Camp pennant', (0, 0, 3.25), [(fx, fy), (fx + dy * .1, fy - dx * .1), tip], .02, p['pennant'], .004)
-            plate(self.c, 'Camp pennant stripe', (0, 0, 3.27), [(fx, fy), (fx + dy * .04, fy - dx * .04),
-                  (fx + (tip[0] - fx) * .55, fy + (tip[1] - fy) * .55)], .02, p['pennant2'], .003)
-            lx, ly = cx + dx * .28 + dy * .2, cy + dy * .28 - dx * .2
-            # The lantern hangs above the tarp ridge, so its light reaches the ground around the post.
-            b.cylinder((lx, ly, .95), .03, 1.9, p['pole2'], 8, .006)
-            self.lantern(lx, ly, 1.9)
-            for k in range(4):
-                b.rod((cx - dy * .1 + k * .05 * dx, cy + dx * .1 + k * .05 * dy, 1.12 + k * .02),
-                      (cx + dy * .2 + k * .05 * dx, cy - dx * .2 + k * .05 * dy, 1.12 + k * .02), .03, p['wood'], 7)
+            for side in (-1, 1):
+                x, y = cx + dx * .4 - dy * side * .3, cy + dy * .4 + dx * side * .3
+                b.cylinder((x, y, .55), .045, 1.1, p['bark'], 8, .006)
+                self.brazier(x, y, 1.1, .065, rng)
 
 
-STYLES = dict(burg=Burg, fort=Fort, hut=Hut, camp=Camp)
+STYLES = dict(burg=Burg, fort=Fort, feld=Feld, wall=Wall)
 
 
 # -- Concept courtyard grounds (boards only) --------------------------------------------
 
-def cobble_material(name, stone, joint, scale=4.2):
-    """Voronoi cobbles with mossy joints: one material instead of a thousand stones."""
+def fade_material(name, base_rgb, dark_rgb, scale, voronoi=False, fade=.6, size=7.6):
+    """Courtyard ground that fades out at its rim, so the game's own ground shows around it."""
     import bpy
     from dawn_parts import linear
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     n, l = mat.node_tree.nodes, mat.node_tree.links
-    bsdf = n['Principled BSDF']
-    bsdf.inputs['Roughness'].default_value = .85
-    coords = n.new('ShaderNodeNewGeometry')
-    vor = n.new('ShaderNodeTexVoronoi'); vor.feature = 'DISTANCE_TO_EDGE'; vor.inputs['Scale'].default_value = scale
-    l.new(coords.outputs['Position'], vor.inputs['Vector'])
-    cells = n.new('ShaderNodeTexVoronoi'); cells.inputs['Scale'].default_value = scale
-    l.new(coords.outputs['Position'], cells.inputs['Vector'])
-    ramp = n.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].position = .04; ramp.color_ramp.elements[1].position = .1
-    ramp.color_ramp.elements[0].color = (*linear(joint), 1); ramp.color_ramp.elements[1].color = (*linear(stone), 1)
-    l.new(vor.outputs['Distance'], ramp.inputs[0])
-    # Per-stone value only: the Voronoi cell colour is random hue, so take its luminance.
-    grey = n.new('ShaderNodeRGBToBW'); l.new(cells.outputs['Color'], grey.inputs[0])
-    lift = n.new('ShaderNodeMapRange'); lift.inputs['To Min'].default_value = .62; lift.inputs['To Max'].default_value = 1.15
-    l.new(grey.outputs[0], lift.inputs['Value'])
+    bsdf = n['Principled BSDF']; bsdf.inputs['Roughness'].default_value = .88
+    geo = n.new('ShaderNodeNewGeometry')
+    if voronoi:
+        edge = n.new('ShaderNodeTexVoronoi'); edge.feature = 'DISTANCE_TO_EDGE'; edge.inputs['Scale'].default_value = scale
+        l.new(geo.outputs['Position'], edge.inputs['Vector'])
+        cells = n.new('ShaderNodeTexVoronoi'); cells.inputs['Scale'].default_value = scale
+        l.new(geo.outputs['Position'], cells.inputs['Vector'])
+        grey = n.new('ShaderNodeRGBToBW'); l.new(cells.outputs['Color'], grey.inputs[0])
+        source, fac = edge.outputs['Distance'], grey.outputs[0]
+        ramp_points = (.03, .09)
+    else:
+        noise = n.new('ShaderNodeTexNoise'); noise.inputs['Scale'].default_value = scale; noise.inputs['Detail'].default_value = 8
+        l.new(geo.outputs['Position'], noise.inputs['Vector'])
+        source, fac, ramp_points = noise.outputs['Fac'], noise.outputs['Fac'], (.35, .7)
+    ramp = n.new('ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].position, ramp.color_ramp.elements[1].position = ramp_points
+    ramp.color_ramp.elements[0].color = (*linear(dark_rgb), 1); ramp.color_ramp.elements[1].color = (*linear(base_rgb), 1)
+    l.new(source, ramp.inputs[0])
+    lift = n.new('ShaderNodeMapRange'); lift.inputs['To Min'].default_value = .78; lift.inputs['To Max'].default_value = 1.12
+    l.new(fac, lift.inputs['Value'])
     tone = n.new('ShaderNodeMixRGB'); tone.blend_type = 'MULTIPLY'; tone.inputs[0].default_value = 1
     l.new(ramp.outputs['Color'], tone.inputs[1]); l.new(lift.outputs['Result'], tone.inputs[2])
-    l.new(tone.outputs['Color'], bsdf.inputs['Base Color'])
-    bump = n.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .6; bump.inputs['Distance'].default_value = .03
-    l.new(vor.outputs['Distance'], bump.inputs['Height']); l.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
+    # Grass reclaims the yard in patches, more towards the rim than on the worn centre.
+    patches = n.new('ShaderNodeTexNoise'); patches.inputs['Scale'].default_value = 1.4; patches.inputs['Detail'].default_value = 6
+    l.new(geo.outputs['Position'], patches.inputs['Vector'])
+    growth = n.new('ShaderNodeMapRange'); growth.inputs['From Min'].default_value = .5; growth.inputs['From Max'].default_value = .66
+    growth.inputs['To Max'].default_value = .85
+    l.new(patches.outputs['Fac'], growth.inputs['Value'])
+    grass = n.new('ShaderNodeMixRGB'); l.new(growth.outputs['Result'], grass.inputs[0])
+    l.new(tone.outputs['Color'], grass.inputs[1]); grass.inputs[2].default_value = (*linear((46, 62, 30)), 1)
+    l.new(grass.outputs['Color'], bsdf.inputs['Base Color'])
+    bump = n.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .45; bump.inputs['Distance'].default_value = .02
+    l.new(source, bump.inputs['Height']); l.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
+    # Rim fade: distance to the square's edge, broken up by noise.
+    split = n.new('ShaderNodeSeparateXYZ'); l.new(geo.outputs['Position'], split.inputs[0])
+    absx = n.new('ShaderNodeMath'); absx.operation = 'ABSOLUTE'; l.new(split.outputs['X'], absx.inputs[0])
+    absy = n.new('ShaderNodeMath'); absy.operation = 'ABSOLUTE'; l.new(split.outputs['Y'], absy.inputs[0])
+    far = n.new('ShaderNodeMath'); far.operation = 'MAXIMUM'; l.new(absx.outputs[0], far.inputs[0]); l.new(absy.outputs[0], far.inputs[1])
+    wobble = n.new('ShaderNodeTexNoise'); wobble.inputs['Scale'].default_value = 3.5; l.new(geo.outputs['Position'], wobble.inputs['Vector'])
+    edge_dist = n.new('ShaderNodeMath'); edge_dist.operation = 'MULTIPLY_ADD'
+    l.new(wobble.outputs['Fac'], edge_dist.inputs[0]); edge_dist.inputs[1].default_value = 1.1; l.new(far.outputs[0], edge_dist.inputs[2])
+    alpha = n.new('ShaderNodeMapRange'); alpha.inputs['From Min'].default_value = size / 2 + .3 - fade; alpha.inputs['From Max'].default_value = size / 2 + .3
+    alpha.inputs['To Min'].default_value = .86; alpha.inputs['To Max'].default_value = 0
+    l.new(edge_dist.outputs[0], alpha.inputs['Value']); l.new(alpha.outputs['Result'], bsdf.inputs['Alpha'])
     return mat
 
 
 def courtyard_ground(c, style, m, rect, rng):
-    """Style ground over the courtyard/build area; tagged concept-only by the caller."""
+    """Style ground over the 7 x 7 courtyard and build area, fading into the game ground."""
+    from base_structure_parts import flat_sheet
     x0, y0, x1, y1 = rect
+    size = x1 - x0
     made, b = [], Batch(c)
-    if style == 'burg':
-        made.append(flat_sheet(c, 'Cobbled courtyard', x0, y0, x1, y1, .0, cobble_material('Courtyard cobbles', (124, 118, 104), (52, 58, 36))))
-    elif style == 'fort':
-        made.append(flat_sheet(c, 'Courtyard sand', x0, y0, x1, y1, .0, m('Courtyard sand', (150, 128, 92), .2)))
-        rut = m('Wagon rut earth', (110, 90, 64), .25)
-        for off in (-.45, .45):
-            b.box(((x0 + x1) / 2, off, .003), (x1 - x0, .16, .006), rut, .002)
-            b.box((off, (y0 + y1) / 2, .004), (.16, y1 - y0, .006), rut, .002)
-    elif style == 'hut':
-        made.append(flat_sheet(c, 'Packed loam', x0, y0, x1, y1, .0, m('Packed loam', (104, 86, 64), .25)))
+    looks = dict(burg=('Courtyard cobbles', (108, 104, 94), (44, 50, 32), 6.0, True),
+                 fort=('Courtyard packed earth', (122, 104, 78), (88, 72, 52), 3.0, False),
+                 feld=('Courtyard mud', (92, 78, 58), (58, 50, 38), 3.4, False),
+                 wall=('Courtyard trampled grass', (70, 80, 46), (86, 72, 52), 2.6, False))
+    name, base, dark, scale, vor = looks[style]
+    made.append(flat_sheet(c, name, x0 - .6, y0 - .6, x1 + .6, y1 + .6, .0, fade_material(name, base, dark, scale, vor, 1.3, size)))
+    if style == 'fort':
         plank = m('Boardwalk plank', (128, 108, 82), .3)
         for axis in (0, 1):
-            t = x0
-            while t < x1 - .05:
-                if not (axis == 1 and abs(t + .08) < .45):
-                    pos = (t + .08, 0, .03) if axis == 0 else (0, t + .08, .035)
-                    b.box(pos, (.14, .9, .04) if axis == 0 else (.9, .14, .04), plank, .006)
+            t = x0 + .7
+            while t < x1 - .7:
+                if axis == 0 or abs(t + .08) > .42:
+                    pos, dims = ((t + .08, 0, .025), (.14, .8, .035)) if axis == 0 else ((0, t + .08, .03), (.8, .14, .035))
+                    b.box(pos, dims, plank, .006, None, .006, rng)
                 t += .16
-    else:
-        made.append(flat_sheet(c, 'Trampled earth', x0, y0, x1, y1, .0, m('Trampled earth', (98, 82, 62), .25)))
-        grass = m('Trampled grass', (66, 74, 44), .25)
-        for x, y in scatter_rects([rect], rng, 40):
-            if abs(x) < 1.2 or abs(y) < 1.2: continue  # paths stay bare between the gates
-            s = rng.uniform(.08, .22)
-            b.ell((x, y, -.008), (s, s * rng.uniform(.5, 1), .014), grass, 12, 4)
+    elif style == 'feld':
+        slat = m('Duckboard slat', (116, 98, 72), .3)
+        for axis in (0, 1):
+            t = x0 + .7
+            while t < x1 - .7:
+                if axis == 0 or abs(t + .06) > .36:
+                    pos, dims = ((t + .06, 0, .03), (.08, .6, .03)) if axis == 0 else ((0, t + .06, .035), (.6, .08, .03))
+                    b.box(pos, dims, slat, .004, None, .005, rng)
+                t += .13
+            for side in (-1, 1):
+                pos, dims = ((0, side * .22, .012), (x1 - x0 - 1.4, .06, .025)) if axis == 0 else ((side * .22, 0, .016), (.06, x1 - x0 - 1.4, .025))
+                b.box(pos, dims, slat, .004)
+    elif style == 'wall':
+        flag = m('Worn paving stone', (100, 96, 86), .38)
+        for axis in (0, 1):
+            t = x0 + .6
+            while t < x1 - .6:
+                w = rng.uniform(.2, .3)
+                for lane in (-.16, .16):
+                    if rng.random() < .85:
+                        pos = (t + w / 2, lane + rng.uniform(-.04, .04), .02) if axis == 0 else (lane + rng.uniform(-.04, .04), t + w / 2, .02)
+                        dims = (w - .05, .26, .04) if axis == 0 else (.26, w - .05, .04)
+                        b.box(pos, dims, flag, .015, (0, 0, rng.uniform(-.08, .08)), .02, rng)
+                t += w
     return made + b.flush('Courtyard')

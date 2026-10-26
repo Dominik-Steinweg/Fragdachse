@@ -1,13 +1,18 @@
-"""Concept renders of the rustic base styles: day, night, oblique and the neutral kit top view.
+"""Concept renders of the rustic base styles, made to be composed onto real game ground captures.
 
 Usage: blender --background --factory-startup --python base-structure-concept.py -- job.json
 job = {spec, modelHash, model, output, settings: {samples, device, denoise}, pxPerMetre, aspect, views}
 
-Concept views add a sun or moon, lamp lights at the recipe's sockets and the concept-only ground;
-they judge mood and are never runtime passes. The `top` view keeps the pipeline's soft rig, moved
-far away (bridge_parts.distant_lights) so every cell sees the same light direction, and hides the
-concept ground: kit frames and whole shapes are rendered under identical light.
-The oblique camera is a diagnostic exception, like the shape mode's side view.
+Views (all orthographic top views at the job's canvas unless noted):
+- day: sun and sky, transparent film, a shadow catcher under everything, so structures, courtyard
+  ground and cast shadows lay straight onto a game capture.
+- mask: coverage of structures and courtyard ground only (1 sample).
+- lamp: lamp and fire lights only, world black, structures visible over a white diffuse ground; the
+  board multiplies the day capture by it, as the game's light map does at night. 16-bit, Standard.
+- oblique: day light from the south-east in perspective, a diagnostic exception like the shape
+  mode's side view.
+- top: the pipeline's soft rig moved far away (bridge_parts.distant_lights) and no concept ground,
+  so kit frames and whole shapes are rendered under identical light.
 """
 import sys
 sys.dont_write_bytecode = True
@@ -29,8 +34,10 @@ shape = load('shape_helpers', 'shape-v2.py')
 draft = shape.draft
 bpy = draft.bpy
 
-# Colour, watts and height lift: fire light sits above the basket so the coals keep their colour.
-LIGHTS = {'lamp': ((1.0, .70, .40), 22, 0), 'window': ((1.0, .66, .38), 16, 0), 'fire': ((1.0, .52, .22), 40, .35)}
+# Colour, watts and height lift (fire light sits above the basket so the coals keep their colour).
+LIGHTS = {'lamp': ((1.0, .70, .40), 5, 0), 'fire': ((1.0, .55, .25), 9, .25)}
+# Game sun at noon: shadows fall towards the screen bottom (-Y), slightly left.
+SUN = (-.12, -.40, -.91)
 
 
 def sun(scene, name, direction, energy, color, angle):
@@ -49,6 +56,22 @@ def world(scene, color, strength):
     nodes['Background'].inputs[1].default_value = strength
 
 
+def plane(scene, name, size, z, color=None):
+    half = size / 2
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata([(-half, -half, z), (half, -half, z), (half, half, z), (-half, half, z)], [], [(0, 1, 2, 3)])
+    ob = bpy.data.objects.new(name, mesh)
+    scene.collection.objects.link(ob)
+    if color:
+        mat = bpy.data.materials.new(name)
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes['Principled BSDF']
+        bsdf.inputs['Base Color'].default_value = (*color, 1)
+        bsdf.inputs['Roughness'].default_value = 1
+        mesh.materials.append(mat)
+    return ob
+
+
 def emission_scale(factor):
     for mat in bpy.data.materials:
         if not mat.name.startswith('Separate') or not mat.node_tree: continue
@@ -65,16 +88,20 @@ def render(job):
     spec = job['spec']
     width = round(spec['orthoScale'] * job['pxPerMetre'])
     scene.render.resolution_x, scene.render.resolution_y = width, round(width * job.get('aspect', 1))
-    scene.view_settings.view_transform = 'AgX'
+    scene.view_settings.view_transform = 'Standard'
+    scene.render.film_transparent = True
     rig = [ob for ob in scene.objects if ob.type == 'LIGHT']
     concept = [ob for ob in scene.objects if ob.get('fdConceptOnly')]
     sockets = {name: ob.matrix_world.translation.copy() for name, ob in asset['sockets'].items()}
     views = job['views']
+    samples = scene.cycles.samples
+    span = spec['orthoScale'] * 2.5
 
     def show(objects, visible):
         for ob in objects: ob.hide_render = not visible
 
-    def shoot(name):
+    def shoot(name, depth='8'):
+        scene.render.image_settings.color_depth = depth
         scene.render.filepath = str(out / f'{name}.png')
         bpy.ops.render.render(write_still=True, scene=scene.name)
 
@@ -82,48 +109,61 @@ def render(job):
         from bridge_parts import distant_lights
         show(concept, False)
         distant_lights(scene, factor=10)
-        scene.render.film_transparent = True
         shoot('top')
     show(rig, False)
     show(concept, True)
-    scene.render.film_transparent = False
-    day_sun = sun(scene, 'Concept afternoon sun', (-.3, .35, -.89), 3.4, (1.0, .94, .84), 2.5)
+    catcher = plane(scene, 'Concept shadow catcher', span, -.002)
+    catcher.is_shadow_catcher = True
+    day_sun = sun(scene, 'Concept noon sun', SUN, 3.2, (1.0, .96, .9), 2.0)
+    world(scene, (.6, .68, .8), .6)
     if 'day' in views:
-        world(scene, (.56, .66, .80), .75)
         shoot('day')
+    if 'mask' in views:
+        catcher.hide_render = True
+        scene.cycles.samples, scene.cycles.use_denoising = 1, False
+        shoot('mask')
+        scene.cycles.samples, scene.cycles.use_denoising = samples, job['settings']['denoise']
+        catcher.hide_render = False
     if 'oblique' in views:
+        catcher.hide_render = True
+        floor = plane(scene, 'Concept oblique floor', span, -.004, (.05, .07, .035))
         camera = scene.camera
-        ortho, location, rotation = camera.data.type, camera.location.copy(), camera.rotation_euler.copy()
         camera.data.type = 'PERSP'; camera.data.lens = 38
         deps = bpy.context.evaluated_depsgraph_get()
         points = [o.evaluated_get(deps).matrix_world @ Vector(c) for o in scene.objects
-                  if o.type == 'MESH' and not o.hide_render and not o.get('fdConceptOnly') for c in o.evaluated_get(deps).bound_box]
+                  if o.type == 'MESH' and not o.hide_render and not o.get('fdConceptOnly') and o is not floor
+                  for c in o.evaluated_get(deps).bound_box]
         lo = Vector([min(p[i] for p in points) for i in range(3)]); hi = Vector([max(p[i] for p in points) for i in range(3)])
         target = (lo + hi) / 2
-        radius = (hi - lo).length / 2
-        camera.location = target + Vector((5.6, -8.4, 7.4)).normalized() * radius * 2.3
+        camera.location = target + Vector((5.6, -8.4, 7.4)).normalized() * (hi - lo).length / 2 * 2.3
         camera.rotation_euler = (target - camera.location).to_track_quat('-Z', 'Y').to_euler()
-        keep = scene.render.resolution_x, scene.render.resolution_y
         scene.render.resolution_x, scene.render.resolution_y = 1100, 760
-        world(scene, (.56, .66, .80), .75)
+        scene.render.film_transparent = False
         shoot('oblique')
-        scene.render.resolution_x, scene.render.resolution_y = keep
-        camera.data.type, camera.location, camera.rotation_euler = ortho, location, rotation
-    if 'night' in views:
+        scene.render.film_transparent = True
+        floor.hide_render = True
+    if 'lamp' in views:
+        catcher.hide_render = True
         day_sun.hide_render = True
-        sun(scene, 'Concept moon', (.35, -.45, -.82), .05, (.62, .72, 1.0), 1.0)
-        world(scene, (.03, .04, .08), .6)
+        world(scene, (0, 0, 0), 0)
+        white = plane(scene, 'Concept light catcher', span, -.003, (.8, .8, .8))
         emission_scale(1.5)
         for name, position in sockets.items():
             kind = name.split('_')[0]
             if kind not in LIGHTS: continue
             color, energy, lift = LIGHTS[kind]
             data = bpy.data.lights.new('Concept ' + name, 'POINT')
-            data.energy, data.color, data.shadow_soft_size = energy, color, .12
+            data.energy, data.color, data.shadow_soft_size = energy, color, .1
             ob = bpy.data.objects.new('Concept ' + name, data)
             ob.location = position + Vector((0, 0, lift))
             scene.collection.objects.link(ob)
-        shoot('night')
+        width = round(spec['orthoScale'] * job['pxPerMetre'])
+        scene.render.resolution_x, scene.render.resolution_y = width, round(width * job.get('aspect', 1))
+        scene.camera.data.type = 'ORTHO'
+        scene.camera.location, scene.camera.rotation_euler = (0, 0, 8), (0, 0, 0)
+        scene.render.film_transparent = False
+        shoot('lamp', '16')
+        white.hide_render = True
     draft.save(out / 'concept.json', dict(sockets={k: list(v) for k, v in sockets.items()},
                objects=sum(1 for o in scene.objects if o.type == 'MESH')))
 

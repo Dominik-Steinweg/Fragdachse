@@ -1,0 +1,93 @@
+{
+  "name": "base-rustic-ground",
+  "description": "Game ground behind the rustic base concepts: map 04's persistent base site (old base tiles, glow and base lights hidden) and a free meadow for the outpost sheet, at 64 px per metre, noon and night.",
+  "viewport": {
+    "width": 1472,
+    "height": 768
+  },
+  "board": {
+    "columns": 2,
+    "tileWidth": 736
+  },
+  "hud": false,
+  "scenario": {
+    "classId": "inspector_gadachs",
+    "seed": 12345,
+    "mapId": "4",
+    "player": {
+      "gridX": 52,
+      "gridY": 33
+    }
+  },
+  "times": [
+    {
+      "id": "day",
+      "timeOfDay": 720,
+      "label": "12:00"
+    },
+    {
+      "id": "night",
+      "timeOfDay": 1380,
+      "label": "23:00"
+    }
+  ],
+  "layouts": [
+    {
+      "id": "map04"
+    }
+  ],
+  "setup": [
+    {
+      "op": "js",
+      "code": "const s = ck.scene; const walk = (list, fn) => { for (const o of list) { fn(o); if (o.list) walk(o.list, fn); } }; const hidden = []; const hide = () => walk(s.children.list, o => { const k = o.texture && o.texture.key; const n = (o.constructor && o.constructor.name) || ''; if (k === 'base' || k === '__WHITE' || (k && k.startsWith('__base_accent_glow')) || /BarSdf|HealthBar|Wildlife/.test(n)) { o.setVisible(false); hidden.push(n || k); } }); hide(); const seen = new Set(); const visit = (o, d) => { if (!o || typeof o !== 'object' || seen.has(o) || d > 4) return null; seen.add(o); if (typeof o.setLight === 'function' && typeof o.releaseLight === 'function' && typeof o.pulse === 'function') return o; for (const k of Object.keys(o)) { let r = null; try { r = visit(o[k], d + 1); } catch (e) {} if (r) return r; } return null; }; const lighting = visit(s, 0); if (lighting) { const proto = Object.getPrototypeOf(lighting); if (!proto.__fdBaseless) { const orig = proto.setLight; proto.setLight = function (key, preset, ...rest) { if (preset === 'baseGlow' || preset === 'spore_turret') return; return orig.call(this, key, preset, ...rest); }; proto.__fdBaseless = true; } } s.events.on('postupdate', hide); s.events.on('prerender', hide); ck.warnings.push('base lights filtered: ' + !!lighting + ', hidden: ' + [...new Set(hidden)].join(','));"
+    },
+    {
+      "action": "renderDebug",
+      "disable": [
+        "fogDisplay"
+      ]
+    },
+    {
+      "op": "step",
+      "frames": 90
+    }
+  ],
+  "shots": [
+    {
+      "id": "core",
+      "label": "persistent base site",
+      "do": [
+        {
+          "op": "camera",
+          "at": {
+            "gridX": 77,
+            "gridY": 19
+          },
+          "zoom": 2
+        },
+        {
+          "op": "step",
+          "frames": 30
+        }
+      ]
+    },
+    {
+      "id": "meadow",
+      "label": "meadow north-east",
+      "do": [
+        {
+          "op": "camera",
+          "at": {
+            "gridX": 77,
+            "gridY": 7
+          },
+          "zoom": 2
+        },
+        {
+          "op": "step",
+          "frames": 30
+        }
+      ]
+    }
+  ]
+}

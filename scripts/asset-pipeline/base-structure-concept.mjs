@@ -1,6 +1,6 @@
 // Concept renders of the rustic base styles: core, outpost sheet and 47-mask kit per style.
 // node scripts/asset-pipeline/base-structure-concept.mjs --output D:/Fragdachse-render/base-rustic/concept/<label>
-//   [--styles burg,fort,hut,camp] [--layouts core,outposts,kit] [--samples 24] [--variant 0]
+//   [--styles burg,fort,feld,wall] [--layouts core,outposts,kit] [--samples 24] [--variant 0]
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -8,7 +8,7 @@ import { repoRoot, resolveBlender, renderProcess } from './preview-v2.mjs';
 import { digest, pythonSources } from './draft-v2.mjs';
 
 const { values } = parseArgs({ options: {
-  output: { type: 'string' }, styles: { type: 'string', default: 'burg,fort,hut,camp' },
+  output: { type: 'string' }, styles: { type: 'string', default: 'burg,fort,feld,wall' },
   layouts: { type: 'string', default: 'core,outposts,kit' }, samples: { type: 'string', default: '24' },
   variant: { type: 'string', default: '0' }, device: { type: 'string', default: 'OPTIX' }, blender: { type: 'string' },
 } });
@@ -16,8 +16,8 @@ if (!values.output) throw Error('--output required');
 
 // Canvas per layout: orthoScale in metres, aspect = height / width, views to render.
 const LAYOUTS = {
-  core: { orthoScale: 11, aspect: 1, views: ['day', 'night', 'oblique'] },
-  outposts: { orthoScale: 22, aspect: 10 / 22, views: ['top', 'day', 'night'] },
+  core: { orthoScale: 11, aspect: 1, views: ['day', 'mask', 'oblique', 'lamp'] },
+  outposts: { orthoScale: 17, aspect: 10 / 17, views: ['top', 'day', 'mask', 'lamp'] },
   kit: { orthoScale: 14, aspect: 1, views: ['top'] },
 };
 
