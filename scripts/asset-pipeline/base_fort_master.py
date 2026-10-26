@@ -135,10 +135,16 @@ class FortMaster:
             straw=m('Straw litter', (170, 146, 92), .2), chip=m('Wood chips', (150, 120, 84), .25),
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
             brass=m('Worn brass fittings', (158, 119, 61), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7),
-            tuft=m('Turf tuft', (58, 74, 36), .3), tuft2=m('Dry turf tuft', (104, 98, 62), .3))
+            tuft=m('Turf tuft', (58, 74, 36), .3), tuft2=m('Dry turf tuft', (104, 98, 62), .3),
+            fresh=m('Fresh bark log', (124, 98, 68), .3), freshcut=m('Fresh cut log end', (196, 164, 116), .25),
+            mossy=m('Mossy log tip', (96, 104, 62), .35), moss=m('Masonry moss', (60, 76, 38), .5), fern=m('Fern frond', (52, 78, 34), .3),
+            fern2=m('Dry fern frond', (92, 90, 46), .3), bloom=m('Meadow flower white', (214, 210, 190), .1),
+            bloom2=m('Meadow flower yellow', (204, 172, 64), .1), nail=m('Soot iron', (43, 44, 39), .18),
+            stump=m('Weathered stump top', (104, 94, 78), .35))
         self.earth = ground_material('Earthwork loam', (104, 86, 62), (70, 56, 40), .6)
         self.track = ground_material('Trampled track', (100, 86, 66), (68, 58, 44))
         self.loam = ground_material('Courtyard loam', (118, 100, 74), (84, 68, 50), .25)
+        self.puddle = ground_material('Puddle', (30, 33, 33), (22, 24, 25), 0, True, False)
 
     def socket(self, name, xyz):
         self.sockets[f'{name}_{len(self.sockets)}'] = xyz
@@ -146,11 +152,13 @@ class FortMaster:
     # -- shared parts ---------------------------------------------------------------
     def log(self, t, x, y, h, r=None):
         rng, b = self.rng, self.b
-        r = r or LOG_R + rng.uniform(-.012, .01)
-        h += rng.uniform(-.08, .08)
-        b.cylinder(t.p(x, y, h / 2), r, h, self.p['bark'], 10, .008, None, rng.uniform(0, 1))
+        r = r or LOG_R + rng.uniform(-.014, .012)
+        h += rng.uniform(-.09, .09)
+        fresh = rng.random() < .1                      # a replaced log stands out lighter
+        b.cylinder(t.p(x, y, h / 2), r, h, self.p['fresh' if fresh else 'bark'], 10, .008, None, rng.uniform(0, 1))
         px, py, _ = t.p(x + rng.uniform(-.008, .008), y + rng.uniform(-.008, .008))
-        cone(self.c, 'Sharpened log tip', (px, py), r, h, h + .17, self.p['cut'], 8, 0, rng.uniform(0, 1))
+        tip = 'freshcut' if fresh else ('mossy' if rng.random() < .16 else 'cut')
+        cone(self.c, 'Sharpened log tip', (px, py), r, h, h + rng.uniform(.14, .2), self.p[tip], 8, 0, rng.uniform(0, 1))
 
     def logs(self, t, a, b, fixed, along_x, h):
         n = max(1, round(abs(b - a) / LOG_PITCH))
@@ -186,6 +194,10 @@ class FortMaster:
                 cx, cy = ((u + w / 2, v + length / 2) if boards_along_y else (v + length / 2, u + w / 2))
                 size = ((w - .014, length - .012, .045) if boards_along_y else (length - .012, w - .014, .045))
                 b.box(t.p(cx, cy, z - .022 + rng.uniform(0, .006)), size, mat, .006, t.r(), .005, rng)
+                for end in (v + .05, v + length - .05):          # two nails at each board end
+                    for side in (-.03, .03):
+                        nx, ny = ((u + w / 2 + side, end) if boards_along_y else (end, u + w / 2 + side))
+                        b.cylinder(t.p(nx, ny, z + .002), .009, .006, p['nail'], 6, 0)
                 v += length
             u += w
 
@@ -258,29 +270,48 @@ class FortMaster:
         self.lantern(t, -3.72, 2.0, 1.15, (-LINE, 2.0, 1.45))
         self.lantern(t, -2.36, 2.36, TOWER_DECK + .55, (-inner_post, inner_post, TOWER_DECK + .95))
         self.gate(t)
-        if k == 0: self.flag(t)
+        self.flag(t)
+        self.wall_details(t, k)
 
     def gate(self, t):
         """North gate: iron-banded sills continue the outer palisade line and the inner edge line."""
         b, p = self.b, self.p
         # Dark, flush and narrow, so they read as thresholds in the gravel, never as a wall.
         x = 1.5 + WALL / 2 - .14
-        for y, width in ((LINE, .17), (INNER + .05, .09)):
+        for y, width in ((LINE, .11), (INNER + .05, .065)):
             self.beam(t, (-x, y), (x, y), .018, width, .04, p['tar'])
             for f in (-.66, 0, .66):
                 b.box(t.p(f * x, y, .018), (.04, width + .01, .038), p['iron'], .003, t.r())
 
     def flag(self, t):
+        """Pennant on the tower's corner post; every pennant blows the same way (world +X)."""
         from dawn_parts import plate
         b, p = self.b, self.p
-        x, y = -LINE, LINE
-        b.cylinder(t.p(x, y, 2.55 + .6), .035, 1.2, p['oak'], 8, .004)
-        tip = t.p(x + .62, y - .1)[:2]
-        root_a, root_b = t.p(x + .03, y)[:2], t.p(x + .03, y - .26)[:2]
+        x, y, _ = t.p(-LINE, LINE)
+        b.cylinder((x, y, 2.55 + .6), .035, 1.2, p['oak'], 8, .004)
+        root_a, root_b, tip = (x + .03, y + .13), (x + .03, y - .13), (x + .66, y - .04)
         plate(self.c, 'Fort pennant', (0, 0, 3.05), [root_a, tip, root_b], .02, p['flag'], .004)
-        mid = ((root_a[0] + tip[0]) / 2, (root_a[1] + tip[1]) / 2)
-        plate(self.c, 'Fort pennant band', (0, 0, 3.07), [root_a, mid, ((root_a[0] + root_b[0]) / 2, (root_a[1] + root_b[1]) / 2)],
+        plate(self.c, 'Fort pennant band', (0, 0, 3.07), [root_a, ((root_a[0] + tip[0]) / 2, (root_a[1] + tip[1]) / 2 + .01), (x + .03, y)],
               .02, p['flag2'], .003)
+
+    def wall_details(self, t, k):
+        """Iron clamps on the wales, a hatch in the tower deck and, on two sides, a woodpile outside."""
+        b, p = self.b, self.p
+        for i in range(6):
+            u = -3.1 + i * .27
+            if u < -1.8: b.box(t.p(u, LINE - LOG_R - .04, 1.26), (.04, .1, .04), p['iron'], .004, t.r())
+            v = 3.1 - i * .27
+            if v > 1.8: b.box(t.p(-LINE + LOG_R + .04, v, 1.26), (.1, .04, .04), p['iron'], .004, t.r())
+        hx, hy = -2.78, 2.78
+        b.box(t.p(hx, hy, TOWER_DECK + .004), (.36, .36, .03), p['tar'], .004, t.r())
+        for j in range(3):
+            b.box(t.p(hx - .1 + j * .1, hy, TOWER_DECK + .012), (.085, .3, .025), p['plank'], .004, t.r())
+        b.cylinder(t.p(hx + .1, hy, TOWER_DECK + .03), .03, .012, p['iron'], 10, 0)
+        if k % 2 == 0:
+            for row in range(2):
+                for j in range(3 - row):
+                    y, z = 3.58 + j * .13 + row * .065, .065 + row * .11
+                    b.rod(t.p(-2.48, y, z), t.p(-1.86, y, z), .062, p['bark'], 10)
 
     # -- ground: glacis, approaches, chips, courtyard ------------------------------------
     def glacis(self, k):
@@ -298,8 +329,8 @@ class FortMaster:
             return (.22 * f ** 1.5 + .004, min(1.0, f * 1.7), .2 * f)
         turned_sheet(self.c, 'Glacis', k, -3.5 - width * 1.3, 3.48, 3.5, 3.5 + width * 1.3, sample, self.earth, .06)
         b = self.b
-        for _ in range(28):
-            u, v = rng.uniform(-4.1, 3.4), rng.uniform(3.55, 4.05)
+        for _ in range(55):
+            u, v = rng.uniform(-4.1, 3.4), rng.uniform(3.55, 4.15)
             if abs(u) < 1.5: continue
             if rng.random() < .6:
                 s = rng.uniform(.035, .07)
@@ -311,12 +342,18 @@ class FortMaster:
     def approach(self, k):
         """Worn gate passage and road through the glacis, fading out into the meadow."""
         def sample(x, y):
-            if abs(x) > 1.9 or not 2.4 < y < 5.4: return None
+            if abs(x) > 1.9 or not 1.1 < y < 5.4: return None
             f = max(0.0, 1 - max(0.0, abs(x) - 1.15) / .75) * min(1.0, max(0.0, (5.4 - y) / 1.4))
+            if y < 2.5: f *= .45 * min(1.0, (y - 1.1) / .6)                   # worn path over the courtyard gravel
             f *= .85 + .15 * wobble(x * 1.5, y * 1.5, k + 2)
             rut = max(0.0, 1 - abs(abs(x) - .55) / .12) * .5
             return (.003, min(1.0, f * .85), min(1.0, .2 + rut))
-        turned_sheet(self.c, 'Gate approach', k, -1.9, 2.4, 1.9, 5.4, sample, self.track, .08)
+        turned_sheet(self.c, 'Gate approach', k, -1.9, 1.1, 1.9, 5.4, sample, self.track, .08)
+        t, rng = Turn(k), self.rng
+        for _ in range(rng.randrange(1, 3)):                                      # puddles in the ruts
+            x, y = rng.choice((-.55, .55)) + rng.uniform(-.05, .05), rng.uniform(3.9, 4.9)
+            s = rng.uniform(.16, .3)
+            self.b.ell(t.p(x, y, .008), (s * .45, s, .006), self.puddle, 14, 3, t.r(0, 0, rng.uniform(-.2, .2)))
 
     def gutter(self, k):
         """Stone-lined gutter along the two courtyard faces of the quarter's arms."""
@@ -345,6 +382,9 @@ class FortMaster:
             self.beam(Turn(k), (.32, 0), (.86, 0), .03, .12, .05, p['oak'])
         b.cylinder((0, 0, .025), .3, .05, p['stone'], 24, .02)
         b.cylinder((0, 0, .05), .12, .02, p['iron'], 16, .004)
+        for i in range(14):                                                       # grass in the joints
+            a = rng.uniform(0, math.tau)
+            b.ell((1.0 * math.cos(a), 1.0 * math.sin(a), .045), (.03, .02, .012), p['tuft'], 8, 3)
 
     def chips(self, k, count=50):
         t, b, rng, p = Turn(k), self.b, self.rng, self.p
@@ -355,6 +395,36 @@ class FortMaster:
             if side < .5 and abs(x) < 1.5: continue
             mat = p['straw'] if rng.random() < .35 else p['chip']
             b.box(t.p(x, y, .012), (rng.uniform(.03, .07), rng.uniform(.01, .025), .01), mat, 0, t.r(0, 0, rng.uniform(0, 3.2)))
+
+    def forest(self, k):
+        """Stumps of the trees the fort was built from, ferns at the tower corners, flowers on the bank."""
+        t, b, rng, p = Turn(k), self.b, self.rng, self.p
+        placed = 0
+        while placed < 2:
+            u, v = rng.uniform(-4.6, 3.8), rng.uniform(4.25, 5.0)
+            if abs(u) < 2.0: continue
+            r, h = rng.uniform(.13, .2), rng.uniform(.08, .16)
+            b.cylinder(t.p(u, v, h / 2), r, h, p['bark'], 14, .01, None, rng.uniform(0, 1))
+            b.cylinder(t.p(u, v, h + .004), r - .02, .01, p['stump'], 14, 0)
+            for ring in (.45, .75):
+                b.cylinder(t.p(u, v, h + .008), (r - .02) * ring, .004, p['tar'], 14, 0)
+            if rng.random() < .8:
+                b.ell(t.p(u + r * .25, v, h + .01), (r * .55, r * .4, .012), p['moss'], 10, 3)
+            for _ in range(8):
+                a, d = rng.uniform(0, 6.3), rng.uniform(r + .05, r + .35)
+                b.box(t.p(u + d * math.cos(a), v + d * math.sin(a), .01), (rng.uniform(.03, .06), .015, .01), p['chip'], 0,
+                      t.r(0, 0, rng.uniform(0, 3.2)))
+            placed += 1
+        cx, cy = -3.98, 3.98
+        for i in range(9):
+            a = i * math.tau / 9 + rng.uniform(-.15, .15)
+            ln = rng.uniform(.18, .28)
+            b.ell(t.p(cx + ln * .5 * math.cos(a), cy + ln * .5 * math.sin(a), .07), (ln * .5, .045, .012),
+                  p['fern'] if rng.random() > .25 else p['fern2'], 10, 3, t.r(rng.uniform(-.2, .2), 0, a))
+        for _ in range(22):
+            u, v = rng.uniform(-4.2, 3.4), rng.uniform(3.62, 4.15)
+            if abs(u) < 1.6: continue
+            b.ell(t.p(u, v, .1), (.016, .016, .01), p['bloom'] if rng.random() > .4 else p['bloom2'], 6, 3)
 
     def loam_courtyard(self):
         """The earlier loam study: packed loam over the build area."""
@@ -385,9 +455,10 @@ class FortMaster:
             self.approach(k)
             self.gutter(k)
             self.chips(k)
+            self.forest(k)
         self.rose()
         if self.ground == 'loam': self.loam_courtyard()
         for ob in self.b.flush('Fort master'):
-            if any(key in ob.name for key in ('Wood chips', 'Straw', 'Turf')):
+            if any(key in ob.name for key in ('Wood chips', 'Straw', 'Turf', 'Puddle', 'Fern', 'Meadow flower', 'Masonry moss')):
                 ob['fdGround'] = True
         return self.sockets

@@ -23,8 +23,10 @@ ROOT = Path(__file__).resolve().parents[2]
 # Layout -> capture shot, crop box, pixels per metre of the render, and the core grid offset in cells
 # (None: the outpost sheet's own origin).
 CROPS = {'core': ('01-core', (384, 32, 1088, 736), 64, 2.5), 'core-gravel': ('01-core', (384, 32, 1088, 736), 64, 2.5),
-         'core-loam': ('01-core', (384, 32, 1088, 736), 64, 2.5), 'wide-loam': ('03-wide', (480, 128, 992, 640), 32, 5.0),
-         'outposts': ('02-meadow', (288, 128, 1376, 768), 64, None)}
+         'core-loam': ('01-core', (384, 32, 1088, 736), 64, 2.5), 'wide-loam': ('05-wide', (480, 128, 992, 640), 32, 5.0),
+         'outposts': ('04-meadow', (288, 128, 1376, 768), 64, None)}
+FOG_SHOT = {'01-core': '02-core-fog'}   # same simulation frame with the game's ground fog switched on
+BLOOM = (.55, 5, .35, 14)               # weight/radius pairs of the night glow round lamps and fire
 # (cell, turret, angle in degrees) on the core grid 0..6 and the outpost sheet.
 TURRETS = dict(core=[((0, 0), 'plasma', 225), ((1, 0), 'rocket', 260), ((6, 1), 'spore', 0),
                      ((6, 6), 'plasma', 45), ((0, 5), 'rocket', 160), ((5, 6), 'spore', 0)],
@@ -91,8 +93,26 @@ def compose(folder, ground, style, layout, turrets=True):
     struct_n = struct_day * ambient + lin(lamp) * LAMP_GAIN
     night = struct_n * mask + ground_n * (1 - mask)
     night = lin(turret[:, :, :3]) * (ambient + light) * ta + night * (1 - ta)
+    # Glow round lanterns and fire, as the game's bloom adds it.
+    hot = np.clip(lin(lamp) * LAMP_GAIN - .3, 0, None) * mask
+    w1, r1, w2, r2 = BLOOM
+    night = night + w1 * blur(hot, r1) + w2 * blur(hot, r2)
+    day_lin = lin(day_rgb)
+    if shot in FOG_SHOT:
+        fog_d = np.asarray(Image.open(ground / f'map04-day__{FOG_SHOT[shot]}.png').convert('RGB').crop(box), float) / 255
+        fog_n = np.asarray(Image.open(ground / f'map04-night__{FOG_SHOT[shot]}.png').convert('RGB').crop(box), float) / 255
+        day_lin = day_lin + np.clip(lin(fog_d) - ld, 0, None)
+        night = night + np.clip(lin(fog_n) - ln, 0, None)
     to_img = lambda x: Image.fromarray(np.clip(x * 255, 0, 255).astype('uint8'), 'RGB')
-    return to_img(day_rgb), to_img(srgb(night)), ambient
+    return to_img(srgb(day_lin)), to_img(srgb(night)), ambient
+
+
+def blur(rgb, radius):
+    """Separable Gaussian blur of a float image (sigma = radius px)."""
+    k = np.exp(-.5 * (np.arange(-3 * radius, 3 * radius + 1) / radius) ** 2)
+    k /= k.sum()
+    out = np.apply_along_axis(lambda v: np.convolve(v, k, 'same'), 0, rgb)
+    return np.apply_along_axis(lambda v: np.convolve(v, k, 'same'), 1, out)
 
 
 def game(im):
@@ -222,9 +242,9 @@ def palisade_board(folder, ground, round_label):
     height = 84 + sum(28 + max(im.height for _, im in row) + gap for row in rows)
     board = Image.new('RGB', (width, height), BG)
     d = ImageDraw.Draw(board)
-    label(d, (gap, 12), f'{round_label} · Palisadenschanze – der Kern als zusammenhängendes Fort', 26)
-    label(d, (gap, 48), 'Kiesboden des Spiels (Karte 04, 12:00 / 23:00) · 1:1 = 32 px pro Feld · Decks frei für Türme · '
-                        'Probetürme mittig auf ihren Zellen', 15, MUTED)
+    label(d, (gap, 12), f'{round_label} · Palisadenschanze – Details und Einbettung', 26)
+    label(d, (gap, 48), 'Kiesboden und Bodennebel des Spiels (Karte 04, 12:00 / 23:00), Leuchten nachts wie Bloom · 1:1 = 32 px '
+                        'pro Feld · Decks frei für Türme · Probetürme mittig auf ihren Zellen', 15, MUTED)
     y = 84
     for row in rows:
         x = gap

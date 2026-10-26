@@ -72,6 +72,28 @@
       ]
     },
     {
+      "id": "core-fog",
+      "label": "persistent base site with fog (same frame)",
+      "do": [
+        {
+          "action": "renderDebug",
+          "disable": []
+        }
+      ]
+    },
+    {
+      "id": "fog-off",
+      "label": "fog off again",
+      "do": [
+        {
+          "action": "renderDebug",
+          "disable": [
+            "fogDisplay"
+          ]
+        }
+      ]
+    },
+    {
       "id": "meadow",
       "label": "meadow north-east",
       "do": [
