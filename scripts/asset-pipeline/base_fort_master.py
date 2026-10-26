@@ -139,9 +139,9 @@ class FortMaster:
             fresh=m('Fresh bark log', (124, 98, 68), .3), freshcut=m('Fresh cut log end', (196, 164, 116), .25),
             mossy=m('Mossy log tip', (96, 104, 62), .35), moss=m('Masonry moss', (60, 76, 38), .5), fern=m('Fern frond', (52, 78, 34), .3),
             fern2=m('Dry fern frond', (92, 90, 46), .3), bloom=m('Meadow flower white', (214, 210, 190), .1),
-            bloom2=m('Meadow flower yellow', (204, 172, 64), .1), nail=m('Soot iron', (43, 44, 39), .18),
-            stump=m('Weathered stump top', (104, 94, 78), .35))
-        self.earth = ground_material('Earthwork loam', (104, 86, 62), (70, 56, 40), .6)
+            bloom2=m('Meadow flower yellow', (204, 172, 64), .1), nail=m('Soot iron', (43, 44, 39), .18))
+        self.earth = ground_material('Earthwork loam', (98, 80, 58), (64, 52, 38), .15)
+        self.bank = ground_material('Grassed bank', (78, 92, 50), (50, 64, 32), .5)
         self.track = ground_material('Trampled track', (100, 86, 66), (68, 58, 44))
         self.loam = ground_material('Courtyard loam', (118, 100, 74), (84, 68, 50), .25)
         self.puddle = ground_material('Puddle', (30, 33, 33), (22, 24, 25), 0, True, False)
@@ -315,29 +315,56 @@ class FortMaster:
 
     # -- ground: glacis, approaches, chips, courtyard ------------------------------------
     def glacis(self, k):
-        """Earth bank round the north side and the north-west corner; it opens for the gate road."""
-        rng, t = self.rng, Turn(k)
-        width = .7
+        """Earth banked against the north palisade and round the north-west corner.
 
-        def sample(x, y):
+        A narrow strip of trodden dark earth hugs the log feet; beyond it a grassed bank of uneven
+        width runs out softly into the meadow. Both open for the gate road. Long grass grows in
+        clumps along the foot, as it does where a mower never reaches.
+        """
+        rng, t, b, p = self.rng, Turn(k), self.b, self.p
+        width = .9
+
+        def out_of(x, y):
+            return y - 3.5 if x >= -3.5 else math.hypot(-3.5 - x, y - 3.5)
+
+        def road(x):
+            return min(1.0, max(0.0, (abs(x) - 1.45) / .45))
+
+        def bank(x, y):
             if y < 3.5 - .02 or x > 3.5: return None
-            out = y - 3.5 if x >= -3.5 else math.hypot(-3.5 - x, y - 3.5)
-            w = width * (1 + .22 * wobble(x, y, k))
-            f = max(0.0, 1 - out / w)
-            f *= min(1.0, max(0.0, (abs(x) - 1.45) / .45))                    # gate road
+            w = width * (1 + .38 * wobble(x * .9, y * .9, k))
+            f = max(0.0, 1 - out_of(x, y) / w) * road(x)
             if f <= 0: return (.004, 0.0, 0.0)
-            return (.22 * f ** 1.5 + .004, min(1.0, f * 1.7), .2 * f)
-        turned_sheet(self.c, 'Glacis', k, -3.5 - width * 1.3, 3.48, 3.5, 3.5 + width * 1.3, sample, self.earth, .06)
-        b = self.b
-        for _ in range(55):
-            u, v = rng.uniform(-4.1, 3.4), rng.uniform(3.55, 4.15)
-            if abs(u) < 1.5: continue
-            if rng.random() < .6:
-                s = rng.uniform(.035, .07)
-                b.ell(t.p(u, v, .12), (s, s, .05), self.p['tuft'] if rng.random() > .3 else self.p['tuft2'], 8, 4)
-            else:
+            soft = f * f * (3 - 2 * f)
+            return (.2 * f ** 1.6 + .004, min(1.0, soft * 1.3), .1 * (1 - f))
+
+        def foot(x, y):
+            if y < 3.5 - .02 or x > 3.5: return None
+            w = .2 * (1 + .45 * wobble(x * 2.1, y * 2.1, k + 7))
+            f = max(0.0, 1 - out_of(x, y) / w) * road(x)
+            if f <= 0: return (.008, 0.0, 0.0)
+            return (.2 * max(0.0, 1 - out_of(x, y) / width) ** 1.6 + .008, min(1.0, f * 1.4), .45 * f)
+        turned_sheet(self.c, 'Glacis bank', k, -3.5 - width * 1.4, 3.48, 3.5, 3.5 + width * 1.4, bank, self.bank, .06)
+        turned_sheet(self.c, 'Palisade foot', k, -3.5 - .4, 3.48, 3.5, 3.5 + .4, foot, self.earth, .04)
+        for _ in range(24):                                                       # grass clumps along the foot
+            u = rng.uniform(-3.9, 3.4)
+            if abs(u) < 1.6: continue
+            v = rng.uniform(3.53, 3.68) if u > -3.5 else rng.uniform(3.53, 3.9)
+            for _ in range(rng.randrange(4, 8)):
+                a = rng.uniform(-1.2, 1.2) + math.pi / 2
+                ln = rng.uniform(.05, .09)
+                bx, by = u + math.cos(a) * ln * .6, v + math.sin(a) * ln * .6
+                b.ell(t.p(bx, by, .12), (ln, .008, .02), p['tuft'] if rng.random() > .3 else p['tuft2'], 6, 3,
+                      t.r(rng.uniform(-.4, .4), 0, a))
+        for _ in range(30):                                                       # stones and tufts on the bank
+            u, v = rng.uniform(-4.2, 3.4), rng.uniform(3.7, 4.35)
+            if abs(u) < 1.7: continue
+            if rng.random() < .65:
                 s = rng.uniform(.03, .06)
-                b.box(t.p(u, v, .08), (s * 1.4, s, s * .8), self.p['stone'], .01, t.r(0, 0, rng.uniform(0, 3)), .01, rng)
+                b.ell(t.p(u, v, .1), (s, s, .04), p['tuft'] if rng.random() > .35 else p['tuft2'], 8, 4)
+            else:
+                s = rng.uniform(.025, .05)
+                b.box(t.p(u, v, .06), (s * 1.4, s, s * .7), p['stone'], .01, t.r(0, 0, rng.uniform(0, 3)), .01, rng)
 
     def approach(self, k):
         """Worn gate passage and road through the glacis, fading out into the meadow."""
@@ -373,18 +400,42 @@ class FortMaster:
             else: self.beam(t, (ax - off, ay), (bx - off, by), .01, .07, .01, p['coal'])
 
     def rose(self):
-        """Flat stone rose in the courtyard centre: a ring of dressed stones and four timber spokes."""
+        """Stone rose in the courtyard centre, grown into the ground rather than laid on it.
+
+        The ring sits in a bed of trodden earth that fades into the gravel; its stones are sunk to
+        different depths, a little shifted, one is missing; moss and grass fill the joints and
+        creep in from the rim; the timber spokes are worn and half covered with grit.
+        """
         b, rng, p = self.b, self.rng, self.p
+
+        def bed(x, y):
+            r = math.hypot(x, y)
+            edge = 1.45 + .18 * wobble(x * 1.3, y * 1.3, 11)
+            if r > edge + .02: return None
+            f = min(1.0, max(0.0, (edge - r) / .45))
+            ring = max(0.0, 1 - abs(r - 1.0) / .3)
+            return (.003, min(1.0, f * .85), .25 + .35 * ring)
+        ground_sheet(self.c, 'Rose bed', -1.75, -1.75, 1.75, 1.75, bed, self.track, .05)
+        missing = rng.randrange(20)
         for i in range(20):
-            a = i * math.tau / 20
-            b.box((1.0 * math.cos(a), 1.0 * math.sin(a), .025), (.3, .17, .045), p['stone'], .015, (0, 0, a + math.pi / 2), .01, rng)
+            if i == missing: continue
+            a = i * math.tau / 20 + rng.uniform(-.03, .03)
+            r = 1.0 + rng.uniform(-.025, .025)
+            b.box((r * math.cos(a), r * math.sin(a), rng.uniform(.0, .022)), (.29, .165, .045), p['stone'], .018,
+                  (rng.uniform(-.03, .03), rng.uniform(-.03, .03), a + math.pi / 2 + rng.uniform(-.06, .06)), .014, rng)
         for k in range(4):
-            self.beam(Turn(k), (.32, 0), (.86, 0), .03, .12, .05, p['oak'])
-        b.cylinder((0, 0, .025), .3, .05, p['stone'], 24, .02)
-        b.cylinder((0, 0, .05), .12, .02, p['iron'], 16, .004)
-        for i in range(14):                                                       # grass in the joints
+            self.beam(Turn(k), (.34, rng.uniform(-.02, .02)), (.84, rng.uniform(-.02, .02)), .018, .11, .04, p['tar'])
+        b.cylinder((0, 0, .02), .3, .04, p['stone'], 24, .02)
+        b.cylinder((0, 0, .041), .11, .014, p['iron'], 16, .004)
+        for _ in range(48):                                                       # moss and grass in and round the ring
             a = rng.uniform(0, math.tau)
-            b.ell((1.0 * math.cos(a), 1.0 * math.sin(a), .045), (.03, .02, .012), p['tuft'], 8, 3)
+            r = rng.choice((rng.uniform(.84, .9), rng.uniform(1.09, 1.25), rng.uniform(.95, 1.05)))
+            s = rng.uniform(.02, .045)
+            mat = p['moss'] if r > 1.05 or rng.random() < .4 else p['tuft']
+            b.ell((r * math.cos(a), r * math.sin(a), .04), (s, s * .7, .012), mat, 8, 3, (0, 0, a))
+        for _ in range(26):                                                       # grit on the spokes and the hub
+            a, r = rng.uniform(0, math.tau), rng.uniform(.3, .85)
+            b.box((r * math.cos(a), r * math.sin(a), .03), (.025, .02, .01), p['stone'], 0, (0, 0, rng.uniform(0, 3)))
 
     def chips(self, k, count=50):
         t, b, rng, p = Turn(k), self.b, self.rng, self.p
@@ -397,24 +448,8 @@ class FortMaster:
             b.box(t.p(x, y, .012), (rng.uniform(.03, .07), rng.uniform(.01, .025), .01), mat, 0, t.r(0, 0, rng.uniform(0, 3.2)))
 
     def forest(self, k):
-        """Stumps of the trees the fort was built from, ferns at the tower corners, flowers on the bank."""
+        """Ferns at the tower corners and flowers on the bank."""
         t, b, rng, p = Turn(k), self.b, self.rng, self.p
-        placed = 0
-        while placed < 2:
-            u, v = rng.uniform(-4.6, 3.8), rng.uniform(4.25, 5.0)
-            if abs(u) < 2.0: continue
-            r, h = rng.uniform(.13, .2), rng.uniform(.08, .16)
-            b.cylinder(t.p(u, v, h / 2), r, h, p['bark'], 14, .01, None, rng.uniform(0, 1))
-            b.cylinder(t.p(u, v, h + .004), r - .02, .01, p['stump'], 14, 0)
-            for ring in (.45, .75):
-                b.cylinder(t.p(u, v, h + .008), (r - .02) * ring, .004, p['tar'], 14, 0)
-            if rng.random() < .8:
-                b.ell(t.p(u + r * .25, v, h + .01), (r * .55, r * .4, .012), p['moss'], 10, 3)
-            for _ in range(8):
-                a, d = rng.uniform(0, 6.3), rng.uniform(r + .05, r + .35)
-                b.box(t.p(u + d * math.cos(a), v + d * math.sin(a), .01), (rng.uniform(.03, .06), .015, .01), p['chip'], 0,
-                      t.r(0, 0, rng.uniform(0, 3.2)))
-            placed += 1
         cx, cy = -3.98, 3.98
         for i in range(9):
             a = i * math.tau / 9 + rng.uniform(-.15, .15)
@@ -459,6 +494,6 @@ class FortMaster:
         self.rose()
         if self.ground == 'loam': self.loam_courtyard()
         for ob in self.b.flush('Fort master'):
-            if any(key in ob.name for key in ('Wood chips', 'Straw', 'Turf', 'Puddle', 'Fern', 'Meadow flower', 'Masonry moss')):
+            if any(key in ob.name for key in ('Wood chips', 'Straw', 'Turf', 'Puddle', 'Fern', 'Meadow flower', 'Masonry moss', 'Fieldstone')):
                 ob['fdGround'] = True
         return self.sockets
