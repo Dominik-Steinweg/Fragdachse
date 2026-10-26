@@ -63,13 +63,14 @@ def turret_layer(size, layout):
         sprite = Image.open(ROOT / f'public/assets/sprites/pipeline-v2/{kind}/idle.png').convert('RGBA')
         px = round((32 if kind == 'spore' else 40) * scale / 32)
         sprite = sprite.resize((px, px), Image.LANCZOS).rotate(-angle, Image.BICUBIC)
-        o = .5 if offset is None else offset + .5
+        # Sheet cells start at their own top-left corner; core cells are centred on integer offsets.
+        o = .5 if offset is None else offset
         cx, cy = (gx + o) * scale, (gy + o) * scale
         layer.alpha_composite(sprite, (int(cx - px / 2), int(cy - px / 2)))
     return np.asarray(layer, float) / 255
 
 
-def compose(folder, ground, style, layout):
+def compose(folder, ground, style, layout, turrets=True):
     shot, box = CROPS[layout][:2]
     cap_d = np.asarray(Image.open(ground / f'map04-day__{shot}.png').convert('RGB').crop(box), float) / 255
     cap_n = np.asarray(Image.open(ground / f'map04-night__{shot}.png').convert('RGB').crop(box), float) / 255
@@ -78,6 +79,7 @@ def compose(folder, ground, style, layout):
     a = day[:, :, 3:4]
     day_rgb = day[:, :, :3] * a + cap_d * (1 - a)
     turret = turret_layer((cap_d.shape[1], cap_d.shape[0]), layout)
+    if not turrets: turret[:] = 0
     ta = turret[:, :, 3:4]
     day_rgb = turret[:, :, :3] * ta + day_rgb * (1 - ta)
     # Night: ambient ratio of the captures, then light-map style lamp light.
@@ -201,26 +203,28 @@ def kit_proof(folder, style, shapes):
 
 
 def palisade_board(folder, ground, round_label):
-    """The chosen palisade style: unique core in both grounds, details, grown build area, outposts."""
+    """The palisade fort on the game gravel: with and without turrets, details, outposts."""
     style, gap = 'fort', 20
-    views = {name: compose(folder, ground, style, name) for name in ('core-gravel', 'core-loam', 'wide-loam', 'outposts')}
-    obl = Image.open(folder / f'{style}-core-loam' / 'oblique.png').convert('RGB')
-    obl = obl.resize((int(obl.width * 320 / obl.height), 320), Image.LANCZOS)
+    day, night, _ = compose(folder, ground, style, 'core-gravel')
+    bare_day, bare_night, _ = compose(folder, ground, style, 'core-gravel', False)
+    out_day, out_night, _ = compose(folder, ground, style, 'outposts')
+    obl = Image.open(folder / f'{style}-core-gravel' / 'oblique.png').convert('RGB')
+    obl = obl.resize((int(obl.width * 288 / obl.height), 288), Image.LANCZOS)
+    quarter, centre = (96, 96, 384, 384), (208, 208, 496, 496)
     rows = [
-        [('Kern · Kiesboden · Tag 1:1', game(views['core-gravel'][0])), ('Kern · Kiesboden · Nacht 1:1', game(views['core-gravel'][1])),
-         ('Kern · Lehm + Bohlenwege · Tag 1:1', game(views['core-loam'][0])), ('Kern · Lehm · Nacht 1:1', game(views['core-loam'][1]))],
-        [('Bastion · Kies · 2×', views['core-gravel'][0].crop((96, 96, 416, 416))), ('Bastion · Lehm · 2×', views['core-loam'][0].crop((96, 96, 416, 416))),
-         ('Bastion · Nacht · 2×', views['core-loam'][1].crop((96, 96, 416, 416))), ('Schrägansicht (nur zur Form)', obl)],
-        [('Baufläche Stufe 2 (Radius 6) · Lehm · Tag 1:1', views['wide-loam'][0]), ('Baufläche Stufe 2 · Nacht 1:1', views['wide-loam'][1])],
-        [('Vorposten (Bausatz) · Tag 1:1', game(views['outposts'][0])), ('Vorposten · Nacht 1:1', game(views['outposts'][1]))],
+        [('Kern · Tag 1:1', game(day)), ('Kern · Nacht 1:1', game(night)),
+         ('Kern ohne Türme · Tag 1:1', game(bare_day)), ('Kern ohne Türme · Nacht 1:1', game(bare_night))],
+        [('Eckturm, Wehrgang und Tor · 2×', bare_day.crop(quarter)), ('dasselbe · Nacht · 2×', bare_night.crop(quarter)),
+         ('Innenhof · 2×', bare_day.crop(centre)), ('Schrägansicht (nur zur Form)', obl)],
+        [('Vorposten (Bausatz) · Tag 1:1', game(out_day)), ('Vorposten · Nacht 1:1', game(out_night))],
     ]
     width = max(sum(im.width for _, im in row) + gap * (len(row) + 1) for row in rows)
     height = 84 + sum(28 + max(im.height for _, im in row) + gap for row in rows)
     board = Image.new('RGB', (width, height), BG)
     d = ImageDraw.Draw(board)
-    label(d, (gap, 12), f'{round_label} · Palisadenschanze – Kern als Unikat, Vorposten aus dem Bausatz', 26)
-    label(d, (gap, 48), 'Spielboden aus Karte 04 (12:00 / 23:00) · 1:1 = 32 px pro Feld · Decks frei für Türme, Licht an Rändern, '
-                        'Ecken und Toren · Probetürme auf einigen Plätzen', 15, MUTED)
+    label(d, (gap, 12), f'{round_label} · Palisadenschanze – der Kern als zusammenhängendes Fort', 26)
+    label(d, (gap, 48), 'Kiesboden des Spiels (Karte 04, 12:00 / 23:00) · 1:1 = 32 px pro Feld · Decks frei für Türme · '
+                        'Probetürme mittig auf ihren Zellen', 15, MUTED)
     y = 84
     for row in rows:
         x = gap
