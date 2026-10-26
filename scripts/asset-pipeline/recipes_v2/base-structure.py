@@ -1,9 +1,11 @@
 """Rustic persistent base core, outpost sets and the 47-mask kit (1 BU = 1 m = 1 cell = 32 px).
 
-model = {style: burg|fort|feld|wall, layout: core|outposts|kit, variant: 0, conceptGround: false}
+model = {style: burg|fort|feld|wall, layout: core|outposts|kit, variant: 0, conceptGround: false,
+         master: false, ground: gravel|loam, buildStage: 0}
 
 - core: the 12 base-surface cells of the 7 x 7 persistent core (four 3-cell corner bastions,
-  3-cell entrances), centred on the pivot. Cells are seeded by position: this is the master.
+  3-cell entrances), centred on the pivot. Cells are seeded by position. With `master` the fort
+  core is the hand-built unique asset of base_fort_master instead of the cell kit.
 - outposts: the friendly outpost and middle-base shapes of the campaign maps side by side,
   seeded by mask exactly like the kit, so each cell equals its kit frame.
 - kit: every one of the 47 masks as a lone centre cell on a 2 m pitch, 7 per row, in the order of
@@ -54,7 +56,11 @@ def build(c, spec):
     style = STYLES[model['style']](c, m)
     variant = model.get('variant', 0)
     layout = model['layout']
-    if layout == 'core':
+    if layout == 'core' and model.get('master'):
+        from base_fort_master import FortMaster
+        style.sockets.update(FortMaster(c, m, model.get('ground', 'gravel'), model.get('buildStage', 0)).build())
+        courtyard = None
+    elif layout == 'core':
         cells = set(CORE)
         for gx, gy in sorted(cells):
             style.cell(gx, gy, gx - 3.0, 3.0 - gy, mask_of(cells, gx, gy), random.Random(cell_seed(gx, gy, variant)))

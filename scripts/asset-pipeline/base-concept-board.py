@@ -20,7 +20,11 @@ BG, INK, MUTED = (30, 33, 36), (228, 224, 212), (150, 152, 146)
 NAMES = dict(burg='Steinbastion', fort='Palisadenschanze', feld='Feldstellung', wall='Wallanlage')
 PX = 64
 ROOT = Path(__file__).resolve().parents[2]
-CROPS = dict(core=('01-core', (384, 32, 1088, 736)), outposts=('02-meadow', (288, 128, 1376, 768)))
+# Layout -> capture shot, crop box, pixels per metre of the render, and the core grid offset in cells
+# (None: the outpost sheet's own origin).
+CROPS = {'core': ('01-core', (384, 32, 1088, 736), 64, 2.5), 'core-gravel': ('01-core', (384, 32, 1088, 736), 64, 2.5),
+         'core-loam': ('01-core', (384, 32, 1088, 736), 64, 2.5), 'wide-loam': ('03-wide', (480, 128, 992, 640), 32, 5.0),
+         'outposts': ('02-meadow', (288, 128, 1376, 768), 64, None)}
 # (cell, turret, angle in degrees) on the core grid 0..6 and the outpost sheet.
 TURRETS = dict(core=[((0, 0), 'plasma', 225), ((1, 0), 'rocket', 260), ((6, 1), 'spore', 0),
                      ((6, 6), 'plasma', 45), ((0, 5), 'rocket', 160), ((5, 6), 'spore', 0)],
@@ -51,20 +55,22 @@ def load(path):
     return arr / (65535.0 if arr.max() > 255 else 255.0)
 
 
-def turret_layer(size, layout, scale=PX):
-    """Turret sprites at 2x source scale (80/64 px) on their cells, as straight-alpha RGBA."""
+def turret_layer(size, layout):
+    """Turret sprites (40/32 px at 1:1) on their cells at the render's scale, as straight-alpha RGBA."""
+    _, _, scale, offset = CROPS[layout]
     layer = Image.new('RGBA', size, (0, 0, 0, 0))
-    for (gx, gy), kind, angle in TURRETS[layout]:
+    for (gx, gy), kind, angle in TURRETS['outposts' if offset is None else 'core']:
         sprite = Image.open(ROOT / f'public/assets/sprites/pipeline-v2/{kind}/idle.png').convert('RGBA')
-        px = 64 if kind == 'spore' else 80
+        px = round((32 if kind == 'spore' else 40) * scale / 32)
         sprite = sprite.resize((px, px), Image.LANCZOS).rotate(-angle, Image.BICUBIC)
-        cx, cy = ((gx + 2.5) * scale, (gy + 2.5) * scale) if layout == 'core' else ((gx + .5) * scale, (gy + .5) * scale)
+        o = .5 if offset is None else offset + .5
+        cx, cy = (gx + o) * scale, (gy + o) * scale
         layer.alpha_composite(sprite, (int(cx - px / 2), int(cy - px / 2)))
     return np.asarray(layer, float) / 255
 
 
 def compose(folder, ground, style, layout):
-    shot, box = CROPS[layout]
+    shot, box = CROPS[layout][:2]
     cap_d = np.asarray(Image.open(ground / f'map04-day__{shot}.png').convert('RGB').crop(box), float) / 255
     cap_n = np.asarray(Image.open(ground / f'map04-night__{shot}.png').convert('RGB').crop(box), float) / 255
     d = folder / f'{style}-{layout}'
@@ -194,14 +200,50 @@ def kit_proof(folder, style, shapes):
     return stats
 
 
+def palisade_board(folder, ground, round_label):
+    """The chosen palisade style: unique core in both grounds, details, grown build area, outposts."""
+    style, gap = 'fort', 20
+    views = {name: compose(folder, ground, style, name) for name in ('core-gravel', 'core-loam', 'wide-loam', 'outposts')}
+    obl = Image.open(folder / f'{style}-core-loam' / 'oblique.png').convert('RGB')
+    obl = obl.resize((int(obl.width * 320 / obl.height), 320), Image.LANCZOS)
+    rows = [
+        [('Kern · Kiesboden · Tag 1:1', game(views['core-gravel'][0])), ('Kern · Kiesboden · Nacht 1:1', game(views['core-gravel'][1])),
+         ('Kern · Lehm + Bohlenwege · Tag 1:1', game(views['core-loam'][0])), ('Kern · Lehm · Nacht 1:1', game(views['core-loam'][1]))],
+        [('Bastion · Kies · 2×', views['core-gravel'][0].crop((96, 96, 416, 416))), ('Bastion · Lehm · 2×', views['core-loam'][0].crop((96, 96, 416, 416))),
+         ('Bastion · Nacht · 2×', views['core-loam'][1].crop((96, 96, 416, 416))), ('Schrägansicht (nur zur Form)', obl)],
+        [('Baufläche Stufe 2 (Radius 6) · Lehm · Tag 1:1', views['wide-loam'][0]), ('Baufläche Stufe 2 · Nacht 1:1', views['wide-loam'][1])],
+        [('Vorposten (Bausatz) · Tag 1:1', game(views['outposts'][0])), ('Vorposten · Nacht 1:1', game(views['outposts'][1]))],
+    ]
+    width = max(sum(im.width for _, im in row) + gap * (len(row) + 1) for row in rows)
+    height = 84 + sum(28 + max(im.height for _, im in row) + gap for row in rows)
+    board = Image.new('RGB', (width, height), BG)
+    d = ImageDraw.Draw(board)
+    label(d, (gap, 12), f'{round_label} · Palisadenschanze – Kern als Unikat, Vorposten aus dem Bausatz', 26)
+    label(d, (gap, 48), 'Spielboden aus Karte 04 (12:00 / 23:00) · 1:1 = 32 px pro Feld · Decks frei für Türme, Licht an Rändern, '
+                        'Ecken und Toren · Probetürme auf einigen Plätzen', 15, MUTED)
+    y = 84
+    for row in rows:
+        x = gap
+        for text, im in row:
+            label(d, (x, y), text, 16)
+            board.paste(im, (x, y + 28))
+            x += im.width + gap
+        y += 28 + max(im.height for _, im in row) + gap
+    board.save(folder / 'board-palisade.png')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('folder')
     ap.add_argument('--ground', required=True)
     ap.add_argument('--styles', default='burg,fort,feld,wall')
     ap.add_argument('--round', default='R1b')
+    ap.add_argument('--palisade', action='store_true', help='only the palisade board (R2 layouts)')
     args = ap.parse_args()
     folder, ground = Path(args.folder), Path(args.ground)
+    if args.palisade:
+        palisade_board(folder, ground, args.round)
+        return
     shapes = json.loads((Path(__file__).with_name('base-structure-shapes.json')).read_text(encoding='utf8'))
     tiles, proof = {}, {}
     for style in args.styles.split(','):

@@ -183,26 +183,26 @@ class Fort(Style):
             self.log(*q.p(line, line)[:2], rng, self.R + .02)
 
     def pad(self, cx, cy, rng):
-        b, p, z = self.b, self.p, self.PZ
-        b.cylinder((cx, cy, z + .04), self.PAD, .08, p['cut'], 32, .012, None, rng.uniform(0, 1))
-        b.cylinder((cx, cy, z + .045), self.PAD + .012, .05, p['iron'], 32, .004)
-        b.cylinder((cx, cy, z + .085), self.PAD - .01, .01, p['cut'], 32, 0)
-        self.bolts(cx, cy, z + .09, self.PAD - .05, 6, p['dark'], .016)
+        """No socket: the deck centre stays clear for a turret."""
 
     def feature(self, kind, cx, cy, mask, rng):
         b, p = self.b, self.p
         if kind == 'corner':
+            # Corner post with a lantern hanging out over the outer corner.
             dx, dy = corner_direction(mask)
             x, y = cx + dx * (self.HALF - self.R - .02), cy + dy * (self.HALF - self.R - .02)
             self.log(x, y, rng, .12, self.PZ + 1.0)
-            b.rod((x, y, self.PZ + .95), (x - dx * .16, y - dy * .16, self.PZ + .95), .015, p['dark'], 6)
-            self.lantern(x - dx * .16, y - dy * .16, self.PZ + .68)
+            b.rod((x, y, self.PZ + .95), (x + dx * .2, y + dy * .2, self.PZ + .95), .015, p['dark'], 6)
+            self.lantern(x + dx * .2, y + dy * .2, self.PZ + .66)
         elif kind == 'end':
+            # Two gate posts on the end corners: a torch on one, a lantern on the other.
             dx, dy = end_direction(mask)
-            x, y = cx + dx * .34, cy + dy * .34
-            b.box((x, y, (self.PZ + 1.0) / 2), (.24, .24, self.PZ + 1.0), p['oak'], .015, None, .008, rng)
-            b.box((x, y, self.PZ + 1.02), (.27, .27, .04), p['tar'], .006)
-            self.brazier(x, y, self.PZ + 1.04, .085, rng)
+            for side, light in ((-1, 'torch'), (1, 'lamp')):
+                x, y = cx + dx * .36 - dy * side * .34, cy + dy * .36 + dx * side * .34
+                b.box((x, y, (self.PZ + 1.0) / 2), (.22, .22, self.PZ + 1.0), p['oak'], .015, None, .008, rng)
+                b.box((x, y, self.PZ + 1.02), (.25, .25, .04), p['tar'], .006)
+                if light == 'torch': self.brazier(x, y, self.PZ + 1.04, .075, rng)
+                else: self.lantern(x + dx * .16, y + dy * .16, self.PZ + .62)
 
 
 # -- Feldstellung: sandbag walls, earth floor, steel turret plate, oil-drum fire ------------

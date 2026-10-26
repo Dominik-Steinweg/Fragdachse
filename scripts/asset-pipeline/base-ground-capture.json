@@ -1,6 +1,6 @@
 {
   "name": "base-rustic-ground",
-  "description": "Game ground behind the rustic base concepts: map 04's persistent base site (old base tiles, glow and base lights hidden) and a free meadow for the outpost sheet, at 64 px per metre, noon and night.",
+  "description": "Game ground behind the rustic base concepts: map 04's persistent base site (old base tiles, glow, base lights and HP bars hidden) at 64 px per metre and as a wide 32 px per metre view for the grown build area, plus a free meadow for the outpost sheet; noon and night.",
   "viewport": {
     "width": 1472,
     "height": 768
@@ -82,6 +82,24 @@
             "gridY": 7
           },
           "zoom": 2
+        },
+        {
+          "op": "step",
+          "frames": 30
+        }
+      ]
+    },
+    {
+      "id": "wide",
+      "label": "persistent base site, wide",
+      "do": [
+        {
+          "op": "camera",
+          "at": {
+            "gridX": 77,
+            "gridY": 19
+          },
+          "zoom": 1
         },
         {
           "op": "step",
