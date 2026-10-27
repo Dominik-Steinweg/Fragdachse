@@ -195,7 +195,8 @@ export class BaseEntity {
     if (this.isFortCore()) {
       const region = this.spec.region;
       this.fort!.add(this.id, this.metrics.offsetX + (region.minGridX + region.maxGridX + 1) / 2 * CELL_SIZE,
-        this.metrics.offsetY + (region.minGridY + region.maxGridY + 1) / 2 * CELL_SIZE, this.spec.cells.length);
+        this.metrics.offsetY + (region.minGridY + region.maxGridY + 1) / 2 * CELL_SIZE,
+        this.spec.cells.map(cell => ({ x: this.metrics.offsetX + (cell.gridX + .5) * CELL_SIZE, y: this.metrics.offsetY + (cell.gridY + .5) * CELL_SIZE })));
     } else if (this.spec.surface !== 'none' && this.role !== 'spawn-point') {
       this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
       this.grounding = new BaseGroundingRenderer(this.scene, { cells: this.spec.cells }, this.metrics,

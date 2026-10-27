@@ -65,8 +65,9 @@ export class CharacterShadowReceiver {
       }
     }
     for (const rect of structures) this.setRect(rect, 0);
-    // G mirrors the ground plane; base tops then receive in G only, for casters standing on them (turrets).
-    for (let i = 0; i < this.data.length; i += 4) this.data[i + 1] = this.data[i];
+    // G is the raised plane: only base tops, for casters standing on them (turrets). Their shadow beyond
+    // the top belongs to the structure's own height-field shadow, which carries the deck height.
+    for (let i = 0; i < this.data.length; i += 4) this.data[i + 1] = 0;
     for (const cell of bases) { this.set(cell.x, cell.y, 0); this.set(cell.x, cell.y, 255, 1); }
     const renderer = this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, gl = renderer.gl;
     renderer.glTextureUnits.bind(this.texture.source[0].glTexture!, 0);

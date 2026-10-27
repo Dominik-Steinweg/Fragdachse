@@ -36,6 +36,8 @@ export interface LobbyStructureSunlight {
 }
 
 /** Gap between an outline edge and its name plaque. */
+/** Lobby structures carry no turrets: the mounted height grid stays off. */
+const NO_MOUNTED = new Float32Array([0, 0, 0]);
 const NAMEPLATE_GAP_PX = 12;
 /** Half the plaque height: a plaque above the outline is placed by its centre, below by its top. */
 const NAMEPLATE_HALF_HEIGHT_PX = 8;
@@ -264,6 +266,7 @@ export class LobbyStructureRenderer {
         const frame = this.castFrame;
         set('uCaster', 0);
         set('uTexels', casterTexels);
+        set('uMountedCaster', 1); set('uMounted', NO_MOUNTED);
         this.canvasUniform[0] = left; this.canvasUniform[1] = top; this.canvasUniform[2] = size; this.canvasUniform[3] = 0;
         set('uCanvas', this.canvasUniform);
         this.heightUniform[0] = asset.heightPx.min; this.heightUniform[1] = asset.heightPx.max;
@@ -276,7 +279,7 @@ export class LobbyStructureRenderer {
         this.shadeUniform[0] = STRUCTURE_SHADOW.opacity * frame.opacityMult; this.shadeUniform[1] = STRUCTURE_SHADOW.softnessPx * frame.softnessMult;
         set('uShade', this.shadeUniform);
       },
-    }, quadLeft, quadTop, quadSize, quadSize, [caster]);
+    }, quadLeft, quadTop, quadSize, quadSize, [caster, this.scene.textures.get('__DEFAULT')]);
     return this.scene.add.existing(quad).setOrigin(0).setDepth(STRUCTURE_SHADOW.layerDepth).setBlendMode(Phaser.BlendModes.MULTIPLY);
   }
 

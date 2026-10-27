@@ -13,6 +13,8 @@ export interface BaseFortAsset {
   readonly sourceSize: number;
   readonly displaySize: number;
   readonly heightPx: { readonly min: number; readonly max: number };
+  /** Height of the decks turrets stand on, in px above the ground. */
+  readonly deckPx?: number;
   readonly layers: readonly BaseFortLayer[];
   readonly sockets: Readonly<Record<string, BaseFortSocket>>;
   readonly sha256: Readonly<Record<string, string>>;

@@ -134,10 +134,11 @@ it('lets base tops receive only on the raised plane, for casters standing on the
  const f=fixture();
  const layout:any={rocks:[{gridX:5,gridY:5}],water:[]};
  f.receiver.update(layout,0,0,()=>true,[],[{x:80,y:80}]);
- // Ground figures never shade a base top; a turret on the deck does. Rocks block both planes.
+ // Ground figures never shade a base top; a turret on the deck does, and only there: beyond the top
+ // its shadow is part of the structure's height-field shadow. Rocks block both planes.
  expect(f.receiver.sample(80,80)).toBe(0);expect(f.receiver.sample(80,80,1)).toBe(1);
  expect(f.receiver.sample(176,176)).toBe(0);expect(f.receiver.sample(176,176,1)).toBe(0);
- expect(f.receiver.sample(300,300)).toBe(1);expect(f.receiver.sample(300,300,1)).toBe(1);
+ expect(f.receiver.sample(300,300)).toBe(1);expect(f.receiver.sample(300,300,1)).toBe(0);
  f.renderer.destroy();
 });
 

@@ -8,6 +8,7 @@
         "min": 0,
         "max": 76.8
       },
+      "deckPx": 40,
       "layers": [
         "forge",
         "lamp"

@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DEPTH, DEPTH_LIGHTING } from '../../config';
+import { CELL_SIZE, DEPTH, DEPTH_LIGHTING } from '../../config';
 import type { LightingSystem } from '../../effects/LightingSystem';
 import { LIGHT_PRESETS, type LightPresetKey } from '../../effects/LightingConfig';
 import type { LongCasterFrame, ShadowSystem } from '../../effects/ShadowSystem';
@@ -13,13 +13,17 @@ import type { LobbyStructureSunlight } from '../lobbyStructures/LobbyStructureRe
 import { LOBBY_STRUCTURE_RELIEF_FRAGMENT, LOBBY_STRUCTURE_SHADOW_FRAGMENT } from '../lobbyStructures/lobbyStructureShaders';
 import { baseFortCoreAsset, baseFortTextureKey, type BaseFortAsset, type BaseFortLayer } from './BaseFortAssets';
 import type { BaseFortEmitter, BaseFortEmitterKind, BaseFortFx } from './BaseFortFx';
+import { BaseFortMountedHeights, MOUNTED_HEIGHT_RANGE_PX } from './BaseFortMountedHeights';
+import type { MeshShadowCaster } from '../../effects/EnemyMeshShadowRenderer';
 
 /** Ambient particles of one fort; supplied by the World presentation, which owns the GPU particle backend. */
 export type BaseFortParticles = Pick<BaseFortFx, 'setActive' | 'setNight' | 'destroy'>;
 export type BaseFortParticleFactory = (emitters: readonly BaseFortEmitter[]) => BaseFortParticles;
 
 type FortLighting = Pick<LightingSystem, 'setLight' | 'releaseLight' | 'getArtificialLightFactor'>;
-type FortShadows = Pick<ShadowSystem, 'getLongCasterFrame'>;
+type FortShadows = Pick<ShadowSystem, 'getLongCasterFrame' | 'turretCasters'>;
+/** Dynamic textures share the caster images' row order (v = 1 at the top), so no flip. */
+const MOUNTED_FLIP = 0;
 
 /**
  * Below the turrets' aura (ROCKS + 0.1) and sprite (ROCKS + 0.2), above the ground band: turrets
@@ -60,6 +64,13 @@ function flicker(seconds: number, hz: number, amount: number, phase: number): nu
   return 1 + amount * (.6 * Math.sin((seconds * hz + phase) * Math.PI * 2) + .4 * Math.sin((seconds * hz * 2.37 + phase * 3.1) * Math.PI * 2));
 }
 
+interface FortMounted {
+  left: number;
+  top: number;
+  target: Phaser.Textures.DynamicTexture | null;
+  readonly uniform: Float32Array;
+}
+
 interface FortView {
   readonly ground: Phaser.GameObjects.Image;
   readonly body: Phaser.GameObjects.Image;
@@ -70,6 +81,9 @@ interface FortView {
   readonly stamp: { -readonly [K in keyof FogSurfaceStamp]: FogSurfaceStamp[K] };
   readonly emitters: readonly BaseFortEmitter[];
   fx: BaseFortParticles | null;
+  /** World centres of the base cells; turrets standing on them join the fort's shadow. */
+  readonly cells: readonly { readonly x: number; readonly y: number }[];
+  readonly mounted: FortMounted;
   readonly cellCount: number;
   destroyedCells: number;
 }
@@ -96,13 +110,16 @@ export class BaseFortRenderer {
   private readonly heightUniform = new Float32Array(2);
   private readonly optionsUniform = new Float32Array([0, 0, 1, 1]);
   private readonly shadeUniform = new Float32Array(2);
+  private mountedHeights: BaseFortMountedHeights | null = null;
+  private readonly casterScratch: MeshShadowCaster[] = [];
+  private readonly mountedScratch: MeshShadowCaster[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {
     this.asset = baseFortCoreAsset()!;
   }
 
   /** Presents a persistent core centred on the given world point (the centre of its anchor cell). */
-  add(baseId: string, centreX: number, centreY: number, cellCount: number): void {
+  add(baseId: string, centreX: number, centreY: number, cells: readonly { readonly x: number; readonly y: number }[]): void {
     this.remove(baseId);
     const asset = this.asset, size = asset.displaySize;
     const lit = getGraphicsQualityProfile(this.scene).level !== 'low';
@@ -126,9 +143,10 @@ export class BaseFortRenderer {
     const stamp = { active: true, visible: true, alpha: 1, x: left, y: top, displayWidth: size, displayHeight: size,
       scaleX: size / asset.sourceSize, scaleY: size / asset.sourceSize, originX: 0, originY: 0, rotation: 0,
       texture: { key: baseFortTextureKey(asset, 'solid') }, frame: { name: '__BASE' } };
-    this.views.set(baseId, { ground, body, emission, lights, stamp, emitters, cellCount, destroyedCells: 0,
+    const mounted: FortMounted = { left, top, target: null, uniform: new Float32Array([asset.deckPx ?? 0, 0, MOUNTED_FLIP]) };
+    this.views.set(baseId, { ground, body, emission, lights, stamp, emitters, cells, mounted, cellCount: cells.length, destroyedCells: 0,
       fx: this.particles?.(emitters) ?? null,
-      relief: lit ? this.makeRelief(left, top) : null, shadow: lit ? this.makeShadow(left, top) : null });
+      relief: lit ? this.makeRelief(left, top) : null, shadow: lit ? this.makeShadow(left, top, mounted) : null });
   }
 
   /** One base cell exploded: the fort fades with the staggered destruction and is gone with the last. */
@@ -154,6 +172,7 @@ export class BaseFortRenderer {
     this.destroyQuad(view.relief); this.destroyQuad(view.shadow);
     for (const { image } of view.emission) image.destroy();
     view.fx?.destroy();
+    if (view.mounted.target) this.scene.textures.remove(view.mounted.target);
     this.views.delete(baseId);
   }
 
@@ -189,15 +208,19 @@ export class BaseFortRenderer {
     for (const view of this.views.values()) if (view.stamp.visible) yield view.stamp;
   }
 
-  /** Per frame: glow, particles, light-map lights and the shadow bearing. */
+  /** Per frame: glow, particles, light-map lights, the shadow bearing and the turrets on the decks. */
   update(): void {
     const seconds = this.scene.time.now / 1000;
     this.shadows?.getLongCasterFrame(this.castFrame);
     const lighting = this.lighting;
     const night = lighting?.getArtificialLightFactor() ?? 0;
+    const casters = this.casterScratch;
+    casters.length = 0;
+    if (this.castFrame.visible) this.shadows?.turretCasters.collect(casters);
     for (const view of this.views.values()) {
       view.shadow?.setVisible(this.castFrame.visible && view.destroyedCells < view.cellCount);
       const standing = view.destroyedCells < view.cellCount;
+      if (view.shadow && standing) this.drawMounted(view, casters);
       view.fx?.setActive(standing && lighting !== null);
       view.fx?.setNight(night);
       for (const glow of view.emission) {
@@ -213,6 +236,27 @@ export class BaseFortRenderer {
           { intensity: preset.intensity * level, radiusPx: preset.radiusPx * light.scale });
       }
     }
+  }
+
+  /** Stamps the turrets standing on this fort's cells into its mounted height grid. */
+  private drawMounted(view: FortView, casters: readonly MeshShadowCaster[]): void {
+    const mounted = this.mountedScratch, half = CELL_SIZE / 2;
+    mounted.length = 0;
+    for (const caster of casters) {
+      if ((caster.getShadowReceiverPlane?.() ?? 0) !== 1) continue;
+      const { x, y } = caster.sprite;
+      if (view.cells.some(cell => Math.abs(cell.x - x) <= half && Math.abs(cell.y - y) <= half)) mounted.push(caster);
+    }
+    const state = view.mounted;
+    if (!mounted.length && !state.target) return;
+    const texels = this.scene.textures.get(baseFortTextureKey(this.asset, 'caster-height')).source[0].width;
+    this.mountedHeights ??= new BaseFortMountedHeights(this.scene);
+    if (!state.target) {
+      state.target = this.mountedHeights.createTarget(texels);
+      view.shadow!.textures[1] = state.target;
+    }
+    const any = this.mountedHeights.draw(state.target, state.left, state.top, this.asset.displaySize / texels, mounted);
+    state.uniform[1] = any ? MOUNTED_HEIGHT_RANGE_PX : 0;
   }
 
   private makeRelief(left: number, top: number): Phaser.GameObjects.Shader {
@@ -237,7 +281,7 @@ export class BaseFortRenderer {
     return this.scene.add.existing(quad).setOrigin(0).setDepth(RELIEF_DEPTH).setBlendMode(Phaser.BlendModes.MULTIPLY);
   }
 
-  private makeShadow(left: number, top: number): Phaser.GameObjects.Shader {
+  private makeShadow(left: number, top: number, mounted: FortMounted): Phaser.GameObjects.Shader {
     const asset = this.asset, size = asset.displaySize, reach = STRUCTURE_SHADOW.maxReachPx;
     const quadLeft = left - reach, quadTop = top - reach, quadSize = size + reach * 2;
     const caster = this.scene.textures.get(baseFortTextureKey(asset, 'caster-height'));
@@ -248,6 +292,7 @@ export class BaseFortRenderer {
         const frame = this.castFrame;
         set('uCaster', 0);
         set('uTexels', casterTexels);
+        set('uMountedCaster', 1); set('uMounted', mounted.uniform);
         this.canvasUniform[0] = left; this.canvasUniform[1] = top; this.canvasUniform[2] = size; this.canvasUniform[3] = 0;
         set('uCanvas', this.canvasUniform);
         this.heightUniform[0] = asset.heightPx.min; this.heightUniform[1] = asset.heightPx.max;
@@ -261,7 +306,7 @@ export class BaseFortRenderer {
         this.shadeUniform[1] = STRUCTURE_SHADOW.softnessPx * FORT_SHADOW.softness * frame.softnessMult;
         set('uShade', this.shadeUniform);
       },
-    }, quadLeft, quadTop, quadSize, quadSize, [caster]);
+    }, quadLeft, quadTop, quadSize, quadSize, [caster, this.scene.textures.get('__DEFAULT')]);
     return this.scene.add.existing(quad).setOrigin(0).setDepth(STRUCTURE_SHADOW.layerDepth).setBlendMode(Phaser.BlendModes.MULTIPLY);
   }
 
@@ -280,6 +325,7 @@ export class BaseFortRenderer {
 
   destroy(): void {
     for (const id of [...this.views.keys()]) this.remove(id);
+    this.mountedHeights?.destroy(); this.mountedHeights = null;
     this.lighting = null; this.shadows = null; this.sunlight = null; this.particles = null;
   }
 }

@@ -79,6 +79,9 @@ export const LOBBY_STRUCTURE_SHADOW_MAX_STEPS = 160;
  * by texel and reads each crossed texel once, filtered at the middle of its stretch of ray. Fixed
  * march steps beat against the texel grid and the filter ramps: thin posts and stake tips then
  * cast combs of teeth at the beat period. Only the stretch inside the canvas is walked.
+ *
+ * Structures that carry turrets (the base fort) add a second height grid on the same texels: the
+ * mounted turrets' heights above their deck. Both rise into one shadow; the lobby passes none.
  */
 export const LOBBY_STRUCTURE_SHADOW_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
@@ -89,6 +92,8 @@ uniform vec4 uCast;     // cast direction xy, length per px of height, max reach
 uniform vec2 uShade;    // opacity, softness in px
 uniform float uTexels;  // caster texels across the canvas
 uniform sampler2D uCaster;
+uniform sampler2D uMountedCaster;
+uniform vec3 uMounted;  // deck height in px, mounted height range in px (0: none), 1 when its rows run top down
 ${CANVAS_GLSL}
 vec4 shadowMultiply(float factor){float retained=min(1.0,factor);return vec4(vec3(factor-retained),1.0-retained);}
 void main(){
@@ -116,8 +121,13 @@ void main(){
     if(cell.x>=0.0&&cell.y>=0.0&&cell.x<uTexels&&cell.y<uTexels){
       // Filtered read where the ray runs through this texel: continuous across neighbouring rays.
       float mid=.5*(t+min(exit,leave));
-      float r=texture2D(uCaster,uv+back*mid).r;
-      if(r>.002)shade=max(shade,clamp((mix(uHeight.x,uHeight.y,r)*uCast.z-mid)/soft+.5,0.0,1.0));
+      vec2 at=uv+back*mid;
+      float r=texture2D(uCaster,at).r,h=r>.002?mix(uHeight.x,uHeight.y,r):0.0;
+      if(uMounted.y>0.0){
+        float m=texture2D(uMountedCaster,vec2(at.x,uMounted.z>.5?1.0-at.y:at.y)).r;
+        if(m>.004)h=max(h,uMounted.x+m*uMounted.y);
+      }
+      if(h>0.0)shade=max(shade,clamp((h*uCast.z-mid)/soft+.5,0.0,1.0));
       if(shade>=1.0)break;
     }
     if(next.x<next.y){t=next.x;next.x+=delta.x;cell.x+=stepCell.x;}

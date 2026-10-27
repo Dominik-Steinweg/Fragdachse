@@ -66,7 +66,8 @@ describe('persistent base fort presentation', () => {
     expect(adds).toHaveLength(1);
     const { region } = core;
     expect(adds[0]).toEqual(['add', core.id, METRICS.offsetX + (region.minGridX + region.maxGridX + 1) / 2 * CELL_SIZE,
-      METRICS.offsetY + (region.minGridY + region.maxGridY + 1) / 2 * CELL_SIZE, core.cells.length]);
+      METRICS.offsetY + (region.minGridY + region.maxGridY + 1) / 2 * CELL_SIZE,
+      core.cells.map(cell => ({ x: METRICS.offsetX + (cell.gridX + .5) * CELL_SIZE, y: METRICS.offsetY + (cell.gridY + .5) * CELL_SIZE }))]);
     const entity = manager.getBase(core.id)!;
     expect(entity.getSurfaceImages()).toHaveLength(0);
     expect(entity.getLightSpots()).toHaveLength(0);

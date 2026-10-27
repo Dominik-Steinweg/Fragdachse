@@ -207,8 +207,11 @@ Starre Pipeline-Assets wie Tuerme sind dieselben Mesh-Caster (`MeshShadowCaster`
 `rigid` ohne Kontakte); es gibt keinen eigenen Turmschatten. Sie melden sich als Quelle bei
 `ShadowSystem.turretCasters` und compositen im montierten Band direkt unter ihrem Sprite
 (`MOUNTED_SHADOW_DEPTH`), Figuren im Figurenband. Die Empfaengermaske fuehrt zwei Ebenen: R ist
-der Boden (Basiszellen ausgeschlossen, Figuren stehen unten), G zusaetzlich die Basisoberflaechen
-fuer Caster, die auf ihnen stehen (Tuerme auf Fort-Decks und Vorposten)
+der Boden (Basiszellen ausgeschlossen, Figuren stehen unten), G nur die Basisoberflaechen fuer
+Caster, die auf ihnen stehen (Tuerme auf Fort-Decks und Vorposten). Jenseits der Oberseite gehoert
+ihr Schatten zum Hoehenfeld-Schatten des Bauwerks: Montierte Tuerme stempeln ihre Mesh-Hoehe pro
+Frame in dessen Caster-Raster (Deckhoehe plus Turmhoehe, Maximum), sodass Wand und Turm einen
+gemeinsamen, nicht doppelt abgedunkelten Schatten werfen
 ([CharacterShadowRenderer.test.ts](../../tests/CharacterShadowRenderer.test.ts)).
 Die binaeren, hashgebundenen Meshdaten bleiben im game-owned Loader-Cache. Schatten lesen den
 tatsaechlich dargestellten Sprite-Frame und dessen Rotation, nicht Netzwerk-Facing oder eine

@@ -14,7 +14,7 @@ import { deriveCasterHeight } from './export-lobby-structures.mjs';
 const CELL = 32;
 const ASSET = 'base-fort-core';
 /** Core canvas: 11 m square round the centre cell, 64 source px per metre, shown at 32 px per metre. */
-const CORE = { orthoScale: 11, sourceSize: 704, displaySize: 352, elevation: { min: 0, max: 2.4, scale: .5 } };
+const CORE = { orthoScale: 11, sourceSize: 704, displaySize: 352, elevation: { min: 0, max: 2.4, scale: .5 }, deck: 1.25 };
 
 const sha = buffer => createHash('sha256').update(buffer).digest('hex');
 const exists = file => access(file).then(() => true, () => false);
@@ -68,7 +68,7 @@ async function main() {
   manifest.revision = values.label;
   manifest.structures['persistent-core'] = {
     asset: ASSET, sourceSize: CORE.sourceSize, displaySize: CORE.displaySize,
-    heightPx: { min: CORE.elevation.min * CELL, max: CORE.elevation.max * CELL },
+    heightPx: { min: CORE.elevation.min * CELL, max: CORE.elevation.max * CELL }, deckPx: CORE.deck * CELL,
     layers: passes.layers,
     sockets: Object.fromEntries(Object.entries(passes.sockets).map(([name, s]) => [name, {
       x: Math.round((s.x * CORE.displaySize - half) * 10) / 10, y: Math.round((s.y * CORE.displaySize - half) * 10) / 10,
