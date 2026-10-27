@@ -9,7 +9,7 @@ import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { NET_TICK_INTERVAL_MS } from '../src/config';
 import type { SyncedTeslaDome } from '../src/types';
 
-vi.mock('phaser', () => ({ Math: { Vector2: class { constructor(public x: number, public y: number) {} } } }));
+vi.mock('phaser', () => ({ Math: { Vector2: class { constructor(public x: number, public y: number) {} } }, BlendModes: { ADD: 1 } }));
 const glowFx = vi.hoisted(() => ({ add: vi.fn(() => ({})), remove: vi.fn() }));
 vi.mock('../src/effects/PlayerGlow', () => ({ addPlayerGlow: glowFx.add }));
 vi.mock('../src/utils/phaserFx', () => ({ removeInternalFx: glowFx.remove }));
@@ -175,5 +175,28 @@ describe('turret animation lifecycle', () => {
     expect(first.view.listenerCount('destroy')).toBe(0);
     controller.onShot('7');
     expect(first.view.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the emission glow of a turret on its frame and pose, flares its light with a shot and ends with the binding', () => {
+    const asset = getTurretVisualSpec('SPORE_TURRET_PLASMA').asset;
+    const glow: any = { frame: { name: 0 as string | number }, visible: true, destroy: vi.fn() };
+    for (const method of ['setOrigin', 'setBlendMode', 'setDepth', 'setPosition', 'setRotation', 'setScale', 'setFlip', 'setAlpha']) glow[method] = vi.fn(() => glow);
+    glow.setVisible = (visible: boolean) => { glow.visible = visible; return glow; };
+    glow.setFrame = (frame: number) => { glow.frame.name = frame; return glow; };
+    const scene = { textures: { exists: () => true }, add: { sprite: vi.fn(() => glow) } };
+    const turret = sprite(); Object.assign(turret.view, { scene, visible: true, alpha: 1, scaleX: .25, scaleY: .25, flipX: false, flipY: false });
+    const pulse = vi.fn();
+    const controller = new TurretAnimationController();
+    controller.setLightingSystem({ pulse });
+    controller.bind('3', turret.phaser, 'SPORE_TURRET_PLASMA');
+    expect(scene.add.sprite).toHaveBeenCalledWith(0, 0, `${asset.sheetTextureKey}_emission`, asset.idleFrame);
+    controller.syncPose('3', 80, 40, .5, false);
+    controller.onShot('3');
+    expect(pulse).toHaveBeenCalledWith('turretGlow', 80, 40, expect.objectContaining({ color: expect.any(Number) }));
+    controller.update(16);
+    expect(glow.frame.name).toBe(turret.view.frame.name);
+    expect(glow.setPosition).toHaveBeenLastCalledWith(80, 40);
+    controller.unbind('3');
+    expect(glow.destroy).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,10 +1,12 @@
-import type * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { addPlayerGlow } from './PlayerGlow';
 import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
 
 
-import { NET_TICK_INTERVAL_MS } from '../config';
-import { getTurretVisualSpec, getTurretVisualTransform } from '../config/turretVisuals';
+import { DEPTH_LIGHTING, NET_TICK_INTERVAL_MS } from '../config';
+import { getTurretVisualSpec, getTurretVisualTransform, turretEmissionColor, turretEmissionKey } from '../config/turretVisuals';
+import { emissiveAlpha } from './EmissiveScale';
+import type { LightingSystem } from './LightingSystem';
 import { turretAngleDifference } from '../utils/turretAngle';
 import { pipelineAnimationKey, type PipelineAsset, type PipelineClip } from '../config/pipelineAssets';
 import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
@@ -14,6 +16,8 @@ interface Binding {
   controlGlow?: GlowHandle | null;
   controlColor?: number;
   sprite: Phaser.GameObjects.Sprite;
+  /** The turret's glowing parts above the light map, on the sprite's current frame. */
+  glow: Phaser.GameObjects.Sprite | null;
   weaponId: TurretWeaponId;
   asset: PipelineAsset;
   clip: PipelineClip;
@@ -38,6 +42,11 @@ export class TurretAnimationController {
   private readonly bindings = new Map<string, Binding>();
   private readonly activeTesla = new Set<string>();
   private now = 0;
+  private lighting: Pick<LightingSystem, 'pulse'> | null = null;
+  private readonly pulseOverrides = { color: 0xffffff };
+
+  /** A shot of a glowing turret also lights its surroundings briefly in the glow's colour. */
+  setLightingSystem(lighting: Pick<LightingSystem, 'pulse'> | null): void { this.lighting = lighting; }
 
   bind(id: string, sprite: Phaser.GameObjects.Sprite, weaponId: TurretWeaponId): void {
     const previous = this.bindings.get(id);
@@ -46,8 +55,16 @@ export class TurretAnimationController {
     const asset = getTurretVisualSpec(weaponId).asset;
     sprite.setTexture(asset.sheetTextureKey, asset.idleFrame).setOrigin(asset.pivot[0], asset.pivot[1]);
     const dispose = () => this.unbind(id);
-    this.bindings.set(id, { sprite, weaponId, asset,
-      clip: asset.clips.find((clip) => clip.name === 'fire')!, activeUntil: 0, dispose });
+    const emission = turretEmissionKey(asset);
+    // Self-lit like other emissive layers: just above the light map, under the canopy.
+    const glow = emission && sprite.scene?.textures.exists(emission)
+      ? sprite.scene.add.sprite(sprite.x, sprite.y, emission, asset.idleFrame).setOrigin(asset.pivot[0], asset.pivot[1])
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH_LIGHTING + 0.08)
+      : null;
+    const binding: Binding = { sprite, glow, weaponId, asset,
+      clip: asset.clips.find((clip) => clip.name === 'fire')!, activeUntil: 0, dispose };
+    this.bindings.set(id, binding);
+    this.syncGlow(binding);
     sprite.once('destroy', dispose);
   }
 
@@ -57,8 +74,20 @@ export class TurretAnimationController {
     this.bindings.delete(id);
     if (binding.controlGlow && !binding.sprite.isDestroyed) removeInternalFx(binding.sprite, binding.controlGlow);
     binding.sprite.off('destroy', binding.dispose);
+    binding.glow?.destroy();
     // Phaser destroys AnimationState before emitting the sprite's destroy event.
     if (binding.sprite.active && !binding.sprite.isDestroyed) this.idle(binding);
+  }
+
+  /** The glow follows the sprite's frame, transform and visibility; the fire clip brightens it. */
+  private syncGlow(binding: Binding): void {
+    const glow = binding.glow, sprite = binding.sprite;
+    if (!glow) return;
+    glow.setVisible(sprite.visible && sprite.active);
+    if (!glow.visible) return;
+    if (glow.frame.name !== sprite.frame.name) glow.setFrame(sprite.frame.name);
+    glow.setPosition(sprite.x, sprite.y).setRotation(sprite.rotation).setScale(sprite.scaleX, sprite.scaleY)
+      .setFlip(sprite.flipX, sprite.flipY).setAlpha(emissiveAlpha(sprite.alpha));
   }
 
   /** Only presentation state: confirmed angles never flow back to simulation. */
@@ -88,6 +117,11 @@ export class TurretAnimationController {
     const binding = this.bindings.get(id);
     if (!binding || !binding.sprite.active || binding.weaponId === 'TURRET_TESLA') return;
     const key = pipelineAnimationKey(binding.asset, binding.clip);
+    const color = binding.glow ? turretEmissionColor(binding.asset) : null;
+    if (color !== null && this.lighting && binding.sprite.visible) {
+      this.pulseOverrides.color = color;
+      this.lighting.pulse('turretGlow', binding.sprite.x, binding.sprite.y, this.pulseOverrides);
+    }
     if (binding.clip.loop) {
       binding.activeUntil = this.now + WEAPON_CONFIGS[binding.weaponId].cooldown + 2 * NET_TICK_INTERVAL_MS;
       binding.sprite.play(key, true);
@@ -108,6 +142,7 @@ export class TurretAnimationController {
     this.now += Math.max(0, delta);
     for (const [id, binding] of this.bindings) {
       if (!binding.sprite.active) continue;
+      this.syncGlow(binding);
       const pose = binding.pose;
       if (pose && pose.elapsed < NET_TICK_INTERVAL_MS) {
         pose.elapsed = Math.min(NET_TICK_INTERVAL_MS, pose.elapsed + Math.max(0, delta));

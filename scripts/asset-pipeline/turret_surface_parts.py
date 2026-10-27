@@ -56,7 +56,8 @@ def finish(material, kind='paint'):
         links.new(vector.outputs[0], out.inputs['Vector'])
         return out.outputs['Fac']
 
-    organic = kind in ('cuticle', 'veil', 'fibre')
+    organic = kind in ('cuticle', 'veil', 'fibre', 'timber')
+    timber = kind == 'timber'
     recess = kind == 'recess'
     ceramic = kind in ('ceramic', 'frost')
     patches = noise(4.5, (1, 1, 1), 'Broad outdoor weathering')
@@ -64,7 +65,11 @@ def finish(material, kind='paint'):
     values = ramp(patches, [(.24, .35), (.42, .63), (.59, 1.12), (.76, 1.48)], 'Uneven aged finish')
     surface = mix(original, values, .78 if organic else .60 if ceramic else .90,
                   'Material variation at game scale', 'MULTIPLY')
-    if organic:
+    if timber:
+        # Weathered post and foot timber: long grain along the piece, darker checks between.
+        rings = ramp(noise(16, (.08, 1, 1), 'Timber grain'), [(.30, .55), (.48, .92), (.66, 1.22), (.80, 1.40)], 'Weathered grain')
+        surface = mix(surface, rings, .65, 'Timber grain at game scale', 'MULTIPLY')
+    elif organic:
         freckles = noise(13, (1, 1, 1), 'Dry cuticle granulation')
         dry = ramp(freckles, [(.25, .45), (.45, .78), (.60, 1.06), (.78, 1.28)], 'Fine fungal fibres')
         surface = mix(surface, dry, .60 if kind == 'cuticle' else .40, 'Dry organic skin', 'MULTIPLY')

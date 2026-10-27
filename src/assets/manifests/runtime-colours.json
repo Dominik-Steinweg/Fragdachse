@@ -1278,11 +1278,11 @@
       "source": "assets/sprites/pipeline-v2/plasma/sheet.png",
       "width": 1312,
       "height": 328,
-      "sourceBytes": 134374,
-      "downloadBytes": 107684,
-      "sourceSha256": "c6a9f0cad8496d74df2e86a0dec58275e2245f9e655ca4cdd15ad31b8d992984",
-      "sha256": "e08a63563f0699ac3edeaa76d4ad27d573495de628317d26511517b7c37ab5ea",
-      "visiblePixelSha256": "659d751e6801db4236c2af92f4f16a6d50e8dae3120bc70815287cc801cd5513",
+      "sourceBytes": 104863,
+      "downloadBytes": 76364,
+      "sourceSha256": "f9f7aac969a4d06a695ab9034661a28de8be1e332218db6d8dac6383ab75f46e",
+      "sha256": "4e82f64e00906548157241c8e9a8f810a1577f937cd34e9edb40818824600bab",
+      "visiblePixelSha256": "879049ea1783e30f0223e7ba9550e0a2b9704a9bc6c1e131bd21cfef40c59b00",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/portal-generator/sheet.png": {

@@ -1,0 +1,46 @@
+{
+  "owner": "effects/TurretAnimationController.ts",
+  "notes": [
+    "Glowing parts of a turret: its emission sheet on the sprite's current frame, ADD just above the light map, so the fire clip brightens it at night."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "bind/glow/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/TurretAnimationController.ts:bind/glow/setDepth/0",
+      "owner": "effects/TurretAnimationController.ts",
+      "component": "bind/glow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "bind/glow/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    }
+  ]
+}

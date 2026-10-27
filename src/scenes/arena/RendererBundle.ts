@@ -429,6 +429,7 @@ export function* createRendererBundleSteps(
   asmdPrimary.setLightingSystem(lighting);
   plasmaBurner.setLightingSystem(lighting);
   teslaDome.setLightingSystem(lighting);
+  turretAnimations.setLightingSystem(lighting);
   teslaNova.setLightingSystem(lighting);
   miniTeslaDome.setLightingSystem(lighting);
   energyShield.setLightingSystem(lighting);

@@ -40955,8 +40955,8 @@
     },
     {
       "id": "plasma",
-      "revision": "towers-r03",
-      "meshRevision": "enemy-mesh-rigid-r1",
+      "revision": "towers-r04",
+      "meshRevision": "enemy-mesh-rigid-r2",
       "profile": "rigid",
       "coordinates": {
         "axes": "X-right,Y-south,Z-up",
@@ -40981,63 +40981,63 @@
           "blenderFrame": 0,
           "clip": "rest",
           "clipFrame": 0,
-          "sourceBeautySha256": "09471c9205feea614267cfd4119024f120f08f3054d211df82c461fe25095a76"
+          "sourceBeautySha256": "835c34b86b82ce9934c47fea0733cd6836421cec38ed3fd9595683464db46070"
         },
         {
           "index": 1,
           "blenderFrame": 1,
           "clip": "fire",
           "clipFrame": 0,
-          "sourceBeautySha256": "c25c596d9faa14bb4540b522b1c707fb57d3dcd926863c9f9095a890f8429ac6"
+          "sourceBeautySha256": "e3967111d7f82eba4950ab6834357e06ddeadde16711f0041afd5f5d9d98fff7"
         },
         {
           "index": 2,
           "blenderFrame": 2,
           "clip": "fire",
           "clipFrame": 1,
-          "sourceBeautySha256": "6c14c435cd296327f33ac7866672815a203a75a716d5fdc945e4a3f752c3d05b"
+          "sourceBeautySha256": "1743480daafa6cf53bc7ee7d3a533610bbd1ae9c226b16b759f9aee7340d8785"
         },
         {
           "index": 3,
           "blenderFrame": 3,
           "clip": "fire",
           "clipFrame": 2,
-          "sourceBeautySha256": "36e46a0634218c2d1454569997c2a75a6503742ccdefde96d6426b201d5d3cc1"
+          "sourceBeautySha256": "f40cc627b979bfd747856272d8c2b2f53ea07652efee57803d3f9190b5c42eb0"
         },
         {
           "index": 4,
           "blenderFrame": 4,
           "clip": "fire",
           "clipFrame": 3,
-          "sourceBeautySha256": "a9125604ee9269eb2331b1f3ccd9f3cd8a423b87f15c198a691e9d2b05f1bfc4"
+          "sourceBeautySha256": "8742b4e05e8dcb26780350aa032656f5fb00654fcab6b82abbd5c98eed5d96d5"
         },
         {
           "index": 5,
           "blenderFrame": 5,
           "clip": "fire",
           "clipFrame": 4,
-          "sourceBeautySha256": "2b1de5e9b48233703525d590a8e4674a4d81b27cd7ddd85016cc9d098070d62f"
+          "sourceBeautySha256": "3d765fe4ce90d2587649455dccdf6516a8d6d7a0daa25ac1cb195fd26b067a1e"
         },
         {
           "index": 6,
           "blenderFrame": 6,
           "clip": "fire",
           "clipFrame": 5,
-          "sourceBeautySha256": "dcf89fe773f514148c06f51d557e312974926385809d7256cb0639419ba71b52"
+          "sourceBeautySha256": "0254f4a91ab44a50f560fbb0bb1593aa710b1ecec381d9100bcfd51a42065037"
         },
         {
           "index": 7,
           "blenderFrame": 7,
           "clip": "fire",
           "clipFrame": 6,
-          "sourceBeautySha256": "bb47cf20381a6fef2ff514bb703edd3d23b7063e7e198213acecaa8612f7768a"
+          "sourceBeautySha256": "f1cc7d4f7cf5aca00b0dd10378eb8ae553d1d6e7ece328859846d1937b5df014"
         },
         {
           "index": 8,
           "blenderFrame": 8,
           "clip": "fire",
           "clipFrame": 7,
-          "sourceBeautySha256": "dfecc31a0caeedc5e52da60745e67b044ac9675f0334f93124f643496e576a10"
+          "sourceBeautySha256": "931b5b69fce1a25742fc940ecc9d7687ef63f30773a25d177cb79e864a9f32dd"
         }
       ],
       "contacts": [
@@ -41080,7 +41080,7 @@
       ],
       "provenance": {
         "source": "selected-v2",
-        "sourceRevision": "towers-r03",
+        "sourceRevision": "towers-r04",
         "blenderVersion": "5.2.1 LTS"
       },
       "mesh": {
@@ -41088,18 +41088,18 @@
         "encoding": "uint16-le-xyz-bounds",
         "bounds": {
           "min": [
-            -11.54854382787432,
-            -12.042655233150043,
+            -10.07142886519432,
+            -6.56983044820132,
             0
           ],
           "max": [
-            18.071427941322327,
-            12.042657622488303,
-            15.222925429875506
+            18.07142794132233,
+            6.569784260933853,
+            38.10207398252162
           ]
         },
         "vertexCount": 2000,
-        "triangleCount": 3996,
+        "triangleCount": 3988,
         "poseIndices": [
           0,
           1,
@@ -41112,45 +41112,45 @@
           8
         ],
         "positions": {
-          "file": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r1/plasma-positions-7440e66df9e837f80715f3c459bce3545423344eab398eb7416359d165dbb310.bin",
+          "file": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r2/plasma-positions-2ad890a513ebbb43aed4ac212e68879c4b106e2d05be5c067707af4f7abfa08e.bin",
           "bytes": 108000,
-          "sha256": "7440e66df9e837f80715f3c459bce3545423344eab398eb7416359d165dbb310",
-          "url": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r1/plasma-positions-7440e66df9e837f80715f3c459bce3545423344eab398eb7416359d165dbb310.bin?v=7440e66df9e837f80715f3c459bce3545423344eab398eb7416359d165dbb310"
+          "sha256": "2ad890a513ebbb43aed4ac212e68879c4b106e2d05be5c067707af4f7abfa08e",
+          "url": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r2/plasma-positions-2ad890a513ebbb43aed4ac212e68879c4b106e2d05be5c067707af4f7abfa08e.bin?v=2ad890a513ebbb43aed4ac212e68879c4b106e2d05be5c067707af4f7abfa08e"
         },
         "indices": {
-          "file": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r1/plasma-indices-07edee9d83c09741343fff952e230a0ca8196bf562145c1a6f6cc5bf02cab590.bin",
-          "bytes": 23976,
-          "sha256": "07edee9d83c09741343fff952e230a0ca8196bf562145c1a6f6cc5bf02cab590",
+          "file": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r2/plasma-indices-861decca0fbe5890c631a4591bdec4010e1e56eac8a20ce4dc3ba22fca7bf08c.bin",
+          "bytes": 23928,
+          "sha256": "861decca0fbe5890c631a4591bdec4010e1e56eac8a20ce4dc3ba22fca7bf08c",
           "encoding": "uint16-le-triangles",
-          "url": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r1/plasma-indices-07edee9d83c09741343fff952e230a0ca8196bf562145c1a6f6cc5bf02cab590.bin?v=07edee9d83c09741343fff952e230a0ca8196bf562145c1a6f6cc5bf02cab590"
+          "url": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r2/plasma-indices-861decca0fbe5890c631a4591bdec4010e1e56eac8a20ce4dc3ba22fca7bf08c.bin?v=861decca0fbe5890c631a4591bdec4010e1e56eac8a20ce4dc3ba22fca7bf08c"
         },
-        "topologySha256": "07edee9d83c09741343fff952e230a0ca8196bf562145c1a6f6cc5bf02cab590",
-        "downloadBytes": 131976,
-        "gpuFloat32Bytes": 239976,
+        "topologySha256": "861decca0fbe5890c631a4591bdec4010e1e56eac8a20ce4dc3ba22fca7bf08c",
+        "downloadBytes": 131928,
+        "gpuFloat32Bytes": 239928,
         "quantizationMaxErrorWorld": [
-          0.00022598589890285073,
-          0.00018375915812648467,
-          0.00011614347623312356
+          0.00021471623412311474,
+          0.000100248834280424,
+          0.0002907001906044222
         ]
       },
       "images": {
         "beauty160": {
           "file": "assets/sprites/pipeline-v2/plasma/sheet.png",
-          "sha256": "c6a9f0cad8496d74df2e86a0dec58275e2245f9e655ca4cdd15ad31b8d992984"
+          "sha256": "f9f7aac969a4d06a695ab9034661a28de8be1e332218db6d8dac6383ab75f46e"
         }
       },
       "materialEncoding": null,
-      "sourceManifestSha256": "d612cce8c3770335e469e77f30af75918f7267509305086e5134f60efa3caa15",
-      "sourceArchiveSha256": "c364244f89e7f744df9ac41ac279c5cadf0bf6a614197537dbe961e7bdd410e8",
+      "sourceManifestSha256": "5ebe9f59774a790403e5ea737f7cc0144304fc268cc7ed1c404c8b613a06c915",
+      "sourceArchiveSha256": "c9c48798addf64cf7f9353a9e5829bcf4905542839822750ef07ac861ed3beb7",
       "inheritedEyeAnchorSource": null,
       "validation": {
         "fullSilhouettes": 729,
-        "minimumIou": 0.9930155773789366,
-        "minimumFineIou": 0.9924634093060511,
+        "minimumIou": 0.99074533135019,
+        "minimumFineIou": 0.9912262201037668,
         "materialMetrics": [],
         "evidence": {
-          "candidate.blend": "f59bc629f32d02474022bb1fc514370edd931d26b6c73bc17c72992dc851a1d6",
-          "silhouette-review.json": "17b0b2b66c9bb420598feaafdfe127e5ca158d12cc6b4b62381eff46777a629d"
+          "candidate.blend": "bfc199901584689d00c05a9a36428a960c3741934c7836bcc8b68d71b40e9e64",
+          "silhouette-review.json": "439fbe2b7e7a46ed4931567f2a5d784780fcbbe0bff5488483cef97790eb9355"
         }
       }
     }
