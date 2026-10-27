@@ -17,7 +17,7 @@ import {
   sanitizePersistentBaseRewardState,
   type PersistentBaseRewardId,
 } from '../src/persistentBase/PersistentBaseRewardTypes';
-import { isPersistentBaseRewardCellAllowed, relocateStrandedBaseSurfaceRewards } from '../src/persistentBase/PersistentBasePlacementRules';
+import { isPersistentBaseRewardCellAllowed, relocateStrandedCoreRewards } from '../src/persistentBase/PersistentBasePlacementRules';
 import { DEFAULT_PERSISTENT_BASE_BUILD_AREA, getCanonicalPersistentBaseCoreCells } from '../src/persistentBase/PersistentBaseCore';
 
 describe('Persistent Base Reward-Katalog', () => {
@@ -283,29 +283,32 @@ describe('PersistentBaseRewardGrantService', () => {
   });
 });
 
-describe('Persistent Base – Umsetzen gestrandeter Basistürme', () => {
+describe('Persistent Base – Umsetzen gestrandeter Rewards', () => {
   const state = (placements: { rewardId: PersistentBaseRewardId; relativeGridX: number; relativeGridY: number }[]) => ({
     ...DEFAULT_PERSISTENT_BASE_REWARD_STATE, revision: 4, placements: placements.map(p => ({ ...p, angle: 1 })),
   });
 
-  it('moves turrets from former ring cells onto the nearest free corner cell and keeps valid ones', () => {
+  it('moves rewards off cells the core took onto the nearest free allowed cell and keeps valid ones', () => {
     // (-1,-3) was ring before the 3-cell entrances; (-3,-3) is still a corner bastion and taken.
-    const migrated = relocateStrandedBaseSurfaceRewards(state([
+    // The hearth took the anchor (0,0) from the courtyard; (0,-2) stays a valid courtyard cell.
+    const migrated = relocateStrandedCoreRewards(state([
       { rewardId: 'base_plasma_turret', relativeGridX: -3, relativeGridY: -3 },
       { rewardId: 'base_spore_turret', relativeGridX: -1, relativeGridY: -3 },
       { rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0 },
+      { rewardId: 'base_rage_pedestal', relativeGridX: 0, relativeGridY: -2 },
     ]));
     expect(migrated.revision).toBe(4);
     expect(migrated.placements).toEqual([
       { rewardId: 'base_plasma_turret', relativeGridX: -3, relativeGridY: -3, angle: 1 },
       { rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: -3, angle: 1 },
-      { rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 1 },
+      { rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: -1, angle: 1 },
+      { rewardId: 'base_rage_pedestal', relativeGridX: 0, relativeGridY: -2, angle: 1 },
     ]);
     for (const placement of migrated.placements) {
       expect(isPersistentBaseRewardCellAllowed(placement.rewardId, placement.relativeGridX, placement.relativeGridY,
         DEFAULT_PERSISTENT_BASE_BUILD_AREA)).toBe(true);
     }
-    expect(relocateStrandedBaseSurfaceRewards(migrated)).toBe(migrated);
+    expect(relocateStrandedCoreRewards(migrated)).toBe(migrated);
   });
 
   it('keeps every base-surface turret placed on its own corner cell after the footprint change', () => {
@@ -314,7 +317,7 @@ describe('Persistent Base – Umsetzen gestrandeter Basistürme', () => {
     expect(turrets.length).toBeLessThanOrEqual(corners.length);
     // Former ring cells of the 20-cell core, now entrance cells.
     const formerRing = [[-1, -3], [1, -3], [-1, 3], [1, 3], [-3, -1], [-3, 1], [3, -1], [3, 1], [-2, -3]] as const;
-    const migrated = relocateStrandedBaseSurfaceRewards(state(turrets.map((rewardId, index) => ({
+    const migrated = relocateStrandedCoreRewards(state(turrets.map((rewardId, index) => ({
       rewardId, relativeGridX: formerRing[index]![0], relativeGridY: formerRing[index]![1] }))));
     expect(migrated.placements.map(p => p.rewardId).sort()).toEqual([...turrets].sort());
     expect(new Set(migrated.placements.map(p => `${p.relativeGridX},${p.relativeGridY}`)).size).toBe(turrets.length);

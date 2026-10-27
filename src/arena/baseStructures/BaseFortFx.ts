@@ -5,20 +5,23 @@ import type { GpuVfxSpawnSpec } from '../../effects/gpu/GpuVfxSpawnSpec';
 import type { GpuVfxSystem } from '../../effects/gpu/GpuVfxSystem';
 
 /** Socket kinds of the fort asset that carry particles; positions are world pixels. */
-export type BaseFortEmitterKind = 'torch' | 'bowl';
+export type BaseFortEmitterKind = 'torch' | 'bowl' | 'hearth';
 export interface BaseFortEmitter { readonly kind: BaseFortEmitterKind; readonly x: number; readonly y: number }
 
 /** The breeze the asset's pennants show: towards world +X, a little north. */
 const WIND = { x: 1, y: -.2 };
 const WIND_ANGLE = Math.atan2(WIND.y, WIND.x);
 /**
- * Two fires of one fort. Torches burn pitch: a yellow-orange flame with a pale core. The fire bowls
- * burn wood on coal: a wider, redder flame with more smoke and sparks. Both are seen from above,
- * where a flame rises towards the camera and leans downwind; daylight washes them out a little.
+ * Three fires of one fort. Torches burn pitch: a yellow-orange flame with a pale core. The fire bowls
+ * burn wood on coal: a wider, redder flame with more smoke and sparks. The hearth in the courtyard is
+ * a log fire: the largest, a hot yellow heart in a ring of orange tongues, with a steady smoke column.
+ * All are seen from above, where a flame rises towards the camera and leans downwind; daylight washes
+ * them out a little.
  */
 const FIRE = {
   torch: { core: 0xffd8a0, flame: 0xffe0b8, dayAlpha: .75 },
   bowl: { core: 0xff7a34, flame: 0xff8a48, dayAlpha: .9 },
+  hearth: { core: 0xffb050, flame: 0xff9a4c, dayAlpha: .95 },
 } as const;
 const SPARKS = [0xffc070, 0xff8a40] as const;
 const SMOKE = 0x4c4540;
@@ -72,6 +75,11 @@ export class BaseFortFx {
         add(130, 130, flame, (e, n, t) => this.emitTorchFlame(e, n, t));
         add(1500, 900, ember, (e, n, t) => this.emitSpark(e, .8, SPARKS[0], t));
         add(800, 1000, smoke, (e, n, t) => this.emitSmoke(e, n, .8, t));
+      } else if (emitter.kind === 'hearth') {
+        add(150, 150, flame, (e, n, t) => this.emitHearthCore(e, n, t));
+        add(70, 70, flame, (e, n, t) => this.emitHearthFlame(e, n, t));
+        add(170, 130, ember, (e, n, t) => this.emitSpark(e, 1.2, SPARKS[Math.random() < .5 ? 0 : 1], t));
+        add(240, 300, smoke, (e, n, t) => this.emitSmoke(e, n, 2, t));
       } else {
         add(190, 190, flame, (e, n, t) => this.emitBowlCore(e, n, t));
         add(130, 130, flame, (e, n, t) => this.emitBowlFlame(e, n, t));
@@ -168,6 +176,18 @@ export class BaseFortFx {
     this.lick(emitter.x + Math.cos(a) * d, emitter.y + Math.sin(a) * d,
       WIND_ANGLE + (Math.random() - .5) * 1.4, .36 + Math.random() * .1, 900 + Math.random() * 260,
       (.26 + .06 * night) * BaseFortFx.dayFade(FIRE.bowl.dayAlpha, night), FIRE.bowl.flame, .45, nowMs);
+  }
+
+  private emitHearthCore(emitter: BaseFortEmitter, night: number, nowMs: number): void {
+    this.glow(emitter, .5, .55 * BaseFortFx.dayFade(FIRE.hearth.dayAlpha, night), FIRE.hearth.core, nowMs);
+  }
+
+  /** The log fire: tongues rise from the whole bed between the logs and lean downwind, larger than a bowl's. */
+  private emitHearthFlame(emitter: BaseFortEmitter, night: number, nowMs: number): void {
+    const a = Math.random() * Math.PI * 2, d = 5 * Math.sqrt(Math.random());
+    this.lick(emitter.x + Math.cos(a) * d, emitter.y + Math.sin(a) * d,
+      WIND_ANGLE + (Math.random() - .5) * 1.2, .5 + Math.random() * .16, 1000 + Math.random() * 300,
+      (.28 + .06 * night) * BaseFortFx.dayFade(FIRE.hearth.dayAlpha, night), FIRE.hearth.flame, .5, nowMs);
   }
 
   /** Sparks break off, drift with the breeze and burn out. */

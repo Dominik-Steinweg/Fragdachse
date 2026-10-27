@@ -52,8 +52,10 @@ void main(){
   float planar=length(uSun.xy);
   if(planar>.001){
     vec2 stepUv=structureUvStep(uSun.xy/planar);
-    for(int k=1;k<=28;k++){
-      float t=float(k)*3.0;
+    // Every px close by, then every third: a palisade is only a few px thick where two round stakes
+    // touch, and fixed coarse steps skip it at the same distances, combing the shadow on the deck.
+    for(int k=1;k<=40;k++){
+      float t=k<=12?float(k):12.0+float(k-12)*3.0;
       float h=structureHeight(uv+stepUv*t);
       horizon=max(horizon,atan(h-h0-1.5,t));
     }

@@ -41,8 +41,11 @@ const EMISSION_DEPTH = DEPTH_LIGHTING + 0.1;
  * this tint brings its albedo down to the shaded gravel it covers (measured on map 04 at noon).
  */
 const GROUND_TINT = 0xb6b2aa;
-/** Low decks and stakes: a lighter, softer ground shadow than the tall lobby buildings. */
-const FORT_SHADOW = { opacity: .34, softness: 1.6 };
+/**
+ * Low decks and stakes: a lighter ground shadow than the tall lobby buildings, with an edge crisp
+ * enough that the stake points still draw their teeth (they are only a few px long).
+ */
+const FORT_SHADOW = { opacity: .34, softness: .6 };
 /**
  * The glowing torch heads and bowl coals glow by day too and breathe slowly: fast flicker reads as
  * strobing at this scale.
@@ -52,13 +55,14 @@ const LAYER_LOOK: Record<BaseFortLayer, { day: number; night: number; flicker: n
 };
 /**
  * Light-map lights by socket prefix; daylight keeps a pool, night the full one. The fire bowls stay
- * clearly lit by day; the torches only faintly.
+ * clearly lit by day; the torches and the hearth, whose pool spans the courtyard, only faintly.
  */
 const SOCKET_LIGHTS: readonly { prefix: string; preset: LightPresetKey; day: number; scale: number }[] = [
   { prefix: 'bowl', preset: 'baseFortBowl', day: .55, scale: 1 },
   { prefix: 'torch', preset: 'baseFortTorch', day: .3, scale: 1 },
+  { prefix: 'hearth', preset: 'baseFortHearth', day: .25, scale: 1 },
 ];
-const EMITTER_KINDS: readonly BaseFortEmitterKind[] = ['torch', 'bowl'];
+const EMITTER_KINDS: readonly BaseFortEmitterKind[] = ['torch', 'bowl', 'hearth'];
 /** The structure fades with the staggered cell explosions instead of vanishing at once. */
 const DESTROYED_ALPHA = 0;
 /** Turret plinths lie on the decks, under the turrets' mounted shadow (ROCKS + 0.09) and sprite. */

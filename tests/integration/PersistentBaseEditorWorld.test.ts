@@ -22,7 +22,7 @@ describe('base editor World terrain', () => {
     const pedestalId = PERSISTENT_BASE_REWARD_IDS.find(id => getPersistentBaseRewardDefinition(id).category === 'basePedestal')!;
     progress.persistentBaseRewardUnlocks = [pedestalId];
     progress.personalBaseContribution.constructions = [{ persistentId: 'wall', tool: { kind: 'construction', id: 'rock_barrier' },
-      relativeGridX: 0, relativeGridY: 0, angle: 0, placementOrder: 1 }];
+      relativeGridX: 0, relativeGridY: 1, angle: 0, placementOrder: 1 }];
     const model = new PersistentBaseEditorModel(progress);
     const wall = { kind: 'construction' as const, id: 'wall' };
     const pedestal = { kind: 'reward' as const, id: pedestalId };
@@ -44,14 +44,14 @@ describe('base editor World terrain', () => {
       powerUps, shadows, occluders: { markDirty() {} }, fog: { terrain: { setObstacle() {} } },
     }) as PersistentBaseEditorWorld;
     world.syncObjects();
-    const firstId = rockGrid.getIndex(anchor, anchor);
+    const firstId = rockGrid.getIndex(anchor, anchor + 1);
     expect(states.get(firstId)).toMatchObject({ active: true, material: 'walls' });
     const pickupId = powerUps.sync.mock.lastCall![0][0].uid;
 
     expect(model.move(wall, -1, -1)).toBe(true);
     expect(model.move(pedestal, -1, 1)).toBe(true);
     world.syncObjects();
-    expect(rockGrid.getIndex(anchor, anchor)).toBe(-1);
+    expect(rockGrid.getIndex(anchor, anchor + 1)).toBe(-1);
     expect(states.get(firstId)?.active).toBe(false);
     expect(states.get(rockGrid.getIndex(anchor - 1, anchor - 1))).toMatchObject({ active: true, material: 'walls',
       x: (anchor - .5) * CELL_SIZE, y: (anchor - .5) * CELL_SIZE });
@@ -60,9 +60,10 @@ describe('base editor World terrain', () => {
     expect(powerUps.syncPedestals.mock.lastCall![0][0]).toMatchObject({ id: pickupId,
       x: (anchor - .5) * CELL_SIZE, y: (anchor + 1.5) * CELL_SIZE });
 
-    expect(model.move(wall, 0, 0)).toBe(true);
+    expect(model.move(wall, 0, 0)).toBe(false);
+    expect(model.move(wall, 0, 1)).toBe(true);
     world.syncObjects();
-    expect(rockGrid.getIndex(anchor, anchor)).toBe(firstId);
+    expect(rockGrid.getIndex(anchor, anchor + 1)).toBe(firstId);
     expect(states.get(firstId)).toMatchObject({ active: true, material: 'walls' });
     expect(rockGrid.getIndex(anchor - 1, anchor - 1)).toBe(-1);
     // Shadow replacements preserve the existing baked image until the new bake is ready.

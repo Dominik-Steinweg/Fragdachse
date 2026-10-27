@@ -3,7 +3,7 @@ import type { CoopDefenseProgressPreferences } from '../utils/localPreferences';
 import type { PersistentBaseAreaStage } from './PersistentBaseCore';
 import { isPersistentBaseRewardCellAllowed, getPersistentConstructionFootprint, getPersistentBaseRewardFootprint, getPersistentBaseRewardCells } from './PersistentBasePlacementRules';
 import { resolvePersistentBaseBuildAreaForStage, resolvePersistentBaseCell, isCellInsidePersistentBaseBuildArea,
-  type PersistentBaseBuildArea } from './PersistentBaseCore';
+  isPersistentBaseSolidDomain, type PersistentBaseBuildArea } from './PersistentBaseCore';
 import type { PersistentBaseRewardId, PersistentBaseRewardPlacement } from './PersistentBaseRewardTypes';
 import type { PersistentConstruction } from './PersistentBaseTypes';
 
@@ -73,7 +73,7 @@ export class PersistentBaseEditorModel {
       const cx = x + cell.dx, cy = y + cell.dy;
       if (!isCellInsidePersistentBaseBuildArea(cx, cy, this.area)) return 'outside';
       if (object.kind === 'construction'
-        && resolvePersistentBaseCell({ gridX: 0, gridY: 0 }, cx, cy, undefined, this.area)?.domain === 'base-surface') return 'surface';
+        && isPersistentBaseSolidDomain(resolvePersistentBaseCell({ gridX: 0, gridY: 0 }, cx, cy, undefined, this.area)?.domain)) return 'surface';
       if (occupied.has(`${cx},${cy}`)) return 'occupied';
     }
     return null;

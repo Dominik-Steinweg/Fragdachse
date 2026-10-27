@@ -145,27 +145,38 @@ class Burg(Style):
 
 # -- Palisadenschanze: plank deck, low sharpened palisade, timber turntable ------------------
 
+def fort_timber(m):
+    """Warm, weathered timber shared by the persistent core and the outpost kit, so both read as one
+    fort: mid-brown decks with darker oak boards, dark bark, pale axe-hewn stake points."""
+    return dict(
+        bark=m('Fort bark', (80, 62, 46), .35), point=m('Hewn stake point', (138, 108, 76), .3),
+        point_old=m('Old stake point', (104, 86, 66), .3), point_moss=m('Mossy stake point', (100, 104, 72), .3),
+        plank=m('Fort deck plank', (118, 88, 58), .3), oak=m('Fort oak', (88, 62, 40), .32),
+        worn=m('Fort worn board', (146, 116, 82), .32), tar=m('Dark tarred timber', (58, 48, 40), .2))
+
+
+def hewn_stake(b, x, y, top, r, mats, rng):
+    """One palisade stake: a round log sharpened by axe (Batch.hewn_log). The bare wood of the point
+    has weathered differently from stake to stake: mostly silver-brown, some dark with age, a few
+    greened with moss, so a row reads as old, individually cut timber rather than a pattern."""
+    pick = rng.random()
+    wood = mats['point_moss'] if pick < .12 else mats['point_old'] if pick < .38 else mats['point']
+    b.hewn_log(x, y, top, r, mats['bark'], wood, rng, .03)
+
+
 class Fort(Style):
-    PZ, R = 1.2, .085           # raised deck: turrets fire over the stakes, as on the core
+    PZ, R = 1.2, .09            # raised deck: turrets fire over the stakes, as on the core
 
     def palette(self, m):
-        return dict(
-            bark=m('Bark log', (82, 64, 46), .35), cut=m('Cut log end', (156, 126, 88), .3), plank=m('Silvered timber', (140, 128, 106), .3),
-            oak=m('Weathered oak', (104, 84, 60), .32), tar=m('Dark tarred timber', (58, 50, 42), .2), rope=m('Hemp cord', (142, 128, 94), .3),
+        return dict(fort_timber(m),
+            rope=m('Hemp cord', (142, 128, 94), .3),
             iron=m('Forged iron', (92, 96, 94), .25), dark=m('Soot iron', (43, 44, 39), .18),
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
-            log=m('Charred fire log', (38, 33, 29), .12),
-            mossy=m('Mossy log tip', (90, 100, 56), .35), moss=m('Masonry moss', (60, 76, 38), .5))
+            log=m('Charred fire log', (38, 33, 29), .12))
 
     def log(self, x, y, rng, r=None, top=None):
-        """Individual mossy sharpened stake, as on the persistent core (base_fort_master)."""
-        r = r or self.R + rng.uniform(-.01, .008)
-        h = top or self.PZ + .44 + rng.uniform(-.06, .06)
-        self.b.cylinder((x, y, h / 2), r, h, self.p['bark'], 10, .008, None, rng.uniform(0, 1))
-        cone(self.c, 'Sharpened log tip', (x + rng.uniform(-.008, .008), y + rng.uniform(-.008, .008)), r, h, h + .16,
-             self.p['mossy' if rng.random() < .55 else 'cut'], 8, 0, rng.uniform(0, 1))
-        a = rng.uniform(0, math.tau)
-        self.b.ell((x + r * .5 * math.cos(a), y + r * .5 * math.sin(a), h - .02), (r * .8, r * .65, .035), self.p['moss'], 8, 4)
+        """Individual sharpened stake, as on the persistent core (base_fort_master)."""
+        hewn_stake(self.b, x, y, top or self.PZ + .5 + rng.uniform(-.06, .04), r or self.R + rng.uniform(-.01, .006), self.p, rng)
 
     def torch_out(self, x, y, outward, rng):
         """Large torch on an iron bracket outside the palisade, as on the core."""
@@ -185,8 +196,10 @@ class Fort(Style):
     def post_bowl(self, x, y, rng):
         """Small square gate post with an iron fire bowl on top, as on the core."""
         b, p, h = self.b, self.p, self.PZ + .5
-        b.box((x, y, h / 2), (.18, .18, h), p['oak'], .012, None, .006, rng)
-        b.box((x, y, h + .02), (.21, .21, .04), p['tar'], .005)
+        b.box((x, y, h / 2), (.24, .24, h), p['oak'], .012, None, .006, rng)
+        b.box((x, y, h + .02), (.27, .27, .04), p['tar'], .005)
+        for z in (h - .22, .35):                                                       # iron bands
+            b.box((x, y, z), (.255, .255, .04), p['dark'], .003)
         z = h + .04
         r = .15
         b.cylinder((x, y, z + .02), .07, .04, p['dark'], 10, .006)                  # foot on the post cap
@@ -218,7 +231,7 @@ class Fort(Style):
             while a < a1 - .02:
                 w = min(.118, a1 - a)
                 b.box(q.p(a + w / 2, (b0 + b1) / 2, self.PZ - .025), q.dims(w - .014, b1 - b0 + .01, .045),
-                      p['plank'] if rng.random() > .35 else p['oak'], .006, None, .006, rng)
+                      p['plank'] if rng.random() > .45 else p['oak'], .006, None, .006, rng)
                 a += w
         line = H - R
         for qe, a0, a1 in q.edges(H):

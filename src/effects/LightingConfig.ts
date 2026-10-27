@@ -814,11 +814,14 @@ export const LIGHT_PRESETS = {
     flickerHz: 1.3,
     surfaceRelief: true,
   },
-  /** Fire bowls on the gate posts of the persistent base fort: red-orange, lit by day too, slowly breathing. */
+  /**
+   * Fire bowls on the outer gate posts of the persistent base fort: red-orange, lit by day too, slowly
+   * breathing; a pair lights its gate passage.
+   */
   baseFortBowl: {
     enabled: true,
     shape: 'radial',
-    radiusPx: 64,
+    radiusPx: 80,
     color: 0xff7a38,
     intensity: 0.72,
     durationMs: 0,
@@ -827,6 +830,21 @@ export const LIGHT_PRESETS = {
     priority: 2,
     flickerAmount: 0.05,
     flickerHz: 0.9,
+    surfaceRelief: true,
+  },
+  /** The hearth in the fort's courtyard: the largest fire, warm amber, lights the whole yard at night. */
+  baseFortHearth: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 150,
+    color: 0xffa452,
+    intensity: 0.9,
+    durationMs: 0,
+    decayExponent: 1.25,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0.06,
+    flickerHz: 1.1,
     surfaceRelief: true,
   },
   /** Large torches outside the fort's palisade: orange, slowly breathing, a pool each. */

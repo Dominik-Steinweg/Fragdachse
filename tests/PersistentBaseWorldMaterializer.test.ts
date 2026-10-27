@@ -95,7 +95,7 @@ describe('destructible persistent reward lifetime', () => {
     const placement = new PlacementSystem({ seed: 1, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: [] },
       grid, { getAllPlayers: () => [] } as never, resolveActiveArenaWorldMetrics());
     const rewards = new PersistentBaseRewardStore();
-    const record = { rewardId: 'base_watchtower' as const, relativeGridX: 0, relativeGridY: 0, angle: 0 };
+    const record = { rewardId: 'base_watchtower' as const, relativeGridX: 1, relativeGridY: 1, angle: 0 };
     rewards.placeReward(record);
     const contributions = new PersistentBaseContributionStore();
     const binding = new PersistentBaseWorldBinding({ finalizeRuntimeObjects: () => {}, releaseRewardRuntime: () => {} });
@@ -125,11 +125,11 @@ describe('destructible persistent reward lifetime', () => {
     materializer.reconcile();
     const tower = placement.getAllRuntimeRocks()[0];
     expect(tower.kind).toBe('watchtower');
-    for (const { dx, dy } of COOP_DEFENSE_CONSTRUCTIONS.watchtower.footprint) expect(placement.getRuntimeRockAt(10 + dx, 10 + dy)?.id).toBe(tower.id);
+    for (const { dx, dy } of COOP_DEFENSE_CONSTRUCTIONS.watchtower.footprint) expect(placement.getRuntimeRockAt(11 + dx, 11 + dy)?.id).toBe(tower.id);
     expect(construction.commitDamage(tower.id, tower.maxHp).kind).toBe('applied');
     // A contribution overlapping a non-anchor cell remains suppressed even while the reward is absent.
     contributions.offerContribution({ schemaVersion: 1, ownerId: 'owner', revision: 1, constructions: [{
-      persistentId: 'wall', tool: { kind: 'construction', id: 'rock_barrier' }, relativeGridX: 1, relativeGridY: 1, angle: 0, placementOrder: 0,
+      persistentId: 'wall', tool: { kind: 'construction', id: 'rock_barrier' }, relativeGridX: 2, relativeGridY: 2, angle: 0, placementOrder: 0,
     }] });
     materializer.reconcile(); materializer.refreshForRelevantBuildChanges();
     expect(materializer.materializeRewardPlacement(record)).toBeNull();
@@ -137,7 +137,7 @@ describe('destructible persistent reward lifetime', () => {
     expect(rewards.getState().placements).toEqual([record]);
     revision += 1; materializer.reconcile();
     expect(placement.getAllRuntimeRocks()).toHaveLength(1);
-    expect(placement.getAllRuntimeRocks()[0]).toMatchObject({ kind: 'watchtower', gridX: 10, gridY: 10, hp: COOP_DEFENSE_CONSTRUCTIONS.watchtower.maxHp });
+    expect(placement.getAllRuntimeRocks()[0]).toMatchObject({ kind: 'watchtower', gridX: 11, gridY: 11, hp: COOP_DEFENSE_CONSTRUCTIONS.watchtower.maxHp });
     expect(placement.getAllRuntimeRocks()[0].id).not.toBe(tower.id);
   });
 });
