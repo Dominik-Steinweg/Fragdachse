@@ -29,6 +29,11 @@ describe('deployment seed', () => {
     const round = generateRoundWorld({ roundRevision: 7, gameMode: COOP_DEFENSE_MODE, seed,
       campaignMapConfig: mapConfig, dawn: null, worldParameters: undefined });
     expect(ArenaGenerator.fingerprint(preview)).toBe(round.world.layoutFingerprint);
+    // The round start may take the lobby's layout instead of generating it again: same World.
+    const prepared = generateRoundWorld({ roundRevision: 7, gameMode: COOP_DEFENSE_MODE, seed,
+      campaignMapConfig: mapConfig, dawn: null, worldParameters: undefined, preparedLayout: preview });
+    expect(prepared.layout).toBe(preview);
+    expect(prepared.world).toEqual(round.world);
   });
 
   it('is published by the host, rolled by a map change and handed over once per round start', async () => {

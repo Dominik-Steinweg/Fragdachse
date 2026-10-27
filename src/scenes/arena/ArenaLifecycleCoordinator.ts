@@ -137,6 +137,7 @@ import type {
 } from '../../persistentBase/PersistentBaseCore';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
 import { generateRoundWorld } from '../../world/RoundWorldGeneration';
+import type { DeploymentLayout } from '../../world/deployment/DeploymentLayoutCache';
 import { composeDawnRoundPlans, type DawnRoundPlans } from '../../dawn/composition/DawnRoundComposition';
 import { DEFAULT_COOP_PROGRAM } from '../../dawn/contracts/CoopProgram';
 import { resolveDawnScenario } from '../../dawn/resolution/DawnScenarioResolution';
@@ -148,6 +149,7 @@ import {
   toActivityKind,
 } from '../../world/arenaDescriptorAdapter';
 import {
+  isDawnWorld,
   resolveActivityDefinition,
   resolveCoopDefenseMapConfig,
   resolveWorldDefinition,
@@ -235,6 +237,11 @@ type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown
  * Runtime state stays at the concrete World-/Activity owners; the context contains only
  * scene-lifetime infrastructure.
  */
+/** Layouts the lobby generated for the next round, by campaign map and seed. */
+export interface DeploymentLayoutSource {
+  peekLayout(mapId: string, seed: number): DeploymentLayout | null;
+}
+
 export class ArenaLifecycleCoordinator {
   private matchTerminated   = false;
   private roundTimeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES;
@@ -817,6 +824,7 @@ export class ArenaLifecycleCoordinator {
     private readonly persistentBase: ArenaPersistentBaseSession,
     /** Lazy: Die Input-Bindings der Scene entstehen erst nach diesem Owner. */
     private readonly getSpectatorCameraInput: () => ArenaSpectatorCameraInput | undefined,
+    private readonly deploymentLayouts: DeploymentLayoutSource | null = null,
   ) {
     this.coopMissionPresentationUi = coopMissionPresentation?.createUiPort({
       getPersistentBaseSite: () => this.worldRuntime?.context.persistentBaseSite ?? null,
@@ -2948,7 +2956,7 @@ export class ArenaLifecycleCoordinator {
       && activityDescriptor === null
       ? this.worldRuntime?.presentation ?? this.worldPresentationHandoff.pending
       : null;
-    const prepared = this.preparedRoundLayout;
+    const prepared = this.preparedRoundLayout ?? this.lobbyPreparedLayout(worldDescriptor);
     this.tearDownArena(reusablePresentation !== null);
     const previousMeasurement = loadingTimeline.get('world');
     const loadRun = loadingTimeline.begin('world', String(worldDescriptor.worldRevision) + ':' + worldDescriptor.definitionId, previousMeasurement?.endedAt !== null);
@@ -3479,6 +3487,9 @@ export class ArenaLifecycleCoordinator {
           campaignMapConfig: request.dawn ? null : request.mapConfig,
           dawn: request.dawn,
           worldParameters: request.worldParameters,
+          // Generated in the lobby for the announced map and seed (Lagekarte).
+          preparedLayout: !request.dawn && request.mapConfig
+            ? this.deploymentLayouts?.peekLayout(request.mapConfig.mapId, request.seed)?.layout ?? null : null,
         });
         this.preparedRoundLayout = { descriptor: world, layout };
         // Der eine World-Kanal: Weltidentitaet und Activity gehen gemeinsam raus, abgeleitet
@@ -3490,6 +3501,18 @@ export class ArenaLifecycleCoordinator {
         this.terminateMatch(t('ui.lobby.arenaBuildFailed'));
       }
     });
+  }
+
+  /**
+   * Client: the campaign layout the lobby generated for this World's map and seed. The World
+   * composition takes it only if its fingerprint matches the host's; otherwise it generates.
+   */
+  private lobbyPreparedLayout(descriptor: WorldDescriptor): { descriptor: Pick<WorldDescriptor, 'seed' | 'layoutFingerprint'>;
+    layout: ArenaLayout } | null {
+    if (!this.deploymentLayouts || isDawnWorld(descriptor)) return null;
+    const mapId = resolveCoopDefenseMapConfig(descriptor, null)?.mapId;
+    const prepared = mapId ? this.deploymentLayouts.peekLayout(mapId, descriptor.seed) : null;
+    return prepared ? { descriptor: { seed: prepared.seed, layoutFingerprint: prepared.fingerprint }, layout: prepared.layout } : null;
   }
 
   private cancelPendingHostArenaGeneration(): void {

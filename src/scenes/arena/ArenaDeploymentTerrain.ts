@@ -58,6 +58,11 @@ export class ArenaDeploymentTerrain {
     return this.cache?.peek(deployment.mapConfig.mapId, deployment.seed) ?? null;
   }
 
+  /** A finished lobby layout for a round about to start; a clone, the round may change it. */
+  peekLayout(mapId: string, seed: number): DeploymentLayout | null {
+    return this.cache?.peek(mapId, seed) ?? null;
+  }
+
   request(deployment: Deployment): Promise<DeploymentLayout> {
     return this.layouts().request(deployment.mapConfig, deployment.seed);
   }

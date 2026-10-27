@@ -19,6 +19,11 @@ export interface RoundWorldGenerationRequest {
   /** Host-komponierte Dawn-Plaene; ersetzen die Kampagnenkarte. */
   readonly dawn: DawnRoundPlans | null;
   readonly worldParameters: WorldParameters | undefined;
+  /**
+   * The campaign layout the lobby already generated for this map and seed (Lagekarte). Its
+   * fingerprint goes into the descriptor like a fresh one; every client still verifies it.
+   */
+  readonly preparedLayout?: ArenaLayout | null;
 }
 
 export interface GeneratedRoundWorld {
@@ -67,7 +72,7 @@ export function generateRoundWorld(request: RoundWorldGenerationRequest): Genera
   const mapConfig = request.dawn
     ? resolveCoopDefenseMapConfig(worldIdentity, activity)
     : request.campaignMapConfig;
-  const layout = generateRoundWorldLayout(request.gameMode, mapConfig, request.seed);
+  const layout = (!request.dawn && request.preparedLayout) || generateRoundWorldLayout(request.gameMode, mapConfig, request.seed);
   const world: WorldDescriptor = {
     worldRevision: request.roundRevision,
     seed: request.seed,

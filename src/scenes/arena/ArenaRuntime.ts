@@ -60,7 +60,7 @@ import type {
   SyncedBurningGroundSnapshot,
   SyncedPowerUpPedestal,
 } from '../../types';
-import { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
+import { ArenaLifecycleCoordinator, type DeploymentLayoutSource } from './ArenaLifecycleCoordinator';
 import { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 import type { CaptureTheBeerPresentationBinding } from '../../activity/CaptureTheBeerPresentationBinding';
 import {
@@ -126,6 +126,8 @@ export interface ArenaRuntimeInput {
    * Scene erst nach der `ArenaRuntime` entstehen – wie bei `rockVisualHelper`s World-Ports.
    */
   readonly getSpectatorCameraInput: () => ArenaSpectatorCameraInput | undefined;
+  /** Layouts the lobby generated for the next round; a matching one saves the round start its generation. */
+  readonly deploymentLayouts?: DeploymentLayoutSource;
 }
 
 export class ArenaRuntime {
@@ -201,6 +203,7 @@ export class ArenaRuntime {
       input.captureTheBeerPresentation ?? null,
       this.persistentBaseOwner,
       input.getSpectatorCameraInput,
+      input.deploymentLayouts ?? null,
     );
     input.rockVisualHelper?.setWorldPort?.({
       getWorldRuntime: () => this.flow.getWorldRuntime(),

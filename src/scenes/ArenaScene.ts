@@ -1281,6 +1281,7 @@ export class ArenaScene extends Phaser.Scene {
       getSynchronizedNow: () => bridge.getSynchronizedNow(),
       // Lazy: `this.inputBindings` entsteht erst nach der ArenaRuntime.
       getSpectatorCameraInput: () => this.inputBindings?.getSpectatorCameraInput(),
+      deploymentLayouts: this.deploymentTerrain,
     });
     this.arenaRuntime.setRuntimeDiagnosticEventSink(this.diagnostics?.getSemanticEventSink() ?? null);
     if (import.meta.env.DEV && isDevScenarioMode()) {
