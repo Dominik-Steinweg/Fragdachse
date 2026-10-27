@@ -103,11 +103,15 @@ describe('persistent base fort presentation', () => {
       expect(Math.abs(socket.x)).toBeLessThan(half);
       expect(Math.abs(socket.y)).toBeLessThan(half);
     }
-    // Four gate posts per bastion carry a fire bowl, three large torches stand outside each bastion;
-    // every socket is one of the runtime's fire kinds.
-    expect(sockets.filter(([name]) => name.startsWith('bowl_'))).toHaveLength(16);
+    // The outer gate post at each end of a bastion carries a fire bowl, three large torches stand
+    // outside each bastion, and the hearth burns on the solid anchor cell; every socket is one of the
+    // runtime's fire kinds.
+    expect(sockets.filter(([name]) => name.startsWith('bowl_'))).toHaveLength(8);
     expect(sockets.filter(([name]) => name.startsWith('torch_'))).toHaveLength(12);
-    expect(sockets.every(([name]) => /^(bowl|torch)_\d+$/.test(name))).toBe(true);
+    const hearths = sockets.filter(([name]) => name.startsWith('hearth_'));
+    expect(hearths).toHaveLength(1);
+    expect(Math.hypot(hearths[0]![1].x, hearths[0]![1].y)).toBeLessThan(CELL_SIZE / 2);
+    expect(sockets.every(([name]) => /^(bowl|torch|hearth)_\d+$/.test(name))).toBe(true);
   });
 
   it('publishes the outpost kit variants with one frame per corner-suppressed mask and sockets inside their frames', () => {
