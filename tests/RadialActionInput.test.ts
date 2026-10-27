@@ -470,10 +470,9 @@ describe('shared Shift interaction', () => {
       expect(open).toHaveBeenCalledExactlyOnceWith(menu);
     });
 
-  it('keeps base editing host-only and presents locked menu reasons', () => {
-    const access = { coop: true, ready: false, host: true, baseUnlocked: true, itemsUnlocked: true, dawnUnlocked: true };
+  it('opens base editing for every player and presents locked menu reasons', () => {
+    const access = { coop: true, ready: false, baseUnlocked: true, itemsUnlocked: true, dawnUnlocked: true };
     expect(lobbyMenuDenial('base', access)).toBeNull();
-    expect(lobbyMenuDenial('base', { ...access, host: false })).toBe(t('ui.base.hostOnly'));
     expect(lobbyMenuDenial('items', { ...access, itemsUnlocked: false })).toBe(t('ui.lobbyBuilding.itemsLocked'));
     expect(lobbyMenuDenial('merchant', { ...access, dawnUnlocked: false })).toBe(t('ui.dawn.locked'));
     expect(lobbyMenuDenial('base', { ...access, baseUnlocked: false })).toBeTruthy();
@@ -483,7 +482,7 @@ describe('shared Shift interaction', () => {
 
   it('frames whole lobby buildings and shows a short personal denial before pressing', () => {
     const metrics = resolveActiveArenaWorldMetrics();
-    const access = { coop: true, ready: false, host: false, baseUnlocked: true, itemsUnlocked: true, dawnUnlocked: true };
+    const access = { coop: true, ready: false, baseUnlocked: false, itemsUnlocked: true, dawnUnlocked: true };
     const player = { x: metrics.offsetX, y: metrics.offsetY };
     const candidates = lobbyBuildingCandidates(metrics, 1, player, menu => lobbyMenuBlockedLabel(menu, access));
     expect(candidates.map(candidate => candidate.kind === 'lobby-menu' && candidate.menu).sort())
@@ -497,7 +496,7 @@ describe('shared Shift interaction', () => {
       expect(candidate).toMatchObject({ x: point.x, y: point.y,
         radius: LOBBY_BUILDING_INTERACTION_RANGE_PX, label: t('ui.lobbyBuilding.open'), subject: t(building.nameKey) });
     }
-    expect(candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === 'base')!.blocked).toBe(t('ui.lobbyBuilding.blocked.host'));
+    expect(candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === 'base')!.blocked).toBe(t('ui.lobbyBuilding.blocked.locked'));
     expect(candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === 'upgrades')!.blocked).toBeUndefined();
     expect(lobbyMenuBlockedLabel('upgrades', { ...access, ready: true })).toBe(t('ui.lobbyBuilding.blocked.ready'));
   });

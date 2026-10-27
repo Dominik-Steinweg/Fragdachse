@@ -92,9 +92,10 @@ Import/Export, Einmaligkeit und Reset.
 ## Cache, Fehler und Lebensdauer
 
 Der Basis-Editor zeigt den persönlichen Entwurf in einer eigenen, lokalen World ohne Activity oder
-Spielfigur. Nur der Host kann ihn öffnen; bei Clients bleibt der Lobby-Button gesperrt und der
-Belohnungsablauf überspringt diesen Bildschirm. Die gemeinsame World verwendet die
-Reward-Platzierungen des Hosts. Änderungen persönlicher Konstruktionen laufen auch im Menü
+Spielfigur. Jeder Spieler mit freigeschalteter Basis kann ihn öffnen; der Belohnungsablauf nach
+einer Runde zeigt ihn nur dem Host. Reward-Platzierungen und die Ausrichtung der Basis gehören dem
+Basisdokument des Raum-Hosts: Der Host bearbeitet sie im Editor, ein Gast sieht die replizierte
+Projektion schreibgeschützt. Änderungen persönlicher Konstruktionen laufen auch im Menü
 über die Host-Bestätigung: Der Lobby-Layout-Vertrag prüft World- und
 Beitragsrevision und erlaubt nur Verschieben oder Entfernen vorhandener Identitäten. Er ist kein
 avatarfreier Baupfad. Der Entwurf selbst schreibt nichts in den Fortschritt; Schließen mit Abbruch

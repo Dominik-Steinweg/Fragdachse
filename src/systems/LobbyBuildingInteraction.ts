@@ -6,9 +6,9 @@ import type { WorldMetrics } from '../world/WorldMetrics';
 import type { WorldInteractionCandidate } from './WorldInteractionCandidate';
 
 export interface LobbyMenuAccessState {
-  coop: boolean; ready: boolean; host: boolean; itemsUnlocked: boolean; baseUnlocked: boolean; dawnUnlocked: boolean;
+  coop: boolean; ready: boolean; itemsUnlocked: boolean; baseUnlocked: boolean; dawnUnlocked: boolean;
 }
-export type LobbyMenuDenialCode = 'coop' | 'ready' | 'host' | 'locked';
+export type LobbyMenuDenialCode = 'coop' | 'ready' | 'locked';
 
 /**
  * Every side is an entrance: the approach point is the outline point nearest to the player, so
@@ -33,7 +33,6 @@ export function lobbyBuildingCandidates(metrics: WorldMetrics, worldRevision: nu
 export function lobbyMenuDenialCode(menu: LobbyMenu, state: LobbyMenuAccessState): LobbyMenuDenialCode | null {
   if (!state.coop) return 'coop';
   if (state.ready) return 'ready';
-  if (menu === 'base' && !state.host) return 'host';
   if (menu === 'base' && !state.baseUnlocked) return 'locked';
   if (menu === 'items' && !state.itemsUnlocked) return 'locked';
   if (menu === 'merchant' && !state.dawnUnlocked) return 'locked';
@@ -45,7 +44,6 @@ export function lobbyMenuDenial(menu: LobbyMenu, state: LobbyMenuAccessState): s
   const code = lobbyMenuDenialCode(menu, state);
   if (code === 'coop') return t('ui.lobbyBuilding.coopOnly');
   if (code === 'ready') return t('ui.lobbyBuilding.unready');
-  if (code === 'host') return t('ui.base.hostOnly');
   if (code === 'locked') {
     if (menu === 'base') return t('ui.lobbyBuilding.baseLocked');
     if (menu === 'items') return t('ui.lobbyBuilding.itemsLocked');

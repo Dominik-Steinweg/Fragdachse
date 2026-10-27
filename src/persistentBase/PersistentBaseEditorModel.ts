@@ -6,36 +6,84 @@ import { resolvePersistentBaseBuildAreaForStage, resolvePersistentBaseCell, isCe
   type PersistentBaseBuildArea } from './PersistentBaseCore';
 import type { PersistentBaseRewardId, PersistentBaseRewardPlacement } from './PersistentBaseRewardTypes';
 import type { PersistentConstruction } from './PersistentBaseTypes';
+import { rotatePersistentBaseQuarterTurnsClockwise, type PersistentBaseQuarterTurns } from './PersistentBaseFrame';
 
 export type BaseEditorObject = { readonly kind: 'reward'; readonly id: PersistentBaseRewardId }
   | { readonly kind: 'construction'; readonly id: string };
 export type BaseEditorPlacementFailure = 'outside' | 'surface' | 'occupied' | 'locked' | 'unknown';
 
+/**
+ * Die Basis des Raums, wie der Editor sie zeigt: Reward-Platzierungen und Ausrichtung gehoeren dem
+ * Raum-Host. Nur der Host bearbeitet sie; ein Gast sieht die replizierte Projektion.
+ */
+export interface PersistentBaseEditorRoomBase {
+  readonly placements: readonly PersistentBaseRewardPlacement[];
+  readonly quarterTurns: PersistentBaseQuarterTurns;
+  readonly editable: boolean;
+}
+
 /** A value-only draft. Neither renderer updates nor cancel can write progress. */
 export class PersistentBaseEditorModel {
   readonly area: PersistentBaseBuildArea;
-  readonly rewards: PersistentBaseRewardPlacement[];
-  readonly constructions: PersistentConstruction[];
+  readonly rewards: PersistentBaseRewardPlacement[] = [];
+  readonly constructions: PersistentConstruction[] = [];
   /** Removed personal builds stay available in this draft until Apply/Cancel. */
-  readonly availableConstructions: readonly PersistentConstruction[];
+  readonly availableConstructions: PersistentConstruction[] = [];
   /**
    * Die bearbeitete persoenliche Ausbaustufe. Sie umfasst die Dawn-Expansion und kann damit ueber
    * der gespeicherten Kampagnenstufe der Baseline liegen.
    */
   readonly areaStage: PersistentBaseAreaStage;
-  constructor(readonly baseline: CoopDefenseProgressPreferences, areaStage?: PersistentBaseAreaStage) {
+  private currentBaseline!: CoopDefenseProgressPreferences;
+  private currentRoom!: PersistentBaseEditorRoomBase;
+  private turns: PersistentBaseQuarterTurns = 0;
+  /**
+   * @param room Basis des Raums. Ohne Angabe ist es die eigene Basis aus `baseline`, also die Sicht
+   *   des Hosts auf sein Dokument.
+   */
+  constructor(baseline: CoopDefenseProgressPreferences, areaStage?: PersistentBaseAreaStage, room?: PersistentBaseEditorRoomBase) {
     this.areaStage = areaStage ?? baseline.persistentBaseAreaStage;
     this.area = resolvePersistentBaseBuildAreaForStage(this.areaStage);
-    this.rewards = baseline.persistentBaseRewardState.placements.map(p => ({ ...p }));
-    this.constructions = baseline.personalBaseContribution.constructions.map(p => ({ ...p, tool: { ...p.tool } }));
-    this.availableConstructions = this.constructions.map(p => ({ ...p, tool: { ...p.tool } }));
+    this.reload(baseline, room);
+  }
+  get baseline(): CoopDefenseProgressPreferences { return this.currentBaseline; }
+  /** Ob Rewards und Ausrichtung in diesem Entwurf bearbeitet werden duerfen (nur der Host). */
+  get rewardsEditable(): boolean { return this.currentRoom.editable; }
+  get quarterTurns(): PersistentBaseQuarterTurns { return this.turns; }
+  /** Discards the draft and starts again from the latest confirmed documents. */
+  reload(baseline: CoopDefenseProgressPreferences, room?: PersistentBaseEditorRoomBase): void {
+    this.currentBaseline = baseline;
+    this.currentRoom = room ?? {
+      placements: baseline.persistentBaseRewardState.placements,
+      quarterTurns: baseline.persistentBaseRewardState.quarterTurns,
+      editable: true,
+    };
+    this.turns = this.currentRoom.quarterTurns;
+    this.rewards.splice(0, this.rewards.length, ...this.currentRoom.placements.map(p => ({ ...p })));
+    this.constructions.splice(0, this.constructions.length,
+      ...baseline.personalBaseContribution.constructions.map(p => ({ ...p, tool: { ...p.tool } })));
+    this.availableConstructions.splice(0, this.availableConstructions.length,
+      ...this.constructions.map(p => ({ ...p, tool: { ...p.tool } })));
   }
   get unplaced(): readonly PersistentBaseRewardId[] {
+    if (!this.rewardsEditable) return [];
     return this.baseline.persistentBaseRewardUnlocks.filter(id => !this.rewards.some(p => p.rewardId === id));
   }
+  get constructionsChanged(): boolean {
+    return JSON.stringify(this.constructions) !== JSON.stringify(this.baseline.personalBaseContribution.constructions);
+  }
+  get roomBaseChanged(): boolean {
+    return this.rewardsEditable && (this.turns !== this.currentRoom.quarterTurns
+      || JSON.stringify(this.rewards) !== JSON.stringify(this.currentRoom.placements));
+  }
   get dirty(): boolean {
-    return JSON.stringify(this.rewards) !== JSON.stringify(this.baseline.persistentBaseRewardState.placements)
-      || JSON.stringify(this.constructions) !== JSON.stringify(this.baseline.personalBaseContribution.constructions);
+    return this.constructionsChanged || this.roomBaseChanged;
+  }
+  /** Turns the whole base clockwise; only the host owns the base's orientation. */
+  rotate(): boolean {
+    if (!this.rewardsEditable) return false;
+    this.turns = rotatePersistentBaseQuarterTurnsClockwise(this.turns);
+    return true;
   }
   getPosition(object: BaseEditorObject) {
     return object.kind === 'reward' ? this.rewards.find(p => p.rewardId === object.id)
@@ -50,7 +98,7 @@ export class PersistentBaseEditorModel {
     let footprint: readonly { dx: number; dy: number }[] = [{ dx: 0, dy: 0 }];
     if (object.kind === 'reward') {
       footprint = getPersistentBaseRewardFootprint(object.id);
-      if (!this.baseline.persistentBaseRewardUnlocks.includes(object.id)) return 'locked';
+      if (!this.rewardsEditable || !this.baseline.persistentBaseRewardUnlocks.includes(object.id)) return 'locked';
       if (!isPersistentBaseRewardCellAllowed(object.id, x, y, this.area)) return 'surface';
     } else {
       const entry = this.getConstruction(object.id);
@@ -97,6 +145,7 @@ export class PersistentBaseEditorModel {
   }
   remove(object: BaseEditorObject): void {
     if (object.kind === 'reward') {
+      if (!this.rewardsEditable) return;
       const index = this.rewards.findIndex(p => p.rewardId === object.id);
       if (index >= 0) this.rewards.splice(index, 1);
     } else {

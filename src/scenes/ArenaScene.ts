@@ -15,8 +15,8 @@ import { preloadCharacterMeshAssets, assertCharacterMeshAssetsReady } from '../a
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { preloadRockBase } from '../arena/RockBaseConfig';
 import { TRACK_RAIL_TEXTURE } from '../arena/TrackGravelConfig';
-import { PersistentBaseEditorScene } from './PersistentBaseEditorScene';
-import { PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
+import { PersistentBaseEditorScene, type PersistentBaseEditorSaveResult } from './PersistentBaseEditorScene';
+import { PersistentBaseEditorModel, type PersistentBaseEditorRoomBase } from '../persistentBase/PersistentBaseEditorModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import { getStoredCoopDefenseProgress, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, getStoredPersonalPersistentBaseAreaStage, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
 import { getDeferredAssets, preloadDeferredImages } from '../assets/DeferredAssets';
@@ -2339,7 +2339,7 @@ export class ArenaScene extends Phaser.Scene {
     return {
       coop: isCoopDefenseMode(bridge.getGameMode()),
       ready: this.arenaRuntime.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId()),
-      host: bridge.isHost(), itemsUnlocked: progress.itemsUnlocked,
+      itemsUnlocked: progress.itemsUnlocked,
       baseUnlocked: progress.persistentBaseUnlocked, dawnUnlocked: isDawnUnlocked(progress),
     };
   }
@@ -2360,13 +2360,17 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private openBaseEditor(newRewardIds: readonly PersistentBaseRewardId[]): void {
-    if (this.baseEditor || !bridge.isHost() || bridge.getGamePhase() !== 'LOBBY') return;
-    const baseline = getStoredCoopDefenseProgress();
+    if (this.baseEditor || bridge.getGamePhase() !== 'LOBBY') return;
+    const host = bridge.isHost();
     const personalAreaStage = getStoredPersonalPersistentBaseAreaStage();
-    const model = new PersistentBaseEditorModel(
-      { ...baseline, personalBaseContribution: getStoredPersonalBaseContribution() },
-      personalAreaStage,
-    );
+    // Rewards and the orientation belong to the room host's base; a guest sees the replicated one.
+    const roomBase = (): PersistentBaseEditorRoomBase | undefined => {
+      if (host) return undefined;
+      const session = bridge.getPersistentBaseRewardSessionState();
+      return { placements: session?.placements ?? [], quarterTurns: session?.quarterTurns ?? 0, editable: false };
+    };
+    const confirmedBaseline = () => ({ ...getStoredCoopDefenseProgress(), personalBaseContribution: getStoredPersonalBaseContribution() });
+    const model = new PersistentBaseEditorModel(confirmedBaseline(), personalAreaStage, roomBase());
     const revision = bridge.getCurrentWorldRevision();
     if (revision === null) {
       if (this.afterRoundTransition?.active) this.meta?.finishAfterRoundStep('base');
@@ -2374,33 +2378,42 @@ export class ArenaScene extends Phaser.Scene {
     }
     bridge.setLocalReady(false); this.arenaRuntime.setIsLocalReady(false);
     this.lobbyOverlay.setReadyButtonState(false);
+    // The host validates a layout edit against the stage this player offered.
+    bridge.offerPersonalBaseAreaStage(personalAreaStage);
     const opening = this.afterRoundOpening();
+    const reload = () => model.reload(confirmedBaseline(), roomBase());
     const editor = new PersistentBaseEditorScene({ model, newRewardIds, color: bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? 0xffffff,
       presented: opening?.ready,
       retire: () => { if (this.baseEditor === editor) this.closeBaseEditor(false); },
       close: () => {
         if (!this.advanceAfterRound('base', editor.getTransitionView())) this.closeBaseEditor(false);
       },
-      save: async () => {
-        const canSave = () => this.baseEditor === editor && bridge.isHost() && bridge.getGamePhase() === 'LOBBY'
+      save: async (): Promise<PersistentBaseEditorSaveResult> => {
+        const canSave = () => this.baseEditor === editor && bridge.isHost() === host && bridge.getGamePhase() === 'LOBBY'
           && bridge.getCurrentWorldRevision() === revision && !bridge.getPlayerReady(bridge.getLocalPlayerId());
-        if (!canSave()) return false;
-        const current = getStoredCoopDefenseProgress();
-        if (current.persistentBaseRewardState.revision !== baseline.persistentBaseRewardState.revision) return false;
-        const changedConstructions = JSON.stringify(model.constructions) !== JSON.stringify(model.baseline.personalBaseContribution.constructions);
-        if (changedConstructions) {
+        if (!canSave()) return { ok: false, reason: 'blocked' };
+        if (model.roomBaseChanged
+          && getStoredPersistentBaseRewardState().revision !== model.baseline.persistentBaseRewardState.revision) {
+          reload();
+          return { ok: false, reason: 'stale' };
+        }
+        if (model.constructionsChanged) {
           bridge.offerPersonalBaseAreaStage(personalAreaStage);
           const result = await bridge.sendPersistentBaseLayoutEdit({ worldRevision: revision,
             expectedRevision: model.baseline.personalBaseContribution.revision, areaStage: personalAreaStage,
             constructions: model.constructions });
-          if (!result.ok) return false;
+          if (!result.ok) {
+            if (result.reason === 'stale') reload();
+            return { ok: false, reason: result.reason };
+          }
           setStoredPersonalBaseContribution(result.contribution);
         }
-        if (!canSave()) return false;
-        if (JSON.stringify(model.rewards) !== JSON.stringify(baseline.persistentBaseRewardState.placements)
-          && !setStoredPersistentBaseRewardState({ ...baseline.persistentBaseRewardState, revision: baseline.persistentBaseRewardState.revision + 1, placements: model.rewards })) return false;
+        if (!canSave()) return { ok: false, reason: 'blocked' };
+        const rewardState = model.baseline.persistentBaseRewardState;
+        if (model.roomBaseChanged && !setStoredPersistentBaseRewardState({ ...rewardState, revision: rewardState.revision + 1,
+          quarterTurns: model.quarterTurns, placements: model.rewards })) return { ok: false, reason: 'invalid' };
         this.meta?.refresh();
-        return true;
+        return { ok: true };
       },
     });
     this.baseEditor = editor;

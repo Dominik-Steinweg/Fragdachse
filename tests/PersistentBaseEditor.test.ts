@@ -48,6 +48,21 @@ describe('personal base editor draft', () => {
     expect(model.dirty).toBe(false);
     expect(model.validate({ kind: 'construction', id: 'invented' }, 1, 1)).toBe('unknown');
   });
+  it('turns the whole base only for the host and reloads a stale draft from confirmed documents', () => {
+    const model = new PersistentBaseEditorModel(baseline());
+    for (let turn = 1; turn <= 4; turn++) {
+      expect(model.rotate()).toBe(true);
+      expect(model.dirty).toBe(turn % 4 !== 0);
+    }
+    expect(model.rotate()).toBe(true);
+    expect(model.roomBaseChanged).toBe(true);
+    expect(model.constructionsChanged).toBe(false);
+    model.remove({ kind: 'construction', id: construction.persistentId });
+    model.reload(baseline());
+    expect(model.quarterTurns).toBe(0);
+    expect(model.constructions).toEqual([construction]);
+    expect(model.dirty).toBe(false);
+  });
   it('uses a wall for personal turret bodies and the authored weapon for both placement and dragging', () => {
     const progress = baseline();
     const definition = getCoopDefenseConstructionDefinition('rocket_turret');

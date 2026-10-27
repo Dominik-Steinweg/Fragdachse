@@ -883,7 +883,8 @@ export class ArenaMetaController {
   }
 
   openBaseOverlay(newRewardIds: readonly PersistentBaseRewardId[] = []): boolean {
-    if (this.destroyed || !this.input.session.isHost() || this.input.session.getGamePhase() !== 'LOBBY'
+    // Every player edits their own contribution; base-owned rewards stay with the host inside the editor.
+    if (this.destroyed || this.input.session.getGamePhase() !== 'LOBBY'
       || !isCoopDefenseMode(this.input.session.getGameMode()) || this.input.session.isLocalReady()
       || this.input.session.isAuthoritativeLocalReady() || !this.readFreshStoredProgress().persistentBaseUnlocked) return false;
     this.input.presentation.hideDebugOverlay();

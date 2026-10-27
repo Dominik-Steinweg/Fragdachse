@@ -23,6 +23,7 @@ import { buildPersistentBaseCoreBaseConfig, type PersistentBaseBuildArea } from 
 import type { BaseEditorObject, PersistentBaseEditorModel } from './PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from './PersistentBaseEditorAppearance';
 import { getPersistentBaseEditorSize } from './PersistentBaseExpansionPreview';
+import { toWorldAngle, toWorldFootprint, type PersistentBaseFrame } from './PersistentBaseFrame';
 export { getPersistentBaseEditorSize } from './PersistentBaseExpansionPreview';
 
 /** A local, non-participating World. It never creates an Activity, player or network identity. */
@@ -104,8 +105,13 @@ export class PersistentBaseEditorWorld {
     this.sunlight.update(this.timeOfDay,0);
     this.syncObjects();
   }
+  /** Anchor of this World with the draft's orientation; the draft itself stays canonical. */
+  get frame(): PersistentBaseFrame {
+    return { anchor: { gridX: this.anchor, gridY: this.anchor }, quarterTurns: this.model.quarterTurns };
+  }
   /** Update object identities in place; terrain, lighting and camera resources stay alive. */
   syncObjects(): void {
+    const frame = this.frame;
     const objects: BaseEditorObject[] = [
       ...this.model.rewards.map(p => ({ kind: 'reward' as const, id: p.rewardId })),
       ...this.model.constructions.map(p => ({ kind: 'construction' as const, id: p.persistentId })),
@@ -119,7 +125,9 @@ export class PersistentBaseEditorWorld {
       const appearance = getBaseEditorAppearance(this.model, object);
       if (!appearance) continue;
       const key = baseEditorObjectKey(object);
-      const gridX = this.anchor + entry.relativeGridX, gridY = this.anchor + entry.relativeGridY;
+      const placed = toWorldFootprint(frame, entry.relativeGridX, entry.relativeGridY, appearance.footprint);
+      const gridX = placed.gridX, gridY = placed.gridY;
+      const angle = appearance.watchtower ? 0 : toWorldAngle(frame, appearance.angle);
       const x = (gridX + .5) * CELL_SIZE, y = (gridY + .5) * CELL_SIZE;
       if (appearance.watchtower) {
         watchtowerKeys.add(key);
@@ -127,10 +135,10 @@ export class PersistentBaseEditorWorld {
         if (!visual) { visual = new WatchtowerVisual(this.scene); this.watchtowers.set(key, visual); }
         visual.sync({ gridX, gridY, hp: 1, maxHp: 1 }, this.world.metrics);
       }
-      if (appearance.wall) for (const cell of appearance.footprint) {
+      if (appearance.wall) for (const cell of placed.footprint) {
         const gx = gridX + cell.dx, gy = gridY + cell.dy;
         walls.set(gx + ',' + gy, { gridX: gx, gridY: gy, tint: appearance.ownerTintStrength,
-          weapon: appearance.weapon, angle: appearance.angle });
+          weapon: appearance.weapon, angle });
       }
       if (appearance.weapon) {
         turretKeys.add(key);
@@ -139,7 +147,7 @@ export class PersistentBaseEditorWorld {
           visual = createWorldTurretVisual(this.scene, appearance.weapon, x, y, this.color);
           this.turrets.set(key, visual);
         }
-        syncWorldTurretVisualPose(visual, key, appearance.weapon, x, y, appearance.angle, this.color, this.animations);
+        syncWorldTurretVisualPose(visual, key, appearance.weapon, x, y, angle, this.color, this.animations);
       }
       if (appearance.powerUpDefId) {
         if (!this.pedestalIds.has(key)) this.pedestalIds.set(key, this.pedestalIds.size);

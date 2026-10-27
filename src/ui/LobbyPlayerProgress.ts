@@ -48,7 +48,6 @@ export class LobbyPlayerProgress {
   private coopUpgradesBtn: UiButton | null = null;
   private coopBaseBtn: UiButton | null = null;
   private coopBaseUnlocked = false;
-  private coopBaseHost = false;
   private baseSignature = '';
   private coopItemsBtn: UiButton | null = null;
   private upgradeBtnEffect: LivingBarEffect | null = null;
@@ -170,7 +169,7 @@ export class LobbyPlayerProgress {
     this.coopBaseBtn = new UiButton(this.scene, { skin: 'forest',
       x: PANEL_CX, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
       label: t('ui.base.title'), icon: 'lock', iconSize: 16, intent: 'neutral',
-      onClick: () => { if (this.coopBaseHost && this.coopBaseUnlocked) this.onOpenBase(); },
+      onClick: () => { if (this.coopBaseUnlocked) this.onOpenBase(); },
     });
     this.coopBaseBtn.setEnabled(false);
     this.attachLockTooltip(this.coopBaseBtn, () => this.baseLockContent());
@@ -238,7 +237,6 @@ export class LobbyPlayerProgress {
 
   private baseLockContent(): { title: string; lines: TooltipLine[] } | null {
     const title = t('ui.base.title').toUpperCase();
-    if (!this.coopBaseHost) return { title, lines: [{ text: t('ui.base.hostOnly'), color: FOREST.text }] };
     return this.coopBaseUnlocked ? null : { title, lines: this.victoryUnlockLines(PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID) };
   }
 
@@ -364,9 +362,9 @@ export class LobbyPlayerProgress {
     if (signature === this.baseSignature) return;
     this.baseSignature = signature;
     this.coopBaseUnlocked = unlocked;
-    this.coopBaseHost = isHost;
     this.hideTooltip();
-    this.coopBaseBtn?.setIcon(isHost && unlocked ? null : 'lock');
+    this.coopBaseBtn?.setIcon(unlocked ? null : 'lock');
+    // Pending rewards are base-owned, so only the host gets the badge.
     this.coopBaseBtn?.setBadge(isHost && unlocked && pending > 0 ? pending : null);
     this.updateCoopDefenseMenuButtons();
   }
@@ -383,7 +381,7 @@ export class LobbyPlayerProgress {
     const enabled = !this.isReady && !this.connectionEnded;
     this.merchantBtn?.setEnabled(enabled && this.dawnUnlocked);
     if (!enabled) this.merchant?.hide();
-    this.coopBaseBtn?.setEnabled(enabled && this.coopBaseHost && this.coopBaseUnlocked);
+    this.coopBaseBtn?.setEnabled(enabled && this.coopBaseUnlocked);
     this.coopUpgradesBtn?.setEnabled(enabled);
     this.coopItemsBtn?.setEnabled(enabled && this.coopItemsUnlocked);
   }

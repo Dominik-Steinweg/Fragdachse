@@ -273,15 +273,15 @@ describe('ArenaMetaController', () => {
     expect(presentation.finishAfterRoundPresentation).toHaveBeenCalledOnce();
   });
 
-  it('blocks manual base access for clients even when their personal base is unlocked', () => {
+  it('opens manual base access for clients once their personal base is unlocked', () => {
     const { controller, store, session, presentation } = makeInput();
     const progress = getStoredCoopDefenseProgress();
-    progress.persistentBaseUnlocked = true;
+    progress.persistentBaseUnlocked = false;
     vi.mocked(store.getProgress).mockReturnValue(progress);
     vi.mocked(session.isHost).mockReturnValue(false);
     controller.openBaseOverlay();
     expect(presentation.showBaseOverlay).not.toHaveBeenCalled();
-    vi.mocked(session.isHost).mockReturnValue(true);
+    progress.persistentBaseUnlocked = true;
     controller.openBaseOverlay();
     expect(presentation.showBaseOverlay).toHaveBeenCalledTimes(1);
   });

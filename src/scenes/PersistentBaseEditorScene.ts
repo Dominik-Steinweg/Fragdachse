@@ -8,7 +8,8 @@ import { ClarityCameraRegistry } from './arena/ClarityCameraRegistry';
 import { PersistentBaseEditorWorld } from '../persistentBase/PersistentBaseEditorWorld';
 import { getMissedBaseRewards, type BaseEditorObject, type PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from '../persistentBase/PersistentBaseEditorAppearance';
-import { getPersistentConstructionFootprint } from '../persistentBase/PersistentBasePlacementRules';
+import { getPersistentBaseRewardCells, getPersistentConstructionFootprint } from '../persistentBase/PersistentBasePlacementRules';
+import { rotatePersistentBaseOffset, toCanonicalCell, toWorldFootprint } from '../persistentBase/PersistentBaseFrame';
 import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentBaseRewardCatalog';
 import { getPersistentBaseBuildAreaExtentCells, isCellInsidePersistentBaseBuildArea } from '../persistentBase/PersistentBaseCore';
 import { resolvePersistentBaseMaxHp } from '../persistentBase/PersistentBaseHealth';
@@ -41,17 +42,23 @@ const NAME_X = TABLE.x + 48, STATUS_X = 1432, PERSONAL_X = 1696;
 type RowStatus = 'unplaced' | 'placed' | 'missed';
 interface EditorRow { label: string; status: RowStatus; personal: boolean; icon?: string; object?: BaseEditorObject }
 interface DragState { pointerId: number; x: number; y: number; offsetX: number; offsetY: number; started: boolean }
+/** Why Apply did not save. `stale` means the draft was reloaded from the newer confirmed state. */
+export type PersistentBaseEditorSaveResult = { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'stale' | 'blocked' | 'placement' | 'invalid' };
 export interface PersistentBaseEditorOptions {
   readonly model: PersistentBaseEditorModel;
   readonly color: number;
   readonly newRewardIds: readonly PersistentBaseRewardId[];
-  readonly save: () => Promise<boolean>;
+  readonly save: () => Promise<PersistentBaseEditorSaveResult>;
   readonly close: () => void;
   readonly presented?: (view: AfterRoundView) => void;
   readonly retire?: () => void;
 }
 
-/** Menu-only input over a small regular World. No avatar, movement bindings or rotation. */
+/**
+ * Menu-only input over a small regular World. No avatar or movement bindings. The draft is
+ * canonical; the World shows it turned by the base orientation, and input is turned back.
+ */
 export class PersistentBaseEditorScene extends Phaser.Scene {
   static readonly KEY = 'PersistentBaseEditor';
   private quality!: GraphicsQualityController;
@@ -154,6 +161,15 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.error = this.label(chrome.centerX, 192, '', 'caption', .5, 1600).setColor('#ffc2a9').setVisible(false);
     this.actionButton('cancel', chrome.centerX - (chrome.buttonGap + chrome.buttonWidth) / 2, () => this.finish());
     this.actionButton('apply', chrome.centerX + (chrome.buttonGap + chrome.buttonWidth) / 2, () => { void this.save(); });
+    if (model.rewardsEditable) {
+      this.button(WORLD_PANEL.x + WORLD_PANEL.width / 2, 942, 220, 40, t('ui.base.rotate'), () => {
+        if (this.drag || this.saving || !model.rotate()) return;
+        this.syncDraft();
+      });
+    } else {
+      this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 942, t('ui.base.hostRoomBase'), 'caption', .5, WORLD_PANEL.width)
+        .setColor('#d9cfa8');
+    }
     const expansion = this.expansion;
     this.world = new PersistentBaseEditorWorld(this, model, this.options.color, expansion?.area);
     this.ui.add(createPersistentBaseEditorBoundary(this, model.area, this.framing));
@@ -182,7 +198,8 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       if (this.saving || this.closed || pointer.button !== 0) return;
       const cell = this.cellAt(pointer);
       if (!cell) return;
-      const reward = model.rewards.find(p => p.relativeGridX === cell.x && p.relativeGridY === cell.y);
+      const reward = model.rewardsEditable ? model.rewards.find(p => getPersistentBaseRewardCells(p).some(c =>
+        c.gridX === cell.x && c.gridY === cell.y)) : undefined;
       const construction = model.constructions.find(p => (getPersistentConstructionFootprint(p) ?? []).some(c =>
         p.relativeGridX + c.dx === cell.x && p.relativeGridY + c.dy === cell.y));
       const object: BaseEditorObject | null = reward ? { kind: 'reward', id: reward.rewardId }
@@ -282,11 +299,19 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.cameras.main.setViewport(this.view.x * scale, this.view.y * scale, this.view.width * scale, this.view.height * scale)
       .setOrigin(0, 0).setZoom(scale * this.worldZoom).setScroll(0, 0);
   }
+  /** Canonical draft cell under the pointer: the World cell turned back by the base orientation. */
   private cellAt(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
     const scale = getRenderScale(this.scale), x = pointer.x / scale, y = pointer.y / scale;
     if (x < this.view.x || y < this.view.y || x >= this.view.x + this.view.width || y >= this.view.y + this.view.height) return null;
-    return { x: Math.floor((x - this.view.x) / (CELL_SIZE * this.worldZoom)) - this.world.anchor,
-      y: Math.floor((y - this.view.y) / (CELL_SIZE * this.worldZoom)) - this.world.anchor };
+    const canonical = toCanonicalCell(this.world.frame,
+      Math.floor((x - this.view.x) / (CELL_SIZE * this.worldZoom)),
+      Math.floor((y - this.view.y) / (CELL_SIZE * this.worldZoom)));
+    return { x: canonical.relativeGridX, y: canonical.relativeGridY };
+  }
+  /** World top-left cell of the selected object at a canonical origin. */
+  private worldOrigin(x: number, y: number): { gridX: number; gridY: number } {
+    const cells = this.selected ? getBaseEditorAppearance(this.options.model, this.selected)?.footprint ?? [] : [];
+    return toWorldFootprint(this.world.frame, x, y, cells);
   }
   private isOverTable(pointer: Phaser.Input.Pointer): boolean {
     const scale = getRenderScale(this.scale), x = pointer.x / scale, y = pointer.y / scale;
@@ -314,10 +339,14 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       cell.x -= drag.offsetX; cell.y -= drag.offsetY;
       const valid = !this.options.model.validate(this.selected, cell.x, cell.y);
       this.drawFootprint(this.preview, cell.x, cell.y, valid ? 0xb1ed94 : 0xff9991, .2);
+      const origin = this.worldOrigin(cell.x, cell.y);
       this.dragPreview?.setScale(this.worldZoom).setPosition(
-        this.view.x + (this.world.anchor + cell.x + .5) * CELL_SIZE * this.worldZoom,
-        this.view.y + (this.world.anchor + cell.y + .5) * CELL_SIZE * this.worldZoom);
-    } else this.dragPreview?.setScale(1).setPosition(pointer.x / scale - drag.offsetX * CELL_SIZE, pointer.y / scale - drag.offsetY * CELL_SIZE);
+        this.view.x + (origin.gridX + .5) * CELL_SIZE * this.worldZoom,
+        this.view.y + (origin.gridY + .5) * CELL_SIZE * this.worldZoom);
+    } else {
+      const offset = rotatePersistentBaseOffset(drag.offsetX, drag.offsetY, this.world.frame.quarterTurns);
+      this.dragPreview?.setScale(1).setPosition(pointer.x / scale - offset.dx * CELL_SIZE, pointer.y / scale - offset.dy * CELL_SIZE);
+    }
     const removing = this.isOverTable(pointer) && !!this.options.model.getPosition(this.selected);
     this.tableOutline.setStrokeStyle(removing ? 2 : 1, removing ? 0xb1ed94 : 0x718160, removing ? 1 : .5);
   }
@@ -343,9 +372,10 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private drawFootprint(graphics: Phaser.GameObjects.Graphics, x: number, y: number, color: number, alpha: number): void {
     if (!this.selected) return;
     const cells = getBaseEditorAppearance(this.options.model, this.selected)?.footprint ?? [{ dx: 0, dy: 0 }];
+    const placed = toWorldFootprint(this.world.frame, x, y, cells);
     graphics.fillStyle(color, alpha).lineStyle(2, color, 1);
-    for (const offset of cells) {
-      const wx = (this.world.anchor + x + offset.dx) * CELL_SIZE, wy = (this.world.anchor + y + offset.dy) * CELL_SIZE;
+    for (const offset of placed.footprint) {
+      const wx = (placed.gridX + offset.dx) * CELL_SIZE, wy = (placed.gridY + offset.dy) * CELL_SIZE;
       graphics.fillRect(wx, wy, CELL_SIZE, CELL_SIZE).strokeRect(wx + 1, wy + 1, CELL_SIZE - 2, CELL_SIZE - 2);
     }
   }
@@ -356,13 +386,18 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   }
   private rows(): EditorRow[] {
     const model = this.options.model;
+    const rewardIds = model.rewardsEditable ? model.baseline.persistentBaseRewardUnlocks : model.rewards.map(p => p.rewardId);
     const objects: BaseEditorObject[] = [
-      ...model.baseline.persistentBaseRewardUnlocks.map(id => ({ kind: 'reward' as const, id })),
+      ...rewardIds.map(id => ({ kind: 'reward' as const, id })),
       ...model.availableConstructions.map(p => ({ kind: 'construction' as const, id: p.persistentId })),
     ];
-    const rows: EditorRow[] = objects.map(object => ({ object, label: this.objectLabel(object),
+    const rows: EditorRow[] = objects.map(object => ({
+      // The room's rewards belong to the host: a guest sees them, but cannot drag them.
+      object: object.kind === 'reward' && !model.rewardsEditable ? undefined : object,
+      label: this.objectLabel(object),
       icon: object.kind === 'reward' ? getPersistentBaseRewardDefinition(object.id).presentation.iconKey : undefined,
       personal: object.kind === 'construction', status: model.getPosition(object) ? 'placed' : 'unplaced' }));
+    if (!model.rewardsEditable) return rows;
     const missed = new Set<PersistentBaseRewardId>();
     for (const entry of getMissedBaseRewards(model.baseline)) if (!missed.has(entry.rewardId)) {
       missed.add(entry.rewardId);
@@ -418,12 +453,18 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private async save(): Promise<void> {
     if (this.saving) return;
     this.saving = true; this.endDrag(); this.error.setVisible(false);
-    let saved = false;
-    try { saved = !this.options.model.dirty || await this.options.save(); } catch { saved = false; }
+    let result: PersistentBaseEditorSaveResult = { ok: true };
+    try {
+      if (this.options.model.dirty) result = await this.options.save();
+    } catch { result = { ok: false, reason: 'invalid' }; }
     if (this.closed) return;
     this.saving = false;
-    if (saved) this.finish();
-    else this.error.setText(t('ui.base.saveFailed')).setVisible(true);
+    if (result.ok) { this.finish(); return; }
+    // A stale draft was already replaced by the newer confirmed state.
+    if (result.reason === 'stale') { this.selected = null; this.syncDraft(); }
+    this.error.setText(t(result.reason === 'stale' ? 'ui.base.saveStale'
+      : result.reason === 'blocked' ? 'ui.base.saveBlocked'
+        : result.reason === 'placement' ? 'ui.base.savePlacement' : 'ui.base.saveFailed')).setVisible(true);
   }
   private finish(): void { if (!this.closed) { this.closed = true; this.options.close(); } }
   update(now: number, delta: number): void {

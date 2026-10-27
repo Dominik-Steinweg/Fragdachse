@@ -5,7 +5,6 @@ export const enLobby = {
   "ui.lobbyBuilding.open": "Open",
   "ui.lobbyBuilding.blocked.coop": "Co-op only",
   "ui.lobbyBuilding.blocked.ready": "Unready first",
-  "ui.lobbyBuilding.blocked.host": "Host only",
   "ui.lobbyBuilding.blocked.locked": "Locked",
   "ui.lobbyBuilding.coopOnly": "These menus are available in co-op mode.",
   "ui.lobbyBuilding.unready": "Please cancel ready status first.",

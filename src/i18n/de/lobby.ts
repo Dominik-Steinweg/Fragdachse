@@ -5,7 +5,6 @@ export const deLobby = {
   "ui.lobbyBuilding.open": "Öffnen",
   "ui.lobbyBuilding.blocked.coop": "Nur im Koop",
   "ui.lobbyBuilding.blocked.ready": "Erst Bereitschaft lösen",
-  "ui.lobbyBuilding.blocked.host": "Nur für den Host",
   "ui.lobbyBuilding.blocked.locked": "Noch gesperrt",
   "ui.lobbyBuilding.coopOnly": "Diese Menüs sind im Koop-Modus verfügbar.",
   "ui.lobbyBuilding.unready": "Bitte zuerst die Bereitschaft zurücknehmen.",

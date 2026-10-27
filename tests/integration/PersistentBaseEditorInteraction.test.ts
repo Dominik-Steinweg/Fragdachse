@@ -12,6 +12,7 @@ import { getStoredCoopDefenseProgress } from '../../src/utils/localPreferences';
 import { CELL_SIZE, GAME_WIDTH } from '../../src/config';
 import { type PersistentBaseAreaStage } from '../../src/persistentBase/PersistentBaseCore';
 import { getPersistentBaseEditorSize } from '../../src/persistentBase/PersistentBaseEditorWorld';
+import type { PersistentBaseEditorRoomBase } from '../../src/persistentBase/PersistentBaseEditorModel';
 
 function graphics() {
   const result: any = {};
@@ -19,7 +20,7 @@ function graphics() {
     result[method] = vi.fn(() => result);
   return result;
 }
-function harness(scale = 1, stage: PersistentBaseAreaStage = 0) {
+function harness(scale = 1, stage: PersistentBaseAreaStage = 0, room?: PersistentBaseEditorRoomBase) {
   const progress = getStoredCoopDefenseProgress();
   progress.persistentBaseAreaStage = stage;
   progress.persistentBaseRewardUnlocks = ['base_health_pedestal', 'base_spore_turret'];
@@ -30,12 +31,13 @@ function harness(scale = 1, stage: PersistentBaseAreaStage = 0) {
     persistentId: 'wall', tool: { kind: 'construction', id: 'rock_barrier' },
     relativeGridX: 1, relativeGridY: 1, angle: 0, placementOrder: 1,
   }] };
-  const model = new PersistentBaseEditorModel(progress);
+  const model = new PersistentBaseEditorModel(progress, undefined, room);
   // Drive the pointer entry points without a DOM or a fake full GPU renderer.
   const scene: any = new PersistentBaseEditorScene({ model, color: 0xffffff,
-    newRewardIds: [], close() {}, save: async () => true });
+    newRewardIds: [], close() {}, save: async () => ({ ok: true }) });
   const size = getPersistentBaseEditorSize(model.area);
-  const world = { size, anchor: (size / CELL_SIZE - 1) / 2, syncObjects: vi.fn() };
+  const world = { size, anchor: (size / CELL_SIZE - 1) / 2, syncObjects: vi.fn(),
+    get frame() { return { anchor: { gridX: this.anchor, gridY: this.anchor }, quarterTurns: model.quarterTurns }; } };
   Object.assign(scene, { world, scale: { width: GAME_WIDTH * scale }, preview: graphics(),
     selection: graphics(), grid: graphics(), tableOutline: graphics(), error: graphics(), ui: { add() {} },
     refreshList: vi.fn(() => scene.refreshSelection()),
@@ -155,5 +157,26 @@ describe('base menu drag interaction', () => {
     ]));
     model.remove({ kind: 'construction', id: 'wall' });
     expect(scene.rows()).toContainEqual(expect.objectContaining({ object: { kind: 'construction', id: 'wall' }, status: 'unplaced', personal: true }));
+  });
+  it('turns pointer cells back into the canonical draft after the host rotated the base', () => {
+    const { scene, model, cell } = harness();
+    expect(model.rotate()).toBe(true);
+    const wall = { kind: 'construction', id: 'wall' } as const;
+    // Canonical (1, 1) stands at world offset (-1, 1) after one clockwise quarter turn.
+    expect(scene.cellAt(cell(-1, 1))).toEqual({ x: 1, y: 1 });
+    scene.beginDrag(wall, cell(-1, 1)); scene.updateDrag(cell(2, 0)); scene.drop(cell(2, 0));
+    expect(model.getPosition(wall)).toMatchObject({ relativeGridX: 0, relativeGridY: -2 });
+    expect(model.dirty).toBe(true);
+  });
+  it('shows a guest the room rewards without letting them move', () => {
+    const { scene, model } = harness(1, 0, { editable: false, quarterTurns: 2,
+      placements: [{ rewardId: 'base_spore_turret', relativeGridX: -1, relativeGridY: 1, angle: 0 }] });
+    expect(model.rotate()).toBe(false);
+    expect(model.quarterTurns).toBe(2);
+    expect(model.validate({ kind: 'reward', id: 'base_spore_turret' }, 1, 1)).toBe('locked');
+    const rows = scene.rows();
+    expect(rows).toContainEqual(expect.objectContaining({ object: undefined, status: 'placed', personal: false }));
+    expect(rows).toContainEqual(expect.objectContaining({ object: { kind: 'construction', id: 'wall' }, personal: true }));
+    expect(rows.some((row: { status: string }) => row.status === 'missed')).toBe(false);
   });
 });
