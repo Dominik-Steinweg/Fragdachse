@@ -49,7 +49,7 @@ describe('turret animation lifecycle', () => {
       return view;
     };
     const graphics: any[] = [], texts: any[] = [];
-    const scene = { add: { graphics: () => { const g = element(); graphics.push(g); return g; }, text: () => { const x = element(); texts.push(x); return x; } } };
+    const scene = { textures: { exists: () => false }, add: { graphics: () => { const g = element(); graphics.push(g); return g; }, text: () => { const x = element(); texts.push(x); return x; } } };
     const turret = sprite(); Object.assign(turret.view, { scene, displayWidth: 48, displayHeight: 48 });
     const controller = new TurretAnimationController(); controller.bind('7', turret.phaser, 'TURRET_TESLA');
     const selection = new WorldInteractionRenderer(scene as never);

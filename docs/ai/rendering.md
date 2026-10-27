@@ -391,6 +391,15 @@ Turmzellen bleiben zellbasiert; das Fort präsentiert sie nur.
   `AutoTiler`), Variante deterministisch aus der Zellposition, Farb-Passes überlagert, Caster-Höhen per Maximum. Danach
   gelten dieselben Relief-, Schatten-, Emissions-, Licht- und Partikelregeln wie beim Kern; die Bodenschürze bleibt.
 - Der Zellzerfall blendet den Bau stufenweise aus; die Solid-Maske ist der Nebelstempel.
+- Turm-Sprites tragen kein Fundament, nur Pfosten und Drehkragen; ihr Kopf sitzt über der Palisade. Unter jeden
+  Turm auf einer Fort-Zelle legt der Renderer einen rasterfesten Steinsockel (Pipeline-Asset `turret-plinth`), mittig
+  unter dem Turmpunkt und dort ausgespart, wo die Caster-Höhen über das Deck ragen (Pfähle, Pfosten, Feuerschalen),
+  damit die Palisade vor seinem Rand steht ([fortObstacleCover.ts](../../src/arena/baseStructures/fortObstacleCover.ts)).
+- Leuchtende Turmteile kommen aus einem abgeleiteten Emissions-Pass: `turret-emission.mjs` rendert die ausgewählte,
+  archivierte Blend-Datei je Frame ohne Licht nach und packt ihn im Raster des Beauty-Sheets
+  ([turret-emission.json](../../src/assets/manifests/turret-emission.json), an die Live-Revision gebunden). Der
+  `TurretAnimationController` zeigt ihn additiv über der Lichtkarte im aktuellen Frame des Sprites; ein Schuss setzt
+  zusätzlich einen kurzen `turretGlow`-Lichtimpuls in der Leuchtfarbe.
 
 ## Große World-Flächen
 

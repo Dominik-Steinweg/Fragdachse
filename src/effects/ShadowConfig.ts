@@ -39,14 +39,6 @@ export const CHARACTER_SHADOW_CONFIG = {
   maxPlayers: 12,
 } as const;
 
-/**
- * The first turret shadow meshes (enemy-mesh-rigid-r1) stand only 0.40-0.52 m tall, flatter than the
- * figures beside them; their shadows use figure-like heights. Meshes of the fort emplacement models
- * carry their real height and keep scale 1.
- */
-export const LEGACY_TURRET_SHADOW_HEIGHT_SCALE = 2;
-export const LEGACY_TURRET_MESH_REVISION = 'enemy-mesh-rigid-r1';
-
 export interface ShadowCasterConfig {
   readonly enabled: boolean;
   readonly layerDepth: number;

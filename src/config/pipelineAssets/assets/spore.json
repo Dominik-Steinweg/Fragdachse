@@ -6,29 +6,16 @@
     "BASE_SPORES",
     "TURRET_SPORES"
   ],
-  "revision": "towers-r03",
+  "revision": "towers-r08",
   "variant": "standard",
   "sourceSize": 128,
   "textureKey": "turret_weapon_spore",
-  "sheetTextureKey": "turret_weapon_spore_animated",
-  "idlePath": "./assets/sprites/pipeline-v2/spore/idle.png",
-  "sheetPath": "./assets/sprites/pipeline-v2/spore/sheet.png",
+  "runtimeContract": "sheet",
   "forward": "east",
   "pivot": [
     0.5,
     0.5
   ],
-  "layout": {
-    "frameWidth": 128,
-    "frameHeight": 128,
-    "margin": 2,
-    "spacing": 4,
-    "columns": 8,
-    "rows": 2,
-    "frameCount": 9,
-    "width": 1056,
-    "height": 264
-  },
   "idleFrame": 0,
   "clips": [
     {
@@ -44,11 +31,26 @@
         8
       ],
       "frameRate": 24,
-      "loop": false
+      "loop": false,
+      "end": "rest"
     }
   ],
+  "sheetTextureKey": "turret_weapon_spore_animated",
+  "idlePath": "./assets/sprites/pipeline-v2/spore/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/spore/sheet.png",
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 9,
+    "width": 1056,
+    "height": 264
+  },
   "hashes": {
-    "idle": "0fb1c83e3be229c123b96594d5bdd7c68c13eb8646e5b22ef76baaed8b29534e",
-    "sheet": "c61ef25b3843eb7b07db913ff61d7b2ff14323eb198372a93811bf504a2738c8"
+    "idle": "c996a976c0f37870bc1d9d66df2e5c9d49166811fbbbf6b66cead196fc244cda",
+    "sheet": "e3c3e260418b7e067379af7841222a66975c8ec4a86b286aff3455ccad25ada2"
   }
 }

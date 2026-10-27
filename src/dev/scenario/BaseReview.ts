@@ -42,6 +42,11 @@ const OUTPOSTS: readonly (Pick<CoopBaseConfig, 'id' | 'shape' | 'turrets'> & { g
   { id: 'lab-bastion', gridX: 35, gridY: 24, shape: cells([0, 1], [1, 1], [2, 1], [3, 1], [0, 2], [0, 3], [0, 4]),
     turrets: [{ id: 'lab-bastion-rocket', cellOffset: { gridX: 0, gridY: 1 }, mountSide: 'front', weaponId: 'TURRET_ROCKET_BURST' }] },
   { id: 'lab-middle', gridX: 44, gridY: 25, shape: { kind: 'rectangle', widthCells: 2, heightCells: 4 } },
+  // Every base turret type on one 3x2 outpost: corner and edge cells under their plinths.
+  { id: 'lab-arsenal', gridX: 49, gridY: 20, shape: { kind: 'rectangle', widthCells: 3, heightCells: 2 },
+    turrets: (['TURRET_ROCKET_BURST', 'TURRET_MG', 'TURRET_FLAME', 'TURRET_VOID_FLAME', 'SPORE_TURRET_PLASMA', 'TURRET_SPORES'] as const)
+      .map((weaponId, index) => ({ id: `lab-arsenal-${index}`, cellOffset: { gridX: index % 3, gridY: Math.floor(index / 3) },
+        mountSide: 'front' as const, weaponId })) },
 ];
 
 /** Camera targets shared by the panel steps and capture specs. */
@@ -50,6 +55,7 @@ export const BASE_REVIEW_FOCUS = {
   gate: { gridX: CORE.gridX + .5, gridY: CORE.gridY + 3.5 },
   outposts: { gridX: 43, gridY: 17 },
   built: { gridX: 22, gridY: 22 },
+  arsenal: { gridX: 50.5, gridY: 22.5 },
 } as const;
 type Focus = keyof typeof BASE_REVIEW_FOCUS;
 

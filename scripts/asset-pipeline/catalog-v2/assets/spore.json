@@ -51,11 +51,15 @@
       "motion": "organic_pulse",
       "frameCount": 8,
       "frameRate": 24,
-      "loop": false
+      "loop": false,
+      "parameters": {
+        "idleEmission": 0,
+        "activeEmission": 0.9
+      }
     }
   ],
   "mount": {
     "rockSize": 32,
-    "maxBaseDiameter": 27
+    "maxBaseDiameter": 16
   }
 }

@@ -1,8 +1,6 @@
 import type * as Phaser from 'phaser';
 import { PIPELINE_ASSETS } from '../config/pipelineAssets';
-import { ENEMY_MESH_MANIFEST } from '../assets/EnemyMeshAssets';
 import type { MeshShadowCaster } from './EnemyMeshShadowRenderer';
-import { LEGACY_TURRET_MESH_REVISION, LEGACY_TURRET_SHADOW_HEIGHT_SCALE } from './ShadowConfig';
 
 /** Visits every turret sprite an owner shows; `raised` when it stands on a base surface (fort decks, outposts). */
 export type TurretShadowSource = (visit: (sprite: Phaser.GameObjects.Sprite, raised: boolean) => void) => void;
@@ -10,7 +8,6 @@ export type TurretShadowSource = (visit: (sprite: Phaser.GameObjects.Sprite, rai
 /** Idle and sheet textures of every turret resolve to the pipeline asset its mesh belongs to. */
 const TURRET_TEXTURES = new Map(PIPELINE_ASSETS.filter(asset => asset.category === 'turret')
   .flatMap(asset => [[asset.textureKey, asset], [asset.sheetTextureKey, asset]] as const));
-const LEGACY_FLAT = new Set(ENEMY_MESH_MANIFEST.assets.filter(mesh => mesh.meshRevision === LEGACY_TURRET_MESH_REVISION).map(mesh => mesh.id));
 
 class TurretCaster implements MeshShadowCaster {
   readonly kind = 'turret';
@@ -22,9 +19,6 @@ class TurretCaster implements MeshShadowCaster {
   getHp(): number { return this.sprite.active ? 1 : 0; }
   isBurrowed(): boolean { return false; }
   getHopLiftScale(): number { return 1; }
-  getShadowHeightScale(): number {
-    return LEGACY_FLAT.has(TURRET_TEXTURES.get(this.sprite.texture.key)?.id ?? '') ? LEGACY_TURRET_SHADOW_HEIGHT_SCALE : 1;
-  }
   getShadowReceiverPlane(): number { return this.plane; }
 }
 

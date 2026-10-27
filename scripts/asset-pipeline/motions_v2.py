@@ -171,10 +171,20 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
             if socket is not None:
                 socket.default_value = p.get('idleEmission', .3) + p.get('activeEmission', 1.1) * pulse
                 socket.keyframe_insert(data_path='default_value', frame=frame)
+        elif parts.get('emission') is not None:
+            # Ignition and barrel heat flare with the shot and cool with the recovery.
+            socket = parts['emission']
+            socket.default_value = p.get('idleEmission', .15) + p.get('activeEmission', 1.4) * kick
+            socket.keyframe_insert(data_path='default_value', frame=frame)
     elif motion == 'organic_pulse':
         pulse = 0 if idle else math.sin(math.pi * phase) ** 2
         pose('cap', scale=(1 + p.get('pulseWidth', .10) * pulse, 1 - p.get('pulseCompression', .13) * pulse, 1 + .08 * pulse))
         pose('gills', rotation=(0, 0, .07 * pulse))
+        socket = parts.get('emission')
+        if socket is not None:
+            # The cap glows as it swells to release its spores and fades as it settles.
+            socket.default_value = p.get('idleEmission', .25) + p.get('activeEmission', 1.1) * pulse
+            socket.keyframe_insert(data_path='default_value', frame=frame)
     elif motion == 'sustained':
         wave = 0 if idle else .5 - .5 * math.cos(angle)
         pose('rotor', rotation=(0, 0, p.get('rotorSwing', .22) * (0 if idle else math.sin(angle))))

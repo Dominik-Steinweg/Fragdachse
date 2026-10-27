@@ -46,7 +46,9 @@
       "frameRate": 24,
       "loop": false,
       "parameters": {
-        "recoil": 0.12
+        "recoil": 0.12,
+        "idleEmission": 0.12,
+        "activeEmission": 1.6
       }
     }
   ],

@@ -4,7 +4,7 @@
   "gameIds": [
     "turret_plinth"
   ],
-  "revision": "fort-plinth-r01",
+  "revision": "fort-plinth-r02",
   "variant": "standard",
   "sourceSize": 100,
   "textureKey": "construction_turret_plinth",
@@ -31,7 +31,7 @@
     "height": 104
   },
   "hashes": {
-    "idle": "868a693936329ed0ae162bf2ef3cdd4d9fc11443cde94864bd607928a63bef63",
-    "sheet": "f618c64dabaeb3eaae61e4a6b87a5f87058f8472cd7fc8284e78d6926b3c3904"
+    "idle": "b92a753a60b86a92182cf5e4aa5ce2f07de3d0fe4b781fa4ca1c47ce89f07cf4",
+    "sheet": "e7634415dbf0e590f568c7d799455db7527ec6b422bb988f4ccbe7d6f9038cb8"
   }
 }

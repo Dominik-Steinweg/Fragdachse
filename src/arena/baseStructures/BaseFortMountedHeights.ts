@@ -60,7 +60,7 @@ export class BaseFortMountedHeights {
       if (!mesh || mesh.asset.revision !== asset!.revision) continue;
       const pose = enemyMeshPose(sprite.frame.name, mesh);
       if (pose < 0) continue;
-      this.brush.setTexture(this.stamp(mesh, pose, caster.getShadowHeightScale?.() ?? 1)).setOrigin(sprite.originX, sprite.originY)
+      this.brush.setTexture(this.stamp(mesh, pose)).setOrigin(sprite.originX, sprite.originY)
         .setRotation(sprite.rotation).setFlip(sprite.flipX, sprite.flipY)
         .setDisplaySize(sprite.displayWidth / texelPx, sprite.displayHeight / texelPx)
         .setPosition((sprite.x - left) / texelPx, (sprite.y - top) / texelPx);
@@ -73,8 +73,8 @@ export class BaseFortMountedHeights {
   }
 
   /** Top-down maximum height of one mesh pose over its sprite canvas; R holds height / range. */
-  private stamp(mesh: EnemyMeshData, pose: number, heightScale: number): string {
-    const id = `${mesh.asset.id}:${pose}:${heightScale}`;
+  private stamp(mesh: EnemyMeshData, pose: number): string {
+    const id = `${mesh.asset.id}:${pose}`;
     const existing = this.stamps.get(id);
     if (existing) return existing;
     const size = STAMP_SIZE, canvas = mesh.asset.coordinates.canvasWorldPx, heights = new Float32Array(size * size);
@@ -85,7 +85,7 @@ export class BaseFortMountedHeights {
       const ax = px(a), ay = py(a), bx = px(b), by = py(b), cx = px(c), cy = py(c);
       const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
       if (Math.abs(area) < 1e-9) continue;
-      const az = p[base + a * 3 + 2] * heightScale, bz = p[base + b * 3 + 2] * heightScale, cz = p[base + c * 3 + 2] * heightScale;
+      const az = p[base + a * 3 + 2], bz = p[base + b * 3 + 2], cz = p[base + c * 3 + 2];
       const x0 = Math.max(0, Math.floor(Math.min(ax, bx, cx))), x1 = Math.min(size - 1, Math.ceil(Math.max(ax, bx, cx)));
       const y0 = Math.max(0, Math.floor(Math.min(ay, by, cy))), y1 = Math.min(size - 1, Math.ceil(Math.max(ay, by, cy)));
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
