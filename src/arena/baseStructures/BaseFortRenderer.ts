@@ -11,8 +11,9 @@ import { createSurfaceLightFrame, setSurfaceLightUniforms } from '../../effects/
 import type { FogSurfaceStamp } from '../../effects/groundFog/FogSurfaceMask';
 import type { LobbyStructureSunlight } from '../lobbyStructures/LobbyStructureRenderer';
 import { LOBBY_STRUCTURE_RELIEF_FRAGMENT, LOBBY_STRUCTURE_SHADOW_FRAGMENT } from '../lobbyStructures/lobbyStructureShaders';
-import { baseFortCoreAsset, baseFortKitAsset, baseFortTextureKey, type BaseFortLayer, type BaseFortPass, type BaseFortSocket } from './BaseFortAssets';
-import { composeOutpost, type FortCell } from './BaseFortKitComposer';
+import { baseFortCoreAsset, baseFortKitAsset, baseFortTextureKey, TURRET_PLINTH, type BaseFortLayer, type BaseFortPass, type BaseFortSocket } from './BaseFortAssets';
+import { composeOutpost, type ComposedFort, type FortCell } from './BaseFortKitComposer';
+import { fortFreeSquare } from './fortFreeSquare';
 import type { BaseFortEmitter, BaseFortEmitterKind, BaseFortFx } from './BaseFortFx';
 import { BaseFortMountedHeights, MOUNTED_HEIGHT_RANGE_PX } from './BaseFortMountedHeights';
 import type { MeshShadowCaster } from '../../effects/EnemyMeshShadowRenderer';
@@ -60,6 +61,12 @@ const SOCKET_LIGHTS: readonly { prefix: string; preset: LightPresetKey; day: num
 const EMITTER_KINDS: readonly BaseFortEmitterKind[] = ['torch', 'bowl'];
 /** The structure fades with the staggered cell explosions instead of vanishing at once. */
 const DESTROYED_ALPHA = 0;
+/** Turret plinths lie on the decks, under the turrets' mounted shadow (ROCKS + 0.09) and sprite. */
+const PLINTH_DEPTH = DEPTH.ROCKS + 0.06;
+/** The plinth's stone fills 0.70 m of its 0.78 m canvas (catalog orthoScale); the largest one is 24 px. */
+const PLINTH = { fill: .70 / .78, maxSidePx: 24, minSidePx: 14, fallbackSidePx: 18, clearancePx: 3 };
+
+const EMPTY_CASTERS: readonly MeshShadowCaster[] = [];
 
 /** Deterministic flicker per light, two incommensurate sines. */
 function flicker(seconds: number, hz: number, amount: number, phase: number): number {
@@ -78,6 +85,8 @@ interface FortArt {
   readonly sockets: readonly (readonly [string, BaseFortSocket])[];
   /** Composed textures the view owns and removes with it. */
   readonly owned: readonly string[];
+  /** Outposts: the kit caster-height frame of every cell (their composed caster grid is GPU-only). */
+  readonly cellHeights?: ComposedFort['cellHeights'];
 }
 
 interface FortMounted {
@@ -103,6 +112,10 @@ interface FortView {
   readonly mounted: FortMounted;
   readonly cellCount: number;
   destroyedCells: number;
+  /** Per cell: the largest free deck square inside the stakes and posts, found once from the caster heights. */
+  freeSquares: ({ x: number; y: number; side: number })[] | null;
+  /** Stone plinths under the turrets standing on the cells, by cell index. */
+  readonly plinths: Map<number, Phaser.GameObjects.Image>;
 }
 
 /**
@@ -128,6 +141,7 @@ export class BaseFortRenderer {
   private readonly shadeUniform = new Float32Array(2);
   private mountedHeights: BaseFortMountedHeights | null = null;
   private readonly casterScratch: MeshShadowCaster[] = [];
+  private readonly occupiedScratch = new Set<number>();
   private readonly mountedScratch: MeshShadowCaster[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {}
@@ -159,7 +173,7 @@ export class BaseFortRenderer {
     const composed = composeOutpost(this.scene, kit, baseId, cells, passes);
     if (!composed) return false;
     this.present(baseId, { size: composed.size, sourceSize: composed.sourceSize, heightPx: kit.heightPx, deckPx: kit.deckPx ?? 0,
-      layers: kit.layers, keys: composed.keys, sockets: composed.sockets, owned: Object.values(composed.keys) },
+      layers: kit.layers, keys: composed.keys, sockets: composed.sockets, owned: Object.values(composed.keys), cellHeights: composed.cellHeights },
     composed.centreX, composed.centreY, cells);
     return true;
   }
@@ -190,7 +204,7 @@ export class BaseFortRenderer {
       texture: { key: key('solid') }, frame: { name: '__BASE' } };
     const mounted: FortMounted = { left, top, target: null, uniform: new Float32Array([art.deckPx, 0, MOUNTED_FLIP]) };
     this.views.set(baseId, { art, ground, body, emission, lights, stamp, emitters, cells, mounted, cellCount: cells.length,
-      destroyedCells: 0, fx: this.particles?.(emitters) ?? null,
+      destroyedCells: 0, fx: this.particles?.(emitters) ?? null, freeSquares: null, plinths: new Map(),
       relief: lit ? this.makeRelief(left, top, art) : null, shadow: lit ? this.makeShadow(left, top, mounted, art) : null });
   }
 
@@ -216,6 +230,7 @@ export class BaseFortRenderer {
     view.ground?.destroy(); view.body.destroy();
     this.destroyQuad(view.relief); this.destroyQuad(view.shadow);
     for (const { image } of view.emission) image.destroy();
+    for (const plinth of view.plinths.values()) plinth.destroy();
     view.fx?.destroy();
     if (view.mounted.target) this.scene.textures.remove(view.mounted.target);
     for (const key of view.art.owned) if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
@@ -262,11 +277,12 @@ export class BaseFortRenderer {
     const night = lighting?.getArtificialLightFactor() ?? 0;
     const casters = this.casterScratch;
     casters.length = 0;
-    if (this.castFrame.visible) this.shadows?.turretCasters.collect(casters);
+    this.shadows?.turretCasters.collect(casters);
     for (const view of this.views.values()) {
       view.shadow?.setVisible(this.castFrame.visible && view.destroyedCells < view.cellCount);
       const standing = view.destroyedCells < view.cellCount;
-      if (view.shadow && standing) this.drawMounted(view, casters);
+      this.syncPlinths(view, standing ? casters : EMPTY_CASTERS);
+      if (view.shadow && standing) this.drawMounted(view, this.castFrame.visible ? casters : EMPTY_CASTERS);
       view.fx?.setActive(standing && lighting !== null);
       view.fx?.setNight(night);
       for (const glow of view.emission) {
@@ -282,6 +298,65 @@ export class BaseFortRenderer {
           { intensity: preset.intensity * level, radiusPx: preset.radiusPx * light.scale });
       }
     }
+  }
+
+  /** A stone plinth under every turret standing on one of this fort's cells, in that cell's free deck square. */
+  private syncPlinths(view: FortView, casters: readonly MeshShadowCaster[]): void {
+    const half = CELL_SIZE / 2, occupied = this.occupiedScratch;
+    occupied.clear();
+    for (const caster of casters) {
+      if ((caster.getShadowReceiverPlane?.() ?? 0) !== 1) continue;
+      const { x, y } = caster.sprite;
+      const index = view.cells.findIndex(cell => Math.abs(cell.x - x) <= half && Math.abs(cell.y - y) <= half);
+      if (index >= 0) occupied.add(index);
+    }
+    for (const [index, plinth] of view.plinths) plinth.setVisible(occupied.has(index));
+    if (!occupied.size) return;
+    view.freeSquares ??= this.freeSquares(view);
+    for (const index of occupied) {
+      if (view.plinths.has(index)) continue;
+      const square = view.freeSquares[index], size = square.side / PLINTH.fill;
+      view.plinths.set(index, this.scene.add.image(square.x, square.y, TURRET_PLINTH.textureKey)
+        .setDisplaySize(size, size).setDepth(PLINTH_DEPTH));
+    }
+  }
+
+  /**
+   * The largest square of free deck in every cell: caster texels at deck height, clear of stakes, posts and
+   * beams by a few px. The core reads its own caster grid, an outpost the kit frame of each cell. Without
+   * readable caster heights (low quality) a plinth sits centred and small.
+   */
+  private freeSquares(view: FortView): { x: number; y: number; side: number }[] {
+    const art = view.art, core = art.keys['caster-height'];
+    const whole = !art.cellHeights && core ? this.readPixels(core) : null;
+    return view.cells.map((cell, index) => {
+      const fallback = { x: cell.x, y: cell.y, side: PLINTH.fallbackSidePx };
+      let window: { data: Uint8ClampedArray; width: number; height: number; left: number; top: number; texelPx: number } | null = null;
+      if (whole) {
+        window = { ...whole, left: view.mounted.left, top: view.mounted.top, texelPx: art.size / whole.width };
+      } else if (art.cellHeights) {
+        const { key, frame, framePx } = art.cellHeights[index];
+        const pixels = this.readPixels(key, frame);
+        if (pixels) window = { ...pixels, left: cell.x - framePx / 2, top: cell.y - framePx / 2, texelPx: framePx / pixels.width };
+      }
+      const square = window ? fortFreeSquare(cell, window, art.heightPx, art.deckPx, PLINTH.clearancePx) : null;
+      return square && square.side >= PLINTH.minSidePx ? { ...square, side: Math.min(PLINTH.maxSidePx, square.side) } : fallback;
+    });
+  }
+
+  /** RGBA of a loaded image texture (optionally one frame of it), or null where the CPU cannot read it. */
+  private readPixels(key: string, frameName?: string): { data: Uint8ClampedArray; width: number; height: number } | null {
+    if (!this.scene.textures.exists(key) || typeof document === 'undefined') return null;
+    const texture = this.scene.textures.get(key), source = texture.getSourceImage();
+    if (!(source instanceof HTMLImageElement || source instanceof HTMLCanvasElement)) return null;
+    const frame = frameName ? texture.get(frameName) : null;
+    const x = frame?.cutX ?? 0, y = frame?.cutY ?? 0, width = frame?.cutWidth ?? source.width, height = frame?.cutHeight ?? source.height;
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) return null;
+    context.drawImage(source, x, y, width, height, 0, 0, width, height);
+    return { data: context.getImageData(0, 0, width, height).data, width, height };
   }
 
   /** Stamps the turrets standing on this fort's cells into its mounted height grid. */

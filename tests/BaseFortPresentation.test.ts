@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { fortFreeSquare } from '../src/arena/baseStructures/fortFreeSquare';
 import { describe, expect, it, vi } from 'vitest';
 
 const fort = vi.hoisted(() => ({ calls: [] as unknown[][] }));
@@ -59,6 +60,18 @@ function lobbyBases() {
 }
 
 describe('persistent base fort presentation', () => {
+  it('lays a turret plinth in the largest free deck square of its cell, clear of the stakes', () => {
+    // A 32 px cell (texels 0..15 of a 2 px grid that continues as deck to the south-east): stakes (60 px) along
+    // its north and west edge, 4 texels deep, deck at 40 px elsewhere.
+    const width = 20, data = new Uint8ClampedArray(width * width * 4);
+    for (let y = 0; y < width; y++) for (let x = 0; x < width; x++) data[(y * width + x) * 4] = x < 4 || y < 4 ? 200 : 136;
+    const heightPx = { min: 0, max: 76.8 }, deck = 136 / 255 * 76.8;
+    const square = fortFreeSquare({ x: 16, y: 16 }, { data, width, height: width, left: 0, top: 0, texelPx: 2 }, heightPx, deck, 3)!;
+    // Clearance 3 px = 2 texels: free texels 6..15 -> a 10-texel (20 px) square in the south-east of the cell.
+    expect(square).toEqual({ x: 22, y: 22, side: 20 });
+    expect(square.x - square.side / 2).toBeGreaterThanOrEqual(8 + 3);
+  });
+
   it('presents the friendly persistent core as the fort, centred on its anchor cell, without tiles or base glow', () => {
     fort.calls.length = 0;
     const specs = lobbyBases();

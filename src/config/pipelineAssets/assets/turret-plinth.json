@@ -1,0 +1,37 @@
+{
+  "id": "turret-plinth",
+  "category": "construction",
+  "gameIds": [
+    "turret_plinth"
+  ],
+  "revision": "fort-plinth-r01",
+  "variant": "standard",
+  "sourceSize": 100,
+  "textureKey": "construction_turret_plinth",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_turret_plinth_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/turret-plinth/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/turret-plinth/sheet.png",
+  "layout": {
+    "frameWidth": 100,
+    "frameHeight": 100,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 104,
+    "height": 104
+  },
+  "hashes": {
+    "idle": "868a693936329ed0ae162bf2ef3cdd4d9fc11443cde94864bd607928a63bef63",
+    "sheet": "f618c64dabaeb3eaae61e4a6b87a5f87058f8472cd7fc8284e78d6926b3c3904"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "id": "turret-plinth",
+  "label": "Turmsockel (Fort)",
+  "category": "construction",
+  "gameIds": [
+    "turret_plinth"
+  ],
+  "reference": "scripts/asset-pipeline/references/base-fort-core.png",
+  "targetSize": 25,
+  "sourceSizes": [
+    50,
+    100
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Square stone plinth, 0.70 m, filling the free deck of one fort cell under a turret",
+    "colors": "Weathered grey field stone matching the fort's thresholds, dark mortar, a dark iron anchor plate, moss in the joints",
+    "anatomy": "Strict orthographic top-down. Four dressed slabs with chamfered edges and open joints over a mortar core, a central iron anchor plate with bolts and the post socket. Broad values stay readable at 22 px."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "turret-plinth",
+  "model": {},
+  "orthoScale": 0.78,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Weathered field stone, iron anchor",
+      "textureStrength": 0.16,
+      "formShadowStrength": 0
+    }
+  },
+  "clips": []
+}
