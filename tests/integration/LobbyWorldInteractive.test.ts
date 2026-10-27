@@ -134,6 +134,7 @@ describe('Lobby building menu dispatch', () => {
       canSelfAdmitToWorld: () => true, isLocalWorldParticipant: () => true, getIsLocalReady: () => true, setIsLocalReady: vi.fn() };
     scene.lobbyOverlay = { setWorldEntryState: vi.fn(), setReadyButtonState: vi.fn() };
     scene.meta = { refreshLobbyProjection: vi.fn() };
+    scene.deploymentTerrain = { prefetch: vi.fn(), current: () => null };
     scene.coopDefenseUpgradesOverlay = { hide: vi.fn() };
     scene.buildLocalLobbyLoadoutPreview = () => null;
     vi.spyOn(bridge, 'setLocalLobbyLoadoutPreview').mockImplementation(() => {});
@@ -150,7 +151,7 @@ describe('Lobby building menu dispatch', () => {
     } finally { vi.restoreAllMocks(); }
   });
 
-  it('uses existing menu callbacks, blocks guests at the yard and blocks further interaction behind overlays', () => {
+  it('uses existing menu callbacks, lets guests into the yard and blocks further interaction behind overlays', () => {
     const stored = getStoredCoopDefenseProgress();
     vi.spyOn(preferences, 'getStoredCoopDefenseProgress').mockReturnValue({ ...stored,
       itemsUnlocked: true, persistentBaseUnlocked: true, dawn: { ...stored.dawn, debugUnlocked: true } });
@@ -175,10 +176,11 @@ describe('Lobby building menu dispatch', () => {
       expect(scene.meta.openItemsOverlay).toHaveBeenCalledTimes(1);
       expect(scene.meta.openBaseOverlay).toHaveBeenCalledTimes(1);
       expect(scene.lobbyOverlay.openMerchant).toHaveBeenCalledTimes(1);
+      // Guests edit their own constructions in the yard, too.
       host.mockReturnValue(false);
       scene.openLobbyMenu('base');
-      expect(scene.meta.openBaseOverlay).toHaveBeenCalledTimes(1);
-      expect(scene.aimPresentation.showPlacementError).toHaveBeenCalledTimes(1);
+      expect(scene.meta.openBaseOverlay).toHaveBeenCalledTimes(2);
+      expect(scene.aimPresentation.showPlacementError).not.toHaveBeenCalled();
       scene.itemsOverlay = { isOpen: () => true };
       scene.openLobbyMenu('upgrades');
       expect(scene.meta.openUpgradeOverlay).toHaveBeenCalledTimes(1);

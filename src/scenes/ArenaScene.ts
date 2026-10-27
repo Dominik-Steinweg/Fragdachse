@@ -1614,8 +1614,6 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
     if (!deferArenaExit) this.arenaRuntime.hostSyncLobbyWorld();
-    this.deploymentTerrain.prefetch();
-    this.followBaseEditorDeployment();
     // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
     this.arenaRuntime.syncRoomOwners();
@@ -2023,6 +2021,9 @@ export class ArenaScene extends Phaser.Scene {
     returningFromWeaponBalanceLab: boolean,
     diagnosticsFrame: ArenaDiagnosticsFrame | null,
   ): void {
+    // The next round's terrain is generated in the lobby; an open base editor follows the host's map.
+    this.deploymentTerrain.prefetch();
+    this.followBaseEditorDeployment();
     this.matchResultsOverlay?.refreshRestartState();
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
     // Weltlicht der Lobby haengt an der Raumphase, nicht an der Oberflaeche: wer das
