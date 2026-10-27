@@ -388,6 +388,21 @@ describe('static shadow baking', () => {
     shadows.destroy();
   });
 
+  it('bakes no contact footprint for raised cells of structures that cast their own shadow', () => {
+    const { scene, graphicsLog, textures } = makeScene();
+    const shadows = new ShadowSystem(scene);
+    shadows.setWorldBoundsOverride({ minX: 0, minY: 0, maxX: ARENA_RENDER_CHUNK_SIZE * 2, maxY: 512 });
+    shadows.rebuildStaticLayoutShadows(layout(0, 0), { offsetX: 0, offsetY: 0 });
+    drain(scene);
+    const draws = totalDraws(textures);
+    shadows.syncBaseShadows([{ x: ARENA_RENDER_CHUNK_SIZE, y: 100, active: true, visible: true, footprint: false }]);
+    drain(scene);
+    expect(totalDraws(textures)).toBe(draws);
+    expect(graphicsLog.filter((entry) => entry.depth === SHADOW_CASTERS.base.layerDepth)
+      .every((entry) => entry.fillPoints.length === 0)).toBe(true);
+    shadows.destroy();
+  });
+
   it('bakes a far-right lobby rock through the public layout path', () => {
     const { scene, graphicsLog } = makeScene();
     const shadows = new ShadowSystem(scene);

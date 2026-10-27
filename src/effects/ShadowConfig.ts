@@ -39,6 +39,13 @@ export const CHARACTER_SHADOW_CONFIG = {
   maxPlayers: 12,
 } as const;
 
+/**
+ * Turret models are built for the top-down sprite and stand 0.40-0.52 m tall, flatter than the
+ * figures beside them; true to scale their shadow hides under their own 1.25 m sprite and, on a
+ * base deck, inside the palisade's. Their mesh shadows use figure-like heights instead.
+ */
+export const TURRET_SHADOW_HEIGHT_SCALE = 2;
+
 export interface ShadowCasterConfig {
   readonly enabled: boolean;
   readonly layerDepth: number;

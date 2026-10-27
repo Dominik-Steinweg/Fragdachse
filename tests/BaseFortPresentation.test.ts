@@ -77,10 +77,16 @@ describe('persistent base fort presentation', () => {
     const entity = manager.getBase(core.id)!;
     expect(entity.getSurfaceImages()).toHaveLength(0);
     expect(entity.getLightSpots()).toHaveLength(0);
+    // The decks stay raised shadow receivers (turret shadows land on them); the fort casts its own shadow.
+    const raised = entity.getShadowSurfaceCells();
+    expect(raised.map(({ x, y }) => ({ x, y }))).toEqual(core.cells.map(cell => ({
+      x: METRICS.offsetX + (cell.gridX + .5) * CELL_SIZE, y: METRICS.offsetY + (cell.gridY + .5) * CELL_SIZE })));
+    expect(raised.every(cell => cell.active && cell.footprint === false)).toBe(true);
     // Collision stays cell based: every base-surface cell keeps its body.
     expect(entity.getCellBodies()).toHaveLength(core.cells.length);
     entity.destroyCellVisual(0);
     expect(fort.calls.at(-1)).toEqual(['destroyCell', core.id]);
+    expect(raised.map(cell => cell.active)).toEqual(core.cells.map((_, index) => index !== 0));
     manager.destroy();
     expect(fort.calls.at(-1)).toEqual(['remove', core.id]);
   });

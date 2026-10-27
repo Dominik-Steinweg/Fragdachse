@@ -555,7 +555,7 @@ export class ArenaLifecycleCoordinator {
           const bases = manager?.getBases() ?? [];
           const preview = this.persistentBasePreviewRenderer.getSurfaceImages();
           return (function* () {
-            for (const base of bases) yield* base.getSurfaceImages();
+            for (const base of bases) yield* base.getShadowSurfaceCells();
             yield* preview;
             if (manager) yield* manager.getSpawnStructureShadowCells();
           })();

@@ -29,6 +29,8 @@ export interface MeshShadowCaster {
   getHp(): number;
   isBurrowed(): boolean;
   getHopLiftScale(): number;
+  /** Shadow height over the mesh's modelled height; 1 when omitted. */
+  getShadowHeightScale?(): number;
   /** 1 when the caster stands on a raised base surface whose top receives its shadow; ground casters omit it. */
   getShadowReceiverPlane?(): number;
   /** Mounted casters (turrets) are drawn below the figures: their shadow lies just under their own sprite. */
@@ -205,6 +207,7 @@ export class EnemyMeshShadowRenderer {
       if (asset?.revision !== mesh.asset.revision) continue;
       const s = enemy.sprite, pose = enemyMeshPose(s.frame.name, mesh); if (pose < 0) continue;
       enemyMeshMatrix(s, mesh.asset.coordinates.canvasWorldPx, this.matrix, enemy.getHopLiftScale());
+      this.matrix[10] *= enemy.getShadowHeightScale?.() ?? 1;
       enemyShadowBounds(mesh, this.matrix, this.sun, this.tileSize, this.bounds);
       const b = this.bounds;
       if (b[0] > view.right || b[1] > view.bottom || b[0] + b[2] < view.x || b[1] + b[3] < view.y) {

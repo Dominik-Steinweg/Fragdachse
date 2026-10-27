@@ -281,8 +281,9 @@ export interface WorldPresentationFrameBindingInput {
   readonly getTrainVisual: () => Pick<TrainRenderer, 'computeSegYs' | 'getShadowState'> | null;
   readonly syncTurretLights: (inArena: boolean) => void;
   readonly syncBaseLights: (inArena: boolean) => void;
-  /** Base shadow casters: cell images plus the spawn structures' wall cells. */
-  readonly getBaseShadowCells: () => Iterable<{ readonly x: number; readonly y: number; readonly active: boolean; readonly visible: boolean }>;
+  /** Raised base cells: tile images and spawn-structure walls cast footprints, fort cells (`footprint: false`) only receive. */
+  readonly getBaseShadowCells: () => Iterable<{ readonly x: number; readonly y: number; readonly active: boolean;
+    readonly visible: boolean; readonly footprint?: boolean }>;
   /** Geometry above the walkable ground on which the fog is cut; shadows keep `getBaseShadowCells`. */
   readonly getFogSurfaceStamps: () => Iterable<FogSurfaceStamp>;
   /** World-pixel outline rects of live structures; figure shadows are not received on their roofs. */

@@ -42,9 +42,12 @@ const EMISSION_DEPTH = DEPTH_LIGHTING + 0.1;
 const GROUND_TINT = 0xb6b2aa;
 /** Low decks and stakes: a lighter, softer ground shadow than the tall lobby buildings. */
 const FORT_SHADOW = { opacity: .34, softness: 1.6 };
-/** Embers glow by day too; lantern glass is visible by day and bright at night. */
+/**
+ * Embers glow by day too; lantern glass is visible by day and bright at night. Torch glow breathes
+ * slowly: fast flicker reads as strobing at this scale.
+ */
 const LAYER_LOOK: Record<BaseFortLayer, { day: number; night: number; flicker: number; hz: number }> = {
-  forge: { day: .6, night: 1, flicker: .22, hz: 6.5 },
+  forge: { day: .6, night: 1, flicker: .08, hz: 1.3 },
   lamp: { day: .4, night: 1, flicker: .05, hz: 1.1 },
 };
 /**

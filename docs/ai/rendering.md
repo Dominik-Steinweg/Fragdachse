@@ -208,7 +208,11 @@ Starre Pipeline-Assets wie Tuerme sind dieselben Mesh-Caster (`MeshShadowCaster`
 `ShadowSystem.turretCasters` und compositen im montierten Band direkt unter ihrem Sprite
 (`MOUNTED_SHADOW_DEPTH`), Figuren im Figurenband. Die Empfaengermaske fuehrt zwei Ebenen: R ist
 der Boden (Basiszellen ausgeschlossen, Figuren stehen unten), G nur die Basisoberflaechen fuer
-Caster, die auf ihnen stehen (Tuerme auf Fort-Decks und Vorposten). Jenseits der Oberseite gehoert
+Caster, die auf ihnen stehen (Tuerme auf Fort-Decks und Vorposten). Beide Ebenen kennen die
+Basiszellen nur ueber `BaseEntity.getShadowSurfaceCells()` und `ShadowSystem.syncBaseShadows`, nie
+ueber Zellbilder: Fort-Basen haben keine Kachelbilder und melden ihre Zellen mit `footprint: false`
+(nur Empfaenger, kein gebackener Kontaktschatten, weil das Fort seinen Schatten selbst wirft)
+([ShadowStaticBake.test.ts](../../tests/ShadowStaticBake.test.ts)). Jenseits der Oberseite gehoert
 ihr Schatten zum Hoehenfeld-Schatten des Bauwerks: Montierte Tuerme stempeln ihre Mesh-Hoehe pro
 Frame in dessen Caster-Raster (Deckhoehe plus Turmhoehe, Maximum), sodass Wand und Turm einen
 gemeinsamen, nicht doppelt abgedunkelten Schatten werfen

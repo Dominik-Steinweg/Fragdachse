@@ -540,7 +540,7 @@ export class ShadowSystem {
   }
   private readonly baseCells = new Map<
     { readonly x: number; readonly y: number },
-    { x: number; y: number }
+    { x: number; y: number; footprint: boolean }
   >();
   private readonly seenBaseCells = new Set<{ readonly x: number; readonly y: number }>();
   /** Lebende reaktive Map-Objekte, deren Kontaktschatten gebacken ist (Schlüssel: Layout-Index). */
@@ -620,29 +620,41 @@ export class ShadowSystem {
     this.worldBoundsOverride = bounds;
   }
 
-  /** Cache visible surface cells, including previews and cells still awaiting destruction. */
+  /**
+   * Cache visible surface cells, including previews and cells still awaiting destruction. Every cell
+   * is a raised top for the figure receiver; cells with `footprint: false` belong to structures that
+   * cast their own ground shadow (the base fort) and get no baked contact footprint.
+   */
   syncBaseShadows(cells: Iterable<{
     readonly x: number;
     readonly y: number;
     readonly active: boolean;
     readonly visible: boolean;
+    readonly footprint?: boolean;
   }>): void {
     this.seenBaseCells.clear();
     for (const cell of cells) {
       if (!cell.active || !cell.visible) continue;
       this.seenBaseCells.add(cell);
+      const footprint = cell.footprint !== false;
       const previous = this.baseCells.get(cell);
-      if (previous?.x === cell.x && previous.y === cell.y) continue;
-      if (previous) this.invalidateBaseShadow(previous.x, previous.y);
-      this.baseCells.set(cell, { x: cell.x, y: cell.y });
-      this.invalidateBaseShadow(cell.x, cell.y);
+      if (previous?.x === cell.x && previous.y === cell.y && previous.footprint === footprint) continue;
+      if (previous) this.invalidateBaseCell(previous);
+      const next = { x: cell.x, y: cell.y, footprint };
+      this.baseCells.set(cell, next);
+      this.invalidateBaseCell(next);
     }
     for (const [cell, position] of this.baseCells) {
       if (this.seenBaseCells.has(cell)) continue;
       this.baseCells.delete(cell);
-      this.invalidateBaseShadow(position.x, position.y);
+      this.invalidateBaseCell(position);
     }
     this.seenBaseCells.clear();
+  }
+
+  private invalidateBaseCell(cell: { readonly x: number; readonly y: number; readonly footprint: boolean }): void {
+    if (cell.footprint) this.invalidateBaseShadow(cell.x, cell.y);
+    else this.characterReceiverDirty = true;
   }
 
   /**
@@ -1085,7 +1097,7 @@ export class ShadowSystem {
       if (layout && this.staticHasLayout) {
         if (SHADOW_CASTERS.base.layerDepth === depth) {
           for (const cell of this.baseCells.values()) {
-            this.drawStaticFootprintInRegion(bucket, cell.x, cell.y, SHADOW_CASTERS.base, regionBounds, profile);
+            if (cell.footprint) this.drawStaticFootprintInRegion(bucket, cell.x, cell.y, SHADOW_CASTERS.base, regionBounds, profile);
           }
         }
         if (SHADOW_CASTERS.reactiveProp.layerDepth === depth) {

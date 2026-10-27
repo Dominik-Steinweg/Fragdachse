@@ -89,6 +89,8 @@ export class BaseEntity {
   private presentationCreated = false;
   /** The fort renderer presents this base (persistent core or kit outpost) instead of cell tiles. */
   private fortPresented = false;
+  /** The fort's cells as raised shadow receivers while they stand; the fort casts its own shadow. */
+  private readonly fortShadowCells: { x: number; y: number; active: boolean; visible: boolean; footprint: false }[] = [];
   private grounding: BaseGroundingRenderer | null = null;
   /** Gravel of a base site below this base, if any; the grounding matches it. */
   private groundGravel: PersistentBaseGravelCoverage | null = null;
@@ -200,9 +202,9 @@ export class BaseEntity {
       const region = this.spec.region;
       this.fort!.add(this.id, this.metrics.offsetX + (region.minGridX + region.maxGridX + 1) / 2 * CELL_SIZE,
         this.metrics.offsetY + (region.minGridY + region.maxGridY + 1) / 2 * CELL_SIZE, this.fortCells());
-      this.fortPresented = true;
+      this.presentFort();
     } else if (this.isFortOutpost() && this.fort!.addOutpost(this.id, this.fortCells())) {
-      this.fortPresented = true;
+      this.presentFort();
       // The kit has no ground of its own: the compacted apron settles the outpost into the map.
       this.grounding = new BaseGroundingRenderer(this.scene, { cells: this.spec.cells }, this.metrics,
         { hostile, gravel: this.groundGravel });
@@ -264,12 +266,25 @@ export class BaseEntity {
       x: this.metrics.offsetX + (cell.gridX + .5) * CELL_SIZE, y: this.metrics.offsetY + (cell.gridY + .5) * CELL_SIZE }));
   }
 
-  /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist; das Fort bringt eigene Lichter. */
+  private presentFort(): void {
+    this.fortPresented = true;
+    this.fortShadowCells.length = 0;
+    for (const { x, y } of this.fortCells()) this.fortShadowCells.push({ x, y, active: true, visible: true, footprint: false });
+  }
+
+  private unpresentFort(): void {
+    if (!this.fortPresented) return;
+    this.fort!.remove(this.id);
+    this.fortPresented = false;
+    this.fortShadowCells.length = 0;
+  }
+
   /** Mounted turret sprites, for their mesh shadows in the shadow system. */
   forEachTurretSprite(visit: (sprite: Phaser.GameObjects.Sprite) => void): void {
     for (const image of this.turretImages.values()) visit(image);
   }
 
+  /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist; das Fort bringt eigene Lichter. */
   getLightSpots(): readonly { x: number; y: number; radius: number }[] {
     return !this.presentation || this.spec.surface === 'none' || this.role === 'spawn-point' || this.isInert() || this.fortPresented
       ? EMPTY_LIGHT_SPOTS : this.lightSpots;
@@ -314,6 +329,8 @@ export class BaseEntity {
   /** Entfernt genau das Zellbild, dessen Explosion gerade abgespielt wird. */
   destroyCellVisual(cellIndex: number): void {
     if (this.fortPresented) this.fort!.destroyCell(this.id);
+    const fortCell = this.fortShadowCells[cellIndex];
+    if (fortCell) fortCell.active = false;
     this.accentGlow?.destroyCell(cellIndex);
     this.grounding?.destroyCell(cellIndex);
     const image = this.cellImages[cellIndex];
@@ -323,6 +340,15 @@ export class BaseEntity {
   /** Presentation cells remain available during the staggered destruction. */
   getSurfaceImages(): readonly Phaser.GameObjects.Image[] {
     return this.cellImages;
+  }
+
+  /**
+   * Raised cells for the shadow system: tile images also cast their baked contact footprint, fort
+   * cells only receive (turrets on the decks, no figure shadows on the walls).
+   */
+  getShadowSurfaceCells(): readonly { readonly x: number; readonly y: number; readonly active: boolean;
+    readonly visible: boolean; readonly footprint?: boolean }[] {
+    return this.fortPresented ? this.fortShadowCells : this.cellImages;
   }
 
   /**
@@ -592,7 +618,7 @@ export class BaseEntity {
   destroy(): void {
     this.vulnerableMarker?.destroy();
     this.vulnerableMarker = null;
-    if (this.fortPresented) { this.fort!.remove(this.id); this.fortPresented = false; }
+    this.unpresentFort();
     this.accentGlow?.destroy();
     this.accentGlow = null;
     this.grounding?.destroy();
@@ -616,7 +642,7 @@ export class BaseEntity {
 
   private resetRepresentation(): void {
     this.presentationCreated = false;
-    if (this.fortPresented) { this.fort!.remove(this.id); this.fortPresented = false; }
+    this.unpresentFort();
     this.accentGlow?.destroy();
     this.accentGlow = null;
     this.grounding?.destroy();

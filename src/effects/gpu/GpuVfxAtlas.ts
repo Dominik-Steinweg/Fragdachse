@@ -106,6 +106,7 @@ import {
   ensureFlameTextures,
   ensureVoidFlameTextures,
 } from '../FlameShared';
+import { TEX_TORCH_FLAME, ensureTorchFlameTexture } from '../TorchFlameTexture';
 
 /**
  * GpuVfxAtlas – ein gemeinsames Bild fuer alle GPU-VFX-Partikel.
@@ -216,6 +217,8 @@ export const GpuVfxFrameId = {
   LeafBlowerDroplet:     218,
   LeafBlowerWindStreak:  219,
   // 220..603: three additional 128-frame death variants. Existing IDs remain stable.
+  /** Torch flame from above, head at the torch, tip downwind along +x; colour baked. */
+  TorchFlame:            604,
 } as const;
 
 /** Nur die unten erzeugte, zusammenhaengende Morph-Folge darf diesen ID-Bereich belegen. */
@@ -517,6 +520,10 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerClod, 'leaf-blower-clod', LEAF_BLOWER_SHEET_CELLS.clod),
   leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerDroplet, 'leaf-blower-droplet', LEAF_BLOWER_SHEET_CELLS.droplet),
   leafBlowerSheetEntry(GpuVfxFrameId.LeafBlowerWindStreak, 'leaf-blower-wind-streak', LEAF_BLOWER_SHEET_CELLS.windStreak),
+  {
+    id: GpuVfxFrameId.TorchFlame, frame: 'torch-flame',
+    sourceTextureKey: TEX_TORCH_FLAME, width: 32, height: 16, ensure: ensureTorchFlameTexture,
+  },
 ];
 
 /** Transparenter Rand um jeden Frame, in Pixeln. */

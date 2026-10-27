@@ -815,7 +815,7 @@ export const LIGHT_PRESETS = {
     flickerHz: 1.1,
     surfaceRelief: true,
   },
-  /** Torches outside the fort's palisade: orange, flickering, a small pool each. */
+  /** Torches outside the fort's palisade: orange, slowly breathing, a small pool each. */
   baseFortTorch: {
     enabled: true,
     shape: 'radial',
@@ -826,8 +826,8 @@ export const LIGHT_PRESETS = {
     decayExponent: 1.15,
     occludes: false,
     priority: 2,
-    flickerAmount: 0.16,
-    flickerHz: 5.5,
+    flickerAmount: 0.06,
+    flickerHz: 1.6,
     surfaceRelief: true,
   },
   /** The light strip of finished base floor tiles in the yard: small, cool, steady. */
