@@ -10,6 +10,7 @@ import { getRenderScale } from '../graphics/RenderResolution';
 import { ClarityCameraRegistry } from './arena/ClarityCameraRegistry';
 import { PERSISTENT_BASE_EDITOR_DETAIL_RADIUS, PersistentBaseEditorWorld, type PersistentBaseEditorTerrain } from '../persistentBase/PersistentBaseEditorWorld';
 import { resolvePersistentBaseEditorPreview, type PersistentBaseEditorRoom } from '../persistentBase/PersistentBaseEditorPreview';
+import type { DeploymentRoutePlan } from '../activity/DeploymentRoutes';
 import type { PersistentCompositeConflictReason } from '../persistentBase/PersistentBaseComposite';
 import { TurretRangePreviewVisual } from './arena/TurretRangePreviewVisual';
 import { getMissedBaseRewards, type BaseEditorObject, type PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
@@ -109,6 +110,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private readonly rangeRings = new Map<string, TurretRangePreviewVisual>();
   private showRanges = false;
   private minimap: PersistentBaseEditorMinimap | null = null;
+  /** Why the World view shows no routes (forward base, players hunted away); below the minimap. */
+  private routeHint: Phaser.GameObjects.Text | null = null;
+  private breachWarning: Phaser.GameObjects.Container | null = null;
   constructor(private readonly options: PersistentBaseEditorOptions) {
     super(PersistentBaseEditorScene.KEY);
     // The local menu uses the lobby ceiling but can edit a personal area larger than that site.
@@ -140,14 +144,30 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       return;
     }
     const view = this.world.view;
+    // Where routes cannot be shown on the base, the reason gets its own strip below the overview.
+    const hint = this.routeHintText(this.world.planRoutes());
+    const hintHeight = hint ? 40 : 0;
     this.minimap = createPersistentBaseEditorMinimap(this, {
       layout: terrain.layout, widthCells: terrain.definition.metrics.widthCells, heightCells: terrain.definition.metrics.heightCells,
       bases: this.world.world.bases, persistentBaseId: this.world.world.persistentBaseSite?.baseId ?? null,
       spawnZones: terrain.definition.spawnZones ?? [],
       detail: { minX: view.x / CELL_SIZE, minY: view.y / CELL_SIZE,
         maxX: (view.x + view.width) / CELL_SIZE - 1, maxY: (view.y + view.height) / CELL_SIZE - 1 },
-    }, { x: panel.x + 8, y: panel.y + 8, width: panel.width - 16, height: panel.height - 16 });
+    }, { x: panel.x + 8, y: panel.y + 8, width: panel.width - 16, height: panel.height - 16 - hintHeight });
     this.ui.add(this.minimap.image);
+    const origin = this.minimap.cellToScreen(0, 0);
+    this.world.attachRouteMinimap(this.ui, { originX: origin.x - this.minimap.scale / 2, originY: origin.y - this.minimap.scale / 2,
+      unit: this.minimap.scale / CELL_SIZE });
+    this.routeHint = this.label(panel.x + panel.width / 2, panel.y + panel.height - 26, hint ?? '', 'caption', .5, panel.width - 40)
+      .setColor('#e3d2ff').setVisible(hint !== null);
+    // No free path: the warning sits on the World view, where the breach glows.
+    const warning = this.add.container(WORLD_PANEL.x + WORLD_PANEL.width / 2, this.view.y + this.view.height - 30).setVisible(false);
+    const text = this.add.text(0, 0, t('ui.base.routes.breach').toLocaleUpperCase(), textStyle('label', { color: 0xffd0da }))
+      .setOrigin(.5).setStroke('#2a0610', 4);
+    warning.add([this.add.rectangle(0, 0, text.width + 48, 36, 0x3a0a18, .82).setStrokeStyle(2, 0xff5a7a, .9), text]);
+    this.tweens.add({ targets: warning, alpha: { from: 1, to: .6 }, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.ui.add(warning);
+    this.breachWarning = warning;
   }
   private get worldZoom(): number { return this.framing.zoom; }
 
@@ -450,6 +470,16 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       }
     }
     this.refreshRanges();
+    this.refreshRoutes();
+  }
+  /** The next round's enemy routes with the draft as it stands, and what the view cannot show. */
+  private refreshRoutes(): void {
+    const plan = this.world.planRoutes();
+    this.breachWarning?.setVisible(!!plan?.routes.some((route) => route.relevant && route.breach));
+  }
+  private routeHintText(plan: DeploymentRoutePlan | null): string | null {
+    return plan?.hint === 'front-base' ? t('ui.base.routes.frontBase')
+      : plan?.hint === 'players-away' ? t('ui.base.routes.playersAway') : null;
   }
   /** Rings of every own turret while toggled on; the selected turret always shows its ring. */
   private refreshRanges(): void {

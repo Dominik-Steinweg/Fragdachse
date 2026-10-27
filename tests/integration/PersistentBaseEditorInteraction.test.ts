@@ -36,7 +36,7 @@ function harness(scale = 1, stage: PersistentBaseAreaStage = 0, room?: Persisten
   const scene: any = new PersistentBaseEditorScene({ model, color: 0xffffff,
     newRewardIds: [], close() {}, save: async () => ({ ok: true }) });
   const size = getPersistentBaseEditorSize(model.area);
-  const world = { size, anchor: (size / CELL_SIZE - 1) / 2, syncObjects: vi.fn(), setMates: vi.fn(),
+  const world = { size, anchor: (size / CELL_SIZE - 1) / 2, syncObjects: vi.fn(), setMates: vi.fn(), planRoutes: () => null,
     view: { x: 0, y: 0, width: size, height: size }, siteArea: model.area, isCellBlocked: () => false,
     get frame() { return { anchor: { gridX: this.anchor, gridY: this.anchor }, quarterTurns: model.quarterTurns }; } };
   Object.assign(scene, { world, scale: { width: GAME_WIDTH * scale }, preview: graphics(),

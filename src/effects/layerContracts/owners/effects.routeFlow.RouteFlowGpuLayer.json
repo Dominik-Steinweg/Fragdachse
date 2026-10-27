@@ -1,0 +1,162 @@
+{
+  "owner": "effects/routeFlow/RouteFlowGpuLayer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createRouteFlowGpuLayer/image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createRouteFlowLayers/layers/createRouteFlowGpuLayer/0",
+        "expression": "DEPTH.DECALS + 0.06",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createRouteFlowLayers/layers/createRouteFlowGpuLayer/1",
+        "expression": "DEPTH.GROUND_FOG + 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createRouteFlowLayers/layers/createRouteFlowGpuLayer/2",
+        "expression": "DEPTH.CANOPY + 0.3",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createRouteFlowMinimapLayer/createRouteFlowGpuLayer/createRouteFlowGpuLayer/0",
+        "expression": "0",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        5,
+        10,
+        16,
+        25
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/routeFlow/RouteFlowGpuLayer.ts:createRouteFlowGpuLayer/image/setDepth/0",
+      "owner": "effects/routeFlow/RouteFlowGpuLayer.ts",
+      "component": "createRouteFlowGpuLayer/image/setDepth/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "createRouteFlowGpuLayer/image/setDepth/0",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:effects/routeFlow/RouteFlowGpuLayer.ts:createRouteFlowLayers/layers/createRouteFlowGpuLayer/0",
+      "owner": "effects/routeFlow/RouteFlowGpuLayer.ts",
+      "component": "createRouteFlowLayers/layers/createRouteFlowGpuLayer/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        5.06
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createRouteFlowLayers/layers/createRouteFlowGpuLayer/0",
+        "expression": "DEPTH.DECALS + 0.06"
+      }
+    },
+    {
+      "id": "cpu:effects/routeFlow/RouteFlowGpuLayer.ts:createRouteFlowLayers/layers/createRouteFlowGpuLayer/1",
+      "owner": "effects/routeFlow/RouteFlowGpuLayer.ts",
+      "component": "createRouteFlowLayers/layers/createRouteFlowGpuLayer/1",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        5.35
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createRouteFlowLayers/layers/createRouteFlowGpuLayer/1",
+        "expression": "DEPTH.GROUND_FOG + 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/routeFlow/RouteFlowGpuLayer.ts:createRouteFlowLayers/layers/createRouteFlowGpuLayer/2",
+      "owner": "effects/routeFlow/RouteFlowGpuLayer.ts",
+      "component": "createRouteFlowLayers/layers/createRouteFlowGpuLayer/2",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        20.3
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "createRouteFlowLayers/layers/createRouteFlowGpuLayer/2",
+        "expression": "DEPTH.CANOPY + 0.3"
+      }
+    },
+    {
+      "id": "cpu:effects/routeFlow/RouteFlowGpuLayer.ts:createRouteFlowMinimapLayer/createRouteFlowGpuLayer/createRouteFlowGpuLayer/0",
+      "owner": "effects/routeFlow/RouteFlowGpuLayer.ts",
+      "component": "createRouteFlowMinimapLayer/createRouteFlowGpuLayer/createRouteFlowGpuLayer/0",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        0
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "createRouteFlowMinimapLayer/createRouteFlowGpuLayer/createRouteFlowGpuLayer/0",
+        "expression": "0"
+      }
+    }
+  ]
+}

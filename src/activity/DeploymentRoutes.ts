@@ -109,6 +109,8 @@ export interface DeploymentRouteLine {
   /** Without a free path enemies break through here (World pixels), else `null`. */
   readonly breach: { readonly x: number; readonly y: number } | null;
   readonly source: { readonly x: number; readonly y: number };
+  /** World-pixel rectangle of the spawn zone the route leaves from; `null` for pit mouths and edge bands. */
+  readonly zone: Rect | null;
   /** The route matters for the base: it ends (or breaks through) inside the detail view. */
   readonly relevant: boolean;
 }
@@ -207,7 +209,10 @@ export class DeploymentRoutePlanner {
     const detail = this.input.detail;
     const relevant = end !== null && end.x >= detail.x && end.x <= detail.x + detail.width
       && end.y >= detail.y && end.y <= detail.y + detail.height;
-    return { key: request.key, target: request.target, points, reachedGoal, breach, source, relevant };
+    const place = request.source.place, { offsetX, offsetY } = this.input.worldMetrics;
+    const zone = place.kind === 'area' ? { x: offsetX + place.area.gridX * CELL_SIZE, y: offsetY + place.area.gridY * CELL_SIZE,
+      width: place.area.widthCells * CELL_SIZE, height: place.area.heightCells * CELL_SIZE } : null;
+    return { key: request.key, target: request.target, points, reachedGoal, breach, source, zone, relevant };
   }
 
   private compute(constructionCells: readonly { gridX: number; gridY: number }[]): void {

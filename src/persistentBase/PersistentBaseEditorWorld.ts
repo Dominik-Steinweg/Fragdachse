@@ -23,8 +23,13 @@ import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, resolveSkyState } from '../effects/T
 import { GpuVfxSystem } from '../effects/gpu/GpuVfxSystem';
 import { PowerUpRenderer } from '../powerups/PowerUpRenderer';
 import { bindBaseFortPresentation } from '../world/BaseFortPresentationBinding';
+import { resolveCoopDefenseMapConfig } from '../world/WorldDefinitionResolution';
+import { DeploymentRoutePlanner, type DeploymentRoutePlan } from '../activity/DeploymentRoutes';
+import { RouteFlowPresentation } from '../effects/routeFlow/RouteFlowPresentation';
+import type { RouteFlowRoute } from '../effects/routeFlow/RouteFlowStore';
 import type { ArenaLayout, SyncedPlaceableRock, SyncedPowerUpPedestal, TurretWeaponId } from '../types';
-import { buildPersistentBaseCoreBaseConfig, type PersistentBaseAreaStage, type PersistentBaseBuildArea } from './PersistentBaseCore';
+import { buildPersistentBaseCoreBaseConfig, isCellInsidePersistentBaseBuildArea, type PersistentBaseAreaStage,
+  type PersistentBaseBuildArea } from './PersistentBaseCore';
 import type { BaseEditorObject, PersistentBaseEditorModel } from './PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from './PersistentBaseEditorAppearance';
 import { getPersistentBaseEditorDetailWindow, getPersistentBaseEditorSize, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS } from './PersistentBaseExpansionPreview';
@@ -92,6 +97,10 @@ export class PersistentBaseEditorWorld {
   private readonly occluders: LightOccluderIndex;
   private readonly blocked = new Set<string>();
   private mates: readonly PersistentBaseEditorMateObject[] = [];
+  /** Cells the draft, the rewards and the teammates block in the round, as the routes see them. */
+  private constructionCells: readonly { gridX: number; gridY: number }[] = [];
+  private readonly routePlanner: DeploymentRoutePlanner | null;
+  private readonly routes: RouteFlowPresentation | null;
   private shadowsInitialized = false;
   private readonly timeOfDay = DEFAULT_LOBBY_TIME_OF_DAY_MINUTES;
 
@@ -181,6 +190,13 @@ export class PersistentBaseEditorWorld {
       shadow:this.shadows,lighting:this.lighting,fog:null,postFx:this.fx,layout:this.layout,worldContext:this.world,
       structures:{setSunlight:(light)=>this.bases.setFortSunlight(light)},
     });
+    // Enemy routes of the next round over the real terrain (Lagekarte); only maps with a mission.
+    const mapConfig = this.terrain ? resolveCoopDefenseMapConfig({ definitionId: this.terrain.definition.id }, null) : null;
+    this.routePlanner = this.terrain && mapConfig ? new DeploymentRoutePlanner({ mapConfig, worldMetrics: this.world.metrics,
+      layout: this.terrain.layout, bases: this.world.bases.filter((base) => !base.dormant),
+      spawnFocusCell: this.terrain.definition.spawnFocusCell, detail: this.view }) : null;
+    this.routes = this.routePlanner ? new RouteFlowPresentation(scene, this.lighting) : null;
+    if (this.routes) this.sunlight.setActivityVoidDanger(this.routes.voidDanger);
     this.sunlight.update(this.timeOfDay,0);
     this.syncObjects();
   }
@@ -196,6 +212,29 @@ export class PersistentBaseEditorWorld {
   setMates(mates: readonly PersistentBaseEditorMateObject[]): void {
     this.mates = mates;
     this.syncObjects();
+  }
+  /**
+   * Plans the next round's enemy routes with the draft as it stands and shows them. `null` without
+   * map terrain or mission.
+   */
+  planRoutes(): DeploymentRoutePlan | null {
+    if (!this.routePlanner || !this.routes) return null;
+    const plan = this.routePlanner.plan(this.constructionCells);
+    const toFlow = (dim: number) => plan.routes.filter((route) => route.points.length > 1)
+      .map((route): RouteFlowRoute => ({ points: route.points, breach: route.breach !== null, strength: route.relevant ? 1 : dim }));
+    const zones = new Map<string, { x: number; y: number; width: number; height: number }>();
+    for (const route of plan.routes) if (route.relevant && route.zone) zones.set(`${route.zone.x}:${route.zone.y}`, route.zone);
+    const { anchor, siteArea } = this;
+    this.routes.setPlan({
+      view: plan.mode === 'routes' ? toFlow(.4) : [], overview: toFlow(.75), zones: [...zones.values()], clip: this.view,
+      isInsideBuildArea: (x, y) => isCellInsidePersistentBaseBuildArea(Math.floor(x / CELL_SIZE) - anchor.gridX,
+        Math.floor(y / CELL_SIZE) - anchor.gridY, siteArea),
+    });
+    return plan;
+  }
+  /** The routes also flow over the situation map's minimap, in its panel space. */
+  attachRouteMinimap(container: Phaser.GameObjects.Container, placement: { readonly originX: number; readonly originY: number; readonly unit: number }): void {
+    this.routes?.attachMinimap(container, placement);
   }
   /** Update object identities in place; terrain, lighting and camera resources stay alive. */
   syncObjects(): void {
@@ -255,6 +294,7 @@ export class PersistentBaseEditorWorld {
       entry.visual.image.destroy(); entry.visual.aura.destroy(); this.turrets.delete(key);
     }
     for (const [key, visual] of this.watchtowers) if (!watchtowerKeys.has(key)) { visual.destroy(); this.watchtowers.delete(key); }
+    this.constructionCells = [...walls.values()].map(({ gridX, gridY }) => ({ gridX, gridY }));
     this.powerUps.syncPedestals(pedestals);
     this.powerUps.sync(pedestals.map(p => ({ uid: p.id, defId: p.defId, x: p.x, y: p.y })));
     const runtime: SyncedPlaceableRock[] = [];
@@ -299,9 +339,9 @@ export class PersistentBaseEditorWorld {
       && this.shadows.isStaticReadyForView(view);
   }
   update(now: number, delta: number, view: WorldRect): void {
-    this.arena.groundSurface?.updateResidency(view);
-    this.arena.rockOverlaySurface?.updateResidency(view);
-    this.arena.rockVisualSystem?.updateVisibility(view);
+    // Water masks are prepared over several frames, as in a round's presentation frame.
+    this.arena.waterSurface?.prepareMasks();
+    ArenaBuilder.updateSurfaceResidency(this.arena, view);
     this.shadows.updateStaticResidency(view);
     // Turret mesh shadows; there are no players, projectiles or trains in this World.
     this.shadows.syncDynamicShadows([], [], null);
@@ -312,6 +352,7 @@ export class PersistentBaseEditorWorld {
     this.gpu.update(delta);
     this.presentationTimeMs+=Math.max(0,delta);
     this.powerUps.updatePresentation(this.presentationTimeMs);
+    this.routes?.update(delta);
     this.sunlight.update(this.timeOfDay,this.presentationTimeMs);
     this.lighting.update();
     this.fx.update(delta);
@@ -322,6 +363,7 @@ export class PersistentBaseEditorWorld {
   destroy(): void {
     for (const visual of this.watchtowers.values()) visual.destroy();
     this.watchtowers.clear();
+    this.routes?.destroy(); this.routePlanner?.destroy();
     this.sunlight.destroy();
     this.fx.destroy(); this.powerUps.destroy(); this.gpu.destroy();
     this.animations.clear();
