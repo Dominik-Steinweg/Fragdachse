@@ -154,13 +154,29 @@ class Fort(Style):
             oak=m('Weathered oak', (104, 84, 60), .32), tar=m('Dark tarred timber', (58, 50, 42), .2), rope=m('Hemp cord', (142, 128, 94), .3),
             iron=m('Forged iron', (92, 96, 94), .25), dark=m('Soot iron', (43, 44, 39), .18),
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
-            brass=m('Worn brass fittings', (158, 119, 61), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7))
+            brass=m('Worn brass fittings', (158, 119, 61), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7),
+            mossy=m('Mossy log tip', (90, 100, 56), .35), moss=m('Masonry moss', (60, 76, 38), .5))
 
     def log(self, x, y, rng, r=None, top=None):
+        """Individual mossy sharpened stake, as on the persistent core (base_fort_master)."""
         r = r or self.R + rng.uniform(-.01, .008)
-        h = top or self.PZ + .72 + rng.uniform(-.08, .08)
+        h = top or self.PZ + .72 + rng.uniform(-.06, .06)
         self.b.cylinder((x, y, h / 2), r, h, self.p['bark'], 10, .008, None, rng.uniform(0, 1))
-        cone(self.c, 'Sharpened log tip', (x + rng.uniform(-.008, .008), y + rng.uniform(-.008, .008)), r, h, h + .15, self.p['cut'], 8, 0, rng.uniform(0, 1))
+        cone(self.c, 'Sharpened log tip', (x + rng.uniform(-.008, .008), y + rng.uniform(-.008, .008)), r, h, h + .16,
+             self.p['mossy' if rng.random() < .55 else 'cut'], 8, 0, rng.uniform(0, 1))
+        if rng.random() < .7:
+            a = rng.uniform(0, math.tau)
+            self.b.ell((x + r * .55 * math.cos(a), y + r * .55 * math.sin(a), h - .02), (r * .6, r * .45, .025), self.p['moss'], 8, 4)
+
+    def post_lantern(self, x, y, rng):
+        """Small square gate post with a lantern standing on top, as on the core."""
+        b, p, h = self.b, self.p, 1.45
+        b.box((x, y, h / 2), (.18, .18, h), p['oak'], .012, None, .006, rng)
+        b.box((x, y, h + .02), (.21, .21, .04), p['tar'], .005)
+        b.box((x, y, h + .06), (.13, .13, .04), p['dark'], .006)
+        b.cylinder((x, y, h + .14), .05, .12, p['lamp'], 10, 0)
+        b.box((x, y, h + .215), (.14, .14, .025), p['dark'], .006)
+        self.socket('lamp', x, y, h + .14)
 
     def quadrant(self, q, rng):
         b, p, H, R = self.b, self.p, self.HALF, self.R
@@ -188,21 +204,16 @@ class Fort(Style):
     def feature(self, kind, cx, cy, mask, rng):
         b, p = self.b, self.p
         if kind == 'corner':
-            # Corner post with a lantern hanging out over the outer corner.
+            # A heavier corner stake and a fire basket in the inner corner of the deck.
             dx, dy = corner_direction(mask)
             x, y = cx + dx * (self.HALF - self.R - .02), cy + dy * (self.HALF - self.R - .02)
-            self.log(x, y, rng, .12, self.PZ + 1.0)
-            b.rod((x, y, self.PZ + .95), (x + dx * .2, y + dy * .2, self.PZ + .95), .015, p['dark'], 6)
-            self.lantern(x + dx * .2, y + dy * .2, self.PZ + .66)
+            self.log(x, y, rng, .12, self.PZ + .8)
+            self.brazier(cx + dx * .22, cy + dy * .22, self.PZ, .1, rng)
         elif kind == 'end':
-            # Two gate posts on the end corners: a torch on one, a lantern on the other.
+            # Two uniform gate posts on the end corners, each with a lantern on top.
             dx, dy = end_direction(mask)
-            for side, light in ((-1, 'torch'), (1, 'lamp')):
-                x, y = cx + dx * .36 - dy * side * .34, cy + dy * .36 + dx * side * .34
-                b.box((x, y, (self.PZ + 1.0) / 2), (.22, .22, self.PZ + 1.0), p['oak'], .015, None, .008, rng)
-                b.box((x, y, self.PZ + 1.02), (.25, .25, .04), p['tar'], .006)
-                if light == 'torch': self.brazier(x, y, self.PZ + 1.04, .075, rng)
-                else: self.lantern(x + dx * .16, y + dy * .16, self.PZ + .62)
+            for side in (-1, 1):
+                self.post_lantern(cx + dx * .36 - dy * side * .34, cy + dy * .36 + dx * side * .34, rng)
 
 
 # -- Feldstellung: sandbag walls, earth floor, steel turret plate, oil-drum fire ------------

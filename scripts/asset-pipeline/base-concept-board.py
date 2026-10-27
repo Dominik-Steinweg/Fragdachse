@@ -32,7 +32,10 @@ TURRETS = dict(core=[((0, 0), 'plasma', 225), ((1, 0), 'rocket', 260), ((6, 1), 
                      ((6, 6), 'plasma', 45), ((0, 5), 'rocket', 160), ((5, 6), 'spore', 0)],
                outposts=[((1, 1), 'plasma', 300), ((3, 1), 'rocket', 210), ((7, 2), 'spore', 0),
                          ((6, 7), 'plasma', 180), ((15, 9), 'rocket', 20)])
-LAMP_GAIN = 2.4
+LAMP_GAIN = 3.0
+# Light-map lights by socket kind: colour, strength, reach in metres; tuned so that pools stay local
+# and the courtyard centre stays dark, as in the chosen night reference.
+GAME_LIGHTS = {'lamp': ((1.0, .68, .38), .55, 2.2), 'fire': ((1.0, .55, .25), .75, 2.8)}
 N, NE, E, SE, S, SW, W, NW = 1, 2, 4, 8, 16, 32, 64, 128
 
 
@@ -72,8 +75,8 @@ def turret_layer(size, layout):
     return np.asarray(layer, float) / 255
 
 
-def compose(folder, ground, style, layout, turrets=True):
-    shot, box = CROPS[layout][:2]
+def compose(folder, ground, style, layout, turrets=True, fog=True):
+    shot, box, scale = CROPS[layout][:3]
     cap_d = np.asarray(Image.open(ground / f'map04-day__{shot}.png').convert('RGB').crop(box), float) / 255
     cap_n = np.asarray(Image.open(ground / f'map04-night__{shot}.png').convert('RGB').crop(box), float) / 255
     d = folder / f'{style}-{layout}'
@@ -84,21 +87,34 @@ def compose(folder, ground, style, layout, turrets=True):
     if not turrets: turret[:] = 0
     ta = turret[:, :, 3:4]
     day_rgb = turret[:, :, :3] * ta + day_rgb * (1 - ta)
-    # Night: ambient ratio of the captures, then light-map style lamp light.
+    # Night like the game's light map: radial lights of limited reach at the model's light sockets,
+    # multiplied onto the albedo, on top of the capture's own moonlight; glowing glass from the lamp pass.
     ld, ln = lin(cap_d), lin(cap_n)
-    ambient = float(np.clip(np.median(ln.mean(axis=2) / np.maximum(ld.mean(axis=2), .01)), .02, .4))
-    light = lin(lamp) / .8 * LAMP_GAIN
-    ground_n = ln + ld * light
+    sockets = json.loads((d / 'concept.json').read_text(encoding='utf8'))['sockets']
+    h, w = cap_d.shape[:2]
+    gy, gx = np.mgrid[0:h, 0:w].astype(float)
+    wm, hm = w / scale, h / scale
+    radial = np.zeros((h, w, 3))
+    for name, (sx, sy, _) in sockets.items():
+        kind = name.split('_')[0]
+        if kind not in GAME_LIGHTS: continue
+        colour, power, reach = GAME_LIGHTS[kind]
+        dist = np.hypot(gx - (sx + wm / 2) * scale, gy - (hm / 2 - sy) * scale) / scale
+        radial += np.clip(1 - dist / reach, 0, 1)[..., None] ** 2 * power * np.array(colour)
+    # Per channel, so structures take on the capture's cool moonlight instead of only getting darker.
+    ambient = np.clip(np.median((ln / np.maximum(ld, .01)).reshape(-1, 3), axis=0), .02, .4)
+    glass = np.clip(lin(lamp) * LAMP_GAIN - .25, 0, None) * mask
+    ground_n = ln + ld * radial
     struct_day = lin(np.clip(day[:, :, :3], 0, 1))
-    struct_n = struct_day * ambient + lin(lamp) * LAMP_GAIN
+    struct_n = struct_day * (ambient + radial) + glass
     night = struct_n * mask + ground_n * (1 - mask)
-    night = lin(turret[:, :, :3]) * (ambient + light) * ta + night * (1 - ta)
+    night = lin(turret[:, :, :3]) * (ambient + radial) * ta + night * (1 - ta)
     # Glow round lanterns and fire, as the game's bloom adds it.
-    hot = np.clip(lin(lamp) * LAMP_GAIN - .3, 0, None) * mask
+    hot = glass
     w1, r1, w2, r2 = BLOOM
     night = night + w1 * blur(hot, r1) + w2 * blur(hot, r2)
     day_lin = lin(day_rgb)
-    if shot in FOG_SHOT:
+    if fog and shot in FOG_SHOT:
         fog_d = np.asarray(Image.open(ground / f'map04-day__{FOG_SHOT[shot]}.png').convert('RGB').crop(box), float) / 255
         fog_n = np.asarray(Image.open(ground / f'map04-night__{FOG_SHOT[shot]}.png').convert('RGB').crop(box), float) / 255
         day_lin = day_lin + np.clip(lin(fog_d) - ld, 0, None)
@@ -256,6 +272,42 @@ def palisade_board(folder, ground, round_label):
     board.save(folder / 'board-palisade.png')
 
 
+def reference_board(folder, ground, round_label, ref_day, ref_night):
+    """Blender fort beside the chosen ComfyUI reference, day and night, plus details and outposts."""
+    style, gap, S = 'fort', 20, 352
+    # No fog here: the references were made without it, and fog comes per map in the game.
+    day, night, _ = compose(folder, ground, style, 'core-gravel', fog=False)
+    bare_day, bare_night, _ = compose(folder, ground, style, 'core-gravel', False, fog=False)
+    out_day, out_night, _ = compose(folder, ground, style, 'outposts', fog=False)
+    rd = Image.open(ref_day).convert('RGB').resize((S, S), Image.LANCZOS)
+    rn = Image.open(ref_night).convert('RGB').resize((S, S), Image.LANCZOS)
+    obl = Image.open(folder / f'{style}-core-gravel' / 'oblique.png').convert('RGB')
+    obl = obl.resize((int(obl.width * 288 / obl.height), 288), Image.LANCZOS)
+    quarter, centre = (96, 96, 384, 384), (208, 208, 496, 496)
+    rows = [
+        [('Referenz 5 · Tag', rd), ('Blender · Tag 1:1', game(day)), ('Referenz 5 · Nacht', rn), ('Blender · Nacht 1:1', game(night))],
+        [('Bastion und Tor · Tag · 2×', bare_day.crop(quarter)), ('dasselbe · Nacht · 2×', bare_night.crop(quarter)),
+         ('Hofmitte · 2×', bare_day.crop(centre)), ('Schrägansicht (nur zur Form)', obl)],
+        [('Vorposten (Bausatz) · Tag 1:1', game(out_day)), ('Vorposten · Nacht 1:1', game(out_night))],
+    ]
+    width = max(sum(im.width for _, im in row) + gap * (len(row) + 1) for row in rows)
+    height = 84 + sum(28 + max(im.height for _, im in row) + gap for row in rows)
+    board = Image.new('RGB', (width, height), BG)
+    d = ImageDraw.Draw(board)
+    label(d, (gap, 12), f'{round_label} · Palisadenschanze in Blender nach Referenz 5', 26)
+    label(d, (gap, 48), 'Spielboden Karte 04 (12:00 / 23:00) als Grund, ohne Nebel wie die Referenz, Nachtleuchten wie Bloom nachgestellt · '
+                        '1:1 = 32 px pro Feld · Probetürme mittig auf ihren Zellen', 15, MUTED)
+    y = 84
+    for row in rows:
+        x = gap
+        for text, im in row:
+            label(d, (x, y), text, 16)
+            board.paste(im, (x, y + 28))
+            x += im.width + gap
+        y += 28 + max(im.height for _, im in row) + gap
+    board.save(folder / 'board-reference.png')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('folder')
@@ -263,8 +315,12 @@ def main():
     ap.add_argument('--styles', default='burg,fort,feld,wall')
     ap.add_argument('--round', default='R1b')
     ap.add_argument('--palisade', action='store_true', help='only the palisade board (R2 layouts)')
+    ap.add_argument('--reference', nargs=2, metavar=('DAY', 'NIGHT'), help='palisade board beside a reference pair')
     args = ap.parse_args()
     folder, ground = Path(args.folder), Path(args.ground)
+    if args.reference:
+        reference_board(folder, ground, args.round, *args.reference)
+        return
     if args.palisade:
         palisade_board(folder, ground, args.round)
         return
