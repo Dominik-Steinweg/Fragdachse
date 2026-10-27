@@ -1,6 +1,7 @@
 # Lagekarte im Bauhof (V2)
 
-Status: Konzept vom 2026-10-27, in Umsetzung im Branch `lagekarte`. Ersetzt
+Status: Konzept vom 2026-10-27, umgesetzt (P0–P8) am 2026-10-27, Sichtprüfung als Host im Browser;
+Spieltest mit Gästen offen. Ersetzt
 [V1](Fragdachse_GDD_Lagekarte_Bauhof_V1.md). Grundlage ist die
 [Gameplay-Analyse vom 22.10.2026](../reports/gameplay-review-2026-10-22-inspector-td.md), Vorschlag V1.
 Die Entscheidungen hat der Projektinhaber am 22. und 27.10.2026 getroffen.
@@ -56,7 +57,7 @@ Drei weitere Lücken:
 | E14 | **Ansicht wie in der Mission:** Norden oben. Das Gelände wird nie gedreht; nur die Basisobjekte erscheinen mit der Drehung des Hosts. |
 | E15 | **Wege zum Spieler zählen.** Das Ziel einer Route ergibt sich wie in der Mission aus der Gegnerart: Basisstürmer laufen zu den Zielbasen, Jäger zur erwarteten Spielerposition. |
 | E16 | **Die Vorschau erscheint nur, wo sie Sinn ergibt.** Der Anzeigemodus folgt aus den Routen (Abschnitt 6.3). Maps mit vorgelagerter Basis zeigen Gelände, Hinweis und die Routen in der Miniübersicht. |
-| E17 | **Routenstil „Void-Strömung“.** Violette Partikel fließen im Shader zur Basis, darunter eine Bodenspur. Spawnzonen atmen mit dem Void-Dunst, Eintrittspunkte glühen, „Kein freier Weg“ erscheint als Druckwelle. Keine geraden Linien und keine Pfeile. |
+| E17 | **Routenstil „Void-Strömung“.** Violetter Void-Dunst wabert im Shader zur Basis, darunter eine Bodenspur; keine weißen Funken. Spawnzonen atmen mit dem Void-Dunst, Eintrittspunkte glühen, „Kein freier Weg“ erscheint als Druckwelle. Keine geraden Linien und keine Pfeile. |
 
 ## 4. Ablauf für den Spieler
 
@@ -86,13 +87,14 @@ Die Darstellung folgt [`visual-guidelines.md`](../ai/visual-guidelines.md) und d
 - **Void-Strömung (Routen):**
   - **Bodenspur:** eine dunkle, feuchte Void-Verfärbung unter der Route. Wo sich Routen
     überlagern, wird sie breiter und kräftiger.
-  - **Strom:** Fäden und Partikel fließen zur Basis. Die Phase hängt an der Distanz zum Ziel, darum
-    fließen zusammenlaufende Routen ohne Bruch weiter.
-  - **Quellen** wirbeln. Routen, die von außerhalb kommen, glühen am Rand des Detailbereichs auf.
+  - **Strom:** Violetter Void-Dunst treibt in zwei Schichten zur Basis und rollt dabei über sich
+    selbst; hellere Schlieren statt Funken. Die Phase hängt an der Distanz zum Ziel, darum fließen
+    zusammenlaufende Routen ohne Bruch weiter.
+  - **Quellen** wirbeln. Spawnzonen, deren Routen die Basis erreichen, atmen mit ihrem Void-Dunst.
   - **Eintrittspunkte:** Wo eine Route in den Baubereich eintritt, glüht der Rand.
   - **Kein freier Weg:** Der Strom läuft heiß gegen die Mauer und erzeugt einen Druckring. Dazu
     erscheint die Warnung „Kein freier Weg – Gegner brechen durch“.
-  - **Lage:** Der Strom liegt über den Baumkronen; die Bodenspur bleibt am Boden.
+  - **Lage:** Das Leuchten des Stroms liegt über den Baumkronen; Dunst und Bodenspur bleiben am Boden.
 - **Mitspieler:** in Spielerfarbe wie in der Mission, nicht anwählbar.
 - **Konflikte:** pulsierender roter Halo am Objekt und ein kurzer Grund in der Liste rechts.
 - **Reichweitenringe:** ein Schalter für alle eigenen Türme. Das ausgewählte Objekt zeigt seinen Ring
@@ -231,3 +233,4 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
   Maps mit vorgelagerter Basis zeigen Gelände, Hinweis und Übersicht.
 - 2026-10-27: Routenstil Void-Strömung (E17). Darstellung des Forts wie in der Mission, inklusive
   Fackeln, Feuerschalen und Turmschatten.
+- 2026-10-27 (Sichtprüfung): Statt weißer Funken bewegt sich violetter Void-Dunst.

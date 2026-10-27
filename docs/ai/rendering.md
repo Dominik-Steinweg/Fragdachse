@@ -391,6 +391,9 @@ Turmzellen bleiben zellbasiert; das Fort präsentiert sie nur.
   `AutoTiler`), Variante deterministisch aus der Zellposition, Farb-Passes überlagert, Caster-Höhen per Maximum. Danach
   gelten dieselben Relief-, Schatten-, Emissions-, Licht- und Partikelregeln wie beim Kern; die Bodenschürze bleibt.
 - Der Zellzerfall blendet den Bau stufenweise aus; die Solid-Maske ist der Nebelstempel.
+- Jede World-Darstellung mit Basen verdrahtet Fort, Licht, Fortschatten und GPU-Partikel über
+  [bindBaseFortPresentation](../../src/world/BaseFortPresentationBinding.ts), die Runde wie der Bauhof. Ein eigener
+  Aufbau verliert Fackeln, Feuerschalen oder den Schatten des Forts.
 
 ## Große World-Flächen
 

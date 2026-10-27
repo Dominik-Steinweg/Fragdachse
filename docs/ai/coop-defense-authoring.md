@@ -15,7 +15,7 @@ Der Adapter normalisiert nicht erneut, materialisiert keine Defaults und ersetzt
 
 Eine Activity referenziert ihre World über worldDefinitionId und liefert keine alternative Layout- oder Metrics-Quelle. Dadurch kann dieselbe World ohne Activity geladen, angezeigt oder activity-unabhängig resident gehalten werden.
 
-Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und beschreibt nur die Stelle des Basiskerns: baseId, Anker und Ausrichtung. Sie authoriert keine Build Area; diese wird ausschließlich aus der host-autoritativ eingefrorenen `PersistentBaseAreaStage` über `resolvePersistentBaseBuildAreaForStage()` abgeleitet. Die Kernform ist Code-Definition; die Map-Normalisierung erzeugt daraus den `bases`-Eintrag und prüft die räumliche Reservierung. Eine Map, die dieselbe baseId zusätzlich selbst in `bases` beschreibt, wird abgelehnt: Zwei Beschreibungen derselben Basis könnten über Maps hinweg auseinanderlaufen.
+Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und beschreibt nur die Stelle des Basiskerns: baseId und Anker. Eine Ausrichtung wird abgelehnt; die Basis dreht nur der Raum-Host. Sie authoriert keine Build Area; diese wird ausschließlich aus der host-autoritativ eingefrorenen `PersistentBaseAreaStage` über `resolvePersistentBaseBuildAreaForStage()` abgeleitet. Die Kernform ist Code-Definition; die Map-Normalisierung erzeugt daraus den `bases`-Eintrag und prüft die räumliche Reservierung. Eine Map, die dieselbe baseId zusätzlich selbst in `bases` beschreibt, wird abgelehnt: Zwei Beschreibungen derselben Basis könnten über Maps hinweg auseinanderlaufen.
 
 **Bereits normalisierte Coop-Configs nicht erneut normalisieren.** `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Der erste Lauf materialisiert zum Beispiel die persistente Basis und für Gruppen mit generierter Inline-`spawnArea` (Dawn) den Default für `front`; ein zweiter Lauf kann dann an der gegenseitigen Ausschließlichkeit scheitern. Adapter erhalten daher bereits normalisierte Configs.
 
@@ -222,6 +222,12 @@ Offsets. Verliert eine gespeicherte `base-surface`-Reward-Zelle durch eine Form�
 setzt der Ladepfad das Reward auf die nächste freie Basiszelle um oder macht es wieder unplatziert
 ([`relocateStrandedBaseSurfaceRewards`](../../src/persistentBase/PersistentBasePlacementRules.ts)).
 Ein Reward bleibt nie unsichtbar platziert.
+
+Alle Basisobjekte – Rewards, persönliche Beiträge und Turmwinkel – werden kanonisch, also ungedreht,
+gespeichert. Die Drehung (`quarterTurns`) steht im Basisdokument des Hosts, und jeder Weg zwischen
+Speicher und Welt läuft über denselben Bezugsrahmen
+([`PersistentBaseFrame`](../../src/persistentBase/PersistentBaseFrame.ts)). Der Kern ist unter
+Vierteldrehungen deckungsgleich, deshalb dreht sich seine Fort-Grafik nie.
 
 Verwaltungsrechte hängen an der Herkunft des Objekts, nicht an der Klasse des handelnden Spielers.
 Ein base-owned Reward gehört der Basis des Raum-Hosts; nur der Host darf es platzieren, verschieben

@@ -61,7 +61,7 @@ gesetzt.
 | [Spawnbauwerk V1 (Brutkadaver)](Fragdachse_GDD_Spawnbauwerk_V1.md) | umgesetzt auf `main` (Maps 13 und 17, Dawn-Brutnest; Ankündigung, Aufsteigen aus dem Nest, Knochenexplosion; Protokoll 48); Spieltest offen |
 | [Lobby-Basisgebäude V1](Fragdachse_GDD_Lobby_Basisgebaeude_V1.md) | auf Branch `base-buildings` (Werkstatt, Bauhof, Ausrüstung, Schrotthändler mit Mitarbeitern); Endabnahme offen |
 | [Lagekarte im Bauhof V1](Fragdachse_GDD_Lagekarte_Bauhof_V1.md) | ersetzt durch V2 |
-| [Lagekarte im Bauhof V2](Fragdachse_GDD_Lagekarte_Bauhof_V2.md) | in Umsetzung im Branch `lagekarte` (P0–P8); Grundlage: [Gameplay-Analyse](../reports/gameplay-review-2026-10-22-inspector-td.md) |
+| [Lagekarte im Bauhof V2](Fragdachse_GDD_Lagekarte_Bauhof_V2.md) | umgesetzt (P0–P8), Spieltest mit Gästen offen; Grundlage: [Gameplay-Analyse](../reports/gameplay-review-2026-10-22-inspector-td.md) |
 | Persistente Basis Phase 3: [Roadmap](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3_Roadmap.md), [3C](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3C_Implementierungsplan.md), [3D V4](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3D_V4.md), [3E](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3E.md), [3F V3](Persistent%20Base%20Phase%203/Fragdachse_GDD_Persistente_Basis_Phase3F_V3.md) | umgesetzt; den Stand der einzelnen Phasen nennt die Roadmap |
 
 ## Welt, Darstellung und Technik

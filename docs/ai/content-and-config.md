@@ -44,7 +44,8 @@ Die Lobby ist eine normale authored World mit world:lobby. Sie hat keine authore
 ## Persistent World-Sites
 
 Eine persistente Base-Site ist World-Inhalt: Die World bindet Site, kanonischen Basiskern, Lage,
-Ausrichtung, Grunddauerhaftigkeit und ihre World-Geometrie. Sie trägt keine einzelnen persönlichen
+Grunddauerhaftigkeit und ihre World-Geometrie. Eine Ausrichtung trägt sie nicht: Die Drehung der
+Basis gehört als Vierteldrehung dem Basisdokument des Raum-Hosts. Sie trägt keine einzelnen persönlichen
 Konstruktionen und authoriert keine Build Area. Die aktive Build Area wird ausschließlich aus der
 host-autoritativ eingefrorenen `PersistentBaseAreaStage` über
 `resolvePersistentBaseBuildAreaForStage()` abgeleitet. Die zugehörige Basis wird aus der Site
