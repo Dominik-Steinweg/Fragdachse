@@ -1,4 +1,5 @@
 import { WorldSunlightPresentation, type WorldSunlightTargets } from '../effects/sunlight/WorldSunlightPresentation';
+import { bindBaseFortPresentation } from './BaseFortPresentationBinding';
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
 import { DEFAULT_FOG_STRENGTH } from '../config/groundFog';
@@ -28,7 +29,6 @@ import { generateWorldLayout } from './WorldLayout';
 import { WorldMaterialization } from './WorldMaterialization';
 import { WorldPresentationBinding } from './WorldPresentationBinding';
 import { LobbyStructureRenderer } from '../arena/lobbyStructures/LobbyStructureRenderer';
-import { BaseFortFx } from '../arena/baseStructures/BaseFortFx';
 import { lobbyBuildingsOfWorld } from '../config/authoring/lobbyBuildings';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import type { WorldPresentationHandoff } from './WorldPresentationHandoff';
@@ -292,9 +292,8 @@ export function materializeWorldComposition(
       width: world.metrics.widthPx, height: world.metrics.heightPx }, world.descriptor.seed,
       layout.water ?? [], world.definition?.fogStrength ?? DEFAULT_FOG_STRENGTH)
     : null;
-  baseManager?.setLightingSystem(input.lighting);
-  const gpuVfx = input.gpuVfx ?? null;
-  baseManager?.setFortPresentation(input.sunlight?.shadow ?? null, gpuVfx ? emitters => new BaseFortFx(gpuVfx, emitters) : null);
+  if (baseManager) bindBaseFortPresentation(baseManager, { lighting: input.lighting,
+    shadow: input.sunlight?.shadow ?? null, gpuVfx: input.gpuVfx ?? null });
   if (input.createRockRegistry) materialization.setRocks(new RockRegistry(layout));
 
   if(presentationRequired && input.sunlight && input.runtime.presentationFrame) {

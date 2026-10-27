@@ -15,7 +15,10 @@ describe('persistent base expansion preview', () => {
       const frame = getPersistentBaseEditorFraming(panel, area);
       expect(frame.zoom).toBeGreaterThan(0);
       expect(frame.zoom).toBeLessThanOrEqual(1);
-      expect(frame.worldSize * frame.zoom).toBeCloseTo(frame.view.width);
+      expect(frame.world.width * frame.zoom).toBeCloseTo(frame.view.width);
+      // The base sits in the middle of its own World.
+      expect(frame.anchor.x).toBeCloseTo(frame.view.x + frame.view.width / 2);
+      expect(frame.anchor.y).toBeCloseTo(frame.view.y + frame.view.height / 2);
       expect(frame.view.x).toBeGreaterThan(panel.x);
       expect(frame.view.y + frame.view.height).toBeLessThan(panel.y + panel.height);
       const edges = projectPersistentBaseBoundary(buildPersistentBaseAreaBoundary(area), frame);

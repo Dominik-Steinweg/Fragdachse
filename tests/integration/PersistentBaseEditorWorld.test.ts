@@ -33,7 +33,8 @@ describe('base editor World terrain', () => {
     const powerUps = { syncPedestals: vi.fn(), sync: vi.fn() };
     const shadows = { rebuildStaticLayoutShadows: vi.fn() };
     const world = Object.assign(Object.create(PersistentBaseEditorWorld.prototype), {
-      scene, model, size, anchor, color: 0xffffff,
+      scene, model, anchor: { gridX: anchor, gridY: anchor }, color: 0xffffff, mates: [],
+      world: { metrics: { widthPx: size, heightPx: size } },
       layout: { seed: 17, rocks: [] }, wallIds: new Map(), pedestalIds: new Map(), turrets: new Map(), watchtowers: new Map(),
       arena: { rockPhysicsProxies: [], rockVisualStates: states, rockGrid,
         rockGroup: {
@@ -84,7 +85,7 @@ describe('base editor World terrain', () => {
     // Unrelated animated renderers are ports here; terrain and its scene-local queue are real.
     const world = Object.assign(Object.create(PersistentBaseEditorWorld.prototype), {
       scene, arena: { groundSurface: ground, rockOverlaySurface: { updateResidency() {}, isReadyForView: () => true } },
-      shadows: { updateStaticResidency() {}, syncContinuousStaticShadows() {}, isStaticReadyForView: () => true },
+      shadows: { updateStaticResidency() {}, syncDynamicShadows() {}, isStaticReadyForView: () => true }, bridges: null,
       bases: { syncLights() {} }, animations: { update() {} }, powerUps: { updatePedestals() {}, updatePresentation() {} },
       presentationTimeMs:0,sunlight:{update:vi.fn()},
       gpu: { update() {} }, fog: { update() {} }, lighting: { update() {} }, fx: { update() {} },

@@ -41,7 +41,10 @@ import {
 } from '../../utils/localPreferences';
 import { getCoopDefenseCommittedEffectTotals } from '../../utils/coopDefenseItemEffects';
 import { EMPTY_COOP_DEFENSE_EFFECT_TOTALS, resolveCoopDefenseStat } from '../../utils/coopDefenseStats';
-import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionDefinition, getToolCapacityCost, resolveConstructionCapacity } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionDefinition, getToolCapacityCost, getUtilityIdForConstruction, normalizeConstructionId, resolveConstructionCapacity } from '../../config/coopDefenseConstructions';
+import { resolveMgTurretStats } from '../../config/mgTurret';
+import type { PlaceableUtilityConfig } from '../../loadout/LoadoutTypes';
+import type { PersistentBaseAreaStage } from '../../persistentBase/PersistentBaseCore';
 import { getActiveConstructionToolRefs, getConstructionAccessContext } from '../../systems/ConstructionAccessResolver';
 import { isCoopDefenseMode } from '../../gameModes';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
@@ -1403,15 +1406,37 @@ export class ClientUpdateCoordinator {
    * die der Host anschliessend ablehnt. Das `CoopDefensePlayerModifierSystem` ist auf dem Client
    * nicht verfuegbar, deshalb laeuft es hier ueber dieselben Effekt-Summen.
    */
-  getLocalConstructionCapacity(): number {
+  getLocalConstructionCapacity(persistentBaseAreaStage?: PersistentBaseAreaStage): number {
     const localId = bridge.getLocalPlayerId();
     const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
     return resolveConstructionCapacity({
       gameMode: bridge.getActiveGameMode(),
       classId: currentLoadout?.coopDefenseClassId ?? this.getLocalCoopDefenseClassId(),
-      persistentBaseAreaStage: bridge.getWorldDescriptor()?.parameters?.persistentBaseAreaStage,
+      // A preview of another World (the base editor's map) passes the stage that World will freeze.
+      persistentBaseAreaStage: persistentBaseAreaStage ?? bridge.getWorldDescriptor()?.parameters?.persistentBaseAreaStage,
       modifiers: this.getLocalEffectTotals().additive[COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT] ?? 0,
     });
+  }
+
+  /**
+   * Range of a turret the local player builds, with their upgrades, as the host builds it
+   * (`ConstructionWorldRuntime.getEffectiveDefinition` for the MG, placeable modifiers otherwise).
+   */
+  getLocalTurretRange(constructionId: string): number | null {
+    const id = normalizeConstructionId(constructionId);
+    const definition = id ? getCoopDefenseConstructionDefinition(id) : null;
+    if (!id || definition?.kind !== 'turret') return null;
+    const totals = this.getLocalEffectTotals();
+    if (id === 'machine_gun_turret') {
+      return resolveMgTurretStats(stat => totals.additive[stat] ?? 0, stat => totals.percentage[stat] ?? 0).targetRange;
+    }
+    const utilityId = getUtilityIdForConstruction(id);
+    const config = utilityId ? getUtilityConfigForMode(utilityId, 'coop_defense') : null;
+    if (config && 'placeable' in config) {
+      const effective = applyCoopDefenseModifiersToUtilityConfig(config as PlaceableUtilityConfig, totals) as PlaceableUtilityConfig;
+      if ('targetRange' in effective.placeable && typeof effective.placeable.targetRange === 'number') return effective.placeable.targetRange;
+    }
+    return definition.targetRange;
   }
 
   /** Liest den aktuellen Build; Commit und Lobby-Projektion bleiben getrennte Quellen. */

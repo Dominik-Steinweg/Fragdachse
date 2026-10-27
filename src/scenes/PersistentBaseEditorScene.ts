@@ -1,11 +1,17 @@
 import * as Phaser from 'phaser';
+import { createPersistentBaseEditorMinimap, type PersistentBaseEditorMinimap } from '../ui/PersistentBaseEditorMinimap';
+import { getMapName } from '../i18n/contentPresentation';
+import { getCoopDefenseConstructionDefinition, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import type { AfterRoundView } from '../ui/AfterRoundTransition';
 import { CELL_SIZE, GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { getStoredGraphicsQuality } from '../utils/localPreferences';
 import { getRenderScale } from '../graphics/RenderResolution';
 import { ClarityCameraRegistry } from './arena/ClarityCameraRegistry';
-import { PersistentBaseEditorWorld } from '../persistentBase/PersistentBaseEditorWorld';
+import { PERSISTENT_BASE_EDITOR_DETAIL_RADIUS, PersistentBaseEditorWorld, type PersistentBaseEditorTerrain } from '../persistentBase/PersistentBaseEditorWorld';
+import { resolvePersistentBaseEditorPreview, type PersistentBaseEditorRoom } from '../persistentBase/PersistentBaseEditorPreview';
+import type { PersistentCompositeConflictReason } from '../persistentBase/PersistentBaseComposite';
+import { TurretRangePreviewVisual } from './arena/TurretRangePreviewVisual';
 import { getMissedBaseRewards, type BaseEditorObject, type PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from '../persistentBase/PersistentBaseEditorAppearance';
 import { getPersistentBaseRewardCells, getPersistentConstructionFootprint } from '../persistentBase/PersistentBasePlacementRules';
@@ -26,21 +32,25 @@ import { INTENT } from '../ui/uiTheme';
 import { BUTTON_CURSOR } from '../ui/gameCursor';
 import { activateUi } from '../ui/UiAudio';
 import { attachHoverEffect } from '../ui/uiHover';
-import { t } from '../i18n';
+import { getLocale, t } from '../i18n';
 import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
-import { buildPersistentBaseExpansionPreview, getPersistentBaseEditorFraming } from '../persistentBase/PersistentBaseExpansionPreview';
+import { buildPersistentBaseExpansionPreview, getPersistentBaseEditorDetailWindow, getPersistentBaseEditorFraming,
+  getPersistentBaseEditorWorldFraming, type PersistentBaseEditorFraming } from '../persistentBase/PersistentBaseExpansionPreview';
 import { createDawnExpansionRewardNote } from '../ui/DawnMerchantExpansionPreview';
 import { createDawnMerchantExpansionPreview, createPersistentBaseEditorBoundary } from '../ui/DawnMerchantExpansionPreview';
 import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
 
-const WORLD_PANEL = { x: 88, y: 236, width: 648, height: 680 };
-const TABLE = { x: 800, y: 248, width: 1038, height: 608 };
+const WORLD_PANEL = { x: 88, y: 236, width: 1000, height: 680 };
+/** Overview of the whole map (Lagekarte); empty without map terrain. */
+export const PERSISTENT_BASE_EDITOR_MINIMAP_PANEL = { x: 1130, y: 236, width: 708, height: 200 };
+const TABLE = { x: 1130, y: 486, width: 708, height: 380 };
 const ROW_HEIGHT = 38;
 const ROWS = TABLE.height / ROW_HEIGHT;
-const NAME_X = TABLE.x + 48, STATUS_X = 1432, PERSONAL_X = 1696;
+const NAME_X = TABLE.x + 48, STATUS_X = TABLE.x + 470, PERSONAL_X = TABLE.x + 640;
 type RowStatus = 'unplaced' | 'placed' | 'missed';
-interface EditorRow { label: string; status: RowStatus; personal: boolean; icon?: string; object?: BaseEditorObject }
+interface EditorRow { label: string; status: RowStatus; personal: boolean; icon?: string; object?: BaseEditorObject;
+  conflict?: PersistentCompositeConflictReason }
 interface DragState { pointerId: number; x: number; y: number; offsetX: number; offsetY: number; started: boolean }
 /** Why Apply did not save. `stale` means the draft was reloaded from the newer confirmed state. */
 export type PersistentBaseEditorSaveResult = { readonly ok: true }
@@ -50,6 +60,12 @@ export interface PersistentBaseEditorOptions {
   readonly color: number;
   readonly newRewardIds: readonly PersistentBaseRewardId[];
   readonly save: () => Promise<PersistentBaseEditorSaveResult>;
+  /** Terrain of the host's next map around the base (Lagekarte); `null` shows the base alone. */
+  readonly terrain?: PersistentBaseEditorTerrain | null;
+  /** Teammates and ownership in the room, for teammates' buildings and conflicts on the map. */
+  readonly room?: PersistentBaseEditorRoom | null;
+  /** Range of the local player's turret as built in a round (personal upgrades included). */
+  readonly resolveTurretRange?: (constructionId: string) => number | null;
   readonly close: () => void;
   readonly presented?: (view: AfterRoundView) => void;
   readonly retire?: () => void;
@@ -86,10 +102,13 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private disposed = false;
   private presentationReady = false;
   private page = 0;
-  private readonly worldZoom: number;
-  private readonly framing: ReturnType<typeof getPersistentBaseEditorFraming>;
+  private readonly framing: PersistentBaseEditorFraming;
   private readonly expansion: ReturnType<typeof buildPersistentBaseExpansionPreview>;
-  private readonly view: { x: number; y: number; width: number; height: number };
+  private conflicts: ReadonlyMap<string, PersistentCompositeConflictReason> = new Map();
+  private conflictHalo!: Phaser.GameObjects.Graphics;
+  private readonly rangeRings = new Map<string, TurretRangePreviewVisual>();
+  private showRanges = false;
+  private minimap: PersistentBaseEditorMinimap | null = null;
   constructor(private readonly options: PersistentBaseEditorOptions) {
     super(PersistentBaseEditorScene.KEY);
     // The local menu uses the lobby ceiling but can edit a personal area larger than that site.
@@ -97,10 +116,40 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const baseline = options.model.baseline;
     this.expansion = site ? buildPersistentBaseExpansionPreview(baseline.dawn,
       baseline.persistentBaseAreaStage, isDawnUnlocked(baseline), site.maxAreaStage) : null;
-    this.framing = getPersistentBaseEditorFraming(WORLD_PANEL, options.model.area, this.expansion?.area);
-    this.worldZoom = this.framing.zoom;
-    this.view = this.framing.view;
+    const terrainSite = options.terrain?.definition.persistentBaseSite;
+    if (options.terrain && terrainSite) {
+      const { widthCells, heightCells } = options.terrain.definition.metrics;
+      const detail = getPersistentBaseEditorDetailWindow({ widthCells, heightCells }, terrainSite.anchor, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS);
+      this.framing = getPersistentBaseEditorWorldFraming(WORLD_PANEL, { x: detail.minX * CELL_SIZE, y: detail.minY * CELL_SIZE,
+        width: (detail.maxX - detail.minX + 1) * CELL_SIZE, height: (detail.maxY - detail.minY + 1) * CELL_SIZE }, terrainSite.anchor);
+    } else {
+      this.framing = getPersistentBaseEditorFraming(WORLD_PANEL, options.model.area, this.expansion?.area);
+    }
   }
+  private get view() { return this.framing.view; }
+  /** Overview of the whole map beside the table; without map terrain a short note. */
+  private createSituationMap(): void {
+    const panel = PERSISTENT_BASE_EDITOR_MINIMAP_PANEL, terrain = this.options.terrain;
+    this.ui.add(this.add.rectangle(panel.x, panel.y, panel.width, panel.height, 0x101b14, .55)
+      .setOrigin(0).setStrokeStyle(1, 0x718160, .5));
+    const title = terrain ? `${t('ui.base.situationMap')} · ${getMapName(terrain.mapId, getLocale())}` : t('ui.base.situationMap');
+    this.label(panel.x + 16, 216, title.toLocaleUpperCase(), 'section');
+    if (!terrain) {
+      this.label(panel.x + panel.width / 2, panel.y + panel.height / 2, t('ui.base.noSituationMap'), 'body', .5, panel.width - 40)
+        .setColor('#d9cfa8');
+      return;
+    }
+    const view = this.world.view;
+    this.minimap = createPersistentBaseEditorMinimap(this, {
+      layout: terrain.layout, widthCells: terrain.definition.metrics.widthCells, heightCells: terrain.definition.metrics.heightCells,
+      bases: this.world.world.bases, persistentBaseId: this.world.world.persistentBaseSite?.baseId ?? null,
+      spawnZones: terrain.definition.spawnZones ?? [],
+      detail: { minX: view.x / CELL_SIZE, minY: view.y / CELL_SIZE,
+        maxX: (view.x + view.width) / CELL_SIZE - 1, maxY: (view.y + view.height) / CELL_SIZE - 1 },
+    }, { x: panel.x + 8, y: panel.y + 8, width: panel.width - 16, height: panel.height - 16 });
+    this.ui.add(this.minimap.image);
+  }
+  private get worldZoom(): number { return this.framing.zoom; }
 
   create(): void {
     this.quality = new GraphicsQualityController(getStoredGraphicsQuality());
@@ -145,33 +194,41 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
         stage: model.areaStage, hp: resolvePersistentBaseMaxHp(model.baseline.persistentBaseHealthRewards),
         radius: model.area.kind === 'radius' ? model.area.radiusCells : 0,
       }), 'section', .5, WORLD_PANEL.width);
-    const frameSize = this.view.width + 40;
+    const frameWidth = Math.round(this.view.width + 40), frameHeight = Math.round(this.view.height + 40);
     this.ui.add(this.add.image(this.view.x + this.view.width / 2, this.view.y + this.view.height / 2,
-      ensureUpgradeFrame(this, frameSize, frameSize)).setDisplaySize(frameSize, frameSize));
-    this.label(TABLE.x + 16, 216, t('ui.base.rewards'), 'section');
-    this.label(STATUS_X, 216, t('ui.base.status'), 'section', .5);
-    this.label(PERSONAL_X, 216, t('ui.base.personal'), 'section', .5);
+      ensureUpgradeFrame(this, frameWidth, frameHeight)).setDisplaySize(frameWidth, frameHeight));
+    const columnsY = TABLE.y - 20;
+    this.label(TABLE.x + 16, columnsY, t('ui.base.rewards'), 'section');
+    this.label(STATUS_X, columnsY, t('ui.base.status'), 'section', .5);
+    this.label(PERSONAL_X, columnsY, t('ui.base.personal'), 'section', .5);
     this.tableOutline = this.add.rectangle(TABLE.x, TABLE.y, TABLE.width, TABLE.height, 0x101b14, .25)
       .setOrigin(0).setStrokeStyle(1, 0x718160, .5);
     this.ui.add(this.tableOutline);
     this.list = this.add.container(0, 0); this.ui.add(this.list);
-    this.previous = this.button(TABLE.x + 58, 895, 108, 36, '‹', () => this.changePage(-1));
-    this.next = this.button(TABLE.x + TABLE.width - 58, 895, 108, 36, '›', () => this.changePage(1));
-    this.pageText = this.label(TABLE.x + TABLE.width / 2, 895, '', 'body', .5);
+    const pagerY = TABLE.y + TABLE.height + 28;
+    this.previous = this.button(TABLE.x + 58, pagerY, 108, 36, '‹', () => this.changePage(-1));
+    this.next = this.button(TABLE.x + TABLE.width - 58, pagerY, 108, 36, '›', () => this.changePage(1));
+    this.pageText = this.label(TABLE.x + TABLE.width / 2, pagerY, '', 'body', .5);
     this.error = this.label(chrome.centerX, 192, '', 'caption', .5, 1600).setColor('#ffc2a9').setVisible(false);
     this.actionButton('cancel', chrome.centerX - (chrome.buttonGap + chrome.buttonWidth) / 2, () => this.finish());
     this.actionButton('apply', chrome.centerX + (chrome.buttonGap + chrome.buttonWidth) / 2, () => { void this.save(); });
+    const toolsY = 942, toolsX = WORLD_PANEL.x + WORLD_PANEL.width / 2;
     if (model.rewardsEditable) {
-      this.button(WORLD_PANEL.x + WORLD_PANEL.width / 2, 942, 220, 40, t('ui.base.rotate'), () => {
+      this.button(toolsX - 130, toolsY, 220, 40, t('ui.base.rotate'), () => {
         if (this.drag || this.saving || !model.rotate()) return;
         this.syncDraft();
       });
     } else {
-      this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 942, t('ui.base.hostRoomBase'), 'caption', .5, WORLD_PANEL.width)
-        .setColor('#d9cfa8');
+      this.label(toolsX - 130, toolsY, t('ui.base.hostRoomBase'), 'caption', .5, 360).setColor('#d9cfa8');
     }
+    this.button(toolsX + 130, toolsY, 220, 40, t('ui.base.ranges'), () => {
+      this.showRanges = !this.showRanges;
+      this.refreshRanges();
+    });
     const expansion = this.expansion;
-    this.world = new PersistentBaseEditorWorld(this, model, this.options.color, expansion?.area);
+    this.world = new PersistentBaseEditorWorld(this, model, this.options.color,
+      { previewArea: expansion?.area, terrain: this.options.terrain ?? null });
+    this.createSituationMap();
     this.ui.add(createPersistentBaseEditorBoundary(this, model.area, this.framing));
     if (expansion?.edges.length) {
       this.expansionPreview = createDawnMerchantExpansionPreview(this, this.framing, expansion.edges,
@@ -186,13 +243,16 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.grid = this.add.graphics().setDepth(10000);
     this.selection = this.add.graphics().setDepth(10001);
     this.preview = this.add.graphics().setDepth(10002);
+    this.conflictHalo = this.add.graphics().setDepth(10003);
+    this.tweens.add({ targets: this.conflictHalo, alpha: { from: 1, to: .35 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     const extent = getPersistentBaseBuildAreaExtentCells(model.area);
+    const anchor = this.world.anchor;
     this.grid.lineStyle(1, 0xbdc99c, .18);
     for (let y = -extent; y <= extent; y++) for (let x = -extent; x <= extent; x++) {
       if (isCellInsidePersistentBaseBuildArea(x, y, model.area))
-        this.grid.strokeRect((this.world.anchor + x) * CELL_SIZE, (this.world.anchor + y) * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        this.grid.strokeRect((anchor.gridX + x) * CELL_SIZE, (anchor.gridY + y) * CELL_SIZE, CELL_SIZE, CELL_SIZE);
     }
-    this.resize(); this.refreshList();
+    this.resize(); this.refreshPreview(); this.refreshList();
     this.scale.on('resize', this.resize, this);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.saving || this.closed || pointer.button !== 0) return;
@@ -252,6 +312,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.scale.off('resize', this.resize, this);
     this.dragPreview?.destroy(true);
     this.expansionPreview?.destroy(true); this.expansionPreview = null;
+    for (const ring of this.rangeRings.values()) ring.destroy();
+    this.rangeRings.clear();
+    this.minimap?.destroy(); this.minimap = null;
     this.world?.destroy(); this.cameraRegistry?.destroy(); this.quality?.destroy();
     for (const button of this.buttons) button.destroy();
     this.buttons = [];
@@ -297,15 +360,15 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const scale = getRenderScale(this.scale);
     this.clarity.setViewport(0, 0, this.scale.width, this.scale.height).setOrigin(0, 0).setZoom(scale);
     this.cameras.main.setViewport(this.view.x * scale, this.view.y * scale, this.view.width * scale, this.view.height * scale)
-      .setOrigin(0, 0).setZoom(scale * this.worldZoom).setScroll(0, 0);
+      .setOrigin(0, 0).setZoom(scale * this.worldZoom).setScroll(this.framing.world.x, this.framing.world.y);
   }
   /** Canonical draft cell under the pointer: the World cell turned back by the base orientation. */
   private cellAt(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
     const scale = getRenderScale(this.scale), x = pointer.x / scale, y = pointer.y / scale;
     if (x < this.view.x || y < this.view.y || x >= this.view.x + this.view.width || y >= this.view.y + this.view.height) return null;
     const canonical = toCanonicalCell(this.world.frame,
-      Math.floor((x - this.view.x) / (CELL_SIZE * this.worldZoom)),
-      Math.floor((y - this.view.y) / (CELL_SIZE * this.worldZoom)));
+      Math.floor((this.framing.world.x + (x - this.view.x) / this.worldZoom) / CELL_SIZE),
+      Math.floor((this.framing.world.y + (y - this.view.y) / this.worldZoom) / CELL_SIZE));
     return { x: canonical.relativeGridX, y: canonical.relativeGridY };
   }
   /** World top-left cell of the selected object at a canonical origin. */
@@ -341,8 +404,8 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       this.drawFootprint(this.preview, cell.x, cell.y, valid ? 0xb1ed94 : 0xff9991, .2);
       const origin = this.worldOrigin(cell.x, cell.y);
       this.dragPreview?.setScale(this.worldZoom).setPosition(
-        this.view.x + (origin.gridX + .5) * CELL_SIZE * this.worldZoom,
-        this.view.y + (origin.gridY + .5) * CELL_SIZE * this.worldZoom);
+        this.view.x + ((origin.gridX + .5) * CELL_SIZE - this.framing.world.x) * this.worldZoom,
+        this.view.y + ((origin.gridY + .5) * CELL_SIZE - this.framing.world.y) * this.worldZoom);
     } else {
       const offset = rotatePersistentBaseOffset(drag.offsetX, drag.offsetY, this.world.frame.quarterTurns);
       this.dragPreview?.setScale(1).setPosition(pointer.x / scale - offset.dx * CELL_SIZE, pointer.y / scale - offset.dy * CELL_SIZE);
@@ -368,7 +431,56 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.drag = null; this.dragPreview?.destroy(true); this.dragPreview = null;
     this.preview?.clear(); this.tableOutline?.setStrokeStyle(1, 0x718160, .5);
   }
-  private syncDraft(): void { this.world.syncObjects(); this.refreshList(); }
+  private syncDraft(): void { this.world.syncObjects(); this.refreshPreview(); this.refreshList(); }
+  /** Teammates' buildings and own conflicts as the host would merge them on the shown map. */
+  private refreshPreview(): void {
+    const room = this.options.room;
+    const preview = room ? resolvePersistentBaseEditorPreview({ model: this.options.model, frame: this.world.frame,
+      siteArea: this.world.siteArea, room, isCellBlocked: (x, y) => this.world.isCellBlocked(x, y) }) : null;
+    this.conflicts = preview?.conflicts ?? new Map();
+    this.world.setMates(preview?.mates ?? []);
+    this.conflictHalo.clear().lineStyle(3, 0xff5a4a, 1);
+    for (const persistentId of this.conflicts.keys()) {
+      const entry = this.options.model.constructions.find(p => p.persistentId === persistentId);
+      const appearance = entry && getBaseEditorAppearance(this.options.model, { kind: 'construction', id: persistentId });
+      if (!entry || !appearance) continue;
+      const placed = toWorldFootprint(this.world.frame, entry.relativeGridX, entry.relativeGridY, appearance.footprint);
+      for (const cell of placed.footprint) {
+        this.conflictHalo.strokeRect((placed.gridX + cell.dx) * CELL_SIZE + 2, (placed.gridY + cell.dy) * CELL_SIZE + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+      }
+    }
+    this.refreshRanges();
+  }
+  /** Rings of every own turret while toggled on; the selected turret always shows its ring. */
+  private refreshRanges(): void {
+    const model = this.options.model, frame = this.world.frame;
+    const wanted = new Map<string, { x: number; y: number; radius: number }>();
+    const consider = (object: BaseEditorObject, position: { relativeGridX: number; relativeGridY: number } | undefined, constructionId: string | undefined) => {
+      const key = baseEditorObjectKey(object);
+      const selected = this.selected !== null && baseEditorObjectKey(this.selected) === key;
+      if (!position || !constructionId || (!this.showRanges && !selected)) return;
+      // Personal turrets carry the builder's upgrades; base-owned reward turrets their authored range.
+      const id = normalizeConstructionId(constructionId);
+      const definition = id ? getCoopDefenseConstructionDefinition(id) : null;
+      const radius = object.kind === 'construction' ? this.options.resolveTurretRange?.(constructionId) ?? null
+        : definition?.kind === 'turret' ? definition.targetRange : null;
+      const appearance = getBaseEditorAppearance(model, object);
+      if (!radius || !appearance) return;
+      const placed = toWorldFootprint(frame, position.relativeGridX, position.relativeGridY, appearance.footprint);
+      wanted.set(key, { x: (placed.gridX + .5) * CELL_SIZE, y: (placed.gridY + .5) * CELL_SIZE, radius });
+    };
+    for (const entry of model.constructions) consider({ kind: 'construction', id: entry.persistentId }, entry, entry.tool.id);
+    for (const reward of model.rewards) {
+      const source = getPersistentBaseRewardDefinition(reward.rewardId).gameplaySource;
+      consider({ kind: 'reward', id: reward.rewardId }, reward, source.kind === 'construction-definition' ? source.constructionId : undefined);
+    }
+    for (const [key, ring] of this.rangeRings) if (!wanted.has(key)) { ring.destroy(); this.rangeRings.delete(key); }
+    for (const [key, ring] of wanted) {
+      let visual = this.rangeRings.get(key);
+      if (!visual) { visual = new TurretRangePreviewVisual(this, 9990); this.rangeRings.set(key, visual); }
+      visual.show(ring.x, ring.y, ring.radius, this.options.color, true, 0);
+    }
+  }
   private drawFootprint(graphics: Phaser.GameObjects.Graphics, x: number, y: number, color: number, alpha: number): void {
     if (!this.selected) return;
     const cells = getBaseEditorAppearance(this.options.model, this.selected)?.footprint ?? [{ dx: 0, dy: 0 }];
@@ -394,6 +506,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const rows: EditorRow[] = objects.map(object => ({
       // The room's rewards belong to the host: a guest sees them, but cannot drag them.
       object: object.kind === 'reward' && !model.rewardsEditable ? undefined : object,
+      conflict: object.kind === 'construction' && model.getPosition(object) ? this.conflicts.get(object.id) : undefined,
       label: this.objectLabel(object),
       icon: object.kind === 'reward' ? getPersistentBaseRewardDefinition(object.id).presentation.iconKey : undefined,
       personal: object.kind === 'construction', status: model.getPosition(object) ? 'placed' : 'unplaced' }));
@@ -429,9 +542,11 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       const name = this.add.text(NAME_X, y, row.label, textStyle('label', { color: TEXT.primary })).setOrigin(0, .5);
       if (name.width > STATUS_X - NAME_X - 90) name.setScale((STATUS_X - NAME_X - 90) / name.width);
       this.list.add(name);
-      this.list.add(this.add.text(STATUS_X, y, t(`ui.base.${row.status}`), textStyle('body', {
-        color: row.status === 'placed' ? 0xb8d59f : row.status === 'missed' ? 0xc9a485 : 0xe8d9a5,
-      })).setOrigin(.5));
+      const status = this.add.text(STATUS_X, y, row.conflict ? t(`ui.base.conflict.${row.conflict}`) : t(`ui.base.${row.status}`),
+        textStyle('body', { color: row.conflict ? 0xff9a8a : row.status === 'placed' ? 0xb8d59f : row.status === 'missed' ? 0xc9a485 : 0xe8d9a5 }))
+        .setOrigin(.5);
+      if (status.width > PERSONAL_X - NAME_X - 160) status.setScale((PERSONAL_X - NAME_X - 160) / status.width);
+      this.list.add(status);
       if (row.personal) this.list.add(this.add.text(PERSONAL_X, y, '✓', textStyle('body', { color: 0xc2dda3 })).setOrigin(.5));
     });
     if (!rows.length) this.list.add(this.add.text(TABLE.x + 24, TABLE.y + 26, t('ui.base.empty.all'), textStyle('body', { color: TEXT.muted })));
@@ -449,6 +564,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const position = this.selected && this.options.model.getPosition(this.selected);
     if (position) this.drawFootprint(this.selection, position.relativeGridX, position.relativeGridY, 0xe4d499, .1);
     this.grid.setVisible(this.selected !== null);
+    if (this.world) this.refreshRanges();
   }
   private async save(): Promise<void> {
     if (this.saving) return;
@@ -469,7 +585,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private finish(): void { if (!this.closed) { this.closed = true; this.options.close(); } }
   update(now: number, delta: number): void {
     if (!this.world || this.closed) return;
-    const view = { x: 0, y: 0, width: this.world.size, height: this.world.size };
+    const view = this.world.view;
     this.world.update(now, delta, view);
     if (!this.presentationReady && this.world.isReadyForView(view)) {
       this.presentationReady = true;

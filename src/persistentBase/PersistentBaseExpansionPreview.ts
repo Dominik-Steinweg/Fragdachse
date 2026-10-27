@@ -10,18 +10,52 @@ import { getPersistentBaseBuildAreaExtentCells, isCellInsidePersistentBaseBuildA
 export interface ExpansionBoundaryEdge { x1: number; y1: number; x2: number; y2: number }
 interface EditorRect { x: number; y: number; width: number; height: number }
 
-/** Logical UI coordinates; world zoom never scales annotation strokes or text. */
+/**
+ * Where the editor World appears on screen. Logical UI coordinates; world zoom never scales
+ * annotation strokes or text.
+ */
+export interface PersistentBaseEditorFraming {
+  readonly zoom: number;
+  /** Screen rectangle of the World view. */
+  readonly view: EditorRect;
+  /** World-pixel rectangle shown in `view`. */
+  readonly world: EditorRect;
+  /** Screen position of the anchor cell's centre. */
+  readonly anchor: { readonly x: number; readonly y: number };
+}
+
+/** The personal base on its own small square World, anchor in the middle. */
 export function getPersistentBaseEditorFraming(panel: EditorRect, area: PersistentBaseBuildArea,
-  previewArea?: PersistentBaseBuildArea) {
+  previewArea?: PersistentBaseBuildArea): PersistentBaseEditorFraming {
   const worldSize = getPersistentBaseEditorSize(area, previewArea);
-  const size = Math.min(worldSize, panel.width - 40, panel.height - 40);
-  return { worldSize, zoom: size / worldSize,
-    view: { x: panel.x + (panel.width - size) / 2, y: panel.y + (panel.height - size) / 2, width: size, height: size } };
+  const anchorCell = (worldSize / CELL_SIZE - 1) / 2;
+  return getPersistentBaseEditorWorldFraming(panel, { x: 0, y: 0, width: worldSize, height: worldSize },
+    { gridX: anchorCell, gridY: anchorCell });
+}
+
+/** Fits a World rectangle into the panel, never enlarged beyond its native scale. */
+export function getPersistentBaseEditorWorldFraming(panel: EditorRect, world: EditorRect,
+  anchorCell: { readonly gridX: number; readonly gridY: number }): PersistentBaseEditorFraming {
+  const zoom = Math.min(1, (panel.width - 40) / world.width, (panel.height - 40) / world.height);
+  const width = world.width * zoom, height = world.height * zoom;
+  const view = { x: panel.x + (panel.width - width) / 2, y: panel.y + (panel.height - height) / 2, width, height };
+  return { zoom, view, world,
+    anchor: { x: view.x + ((anchorCell.gridX + .5) * CELL_SIZE - world.x) * zoom,
+      y: view.y + ((anchorCell.gridY + .5) * CELL_SIZE - world.y) * zoom } };
+}
+
+/** Inclusive cell window around an anchor, clamped to the World. */
+export function getPersistentBaseEditorDetailWindow(world: { readonly widthCells: number; readonly heightCells: number },
+  anchor: { readonly gridX: number; readonly gridY: number }, radius: { readonly x: number; readonly y: number }) {
+  const clampX = (x: number) => Math.max(0, Math.min(world.widthCells - 1, x));
+  const clampY = (y: number) => Math.max(0, Math.min(world.heightCells - 1, y));
+  return { minX: clampX(anchor.gridX - radius.x), maxX: clampX(anchor.gridX + radius.x),
+    minY: clampY(anchor.gridY - radius.y), maxY: clampY(anchor.gridY + radius.y) };
 }
 
 export function projectPersistentBaseBoundary(edges: readonly ExpansionBoundaryEdge[],
-  frame: ReturnType<typeof getPersistentBaseEditorFraming>): ExpansionBoundaryEdge[] {
-  const cx = frame.view.x + frame.view.width / 2, cy = frame.view.y + frame.view.height / 2;
+  frame: PersistentBaseEditorFraming): ExpansionBoundaryEdge[] {
+  const cx = frame.anchor.x, cy = frame.anchor.y;
   const cell = CELL_SIZE * frame.zoom;
   return edges.map(e => ({ x1: cx + e.x1 * cell, y1: cy + e.y1 * cell,
     x2: cx + e.x2 * cell, y2: cy + e.y2 * cell }));

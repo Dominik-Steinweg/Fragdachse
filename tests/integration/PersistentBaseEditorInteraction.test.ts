@@ -36,10 +36,11 @@ function harness(scale = 1, stage: PersistentBaseAreaStage = 0, room?: Persisten
   const scene: any = new PersistentBaseEditorScene({ model, color: 0xffffff,
     newRewardIds: [], close() {}, save: async () => ({ ok: true }) });
   const size = getPersistentBaseEditorSize(model.area);
-  const world = { size, anchor: (size / CELL_SIZE - 1) / 2, syncObjects: vi.fn(),
+  const world = { size, anchor: (size / CELL_SIZE - 1) / 2, syncObjects: vi.fn(), setMates: vi.fn(),
+    view: { x: 0, y: 0, width: size, height: size }, siteArea: model.area, isCellBlocked: () => false,
     get frame() { return { anchor: { gridX: this.anchor, gridY: this.anchor }, quarterTurns: model.quarterTurns }; } };
   Object.assign(scene, { world, scale: { width: GAME_WIDTH * scale }, preview: graphics(),
-    selection: graphics(), grid: graphics(), tableOutline: graphics(), error: graphics(), ui: { add() {} },
+    selection: graphics(), grid: graphics(), conflictHalo: graphics(), tableOutline: graphics(), error: graphics(), ui: { add() {} },
     refreshList: vi.fn(() => scene.refreshSelection()),
   });
   const point = (x: number, y: number) => ({ x: x * scale, y: y * scale, id: 1, button: 0 });
@@ -99,7 +100,7 @@ describe('base menu drag interaction', () => {
     const { scene, model, cell, point } = harness(scale, 11);
     expect(scene.worldZoom).toBeLessThan(1);
     expect(scene.view.x).toBeGreaterThanOrEqual(88);
-    expect(scene.view.x + scene.view.width).toBeLessThanOrEqual(736);
+    expect(scene.view.x + scene.view.width).toBeLessThanOrEqual(1088);
     for (const [x, y] of [[15, 0], [-15, 0], [0, 15], [0, -15]]) {
       expect(scene.cellAt(cell(x, y))).toEqual({ x, y });
     }
@@ -114,7 +115,7 @@ describe('base menu drag interaction', () => {
   });
   it('marks a single click without moving or removing a placed list item', () => {
     const { scene, model, world, point } = harness();
-    const pointer = point(950, 300);
+    const pointer = point(1300, 520);
     scene.beginDrag(object, pointer);
     scene.updateDrag({ ...pointer, x: pointer.x + 1 });
     scene.drop(pointer);
@@ -128,7 +129,7 @@ describe('base menu drag interaction', () => {
     scene.beginDrag(object, cell(0, 0)); scene.updateDrag(cell(-1, 1));
     const preview = scene.dragPreview;
     expect(preview.setPosition).toHaveBeenLastCalledWith(cell(-1, 1).x / scale, cell(-1, 1).y / scale);
-    const listPoint = point(950, 340);
+    const listPoint = point(1300, 560);
     scene.updateDrag(listPoint); scene.drop(listPoint);
     expect(model.getPosition(object)).toBeUndefined();
     expect(model.unplaced).toContain(object.id);

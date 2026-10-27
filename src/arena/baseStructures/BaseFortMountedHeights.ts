@@ -22,6 +22,12 @@ export function maxBlend(scene: Phaser.Scene): number {
 }
 
 /**
+ * Texture keys are game-wide; the lobby fort and the base editor's fort live at the same time, so
+ * every grid and stamp gets a key no other instance uses.
+ */
+let nextMountedTextureId = 0;
+
+/**
  * Heights of the turrets mounted on a base structure, in the structure's caster grid: each turret's
  * own shadow mesh, rasterised once per pose from above and stamped with the sprite's displayed
  * transform. The structure's height-field shadow reads it beside its own caster heights, so a turret
@@ -31,7 +37,6 @@ export class BaseFortMountedHeights {
   private readonly stamps = new Map<string, string>();
   private readonly brush: Phaser.GameObjects.Image;
   private readonly blend: number;
-  private serial = 0;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.blend = maxBlend(scene);
@@ -40,7 +45,7 @@ export class BaseFortMountedHeights {
 
   /** A height grid of `texels` square over a canvas; cleared to ground. */
   createTarget(texels: number): Phaser.Textures.DynamicTexture {
-    const target = this.scene.textures.addDynamicTexture(`base-fort-mounted-${++this.serial}`, texels, texels)!;
+    const target = this.scene.textures.addDynamicTexture(`base-fort-mounted-${++nextMountedTextureId}`, texels, texels)!;
     target.clear().render();
     return target;
   }
@@ -98,7 +103,7 @@ export class BaseFortMountedHeights {
         if (z > heights[i]) heights[i] = z;
       }
     }
-    const key = `base-fort-mounted-stamp-${this.stamps.size}`;
+    const key = `base-fort-mounted-stamp-${++nextMountedTextureId}`;
     const texture = this.scene.textures.createCanvas(key, size, size)!;
     const image = texture.context.createImageData(size, size);
     for (let i = 0; i < heights.length; i++) {

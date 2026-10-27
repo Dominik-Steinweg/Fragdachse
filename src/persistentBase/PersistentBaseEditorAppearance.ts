@@ -3,6 +3,7 @@ import { getUtilityConfigForMode } from '../loadout/LoadoutConfig';
 import { getPersistentBaseRewardDefinition } from './PersistentBaseRewardCatalog';
 import type { BaseEditorObject, PersistentBaseEditorModel } from './PersistentBaseEditorModel';
 import type { TurretWeaponId } from '../types';
+import type { PersistentConstruction } from './PersistentBaseTypes';
 
 export interface BaseEditorAppearance {
   readonly wall: boolean;
@@ -27,8 +28,13 @@ export function getBaseEditorAppearance(model: PersistentBaseEditorModel, object
     return def.kind === 'turret' ? { ...common, weapon: source.weaponId ?? def.weaponId } : null;
   }
   const entry = model.getConstruction(object.id);
-  const id = entry && normalizeConstructionId(entry.tool.id);
-  if (!entry || !id) return null;
+  return entry ? getPersistentConstructionAppearance(entry) : null;
+}
+
+/** Appearance of a personal construction, the editor's own and a teammate's alike. */
+export function getPersistentConstructionAppearance(entry: PersistentConstruction): BaseEditorAppearance | null {
+  const id = normalizeConstructionId(entry.tool.id);
+  if (!id) return null;
   const def = getCoopDefenseConstructionDefinition(id);
   const utility = entry.tool.kind === 'utility' ? getUtilityConfigForMode(entry.tool.id, 'coop_defense') : null;
   return { wall: def.kind !== 'pedestal', footprint: def.footprint, angle: entry.angle,

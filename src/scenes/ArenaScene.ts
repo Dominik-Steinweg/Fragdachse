@@ -1,4 +1,11 @@
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
+import { ArenaDeploymentTerrain } from './arena/ArenaDeploymentTerrain';
+import type { PersistentBaseEditorTerrain } from '../persistentBase/PersistentBaseEditorWorld';
+import type { PersistentBaseEditorRoom } from '../persistentBase/PersistentBaseEditorPreview';
+import { toWorldDefinitionId } from '../world/arenaDescriptorAdapter';
+import { DEFAULT_PERSISTENT_BASE_AREA_STAGE, PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
+import { resolveFrozenPersistentBaseAreaStage } from '../persistentBase/PersistentBaseAreaStageResolution';
+import { getConstructionAccessContext, resolveConstructionAccess } from '../systems/ConstructionAccessResolver';
 import { getRenderScale } from '../graphics/RenderResolution';
 import { createMarkerCameraTransform } from '../effects/markers/MarkerLayoutModel';
 import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades';
@@ -18,7 +25,7 @@ import { TRACK_RAIL_TEXTURE } from '../arena/TrackGravelConfig';
 import { PersistentBaseEditorScene, type PersistentBaseEditorSaveResult } from './PersistentBaseEditorScene';
 import { PersistentBaseEditorModel, type PersistentBaseEditorRoomBase } from '../persistentBase/PersistentBaseEditorModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
-import { getStoredCoopDefenseProgress, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, getStoredPersonalPersistentBaseAreaStage, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
+import { getStoredCoopDefenseProgress, getStoredLocalOwnerId, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, getStoredPersonalPersistentBaseAreaStage, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
 import { getDeferredAssets, preloadDeferredImages } from '../assets/DeferredAssets';
 import { SHOOTING_RANGE_CONTROLS } from '../shootingRange/ShootingRangeLayout';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
@@ -158,7 +165,7 @@ import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, getCoopMissionTimeLimitSec, isWeaponBalanceLabMapId, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { resolveActiveGameMode, toMapId } from '../world/arenaDescriptorAdapter';
-import { isDawnWorld, resolveCoopDefenseMapConfig } from '../world/WorldDefinitionResolution';
+import { isDawnWorld, resolveCoopDefenseMapConfig, resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import type { ActivityDescriptor } from '../world/ActivityDescriptor';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
 import type { WorldPresentationRequirement } from '../world/WorldPresentation';
@@ -339,6 +346,12 @@ export class ArenaScene extends Phaser.Scene {
   private meta: ArenaMetaController | null = null;
   private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
   private baseEditor: PersistentBaseEditorScene | null = null;
+  /** Map, seed and draft of the open base editor; a host map change reopens it with the same draft. */
+  private baseEditorSession: { readonly terrainKey: string | null; readonly model: PersistentBaseEditorModel;
+    readonly newRewardIds: readonly PersistentBaseRewardId[] } | null = null;
+  /** The editor waits for the next round's terrain, which the lobby generates in the background. */
+  private pendingBaseEditor: { readonly newRewardIds: readonly PersistentBaseRewardId[]; readonly model?: PersistentBaseEditorModel } | null = null;
+  private readonly deploymentTerrain = new ArenaDeploymentTerrain(bridge);
   private matchResultsOverlay: MatchResultsOverlay | null = null;
   private roomStatisticsOverlay: RoomStatisticsOverlay | null = null;
   private arenaExitFadeOverlay: ArenaExitFadeOverlay | null = null;
@@ -1600,6 +1613,8 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
     if (!deferArenaExit) this.arenaRuntime.hostSyncLobbyWorld();
+    this.deploymentTerrain.prefetch();
+    this.followBaseEditorDeployment();
     // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
     this.arenaRuntime.syncRoomOwners();
@@ -2359,7 +2374,85 @@ export class ArenaScene extends Phaser.Scene {
     bridge.cancelLocalInput();
   }
 
-  private openBaseEditor(newRewardIds: readonly PersistentBaseRewardId[]): void {
+  /** Reopens the editor with the same draft when the host picks another map or seed. */
+  private followBaseEditorDeployment(): void {
+    const session = this.baseEditorSession;
+    if (!session || !this.baseEditor || bridge.getGamePhase() !== 'LOBBY') return;
+    const deployment = this.deploymentTerrain.current();
+    const key = deployment ? `${deployment.mapConfig.mapId}|${deployment.seed}` : null;
+    if (key === session.terrainKey) return;
+    this.closeBaseEditor(false);
+    this.openBaseEditor(session.newRewardIds, session.model);
+  }
+
+  /**
+   * The next round's terrain around the base (Lagekarte), or `null` without a previewable map.
+   * `undefined` means it is still being generated; the editor opens once it is ready.
+   */
+  private resolveBaseEditorTerrain(): PersistentBaseEditorTerrain | null | undefined {
+    const deployment = this.deploymentTerrain.current();
+    if (!deployment) return null;
+    const layout = this.deploymentTerrain.peek(deployment);
+    if (!layout) return undefined;
+    const definition = resolveWorldDefinition({ definitionId: toWorldDefinitionId(deployment.mapConfig.mapId) }, null);
+    if (!definition?.persistentBaseSite) return null;
+    // The round freezes the host's stage, capped by the map's site.
+    const hostStage = bridge.isHost() ? getStoredPersonalPersistentBaseAreaStage()
+      : bridge.getPersonalBaseAreaStage(bridge.getHostPlayerId()) ?? DEFAULT_PERSISTENT_BASE_AREA_STAGE;
+    const areaStage = resolveFrozenPersistentBaseAreaStage({ personalStage: hostStage,
+      siteMaxAreaStage: definition.persistentBaseSite.maxAreaStage ?? PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE });
+    return { mapId: deployment.mapConfig.mapId, definition, seed: layout.seed, fingerprint: layout.fingerprint,
+      layout: layout.layout, areaStage };
+  }
+
+  /** Teammates, ownership and the local owner's tools: what the editor needs to predict the host's merge. */
+  private resolveBaseEditorRoom(areaStage: PersistentBaseAreaStage | null): PersistentBaseEditorRoom {
+    const localId = bridge.getLocalPlayerId();
+    const localOwnerId = getStoredLocalOwnerId();
+    const mates = bridge.getConnectedPlayerIds().filter((id) => id !== localId).flatMap((id) => {
+      const contribution = bridge.getPlayerPersistentBaseContribution(id);
+      return contribution ? [{ ownerId: contribution.ownerId, color: bridge.getPlayerColor(id) ?? 0xffffff, contribution }] : [];
+    });
+    const hostOwnerId = bridge.isHost() ? localOwnerId
+      : bridge.getPlayerPersistentBaseContribution(bridge.getHostPlayerId())?.ownerId ?? '';
+    const loadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
+    return { localOwnerId, hostOwnerId, mates,
+      localCapacity: this.clientUpdate.getLocalConstructionCapacity(areaStage ?? undefined),
+      resolveLocalTool: (toolId) => {
+        const access = resolveConstructionAccess(toolId, getConstructionAccessContext(COOP_DEFENSE_MODE, loadout));
+        if (!access.definition) return null;
+        return { footprint: access.definition.footprint, capacityCost: access.definition.capacityCost,
+          unavailableReason: access.allowed ? undefined : access.reason };
+      } };
+  }
+
+  private openBaseEditor(newRewardIds: readonly PersistentBaseRewardId[], keepModel?: PersistentBaseEditorModel): void {
+    if (this.baseEditor || bridge.getGamePhase() !== 'LOBBY') return;
+    const terrain = this.resolveBaseEditorTerrain();
+    if (terrain === undefined) {
+      // Usually ready: the lobby generates the terrain as soon as the host picks the map.
+      const deployment = this.deploymentTerrain.current()!;
+      const waiting = this.pendingBaseEditor === null;
+      this.pendingBaseEditor = { newRewardIds, model: keepModel };
+      if (waiting) {
+        const resume = () => {
+          const pending = this.pendingBaseEditor;
+          this.pendingBaseEditor = null;
+          if (pending) this.openBaseEditor(pending.newRewardIds, pending.model);
+        };
+        this.deploymentTerrain.request(deployment).then(resume, () => {
+          // Without terrain the editor still opens on the base alone.
+          this.pendingBaseEditor = null;
+          this.openBaseEditorOn(null, newRewardIds, keepModel);
+        });
+      }
+      return;
+    }
+    this.openBaseEditorOn(terrain, newRewardIds, keepModel);
+  }
+
+  private openBaseEditorOn(terrain: PersistentBaseEditorTerrain | null, newRewardIds: readonly PersistentBaseRewardId[],
+    keepModel?: PersistentBaseEditorModel): void {
     if (this.baseEditor || bridge.getGamePhase() !== 'LOBBY') return;
     const host = bridge.isHost();
     const personalAreaStage = getStoredPersonalPersistentBaseAreaStage();
@@ -2370,7 +2463,7 @@ export class ArenaScene extends Phaser.Scene {
       return { placements: session?.placements ?? [], quarterTurns: session?.quarterTurns ?? 0, editable: false };
     };
     const confirmedBaseline = () => ({ ...getStoredCoopDefenseProgress(), personalBaseContribution: getStoredPersonalBaseContribution() });
-    const model = new PersistentBaseEditorModel(confirmedBaseline(), personalAreaStage, roomBase());
+    const model = keepModel ?? new PersistentBaseEditorModel(confirmedBaseline(), personalAreaStage, roomBase());
     const revision = bridge.getCurrentWorldRevision();
     if (revision === null) {
       if (this.afterRoundTransition?.active) this.meta?.finishAfterRoundStep('base');
@@ -2383,6 +2476,8 @@ export class ArenaScene extends Phaser.Scene {
     const opening = this.afterRoundOpening();
     const reload = () => model.reload(confirmedBaseline(), roomBase());
     const editor = new PersistentBaseEditorScene({ model, newRewardIds, color: bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? 0xffffff,
+      terrain, room: this.resolveBaseEditorRoom(terrain?.areaStage ?? null),
+      resolveTurretRange: (constructionId) => this.clientUpdate.getLocalTurretRange(constructionId),
       presented: opening?.ready,
       retire: () => { if (this.baseEditor === editor) this.closeBaseEditor(false); },
       close: () => {
@@ -2417,6 +2512,7 @@ export class ArenaScene extends Phaser.Scene {
       },
     });
     this.baseEditor = editor;
+    this.baseEditorSession = { terrainKey: terrain ? `${terrain.mapId}|${terrain.seed}` : null, model, newRewardIds };
     opening?.onCancel(() => { if (this.baseEditor === editor) this.closeBaseEditor(false); });
     this.input.enabled = false;
     if (this.input.keyboard) { this.input.keyboard.resetKeys(); this.input.keyboard.enabled = false; }
@@ -2445,6 +2541,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private closeBaseEditor(advance: boolean): void {
     if (!this.baseEditor) return;
+    this.baseEditorSession = null;
     this.baseEditor.dispose();
     this.baseEditor = null;
     this.scene.stop(PersistentBaseEditorScene.KEY); this.scene.remove(PersistentBaseEditorScene.KEY);

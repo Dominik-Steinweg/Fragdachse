@@ -112,8 +112,12 @@ interface FortView {
  * and their light-map lights. Collision, occlusion and HP stay with the base cells; the fort only
  * presents them. One renderer per BaseManager, one view per persistent core.
  */
+/** Composed outpost textures are game-wide; each renderer keys its own (lobby and base editor coexist). */
+let nextRendererId = 0;
+
 export class BaseFortRenderer {
   private readonly views = new Map<string, FortView>();
+  private readonly textureScope = `r${++nextRendererId}`;
   private lighting: FortLighting | null = null;
   private shadows: FortShadows | null = null;
   private sunlight: LobbyStructureSunlight | null = null;
@@ -156,7 +160,7 @@ export class BaseFortRenderer {
     const lit = getGraphicsQualityProfile(this.scene).level !== 'low';
     const passes: BaseFortPass[] = [lit ? 'albedo' : 'beauty', 'solid', ...kit.layers.map(layer => `emission-${layer}` as const),
       ...(lit ? ['elevation', 'caster-height'] as const : [])];
-    const composed = composeOutpost(this.scene, kit, baseId, cells, passes);
+    const composed = composeOutpost(this.scene, kit, `${this.textureScope}:${baseId}`, cells, passes);
     if (!composed) return false;
     this.present(baseId, { size: composed.size, sourceSize: composed.sourceSize, heightPx: kit.heightPx, deckPx: kit.deckPx ?? 0,
       layers: kit.layers, keys: composed.keys, sockets: composed.sockets, owned: Object.values(composed.keys) },
