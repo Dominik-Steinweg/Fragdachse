@@ -214,7 +214,9 @@ class FortMaster:
         b.cylinder(t.p(x, y, z + .1), .05, .12, p['lamp'], 10, 0)
         for cx, cy in ((-.055, -.055), (.055, -.055), (.055, .055), (-.055, .055)):
             b.box(t.p(x + cx, y + cy, z + .1), (.016, .016, .13), p['dark'], 0, t.r())
-        b.box(t.p(x, y, z + .175), (.14, .14, .025), p['dark'], .006, t.r())
+        for cx, cy, w, d in ((0, -.06, .14, .02), (0, .06, .14, .02), (-.06, 0, .02, .14), (.06, 0, .02, .14)):
+            b.box(t.p(x + cx, y + cy, z + .175), (w, d, .025), p['dark'], .004, t.r())      # open frame: the glass shows from above
+        b.cylinder(t.p(x, y, z + .17), .03, .02, p['lamp'], 10, 0)
         self.socket('lamp', t.p(x, y, z + .1))
 
     def torch(self, t, x, y, outward, z, size=1.0, pole=False):
@@ -399,26 +401,54 @@ class FortMaster:
             turned_sheet(self.c, 'Wear marks', k, -2.0, .8, 2.0, 5.3, sample, self.rut, .04)
 
     def pebbles(self):
-        """Loose pebbles and grit pushed to the sides of the worn bands, a few in the middle."""
+        """Loose stones as traffic leaves them: kicked into drifts along the band edges and into heaps
+        at the gate posts, a few strays in the middle, bare stretches in between. Clusters follow the
+        band direction; their size follows a long tail, so a few heaps are big and most are small."""
         b, rng, p = self.b, self.rng, self.p
-        placed = 0
+
         def free(x, y):
-            return not (max(abs(x), abs(y)) > 2.45 and min(abs(x), abs(y)) > 1.45 and max(abs(x), abs(y)) < 3.65) and math.hypot(x, y) > 1.45
-        while placed < 1500:
+            far, near = max(abs(x), abs(y)), min(abs(x), abs(y))
+            return not (2.45 < far < 3.65 and near > 1.45) and math.hypot(x, y) > 1.45
+
+        def stone(x, y, s):
+            mat = p['stone'] if rng.random() < .6 else p['ringrock']
+            if s > .03:
+                b.rock((x, y, s * .15), (s, s * rng.uniform(.6, .9), s * .45), mat, rng, .2, (0, 0, rng.uniform(0, 3)), rng.choice((5, 6, 7)), 3)
+            else:
+                b.box((x, y, s * .2), (s * rng.uniform(1, 1.5), s, s * .55), mat, s * .25, (0, 0, rng.uniform(0, 3)), s * .2, rng)
+
+        heaps = 0
+        while heaps < 85:
             x, y = rng.uniform(-5.2, 5.2), rng.uniform(-5.2, 5.2)
             f = path_wear(x, y)
-            edge = 1 - abs(f - .4) / .4                                    # most along the band edges
-            if f < .04 or rng.random() > .2 + .8 * max(0.0, edge) or not free(x, y): continue
-            s = rng.uniform(.01, .03) if rng.random() < .8 else rng.uniform(.035, .065)
-            if s > .03:
-                b.rock((x, y, s * .15), (s, s * rng.uniform(.6, .9), s * .45), p['stone' if rng.random() < .6 else 'ringrock'], rng, .2,
-                       (0, 0, rng.uniform(0, 3)), rng.choice((5, 6, 7)), 3)
-            else:
-                b.box((x, y, s * .2), (s * rng.uniform(1, 1.5), s, s * .55), p['stone'] if rng.random() < .6 else p['ringrock'],
-                      s * .25, (0, 0, rng.uniform(0, 3)), s * .2, rng)
-            placed += 1
+            if not (.08 < f < .7) or not free(x, y) or rng.random() > 1 - abs(f - .35) * 1.6: continue
+            heaps += 1
+            count = min(60, int(4 + rng.paretovariate(1.3) * 5))
+            spread = rng.uniform(.06, .22) * (1 + count / 40)
+            along_y = abs(x) < abs(y)                                       # drifts lie along the band
+            sx, sy = (spread * .45, spread * 1.6) if along_y else (spread * 1.6, spread * .45)
+            for _ in range(count):
+                px, py = x + rng.gauss(0, sx), y + rng.gauss(0, sy)
+                if not free(px, py) or path_wear(px, py) < .03: continue
+                stone(px, py, rng.uniform(.008, .026) if rng.random() < .82 else rng.uniform(.03, .06))
+        for gate in range(4):                                               # heaps at the gate post feet
+            t = Turn(gate)
+            for side in (-1, 1):
+                for line in (LINE + .16, INNER - .12):
+                    cx, cy = side * (GATE - .12), line
+                    for _ in range(rng.randrange(6, 18)):
+                        px, py = cx + rng.gauss(0, .1), cy + rng.gauss(0, .08)
+                        wx, wy, _ = t.p(px, py)
+                        stone(wx, wy, rng.uniform(.01, .028) if rng.random() < .75 else rng.uniform(.03, .055))
+        strays = 0
+        while strays < 160:                                                  # single strays, more at the rim
+            x, y = rng.uniform(-5.2, 5.2), rng.uniform(-5.2, 5.2)
+            f = path_wear(x, y)
+            if f < .04 or not free(x, y) or rng.random() < f * .7: continue
+            stone(x, y, rng.uniform(.008, .03))
+            strays += 1
         flat = 0
-        while flat < 45:                                                   # big flat stones worn level with the path
+        while flat < 40:                                                     # big flat stones worn level with the path
             x, y = rng.uniform(-5, 5), rng.uniform(-5, 5)
             if path_wear(x, y) < .55 or not free(x, y): continue
             s = rng.uniform(.07, .15)

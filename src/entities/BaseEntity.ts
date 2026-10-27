@@ -27,6 +27,7 @@ import { BaseGroundingRenderer } from '../arena/BaseGroundingRenderer';
 import { nearestStructurePoint } from '../arena/StructureOutline';
 import type { PersistentBaseGravelCoverage } from '../arena/PersistentBaseGravelField';
 import { BaseAccentGlowRenderer } from '../arena/BaseAccentGlowRenderer';
+import type { BaseFortRenderer } from '../arena/baseStructures/BaseFortRenderer';
 import {
   integrityState,
   type WorldIntegrityMutationResult,
@@ -120,6 +121,8 @@ export class BaseEntity {
     damageable = false,
     private readonly healthBars: WorldHealthBarRenderer | null = null,
     private readonly turretAnimations: TurretAnimationController | null = null,
+    /** Presents the persistent core as the hand-built fort instead of base tiles (GDD Rustikale Basis). */
+    private readonly fort: BaseFortRenderer | null = null,
   ) {
     this.scene = scene;
     this.metrics = metrics;
@@ -187,8 +190,13 @@ export class BaseEntity {
     const cellTexture = hostile ? 'base_hostile' : 'base';
 
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
-    // Spawnbauwerke zeichnet der SpawnStructureRenderer des BaseManagers (GDD Spawnbauwerk V1).
-    if (this.spec.surface !== 'none' && this.role !== 'spawn-point') {
+    // Spawnbauwerke zeichnet der SpawnStructureRenderer des BaseManagers (GDD Spawnbauwerk V1), den
+    // persistenten Basiskern der BaseFortRenderer: Er bringt Boden, Licht und Schatten selbst mit.
+    if (this.isFortCore()) {
+      const region = this.spec.region;
+      this.fort!.add(this.id, this.metrics.offsetX + (region.minGridX + region.maxGridX + 1) / 2 * CELL_SIZE,
+        this.metrics.offsetY + (region.minGridY + region.maxGridY + 1) / 2 * CELL_SIZE, this.spec.cells.length);
+    } else if (this.spec.surface !== 'none' && this.role !== 'spawn-point') {
       this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
       this.grounding = new BaseGroundingRenderer(this.scene, { cells: this.spec.cells }, this.metrics,
         { hostile, gravel: this.groundGravel });
@@ -229,9 +237,14 @@ export class BaseEntity {
     this.healthBars?.position(this.healthBar, centerX, hpBarY);
   }
 
-  /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist. */
+  /** True for the friendly persistent core while its fort art is loaded. */
+  private isFortCore(): boolean {
+    return this.fort !== null && this.spec.faction === 'friendly' && this.spec.persistentReservationRadiusCells !== undefined;
+  }
+
+  /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist; das Fort bringt eigene Lichter. */
   getLightSpots(): readonly { x: number; y: number; radius: number }[] {
-    return !this.presentation || this.spec.surface === 'none' || this.role === 'spawn-point' || this.isInert()
+    return !this.presentation || this.spec.surface === 'none' || this.role === 'spawn-point' || this.isInert() || this.isFortCore()
       ? EMPTY_LIGHT_SPOTS : this.lightSpots;
   }
 
@@ -273,6 +286,7 @@ export class BaseEntity {
 
   /** Entfernt genau das Zellbild, dessen Explosion gerade abgespielt wird. */
   destroyCellVisual(cellIndex: number): void {
+    if (this.isFortCore()) this.fort!.destroyCell(this.id);
     this.accentGlow?.destroyCell(cellIndex);
     this.grounding?.destroyCell(cellIndex);
     const image = this.cellImages[cellIndex];
@@ -551,6 +565,7 @@ export class BaseEntity {
   destroy(): void {
     this.vulnerableMarker?.destroy();
     this.vulnerableMarker = null;
+    if (this.isFortCore()) this.fort!.remove(this.id);
     this.accentGlow?.destroy();
     this.accentGlow = null;
     this.grounding?.destroy();
@@ -574,6 +589,7 @@ export class BaseEntity {
 
   private resetRepresentation(): void {
     this.presentationCreated = false;
+    if (this.isFortCore()) this.fort!.remove(this.id);
     this.accentGlow?.destroy();
     this.accentGlow = null;
     this.grounding?.destroy();

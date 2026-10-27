@@ -601,6 +601,54 @@
       "visiblePixelSha256": "707ac5f6cb856e6c25e528c0368fdb403215c3565b3284e2dfbf2368f5987da2",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/base-fort-core/albedo.png": {
+      "file": "assets/sprites/pipeline-v2/base-fort-core/albedo.webp",
+      "source": "assets/sprites/pipeline-v2/base-fort-core/albedo.png",
+      "width": 704,
+      "height": 704,
+      "sourceBytes": 248392,
+      "downloadBytes": 140432,
+      "sourceSha256": "74e1d01bda152ab0633a198b88c52b5320bdf7ffeb3e2a539f2c47f47fbbc487",
+      "sha256": "f2bebdbccd4ba56967d99b4ee99441d6dbe6659ff1e9794589ed6b3e71a15b18",
+      "visiblePixelSha256": "d208f49e3e544322d8b794f2022a7a3196b03a3de5e146b4640ac28320518c52",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/base-fort-core/beauty.png": {
+      "file": "assets/sprites/pipeline-v2/base-fort-core/beauty.webp",
+      "source": "assets/sprites/pipeline-v2/base-fort-core/beauty.png",
+      "width": 704,
+      "height": 704,
+      "sourceBytes": 361782,
+      "downloadBytes": 133558,
+      "sourceSha256": "2174af01f918f50545702fa2d6819d6eb3937f667d644625e740678e364d8cd3",
+      "sha256": "16c417ba9e591585f90c04eea23952a071196e99f1434bf8ff14eb9818b18ea0",
+      "visiblePixelSha256": "6763cb3189f25db920fbd2edfeb9ef4cc1727f1abc9e8b2b828f5610c4f47cff",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/base-fort-core/ground.png": {
+      "file": "assets/sprites/pipeline-v2/base-fort-core/ground.webp",
+      "source": "assets/sprites/pipeline-v2/base-fort-core/ground.png",
+      "width": 704,
+      "height": 704,
+      "sourceBytes": 588795,
+      "downloadBytes": 429456,
+      "sourceSha256": "ea937ce6c0611cb8aef3dd2a30ebedfb8e49e5bd29c64e3c94f3e9173fc838d4",
+      "sha256": "59a65824581b56ec2f8972976b6e0e5ef5f45b678c4fd8120e0e9844f94451e2",
+      "visiblePixelSha256": "3dbd9e29bb826bad61759a74a5a005ba4e6def4352fe9b9e0937e254dda78063",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/base-fort-core/solid.png": {
+      "file": "assets/sprites/pipeline-v2/base-fort-core/solid.webp",
+      "source": "assets/sprites/pipeline-v2/base-fort-core/solid.png",
+      "width": 704,
+      "height": 704,
+      "sourceBytes": 365108,
+      "downloadBytes": 127760,
+      "sourceSha256": "8f2abc69a587585f06ab328e9b9875a14c4061847fba3e6a0b1854af8b3b2305",
+      "sha256": "ad41bbe971e66c59a04b591e272a00a483009dfbbf87520fa787e5d7f00597bc",
+      "visiblePixelSha256": "3c83620f86de28bee92735555b741478592d8e1b18e4f0c7374330fcfde3bae1",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/bridge-wood-ruin/idle.png": {
       "file": "assets/sprites/pipeline-v2/bridge-wood-ruin/idle.webp",
       "source": "assets/sprites/pipeline-v2/bridge-wood-ruin/idle.png",

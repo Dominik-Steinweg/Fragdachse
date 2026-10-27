@@ -1,0 +1,258 @@
+import * as Phaser from 'phaser';
+import { DEPTH, DEPTH_LIGHTING } from '../../config';
+import type { LightingSystem } from '../../effects/LightingSystem';
+import { LIGHT_PRESETS, type LightPresetKey } from '../../effects/LightingConfig';
+import type { LongCasterFrame, ShadowSystem } from '../../effects/ShadowSystem';
+import { STRUCTURE_SHADOW } from '../../effects/ShadowConfig';
+import { emissiveAlpha } from '../../effects/EmissiveScale';
+import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
+import { setCloudUniforms } from '../../effects/sunlight/cloudShadow';
+import { createSurfaceLightFrame, setSurfaceLightUniforms } from '../../effects/SurfaceLocalLights';
+import type { FogSurfaceStamp } from '../../effects/groundFog/FogSurfaceMask';
+import type { LobbyStructureSunlight } from '../lobbyStructures/LobbyStructureRenderer';
+import { LOBBY_STRUCTURE_RELIEF_FRAGMENT, LOBBY_STRUCTURE_SHADOW_FRAGMENT } from '../lobbyStructures/lobbyStructureShaders';
+import { baseFortCoreAsset, baseFortTextureKey, type BaseFortAsset, type BaseFortLayer } from './BaseFortAssets';
+
+type FortLighting = Pick<LightingSystem, 'setLight' | 'releaseLight' | 'getArtificialLightFactor'>;
+type FortShadows = Pick<ShadowSystem, 'getLongCasterFrame'>;
+
+/**
+ * Below the turrets' aura (ROCKS + 0.1) and sprite (ROCKS + 0.2), above the ground band: turrets
+ * stand on the decks, figures walk in front of the walls.
+ */
+export const BASE_FORT_DEPTH = DEPTH.ROCKS + 0.04;
+const RELIEF_DEPTH = BASE_FORT_DEPTH + 0.005;
+/** The translucent ground layer lies on the build-area gravel, below decals and figures. */
+const GROUND_DEPTH = DEPTH.BASES;
+const EMISSION_DEPTH = DEPTH_LIGHTING + 0.1;
+/**
+ * The ground layer lies above the ground chunks, so the ground's sun shading does not reach it;
+ * this tint brings its albedo down to the shaded gravel it covers (measured on map 04 at noon).
+ */
+const GROUND_TINT = 0xb6b2aa;
+/** Low decks and stakes: a lighter, softer ground shadow than the tall lobby buildings. */
+const FORT_SHADOW = { opacity: .34, softness: 1.6 };
+/** Embers glow by day too; lantern glass is visible by day and bright at night. */
+const LAYER_LOOK: Record<BaseFortLayer, { day: number; night: number; flicker: number; hz: number }> = {
+  forge: { day: .6, night: 1, flicker: .22, hz: 6.5 },
+  lamp: { day: .4, night: 1, flicker: .05, hz: 1.1 },
+};
+/**
+ * Light-map lights by socket prefix; daylight keeps a faint pool, night the full one. Small pools
+ * only: dozens of overlapping lights would flood the fort. The small torches only glow.
+ */
+const SOCKET_LIGHTS: readonly { prefix: string; preset: LightPresetKey; day: number; scale: number }[] = [
+  { prefix: 'lamp', preset: 'baseFortLantern', day: .25, scale: 1 },
+  { prefix: 'torch', preset: 'baseFortTorch', day: .3, scale: 1 },
+];
+/** The structure fades with the staggered cell explosions instead of vanishing at once. */
+const DESTROYED_ALPHA = 0;
+
+/** Deterministic flicker per light, two incommensurate sines. */
+function flicker(seconds: number, hz: number, amount: number, phase: number): number {
+  if (amount <= 0) return 1;
+  return 1 + amount * (.6 * Math.sin((seconds * hz + phase) * Math.PI * 2) + .4 * Math.sin((seconds * hz * 2.37 + phase * 3.1) * Math.PI * 2));
+}
+
+interface FortView {
+  readonly ground: Phaser.GameObjects.Image;
+  readonly body: Phaser.GameObjects.Image;
+  readonly relief: Phaser.GameObjects.Shader | null;
+  readonly shadow: Phaser.GameObjects.Shader | null;
+  readonly emission: { layer: BaseFortLayer; image: Phaser.GameObjects.Image; phase: number }[];
+  readonly lights: { key: string; preset: LightPresetKey; day: number; scale: number; x: number; y: number; phase: number }[];
+  readonly stamp: { -readonly [K in keyof FogSurfaceStamp]: FogSurfaceStamp[K] };
+  readonly cellCount: number;
+  destroyedCells: number;
+}
+
+/**
+ * Presentation of the persistent base core as one hand-built fort (GDD Rustikale Basis): the
+ * translucent ground layer over the build-area gravel, the lit structure with height relief and a
+ * ray-marched ground shadow on the shared sun, emissive torches and lanterns above the light map,
+ * and their light-map lights. Collision, occlusion and HP stay with the base cells; the fort only
+ * presents them. One renderer per BaseManager, one view per persistent core.
+ */
+export class BaseFortRenderer {
+  private readonly views = new Map<string, FortView>();
+  private readonly asset: BaseFortAsset;
+  private lighting: FortLighting | null = null;
+  private shadows: FortShadows | null = null;
+  private sunlight: LobbyStructureSunlight | null = null;
+  private readonly castFrame: LongCasterFrame = { x: 0, y: 1, lengthMult: 1, softnessMult: 1, opacityMult: 1, visible: true };
+  private readonly surfaceLights = createSurfaceLightFrame();
+  private readonly canvasUniform = new Float32Array(4);
+  private readonly quadUniform = new Float32Array(4);
+  private readonly castUniform = new Float32Array(4);
+  private readonly heightUniform = new Float32Array(2);
+  private readonly optionsUniform = new Float32Array([0, 0, 1, 1]);
+  private readonly shadeUniform = new Float32Array(2);
+
+  constructor(private readonly scene: Phaser.Scene) {
+    this.asset = baseFortCoreAsset()!;
+  }
+
+  /** Presents a persistent core centred on the given world point (the centre of its anchor cell). */
+  add(baseId: string, centreX: number, centreY: number, cellCount: number): void {
+    this.remove(baseId);
+    const asset = this.asset, size = asset.displaySize;
+    const lit = getGraphicsQualityProfile(this.scene).level !== 'low';
+    const left = centreX - size / 2, top = centreY - size / 2;
+    const ground = this.scene.add.image(left, top, baseFortTextureKey(asset, 'ground')).setOrigin(0).setDisplaySize(size, size)
+      .setDepth(GROUND_DEPTH).setTint(GROUND_TINT);
+    const body = this.scene.add.image(left, top, baseFortTextureKey(asset, lit ? 'albedo' : 'beauty')).setOrigin(0)
+      .setDisplaySize(size, size).setDepth(BASE_FORT_DEPTH);
+    const emission = asset.layers.map((layer, index) => ({ layer, phase: index * .21,
+      image: this.scene.add.image(left, top, baseFortTextureKey(asset, `emission-${layer}`)).setOrigin(0).setDisplaySize(size, size)
+        .setDepth(EMISSION_DEPTH).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0) }));
+    const lights: FortView['lights'] = [];
+    for (const [name, socket] of Object.entries(asset.sockets)) {
+      const rule = SOCKET_LIGHTS.find(candidate => name.startsWith(candidate.prefix + '_'));
+      if (!rule) continue;
+      lights.push({ key: `base-fort:${baseId}:${name}`, preset: rule.preset, day: rule.day, scale: rule.scale,
+        x: centreX + socket.x, y: centreY + socket.y, phase: lights.length * .43 });
+    }
+    const stamp = { active: true, visible: true, alpha: 1, x: left, y: top, displayWidth: size, displayHeight: size,
+      scaleX: size / asset.sourceSize, scaleY: size / asset.sourceSize, originX: 0, originY: 0, rotation: 0,
+      texture: { key: baseFortTextureKey(asset, 'solid') }, frame: { name: '__BASE' } };
+    this.views.set(baseId, { ground, body, emission, lights, stamp, cellCount, destroyedCells: 0,
+      relief: lit ? this.makeRelief(left, top) : null, shadow: lit ? this.makeShadow(left, top) : null });
+  }
+
+  /** One base cell exploded: the fort fades with the staggered destruction and is gone with the last. */
+  destroyCell(baseId: string): void {
+    const view = this.views.get(baseId);
+    if (!view) return;
+    view.destroyedCells = Math.min(view.cellCount, view.destroyedCells + 1);
+    const remaining = 1 - view.destroyedCells / view.cellCount;
+    const alpha = remaining <= 0 ? DESTROYED_ALPHA : .35 + .65 * remaining;
+    view.body.setAlpha(alpha);
+    if (remaining <= 0) {
+      for (const object of [view.body, view.relief, view.shadow]) object?.setVisible(false);
+      view.stamp.visible = false;
+      for (const light of view.lights) this.lighting?.releaseLight(light.key, { immediate: true });
+    }
+  }
+
+  remove(baseId: string): void {
+    const view = this.views.get(baseId);
+    if (!view) return;
+    for (const light of view.lights) this.lighting?.releaseLight(light.key, { immediate: true });
+    view.ground.destroy(); view.body.destroy();
+    this.destroyQuad(view.relief); this.destroyQuad(view.shadow);
+    for (const { image } of view.emission) image.destroy();
+    this.views.delete(baseId);
+  }
+
+  setLighting(lighting: FortLighting | null): void {
+    if (this.lighting && this.lighting !== lighting) for (const view of this.views.values()) {
+      for (const light of view.lights) this.lighting.releaseLight(light.key, { immediate: true });
+    }
+    this.lighting = lighting;
+  }
+
+  /** Leaves the light map, e.g. while the World is not shown; the next update lights it again. */
+  releaseLights(): void {
+    for (const view of this.views.values()) for (const light of view.lights) this.lighting?.releaseLight(light.key, { immediate: true });
+  }
+
+  setShadows(shadows: FortShadows | null): void { this.shadows = shadows; }
+
+  /** Lent by the World sunlight owner while it presents this World; null when it leaves. */
+  setSunlight(sunlight: LobbyStructureSunlight | null): void { this.sunlight = sunlight; }
+
+  /** Solid geometry of every standing fort: the fog is cut on it, never on its ground layer. */
+  *getFogSurfaces(): Iterable<FogSurfaceStamp> {
+    for (const view of this.views.values()) if (view.stamp.visible) yield view.stamp;
+  }
+
+  /** Per frame: glow, light-map lights and the shadow bearing. */
+  update(): void {
+    const seconds = this.scene.time.now / 1000;
+    this.shadows?.getLongCasterFrame(this.castFrame);
+    const lighting = this.lighting;
+    const night = lighting?.getArtificialLightFactor() ?? 0;
+    for (const view of this.views.values()) {
+      view.shadow?.setVisible(this.castFrame.visible && view.destroyedCells < view.cellCount);
+      const standing = view.destroyedCells < view.cellCount;
+      for (const glow of view.emission) {
+        const look = LAYER_LOOK[glow.layer];
+        const level = look.day + (look.night - look.day) * night;
+        glow.image.setAlpha(standing && lighting ? emissiveAlpha(Math.min(1, level * flicker(seconds, look.hz, look.flicker, glow.phase))) : 0);
+      }
+      if (!lighting || !standing) continue;
+      for (const light of view.lights) {
+        const level = light.day + (1 - light.day) * night;
+        const preset = LIGHT_PRESETS[light.preset];
+        lighting.setLight(light.key, light.preset, light.x, light.y,
+          { intensity: preset.intensity * level, radiusPx: preset.radiusPx * light.scale });
+      }
+    }
+  }
+
+  private makeRelief(left: number, top: number): Phaser.GameObjects.Shader {
+    const asset = this.asset, size = asset.displaySize;
+    const quad = new Phaser.GameObjects.Shader(this.scene, {
+      name: 'LobbyStructureRelief', shaderName: 'LobbyStructureRelief', fragmentSource: LOBBY_STRUCTURE_RELIEF_FRAGMENT,
+      setupUniforms: (set: (name: string, value: unknown) => void) => {
+        const sunlight = this.sunlight;
+        setCloudUniforms(set, sunlight?.clouds);
+        set('uElevation', 0); set('uMineralResponse', 0); set('uFineMineral', 0);
+        this.canvasUniform[0] = left; this.canvasUniform[1] = top; this.canvasUniform[2] = size; this.canvasUniform[3] = 0;
+        set('uCanvas', this.canvasUniform);
+        this.heightUniform[0] = asset.heightPx.min; this.heightUniform[1] = asset.heightPx.max;
+        set('uHeight', this.heightUniform);
+        set('uSun', sunlight?.state.sun ?? [0, 0, 1]);
+        this.optionsUniform[0] = sunlight?.state.enabled ? sunlight.clouds.strength : 0;
+        set('uOptions', this.optionsUniform);
+        const lights = sunlight ? sunlight.surfaceLights(left, top, size, size, this.surfaceLights) : null;
+        setSurfaceLightUniforms(set, lights, sunlight?.moon ?? null, sunlight?.clouds.quality?.surfaceLights);
+      },
+    }, left, top, size, size, [this.scene.textures.get(baseFortTextureKey(asset, 'elevation'))]);
+    return this.scene.add.existing(quad).setOrigin(0).setDepth(RELIEF_DEPTH).setBlendMode(Phaser.BlendModes.MULTIPLY);
+  }
+
+  private makeShadow(left: number, top: number): Phaser.GameObjects.Shader {
+    const asset = this.asset, size = asset.displaySize, reach = STRUCTURE_SHADOW.maxReachPx;
+    const quadLeft = left - reach, quadTop = top - reach, quadSize = size + reach * 2;
+    const quad = new Phaser.GameObjects.Shader(this.scene, {
+      name: 'LobbyStructureShadow', shaderName: 'LobbyStructureShadow', fragmentSource: LOBBY_STRUCTURE_SHADOW_FRAGMENT,
+      setupUniforms: (set: (name: string, value: unknown) => void) => {
+        const frame = this.castFrame;
+        set('uCaster', 0);
+        set('uStep', STRUCTURE_SHADOW.marchStepPx);
+        this.canvasUniform[0] = left; this.canvasUniform[1] = top; this.canvasUniform[2] = size; this.canvasUniform[3] = 0;
+        set('uCanvas', this.canvasUniform);
+        this.heightUniform[0] = asset.heightPx.min; this.heightUniform[1] = asset.heightPx.max;
+        set('uHeight', this.heightUniform);
+        this.quadUniform[0] = quadLeft; this.quadUniform[1] = quadTop; this.quadUniform[2] = quadSize; this.quadUniform[3] = quadSize;
+        set('uQuad', this.quadUniform);
+        this.castUniform[0] = frame.x; this.castUniform[1] = frame.y; this.castUniform[2] = frame.lengthMult;
+        this.castUniform[3] = Math.min(reach, asset.heightPx.max * frame.lengthMult);
+        set('uCast', this.castUniform);
+        this.shadeUniform[0] = FORT_SHADOW.opacity * frame.opacityMult;
+        this.shadeUniform[1] = STRUCTURE_SHADOW.softnessPx * FORT_SHADOW.softness * frame.softnessMult;
+        set('uShade', this.shadeUniform);
+      },
+    }, quadLeft, quadTop, quadSize, quadSize, [this.scene.textures.get(baseFortTextureKey(asset, 'caster-height'))]);
+    return this.scene.add.existing(quad).setOrigin(0).setDepth(STRUCTURE_SHADOW.layerDepth).setBlendMode(Phaser.BlendModes.MULTIPLY);
+  }
+
+  private destroyQuad(quad: Phaser.GameObjects.Shader | null): void {
+    if (!quad) return;
+    // Phaser 4.2.1 Shader.preDestroy omits its private VAOs and vertex buffer (as in LobbyStructureRenderer).
+    const node = quad.renderNode;
+    if (node?.programManager) {
+      for (const suite of Object.values(node.programManager.programs)) {
+        Phaser.Utils.Array.Remove(node.renderer.glVAOWrappers, suite.vao); suite.vao.destroy();
+      }
+      node.programManager.programs = {}; node.renderer.deleteBuffer(node.vertexBufferLayout.buffer);
+    }
+    quad.destroy();
+  }
+
+  destroy(): void {
+    for (const id of [...this.views.keys()]) this.remove(id);
+    this.lighting = null; this.shadows = null; this.sunlight = null;
+  }
+}

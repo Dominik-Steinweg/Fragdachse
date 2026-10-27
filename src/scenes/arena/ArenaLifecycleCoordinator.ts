@@ -570,6 +570,7 @@ export class ArenaLifecycleCoordinator {
             for (const base of bases) yield* base.getSurfaceImages();
             yield* preview;
             if (manager) yield* manager.getSpawnStructureFogSurfaces();
+            if (manager) yield* manager.getFortFogSurfaces();
             yield* structures;
           })();
         },

@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { preloadLobbyStaffAssets } from './LobbyStaffAssets';
 import { preloadLobbyStructureAssets } from '../arena/lobbyStructures/LobbyStructureAssets';
+import { preloadBaseFortAssets } from '../arena/baseStructures/BaseFortAssets';
 import { PIPELINE_ASSETS, pipelineAnimationKey, getPipelineSpriteScale, isPipelineBossTexture } from '../config/pipelineAssets';
 
 /**
@@ -95,6 +96,7 @@ export function getWalkingSheetForStaticTexture(staticTextureKey: string): Walki
 export function preloadBadgerAnimationAssets(loader: Phaser.Loader.LoaderPlugin): void {
   preloadLobbyStaffAssets(loader);
   preloadLobbyStructureAssets(loader);
+  preloadBaseFortAssets(loader);
   for (const sheet of WALKING_SHEETS) {
     loader.spritesheet(sheet.textureKey, sheet.assetPath, {
       frameWidth: sheet.frameWidth,

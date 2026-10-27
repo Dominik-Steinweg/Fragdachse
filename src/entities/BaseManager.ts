@@ -31,6 +31,11 @@ import { SpawnStructureRenderer, type SpawnStructureShadowCell } from '../effect
 import type { SpawnStructureView } from '../effects/spawnStructure/SpawnStructureModel';
 import { worldCellCenter } from '../world/WorldMetrics';
 import { CELL_SIZE } from '../config';
+import { BaseFortRenderer } from '../arena/baseStructures/BaseFortRenderer';
+import { isBaseFortLoaded } from '../arena/baseStructures/BaseFortAssets';
+import type { ShadowSystem } from '../effects/ShadowSystem';
+import type { LobbyStructureSunlight } from '../arena/lobbyStructures/LobbyStructureRenderer';
+import type { FogSurfaceStamp } from '../effects/groundFog/FogSurfaceMask';
 
 /**
  * Verwaltet die world-owned Base-Geometrie und bindet bei Bedarf genau einen Activity-Overlay.
@@ -85,6 +90,8 @@ export class BaseManager {
   private readonly structureRenderer: SpawnStructureRenderer | null;
   private readonly spawnStructures: { readonly entity: BaseEntity; readonly wallCells: readonly { x: number; y: number }[] }[] = [];
   private readonly structureViews: SpawnStructureView[] = [];
+  /** The persistent core's fort art (GDD Rustikale Basis); null without a core or before its art loads. */
+  private readonly fortRenderer: BaseFortRenderer | null;
   /** Outline rects of the live outlined structures, rebuilt only when obstacleGeneration changes. */
   private structureRects: readonly StructureRect[] = [];
   private structureRectsGeneration = -1;
@@ -106,8 +113,10 @@ export class BaseManager {
     this.worldMetrics = metrics;
     this.group = scene.physics.add.staticGroup();
     this.destructionRenderer = presentation ? new BaseDestructionRenderer(scene, destructionHooks) : null;
+    this.fortRenderer = presentation && isBaseFortLoaded(scene) && baseSpecs.some((spec) => (
+      spec.faction === 'friendly' && spec.persistentReservationRadiusCells !== undefined)) ? new BaseFortRenderer(scene) : null;
     for (const spec of baseSpecs) {
-      const entity = new BaseEntity(scene, spec, metrics, presentation, damageable, healthBars, turretAnimations);
+      const entity = new BaseEntity(scene, spec, metrics, presentation, damageable, healthBars, turretAnimations, this.fortRenderer);
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
       this.entities.push(entity);
       this.byId.set(entity.id, entity);
@@ -229,6 +238,21 @@ export class BaseManager {
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
     this.structureRenderer?.setLighting(lighting);
+    this.fortRenderer?.setLighting(lighting);
+  }
+
+  /** Shadow bearing and sun relief of the persistent fort, lent by the World presentation. */
+  setFortPresentation(shadows: Pick<ShadowSystem, 'getLongCasterFrame'> | null): void {
+    this.fortRenderer?.setShadows(shadows);
+  }
+
+  setFortSunlight(sunlight: LobbyStructureSunlight | null): void {
+    this.fortRenderer?.setSunlight(sunlight);
+  }
+
+  /** Solid stamps of the persistent fort for the ground fog. */
+  getFortFogSurfaces(): Iterable<FogSurfaceStamp> {
+    return this.fortRenderer?.getFogSurfaces() ?? [];
   }
 
   /** Activity input: announced release of a spawn structure (0..1); cleared when the Activity detaches. */
@@ -289,6 +313,7 @@ export class BaseManager {
    */
   syncLights(): void {
     this.burnRenderer?.sync(this.entities, this.worldMetrics, this.lighting);
+    this.fortRenderer?.update();
     this.syncSpawnStructures();
     const lighting = this.lighting;
     if (!this.presentation || !lighting) return;
@@ -341,6 +366,7 @@ export class BaseManager {
   releaseLights(): void {
     this.burnRenderer?.clear();
     this.structureRenderer?.releaseLights();
+    this.fortRenderer?.releaseLights();
     if (!this.lighting) return;
     for (const key of this.litBaseKeys) this.lighting.releaseLight(key);
     this.litBaseKeys.clear();
@@ -604,6 +630,7 @@ export class BaseManager {
     this.releaseLights();
     this.structureRenderer?.destroy();
     this.destructionRenderer?.destroy();
+    this.fortRenderer?.destroy();
     for (const entity of this.entities) entity.destroy();
     this.entities.length = 0;
     this.byId.clear();

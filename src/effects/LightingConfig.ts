@@ -800,6 +800,36 @@ export const LIGHT_PRESETS = {
     flickerHz: 1.3,
     surfaceRelief: true,
   },
+  /** Lanterns on the gate posts of the persistent base fort: warm, steady, local pools. */
+  baseFortLantern: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 42,
+    color: 0xffbd6e,
+    intensity: 0.48,
+    durationMs: 0,
+    decayExponent: 1.1,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0.05,
+    flickerHz: 1.1,
+    surfaceRelief: true,
+  },
+  /** Torches outside the fort's palisade: orange, flickering, a small pool each. */
+  baseFortTorch: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 36,
+    color: 0xff9447,
+    intensity: 0.48,
+    durationMs: 0,
+    decayExponent: 1.15,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0.16,
+    flickerHz: 5.5,
+    surfaceRelief: true,
+  },
   /** The light strip of finished base floor tiles in the yard: small, cool, steady. */
   lobbyTileGlow: {
     enabled: true,

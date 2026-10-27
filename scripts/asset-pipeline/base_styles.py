@@ -186,7 +186,9 @@ class Fort(Style):
         b.box((x, y, h + .02), (.21, .21, .04), p['tar'], .005)
         b.box((x, y, h + .06), (.13, .13, .04), p['dark'], .006)
         b.cylinder((x, y, h + .14), .05, .12, p['lamp'], 10, 0)
-        b.box((x, y, h + .215), (.14, .14, .025), p['dark'], .006)
+        for cx, cy, w, d in ((0, -.06, .14, .02), (0, .06, .14, .02), (-.06, 0, .02, .14), (.06, 0, .02, .14)):
+            b.box((x + cx, y + cy, h + .215), (w, d, .025), p['dark'], .004)
+        b.cylinder((x, y, h + .21), .03, .02, p['lamp'], 10, 0)
         self.socket('lamp', x, y, h + .14)
 
     def quadrant(self, q, rng):
