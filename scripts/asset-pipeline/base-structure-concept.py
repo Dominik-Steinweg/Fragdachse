@@ -35,7 +35,7 @@ draft = shape.draft
 bpy = draft.bpy
 
 # Colour, watts and height lift (fire light sits above the basket so the coals keep their colour).
-LIGHTS = {'lamp': ((1.0, .70, .40), 12, 0), 'fire': ((1.0, .55, .25), 16, .25), 'torch': ((1.0, .56, .26), 5, .05)}
+LIGHTS = {'lamp': ((1.0, .70, .40), 12, 0), 'fire': ((1.0, .55, .25), 16, .25), 'torch': ((1.0, .56, .26), 5, .05), 'torchlet': ((1.0, .58, .28), 3, .04)}
 # Game sun at noon: shadows fall towards the screen bottom (-Y), slightly left.
 SUN = (-.12, -.40, -.91)
 

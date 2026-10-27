@@ -22,12 +22,12 @@ from pathlib import Path
 from base_structure_parts import Batch, mesh_object, cone
 from dawn_parts import linear
 
-DECK, WALL = .74, .26
+DECK, WALL = 1.25, .26        # raised fighting deck: turrets on it fire over the palisade
 LINE = 3.5 - WALL / 2           # palisade centre line on the outer sides
 INNER = 2.5                     # courtyard edge
 GATE = 1.5 + WALL / 2           # gate post line: the arm ends, either side of the 3-cell gates
-LOG_R, LOG_PITCH, LOG_H = .11, .22, 1.6
-POST_R, POST_H = .09, 1.45
+LOG_R, LOG_PITCH, LOG_H = .11, .22, DECK + .46   # the stakes rise only a breastwork above the deck
+POST_R, POST_H = .09, DECK + .5
 TEXTURES = Path(__file__).resolve().parents[2] / 'art' / 'poc' / 'base-rustic'
 
 
@@ -165,10 +165,12 @@ class FortMaster:
             ringstone=m('Wall walk flagstone', (122, 118, 108), .35), chip=m('Wood chips', (150, 120, 84), .25),
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
             brass=m('Worn brass fittings', (150, 112, 58), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7),
-            moss=m('Stake moss', (70, 92, 38), .3))
+            moss=m('Stake moss', (70, 92, 38), .3), moss2=m('Old moss', (84, 96, 46), .3),
+            lichen=m('Grey lichen', (150, 152, 128), .2), ringrock=m('Ring fieldstone', (112, 108, 98), .4),
+            grass=m('Turf tuft', (66, 82, 40), .3), grass2=m('Dry turf tuft', (118, 108, 70), .3), fern=m('Fern frond', (52, 78, 34), .3))
         # Partial covers over the game's gravel: the path pales and compacts it, moss grows over it in patches.
-        self.path = image_material('Worn path earth', 'path-ref5.png', 1.35, .95, .95, patchy=1.6)
-        self.mossmat = image_material('Moss carpet', 'moss-ref5.png', 1.3, 1.7, .9, (118, 108, 78), .3, (40, 46, 28), patchy=2.2)
+        self.path = image_material('Worn path gravel', 'gravel-path-03.png', 2.2, .98, .9, patchy=1.25)
+        self.mossmat = image_material('Moss carpet', 'moss-carpet-01.png', 1.4, .78, .78, (92, 98, 56), .3, (40, 46, 28), patchy=1.8)
         self.rut = ground_tint('Trodden earth', (78, 66, 50))
 
     def socket(self, name, xyz):
@@ -183,8 +185,13 @@ class FortMaster:
         px, py, _ = t.p(x + rng.uniform(-.008, .008), y + rng.uniform(-.008, .008))
         tip = 'mossy' if rng.random() < .55 else 'cut'
         cone(self.c, 'Sharpened stake tip', (px, py), r, h, h + rng.uniform(.16, .22), self.p[tip], 10, 0, rng.uniform(0, 1))
-        a = rng.uniform(0, math.tau)                                  # moss cushion on the stake shoulder
-        b.ell(t.p(x + r * .45 * math.cos(a), y + r * .45 * math.sin(a), h - .01), (r * .8, r * .65, .035), self.p['moss'], 10, 4)
+        for k in range(1 if rng.random() < .5 else 2):               # moss cushions on the stake shoulder
+            a = rng.uniform(0, math.tau)
+            b.ell(t.p(x + r * .45 * math.cos(a), y + r * .45 * math.sin(a), h - .01 - k * .02), (r * .85, r * .7, .04),
+                  self.p['moss' if rng.random() < .6 else 'moss2'], 10, 4)
+        if rng.random() < .3:
+            a = rng.uniform(0, math.tau)
+            b.ell(t.p(x + r * .6 * math.cos(a), y + r * .6 * math.sin(a), h + .02), (r * .35, r * .3, .012), self.p['lichen'], 8, 3)
 
     def stakes(self, t, a, b, fixed, along_x):
         n = max(1, round(abs(b - a) / LOG_PITCH))
@@ -198,8 +205,7 @@ class FortMaster:
         b.box(t.p(x, y, POST_H / 2), (2 * POST_R, 2 * POST_R, POST_H), p['oak'], .012, t.r(), .006, self.rng)
         b.box(t.p(x, y, POST_H + .02), (2 * POST_R + .03, 2 * POST_R + .03, .04), p['tar'], .005, t.r())
         b.box(t.p(x, y, POST_H - .25), (2 * POST_R + .015, 2 * POST_R + .015, .04), p['iron'], .003, t.r())
-        if self.rng.random() < .6:
-            b.ell(t.p(x - .03, y + .03, POST_H + .045), (.06, .05, .015), p['moss'], 8, 3)
+        b.ell(t.p(x - .03, y + .03, POST_H + .045), (.07, .055, .016), p['moss'], 8, 3)
         self.lantern(t, x, y, POST_H + .04)
 
     def lantern(self, t, x, y, z):
@@ -211,16 +217,48 @@ class FortMaster:
         b.box(t.p(x, y, z + .175), (.14, .14, .025), p['dark'], .006, t.r())
         self.socket('lamp', t.p(x, y, z + .1))
 
-    def torch(self, t, x, y, outward):
-        """Small torch on an iron bracket fixed to the outside of the palisade."""
+    def torch(self, t, x, y, outward, z, size=1.0, pole=False):
+        """Torch on an iron bracket at the palisade, or on its own pole stuck in the earth bank."""
         b, p, rng = self.b, self.p, self.rng
-        z = 1.18 + rng.uniform(-.04, .04)
         ox, oy = outward
-        b.rod(t.p(x - ox * .12, y - oy * .12, z - .1), t.p(x, y, z - .1), .012, p['dark'], 6)
-        b.rod(t.p(x - ox * .02, y - oy * .02, z - .26), t.p(x + ox * .015, y + oy * .015, z), .018, p['oak'], 6)
-        b.cylinder(t.p(x + ox * .015, y + oy * .015, z + .015), .034, .05, p['iron'], 10, .004)
-        b.ell(t.p(x + ox * .015, y + oy * .015, z + .05), (.026, .026, .03), p['ember'], 8, 4)
-        self.socket('torch', t.p(x + ox * .015, y + oy * .015, z + .1))
+        if pole:
+            b.cylinder(t.p(x, y, z / 2), .028, z, p['bark'], 8, .004, t.r(rng.uniform(-.05, .05), rng.uniform(-.05, .05)))
+        else:
+            arm = rng.uniform(.1, .18)
+            b.rod(t.p(x - ox * arm, y - oy * arm, z - .1), t.p(x, y, z - .1), .012, p['dark'], 6)
+        b.rod(t.p(x - ox * .02, y - oy * .02, z - .24), t.p(x + ox * .015, y + oy * .015, z), .018, p['oak'], 6)
+        hx, hy = x + ox * .015, y + oy * .015
+        b.cylinder(t.p(hx, hy, z + .015), .03 * size, .05, p['dark'], 10, .004)
+        b.ell(t.p(hx, hy, z + .05), (.024 * size, .021 * size, .03 * size), p['ember'], 8, 4, t.r(0, 0, rng.uniform(0, 3)))
+        self.socket('torch' if size >= 1 else 'torchlet', t.p(hx, hy, z + .1))
+
+    def torches(self, t):
+        """Torches outside one quarter: never an even row. Gate ends and the corner are always lit;
+        the walls carry a few more at irregular spacing, on the palisade or on poles in the bank."""
+        rng = self.rng
+        face = LINE + LOG_R + .08
+        lit = []
+
+        def place(u, side, pole=False, z=None, size=None):
+            # side 'n': along the north face at x = u; side 'w': along the west face at y = -u.
+            out = face + (rng.uniform(.3, .6) if pole else 0)
+            x, y, ow = (u, out, (0, 1)) if side == 'n' else (-out, -u, (-1, 0))
+            lit.append((x, y))
+            self.torch(t, x, y, ow, z or rng.uniform(DECK + .05, DECK + .45), size or rng.choice((.75, 1.0, 1.0, 1.25)), pole)
+
+        place(-GATE - rng.uniform(.22, .4), 'n')
+        place(-GATE - rng.uniform(.22, .4), 'w')
+        if rng.random() < .55:
+            self.torch(t, -LINE - rng.uniform(.4, .65), LINE + rng.uniform(.4, .65), (-.7, .7), rng.uniform(1.5, 1.85), 1.25, True)
+        else:
+            self.torch(t, -LINE - .14, LINE + .14, (-.7, .7), DECK + .4, 1.0)
+        for side in ('n', 'w'):
+            count = rng.choice((0, 1, 1, 2))
+            for _ in range(count):
+                for _ in range(10):
+                    u = rng.uniform(-3.15, -2.3)
+                    if all(abs(u - (q[0] if side == 'n' else -q[1])) > .45 for q in lit): break
+                place(u, side, rng.random() < .35)
 
     def deck(self, t, x0, y0, x1, y1, boards_along_y):
         """Plank deck on a tarred frame; staggered butt joints, the odd darker board, nail heads."""
@@ -249,6 +287,21 @@ class FortMaster:
                 v += length
             u += w
 
+    def deck_moss(self, t):
+        """Moss and lichen creep over the decks from the palisade side and settle in the corners."""
+        b, rng, p = self.b, self.rng, self.p
+        for _ in range(55):
+            if rng.random() < .5: x, y = rng.uniform(-3.24, -1.55), rng.uniform(3.0, 3.24)
+            else: x, y = rng.uniform(-3.24, -3.0), rng.uniform(1.55, 3.24)
+            s = rng.uniform(.03, .09)
+            b.ell(t.p(x, y, DECK + .006), (s, s * rng.uniform(.5, .9), .01), p['moss' if rng.random() < .55 else 'moss2'], 8, 3,
+                  t.r(0, 0, rng.uniform(0, 3)))
+        for _ in range(16):
+            x, y = rng.uniform(-3.2, -1.6), rng.uniform(1.6, 3.2)
+            if min(abs(x - round(x)), abs(y - round(y))) > .14 and max(abs(x - round(x)), abs(y - round(y))) < .3: continue
+            s = rng.uniform(.015, .035)
+            b.ell(t.p(x, y, DECK + .005), (s, s * .8, .006), p['lichen'], 6, 3)
+
     def beam(self, t, a, b_, z, width, height, mat=None):
         """A squared timber between two plan points; z is its top."""
         (ax, ay), (bx, by) = a, b_
@@ -275,16 +328,13 @@ class FortMaster:
         self.stakes(t, -LINE + .16, -inner_post - .14, GATE, True)
         for a, b_ in (((-LINE + .2, LINE - LOG_R - .035), (-GATE - .15, LINE - LOG_R - .035)),
                       ((-LINE + LOG_R + .035, GATE + .15), (-LINE + LOG_R + .035, LINE - .2))):
-            self.beam(t, a, b_, 1.15, .06, .08)                                  # binding wale inside the stakes
+            self.beam(t, a, b_, DECK + .28, .06, .08)                            # binding wale inside the stakes
         # Uniform gate posts with lanterns at both ends of both arms; the decks stay free for turrets,
         # so all other light hangs outside: small torches on brackets along the outer palisade.
         for x, y in ((-GATE, LINE), (-GATE, inner_post), (-LINE, GATE), (-inner_post, GATE)):
             self.post(t, x, y)
-        out = LINE + LOG_R + .1
-        for u in (-3.0, -2.5, -2.0):
-            self.torch(t, u, out, (0, 1))
-            self.torch(t, -out, -u, (-1, 0))
-        self.torch(t, -LINE - .2, LINE + .2, (-.7, .7))
+        self.torches(t)
+        self.deck_moss(t)
         self.gate(t)
 
     def gate(self, t):
@@ -312,12 +362,13 @@ class FortMaster:
 
         def moss(x, y):
             far = max(abs(x), abs(y))
-            rim = smooth((4.25 + .3 * wobble(x * 1.4, y * 1.4, 8) - far) / .6)
+            rim = smooth((4.4 + .35 * wobble(x * 1.4, y * 1.4, 8) - far) / .6)
             if rim <= .01: return None
-            f = rim * (1 - smooth(path_wear(x, y) * 1.25 - .15))
-            f *= .8 + .2 * wobble(x * 3.1, y * 3.1, 2)
-            return (.003, max(0.0, min(1.0, f * .95)), .25 * (1 - rim))
-        ground_sheet(self.c, 'Moss carpet', -4.6, -4.6, 4.6, 4.6, moss, self.mossmat, .07)
+            f = rim * (1 - smooth(path_wear(x, y) * 1.1 - .25))
+            f *= .75 + .25 * wobble(x * 3.1, y * 3.1, 2)
+            return (.003, max(0.0, min(1.0, f * 1.2)), .25 * (1 - rim))
+        ground_sheet(self.c, 'Moss carpet', -4.8, -4.8, 4.8, 4.8, moss, self.mossmat, .07)
+        self.ground_growth()
 
     def wear_marks(self):
         """Countless faint, overlapping wheel and foot marks through every gate.
@@ -351,16 +402,29 @@ class FortMaster:
         """Loose pebbles and grit pushed to the sides of the worn bands, a few in the middle."""
         b, rng, p = self.b, self.rng, self.p
         placed = 0
-        while placed < 520:
+        def free(x, y):
+            return not (max(abs(x), abs(y)) > 2.45 and min(abs(x), abs(y)) > 1.45 and max(abs(x), abs(y)) < 3.65) and math.hypot(x, y) > 1.45
+        while placed < 1500:
             x, y = rng.uniform(-5.2, 5.2), rng.uniform(-5.2, 5.2)
             f = path_wear(x, y)
-            edge = 1 - abs(f - .45) / .45                                  # most along the band edges
-            if f < .05 or rng.random() > .15 + .85 * max(0.0, edge): continue
-            if max(abs(x), abs(y)) > 2.45 and min(abs(x), abs(y)) > 1.45 and max(abs(x), abs(y)) < 3.65: continue
-            s = rng.uniform(.012, .035) if rng.random() < .85 else rng.uniform(.04, .07)
-            b.box((x, y, s * .25), (s * rng.uniform(1, 1.5), s, s * .6), p['stone'] if rng.random() < .7 else p['ringstone'],
-                  s * .25, (0, 0, rng.uniform(0, 3)), s * .2, rng)
+            edge = 1 - abs(f - .4) / .4                                    # most along the band edges
+            if f < .04 or rng.random() > .2 + .8 * max(0.0, edge) or not free(x, y): continue
+            s = rng.uniform(.01, .03) if rng.random() < .8 else rng.uniform(.035, .065)
+            if s > .03:
+                b.rock((x, y, s * .15), (s, s * rng.uniform(.6, .9), s * .45), p['stone' if rng.random() < .6 else 'ringrock'], rng, .2,
+                       (0, 0, rng.uniform(0, 3)), rng.choice((5, 6, 7)), 3)
+            else:
+                b.box((x, y, s * .2), (s * rng.uniform(1, 1.5), s, s * .55), p['stone'] if rng.random() < .6 else p['ringrock'],
+                      s * .25, (0, 0, rng.uniform(0, 3)), s * .2, rng)
             placed += 1
+        flat = 0
+        while flat < 45:                                                   # big flat stones worn level with the path
+            x, y = rng.uniform(-5, 5), rng.uniform(-5, 5)
+            if path_wear(x, y) < .55 or not free(x, y): continue
+            s = rng.uniform(.07, .15)
+            b.rock((x, y, -s * .12), (s, s * rng.uniform(.55, .85), s * .25), p['ringrock'], rng, .18, (0, 0, rng.uniform(0, 3)),
+                   rng.choice((5, 6, 7)), 3)
+            flat += 1
 
     def rubble(self, k):
         """Stones, broken plank ends and chips at the inner corner and at the gate post feet."""
@@ -385,21 +449,82 @@ class FortMaster:
                               p['chip'], 0, t.r(0, 0, rng.uniform(0, 3.2)))
 
     def ring(self):
-        """Stone ring in the courtyard centre: dressed stones, four stone spokes and a hub."""
+        """Stone ring in the courtyard centre, set long ago and grown into the ground: rough field stones
+        of different sizes sunk to different depths in a bed of trodden earth, two of them gone, moss in
+        every joint, grit washed over the edges, rows of small cobbles for spokes, a worn hub stone."""
         b, rng, p = self.b, self.rng, self.p
+
+        def bed(x, y):
+            r = math.hypot(x, y)
+            if r > 1.6: return None
+            ring = max(0.0, 1 - abs(r - 1.0) / .38)
+            centre = max(0.0, 1 - r / .55)
+            f = max(ring, centre) * (.75 + .25 * wobble(x * 4, y * 4, 12))
+            return None if f < .02 else (.0035, min(1.0, f * .55), 0.0)
+        ground_sheet(self.c, 'Ring earth bed', -1.6, -1.6, 1.6, 1.6, bed, self.rut, .04)
+        gone = set(rng.sample(range(20), 2))
         for i in range(20):
-            a = i * math.tau / 20 + rng.uniform(-.02, .02)
-            r = 1.0 + rng.uniform(-.015, .015)
-            b.box((r * math.cos(a), r * math.sin(a), rng.uniform(.012, .026)), (.28, .16, .045), p['ringstone'], .018,
-                  (0, 0, a + math.pi / 2 + rng.uniform(-.04, .04)), .012, rng)
+            if i in gone: continue
+            a = i * math.tau / 20 + rng.uniform(-.03, .03)
+            r = 1.0 + rng.uniform(-.035, .035)
+            sx, sy = rng.uniform(.15, .19), rng.uniform(.09, .12)
+            # Flat, angular and sunk: only a weathered top face shows above the ground.
+            b.rock((r * math.cos(a), r * math.sin(a), rng.uniform(-.03, -.012)), (sx, sy, rng.uniform(.045, .06)), p['ringrock'], rng, .22,
+                   (rng.uniform(-.05, .05), rng.uniform(-.05, .05), a + math.pi / 2 + rng.uniform(-.12, .12)), rng.choice((5, 6, 6, 7)), 3)
         for k in range(4):
-            self.beam(Turn(k), (.36, 0), (.84, 0), .022, .09, .04, p['ringstone'])
-        b.cylinder((0, 0, .022), .3, .044, p['ringstone'], 28, .02)
-        b.cylinder((0, 0, .045), .1, .012, p['iron'], 16, .004)
-        for _ in range(18):                                                      # moss in the joints
-            a = rng.uniform(0, math.tau)
-            s = rng.uniform(.02, .04)
-            b.ell((1.0 * math.cos(a), 1.0 * math.sin(a), .04), (s, s * .7, .01), p['moss'], 8, 3, (0, 0, a))
+            t = Turn(k)
+            u = .36
+            while u < .84:
+                if rng.random() > .12:
+                    s = rng.uniform(.045, .07)
+                    b.rock(t.p(u, rng.uniform(-.02, .02), -.01), (s, s * .8, .025), p['ringrock'], rng, .22, (0, 0, rng.uniform(0, 3)),
+                           rng.choice((5, 6)), 3)
+                u += rng.uniform(.09, .12)
+        b.rock((0, 0, -.02), (.3, .27, .05), p['ringrock'], rng, .08, (0, 0, rng.uniform(0, 3)), 8, 3)
+        b.cylinder((0, 0, .03), .1, .012, p['iron'], 16, .004)
+        for _ in range(70):                                                      # moss and grass in and round the ring
+            a, r = rng.uniform(0, math.tau), rng.choice((rng.uniform(.82, .9), rng.uniform(1.1, 1.3), rng.uniform(.3, .82)))
+            s = rng.uniform(.02, .055)
+            b.ell((r * math.cos(a), r * math.sin(a), .02), (s, s * .7, .012), p['moss' if rng.random() < .6 else 'moss2'], 8, 3, (0, 0, a))
+        for _ in range(60):                                                      # grit washed over the stones
+            a, r = rng.uniform(0, math.tau), rng.uniform(.2, 1.25)
+            s = rng.uniform(.01, .022)
+            b.box((r * math.cos(a), r * math.sin(a), .035), (s, s * .8, s * .5), p['stone'], s * .2, (0, 0, rng.uniform(0, 3)), s * .2, rng)
+
+    def ground_growth(self):
+        """Grass tufts and moss cushions where feet rarely go: along the band edges, the palisade feet
+        inside and outside, the courtyard corners; a few ferns at the outer corners."""
+        b, rng, p = self.b, self.rng, self.p
+        tufts = 0
+        while tufts < 260:
+            x, y = rng.uniform(-4.6, 4.6), rng.uniform(-4.6, 4.6)
+            far, near = max(abs(x), abs(y)), min(abs(x), abs(y))
+            if 2.45 < far < 3.65 and near > 1.45: continue                        # inside the bastions
+            f = path_wear(x, y)
+            if f > .55 or (f < .05 and far < 2.45) or math.hypot(x, y) < 1.45: continue
+            for _ in range(rng.randrange(3, 7)):
+                a = rng.uniform(0, math.tau)
+                ln = rng.uniform(.035, .075)
+                b.ell((x + math.cos(a) * ln * .5, y + math.sin(a) * ln * .5, .03), (ln, .007, .012),
+                      p['grass' if rng.random() > .3 else 'grass2'], 6, 3, (rng.uniform(-.3, .3), 0, a))
+            tufts += 1
+        cushions = 0
+        while cushions < 160:
+            x, y = rng.uniform(-4.2, 4.2), rng.uniform(-4.2, 4.2)
+            far, near = max(abs(x), abs(y)), min(abs(x), abs(y))
+            if 2.45 < far < 3.65 and near > 1.45: continue
+            if path_wear(x, y) > .35: continue
+            if not (far > 3.55 or (far < 2.55 and far > 2.0 and near > 1.0)): continue
+            s = rng.uniform(.04, .11)
+            b.ell((x, y, .015), (s, s * rng.uniform(.6, .9), .025), p['moss' if rng.random() < .6 else 'moss2'], 10, 4, (0, 0, rng.uniform(0, 3)))
+            cushions += 1
+        for k in range(4):
+            t = Turn(k)
+            for i in range(8):
+                a = i * math.tau / 8 + rng.uniform(-.2, .2)
+                ln = rng.uniform(.16, .26)
+                b.ell(t.p(-3.95 + ln * .5 * math.cos(a), 3.95 + ln * .5 * math.sin(a), .07), (ln * .5, .045, .012), p['fern'], 10, 3,
+                      t.r(rng.uniform(-.2, .2), 0, a))
 
     def build(self):
         for k in range(4):
@@ -408,6 +533,6 @@ class FortMaster:
         self.ring()
         self.ground()
         for ob in self.b.flush('Fort master'):
-            if any(key in ob.name for key in ('Wood chips', 'Fieldstone')):
+            if any(key in ob.name for key in ('Wood chips', 'Fieldstone', 'Ring fieldstone', 'Turf tuft', 'Dry turf tuft', 'Fern frond')):
                 ob['fdGround'] = True
         return self.sockets

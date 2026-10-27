@@ -146,7 +146,7 @@ class Burg(Style):
 # -- Palisadenschanze: plank deck, low sharpened palisade, timber turntable ------------------
 
 class Fort(Style):
-    PZ, R = .7, .085
+    PZ, R = 1.2, .085           # raised deck: turrets fire over the stakes, as on the core
 
     def palette(self, m):
         return dict(
@@ -160,28 +160,28 @@ class Fort(Style):
     def log(self, x, y, rng, r=None, top=None):
         """Individual mossy sharpened stake, as on the persistent core (base_fort_master)."""
         r = r or self.R + rng.uniform(-.01, .008)
-        h = top or self.PZ + .72 + rng.uniform(-.06, .06)
+        h = top or self.PZ + .44 + rng.uniform(-.06, .06)
         self.b.cylinder((x, y, h / 2), r, h, self.p['bark'], 10, .008, None, rng.uniform(0, 1))
         cone(self.c, 'Sharpened log tip', (x + rng.uniform(-.008, .008), y + rng.uniform(-.008, .008)), r, h, h + .16,
              self.p['mossy' if rng.random() < .55 else 'cut'], 8, 0, rng.uniform(0, 1))
-        if rng.random() < .7:
-            a = rng.uniform(0, math.tau)
-            self.b.ell((x + r * .55 * math.cos(a), y + r * .55 * math.sin(a), h - .02), (r * .6, r * .45, .025), self.p['moss'], 8, 4)
+        a = rng.uniform(0, math.tau)
+        self.b.ell((x + r * .5 * math.cos(a), y + r * .5 * math.sin(a), h - .02), (r * .8, r * .65, .035), self.p['moss'], 8, 4)
 
     def torch_out(self, x, y, outward, rng):
         """Small torch on an iron bracket outside the palisade, as on the core."""
         b, p = self.b, self.p
-        z = 1.18 + rng.uniform(-.04, .04)
+        z = self.PZ + rng.uniform(.05, .45)
+        size = rng.choice((.75, 1.0, 1.0, 1.25))
         ox, oy = outward
         b.rod((x - ox * .12, y - oy * .12, z - .1), (x, y, z - .1), .012, p['dark'], 6)
         b.rod((x - ox * .02, y - oy * .02, z - .26), (x + ox * .015, y + oy * .015, z), .018, p['oak'], 6)
-        b.cylinder((x + ox * .015, y + oy * .015, z + .015), .034, .05, p['iron'], 10, .004)
-        b.ell((x + ox * .015, y + oy * .015, z + .05), (.026, .026, .03), p['ember'], 8, 4)
-        self.socket('torch', x + ox * .015, y + oy * .015, z + .1)
+        b.cylinder((x + ox * .015, y + oy * .015, z + .015), .03 * size, .05, p['dark'], 10, .004)
+        b.ell((x + ox * .015, y + oy * .015, z + .05), (.024 * size, .021 * size, .03 * size), p['ember'], 8, 4)
+        self.socket('torch' if size >= 1 else 'torchlet', x + ox * .015, y + oy * .015, z + .1)
 
     def post_lantern(self, x, y, rng):
         """Small square gate post with a lantern standing on top, as on the core."""
-        b, p, h = self.b, self.p, 1.45
+        b, p, h = self.b, self.p, self.PZ + .5
         b.box((x, y, h / 2), (.18, .18, h), p['oak'], .012, None, .006, rng)
         b.box((x, y, h + .02), (.21, .21, .04), p['tar'], .005)
         b.box((x, y, h + .06), (.13, .13, .04), p['dark'], .006)
@@ -216,8 +216,9 @@ class Fort(Style):
         b, p = self.b, self.p
         # Decks stay free for turrets: light hangs outside, small torches on the open sides and corners.
         for nx, ny in side_normals(mask):
-            if kind in ('straight', 'end') and rng.random() < .5:
-                self.torch_out(cx + nx * (self.HALF + .06) + ny * .12, cy + ny * (self.HALF + .06) + nx * .12, (nx, ny), rng)
+            if kind in ('straight', 'end') and rng.random() < .22:
+                shift = rng.uniform(-.3, .3)
+                self.torch_out(cx + nx * (self.HALF + .06) + ny * shift, cy + ny * (self.HALF + .06) + nx * shift, (nx, ny), rng)
         if kind == 'corner':
             # A heavier corner stake with a torch hanging out over the outer corner.
             dx, dy = corner_direction(mask)

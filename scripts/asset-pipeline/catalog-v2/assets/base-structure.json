@@ -82,10 +82,10 @@
         "family": "fieldStone",
         "scale": 0.9,
         "tint": 0.21,
-        "value": 0.62,
+        "value": 0.6,
         "grime": 0.23,
         "edgewear": 0.08,
-        "moss": 0.42
+        "moss": 0.5
       },
       "Lime mortar bed": {
         "family": "fieldStone",
@@ -117,10 +117,10 @@
         "family": "wood",
         "scale": 0.5,
         "tint": 0.5,
-        "value": 0.68,
-        "grime": 0.3,
+        "value": 0.62,
+        "grime": 0.4,
         "edgewear": 0.05,
-        "moss": 0.65
+        "moss": 0.85
       },
       "Cut log end": {
         "family": "wood",
@@ -135,9 +135,10 @@
         "family": "wood",
         "scale": 0.6,
         "tint": 0.12,
-        "value": 1.08,
-        "grime": 0.13,
-        "edgewear": 0.21
+        "value": 0.88,
+        "grime": 0.35,
+        "edgewear": 0.12,
+        "moss": 0.3
       },
       "Exposed timber": {
         "family": "wood",
@@ -151,9 +152,10 @@
         "family": "wood",
         "scale": 0.6,
         "tint": 0.08,
-        "value": 0.85,
-        "grime": 0.25,
-        "edgewear": 0.18
+        "value": 0.78,
+        "grime": 0.4,
+        "edgewear": 0.18,
+        "moss": 0.25
       },
       "Old oak": {
         "family": "wood",
@@ -169,7 +171,8 @@
         "tint": 0.55,
         "value": 0.6,
         "grime": 0.35,
-        "edgewear": 0.1
+        "edgewear": 0.1,
+        "moss": 0.2
       },
       "Split wood shingle": {
         "family": "wood",
@@ -390,6 +393,15 @@
         "grime": 0.2,
         "edgewear": 0.05,
         "moss": 0.75
+      },
+      "Ring fieldstone": {
+        "family": "fieldStone",
+        "scale": 1.1,
+        "tint": 0.3,
+        "value": 0.68,
+        "grime": 0.32,
+        "edgewear": 0.06,
+        "moss": 0.55
       }
     }
   },

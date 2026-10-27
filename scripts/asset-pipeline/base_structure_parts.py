@@ -207,6 +207,19 @@ class Batch:
         faces += [(last + s, last + (s + 1) % segments, top) for s in range(segments)]
         self._add(mat, 0, local, faces, [True] * len(faces), loc, rot)
 
+    def rock(self, loc, scale, mat, rng, rough=.18, rot=None, segments=10, rings=6):
+        """Irregular field stone: an ellipsoid whose vertices are pushed in and out at random."""
+        sx, sy, sz = scale
+        g = self._group(mat, 0)
+        base, faces = len(g['verts']), len(g['smooth'])
+        self.ell(loc, scale, mat, segments, rings, rot)
+        g['smooth'][faces:] = [False] * (len(g['smooth']) - faces)   # flat facets read as broken stone
+        from mathutils import Vector
+        centre = Vector(loc)
+        for i in range(base, len(g['verts'])):
+            v = Vector(g['verts'][i]) - centre
+            g['verts'][i] = tuple(centre + v * (1 + rng.uniform(-rough, rough)))
+
     def flush(self, name):
         made = []
         for (mat_name, _), g in self.groups.items():
