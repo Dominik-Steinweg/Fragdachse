@@ -355,7 +355,7 @@ export class ArenaPersistentBaseSession {
     }
     if (!isKnownPersistentBaseRewardId(sanitizedRequest.rewardId)) return { ok: false, reason: 'invalid' };
     const player = this.ctx.playerManager.getPlayer(playerId);
-    if (!player || !player.active || !this.mayManagePersistentBase(playerId)
+    if (!player || !player.active || !this.mayManageBaseOwnedRewards(playerId)
       || !this.world.getPlayerCapabilities(playerId).canPlace
       || !this.ctx.getWorldCombatCore()!.isAlive(playerId)
       || this.ctx.getWorldCombatCore()!.isBurrowed(playerId)) {
@@ -437,7 +437,7 @@ export class ArenaPersistentBaseSession {
     // reward remains visible in the radial while the player is dead, burrowed or otherwise
     // unable to place. The action resolver supplies the disabled state; preview/host validation
     // below still enforce the capability contract.
-    if (!site || !this.mayManagePersistentBase(playerId)) return [];
+    if (!site || !this.mayManageBaseOwnedRewards(playerId)) return [];
 
     const hostState = bridge.isHost() ? this.session.rewards?.getState() : undefined;
     const availableRewardIds = hostState
@@ -458,13 +458,22 @@ export class ArenaPersistentBaseSession {
   /**
    * Ob ein Spieler in dieser World ueberhaupt Persistent-Base-Management ausfuehren darf.
    *
-   * Nach 3F ist das keine Klassenfrage mehr: Base-owned Rewards gehoeren der Host-Basis, nicht
-   * dem ausfuehrenden Spieler, und jede Coop-Defense-Klasse darf sie platzieren, verschieben und
-   * zurueckbauen. Persoenliche Konstruktionen bleiben davon unberuehrt strikt owner-basiert.
+   * Das ist keine Klassenfrage: Jede Coop-Defense-Klasse verwaltet ihre persoenlichen
+   * Konstruktionen, strikt owner-basiert. Base-owned Rewards regelt zusaetzlich
+   * `mayManageBaseOwnedRewards`.
    */
   mayManagePersistentBase(playerId: string): boolean {
     return isCoopDefenseMode(this.world.getConfiguredGameMode())
       && bridge.getPlayerCurrentLoadoutSnapshot(playerId) !== null;
+  }
+
+  /**
+   * Base-owned Rewards gehoeren der Basis des Raum-Hosts. Platzieren, Verschieben und Rueckbau
+   * stehen deshalb nur dem Host zu, unabhaengig von seiner Klasse; Gaeste verwalten ausschliesslich
+   * ihre eigenen Konstruktionen.
+   */
+  mayManageBaseOwnedRewards(playerId: string): boolean {
+    return this.mayManagePersistentBase(playerId) && playerId === bridge.getHostPlayerId();
   }
 
   isPersistentBaseRuntimeActive(site: WorldPersistentBaseSite): boolean {
@@ -620,6 +629,7 @@ export class ArenaPersistentBaseSession {
       pointerY,
       COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       'move-source',
+      this.mayManageBaseOwnedRewards(playerId),
     );
     if (!preview) return undefined;
     const source = preview.sourceRuntimeId === undefined
@@ -814,14 +824,15 @@ export class ArenaPersistentBaseSession {
     return { ok: true };
   }
 
-  /** Gueltige Move-Quelle: eigenes Konstrukt oder base-owned Persistent-Base-Reward. */
+  /** Gueltige Move-Quelle: eigenes Konstrukt oder, nur fuer den Host, ein base-owned Reward. */
   isMovablePersistentBaseSource(
     playerId: string,
     source: SyncedPlaceableRock | undefined,
   ): boolean {
     if (!source) return false;
     if (source.ownership === 'base-owned') {
-      return source.persistentRewardId !== undefined
+      return this.mayManageBaseOwnedRewards(playerId)
+        && source.persistentRewardId !== undefined
         && isKnownPersistentBaseRewardId(source.persistentRewardId);
     }
     return this.world.getConstructionRuntime()?.isMovableConstructionSource(playerId, source) ?? false;

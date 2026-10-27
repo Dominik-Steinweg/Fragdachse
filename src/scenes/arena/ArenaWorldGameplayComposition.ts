@@ -101,6 +101,7 @@ export interface ArenaWorldGameplayFlowPorts {
   readonly resolvePlayerIdForOwner: (ownerId: string) => string | null;
   readonly acceptsCurrentPersistentBaseMutation: (activityRevision?: number) => boolean;
   readonly mayManagePersistentBase: (playerId: string) => boolean;
+  readonly mayManageBaseOwnedRewards: (playerId: string) => boolean;
   readonly getPersistentBaseConstructionContext: () => ConstructionPersistentBaseContext | null;
   readonly reconcilePersistentBaseWorld: () => void;
   readonly publishImmediatePersistentBaseContribution: (ownerId: string) => void;

@@ -224,10 +224,11 @@ setzt der Ladepfad das Reward auf die nächste freie Basiszelle um oder macht es
 Ein Reward bleibt nie unsichtbar platziert.
 
 Verwaltungsrechte hängen an der Herkunft des Objekts, nicht an der Klasse des handelnden Spielers.
-Ein base-owned Reward gehört der Host-Basis; jeder berechtigte Coop-Spieler darf es platzieren,
-verschieben und zurückbauen, ohne dadurch persönliches Ownership zu erwerben. Persönliche
-Konstruktionen bleiben davon unberührt strikt owner-basiert, und der globale Rückbau entfernt
-ausschließlich die eigenen Beiträge des auslösenden Spielers. Die Platzierbarkeit eines Rewards
+Ein base-owned Reward gehört der Basis des Raum-Hosts; nur der Host darf es platzieren, verschieben
+und zurückbauen, in der Welt wie im Bauhof und unabhängig von seiner Klasse
+([`ArenaPersistentBaseSession.mayManageBaseOwnedRewards`](../../src/scenes/arena/ArenaPersistentBaseSession.ts)).
+Persönliche Konstruktionen bleiben davon unberührt strikt owner-basiert, und der globale Rückbau
+entfernt ausschließlich die eigenen Beiträge des auslösenden Spielers. Die Platzierbarkeit eines Rewards
 leitet sich ausschließlich aus Freischaltung und aktuellem Placement ab: Ein zurückgebautes Reward
 ist wieder platzierbar, und es gibt bewusst kein historisches Placeability-Feld.
 

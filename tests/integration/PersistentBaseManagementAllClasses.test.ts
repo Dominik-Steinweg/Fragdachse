@@ -225,6 +225,7 @@ function createHarness(classId: string, restoreTools: readonly PersistentRestore
     isHost: () => bridge.isHost(),
     acceptsPersistentBaseMutation: (activityRevision) => coordinator.acceptsCurrentPersistentBaseMutation(activityRevision),
     mayManagePersistentBase: (id) => coordinator.mayManagePersistentBase(id),
+    mayManageBaseOwnedRewards: (id) => coordinator.mayManageBaseOwnedRewards(id),
     getRewardPlacementRuntime: () => null,
     emitGridChanged: () => { /* not relevant for management tests */ },
     relocatePresentation: (previous, next) => coordinator.relocatePlaceableRuntimePresentation(previous, next),
@@ -346,7 +347,7 @@ function moveRequest(
   };
 }
 
-describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
+describe('Base-Reward-Verwaltung durch den Host jeder Coop-Klasse', () => {
   it.each(['base_plasma_turret', 'base_plasma_turret_2'] as const)(
     'preserves the plasma weapon in placement and move previews for %s', (rewardId) => {
       grantStoredPersistentBaseRewards([rewardId]);
@@ -498,6 +499,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
       target.x,
       target.y,
       1_000,
+      true,
     )).toMatchObject({ isValid: true, sourceRuntimeId: reward.id, mode: 'dismantle' });
 
     expect(coordinator.constructionWorldRuntime.dismantleConstruction(playerId, target.x, target.y, 1_000)).toEqual({ ok: true });
@@ -796,6 +798,65 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
   });
 });
 
+describe('Gaeste verwalten keine Base-Rewards', () => {
+  /** Der lokale Spieler bleibt Teilnehmer, ist aber nicht der Raum-Host. */
+  function asGuest(): void {
+    vi.spyOn(bridge, 'getHostPlayerId').mockReturnValue('room-host');
+  }
+
+  it('bietet einem Gast weder Reward-Aktionen noch eine Placement-Vorschau an', () => {
+    const { coordinator, playerId } = createHarness('assault_dachs');
+    asGuest();
+    const target = rewardCell(1, 1);
+    const targetWorld = worldCellCenter(METRICS, target.gridX, target.gridY);
+
+    expect(coordinator.getPersistentBaseRewardIdsForPlayer(playerId)).toEqual([]);
+    expect(coordinator.getPersistentBaseRewardPlacementPreview(
+      playerId, 'base_health_pedestal', targetWorld.x, targetWorld.y,
+    )).toBeUndefined();
+  });
+
+  it('lehnt Platzieren, Verschieben und Rueckbau eines Gastes hostseitig ab', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, rewardStore, placementSystem, playerId } = harness;
+    const reward = placeRewardPedestal(harness, 0, 0);
+    asGuest();
+
+    expect(coordinator.placePersistentBaseReward(playerId, {
+      worldRevision: WORLD_REVISION,
+      rewardId: 'base_health_pedestal',
+      relativeGridX: 1,
+      relativeGridY: 1,
+      angle: 0,
+    } as never)).toEqual({ ok: false, reason: 'blocked' });
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(reward, rewardCell(1, 1)), 1_000).ok)
+      .toBe(false);
+    const target = worldCellCenter(METRICS, reward.gridX, reward.gridY);
+    expect(coordinator.constructionWorldRuntime.dismantleConstruction(playerId, target.x, target.y, 1_000))
+      .toEqual({ ok: false, reason: 'blocked' });
+
+    expect(placementSystem.getRuntimeRock(reward.id)).toMatchObject({ gridX: reward.gridX, gridY: reward.gridY });
+    expect(rewardStore.getState().placements).toEqual([
+      expect.objectContaining({ rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0 }),
+    ]);
+  });
+
+  it('zeigt einem Gast ein Reward weder als Move-Quelle noch als rueckbaubar', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, placementSystem, playerId } = harness;
+    const reward = placeRewardPedestal(harness, 1, 0);
+    asGuest();
+    const originCell = rewardCell(0, 0);
+    const origin = worldCellCenter(METRICS, originCell.gridX, originCell.gridY);
+    const target = worldCellCenter(METRICS, reward.gridX, reward.gridY);
+
+    expect(coordinator.getPersistentBaseMoveSourcePreview(playerId, target.x, target.y)?.isValid).toBe(false);
+    expect(placementSystem.getDismantlePreview(
+      playerId, origin.x, origin.y, target.x, target.y, 1_000, coordinator.mayManageBaseOwnedRewards(playerId),
+    )?.isValid).toBe(false);
+  });
+});
+
 describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
   it.each([
     ['machine_gun_turret', 'request'], ['machine_gun_turret', 'editor'],
@@ -952,10 +1013,10 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
     const foreignTarget = worldCellCenter(METRICS, foreign.gridX, foreign.gridY);
 
     expect(placementSystem.getDismantlePreview(
-      playerId, origin.x, origin.y, ownTarget.x, ownTarget.y, 1_000,
+      playerId, origin.x, origin.y, ownTarget.x, ownTarget.y, 1_000, false,
     )?.isValid).toBe(true);
     expect(placementSystem.getDismantlePreview(
-      playerId, origin.x, origin.y, foreignTarget.x, foreignTarget.y, 1_000,
+      playerId, origin.x, origin.y, foreignTarget.x, foreignTarget.y, 1_000, false,
     )?.isValid).toBe(false);
   });
 

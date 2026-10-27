@@ -86,6 +86,8 @@ export interface ConstructionWorldRuntimeOptions {
   readonly isHost: () => boolean;
   readonly acceptsPersistentBaseMutation: (activityRevision?: number) => boolean;
   readonly mayManagePersistentBase: (playerId: string) => boolean;
+  /** Base-owned rewards belong to the room host's base; only the host manages them. */
+  readonly mayManageBaseOwnedRewards: (playerId: string) => boolean;
   readonly getRewardPlacementRuntime: () => ConstructionRewardPlacementRuntime | null;
   readonly emitGridChanged: (event: {
     readonly reason: 'placeable_added' | 'placeable_removed' | 'placeables_batch_removed';
@@ -400,6 +402,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     const target = this.options.placementSystem.getRuntimeRockAt(cell.gridX, cell.gridY);
     const rewardId = target?.ownership === 'base-owned' ? target.persistentRewardId : undefined;
     const persistent = target !== undefined && this.options.getPersistentBaseContext()?.contributions.getRuntimeBindings().some((binding) => binding.runtimeId === target.id) === true;
+    if (rewardId !== undefined && !this.options.mayManageBaseOwnedRewards(playerId)) return { ok: false, reason: 'blocked' };
     if ((rewardId !== undefined || persistent) && !this.options.acceptsPersistentBaseMutation(activityRevision)) return { ok: false, reason: 'blocked' };
     if (rewardId !== undefined && !this.options.getPersistentBaseContext()?.rewards.getState().placements.some((placement) => placement.rewardId === rewardId)) return { ok: false, reason: 'blocked' };
     const removed = this.options.placementSystem.removeRockAt(cell.gridX, cell.gridY, playerId, rewardId !== undefined ? 'base-owned' : this.getOwnership(playerId), rewardId !== undefined);

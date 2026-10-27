@@ -627,6 +627,7 @@ export function createArenaPlacementPorts(flow: ArenaLifecycleCoordinator): Aren
         pointerX,
         pointerY,
         range,
+        flow.mayManageBaseOwnedRewards(ownerId),
       )
     ),
     getPlacementPreview: (config, originX, originY, pointerX, pointerY) => (

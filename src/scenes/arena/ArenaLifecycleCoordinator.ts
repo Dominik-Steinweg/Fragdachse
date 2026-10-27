@@ -657,6 +657,7 @@ export class ArenaLifecycleCoordinator {
       this.persistentBase.acceptsCurrentPersistentBaseMutation(activityRevision)
     ),
     mayManagePersistentBase: (playerId) => this.persistentBase.mayManagePersistentBase(playerId),
+    mayManageBaseOwnedRewards: (playerId) => this.persistentBase.mayManageBaseOwnedRewards(playerId),
     getPersistentBaseConstructionContext: () => {
       const anchor = this.persistentBaseAnchor;
       const buildArea = this.persistentBaseBuildArea;
@@ -1118,6 +1119,11 @@ export class ArenaLifecycleCoordinator {
   }
   getIsLocalReady(): boolean   { return this.isLocalReady; }
   isTrainDestroyedShown(): boolean { return this.trainDestroyedShown; }
+
+  /** Base-owned rewards belong to the room host's base; previews use the host's own rule. */
+  mayManageBaseOwnedRewards(playerId: string): boolean {
+    return this.persistentBase.mayManageBaseOwnedRewards(playerId);
+  }
 
   getPersistentBaseVisualSite(): PersistentBaseVisualSite | null {
     return this.persistentBaseVisualSite;

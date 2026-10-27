@@ -744,15 +744,17 @@ export class PlacementSystem {
     pointerX: number,
     pointerY: number,
     range: number,
+    allowBaseOwnedReward: boolean,
   ): UtilityPlacementPreviewState | undefined {
-    return this.getManagementSourcePreview(ownerId, originX, originY, pointerX, pointerY, range, 'dismantle');
+    return this.getManagementSourcePreview(ownerId, originX, originY, pointerX, pointerY, range, 'dismantle', allowBaseOwnedReward);
   }
 
   /**
    * Vorschau fuer Rueckbau und Move-Quellwahl.
    *
-   * Beide verwenden ausdruecklich dieselbe Ownership-Domain: eigenes Konstrukt oder ein
-   * base-owned Persistent-Base-Reward. Nur die Beschriftung des Modus unterscheidet sich.
+   * Beide verwenden ausdruecklich dieselbe Ownership-Domain: eigenes Konstrukt oder, wenn der
+   * Aufrufer Rewards verwalten darf (nur der Host), ein base-owned Persistent-Base-Reward. Nur die
+   * Beschriftung des Modus unterscheidet sich.
    */
   getManagementSourcePreview(
     ownerId: string,
@@ -762,6 +764,7 @@ export class PlacementSystem {
     pointerY: number,
     range: number,
     mode: 'dismantle' | 'move-source',
+    allowBaseOwnedReward: boolean,
   ): UtilityPlacementPreviewState | undefined {
     const targetCell = this.resolveTargetCell(originX, originY, pointerX, pointerY, range);
     if (!targetCell) return undefined;
@@ -777,7 +780,7 @@ export class PlacementSystem {
       isValid: (rock?.ownerId === ownerId
         && rock.constructionId !== undefined
         && rock.ownership !== 'base-owned')
-        || (rock?.ownership === 'base-owned' && rock.persistentRewardId !== undefined),
+        || (allowBaseOwnedReward && rock?.ownership === 'base-owned' && rock.persistentRewardId !== undefined),
       frame: 0,
       range,
       kind: rock?.kind ?? 'rock',

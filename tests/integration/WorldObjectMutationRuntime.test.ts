@@ -122,6 +122,7 @@ function createFixture(options: { readonly throwFromVisuals?: boolean; readonly 
     isHost: () => true,
     acceptsPersistentBaseMutation: () => true,
     mayManagePersistentBase: () => true,
+    mayManageBaseOwnedRewards: () => true,
     getRewardPlacementRuntime: () => null,
     emitGridChanged,
     relocatePresentation: vi.fn(),

@@ -130,6 +130,7 @@ export function composeWorldConstruction(
     isHost: () => bridge.isHost(),
     acceptsPersistentBaseMutation: (activityRevision) => flow.acceptsCurrentPersistentBaseMutation(activityRevision),
     mayManagePersistentBase: (playerId) => flow.mayManagePersistentBase(playerId),
+    mayManageBaseOwnedRewards: (playerId) => flow.mayManageBaseOwnedRewards(playerId),
     getRewardPlacementRuntime: () => {
       const runtime = flow.getCoopMissionRuntime()?.coopDefenseObjectivePlacementRewardSystem;
       return runtime
