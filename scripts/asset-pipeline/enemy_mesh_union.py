@@ -25,6 +25,37 @@ def shell(points, triangles, thickness):
     return np.concatenate([points+normals*thickness/2,points-normals*thickness/2]),np.concatenate([triangles,triangles[:,::-1]+n,caps])
 
 
+def close_open(points, triangles):
+    """Cap every open boundary loop with a fan to its centroid.
+
+    A modelled open shell (a mushroom cap without underside, a raised plate) casts the shadow
+    of the volume it encloses; voxel remeshing would turn the bare shell into a skin that the
+    decimation then drops. Closed parts pass unchanged.
+    """
+    directed=np.concatenate([triangles[:,[0,1]],triangles[:,[1,2]],triangles[:,[2,0]]])
+    key=np.sort(directed,axis=1)
+    _,inverse,count=np.unique(key,axis=0,return_inverse=True,return_counts=True)
+    boundary=directed[count[inverse.reshape(-1)]==1]
+    if not len(boundary):
+        return points,triangles
+    following={int(a):int(b) for a,b in boundary}
+    extra,caps,seen=[],[],set()
+    for start in list(following):
+        if start in seen:
+            continue
+        loop,vertex=[],start
+        while vertex in following and vertex not in seen:
+            seen.add(vertex);loop.append(vertex);vertex=following[vertex]
+        if len(loop)<3:
+            continue
+        centre=len(points)+len(extra);extra.append(points[loop].mean(0))
+        # Reverse the boundary direction so the cap continues the shell's winding.
+        caps.extend((loop[(i+1)%len(loop)],loop[i],centre) for i in range(len(loop)))
+    if not caps:
+        return points,triangles
+    return np.concatenate([points,np.array(extra)]),np.concatenate([triangles,np.array(caps,dtype=triangles.dtype)])
+
+
 def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
     # Recipes may tag rigid props that swing away from the body (e.g. a shield) with
     # ob['meshUnionGroup']; each group gets its own rest volume and its proxy vertices
@@ -37,6 +68,8 @@ def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
         name=p['ob'].name;rest,tri=p['rest'],p['sourceTris']
         if 'fur' in name.lower() or 'coat' in name.lower():
             rest,tri=shell(rest,tri,.012)
+        else:
+            rest,tri=close_open(rest,tri)
         group=str(p['ob'].get('meshUnionGroup','body'))
         volume[group].append(dict(rest=rest,sourceTris=tri));source_groups.extend([names.index(group)]*len(p['rest']))
         points.append(p['rest']);faces.append(p['sourceTris']+offset)

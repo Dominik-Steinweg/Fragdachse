@@ -39401,6 +39401,1758 @@
           "silhouette-review.json": "e7513e39bfa9a4e6e6eca4535f9bbdfa68107848ba9682d90363bfecc09e5db3"
         }
       }
+    },
+    {
+      "id": "spore",
+      "revision": "towers-r03",
+      "meshRevision": "enemy-mesh-rigid-r1",
+      "profile": "rigid",
+      "coordinates": {
+        "axes": "X-right,Y-south,Z-up",
+        "conversion": [
+          1,
+          -1,
+          1
+        ],
+        "groundZBlender": 0,
+        "pivot": [
+          0.5,
+          0.5
+        ],
+        "canvasWorldPx": 32,
+        "orthoScaleBlender": 2.65,
+        "worldPxPerBlenderUnit": 12.075471698113208,
+        "heightPolicy": "evaluated rigid geometry above its own ground plane"
+      },
+      "poses": [
+        {
+          "index": 0,
+          "blenderFrame": 0,
+          "clip": "rest",
+          "clipFrame": 0,
+          "sourceBeautySha256": "a5638d37b20c686db41045800647ea6efa7ea449164be3d59389a6002cf7d098"
+        },
+        {
+          "index": 1,
+          "blenderFrame": 1,
+          "clip": "fire",
+          "clipFrame": 0,
+          "sourceBeautySha256": "54a9589aa33c5565a59b8cd8dc9a1e90d857f8bee29038d4260eae2daeb057ba"
+        },
+        {
+          "index": 2,
+          "blenderFrame": 2,
+          "clip": "fire",
+          "clipFrame": 1,
+          "sourceBeautySha256": "84576ff6ac921f27c64ceb4888adac9275d08bf4554a1b679688c42f3bfbbcd2"
+        },
+        {
+          "index": 3,
+          "blenderFrame": 3,
+          "clip": "fire",
+          "clipFrame": 2,
+          "sourceBeautySha256": "d6303bf3402e2a45a1e9592d3757a9c2441060560129dab77f69e634613a8d25"
+        },
+        {
+          "index": 4,
+          "blenderFrame": 4,
+          "clip": "fire",
+          "clipFrame": 3,
+          "sourceBeautySha256": "412b2fe0563824a1fdd0ce42c173019ba5fe5d46ee0b91cdbe9f11ef5fa841c2"
+        },
+        {
+          "index": 5,
+          "blenderFrame": 5,
+          "clip": "fire",
+          "clipFrame": 4,
+          "sourceBeautySha256": "0a80cd73a8a4d91be9ff61e05dc3aee584a3e00c47b333c01926723e22e56438"
+        },
+        {
+          "index": 6,
+          "blenderFrame": 6,
+          "clip": "fire",
+          "clipFrame": 5,
+          "sourceBeautySha256": "74756caffb30d32ec468ed4ff2522943fcbf5a0ad9884da3e0edd7698a88937a"
+        },
+        {
+          "index": 7,
+          "blenderFrame": 7,
+          "clip": "fire",
+          "clipFrame": 6,
+          "sourceBeautySha256": "dae45aa425602f0efa28689b4e2691d7e9a8df05944f1aad2a90adc524e486d0"
+        },
+        {
+          "index": 8,
+          "blenderFrame": 8,
+          "clip": "fire",
+          "clipFrame": 7,
+          "sourceBeautySha256": "34228f1d09c6618c6d087e8f0e49f66638c9671730f0059202c54050d17e785b"
+        }
+      ],
+      "contacts": [
+        {
+          "pose": 0,
+          "feet": []
+        },
+        {
+          "pose": 1,
+          "feet": []
+        },
+        {
+          "pose": 2,
+          "feet": []
+        },
+        {
+          "pose": 3,
+          "feet": []
+        },
+        {
+          "pose": 4,
+          "feet": []
+        },
+        {
+          "pose": 5,
+          "feet": []
+        },
+        {
+          "pose": 6,
+          "feet": []
+        },
+        {
+          "pose": 7,
+          "feet": []
+        },
+        {
+          "pose": 8,
+          "feet": []
+        }
+      ],
+      "provenance": {
+        "source": "selected-v2",
+        "sourceRevision": "towers-r03",
+        "blenderVersion": "5.2.1 LTS"
+      },
+      "mesh": {
+        "id": "spore",
+        "encoding": "uint16-le-xyz-bounds",
+        "bounds": {
+          "min": [
+            -14.15263201775635,
+            -11.383955119740108,
+            0.004821158092982388
+          ],
+          "max": [
+            13.346194647737175,
+            11.856630126926678,
+            14.817124969179336
+          ]
+        },
+        "vertexCount": 2000,
+        "triangleCount": 3986,
+        "poseIndices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "positions": {
+          "file": "assets/sprites/pipeline-v2/spore/mesh/enemy-mesh-rigid-r1/spore-positions-6f537a2a9bd9d24348f2ff52c75fac0e71a40ab4e95730bccb8761c383b8c405.bin",
+          "bytes": 108000,
+          "sha256": "6f537a2a9bd9d24348f2ff52c75fac0e71a40ab4e95730bccb8761c383b8c405",
+          "url": "assets/sprites/pipeline-v2/spore/mesh/enemy-mesh-rigid-r1/spore-positions-6f537a2a9bd9d24348f2ff52c75fac0e71a40ab4e95730bccb8761c383b8c405.bin?v=6f537a2a9bd9d24348f2ff52c75fac0e71a40ab4e95730bccb8761c383b8c405"
+        },
+        "indices": {
+          "file": "assets/sprites/pipeline-v2/spore/mesh/enemy-mesh-rigid-r1/spore-indices-1e7c5b45f79fa49c39c0b02ebd8bdd8b09f5d5affd2b6a68d516e769f59ca721.bin",
+          "bytes": 23916,
+          "sha256": "1e7c5b45f79fa49c39c0b02ebd8bdd8b09f5d5affd2b6a68d516e769f59ca721",
+          "encoding": "uint16-le-triangles",
+          "url": "assets/sprites/pipeline-v2/spore/mesh/enemy-mesh-rigid-r1/spore-indices-1e7c5b45f79fa49c39c0b02ebd8bdd8b09f5d5affd2b6a68d516e769f59ca721.bin?v=1e7c5b45f79fa49c39c0b02ebd8bdd8b09f5d5affd2b6a68d516e769f59ca721"
+        },
+        "topologySha256": "1e7c5b45f79fa49c39c0b02ebd8bdd8b09f5d5affd2b6a68d516e769f59ca721",
+        "downloadBytes": 131916,
+        "gpuFloat32Bytes": 239916,
+        "quantizationMaxErrorWorld": [
+          0.00020980259911111256,
+          0.00017731429958546416,
+          0.00011301063409694326
+        ]
+      },
+      "images": {
+        "beauty128": {
+          "file": "assets/sprites/pipeline-v2/spore/sheet.png",
+          "sha256": "c61ef25b3843eb7b07db913ff61d7b2ff14323eb198372a93811bf504a2738c8"
+        }
+      },
+      "materialEncoding": null,
+      "sourceManifestSha256": "73659ab1f7fc163cf820f0826c7b29a90f5da95eef27d1570cff430360835027",
+      "sourceArchiveSha256": "1ce245f7fa0f13781197458fbcde2829d677207ff6fe7acb6ba4993ecd56ad0b",
+      "inheritedEyeAnchorSource": null,
+      "validation": {
+        "fullSilhouettes": 729,
+        "minimumIou": 0.993353103589324,
+        "minimumFineIou": 0.9935351479408403,
+        "materialMetrics": [],
+        "evidence": {
+          "candidate.blend": "2e8c58d71da3881825900f3d81a0cacadf9713fc7dff73f88253740a4f5c3b16",
+          "silhouette-review.json": "f48ee5bf546d011201cecba912ebd6321428ba0ae601c2db46bc123110d5cc28"
+        }
+      }
+    },
+    {
+      "id": "machine-gun",
+      "revision": "towers-r03",
+      "meshRevision": "enemy-mesh-rigid-r1",
+      "profile": "rigid",
+      "coordinates": {
+        "axes": "X-right,Y-south,Z-up",
+        "conversion": [
+          1,
+          -1,
+          1
+        ],
+        "groundZBlender": 0,
+        "pivot": [
+          0.5,
+          0.5
+        ],
+        "canvasWorldPx": 40,
+        "orthoScaleBlender": 2.8,
+        "worldPxPerBlenderUnit": 14.285714285714286,
+        "heightPolicy": "evaluated rigid geometry above its own ground plane"
+      },
+      "poses": [
+        {
+          "index": 0,
+          "blenderFrame": 0,
+          "clip": "rest",
+          "clipFrame": 0,
+          "sourceBeautySha256": "7b85853d6f01e4fa427c42203761ce333b397e9ca252f3d6abb627fe2b9cdb52"
+        },
+        {
+          "index": 1,
+          "blenderFrame": 1,
+          "clip": "fire",
+          "clipFrame": 0,
+          "sourceBeautySha256": "2f018744758ad4346707996ba0de949be98c4feb1a7c714d0d05c0f345162117"
+        },
+        {
+          "index": 2,
+          "blenderFrame": 1.8,
+          "clip": "fire",
+          "clipFrame": 1,
+          "sourceBeautySha256": "3c2705ae348ce2577d0dc5999d9880003c5b55447ebb7107a2c6657b5fb045fe"
+        },
+        {
+          "index": 3,
+          "blenderFrame": 2.6,
+          "clip": "fire",
+          "clipFrame": 2,
+          "sourceBeautySha256": "49d6f2db2b001eb5c8a6425730ddedc63c1e9f785a75e6f6b3411f5f3c69a89f"
+        },
+        {
+          "index": 4,
+          "blenderFrame": 3.4000000000000004,
+          "clip": "fire",
+          "clipFrame": 3,
+          "sourceBeautySha256": "bde88a50326d3a8ff2f8d19a20468619b583226af57bd7aab2c9fa8e0b04f649"
+        },
+        {
+          "index": 5,
+          "blenderFrame": 4.2,
+          "clip": "fire",
+          "clipFrame": 4,
+          "sourceBeautySha256": "31600e11820bb5887ba6f136504aee39d671acc6a4388e1605b9b771192118b5"
+        },
+        {
+          "index": 6,
+          "blenderFrame": 5,
+          "clip": "fire",
+          "clipFrame": 5,
+          "sourceBeautySha256": "7b69ae871c839aba58eb7c7823a887e541d3356699754e1024690c9744002ff5"
+        }
+      ],
+      "contacts": [
+        {
+          "pose": 0,
+          "feet": []
+        },
+        {
+          "pose": 1,
+          "feet": []
+        },
+        {
+          "pose": 2,
+          "feet": []
+        },
+        {
+          "pose": 3,
+          "feet": []
+        },
+        {
+          "pose": 4,
+          "feet": []
+        },
+        {
+          "pose": 5,
+          "feet": []
+        },
+        {
+          "pose": 6,
+          "feet": []
+        }
+      ],
+      "provenance": {
+        "source": "selected-v2",
+        "sourceRevision": "towers-r03",
+        "blenderVersion": "5.2.1 LTS"
+      },
+      "mesh": {
+        "id": "machine-gun",
+        "encoding": "uint16-le-xyz-bounds",
+        "bounds": {
+          "min": [
+            -12.075249522721757,
+            -12.066423126905928,
+            0
+          ],
+          "max": [
+            18.176639814390494,
+            12.080052135100015,
+            13.390615253144608
+          ]
+        },
+        "vertexCount": 1996,
+        "triangleCount": 4000,
+        "poseIndices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "positions": {
+          "file": "assets/sprites/pipeline-v2/machine-gun/mesh/enemy-mesh-rigid-r1/machine-gun-positions-0cdf8240fc692481b3ad81b34c5a2293f8d48ce1f72b4a922b1c7bc7920c6fbf.bin",
+          "bytes": 83832,
+          "sha256": "0cdf8240fc692481b3ad81b34c5a2293f8d48ce1f72b4a922b1c7bc7920c6fbf",
+          "url": "assets/sprites/pipeline-v2/machine-gun/mesh/enemy-mesh-rigid-r1/machine-gun-positions-0cdf8240fc692481b3ad81b34c5a2293f8d48ce1f72b4a922b1c7bc7920c6fbf.bin?v=0cdf8240fc692481b3ad81b34c5a2293f8d48ce1f72b4a922b1c7bc7920c6fbf"
+        },
+        "indices": {
+          "file": "assets/sprites/pipeline-v2/machine-gun/mesh/enemy-mesh-rigid-r1/machine-gun-indices-d80e58beda96f06a3fd465dbeed8a6ec5f6dfa748918857bd1b6db0ebdbdbb60.bin",
+          "bytes": 24000,
+          "sha256": "d80e58beda96f06a3fd465dbeed8a6ec5f6dfa748918857bd1b6db0ebdbdbb60",
+          "encoding": "uint16-le-triangles",
+          "url": "assets/sprites/pipeline-v2/machine-gun/mesh/enemy-mesh-rigid-r1/machine-gun-indices-d80e58beda96f06a3fd465dbeed8a6ec5f6dfa748918857bd1b6db0ebdbdbb60.bin?v=d80e58beda96f06a3fd465dbeed8a6ec5f6dfa748918857bd1b6db0ebdbdbb60"
+        },
+        "topologySha256": "d80e58beda96f06a3fd465dbeed8a6ec5f6dfa748918857bd1b6db0ebdbdbb60",
+        "downloadBytes": 107832,
+        "gpuFloat32Bytes": 191664,
+        "quantizationMaxErrorWorld": [
+          0.00023080712090571643,
+          0.0001842257973754936,
+          0.00010216384567898534
+        ]
+      },
+      "images": {
+        "beauty160": {
+          "file": "assets/sprites/pipeline-v2/machine-gun/sheet.png",
+          "sha256": "aa64f88509f516dbfc2470503102fec8594e76dcc32491a60147a1730f6c20aa"
+        }
+      },
+      "materialEncoding": null,
+      "sourceManifestSha256": "17b2a79350a459ebd681b55136a4109bb7d8472b76fa90e246ec17c45f217fad",
+      "sourceArchiveSha256": "31e81dd9887be9fe7796a0d44521db60050e722140c36b49ab61976847139f06",
+      "inheritedEyeAnchorSource": null,
+      "validation": {
+        "fullSilhouettes": 567,
+        "minimumIou": 0.9925334794670685,
+        "minimumFineIou": 0.9940443473031434,
+        "materialMetrics": [],
+        "evidence": {
+          "candidate.blend": "f51a1e7b52b1bd999f12f06edd28e9d144b222ec1725d17f4de4df571f1f2079",
+          "silhouette-review.json": "0293b5af246f70865dcc11e97f53432e8e457288a744bdb3cd8c9ef1d0c238d7"
+        }
+      }
+    },
+    {
+      "id": "flame",
+      "revision": "towers-r03",
+      "meshRevision": "enemy-mesh-rigid-r1",
+      "profile": "rigid",
+      "coordinates": {
+        "axes": "X-right,Y-south,Z-up",
+        "conversion": [
+          1,
+          -1,
+          1
+        ],
+        "groundZBlender": 0,
+        "pivot": [
+          0.5,
+          0.5
+        ],
+        "canvasWorldPx": 40,
+        "orthoScaleBlender": 2.8,
+        "worldPxPerBlenderUnit": 14.285714285714286,
+        "heightPolicy": "evaluated rigid geometry above its own ground plane"
+      },
+      "poses": [
+        {
+          "index": 0,
+          "blenderFrame": 0,
+          "clip": "rest",
+          "clipFrame": 0,
+          "sourceBeautySha256": "f792119d3ff92254d3f73dd34e4791e7aef76f07fb0f578630919631862aac10"
+        },
+        {
+          "index": 1,
+          "blenderFrame": 1,
+          "clip": "fire",
+          "clipFrame": 0,
+          "sourceBeautySha256": "996736687e637355587bedfd7c27199a534a2279542dc8ffb32990d195e1c8ce"
+        },
+        {
+          "index": 2,
+          "blenderFrame": 3,
+          "clip": "fire",
+          "clipFrame": 1,
+          "sourceBeautySha256": "b0c5193f06c05aff7ee7031bc969e2ae27efb0bf9808f7cbe31c065bd6e17054"
+        },
+        {
+          "index": 3,
+          "blenderFrame": 5,
+          "clip": "fire",
+          "clipFrame": 2,
+          "sourceBeautySha256": "d618aabc87d3b4b351043eea101a7f03157fad16f4af14cb4e0cc27767d518c8"
+        },
+        {
+          "index": 4,
+          "blenderFrame": 7,
+          "clip": "fire",
+          "clipFrame": 3,
+          "sourceBeautySha256": "76b16eb596463b212e3187ce13506caa136623f48201f2c2bf204b66d6c36cea"
+        },
+        {
+          "index": 5,
+          "blenderFrame": 9,
+          "clip": "fire",
+          "clipFrame": 4,
+          "sourceBeautySha256": "47088fcd0fbbf0bf117e5cef43408a73b8cc30ea5f30402cfca19ebc91cfcc05"
+        },
+        {
+          "index": 6,
+          "blenderFrame": 11,
+          "clip": "fire",
+          "clipFrame": 5,
+          "sourceBeautySha256": "e3d9cab6f58190b82d9cac2afec98fdc75a8a4fb75dfe947636f5d637d5bfb51"
+        },
+        {
+          "index": 7,
+          "blenderFrame": 13,
+          "clip": "fire",
+          "clipFrame": 6,
+          "sourceBeautySha256": "fa0f7ccd7ef35a2ca23e2bef6142e8ec27c1dec4b6fe93cd55a4af429fcef9ad"
+        },
+        {
+          "index": 8,
+          "blenderFrame": 15,
+          "clip": "fire",
+          "clipFrame": 7,
+          "sourceBeautySha256": "45ca07a40deca3d4bcae98465f44b9c43d3a59ccd6943d534d164a15b7f40c97"
+        },
+        {
+          "index": 9,
+          "blenderFrame": 17,
+          "clip": "fire",
+          "clipFrame": 8,
+          "sourceBeautySha256": "6ce1d7d3ee4a40487a30d97457be867b0efb30d2fec8db9eb2f657254422f9cb"
+        },
+        {
+          "index": 10,
+          "blenderFrame": 19,
+          "clip": "fire",
+          "clipFrame": 9,
+          "sourceBeautySha256": "2a8a040667049c1cdc85da861d769bfc396bdf3e1a5702f99ff8c4136915cd9f"
+        },
+        {
+          "index": 11,
+          "blenderFrame": 21,
+          "clip": "fire",
+          "clipFrame": 10,
+          "sourceBeautySha256": "739f1683a218a3a2f4ad1b898869124ca3a169719c008d54a3a617a25e84a72e"
+        },
+        {
+          "index": 12,
+          "blenderFrame": 23,
+          "clip": "fire",
+          "clipFrame": 11,
+          "sourceBeautySha256": "ce96be73a743159fa11bee1afd1b78ab4916331ee5de0ebd17e67bc74b3b49a7"
+        }
+      ],
+      "contacts": [
+        {
+          "pose": 0,
+          "feet": []
+        },
+        {
+          "pose": 1,
+          "feet": []
+        },
+        {
+          "pose": 2,
+          "feet": []
+        },
+        {
+          "pose": 3,
+          "feet": []
+        },
+        {
+          "pose": 4,
+          "feet": []
+        },
+        {
+          "pose": 5,
+          "feet": []
+        },
+        {
+          "pose": 6,
+          "feet": []
+        },
+        {
+          "pose": 7,
+          "feet": []
+        },
+        {
+          "pose": 8,
+          "feet": []
+        },
+        {
+          "pose": 9,
+          "feet": []
+        },
+        {
+          "pose": 10,
+          "feet": []
+        },
+        {
+          "pose": 11,
+          "feet": []
+        },
+        {
+          "pose": 12,
+          "feet": []
+        }
+      ],
+      "provenance": {
+        "source": "selected-v2",
+        "sourceRevision": "towers-r03",
+        "blenderVersion": "5.2.1 LTS"
+      },
+      "mesh": {
+        "id": "flame",
+        "encoding": "uint16-le-xyz-bounds",
+        "bounds": {
+          "min": [
+            -12.291592236729448,
+            -12.294542125637365,
+            0
+          ],
+          "max": [
+            17.82999731542551,
+            12.295349485531746,
+            14.327053580719916
+          ]
+        },
+        "vertexCount": 1998,
+        "triangleCount": 4000,
+        "poseIndices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "positions": {
+          "file": "assets/sprites/pipeline-v2/flame/mesh/enemy-mesh-rigid-r1/flame-positions-51a1f8c741fbcdec08727f7a103abc813263c586c67c747358eedddfa3f62b9f.bin",
+          "bytes": 155844,
+          "sha256": "51a1f8c741fbcdec08727f7a103abc813263c586c67c747358eedddfa3f62b9f",
+          "url": "assets/sprites/pipeline-v2/flame/mesh/enemy-mesh-rigid-r1/flame-positions-51a1f8c741fbcdec08727f7a103abc813263c586c67c747358eedddfa3f62b9f.bin?v=51a1f8c741fbcdec08727f7a103abc813263c586c67c747358eedddfa3f62b9f"
+        },
+        "indices": {
+          "file": "assets/sprites/pipeline-v2/flame/mesh/enemy-mesh-rigid-r1/flame-indices-114143f3cf6a61c2e1d0a8f33c48822e86adf955603e7b207ed157f41ed77897.bin",
+          "bytes": 24000,
+          "sha256": "114143f3cf6a61c2e1d0a8f33c48822e86adf955603e7b207ed157f41ed77897",
+          "encoding": "uint16-le-triangles",
+          "url": "assets/sprites/pipeline-v2/flame/mesh/enemy-mesh-rigid-r1/flame-indices-114143f3cf6a61c2e1d0a8f33c48822e86adf955603e7b207ed157f41ed77897.bin?v=114143f3cf6a61c2e1d0a8f33c48822e86adf955603e7b207ed157f41ed77897"
+        },
+        "topologySha256": "114143f3cf6a61c2e1d0a8f33c48822e86adf955603e7b207ed157f41ed77897",
+        "downloadBytes": 179844,
+        "gpuFloat32Bytes": 335688,
+        "quantizationMaxErrorWorld": [
+          0.00022981299726981735,
+          0.00018760884726611057,
+          0.00010930841215167404
+        ]
+      },
+      "images": {
+        "beauty160": {
+          "file": "assets/sprites/pipeline-v2/flame/sheet.png",
+          "sha256": "766d19ecdc259536211a10cd27ee9c9815819ce70b94d1fc8927b19b6b250c3d"
+        }
+      },
+      "materialEncoding": null,
+      "sourceManifestSha256": "2ff3a57c507e87cb0f524dabb85825a61217dd8969313937011bea736784eb33",
+      "sourceArchiveSha256": "0fe4058c7b2962109efe272cc703cb756d331d1d5bc2e705a308602dae65c8cb",
+      "inheritedEyeAnchorSource": null,
+      "validation": {
+        "fullSilhouettes": 1053,
+        "minimumIou": 0.9913091922005571,
+        "minimumFineIou": 0.9918539091018865,
+        "materialMetrics": [],
+        "evidence": {
+          "candidate.blend": "fb7dc7ebaf2147bb4712c4d93cae538592b309df22d07426f25bd3e8da37016a",
+          "silhouette-review.json": "891fa071b15702a4e54454c972c9b7557b820c302de4c34ffa38debc21ffc026"
+        }
+      }
+    },
+    {
+      "id": "void-flame",
+      "revision": "towers-r03",
+      "meshRevision": "enemy-mesh-rigid-r1",
+      "profile": "rigid",
+      "coordinates": {
+        "axes": "X-right,Y-south,Z-up",
+        "conversion": [
+          1,
+          -1,
+          1
+        ],
+        "groundZBlender": 0,
+        "pivot": [
+          0.5,
+          0.5
+        ],
+        "canvasWorldPx": 40,
+        "orthoScaleBlender": 2.8,
+        "worldPxPerBlenderUnit": 14.285714285714286,
+        "heightPolicy": "evaluated rigid geometry above its own ground plane"
+      },
+      "poses": [
+        {
+          "index": 0,
+          "blenderFrame": 0,
+          "clip": "rest",
+          "clipFrame": 0,
+          "sourceBeautySha256": "cd9c000c6138d25704b8f01b4f88e6a76d8d15b3f923fe640e5f66b7a4c060e6"
+        },
+        {
+          "index": 1,
+          "blenderFrame": 1,
+          "clip": "fire",
+          "clipFrame": 0,
+          "sourceBeautySha256": "e8e1d631e0a64b09a35bb22ae98d19e371a1923c2b486735c874e44d29025b5d"
+        },
+        {
+          "index": 2,
+          "blenderFrame": 3,
+          "clip": "fire",
+          "clipFrame": 1,
+          "sourceBeautySha256": "c8a4d7c36fd132c6d50ddb437459ad05e87c59f3feac6477cc04769108c8974b"
+        },
+        {
+          "index": 3,
+          "blenderFrame": 5,
+          "clip": "fire",
+          "clipFrame": 2,
+          "sourceBeautySha256": "cdbc4631189353c79edb3c5965d5e08a34d35721f70c5b19e38814d4f0525be7"
+        },
+        {
+          "index": 4,
+          "blenderFrame": 7,
+          "clip": "fire",
+          "clipFrame": 3,
+          "sourceBeautySha256": "76a3e66117b361bc0ed2d94116c096fe35ba0ae380b020bf363b5170ab4eda96"
+        },
+        {
+          "index": 5,
+          "blenderFrame": 9,
+          "clip": "fire",
+          "clipFrame": 4,
+          "sourceBeautySha256": "65e5b8715d1e037d9ab1f644d2610069b6b545893dedcf521f57275a79348b3b"
+        },
+        {
+          "index": 6,
+          "blenderFrame": 11,
+          "clip": "fire",
+          "clipFrame": 5,
+          "sourceBeautySha256": "2904f628f70888044c93d7565bd342971047762bd292d6c0826c9ec7d22aeb7f"
+        },
+        {
+          "index": 7,
+          "blenderFrame": 13,
+          "clip": "fire",
+          "clipFrame": 6,
+          "sourceBeautySha256": "ee3a276aefeff228431867b8a4fa551e996f2b5e8646c271f941d7b6b1d5b1e0"
+        },
+        {
+          "index": 8,
+          "blenderFrame": 15,
+          "clip": "fire",
+          "clipFrame": 7,
+          "sourceBeautySha256": "c264b73901b22d97ee8db897816847357c2b5591cc1165a3c9efa31e8dfc22e3"
+        },
+        {
+          "index": 9,
+          "blenderFrame": 17,
+          "clip": "fire",
+          "clipFrame": 8,
+          "sourceBeautySha256": "7492f415dec99d41b251a803573476d2cb861b467f418636e194974cd8f9ec9d"
+        },
+        {
+          "index": 10,
+          "blenderFrame": 19,
+          "clip": "fire",
+          "clipFrame": 9,
+          "sourceBeautySha256": "cc74086b3188512a9440dbe41f6e0daf67c2fec0d73dca15553f677108034f44"
+        },
+        {
+          "index": 11,
+          "blenderFrame": 21,
+          "clip": "fire",
+          "clipFrame": 10,
+          "sourceBeautySha256": "06001478f5c0c09df93077a5c1c4af01bf4a01dd873276010bccf92f3d71841b"
+        },
+        {
+          "index": 12,
+          "blenderFrame": 23,
+          "clip": "fire",
+          "clipFrame": 11,
+          "sourceBeautySha256": "7689deb9388f61b2a55b6be0f009d2b2149e9490b19d236506737f440f36a600"
+        }
+      ],
+      "contacts": [
+        {
+          "pose": 0,
+          "feet": []
+        },
+        {
+          "pose": 1,
+          "feet": []
+        },
+        {
+          "pose": 2,
+          "feet": []
+        },
+        {
+          "pose": 3,
+          "feet": []
+        },
+        {
+          "pose": 4,
+          "feet": []
+        },
+        {
+          "pose": 5,
+          "feet": []
+        },
+        {
+          "pose": 6,
+          "feet": []
+        },
+        {
+          "pose": 7,
+          "feet": []
+        },
+        {
+          "pose": 8,
+          "feet": []
+        },
+        {
+          "pose": 9,
+          "feet": []
+        },
+        {
+          "pose": 10,
+          "feet": []
+        },
+        {
+          "pose": 11,
+          "feet": []
+        },
+        {
+          "pose": 12,
+          "feet": []
+        }
+      ],
+      "provenance": {
+        "source": "selected-v2",
+        "sourceRevision": "towers-r03",
+        "blenderVersion": "5.2.1 LTS"
+      },
+      "mesh": {
+        "id": "void-flame",
+        "encoding": "uint16-le-xyz-bounds",
+        "bounds": {
+          "min": [
+            -12.04382264120508,
+            -12.067468117817205,
+            0
+          ],
+          "max": [
+            17.714285531214305,
+            12.07765735703997,
+            15.999406126536282
+          ]
+        },
+        "vertexCount": 2000,
+        "triangleCount": 3996,
+        "poseIndices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "positions": {
+          "file": "assets/sprites/pipeline-v2/void-flame/mesh/enemy-mesh-rigid-r1/void-flame-positions-f2835140531fc3bf2a2d8345cad37def89d2f4816a61f891e77a55bc4a5ae19d.bin",
+          "bytes": 156000,
+          "sha256": "f2835140531fc3bf2a2d8345cad37def89d2f4816a61f891e77a55bc4a5ae19d",
+          "url": "assets/sprites/pipeline-v2/void-flame/mesh/enemy-mesh-rigid-r1/void-flame-positions-f2835140531fc3bf2a2d8345cad37def89d2f4816a61f891e77a55bc4a5ae19d.bin?v=f2835140531fc3bf2a2d8345cad37def89d2f4816a61f891e77a55bc4a5ae19d"
+        },
+        "indices": {
+          "file": "assets/sprites/pipeline-v2/void-flame/mesh/enemy-mesh-rigid-r1/void-flame-indices-b0b2c0bc1ed2978b538195c9d20595707accb8bbce12ae91f0f48bb2dc2481b5.bin",
+          "bytes": 23976,
+          "sha256": "b0b2c0bc1ed2978b538195c9d20595707accb8bbce12ae91f0f48bb2dc2481b5",
+          "encoding": "uint16-le-triangles",
+          "url": "assets/sprites/pipeline-v2/void-flame/mesh/enemy-mesh-rigid-r1/void-flame-indices-b0b2c0bc1ed2978b538195c9d20595707accb8bbce12ae91f0f48bb2dc2481b5.bin?v=b0b2c0bc1ed2978b538195c9d20595707accb8bbce12ae91f0f48bb2dc2481b5"
+        },
+        "topologySha256": "b0b2c0bc1ed2978b538195c9d20595707accb8bbce12ae91f0f48bb2dc2481b5",
+        "downloadBytes": 179976,
+        "gpuFloat32Bytes": 335976,
+        "quantizationMaxErrorWorld": [
+          0.00022703981210360407,
+          0.0001842154991596641,
+          0.00012206764420947801
+        ]
+      },
+      "images": {
+        "beauty160": {
+          "file": "assets/sprites/pipeline-v2/void-flame/sheet.png",
+          "sha256": "123c9cb3d76d223f02a184170093ad0d839ab11f4695c3a2a394bd67959f518b"
+        }
+      },
+      "materialEncoding": null,
+      "sourceManifestSha256": "b83048e1c32b5e848fad7874db6149acec4ec4dcbe65e3195bcc33d6a7830c5d",
+      "sourceArchiveSha256": "4a7d49b4af2e9d214b779110f0e3e1abe31b434570e20c99153df9048e505482",
+      "inheritedEyeAnchorSource": null,
+      "validation": {
+        "fullSilhouettes": 1053,
+        "minimumIou": 0.9938263496650467,
+        "minimumFineIou": 0.9949187234686482,
+        "materialMetrics": [],
+        "evidence": {
+          "candidate.blend": "6997b07e2dffc71f685726bd447fcb264ba5afda21981f3965a54963075d85e1",
+          "silhouette-review.json": "30e1c173b7c633f76770f079a90f84ee5de0286cdf611c3aa77c9a3676c1c2e9"
+        }
+      }
+    },
+    {
+      "id": "tesla",
+      "revision": "towers-r03",
+      "meshRevision": "enemy-mesh-rigid-r1",
+      "profile": "rigid",
+      "coordinates": {
+        "axes": "X-right,Y-south,Z-up",
+        "conversion": [
+          1,
+          -1,
+          1
+        ],
+        "groundZBlender": 0,
+        "pivot": [
+          0.5,
+          0.5
+        ],
+        "canvasWorldPx": 40,
+        "orthoScaleBlender": 2.8,
+        "worldPxPerBlenderUnit": 14.285714285714286,
+        "heightPolicy": "evaluated rigid geometry above its own ground plane"
+      },
+      "poses": [
+        {
+          "index": 0,
+          "blenderFrame": 0,
+          "clip": "rest",
+          "clipFrame": 0,
+          "sourceBeautySha256": "7667bd436754064cd9c1b572334224913bffebe4197d7948e2a0e4520af6b669"
+        },
+        {
+          "index": 1,
+          "blenderFrame": 1,
+          "clip": "fire",
+          "clipFrame": 0,
+          "sourceBeautySha256": "9d5480473dcc4b4aa5e5e3e0074f83cdfbf9279043499da3d7d64f4de3f6b3f4"
+        },
+        {
+          "index": 2,
+          "blenderFrame": 3,
+          "clip": "fire",
+          "clipFrame": 1,
+          "sourceBeautySha256": "3561546dce2c9891be8f86e98ac3422a0e7cae78e7bc696c3c909a6ea058639e"
+        },
+        {
+          "index": 3,
+          "blenderFrame": 5,
+          "clip": "fire",
+          "clipFrame": 2,
+          "sourceBeautySha256": "d8efb5f2e381a7bf77fa0175dd4b7f8c77739f376275f1bf610d1abf9e6b0c69"
+        },
+        {
+          "index": 4,
+          "blenderFrame": 7,
+          "clip": "fire",
+          "clipFrame": 3,
+          "sourceBeautySha256": "d3a358af4246eaf221b6bb629b9ef2d617d35b73bc67fb4c8ceb3a2620418e3b"
+        },
+        {
+          "index": 5,
+          "blenderFrame": 9,
+          "clip": "fire",
+          "clipFrame": 4,
+          "sourceBeautySha256": "31331ca6310824f54ff391195fbcf73b7533a3e1d0ea3ba9d220d1ea2b9b2427"
+        },
+        {
+          "index": 6,
+          "blenderFrame": 11,
+          "clip": "fire",
+          "clipFrame": 5,
+          "sourceBeautySha256": "1e94419fb71f3398402f63a2eed795326012598f59bc2696d943fb4cf92c7f49"
+        },
+        {
+          "index": 7,
+          "blenderFrame": 13,
+          "clip": "fire",
+          "clipFrame": 6,
+          "sourceBeautySha256": "20b4f0ee28979932062dbfc21da4cd26c1d4724cdee18ccaf29e6f8279097eee"
+        },
+        {
+          "index": 8,
+          "blenderFrame": 15,
+          "clip": "fire",
+          "clipFrame": 7,
+          "sourceBeautySha256": "25a4c8000ddd64ddec05a561f687872648be62728212038bcd612e5dc0aa0d61"
+        },
+        {
+          "index": 9,
+          "blenderFrame": 17,
+          "clip": "fire",
+          "clipFrame": 8,
+          "sourceBeautySha256": "2f38c7109410395e459f7ab9795407a4e264feec016f0fc6f4279714aaba7d52"
+        },
+        {
+          "index": 10,
+          "blenderFrame": 19,
+          "clip": "fire",
+          "clipFrame": 9,
+          "sourceBeautySha256": "3b5872b5438721ddf3261839c921150250e67949157995a9554bdb8d9d55ad3b"
+        },
+        {
+          "index": 11,
+          "blenderFrame": 21,
+          "clip": "fire",
+          "clipFrame": 10,
+          "sourceBeautySha256": "75810b84c43a169ac5bdf6655ab7ab14737ec851e9d3cbf446ec55a8fea712b0"
+        },
+        {
+          "index": 12,
+          "blenderFrame": 23,
+          "clip": "fire",
+          "clipFrame": 11,
+          "sourceBeautySha256": "1607fa561db720364453506066f822c51135e35668214d754613c30b7ab9723b"
+        }
+      ],
+      "contacts": [
+        {
+          "pose": 0,
+          "feet": []
+        },
+        {
+          "pose": 1,
+          "feet": []
+        },
+        {
+          "pose": 2,
+          "feet": []
+        },
+        {
+          "pose": 3,
+          "feet": []
+        },
+        {
+          "pose": 4,
+          "feet": []
+        },
+        {
+          "pose": 5,
+          "feet": []
+        },
+        {
+          "pose": 6,
+          "feet": []
+        },
+        {
+          "pose": 7,
+          "feet": []
+        },
+        {
+          "pose": 8,
+          "feet": []
+        },
+        {
+          "pose": 9,
+          "feet": []
+        },
+        {
+          "pose": 10,
+          "feet": []
+        },
+        {
+          "pose": 11,
+          "feet": []
+        },
+        {
+          "pose": 12,
+          "feet": []
+        }
+      ],
+      "provenance": {
+        "source": "selected-v2",
+        "sourceRevision": "towers-r03",
+        "blenderVersion": "5.2.1 LTS"
+      },
+      "mesh": {
+        "id": "tesla",
+        "encoding": "uint16-le-xyz-bounds",
+        "bounds": {
+          "min": [
+            -12.015164749962944,
+            -12.015164749962944,
+            0
+          ],
+          "max": [
+            17.595381624285462,
+            12.023071182434418,
+            14.995060520090545
+          ]
+        },
+        "vertexCount": 1994,
+        "triangleCount": 4000,
+        "poseIndices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "positions": {
+          "file": "assets/sprites/pipeline-v2/tesla/mesh/enemy-mesh-rigid-r1/tesla-positions-64e3da3b05f557b311da054231efb412bc731462a1f01849656814b939dc9171.bin",
+          "bytes": 155532,
+          "sha256": "64e3da3b05f557b311da054231efb412bc731462a1f01849656814b939dc9171",
+          "url": "assets/sprites/pipeline-v2/tesla/mesh/enemy-mesh-rigid-r1/tesla-positions-64e3da3b05f557b311da054231efb412bc731462a1f01849656814b939dc9171.bin?v=64e3da3b05f557b311da054231efb412bc731462a1f01849656814b939dc9171"
+        },
+        "indices": {
+          "file": "assets/sprites/pipeline-v2/tesla/mesh/enemy-mesh-rigid-r1/tesla-indices-7eff801fcb1e8607bfc745772c5d888fb327429b8a4f21d03d9479d21972e216.bin",
+          "bytes": 24000,
+          "sha256": "7eff801fcb1e8607bfc745772c5d888fb327429b8a4f21d03d9479d21972e216",
+          "encoding": "uint16-le-triangles",
+          "url": "assets/sprites/pipeline-v2/tesla/mesh/enemy-mesh-rigid-r1/tesla-indices-7eff801fcb1e8607bfc745772c5d888fb327429b8a4f21d03d9479d21972e216.bin?v=7eff801fcb1e8607bfc745772c5d888fb327429b8a4f21d03d9479d21972e216"
+        },
+        "topologySha256": "7eff801fcb1e8607bfc745772c5d888fb327429b8a4f21d03d9479d21972e216",
+        "downloadBytes": 179532,
+        "gpuFloat32Bytes": 335064,
+        "quantizationMaxErrorWorld": [
+          0.00022591398774890063,
+          0.00018339998422520304,
+          0.00011440497840917483
+        ]
+      },
+      "images": {
+        "beauty160": {
+          "file": "assets/sprites/pipeline-v2/tesla/sheet.png",
+          "sha256": "879ea9572da1fa4055d03fd71acccb0e5288d9f571e13627fc11382a404a8662"
+        }
+      },
+      "materialEncoding": null,
+      "sourceManifestSha256": "ade4a8f870164319cfa31e5349399b6b86ad7041bf31dba287929a65b4481431",
+      "sourceArchiveSha256": "b69e6593c4a37ac53eff052189ff15acc1aa7074146de19e15826ec259d15098",
+      "inheritedEyeAnchorSource": null,
+      "validation": {
+        "fullSilhouettes": 1053,
+        "minimumIou": 0.9900144599350668,
+        "minimumFineIou": 0.9888030218350711,
+        "materialMetrics": [],
+        "evidence": {
+          "candidate.blend": "12e4762b7329c3d9351a9ebacf7f5e0a0ade5bcbbed36b791269075e06aefe38",
+          "silhouette-review.json": "423a8d7555ba220296dc6ee07e823818ee71edace4faaae045bf72241016f0b9"
+        }
+      }
+    },
+    {
+      "id": "gravity",
+      "revision": "towers-r03",
+      "meshRevision": "enemy-mesh-rigid-r1",
+      "profile": "rigid",
+      "coordinates": {
+        "axes": "X-right,Y-south,Z-up",
+        "conversion": [
+          1,
+          -1,
+          1
+        ],
+        "groundZBlender": 0,
+        "pivot": [
+          0.5,
+          0.5
+        ],
+        "canvasWorldPx": 40,
+        "orthoScaleBlender": 2.8,
+        "worldPxPerBlenderUnit": 14.285714285714286,
+        "heightPolicy": "evaluated rigid geometry above its own ground plane"
+      },
+      "poses": [
+        {
+          "index": 0,
+          "blenderFrame": 0,
+          "clip": "rest",
+          "clipFrame": 0,
+          "sourceBeautySha256": "e418c1855a79bf37140cb16ca2d2b4d1175bf3a90d97efcc77078db60019cb34"
+        },
+        {
+          "index": 1,
+          "blenderFrame": 1,
+          "clip": "fire",
+          "clipFrame": 0,
+          "sourceBeautySha256": "d0bb73617f42300e3848ab0b3826f2c8ce0bdb626b285ca358fea9b8c7559590"
+        },
+        {
+          "index": 2,
+          "blenderFrame": 2.2,
+          "clip": "fire",
+          "clipFrame": 1,
+          "sourceBeautySha256": "2c7f602c2b5871593507f203dbcec25c4009545b887acc54469801f9101cc2a9"
+        },
+        {
+          "index": 3,
+          "blenderFrame": 3.4,
+          "clip": "fire",
+          "clipFrame": 2,
+          "sourceBeautySha256": "72865c037659086f7d966560a189a1efefb2fb3f14819ead35ffb7b67e900965"
+        },
+        {
+          "index": 4,
+          "blenderFrame": 4.6,
+          "clip": "fire",
+          "clipFrame": 3,
+          "sourceBeautySha256": "1dda21f6bd878c1f398c0a6eef3dec9d9350cfb488b99c10e71ceb0dfed459a4"
+        },
+        {
+          "index": 5,
+          "blenderFrame": 5.8,
+          "clip": "fire",
+          "clipFrame": 4,
+          "sourceBeautySha256": "c655797e74511576891fe5c71a08e830a89c1efd8898bec0f7bf9a329b88575e"
+        },
+        {
+          "index": 6,
+          "blenderFrame": 7,
+          "clip": "fire",
+          "clipFrame": 5,
+          "sourceBeautySha256": "01d0f1b6177b809aaf4c8154b854ee8bd809c156d552990a558f2d6dbb18d641"
+        },
+        {
+          "index": 7,
+          "blenderFrame": 8.2,
+          "clip": "fire",
+          "clipFrame": 6,
+          "sourceBeautySha256": "5cfad6412ffd8a4eabb4a9c349a07137910f8fbd9412de3e06084911aa93ffbe"
+        },
+        {
+          "index": 8,
+          "blenderFrame": 9.4,
+          "clip": "fire",
+          "clipFrame": 7,
+          "sourceBeautySha256": "45076c82e04fd136c3b882c185967a2dce72b4f6118f4855e5551e8e49bc07f7"
+        },
+        {
+          "index": 9,
+          "blenderFrame": 10.6,
+          "clip": "fire",
+          "clipFrame": 8,
+          "sourceBeautySha256": "053d7bf1af405dbc7246de3fadf1d802bf048462b664c3f38d757cc8d41d7578"
+        },
+        {
+          "index": 10,
+          "blenderFrame": 11.799999999999999,
+          "clip": "fire",
+          "clipFrame": 9,
+          "sourceBeautySha256": "8f9a5daea44833a20ff2b10f8a2025c5c1707d4e6240c5fab289c11f44f9af5b"
+        }
+      ],
+      "contacts": [
+        {
+          "pose": 0,
+          "feet": []
+        },
+        {
+          "pose": 1,
+          "feet": []
+        },
+        {
+          "pose": 2,
+          "feet": []
+        },
+        {
+          "pose": 3,
+          "feet": []
+        },
+        {
+          "pose": 4,
+          "feet": []
+        },
+        {
+          "pose": 5,
+          "feet": []
+        },
+        {
+          "pose": 6,
+          "feet": []
+        },
+        {
+          "pose": 7,
+          "feet": []
+        },
+        {
+          "pose": 8,
+          "feet": []
+        },
+        {
+          "pose": 9,
+          "feet": []
+        },
+        {
+          "pose": 10,
+          "feet": []
+        }
+      ],
+      "provenance": {
+        "source": "selected-v2",
+        "sourceRevision": "towers-r03",
+        "blenderVersion": "5.2.1 LTS"
+      },
+      "mesh": {
+        "id": "gravity",
+        "encoding": "uint16-le-xyz-bounds",
+        "bounds": {
+          "min": [
+            -12.42832792198123,
+            -12.428228335378803,
+            0
+          ],
+          "max": [
+            17.54693279034942,
+            12.428484444279054,
+            14.884615308272158
+          ]
+        },
+        "vertexCount": 2000,
+        "triangleCount": 3996,
+        "poseIndices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "positions": {
+          "file": "assets/sprites/pipeline-v2/gravity/mesh/enemy-mesh-rigid-r1/gravity-positions-8a6d0a3f6bad6c2e1c045def0a16cc8221eb206895745b4545209a8d486d4a54.bin",
+          "bytes": 132000,
+          "sha256": "8a6d0a3f6bad6c2e1c045def0a16cc8221eb206895745b4545209a8d486d4a54",
+          "url": "assets/sprites/pipeline-v2/gravity/mesh/enemy-mesh-rigid-r1/gravity-positions-8a6d0a3f6bad6c2e1c045def0a16cc8221eb206895745b4545209a8d486d4a54.bin?v=8a6d0a3f6bad6c2e1c045def0a16cc8221eb206895745b4545209a8d486d4a54"
+        },
+        "indices": {
+          "file": "assets/sprites/pipeline-v2/gravity/mesh/enemy-mesh-rigid-r1/gravity-indices-13454d907aa6f7b0d5776f33b3c72b88d187710a5b69aec7a2e8937d9cf94ce7.bin",
+          "bytes": 23976,
+          "sha256": "13454d907aa6f7b0d5776f33b3c72b88d187710a5b69aec7a2e8937d9cf94ce7",
+          "encoding": "uint16-le-triangles",
+          "url": "assets/sprites/pipeline-v2/gravity/mesh/enemy-mesh-rigid-r1/gravity-indices-13454d907aa6f7b0d5776f33b3c72b88d187710a5b69aec7a2e8937d9cf94ce7.bin?v=13454d907aa6f7b0d5776f33b3c72b88d187710a5b69aec7a2e8937d9cf94ce7"
+        },
+        "topologySha256": "13454d907aa6f7b0d5776f33b3c72b88d187710a5b69aec7a2e8937d9cf94ce7",
+        "downloadBytes": 155976,
+        "gpuFloat32Bytes": 287976,
+        "quantizationMaxErrorWorld": [
+          0.0002286965797843187,
+          0.0001896445622923465,
+          0.00011356233545641381
+        ]
+      },
+      "images": {
+        "beauty160": {
+          "file": "assets/sprites/pipeline-v2/gravity/sheet.png",
+          "sha256": "791ec22a2c21684c386fb7e1106e8f43a3fcbc36c8b3e008d9c77d33acd63700"
+        }
+      },
+      "materialEncoding": null,
+      "sourceManifestSha256": "490e2a68f4df0d98d0a79fd1488612d4ca21d97528b7fd2a2b1e0209ca5d2c37",
+      "sourceArchiveSha256": "3a9885b83cb01f84abbb54dc7260a74b5b05ab118def20167246e422f20b8b26",
+      "inheritedEyeAnchorSource": null,
+      "validation": {
+        "fullSilhouettes": 891,
+        "minimumIou": 0.9920776020710521,
+        "minimumFineIou": 0.9921849408020965,
+        "materialMetrics": [],
+        "evidence": {
+          "candidate.blend": "c073d929ae1936be43bd7d802f4e73a7581a834a3328eb11ea46e7fbfb010202",
+          "silhouette-review.json": "3e01f911e947568231e493d4bd342c555ebaa88361bb37bb5460211d5a41ffc3"
+        }
+      }
+    },
+    {
+      "id": "slow-bubble",
+      "revision": "towers-r03",
+      "meshRevision": "enemy-mesh-rigid-r1",
+      "profile": "rigid",
+      "coordinates": {
+        "axes": "X-right,Y-south,Z-up",
+        "conversion": [
+          1,
+          -1,
+          1
+        ],
+        "groundZBlender": 0,
+        "pivot": [
+          0.5,
+          0.5
+        ],
+        "canvasWorldPx": 40,
+        "orthoScaleBlender": 2.8,
+        "worldPxPerBlenderUnit": 14.285714285714286,
+        "heightPolicy": "evaluated rigid geometry above its own ground plane"
+      },
+      "poses": [
+        {
+          "index": 0,
+          "blenderFrame": 0,
+          "clip": "rest",
+          "clipFrame": 0,
+          "sourceBeautySha256": "106f0ff79f66ecf76870b198b90d41e1a3c901bfe323216957161cdc1ec87367"
+        },
+        {
+          "index": 1,
+          "blenderFrame": 1,
+          "clip": "fire",
+          "clipFrame": 0,
+          "sourceBeautySha256": "1b62251ca16d9e2e74d59cf04b568af062ad1329ae2ca9ca4e54c190b91a2406"
+        },
+        {
+          "index": 2,
+          "blenderFrame": 2,
+          "clip": "fire",
+          "clipFrame": 1,
+          "sourceBeautySha256": "213a6f696b66e54148b651327d9e9f62f9db427085e7c0c45f8073b29a931012"
+        },
+        {
+          "index": 3,
+          "blenderFrame": 3,
+          "clip": "fire",
+          "clipFrame": 2,
+          "sourceBeautySha256": "4afd1b7b0dc9541f49659f05170a04cd33b5c3b392ec7bee7f208b8f4477e30a"
+        },
+        {
+          "index": 4,
+          "blenderFrame": 4,
+          "clip": "fire",
+          "clipFrame": 3,
+          "sourceBeautySha256": "b7c1c91530398a741967a4ed3b02ad1179fdfc5d9caca4e8a41af062f6d5a0db"
+        },
+        {
+          "index": 5,
+          "blenderFrame": 5,
+          "clip": "fire",
+          "clipFrame": 4,
+          "sourceBeautySha256": "3ae8c87a49751af15b4f9d158e8db5d0d9a61c2151b6cfef41faaf06003ed06a"
+        },
+        {
+          "index": 6,
+          "blenderFrame": 6,
+          "clip": "fire",
+          "clipFrame": 5,
+          "sourceBeautySha256": "c80def0a385501410a2d4fa91a81380e93d1cd953b6918cccb4c8fb4a14de720"
+        },
+        {
+          "index": 7,
+          "blenderFrame": 7,
+          "clip": "fire",
+          "clipFrame": 6,
+          "sourceBeautySha256": "97ba05c9715a0dfc52e7f560118f48d2f50287a1cca59372a1769c1d4f65dcbf"
+        },
+        {
+          "index": 8,
+          "blenderFrame": 8,
+          "clip": "fire",
+          "clipFrame": 7,
+          "sourceBeautySha256": "ed70e39fd2981b8212011603e4c7f9ce11194132dfe975ef76af7b0a1cda1325"
+        }
+      ],
+      "contacts": [
+        {
+          "pose": 0,
+          "feet": []
+        },
+        {
+          "pose": 1,
+          "feet": []
+        },
+        {
+          "pose": 2,
+          "feet": []
+        },
+        {
+          "pose": 3,
+          "feet": []
+        },
+        {
+          "pose": 4,
+          "feet": []
+        },
+        {
+          "pose": 5,
+          "feet": []
+        },
+        {
+          "pose": 6,
+          "feet": []
+        },
+        {
+          "pose": 7,
+          "feet": []
+        },
+        {
+          "pose": 8,
+          "feet": []
+        }
+      ],
+      "provenance": {
+        "source": "selected-v2",
+        "sourceRevision": "towers-r03",
+        "blenderVersion": "5.2.1 LTS"
+      },
+      "mesh": {
+        "id": "slow-bubble",
+        "encoding": "uint16-le-xyz-bounds",
+        "bounds": {
+          "min": [
+            -11.856798571926737,
+            -11.856863635896737,
+            0
+          ],
+          "max": [
+            18.126579918056862,
+            11.856870321940816,
+            16.76759845774903
+          ]
+        },
+        "vertexCount": 2000,
+        "triangleCount": 3988,
+        "poseIndices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "positions": {
+          "file": "assets/sprites/pipeline-v2/slow-bubble/mesh/enemy-mesh-rigid-r1/slow-bubble-positions-7c521363a46302b1bf91572f8be4c5a2b585c6657de3db8a62b3ca0b0ef79940.bin",
+          "bytes": 108000,
+          "sha256": "7c521363a46302b1bf91572f8be4c5a2b585c6657de3db8a62b3ca0b0ef79940",
+          "url": "assets/sprites/pipeline-v2/slow-bubble/mesh/enemy-mesh-rigid-r1/slow-bubble-positions-7c521363a46302b1bf91572f8be4c5a2b585c6657de3db8a62b3ca0b0ef79940.bin?v=7c521363a46302b1bf91572f8be4c5a2b585c6657de3db8a62b3ca0b0ef79940"
+        },
+        "indices": {
+          "file": "assets/sprites/pipeline-v2/slow-bubble/mesh/enemy-mesh-rigid-r1/slow-bubble-indices-358174f4eacbac0c7c224bc9274c3da3a71f523952274cc738aa366ef992e9dc.bin",
+          "bytes": 23928,
+          "sha256": "358174f4eacbac0c7c224bc9274c3da3a71f523952274cc738aa366ef992e9dc",
+          "encoding": "uint16-le-triangles",
+          "url": "assets/sprites/pipeline-v2/slow-bubble/mesh/enemy-mesh-rigid-r1/slow-bubble-indices-358174f4eacbac0c7c224bc9274c3da3a71f523952274cc738aa366ef992e9dc.bin?v=358174f4eacbac0c7c224bc9274c3da3a71f523952274cc738aa366ef992e9dc"
+        },
+        "topologySha256": "358174f4eacbac0c7c224bc9274c3da3a71f523952274cc738aa366ef992e9dc",
+        "downloadBytes": 131928,
+        "gpuFloat32Bytes": 239928,
+        "quantizationMaxErrorWorld": [
+          0.00022875851445779813,
+          0.00018092419285753837,
+          0.00012792857601090282
+        ]
+      },
+      "images": {
+        "beauty160": {
+          "file": "assets/sprites/pipeline-v2/slow-bubble/sheet.png",
+          "sha256": "feec721d8f3cd0f53a783cbf11d7e603cb06c524b646f174d4a0d78746ef3d5e"
+        }
+      },
+      "materialEncoding": null,
+      "sourceManifestSha256": "40f8ce43f2d69cfe53c847e80bccd02d495bf7df14607383b9ae1d33418a006f",
+      "sourceArchiveSha256": "fa9ad4b3b73d627b129bfe48d39fedd355e29c1eaaf29ea7a7d7ce7b3ddbb0a1",
+      "inheritedEyeAnchorSource": null,
+      "validation": {
+        "fullSilhouettes": 729,
+        "minimumIou": 0.991869918699187,
+        "minimumFineIou": 0.9932729470203073,
+        "materialMetrics": [],
+        "evidence": {
+          "candidate.blend": "7b93ff6fe27cfb6400e1dfc60d27a7b51e47ab88c22c5b44a64243cb803721bf",
+          "silhouette-review.json": "baee635934fe6f47e2b21aa7890896c78e9d4ad8f5550276efc907f5b068b017"
+        }
+      }
+    },
+    {
+      "id": "plasma",
+      "revision": "towers-r03",
+      "meshRevision": "enemy-mesh-rigid-r1",
+      "profile": "rigid",
+      "coordinates": {
+        "axes": "X-right,Y-south,Z-up",
+        "conversion": [
+          1,
+          -1,
+          1
+        ],
+        "groundZBlender": 0,
+        "pivot": [
+          0.5,
+          0.5
+        ],
+        "canvasWorldPx": 40,
+        "orthoScaleBlender": 2.8,
+        "worldPxPerBlenderUnit": 14.285714285714286,
+        "heightPolicy": "evaluated rigid geometry above its own ground plane"
+      },
+      "poses": [
+        {
+          "index": 0,
+          "blenderFrame": 0,
+          "clip": "rest",
+          "clipFrame": 0,
+          "sourceBeautySha256": "09471c9205feea614267cfd4119024f120f08f3054d211df82c461fe25095a76"
+        },
+        {
+          "index": 1,
+          "blenderFrame": 1,
+          "clip": "fire",
+          "clipFrame": 0,
+          "sourceBeautySha256": "c25c596d9faa14bb4540b522b1c707fb57d3dcd926863c9f9095a890f8429ac6"
+        },
+        {
+          "index": 2,
+          "blenderFrame": 2,
+          "clip": "fire",
+          "clipFrame": 1,
+          "sourceBeautySha256": "6c14c435cd296327f33ac7866672815a203a75a716d5fdc945e4a3f752c3d05b"
+        },
+        {
+          "index": 3,
+          "blenderFrame": 3,
+          "clip": "fire",
+          "clipFrame": 2,
+          "sourceBeautySha256": "36e46a0634218c2d1454569997c2a75a6503742ccdefde96d6426b201d5d3cc1"
+        },
+        {
+          "index": 4,
+          "blenderFrame": 4,
+          "clip": "fire",
+          "clipFrame": 3,
+          "sourceBeautySha256": "a9125604ee9269eb2331b1f3ccd9f3cd8a423b87f15c198a691e9d2b05f1bfc4"
+        },
+        {
+          "index": 5,
+          "blenderFrame": 5,
+          "clip": "fire",
+          "clipFrame": 4,
+          "sourceBeautySha256": "2b1de5e9b48233703525d590a8e4674a4d81b27cd7ddd85016cc9d098070d62f"
+        },
+        {
+          "index": 6,
+          "blenderFrame": 6,
+          "clip": "fire",
+          "clipFrame": 5,
+          "sourceBeautySha256": "dcf89fe773f514148c06f51d557e312974926385809d7256cb0639419ba71b52"
+        },
+        {
+          "index": 7,
+          "blenderFrame": 7,
+          "clip": "fire",
+          "clipFrame": 6,
+          "sourceBeautySha256": "bb47cf20381a6fef2ff514bb703edd3d23b7063e7e198213acecaa8612f7768a"
+        },
+        {
+          "index": 8,
+          "blenderFrame": 8,
+          "clip": "fire",
+          "clipFrame": 7,
+          "sourceBeautySha256": "dfecc31a0caeedc5e52da60745e67b044ac9675f0334f93124f643496e576a10"
+        }
+      ],
+      "contacts": [
+        {
+          "pose": 0,
+          "feet": []
+        },
+        {
+          "pose": 1,
+          "feet": []
+        },
+        {
+          "pose": 2,
+          "feet": []
+        },
+        {
+          "pose": 3,
+          "feet": []
+        },
+        {
+          "pose": 4,
+          "feet": []
+        },
+        {
+          "pose": 5,
+          "feet": []
+        },
+        {
+          "pose": 6,
+          "feet": []
+        },
+        {
+          "pose": 7,
+          "feet": []
+        },
+        {
+          "pose": 8,
+          "feet": []
+        }
+      ],
+      "provenance": {
+        "source": "selected-v2",
+        "sourceRevision": "towers-r03",
+        "blenderVersion": "5.2.1 LTS"
+      },
+      "mesh": {
+        "id": "plasma",
+        "encoding": "uint16-le-xyz-bounds",
+        "bounds": {
+          "min": [
+            -11.54854382787432,
+            -12.042655233150043,
+            0
+          ],
+          "max": [
+            18.071427941322327,
+            12.042657622488303,
+            15.222925429875506
+          ]
+        },
+        "vertexCount": 2000,
+        "triangleCount": 3996,
+        "poseIndices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "positions": {
+          "file": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r1/plasma-positions-7440e66df9e837f80715f3c459bce3545423344eab398eb7416359d165dbb310.bin",
+          "bytes": 108000,
+          "sha256": "7440e66df9e837f80715f3c459bce3545423344eab398eb7416359d165dbb310",
+          "url": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r1/plasma-positions-7440e66df9e837f80715f3c459bce3545423344eab398eb7416359d165dbb310.bin?v=7440e66df9e837f80715f3c459bce3545423344eab398eb7416359d165dbb310"
+        },
+        "indices": {
+          "file": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r1/plasma-indices-07edee9d83c09741343fff952e230a0ca8196bf562145c1a6f6cc5bf02cab590.bin",
+          "bytes": 23976,
+          "sha256": "07edee9d83c09741343fff952e230a0ca8196bf562145c1a6f6cc5bf02cab590",
+          "encoding": "uint16-le-triangles",
+          "url": "assets/sprites/pipeline-v2/plasma/mesh/enemy-mesh-rigid-r1/plasma-indices-07edee9d83c09741343fff952e230a0ca8196bf562145c1a6f6cc5bf02cab590.bin?v=07edee9d83c09741343fff952e230a0ca8196bf562145c1a6f6cc5bf02cab590"
+        },
+        "topologySha256": "07edee9d83c09741343fff952e230a0ca8196bf562145c1a6f6cc5bf02cab590",
+        "downloadBytes": 131976,
+        "gpuFloat32Bytes": 239976,
+        "quantizationMaxErrorWorld": [
+          0.00022598589890285073,
+          0.00018375915812648467,
+          0.00011614347623312356
+        ]
+      },
+      "images": {
+        "beauty160": {
+          "file": "assets/sprites/pipeline-v2/plasma/sheet.png",
+          "sha256": "c6a9f0cad8496d74df2e86a0dec58275e2245f9e655ca4cdd15ad31b8d992984"
+        }
+      },
+      "materialEncoding": null,
+      "sourceManifestSha256": "d612cce8c3770335e469e77f30af75918f7267509305086e5134f60efa3caa15",
+      "sourceArchiveSha256": "c364244f89e7f744df9ac41ac279c5cadf0bf6a614197537dbe961e7bdd410e8",
+      "inheritedEyeAnchorSource": null,
+      "validation": {
+        "fullSilhouettes": 729,
+        "minimumIou": 0.9930155773789366,
+        "minimumFineIou": 0.9924634093060511,
+        "materialMetrics": [],
+        "evidence": {
+          "candidate.blend": "f59bc629f32d02474022bb1fc514370edd931d26b6c73bc17c72992dc851a1d6",
+          "silhouette-review.json": "17b0b2b66c9bb420598feaafdfe127e5ca158d12cc6b4b62381eff46777a629d"
+        }
+      }
     }
   ]
 }

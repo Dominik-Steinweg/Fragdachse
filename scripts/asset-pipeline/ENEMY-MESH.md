@@ -39,7 +39,11 @@ same flow: any forward and clips, no move/claw requirement, no paw contacts (`fe
 selected sprite material stays; `seal` skips the data passes and binds the mesh to the live Beauty
 sheet at source size, which `import` references instead of copying. Extract an archived selection's
 `source-bundle.zip` (and the zip itself) to `art/poc/pipeline-v2/runs/<source-revision>/<asset>/`
-before `prepare`. Pilot: `rocket`, `enemy-mesh-rigid-r1` from `towers-r03`.
+before `prepare`. All nine turrets: `enemy-mesh-rigid-r1` from `towers-r03`.
+
+Open shells (a part with boundary loops, e.g. the spore turret's cap without underside) are capped with
+a fan to each loop's centroid before the voxel union (`close_open` in `enemy_mesh_union.py`); a bare
+shell would remesh to a skin that decimation drops, and its shadow would lose the enclosed volume.
 
 Pose counts and sheet rows follow the selected clips, including optional `cast`
 poses. `move` and `claw` remain required; clip blocks must cover every non-rest

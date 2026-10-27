@@ -28,8 +28,8 @@ export const CHARACTER_MESH_TARGET_SIZE = { high: 256, medium: 128 } as const;
 /** Receiver-masked dynamic shadow below figures and their shared fog composite. */
 export const CHARACTER_SHADOW_CONFIG = {
   depth: DEPTH.PLAYERS - .08,
-  directOpacity: .50,
-  lowSunOpacity: .38,
+  directOpacity: .62,
+  lowSunOpacity: .48,
   colour: [.02, .028, .043],
   contactOpacity: .18,
   contactRadiusX: 6,
