@@ -356,6 +356,23 @@ Flags reisen im WorldDescriptor, Clients sehen also die Lobby des Hosts. Der Zug
   [LobbyStaffModel](../../src/arena/lobbyStructures/LobbyStaffModel.ts) entscheidet Arbeit, Hinwenden und Gruß,
   Clip-Marker lösen GPU-Funken über das gemeinsame `GpuVfxSystem` aus.
 
+## Persistenter Basiskern als Fort
+
+Der freundliche persistente Kern (die Basis mit `persistentReservationRadiusCells`) zeichnet keine 47-Blob-Kacheln,
+kein Akzentleuchten und keine `baseGlow`-Lichter, sobald seine Blender-Passes geladen sind; ihn stellt der
+[BaseFortRenderer](../../src/arena/baseStructures/BaseFortRenderer.ts) des BaseManagers dar
+([export-base-structures.mjs](../../scripts/asset-pipeline/export-base-structures.mjs),
+[base-structures.json](../../src/assets/manifests/base-structures.json)). Kollision, HP, Lichtverdeckung und
+Turmzellen bleiben zellbasiert; das Fort präsentiert sie nur.
+
+- Ein Rezept-Build liefert zwei Teile: den Bau (Relief, Raymarch-Schatten und Emission wie bei den Lobby-Bauwerken,
+  Körper unter Turm-Aura und -Sprite) und eine durchscheinende Bodenschicht (`fdGround`) in `DEPTH.BASES` über dem
+  Baubereichskies. Die Bodenschicht liegt über den Boden-Chunks und bekommt deren Sonnenschattierung nicht; ein
+  fester Tint gleicht sie an.
+- Fackeln und Laternen sind Sockets; nur Laternen und große Fackeln setzen kleine Lightmap-Lichter, sonst überflutet
+  die Summe der Lichter das Fort.
+- Der Zellzerfall blendet den Bau stufenweise aus; die Solid-Maske ist der Nebelstempel.
+
 ## Große World-Flächen
 
 Statische World-Flächen werden über Chunking und Streaming resident gehalten. [ChunkedRenderSurface.ts](../../src/arena/chunks/ChunkedRenderSurface.ts), [GroundSurfaceStreamer.ts](../../src/arena/chunks/GroundSurfaceStreamer.ts) und [RockOverlayStreamer.ts](../../src/arena/chunks/RockOverlayStreamer.ts) begrenzen sichtbare Arbeit, recyceln Ressourcen und veröffentlichen neu gebackene Flächen atomar.
