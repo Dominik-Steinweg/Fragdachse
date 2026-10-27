@@ -48,7 +48,8 @@
 // points are the canonical carcass footprint with the brood pit centre as spawn point.
 // Persistent base core: four 3-cell corner bastions and 3-cell entrances (12 base cells instead of
 // 20); host and client derive the core collision from code that the layout fingerprint does not cover.
-export const PEER_PROTOCOL_VERSION = 50;
+// The core's anchor cell carries a solid hearth (13 base cells), derived from code the same way.
+export const PEER_PROTOCOL_VERSION = 51;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

@@ -66,7 +66,7 @@ describe('Persistent-Base-Vorschau – Presentation', () => {
     const core = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation);
 
     expect(core.filter((cell) => cell.domain === 'base-surface')).toHaveLength(12);
-    expect(core.filter((cell) => cell.domain === 'courtyard-build-area')).toHaveLength((PERSISTENT_BASE_CORE_SIZE_CELLS - 2) ** 2);
+    expect(core.filter((cell) => cell.domain === 'courtyard-build-area')).toHaveLength((PERSISTENT_BASE_CORE_SIZE_CELLS - 2) ** 2 - 1);
     expect(preview.buildArea).toEqual(DEFAULT_PERSISTENT_BASE_BUILD_AREA);
   });
 

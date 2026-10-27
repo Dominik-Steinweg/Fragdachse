@@ -46,6 +46,7 @@ import {
   getPersistentBaseBuildAreaExtentCells,
   isCellInsidePersistentBaseBuildArea,
   resolvePersistentBaseCell,
+  type PersistentBaseCellDomain,
 } from '../../persistentBase/PersistentBaseCore';
 import {
   applyPersistentBaseRoundOutcome,
@@ -1146,7 +1147,7 @@ export class ArenaPersistentBaseSession {
   resolvePersistentBaseRewardCell(
     site: WorldPersistentBaseSite,
     placement: Pick<PersistentBaseRewardPlacement, 'relativeGridX' | 'relativeGridY'> & { rewardId?: PersistentBaseRewardId },
-  ): { gridX: number; gridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
+  ): { gridX: number; gridY: number; domain: PersistentBaseCellDomain } | null {
     return resolvePersistentRewardWorldCell(site, placement);
   }
 
@@ -1155,7 +1156,7 @@ export class ArenaPersistentBaseSession {
     gridX: number,
     gridY: number,
     rewardId?: PersistentBaseRewardId,
-  ): { relativeGridX: number; relativeGridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
+  ): { relativeGridX: number; relativeGridY: number; domain: PersistentBaseCellDomain } | null {
     const extent = Math.max(2, getPersistentBaseBuildAreaExtentCells(site.buildArea));
     for (let relativeGridY = -extent; relativeGridY <= extent; relativeGridY += 1) {
       for (let relativeGridX = -extent; relativeGridX <= extent; relativeGridX += 1) {
