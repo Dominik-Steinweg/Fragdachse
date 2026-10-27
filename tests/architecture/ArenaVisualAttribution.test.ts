@@ -66,8 +66,8 @@ const DIRECT_VECTOR_FACTORY_EXCEPTIONS: Readonly<Record<string, Readonly<Record<
   // ARENA_RUNTIME_SOURCE_PREFIXES, so this key is currently never read. Should `src/ui/` ever be
   // added there, duplicate this entry for 'src/ui/AimVisuals.ts'.
   'src/ui/AimSystem.ts': Object.fromEntries(VECTOR_FACTORIES.map((factory) => [factory, 'AimSystem renders through AimVisuals and no longer creates vector factories itself.'])),
-  'src/entities/BaseEntity.ts:159': { rectangle: 'Invisible Arcade physics hitbox of one structure outline rect; it never renders.' },
-  'src/entities/BaseEntity.ts:174': { rectangle: 'Invisible Arcade physics hitbox; it never renders.' },
+  'src/entities/BaseEntity.ts:162': { rectangle: 'Invisible Arcade physics hitbox of one structure outline rect; it never renders.' },
+  'src/entities/BaseEntity.ts:177': { rectangle: 'Invisible Arcade physics hitbox; it never renders.' },
   'src/effects/ShadowSystem.ts:1312': { graphics: 'Invisible RenderTexture bake helper; only the baked texture is rendered.' },
   'src/scenes/arena/EnemyFlowFieldDebugOverlay.ts': { graphics: 'Optional Shift+D+B developer overlay, outside normal arena runtime attribution.' },
   'src/train/TrainManager.ts:355': { rectangle: 'Invisible Arcade physics hitbox kept in the static collision group.' },

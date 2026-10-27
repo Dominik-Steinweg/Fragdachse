@@ -14,6 +14,7 @@ vi.mock('../src/arena/baseStructures/BaseFortAssets', async (importOriginal) => 
 vi.mock('../src/arena/baseStructures/BaseFortRenderer', () => ({
   BaseFortRenderer: class {
     add(...args: unknown[]) { fort.calls.push(['add', ...args]); }
+    addOutpost(...args: unknown[]) { fort.calls.push(['addOutpost', ...args]); return true; }
     destroyCell(...args: unknown[]) { fort.calls.push(['destroyCell', ...args]); }
     remove(...args: unknown[]) { fort.calls.push(['remove', ...args]); }
     setLighting() {} setShadows() {} setParticles() {} setSunlight() {} releaseLights() {} update() {} destroy() {}
@@ -28,7 +29,8 @@ import { getLobbyWorldDefinition } from '../src/config/authoring/lobbyWorld';
 import { resolveWorldBases } from '../src/arena/BaseRegistry';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { CELL_SIZE } from '../src/config';
-import { baseFortCoreAsset, type BaseFortPass } from '../src/arena/baseStructures/BaseFortAssets';
+import { baseFortCoreAsset, baseFortKitAsset, type BaseFortPass } from '../src/arena/baseStructures/BaseFortAssets';
+import { AutoTiler } from '../src/arena/AutoTiler';
 
 const METRICS = resolveActiveArenaWorldMetrics();
 
@@ -57,7 +59,7 @@ function lobbyBases() {
 }
 
 describe('persistent base fort presentation', () => {
-  it('presents only the friendly persistent core as the fort, centred on its anchor cell, without tiles or base glow', () => {
+  it('presents the friendly persistent core as the fort, centred on its anchor cell, without tiles or base glow', () => {
     fort.calls.length = 0;
     const specs = lobbyBases();
     const core = specs.find((spec) => spec.persistentReservationRadiusCells !== undefined)!;
@@ -67,7 +69,11 @@ describe('persistent base fort presentation', () => {
     const { region } = core;
     expect(adds[0]).toEqual(['add', core.id, METRICS.offsetX + (region.minGridX + region.maxGridX + 1) / 2 * CELL_SIZE,
       METRICS.offsetY + (region.minGridY + region.maxGridY + 1) / 2 * CELL_SIZE,
-      core.cells.map(cell => ({ x: METRICS.offsetX + (cell.gridX + .5) * CELL_SIZE, y: METRICS.offsetY + (cell.gridY + .5) * CELL_SIZE }))]);
+      core.cells.map(cell => ({ gridX: cell.gridX, gridY: cell.gridY,
+        x: METRICS.offsetX + (cell.gridX + .5) * CELL_SIZE, y: METRICS.offsetY + (cell.gridY + .5) * CELL_SIZE }))]);
+    // Every other friendly cell base (outposts, middle bases) is composed from the outpost kit.
+    const outposts = specs.filter(spec => spec !== core && spec.faction === 'friendly' && spec.surface !== 'none' && spec.role !== 'spawn-point');
+    expect(fort.calls.filter(([kind]) => kind === 'addOutpost').map(([, id]) => id).sort()).toEqual(outposts.map(spec => spec.id).sort());
     const entity = manager.getBase(core.id)!;
     expect(entity.getSurfaceImages()).toHaveLength(0);
     expect(entity.getLightSpots()).toHaveLength(0);
@@ -94,5 +100,31 @@ describe('persistent base fort presentation', () => {
     // Four gate posts per bastion carry a lantern; no light stands inside the deck cells' centres.
     expect(sockets.filter(([name]) => name.startsWith('lamp_'))).toHaveLength(16);
     expect(sockets.some(([name]) => name.startsWith('torch'))).toBe(true);
+  });
+
+  it('publishes the outpost kit variants with one frame per corner-suppressed mask and sockets inside their frames', () => {
+    const kit = baseFortKitAsset()!;
+    expect(kit).not.toBeNull();
+    expect(kit.variants.length).toBeGreaterThan(1);
+    for (const variant of kit.variants) {
+      for (const pass of ['beauty', 'albedo', 'elevation', 'solid', 'caster-height', ...kit.layers.map(layer => `emission-${layer}`)]) {
+        expect(existsSync(`public/assets/sprites/pipeline-v2/${variant.asset}/${pass}.png`), `${variant.asset} ${pass}`).toBe(true);
+      }
+    }
+    // Every mask a cell set can produce has its frame: the masks of all 256 neighbourhoods.
+    const masks = new Set<number>();
+    for (let bits = 0; bits < 256; bits++) {
+      const occupied = (x: number, y: number) => {
+        const index = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]].findIndex(([dx, dy]) => dx === x && dy === y);
+        return index >= 0 && (bits & (1 << index)) !== 0;
+      };
+      masks.add(AutoTiler.computeMask(0, 0, occupied));
+    }
+    for (const variant of kit.variants) expect(variant.frames.map(frame => frame.mask)).toEqual([...masks].sort((a, b) => a - b));
+    expect(masks.size).toBe(47);
+    for (const variant of kit.variants) for (const frame of variant.frames) for (const socket of Object.values(frame.sockets)) {
+      expect(Math.abs(socket.x)).toBeLessThan(kit.framePx / 2);
+      expect(Math.abs(socket.y)).toBeLessThan(kit.framePx / 2);
+    }
   });
 });

@@ -20,30 +20,60 @@ export interface BaseFortAsset {
   readonly sha256: Readonly<Record<string, string>>;
 }
 
-const STRUCTURES = manifest.structures as Readonly<Record<string, BaseFortAsset>>;
+/** One kit sheet: a frame per corner-suppressed mask; frame sockets are display px from the cell centre. */
+export interface BaseFortKitVariant {
+  readonly asset: string;
+  readonly frames: readonly { readonly mask: number; readonly sockets: Readonly<Record<string, BaseFortSocket>> }[];
+  readonly sha256: Readonly<Record<string, string>>;
+}
+
+/**
+ * The outpost kit: every variant sheet holds one 2 m frame per corner-suppressed cell mask in the same
+ * order, `columns` frames per row, the cell centred in its frame. Cells pick their variant by position.
+ */
+export interface BaseFortKitAsset extends Omit<BaseFortAsset, 'sockets' | 'asset' | 'sha256'> {
+  readonly columns: number;
+  readonly framePx: number;
+  readonly variants: readonly BaseFortKitVariant[];
+}
+
+const STRUCTURES = manifest.structures as unknown as Readonly<Record<string, unknown>>;
 
 /** The art of the persistent base core, or null before it has been published. */
 export function baseFortCoreAsset(): BaseFortAsset | null {
-  return STRUCTURES['persistent-core'] ?? null;
+  return (STRUCTURES['persistent-core'] as BaseFortAsset | undefined) ?? null;
 }
 
-export function baseFortTextureKey(asset: BaseFortAsset, pass: BaseFortPass): string {
+/** The outpost kit, or null before it has been published. */
+export function baseFortKitAsset(): BaseFortKitAsset | null {
+  return (STRUCTURES['outpost-kit'] as BaseFortKitAsset | undefined) ?? null;
+}
+
+export function baseFortTextureKey(asset: Pick<BaseFortAsset, 'asset'>, pass: BaseFortPass): string {
   return `base-fort:${asset.asset}:${pass}`;
 }
 
-function passes(asset: BaseFortAsset): BaseFortPass[] {
-  return ['beauty', 'albedo', 'elevation', 'solid', 'caster-height', 'ground', ...asset.layers.map(layer => `emission-${layer}` as const)];
+function passes(asset: Pick<BaseFortAsset, 'layers'>, ground: boolean): BaseFortPass[] {
+  return ['beauty', 'albedo', 'elevation', 'solid', 'caster-height', ...(ground ? ['ground' as const] : []),
+    ...asset.layers.map(layer => `emission-${layer}` as const)];
+}
+
+function published(): { asset: Pick<BaseFortAsset, 'asset' | 'layers'>; ground: boolean }[] {
+  const core = baseFortCoreAsset(), kit = baseFortKitAsset();
+  return [...(core ? [{ asset: core, ground: true }] : []),
+    ...(kit ? kit.variants.map(variant => ({ asset: { asset: variant.asset, layers: kit.layers }, ground: false })) : [])];
 }
 
 /** Same contract as the lobby structures: elevation and emission are data, read by the shaders. */
 export function preloadBaseFortAssets(loader: Phaser.Loader.LoaderPlugin): void {
-  const asset = baseFortCoreAsset();
-  if (!asset) return;
-  for (const pass of passes(asset)) loader.image(baseFortTextureKey(asset, pass), `./assets/sprites/pipeline-v2/${asset.asset}/${pass}.png`);
+  for (const { asset, ground } of published()) for (const pass of passes(asset, ground)) {
+    loader.image(baseFortTextureKey(asset, pass), `./assets/sprites/pipeline-v2/${asset.asset}/${pass}.png`);
+  }
 }
 
-/** True once every pass of the core is loaded into the scene's texture manager. */
+/** True once every pass of the core and the outpost kit is loaded into the scene's texture manager. */
 export function isBaseFortLoaded(scene: Phaser.Scene): boolean {
-  const asset = baseFortCoreAsset();
-  return !!asset && !!scene.textures && passes(asset).every(pass => scene.textures.exists(baseFortTextureKey(asset, pass)));
+  const all = published();
+  return all.length > 0 && !!scene.textures
+    && all.every(({ asset, ground }) => passes(asset, ground).every(pass => scene.textures.exists(baseFortTextureKey(asset, pass))));
 }

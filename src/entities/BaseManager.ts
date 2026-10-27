@@ -114,8 +114,9 @@ export class BaseManager {
     this.worldMetrics = metrics;
     this.group = scene.physics.add.staticGroup();
     this.destructionRenderer = presentation ? new BaseDestructionRenderer(scene, destructionHooks) : null;
+    // The persistent core and every friendly cell base (outposts, middle bases) present as forts.
     this.fortRenderer = presentation && isBaseFortLoaded(scene) && baseSpecs.some((spec) => (
-      spec.faction === 'friendly' && spec.persistentReservationRadiusCells !== undefined)) ? new BaseFortRenderer(scene) : null;
+      spec.faction === 'friendly' && spec.surface !== 'none' && spec.role !== 'spawn-point')) ? new BaseFortRenderer(scene) : null;
     for (const spec of baseSpecs) {
       const entity = new BaseEntity(scene, spec, metrics, presentation, damageable, healthBars, turretAnimations, this.fortRenderer);
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));

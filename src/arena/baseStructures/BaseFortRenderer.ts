@@ -11,7 +11,8 @@ import { createSurfaceLightFrame, setSurfaceLightUniforms } from '../../effects/
 import type { FogSurfaceStamp } from '../../effects/groundFog/FogSurfaceMask';
 import type { LobbyStructureSunlight } from '../lobbyStructures/LobbyStructureRenderer';
 import { LOBBY_STRUCTURE_RELIEF_FRAGMENT, LOBBY_STRUCTURE_SHADOW_FRAGMENT } from '../lobbyStructures/lobbyStructureShaders';
-import { baseFortCoreAsset, baseFortTextureKey, type BaseFortAsset, type BaseFortLayer } from './BaseFortAssets';
+import { baseFortCoreAsset, baseFortKitAsset, baseFortTextureKey, type BaseFortLayer, type BaseFortPass, type BaseFortSocket } from './BaseFortAssets';
+import { composeOutpost, type FortCell } from './BaseFortKitComposer';
 import type { BaseFortEmitter, BaseFortEmitterKind, BaseFortFx } from './BaseFortFx';
 import { BaseFortMountedHeights, MOUNTED_HEIGHT_RANGE_PX } from './BaseFortMountedHeights';
 import type { MeshShadowCaster } from '../../effects/EnemyMeshShadowRenderer';
@@ -64,6 +65,19 @@ function flicker(seconds: number, hz: number, amount: number, phase: number): nu
   return 1 + amount * (.6 * Math.sin((seconds * hz + phase) * Math.PI * 2) + .4 * Math.sin((seconds * hz * 2.37 + phase * 3.1) * Math.PI * 2));
 }
 
+/** Where a view's art comes from: the published core, or an outpost composed from the kit. */
+interface FortArt {
+  readonly size: number;
+  readonly sourceSize: number;
+  readonly heightPx: { readonly min: number; readonly max: number };
+  readonly deckPx: number;
+  readonly layers: readonly BaseFortLayer[];
+  readonly keys: Readonly<Partial<Record<BaseFortPass, string>>>;
+  readonly sockets: readonly (readonly [string, BaseFortSocket])[];
+  /** Composed textures the view owns and removes with it. */
+  readonly owned: readonly string[];
+}
+
 interface FortMounted {
   left: number;
   top: number;
@@ -72,7 +86,8 @@ interface FortMounted {
 }
 
 interface FortView {
-  readonly ground: Phaser.GameObjects.Image;
+  readonly art: FortArt;
+  readonly ground: Phaser.GameObjects.Image | null;
   readonly body: Phaser.GameObjects.Image;
   readonly relief: Phaser.GameObjects.Shader | null;
   readonly shadow: Phaser.GameObjects.Shader | null;
@@ -97,7 +112,6 @@ interface FortView {
  */
 export class BaseFortRenderer {
   private readonly views = new Map<string, FortView>();
-  private readonly asset: BaseFortAsset;
   private lighting: FortLighting | null = null;
   private shadows: FortShadows | null = null;
   private sunlight: LobbyStructureSunlight | null = null;
@@ -114,25 +128,54 @@ export class BaseFortRenderer {
   private readonly casterScratch: MeshShadowCaster[] = [];
   private readonly mountedScratch: MeshShadowCaster[] = [];
 
-  constructor(private readonly scene: Phaser.Scene) {
-    this.asset = baseFortCoreAsset()!;
-  }
+  constructor(private readonly scene: Phaser.Scene) {}
 
   /** Presents a persistent core centred on the given world point (the centre of its anchor cell). */
   add(baseId: string, centreX: number, centreY: number, cells: readonly { readonly x: number; readonly y: number }[]): void {
+    const asset = baseFortCoreAsset();
+    if (!asset) return;
     this.remove(baseId);
-    const asset = this.asset, size = asset.displaySize;
+    const keys: Partial<Record<BaseFortPass, string>> = {};
+    const passes: BaseFortPass[] = ['beauty', 'albedo', 'elevation', 'solid', 'caster-height', 'ground',
+      ...asset.layers.map(layer => `emission-${layer}` as const)];
+    for (const pass of passes) keys[pass] = baseFortTextureKey(asset, pass);
+    this.present(baseId, { size: asset.displaySize, sourceSize: asset.sourceSize, heightPx: asset.heightPx, deckPx: asset.deckPx ?? 0,
+      layers: asset.layers, keys, sockets: Object.entries(asset.sockets), owned: [] }, centreX, centreY, cells);
+  }
+
+  /**
+   * Presents an outpost or middle base: its art is composed once from the outpost kit, one frame per
+   * cell mask, in the same fort style as the core. Returns false without a published kit.
+   */
+  addOutpost(baseId: string, cells: readonly FortCell[]): boolean {
+    const kit = baseFortKitAsset();
+    if (!kit || !cells.length) return false;
+    this.remove(baseId);
     const lit = getGraphicsQualityProfile(this.scene).level !== 'low';
+    const passes: BaseFortPass[] = [lit ? 'albedo' : 'beauty', 'solid', ...kit.layers.map(layer => `emission-${layer}` as const),
+      ...(lit ? ['elevation', 'caster-height'] as const : [])];
+    const composed = composeOutpost(this.scene, kit, baseId, cells, passes);
+    if (!composed) return false;
+    this.present(baseId, { size: composed.size, sourceSize: composed.sourceSize, heightPx: kit.heightPx, deckPx: kit.deckPx ?? 0,
+      layers: kit.layers, keys: composed.keys, sockets: composed.sockets, owned: Object.values(composed.keys) },
+    composed.centreX, composed.centreY, cells);
+    return true;
+  }
+
+  private present(baseId: string, art: FortArt, centreX: number, centreY: number,
+    cells: readonly { readonly x: number; readonly y: number }[]): void {
+    const size = art.size, key = (pass: BaseFortPass) => art.keys[pass]!;
+    const lit = getGraphicsQualityProfile(this.scene).level !== 'low' && !!art.keys.elevation;
     const left = centreX - size / 2, top = centreY - size / 2;
-    const ground = this.scene.add.image(left, top, baseFortTextureKey(asset, 'ground')).setOrigin(0).setDisplaySize(size, size)
-      .setDepth(GROUND_DEPTH).setTint(GROUND_TINT);
-    const body = this.scene.add.image(left, top, baseFortTextureKey(asset, lit ? 'albedo' : 'beauty')).setOrigin(0)
+    const ground = art.keys.ground ? this.scene.add.image(left, top, key('ground')).setOrigin(0).setDisplaySize(size, size)
+      .setDepth(GROUND_DEPTH).setTint(GROUND_TINT) : null;
+    const body = this.scene.add.image(left, top, key(lit ? 'albedo' : 'beauty')).setOrigin(0)
       .setDisplaySize(size, size).setDepth(BASE_FORT_DEPTH);
-    const emission = asset.layers.map((layer, index) => ({ layer, phase: index * .21,
-      image: this.scene.add.image(left, top, baseFortTextureKey(asset, `emission-${layer}`)).setOrigin(0).setDisplaySize(size, size)
+    const emission = art.layers.map((layer, index) => ({ layer, phase: index * .21,
+      image: this.scene.add.image(left, top, key(`emission-${layer}`)).setOrigin(0).setDisplaySize(size, size)
         .setDepth(EMISSION_DEPTH).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0) }));
     const lights: FortView['lights'] = [], emitters: BaseFortEmitter[] = [];
-    for (const [name, socket] of Object.entries(asset.sockets)) {
+    for (const [name, socket] of art.sockets) {
       const kind = EMITTER_KINDS.find(candidate => name.startsWith(candidate + '_'));
       if (kind) emitters.push({ kind, x: centreX + socket.x, y: centreY + socket.y });
       const rule = SOCKET_LIGHTS.find(candidate => name.startsWith(candidate.prefix + '_'));
@@ -141,12 +184,12 @@ export class BaseFortRenderer {
         x: centreX + socket.x, y: centreY + socket.y, phase: lights.length * .43 });
     }
     const stamp = { active: true, visible: true, alpha: 1, x: left, y: top, displayWidth: size, displayHeight: size,
-      scaleX: size / asset.sourceSize, scaleY: size / asset.sourceSize, originX: 0, originY: 0, rotation: 0,
-      texture: { key: baseFortTextureKey(asset, 'solid') }, frame: { name: '__BASE' } };
-    const mounted: FortMounted = { left, top, target: null, uniform: new Float32Array([asset.deckPx ?? 0, 0, MOUNTED_FLIP]) };
-    this.views.set(baseId, { ground, body, emission, lights, stamp, emitters, cells, mounted, cellCount: cells.length, destroyedCells: 0,
-      fx: this.particles?.(emitters) ?? null,
-      relief: lit ? this.makeRelief(left, top) : null, shadow: lit ? this.makeShadow(left, top, mounted) : null });
+      scaleX: size / art.sourceSize, scaleY: size / art.sourceSize, originX: 0, originY: 0, rotation: 0,
+      texture: { key: key('solid') }, frame: { name: '__BASE' } };
+    const mounted: FortMounted = { left, top, target: null, uniform: new Float32Array([art.deckPx, 0, MOUNTED_FLIP]) };
+    this.views.set(baseId, { art, ground, body, emission, lights, stamp, emitters, cells, mounted, cellCount: cells.length,
+      destroyedCells: 0, fx: this.particles?.(emitters) ?? null,
+      relief: lit ? this.makeRelief(left, top, art) : null, shadow: lit ? this.makeShadow(left, top, mounted, art) : null });
   }
 
   /** One base cell exploded: the fort fades with the staggered destruction and is gone with the last. */
@@ -168,11 +211,12 @@ export class BaseFortRenderer {
     const view = this.views.get(baseId);
     if (!view) return;
     for (const light of view.lights) this.lighting?.releaseLight(light.key, { immediate: true });
-    view.ground.destroy(); view.body.destroy();
+    view.ground?.destroy(); view.body.destroy();
     this.destroyQuad(view.relief); this.destroyQuad(view.shadow);
     for (const { image } of view.emission) image.destroy();
     view.fx?.destroy();
     if (view.mounted.target) this.scene.textures.remove(view.mounted.target);
+    for (const key of view.art.owned) if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
     this.views.delete(baseId);
   }
 
@@ -249,18 +293,18 @@ export class BaseFortRenderer {
     }
     const state = view.mounted;
     if (!mounted.length && !state.target) return;
-    const texels = this.scene.textures.get(baseFortTextureKey(this.asset, 'caster-height')).source[0].width;
+    const texels = this.scene.textures.get(view.art.keys['caster-height']!).source[0].width;
     this.mountedHeights ??= new BaseFortMountedHeights(this.scene);
     if (!state.target) {
       state.target = this.mountedHeights.createTarget(texels);
       view.shadow!.textures[1] = state.target;
     }
-    const any = this.mountedHeights.draw(state.target, state.left, state.top, this.asset.displaySize / texels, mounted);
+    const any = this.mountedHeights.draw(state.target, state.left, state.top, view.art.size / texels, mounted);
     state.uniform[1] = any ? MOUNTED_HEIGHT_RANGE_PX : 0;
   }
 
-  private makeRelief(left: number, top: number): Phaser.GameObjects.Shader {
-    const asset = this.asset, size = asset.displaySize;
+  private makeRelief(left: number, top: number, art: FortArt): Phaser.GameObjects.Shader {
+    const asset = art, size = art.size;
     const quad = new Phaser.GameObjects.Shader(this.scene, {
       name: 'LobbyStructureRelief', shaderName: 'LobbyStructureRelief', fragmentSource: LOBBY_STRUCTURE_RELIEF_FRAGMENT,
       setupUniforms: (set: (name: string, value: unknown) => void) => {
@@ -277,14 +321,14 @@ export class BaseFortRenderer {
         const lights = sunlight ? sunlight.surfaceLights(left, top, size, size, this.surfaceLights) : null;
         setSurfaceLightUniforms(set, lights, sunlight?.moon ?? null, sunlight?.clouds.quality?.surfaceLights);
       },
-    }, left, top, size, size, [this.scene.textures.get(baseFortTextureKey(asset, 'elevation'))]);
+    }, left, top, size, size, [this.scene.textures.get(art.keys.elevation!)]);
     return this.scene.add.existing(quad).setOrigin(0).setDepth(RELIEF_DEPTH).setBlendMode(Phaser.BlendModes.MULTIPLY);
   }
 
-  private makeShadow(left: number, top: number, mounted: FortMounted): Phaser.GameObjects.Shader {
-    const asset = this.asset, size = asset.displaySize, reach = STRUCTURE_SHADOW.maxReachPx;
+  private makeShadow(left: number, top: number, mounted: FortMounted, art: FortArt): Phaser.GameObjects.Shader {
+    const asset = art, size = art.size, reach = STRUCTURE_SHADOW.maxReachPx;
     const quadLeft = left - reach, quadTop = top - reach, quadSize = size + reach * 2;
-    const caster = this.scene.textures.get(baseFortTextureKey(asset, 'caster-height'));
+    const caster = this.scene.textures.get(art.keys['caster-height']!);
     const casterTexels = caster.source[0].width;
     const quad = new Phaser.GameObjects.Shader(this.scene, {
       name: 'LobbyStructureShadow', shaderName: 'LobbyStructureShadow', fragmentSource: LOBBY_STRUCTURE_SHADOW_FRAGMENT,

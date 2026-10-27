@@ -218,10 +218,15 @@ class Fort(Style):
         b, p = self.b, self.p
         # Decks stay free for turrets: light hangs outside, small torches on the open sides and corners.
         for nx, ny in side_normals(mask):
-            if kind in ('straight', 'end') and rng.random() < .22:
+            if kind in ('straight', 'end') and rng.random() < .3:
                 shift = rng.uniform(-.3, .3)
                 self.torch_out(cx + nx * (self.HALF + .06) + ny * shift, cy + ny * (self.HALF + .06) + nx * shift, (nx, ny), rng)
-        if kind == 'corner':
+        if kind == 'isolated':
+            # A lone emplacement: torches on two opposite outer corners.
+            for dx, dy in ((1, 1), (-1, -1)) if rng.random() < .5 else ((1, -1), (-1, 1)):
+                x, y = cx + dx * (self.HALF - self.R - .02), cy + dy * (self.HALF - self.R - .02)
+                self.torch_out(x + dx * .14, y + dy * .14, (dx * .7, dy * .7), rng)
+        if kind in ('corner', 'block-corner'):
             # A heavier corner stake with a torch hanging out over the outer corner.
             dx, dy = corner_direction(mask)
             x, y = cx + dx * (self.HALF - self.R - .02), cy + dy * (self.HALF - self.R - .02)

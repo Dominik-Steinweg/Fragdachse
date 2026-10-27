@@ -285,6 +285,1006 @@
         "emission-forge": "134b7641d51012c2863bcda75d136017b131c4700dc5dc988b019c4f58fb6cce",
         "emission-lamp": "5af4c5a5ffec54b62b05bb1a57fa853d3b0839f70e770083a5b6d668350d3a1b"
       }
+    },
+    "outpost-kit": {
+      "sourceSize": 896,
+      "displaySize": 448,
+      "heightPx": {
+        "min": 0,
+        "max": 76.8
+      },
+      "deckPx": 38.4,
+      "layers": [
+        "forge",
+        "lamp"
+      ],
+      "columns": 7,
+      "framePx": 64,
+      "variants": [
+        {
+          "asset": "base-fort-kit-v0",
+          "frames": [
+            {
+              "mask": 0,
+              "sockets": {
+                "torch_0": {
+                  "x": 17.1,
+                  "y": 17.1,
+                  "z": 49.8
+                },
+                "torch_1": {
+                  "x": -17.1,
+                  "y": -17.1,
+                  "z": 43.7
+                }
+              }
+            },
+            {
+              "mask": 1,
+              "sockets": {
+                "lamp_2": {
+                  "x": -10.9,
+                  "y": 11.5,
+                  "z": 58.9
+                },
+                "lamp_3": {
+                  "x": 10.9,
+                  "y": 11.5,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 4,
+              "sockets": {
+                "lamp_4": {
+                  "x": -11.5,
+                  "y": -10.9,
+                  "z": 58.9
+                },
+                "lamp_5": {
+                  "x": -11.5,
+                  "y": 10.9,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 5,
+              "sockets": {
+                "torch_6": {
+                  "x": -17.1,
+                  "y": 17.1,
+                  "z": 50.8
+                }
+              }
+            },
+            {
+              "mask": 7,
+              "sockets": {
+                "torch_7": {
+                  "x": -17.1,
+                  "y": 17.1,
+                  "z": 51.6
+                }
+              }
+            },
+            {
+              "mask": 16,
+              "sockets": {
+                "lamp_8": {
+                  "x": 10.9,
+                  "y": -11.5,
+                  "z": 58.9
+                },
+                "lamp_9": {
+                  "x": -10.9,
+                  "y": -11.5,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 17,
+              "sockets": {}
+            },
+            {
+              "mask": 20,
+              "sockets": {
+                "torch_10": {
+                  "x": -17.1,
+                  "y": -17.1,
+                  "z": 45
+                }
+              }
+            },
+            {
+              "mask": 21,
+              "sockets": {}
+            },
+            {
+              "mask": 23,
+              "sockets": {}
+            },
+            {
+              "mask": 28,
+              "sockets": {
+                "torch_11": {
+                  "x": -17.1,
+                  "y": -17.1,
+                  "z": 52.1
+                }
+              }
+            },
+            {
+              "mask": 29,
+              "sockets": {}
+            },
+            {
+              "mask": 31,
+              "sockets": {}
+            },
+            {
+              "mask": 64,
+              "sockets": {
+                "torch_12": {
+                  "x": -5.5,
+                  "y": -18.1,
+                  "z": 52.9
+                },
+                "lamp_13": {
+                  "x": 11.5,
+                  "y": 10.9,
+                  "z": 58.9
+                },
+                "lamp_14": {
+                  "x": 11.5,
+                  "y": -10.9,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 65,
+              "sockets": {
+                "torchlet_15": {
+                  "x": 17.1,
+                  "y": 17.1,
+                  "z": 45.7
+                }
+              }
+            },
+            {
+              "mask": 68,
+              "sockets": {
+                "torch_16": {
+                  "x": -6.1,
+                  "y": -18.1,
+                  "z": 49.9
+                }
+              }
+            },
+            {
+              "mask": 69,
+              "sockets": {}
+            },
+            {
+              "mask": 71,
+              "sockets": {}
+            },
+            {
+              "mask": 80,
+              "sockets": {
+                "torch_17": {
+                  "x": 17.1,
+                  "y": -17.1,
+                  "z": 46.5
+                }
+              }
+            },
+            {
+              "mask": 81,
+              "sockets": {}
+            },
+            {
+              "mask": 84,
+              "sockets": {}
+            },
+            {
+              "mask": 85,
+              "sockets": {}
+            },
+            {
+              "mask": 87,
+              "sockets": {}
+            },
+            {
+              "mask": 92,
+              "sockets": {}
+            },
+            {
+              "mask": 93,
+              "sockets": {}
+            },
+            {
+              "mask": 95,
+              "sockets": {}
+            },
+            {
+              "mask": 112,
+              "sockets": {
+                "torch_18": {
+                  "x": 17.1,
+                  "y": -17.1,
+                  "z": 55.1
+                }
+              }
+            },
+            {
+              "mask": 113,
+              "sockets": {}
+            },
+            {
+              "mask": 116,
+              "sockets": {}
+            },
+            {
+              "mask": 117,
+              "sockets": {}
+            },
+            {
+              "mask": 119,
+              "sockets": {}
+            },
+            {
+              "mask": 124,
+              "sockets": {}
+            },
+            {
+              "mask": 125,
+              "sockets": {}
+            },
+            {
+              "mask": 127,
+              "sockets": {}
+            },
+            {
+              "mask": 193,
+              "sockets": {
+                "torchlet_19": {
+                  "x": 17.1,
+                  "y": 17.1,
+                  "z": 50.7
+                }
+              }
+            },
+            {
+              "mask": 197,
+              "sockets": {}
+            },
+            {
+              "mask": 199,
+              "sockets": {}
+            },
+            {
+              "mask": 209,
+              "sockets": {}
+            },
+            {
+              "mask": 213,
+              "sockets": {}
+            },
+            {
+              "mask": 215,
+              "sockets": {}
+            },
+            {
+              "mask": 221,
+              "sockets": {}
+            },
+            {
+              "mask": 223,
+              "sockets": {}
+            },
+            {
+              "mask": 241,
+              "sockets": {}
+            },
+            {
+              "mask": 245,
+              "sockets": {}
+            },
+            {
+              "mask": 247,
+              "sockets": {}
+            },
+            {
+              "mask": 253,
+              "sockets": {}
+            },
+            {
+              "mask": 255,
+              "sockets": {}
+            }
+          ],
+          "sha256": {
+            "beauty": "81b244732a9749490ee4202457f65d07d5b7cee5040e75841c0d89c0ebb6da05",
+            "albedo": "e1836c3994b655f4b90f782a58c763dd91e8431c4ea611c33b945078c2461136",
+            "elevation": "ce65e307e4c66d5ed3229ca561c12aab7665d45e6254fb05053f9b1ad1d43215",
+            "solid": "4673335984c6a305647b4352b148ecc442b2e0219300edeb9d36d7f6d21382bc",
+            "caster-height": "56a684c681a285b4b3789156b8523fef621431748e226215515f7f5e57ed9bcf",
+            "emission-forge": "ab97712548955859dbaf9c9cbff7a6d80bf8d66567b6d27036c90b5886e12748",
+            "emission-lamp": "8172e04358c6e91115e21a945433f7f1e8af9f58a314ab2dad4dd8acec9f3177"
+          }
+        },
+        {
+          "asset": "base-fort-kit-v1",
+          "frames": [
+            {
+              "mask": 0,
+              "sockets": {
+                "torch_0": {
+                  "x": 17.1,
+                  "y": -17.1,
+                  "z": 43.3
+                },
+                "torch_1": {
+                  "x": -17.1,
+                  "y": 17.1,
+                  "z": 49.4
+                }
+              }
+            },
+            {
+              "mask": 1,
+              "sockets": {
+                "torch_2": {
+                  "x": -18.1,
+                  "y": -9.5,
+                  "z": 50
+                },
+                "lamp_3": {
+                  "x": -10.9,
+                  "y": 11.5,
+                  "z": 58.9
+                },
+                "lamp_4": {
+                  "x": 10.9,
+                  "y": 11.5,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 4,
+              "sockets": {
+                "torch_5": {
+                  "x": 9.4,
+                  "y": -18.1,
+                  "z": 53.1
+                },
+                "lamp_6": {
+                  "x": -11.5,
+                  "y": -10.9,
+                  "z": 58.9
+                },
+                "lamp_7": {
+                  "x": -11.5,
+                  "y": 10.9,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 5,
+              "sockets": {
+                "torch_8": {
+                  "x": -17.1,
+                  "y": 17.1,
+                  "z": 46.6
+                }
+              }
+            },
+            {
+              "mask": 7,
+              "sockets": {
+                "torchlet_9": {
+                  "x": -17.1,
+                  "y": 17.1,
+                  "z": 43.2
+                }
+              }
+            },
+            {
+              "mask": 16,
+              "sockets": {
+                "torch_10": {
+                  "x": 5.3,
+                  "y": -18.1,
+                  "z": 49.9
+                },
+                "lamp_11": {
+                  "x": 10.9,
+                  "y": -11.5,
+                  "z": 58.9
+                },
+                "lamp_12": {
+                  "x": -10.9,
+                  "y": -11.5,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 17,
+              "sockets": {
+                "torchlet_13": {
+                  "x": 18.1,
+                  "y": -4.8,
+                  "z": 54.3
+                },
+                "torch_14": {
+                  "x": -18.1,
+                  "y": 7.7,
+                  "z": 49
+                }
+              }
+            },
+            {
+              "mask": 20,
+              "sockets": {
+                "torchlet_15": {
+                  "x": -17.1,
+                  "y": -17.1,
+                  "z": 53.5
+                }
+              }
+            },
+            {
+              "mask": 21,
+              "sockets": {}
+            },
+            {
+              "mask": 23,
+              "sockets": {}
+            },
+            {
+              "mask": 28,
+              "sockets": {
+                "torchlet_16": {
+                  "x": -17.1,
+                  "y": -17.1,
+                  "z": 54.1
+                }
+              }
+            },
+            {
+              "mask": 29,
+              "sockets": {}
+            },
+            {
+              "mask": 31,
+              "sockets": {}
+            },
+            {
+              "mask": 64,
+              "sockets": {
+                "torch_17": {
+                  "x": 18.1,
+                  "y": 1.5,
+                  "z": 47.9
+                },
+                "lamp_18": {
+                  "x": 11.5,
+                  "y": 10.9,
+                  "z": 58.9
+                },
+                "lamp_19": {
+                  "x": 11.5,
+                  "y": -10.9,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 65,
+              "sockets": {
+                "torch_20": {
+                  "x": 17.1,
+                  "y": 17.1,
+                  "z": 46.7
+                }
+              }
+            },
+            {
+              "mask": 68,
+              "sockets": {}
+            },
+            {
+              "mask": 69,
+              "sockets": {}
+            },
+            {
+              "mask": 71,
+              "sockets": {}
+            },
+            {
+              "mask": 80,
+              "sockets": {
+                "torch_21": {
+                  "x": 17.1,
+                  "y": -17.1,
+                  "z": 50.2
+                }
+              }
+            },
+            {
+              "mask": 81,
+              "sockets": {}
+            },
+            {
+              "mask": 84,
+              "sockets": {}
+            },
+            {
+              "mask": 85,
+              "sockets": {}
+            },
+            {
+              "mask": 87,
+              "sockets": {}
+            },
+            {
+              "mask": 92,
+              "sockets": {}
+            },
+            {
+              "mask": 93,
+              "sockets": {}
+            },
+            {
+              "mask": 95,
+              "sockets": {}
+            },
+            {
+              "mask": 112,
+              "sockets": {
+                "torch_22": {
+                  "x": 17.1,
+                  "y": -17.1,
+                  "z": 50.7
+                }
+              }
+            },
+            {
+              "mask": 113,
+              "sockets": {}
+            },
+            {
+              "mask": 116,
+              "sockets": {}
+            },
+            {
+              "mask": 117,
+              "sockets": {}
+            },
+            {
+              "mask": 119,
+              "sockets": {}
+            },
+            {
+              "mask": 124,
+              "sockets": {}
+            },
+            {
+              "mask": 125,
+              "sockets": {}
+            },
+            {
+              "mask": 127,
+              "sockets": {}
+            },
+            {
+              "mask": 193,
+              "sockets": {
+                "torch_23": {
+                  "x": 17.1,
+                  "y": 17.1,
+                  "z": 48.5
+                }
+              }
+            },
+            {
+              "mask": 197,
+              "sockets": {}
+            },
+            {
+              "mask": 199,
+              "sockets": {}
+            },
+            {
+              "mask": 209,
+              "sockets": {}
+            },
+            {
+              "mask": 213,
+              "sockets": {}
+            },
+            {
+              "mask": 215,
+              "sockets": {}
+            },
+            {
+              "mask": 221,
+              "sockets": {}
+            },
+            {
+              "mask": 223,
+              "sockets": {}
+            },
+            {
+              "mask": 241,
+              "sockets": {}
+            },
+            {
+              "mask": 245,
+              "sockets": {}
+            },
+            {
+              "mask": 247,
+              "sockets": {}
+            },
+            {
+              "mask": 253,
+              "sockets": {}
+            },
+            {
+              "mask": 255,
+              "sockets": {}
+            }
+          ],
+          "sha256": {
+            "beauty": "a46337b6633fcd5cd95b070f81d5d44266dc42b81859563d52234f4e44af485b",
+            "albedo": "99f007541f5289378fc11a6b3c19955e90c76d8b1731b8af5d2708f09bdd4ebf",
+            "elevation": "48b9e8a2ab192d086559b82022137742affe948c0c4fd28479c8428fe12e6145",
+            "solid": "a1c8ebd9be39a6393252e4c5d922a531ebdf750296c3e918bab9155b6f900367",
+            "caster-height": "7da46aacf23a791ed76b475387863d9d769f420edb94bb9352ca45efbbd57ecd",
+            "emission-forge": "7f7678aea6439dc01244254eeabd47d8bcf61178e1318804bbaaf67c3784f909",
+            "emission-lamp": "8172e04358c6e91115e21a945433f7f1e8af9f58a314ab2dad4dd8acec9f3177"
+          }
+        },
+        {
+          "asset": "base-fort-kit-v2",
+          "frames": [
+            {
+              "mask": 0,
+              "sockets": {
+                "torchlet_0": {
+                  "x": 17.1,
+                  "y": -17.1,
+                  "z": 48.4
+                },
+                "torch_1": {
+                  "x": -17.1,
+                  "y": 17.1,
+                  "z": 52.5
+                }
+              }
+            },
+            {
+              "mask": 1,
+              "sockets": {
+                "torch_2": {
+                  "x": -18.1,
+                  "y": 0.1,
+                  "z": 46.5
+                },
+                "lamp_3": {
+                  "x": -10.9,
+                  "y": 11.5,
+                  "z": 58.9
+                },
+                "lamp_4": {
+                  "x": 10.9,
+                  "y": 11.5,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 4,
+              "sockets": {
+                "torch_5": {
+                  "x": 1.6,
+                  "y": -18.1,
+                  "z": 55.9
+                },
+                "lamp_6": {
+                  "x": -11.5,
+                  "y": -10.9,
+                  "z": 58.9
+                },
+                "lamp_7": {
+                  "x": -11.5,
+                  "y": 10.9,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 5,
+              "sockets": {
+                "torch_8": {
+                  "x": -17.1,
+                  "y": 17.1,
+                  "z": 46.8
+                }
+              }
+            },
+            {
+              "mask": 7,
+              "sockets": {
+                "torch_9": {
+                  "x": -17.1,
+                  "y": 17.1,
+                  "z": 54.8
+                }
+              }
+            },
+            {
+              "mask": 16,
+              "sockets": {
+                "torchlet_10": {
+                  "x": 18.1,
+                  "y": 1.3,
+                  "z": 54.2
+                },
+                "lamp_11": {
+                  "x": 10.9,
+                  "y": -11.5,
+                  "z": 58.9
+                },
+                "lamp_12": {
+                  "x": -10.9,
+                  "y": -11.5,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 17,
+              "sockets": {}
+            },
+            {
+              "mask": 20,
+              "sockets": {
+                "torchlet_13": {
+                  "x": -17.1,
+                  "y": -17.1,
+                  "z": 48.3
+                }
+              }
+            },
+            {
+              "mask": 21,
+              "sockets": {}
+            },
+            {
+              "mask": 23,
+              "sockets": {}
+            },
+            {
+              "mask": 28,
+              "sockets": {
+                "torch_14": {
+                  "x": -17.1,
+                  "y": -17.1,
+                  "z": 54.3
+                }
+              }
+            },
+            {
+              "mask": 29,
+              "sockets": {}
+            },
+            {
+              "mask": 31,
+              "sockets": {}
+            },
+            {
+              "mask": 64,
+              "sockets": {
+                "torch_15": {
+                  "x": 4.2,
+                  "y": -18.1,
+                  "z": 53.1
+                },
+                "lamp_16": {
+                  "x": 11.5,
+                  "y": 10.9,
+                  "z": 58.9
+                },
+                "lamp_17": {
+                  "x": 11.5,
+                  "y": -10.9,
+                  "z": 58.9
+                }
+              }
+            },
+            {
+              "mask": 65,
+              "sockets": {
+                "torch_18": {
+                  "x": 17.1,
+                  "y": 17.1,
+                  "z": 53.8
+                }
+              }
+            },
+            {
+              "mask": 68,
+              "sockets": {
+                "torchlet_19": {
+                  "x": -0.7,
+                  "y": -18.1,
+                  "z": 53.2
+                }
+              }
+            },
+            {
+              "mask": 69,
+              "sockets": {}
+            },
+            {
+              "mask": 71,
+              "sockets": {}
+            },
+            {
+              "mask": 80,
+              "sockets": {
+                "torch_20": {
+                  "x": 17.1,
+                  "y": -17.1,
+                  "z": 49.6
+                }
+              }
+            },
+            {
+              "mask": 81,
+              "sockets": {}
+            },
+            {
+              "mask": 84,
+              "sockets": {}
+            },
+            {
+              "mask": 85,
+              "sockets": {}
+            },
+            {
+              "mask": 87,
+              "sockets": {}
+            },
+            {
+              "mask": 92,
+              "sockets": {}
+            },
+            {
+              "mask": 93,
+              "sockets": {}
+            },
+            {
+              "mask": 95,
+              "sockets": {}
+            },
+            {
+              "mask": 112,
+              "sockets": {
+                "torch_21": {
+                  "x": 17.1,
+                  "y": -17.1,
+                  "z": 51.2
+                }
+              }
+            },
+            {
+              "mask": 113,
+              "sockets": {}
+            },
+            {
+              "mask": 116,
+              "sockets": {}
+            },
+            {
+              "mask": 117,
+              "sockets": {}
+            },
+            {
+              "mask": 119,
+              "sockets": {}
+            },
+            {
+              "mask": 124,
+              "sockets": {}
+            },
+            {
+              "mask": 125,
+              "sockets": {}
+            },
+            {
+              "mask": 127,
+              "sockets": {}
+            },
+            {
+              "mask": 193,
+              "sockets": {
+                "torch_22": {
+                  "x": 17.1,
+                  "y": 17.1,
+                  "z": 53.3
+                }
+              }
+            },
+            {
+              "mask": 197,
+              "sockets": {}
+            },
+            {
+              "mask": 199,
+              "sockets": {}
+            },
+            {
+              "mask": 209,
+              "sockets": {}
+            },
+            {
+              "mask": 213,
+              "sockets": {}
+            },
+            {
+              "mask": 215,
+              "sockets": {}
+            },
+            {
+              "mask": 221,
+              "sockets": {}
+            },
+            {
+              "mask": 223,
+              "sockets": {}
+            },
+            {
+              "mask": 241,
+              "sockets": {}
+            },
+            {
+              "mask": 245,
+              "sockets": {}
+            },
+            {
+              "mask": 247,
+              "sockets": {}
+            },
+            {
+              "mask": 253,
+              "sockets": {}
+            },
+            {
+              "mask": 255,
+              "sockets": {}
+            }
+          ],
+          "sha256": {
+            "beauty": "b55e0a65456f021ea1c3223235c3b3b262e523dfb0a22a36f3ab9c21cf1d17bd",
+            "albedo": "fac6b26b882f8558cf042a081850a627c2b3ef6170a78d0529dc4a5ff77615f3",
+            "elevation": "559e6973f4f9345385184d295c98b132053044eafb624bcab03fe9077aaab035",
+            "solid": "02329a1942f3a45c6542cdb88cd116fbe5640656c376e830a6184bc169bea10a",
+            "caster-height": "6c2fbfa6f6de4294db36e4a25e75fae910f414610ea124b15a98088ed82d70ec",
+            "emission-forge": "b8999661624342ef96993d46ca6eefafa3d2af5ab02091612eb84fefc4f3c760",
+            "emission-lamp": "8172e04358c6e91115e21a945433f7f1e8af9f58a314ab2dad4dd8acec9f3177"
+          }
+        }
+      ]
     }
   },
   "revision": "fort-r10e"

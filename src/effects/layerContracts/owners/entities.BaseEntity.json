@@ -8,7 +8,7 @@
     "sites": [
       {
         "key": "createPresentationRepresentation/image/setDepth/0",
-        "expression": "DEPTH.BASES + 3",
+        "expression": "DEPTH.ROCKS + 0.2",
         "blends": [
           "NORMAL"
         ]
@@ -32,7 +32,7 @@
       "lighting": "material",
       "camera": "world",
       "depths": [
-        7
+        9.2
       ],
       "blends": [
         "NORMAL"
@@ -43,7 +43,7 @@
       "role": "effect",
       "source": {
         "selector": "createPresentationRepresentation/image/setDepth/0",
-        "expression": "DEPTH.BASES + 3"
+        "expression": "DEPTH.ROCKS + 0.2"
       }
     },
     {

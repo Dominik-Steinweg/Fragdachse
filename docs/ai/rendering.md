@@ -366,7 +366,7 @@ Flags reisen im WorldDescriptor, Clients sehen also die Lobby des Hosts. Der Zug
   [LobbyStaffModel](../../src/arena/lobbyStructures/LobbyStaffModel.ts) entscheidet Arbeit, Hinwenden und Gruß,
   Clip-Marker lösen GPU-Funken über das gemeinsame `GpuVfxSystem` aus.
 
-## Persistenter Basiskern als Fort
+## Persistenter Basiskern und Vorposten als Fort
 
 Der freundliche persistente Kern (die Basis mit `persistentReservationRadiusCells`) zeichnet keine 47-Blob-Kacheln,
 kein Akzentleuchten und keine `baseGlow`-Lichter, sobald seine Blender-Passes geladen sind; ihn stellt der
@@ -381,6 +381,10 @@ Turmzellen bleiben zellbasiert; das Fort präsentiert sie nur.
   fester Tint gleicht sie an.
 - Fackeln und Laternen sind Sockets; nur Laternen und große Fackeln setzen kleine Lightmap-Lichter, sonst überflutet
   die Summe der Lichter das Fort.
+- Alle anderen freundlichen Zellbasen (Vorposten, Mittelbasen; nicht Spawnpunkte, nicht Gegnerbasen) setzt derselbe
+  Renderer einmalig aus dem Fort-Kit zusammen: je Zelle der Rahmen ihrer corner-suppressed Maske (gleiche Masken wie
+  `AutoTiler`), Variante deterministisch aus der Zellposition, Farb-Passes überlagert, Caster-Höhen per Maximum. Danach
+  gelten dieselben Relief-, Schatten-, Emissions-, Licht- und Partikelregeln wie beim Kern; die Bodenschürze bleibt.
 - Der Zellzerfall blendet den Bau stufenweise aus; die Solid-Maske ist der Nebelstempel.
 
 ## Große World-Flächen

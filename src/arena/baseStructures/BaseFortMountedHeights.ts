@@ -10,7 +10,7 @@ const STAMP_SIZE = 64;
 const maxBlends = new WeakMap<Phaser.Renderer.WebGL.WebGLRenderer, number>();
 
 /** A MAX blend: overlapping turrets keep the taller height, as one height field. */
-function maxBlend(scene: Phaser.Scene): number {
+export function maxBlend(scene: Phaser.Scene): number {
   const renderer = scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
   let mode = maxBlends.get(renderer);
   if (mode === undefined) {

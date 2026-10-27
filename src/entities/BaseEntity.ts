@@ -28,6 +28,7 @@ import { nearestStructurePoint } from '../arena/StructureOutline';
 import type { PersistentBaseGravelCoverage } from '../arena/PersistentBaseGravelField';
 import { BaseAccentGlowRenderer } from '../arena/BaseAccentGlowRenderer';
 import type { BaseFortRenderer } from '../arena/baseStructures/BaseFortRenderer';
+import type { FortCell } from '../arena/baseStructures/BaseFortKitComposer';
 import {
   integrityState,
   type WorldIntegrityMutationResult,
@@ -86,6 +87,8 @@ export class BaseEntity {
   private voidBurning = false;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private presentationCreated = false;
+  /** The fort renderer presents this base (persistent core or kit outpost) instead of cell tiles. */
+  private fortPresented = false;
   private grounding: BaseGroundingRenderer | null = null;
   /** Gravel of a base site below this base, if any; the grounding matches it. */
   private groundGravel: PersistentBaseGravelCoverage | null = null;
@@ -191,12 +194,18 @@ export class BaseEntity {
 
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
     // Spawnbauwerke zeichnet der SpawnStructureRenderer des BaseManagers (GDD Spawnbauwerk V1), den
-    // persistenten Basiskern der BaseFortRenderer: Er bringt Boden, Licht und Schatten selbst mit.
+    // persistenten Basiskern und die freundlichen Vorposten der BaseFortRenderer: Er bringt Boden, Licht
+    // und Schatten selbst mit.
     if (this.isFortCore()) {
       const region = this.spec.region;
       this.fort!.add(this.id, this.metrics.offsetX + (region.minGridX + region.maxGridX + 1) / 2 * CELL_SIZE,
-        this.metrics.offsetY + (region.minGridY + region.maxGridY + 1) / 2 * CELL_SIZE,
-        this.spec.cells.map(cell => ({ x: this.metrics.offsetX + (cell.gridX + .5) * CELL_SIZE, y: this.metrics.offsetY + (cell.gridY + .5) * CELL_SIZE })));
+        this.metrics.offsetY + (region.minGridY + region.maxGridY + 1) / 2 * CELL_SIZE, this.fortCells());
+      this.fortPresented = true;
+    } else if (this.isFortOutpost() && this.fort!.addOutpost(this.id, this.fortCells())) {
+      this.fortPresented = true;
+      // The kit has no ground of its own: the compacted apron settles the outpost into the map.
+      this.grounding = new BaseGroundingRenderer(this.scene, { cells: this.spec.cells }, this.metrics,
+        { hostile, gravel: this.groundGravel });
     } else if (this.spec.surface !== 'none' && this.role !== 'spawn-point') {
       this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
       this.grounding = new BaseGroundingRenderer(this.scene, { cells: this.spec.cells }, this.metrics,
@@ -212,10 +221,11 @@ export class BaseEntity {
     for (const turret of this.spec.turrets) {
       const visual = getTurretVisualSpec(turret.weaponId);
       const transform = getTurretVisualTransform(visual, turret.x, turret.y, turret.initialAngle);
+      // Same band as every turret: above base decks and their own mesh shadow, below figures.
       const image = this.scene.add.sprite(transform.x, transform.y, visual.textureKey)
         .setDisplaySize(visual.displaySize, visual.displaySize)
         .setRotation(transform.rotation)
-        .setDepth(DEPTH.BASES + 3);
+        .setDepth(DEPTH.ROCKS + 0.2);
       this.turretAnimations?.bind(turret.id, image, turret.weaponId);
       image.setDisplaySize(visual.displaySize, visual.displaySize);
       this.turretImages.set(turret.id, image);
@@ -243,6 +253,17 @@ export class BaseEntity {
     return this.fort !== null && this.spec.faction === 'friendly' && this.spec.persistentReservationRadiusCells !== undefined;
   }
 
+  /** Friendly outposts and middle bases on cells take the fort kit; spawn points and enemy bases keep their art. */
+  private isFortOutpost(): boolean {
+    return this.fort !== null && this.spec.faction === 'friendly' && this.spec.persistentReservationRadiusCells === undefined
+      && this.spec.surface !== 'none' && this.role !== 'spawn-point';
+  }
+
+  private fortCells(): FortCell[] {
+    return this.spec.cells.map(cell => ({ gridX: cell.gridX, gridY: cell.gridY,
+      x: this.metrics.offsetX + (cell.gridX + .5) * CELL_SIZE, y: this.metrics.offsetY + (cell.gridY + .5) * CELL_SIZE }));
+  }
+
   /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist; das Fort bringt eigene Lichter. */
   /** Mounted turret sprites, for their mesh shadows in the shadow system. */
   forEachTurretSprite(visit: (sprite: Phaser.GameObjects.Sprite) => void): void {
@@ -250,7 +271,7 @@ export class BaseEntity {
   }
 
   getLightSpots(): readonly { x: number; y: number; radius: number }[] {
-    return !this.presentation || this.spec.surface === 'none' || this.role === 'spawn-point' || this.isInert() || this.isFortCore()
+    return !this.presentation || this.spec.surface === 'none' || this.role === 'spawn-point' || this.isInert() || this.fortPresented
       ? EMPTY_LIGHT_SPOTS : this.lightSpots;
   }
 
@@ -292,7 +313,7 @@ export class BaseEntity {
 
   /** Entfernt genau das Zellbild, dessen Explosion gerade abgespielt wird. */
   destroyCellVisual(cellIndex: number): void {
-    if (this.isFortCore()) this.fort!.destroyCell(this.id);
+    if (this.fortPresented) this.fort!.destroyCell(this.id);
     this.accentGlow?.destroyCell(cellIndex);
     this.grounding?.destroyCell(cellIndex);
     const image = this.cellImages[cellIndex];
@@ -571,7 +592,7 @@ export class BaseEntity {
   destroy(): void {
     this.vulnerableMarker?.destroy();
     this.vulnerableMarker = null;
-    if (this.isFortCore()) this.fort!.remove(this.id);
+    if (this.fortPresented) { this.fort!.remove(this.id); this.fortPresented = false; }
     this.accentGlow?.destroy();
     this.accentGlow = null;
     this.grounding?.destroy();
@@ -595,7 +616,7 @@ export class BaseEntity {
 
   private resetRepresentation(): void {
     this.presentationCreated = false;
-    if (this.isFortCore()) this.fort!.remove(this.id);
+    if (this.fortPresented) { this.fort!.remove(this.id); this.fortPresented = false; }
     this.accentGlow?.destroy();
     this.accentGlow = null;
     this.grounding?.destroy();
