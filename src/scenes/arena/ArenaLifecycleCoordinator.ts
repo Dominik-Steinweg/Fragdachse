@@ -1878,12 +1878,12 @@ export class ArenaLifecycleCoordinator {
 
   // ── Host helpers called from ArenaScene.update() ─────────────────────────
 
-  private nextScenarioSeed: number | null = null;
-
-  /** A scenario supplies a seed, then takes the same loading/participation path as a match. */
+  /**
+   * A scenario supplies the seed of the next round, then takes the same loading/participation path
+   * as a match. It is the room's deployment seed, so a lobby preview shows the same terrain.
+   */
   setNextScenarioSeed(seed: number): void {
-    if (!Number.isSafeInteger(seed)) throw new Error('Scenario seed must be a safe integer');
-    this.nextScenarioSeed = seed;
+    bridge.hostSetDeploymentSeed(seed);
   }
 
   private dawnInfrastructure: {
@@ -1936,8 +1936,8 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
     bridge.publishCoopDefensePortalLinkState(null);
     // Der Seed steht vor der Komposition fest: Dawn-Plaene und Layout derselben Runde teilen ihn.
-    const seed = this.nextScenarioSeed ?? Date.now();
-    this.nextScenarioSeed = null;
+    // Es ist der in der Lobby veroeffentlichte Einsatz-Seed; die Lobby erhaelt sofort den naechsten.
+    const seed = bridge.hostTakeDeploymentSeed();
     const dawnPlans = dawnSelected ? composeHostDawnRoundPlans(seed) : null;
     const coopDefenseMapConfig = dawnPlans
       ? resolveDawnScenario(dawnPlans.world, dawnPlans.activity).mapConfig

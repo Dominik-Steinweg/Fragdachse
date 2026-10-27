@@ -226,6 +226,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'hostPublishDawnRoundScrap'] as const) {
       vi.spyOn(bridge, method).mockImplementation(() => {});
     }
+    vi.spyOn(bridge, 'hostTakeDeploymentSeed').mockReturnValue(1234);
     vi.spyOn(bridge, 'areAllPlayersReady').mockReturnValue(true);
     vi.spyOn(bridge, 'getLobbyTimeOfDayMinutes').mockReturnValue(720);
     vi.spyOn(bridge, 'getCoopDefenseMapId').mockReturnValue(DEFAULT_COOP_DEFENSE_MAP_ID);
@@ -288,6 +289,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'hostPublishDawnRoundScrap', 'hostStartRoundParticipants'] as const) {
       vi.spyOn(bridge, method).mockImplementation(() => {});
     }
+    vi.spyOn(bridge, 'hostTakeDeploymentSeed').mockReturnValue(1234);
     vi.spyOn(bridge, 'areAllPlayersReady').mockReturnValue(true);
     vi.spyOn(bridge, 'getLobbyTimeOfDayMinutes').mockReturnValue(720);
     vi.spyOn(bridge, 'getCoopDefenseMapId').mockReturnValue(DEFAULT_COOP_DEFENSE_MAP_ID);

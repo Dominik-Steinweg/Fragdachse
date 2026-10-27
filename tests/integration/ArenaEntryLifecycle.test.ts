@@ -403,6 +403,7 @@ describe('Lobby exit gates local Arena work', () => {
       'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'publishRoundState'] as const) {
       vi.spyOn(bridge, method).mockImplementation(() => {});
     }
+    vi.spyOn(bridge, 'hostTakeDeploymentSeed').mockReturnValue(1234);
     vi.spyOn(bridge, 'areAllPlayersReady').mockReturnValue(true);
     vi.spyOn(bridge, 'getLobbyTimeOfDayMinutes').mockReturnValue(720);
     vi.spyOn(bridge, 'hostStartRoundParticipants').mockImplementation((_ids, _time, revision) => { f.net.revision = revision!; });

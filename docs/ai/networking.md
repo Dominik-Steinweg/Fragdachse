@@ -60,6 +60,13 @@ autoritative Invalidierung aller Ready-Zustände erhöht diese Revision, auch be
 Konfiguration. Erneute Snapshot-Publikation, Join und Resume erhalten sie. Damit kann ein vor
 dem Reset gesendetes Ready den Reset nach verspäteter Zustellung nicht rückgängig machen.
 
+Den Seed der nächsten Runde besitzt der Host als Einsatz-Seed im Lobby-Snapshot (`s`). So kann
+jeder Peer das Gelände der nächsten Runde schon in der Lobby erzeugen (Lagekarte im Bauhof).
+Neu gewürfelt wird nur bei einem echten Karten- oder Programmwechsel und beim Rundenstart, der den
+veröffentlichten Seed genau einmal übernimmt (`NetworkBridge.hostTakeDeploymentSeed`). Ein
+Szenario-Seed setzt dasselbe Feld. Der Seed ist nicht Teil der Ready-Prüfung. Vertragstest:
+[DeploymentSeedContracts.test.ts](../../tests/DeploymentSeedContracts.test.ts).
+
 Das Coop-Programm (`campaign` oder `dawn`) bleibt eine Host-Auswahl unter `coop_defense`,
 kein eigener GameMode oder ActivityKind. `NetworkBridge.getCoopProgram`/`setCoopProgram`
 kapseln den globalen Reliable-Key `cpg`; fehlende oder ungültige Werte bedeuten Kampagne.

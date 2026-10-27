@@ -1,5 +1,4 @@
-import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../arena/ArenaGenerator';
-import { getArenaMetricsProfile } from '../config';
+import { ArenaGenerator, ARENA_GENERATOR_VERSION } from '../arena/ArenaGenerator';
 import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import type { DawnRoundPlans } from '../dawn/composition/DawnRoundComposition';
 import { toDawnActivityDefinitionId, toDawnWorldDefinitionId } from '../dawn/contracts/DawnIds';
@@ -8,7 +7,7 @@ import type { ActivityDescriptor } from './ActivityDescriptor';
 import { toActivityDefinitionId, toActivityKind, toWorldDefinitionId } from './arenaDescriptorAdapter';
 import type { WorldDescriptor, WorldParameters } from './WorldDescriptor';
 import { resolveCoopDefenseMapConfig } from './WorldDefinitionResolution';
-import { resolveWorldMetrics } from './WorldMetrics';
+import { generateRoundWorldLayout } from './RoundWorldLayout';
 
 /** Was der Host fuer eine neue Runden-World festgelegt hat, bevor das Layout existiert. */
 export interface RoundWorldGenerationRequest {
@@ -68,17 +67,7 @@ export function generateRoundWorld(request: RoundWorldGenerationRequest): Genera
   const mapConfig = request.dawn
     ? resolveCoopDefenseMapConfig(worldIdentity, activity)
     : request.campaignMapConfig;
-  const worldMetrics = resolveWorldMetrics(getArenaMetricsProfile(
-    request.gameMode,
-    'ARENA',
-    mapConfig?.arenaWidthCells,
-    mapConfig?.arenaHeightCells,
-  ));
-  const layout = ArenaGenerator.generate(
-    request.seed,
-    resolveArenaGenerationInput(request.gameMode, worldMetrics),
-    mapConfig ?? undefined,
-  );
+  const layout = generateRoundWorldLayout(request.gameMode, mapConfig, request.seed);
   const world: WorldDescriptor = {
     worldRevision: request.roundRevision,
     seed: request.seed,

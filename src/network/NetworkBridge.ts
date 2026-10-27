@@ -284,7 +284,12 @@ const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, u
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
 const KEY_GAME_STATE_INITIAL = 'gsi'; // global reliable: vollstaendiger Bootstrap-Snapshot der laufenden Runde
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
-const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {r:readyRevision, m:mode, c:mapId, cpg:CoopProgram, t:time, p:playerIds}
+const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {r:readyRevision, m:mode, c:mapId, cpg:CoopProgram, t:time, p:playerIds, s:deploymentSeed}
+
+/** Seeds stay within the generator's unsigned 32-bit range and remain safe integers on the wire. */
+function rollDeploymentSeed(): number {
+  return Math.floor(Math.random() * 0x100000000);
+}
 const KEY_PB_CONTRIBUTION = 'pbo'; // per-player reliable: angebotener PersistentPlayerBaseContribution
 const KEY_PB_CONFIRMED   = 'pbk'; // per-player reliable: host-bestaetigter Beitrag nach einem Sieg
 const KEY_PB_REWARD_GRANT = 'pbr'; // per-player reliable: host-bestaetigte kumulative Reward-IDs
@@ -1298,7 +1303,7 @@ export class NetworkBridge {
    * noch nicht aufgeschlossen hat – z. B. einen Mitspieler nicht kennt (Bug A/B) oder mit veraltetem
    * Modus bereit würde (und so ein für den Modus ungültiges Loadout committen könnte).
    */
-  private hostPublishLobbySync(advanceReadyRevision = false): void {
+  private hostPublishLobbySync(advanceReadyRevision = false, deploymentSeed?: number): void {
     if (!isHost()) return;
     // Alte/neu erstellte Raeume besitzen den optionalen Key noch nicht. Einmalig mit dem
     // Default anlegen, damit auch Clients den Slider sofort als autoritativen Zustand sehen.
@@ -1312,7 +1317,32 @@ export class NetworkBridge {
       cpg: this.getCoopProgram(),
       t: this.getLobbyTimeOfDayMinutes(),
       p: [...this.connectedPlayers.keys()].sort(),
+      s: deploymentSeed ?? this.getDeploymentSeed() ?? rollDeploymentSeed(),
     }, true);
+  }
+
+  /**
+   * Seed of the next round, owned by the host and published with the lobby snapshot. Every peer
+   * can therefore generate the round's terrain before it starts (Lagekarte). It is not part of the
+   * Ready check: it only changes together with the map or program, or right after a round start.
+   */
+  getDeploymentSeed(): number | null {
+    const snapshot = getState(KEY_LOBBY_SYNC);
+    const seed = isRecord(snapshot) ? snapshot.s : undefined;
+    return typeof seed === 'number' && Number.isSafeInteger(seed) && seed >= 0 ? seed : null;
+  }
+
+  /** Host-only: a scenario fixes the terrain of the next round. */
+  hostSetDeploymentSeed(seed: number): void {
+    if (!Number.isSafeInteger(seed) || seed < 0) throw new Error('Deployment seed must be a non-negative safe integer');
+    this.hostPublishLobbySync(false, seed);
+  }
+
+  /** Host-only: hands the published seed to the round that starts now and publishes the next one. */
+  hostTakeDeploymentSeed(): number {
+    const seed = this.getDeploymentSeed() ?? rollDeploymentSeed();
+    this.hostPublishLobbySync(false, rollDeploymentSeed());
+    return seed;
   }
 
   /** The initial lobby uses revision zero; only an explicit host Ready reset advances it. */
@@ -1496,7 +1526,7 @@ export class NetworkBridge {
     if (!parsed || isSameCoopProgram(this.getCoopProgram(), parsed)) return;
     setState(KEY_COOP_PROGRAM, parsed, true);
     this.hostInvalidateLobbyReadyStateForAllPlayers();
-    this.hostPublishLobbySync();
+    this.hostPublishLobbySync(false, rollDeploymentSeed());
   }
 
   setCoopDefenseMapId(mapId: string): void {
@@ -1507,7 +1537,7 @@ export class NetworkBridge {
     setState(KEY_COOP_MAP_ID, normalizedMapId, true);
     setState(KEY_COOP_PROGRAM, DEFAULT_COOP_PROGRAM, true);
     this.hostInvalidateLobbyReadyStateForAllPlayers();
-    this.hostPublishLobbySync();
+    this.hostPublishLobbySync(false, rollDeploymentSeed());
   }
 
   hostReconcileLoadoutsForMode(mode: GameMode): void {
