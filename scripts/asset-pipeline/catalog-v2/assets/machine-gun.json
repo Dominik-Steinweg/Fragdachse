@@ -27,7 +27,7 @@
   "production": "reference",
   "mount": {
     "rockSize": 32,
-    "maxBaseDiameter": 16
+    "maxBaseDiameter": 24
   },
   "model": {},
   "orthoScale": 2.8,

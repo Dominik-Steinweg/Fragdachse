@@ -49,6 +49,6 @@
   ],
   "mount": {
     "rockSize": 32,
-    "maxBaseDiameter": 16
+    "maxBaseDiameter": 24
   }
 }

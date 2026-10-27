@@ -4,7 +4,7 @@
   "gameIds": [
     "SPORE_TURRET_PLASMA"
   ],
-  "revision": "towers-r04",
+  "revision": "towers-r06",
   "variant": "standard",
   "sourceSize": 160,
   "textureKey": "turret_weapon_plasma",
@@ -48,7 +48,7 @@
     "height": 328
   },
   "hashes": {
-    "idle": "1094dfe7b24100a98b2464fba47ae4a361c9b3f7436dc3ea2b70aa7c1b8e5b6c",
-    "sheet": "f9f7aac969a4d06a695ab9034661a28de8be1e332218db6d8dac6383ab75f46e"
+    "idle": "d9422ccfdc2311c3d6a4c0df21cae24c00234f61a62066149311ae4cb6a289a6",
+    "sheet": "2ef3e990e0d276db73256a466e24e44538899d29b420724109b9636f85e6520c"
   }
 }

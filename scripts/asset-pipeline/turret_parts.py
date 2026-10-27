@@ -25,6 +25,8 @@ def palette(c, armor=(.085, .15, .17), accent=(.64, .27, .055), charge=(.06, .58
         'copper': material(c, 'Oxidized copper winding', (.38, .18, .060), 'copper'),
         'charge': c.material('Confined energy color', charge, emission=.30),
         'timber': material(c, 'Weathered oak post', (.16, .12, .085), 'timber'),
+        # Warm dark oak, set off from the silvered deck planks it turns above.
+        'turntable': material(c, 'Dark oak turntable', (.12, .072, .04), 'timber'),
         'tar': material(c, 'Tarred timber foot', (.062, .052, .043), 'timber'),
         'iron': material(c, 'Forged iron bands', (.085, .088, .085), 'steel'),
     }
@@ -62,10 +64,12 @@ def tube(c, name, location, radius, thickness, length, material):
 
 
 def support(c, p, radius=.86, facets=12, accent_lugs=False):
-    """Fort emplacement under the weapon: a tarred timber foot small enough to stand on a base deck between
-    the stakes (inside a 15px circle at ortho2.8/display40), an iron-banded oak post and a swivel bearing that
-    carries the lifted head. `radius` and `facets` only vary the bearing; `accent_lugs` paints the band clamps."""
+    """Fort emplacement under the weapon. On a base deck only a small tarred timber foot and an iron-banded oak
+    post stand between the stakes (inside a 15px circle at ortho2.8/display40); above the stake tips the post
+    carries a broad round timber turntable with an iron rim, visible round the head, on which the lifted weapon
+    turns. `radius` sizes the turntable, `facets` its swivel plate; `accent_lugs` paints the band clamps."""
     top = .335 + FORT_LIFT                                        # where the head's old carrier joint now sits
+    deck_top, deck_h = top - .12, .14                               # turntable: underside ~0.2 BU above the stake tips
     parts = [c.box('Tarred timber foot', (0, 0, .11), (.72, .72, .22), p['tar'], .035)]
     for i in range(4):
         a = math.pi/4 + i*math.pi/2
@@ -73,14 +77,27 @@ def support(c, p, radius=.86, facets=12, accent_lugs=False):
         strap = c.box('Iron corner strap', (x, y, .225), (.17, .11, .03), p['iron'], .008)
         strap.rotation_euler.z = a; parts.append(strap)
         parts.append(c.cylinder('Foot bolt', (x, y, .245), .032, .022, p['edge'], 6))
-    post = top - .22 - .12
+    post = deck_top - deck_h - .22
     parts.append(c.cylinder('Oak emplacement post', (0, 0, .22 + post/2), .19, post, p['timber'], 8))
-    for z in (.5, .5 + post*.55):
+    for z in (.5, .5 + post*.5):
         parts.append(c.cylinder('Iron post band', (0, 0, z), .205, .055, p['iron'], 8))
-        clamp = c.box('Band clamp', (.2, 0, z), (.05, .07, .07), p['accent'] if accent_lugs else p['iron'], .01)
-        parts.append(clamp)
+        parts.append(c.box('Band clamp', (.2, 0, z), (.05, .07, .07), p['accent'] if accent_lugs else p['iron'], .01))
+    for i in range(4):                                             # knee braces under the turntable
+        a = i*math.pi/2
+        brace = c.box('Turntable knee brace', (.3*math.cos(a), .3*math.sin(a), deck_top - deck_h - .14), (.42, .07, .07), p['timber'], .01)
+        brace.rotation_euler = (0, -.62, a)                       # outer end up under the rim
+        parts.append(brace)
+    R = radius * .93
+    parts.append(c.cylinder('Timber turntable', (0, 0, deck_top - deck_h/2), R - .08, deck_h, p['turntable'], 24))
+    for y in (-.5, -.25, 0, .25, .5):                               # board seams across the turntable
+        half = math.sqrt(max(0, (R - .07)**2 - y*y))
+        parts.append(c.box('Turntable board seam', (0, y + .125, deck_top + .002), (2*half, .022, .012), p['tar'], 0))
+    parts.append(annulus(c, 'Iron turntable rim', (0, 0, deck_top - deck_h/2), R, R - .11, deck_h + .03, p['iron'], steps=32))
+    for i in range(10):
+        a = (i + .5) * math.tau / 10
+        parts.append(c.cylinder('Rim bolt', ((R - .055)*math.cos(a), (R - .055)*math.sin(a), deck_top + .018), .026, .02, p['edge'], 6))
     r = min(.42, radius*.5)
-    parts.append(c.cylinder('Iron swivel plate', (0, 0, top - .09), r, .07, p['iron'], max(8, facets)))
+    parts.append(c.cylinder('Iron swivel plate', (0, 0, top - .07), r, .1, p['iron'], max(8, facets)))
     parts.append(annulus(c, 'Dark carrier rotation joint', (0, 0, top), r*.86, r*.68, .065, p['dark']))
     return parts
 

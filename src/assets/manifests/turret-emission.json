@@ -2,10 +2,10 @@
   "version": 1,
   "assets": {
     "plasma": {
-      "revision": "towers-r04",
+      "revision": "towers-r06",
       "sheet": "./assets/sprites/pipeline-v2/plasma/emission.png",
-      "sha256": "46f71d848d65783fc02a2a2e0ed054465fc2fc3b8a61860ad9346ef2a6c2a7fe",
-      "beautySheetSha256": "f9f7aac969a4d06a695ab9034661a28de8be1e332218db6d8dac6383ab75f46e",
+      "sha256": "431cd1bbf9dc020f7a0b3acdbaeb8349c9192574019f4a955399b179f8e38289",
+      "beautySheetSha256": "2ef3e990e0d276db73256a466e24e44538899d29b420724109b9636f85e6520c",
       "encoding": "srgb-hue-alpha-intensity",
       "range": 2,
       "peak": 1.372808814048767,
