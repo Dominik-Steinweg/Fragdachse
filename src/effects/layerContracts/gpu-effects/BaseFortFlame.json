@@ -1,0 +1,24 @@
+{
+  "name": "BaseFortFlame",
+  "contract": {
+    "id": "gpu:BaseFortFlame",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "BaseFortFlame",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.7
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "TrainHeat"
+    ]
+  }
+}

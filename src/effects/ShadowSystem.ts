@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { ShadowTurretSilhouettes } from './ShadowTurretSilhouettes';
 import { isReactivePropObstacleId } from '../world/reactiveProps/ReactivePropObstacleIds';
 import { getCharacterMeshes, CHARACTER_MESH_MANIFEST } from '../assets/CharacterMeshAssets';
 import { quantizeSunAzimuth, type SunPathState } from './sunlight/SunPath';
@@ -597,10 +598,14 @@ export class ShadowSystem {
   private readonly cellPts: Phaser.Math.Vector2[] =
     Array.from({ length: 6 }, () => new Phaser.Math.Vector2());
 
+  /** Sun-cast silhouettes of every turret sprite its owners register, on this system's bearing. */
+  readonly turretSilhouettes: ShadowTurretSilhouettes;
+
   constructor(
     private readonly scene: Phaser.Scene,
   ) {
     this.quality = getGraphicsQualityProfile(scene);
+    this.turretSilhouettes = new ShadowTurretSilhouettes(scene, out => this.getLongCasterFrame(out), this.quality.level !== 'low');
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
       this.quality = profile;
       this.destroyFigureShadows();
@@ -1363,6 +1368,7 @@ export class ShadowSystem {
   }
 
   destroy(): void {
+    this.turretSilhouettes.destroy();
     this.setCharacterSunlight(null);
     this.sunEnemies = null;
     this.sunDirection=null;this.staticSunDirection=null;this.sunAzimuth=null;this.bakedAzimuth=null;

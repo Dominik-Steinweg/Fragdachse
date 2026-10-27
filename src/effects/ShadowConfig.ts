@@ -121,8 +121,8 @@ export const STRUCTURE_SHADOW = {
   softnessPx: 6,
   /** Shadow reach is bounded so a low sun never needs an unbounded quad. */
   maxReachPx: 6 * CELL_SIZE,
-  /** March step along the ray; shorter than the caster texel (2 px), or thin parts break up. */
-  marchStepPx: 1.5,
+  /** World px per caster-height texel (the export max-pools at half the display size); the ray walks this grid. */
+  casterTexelPx: 2,
 } as const;
 
 export const SHADOW_CASTERS = {

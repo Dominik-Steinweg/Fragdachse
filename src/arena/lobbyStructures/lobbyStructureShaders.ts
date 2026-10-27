@@ -67,7 +67,7 @@ void main(){
 }
 `;
 
-/** Upper bound of shadow march steps; the reach divided by the step length stays below it. */
+/** Upper bound of shadow march steps: caster texels a ray can cross within the reach. */
 export const LOBBY_STRUCTURE_SHADOW_MAX_STEPS = 160;
 
 /**
@@ -75,10 +75,10 @@ export const LOBBY_STRUCTURE_SHADOW_MAX_STEPS = 160;
  * the structure toward the light rises high enough to reach it (length per px of height from
  * the shared shadow profile). Drawn in the long-caster band, below the structure itself.
  *
- * The march reads the caster height (solid geometry only, max-pooled at two px per texel, linear
- * filtering) in steps shorter than one texel, so thin posts and grazing edges stay continuous
- * instead of breaking into teeth at the step period. Only the stretch of the ray inside the
- * canvas is marched.
+ * The ray walks the caster-height grid (solid geometry only, max-pooled, two px per texel) texel
+ * by texel and reads each crossed texel once, filtered at the middle of its stretch of ray. Fixed
+ * march steps beat against the texel grid and the filter ramps: thin posts and stake tips then
+ * cast combs of teeth at the beat period. Only the stretch inside the canvas is walked.
  */
 export const LOBBY_STRUCTURE_SHADOW_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
@@ -87,13 +87,9 @@ varying vec2 outTexCoord;
 uniform vec4 uQuad;     // quad top-left in world px, quad size in px
 uniform vec4 uCast;     // cast direction xy, length per px of height, max reach in px
 uniform vec2 uShade;    // opacity, softness in px
-uniform float uStep;    // march step in world px
+uniform float uTexels;  // caster texels across the canvas
 uniform sampler2D uCaster;
 ${CANVAS_GLSL}
-float casterHeight(vec2 uv){
-  float r=texture2D(uCaster,uv).r;
-  return r>.002?mix(uHeight.x,uHeight.y,r):0.0;
-}
 vec4 shadowMultiply(float factor){float retained=min(1.0,factor);return vec4(vec3(factor-retained),1.0-retained);}
 void main(){
   vec2 world=uQuad.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uQuad.zw;
@@ -106,13 +102,26 @@ void main(){
   float enter=max(0.0,max(min(t0.x,t1.x),min(t0.y,t1.y)));
   float leave=min(uCast.w,min(max(t0.x,t1.x),max(t0.y,t1.y)));
   if(enter>leave)discard;
-  float shade=0.0;
+  // Grid walk in texel units; t stays in world px along the ray.
+  vec2 dir=back*uTexels;
+  vec2 pos=(uv+back*enter)*uTexels+dir*1e-3;
+  vec2 cell=floor(pos);
+  vec2 stepCell=vec2(dir.x<0.0?-1.0:1.0,dir.y<0.0?-1.0:1.0);
+  vec2 delta=vec2(abs(dir.x)<1e-6?1e9:abs(1.0/dir.x),abs(dir.y)<1e-6?1e9:abs(1.0/dir.y));
+  vec2 next=enter+vec2(stepCell.x>0.0?cell.x+1.0-pos.x:pos.x-cell.x,stepCell.y>0.0?cell.y+1.0-pos.y:pos.y-cell.y)*delta;
+  float t=enter,shade=0.0,soft=max(1.0,uShade.y);
   for(int k=0;k<${LOBBY_STRUCTURE_SHADOW_MAX_STEPS};k++){
-    float t=enter+float(k)*uStep;
     if(t>leave)break;
-    float h=casterHeight(uv+back*t);
-    shade=max(shade,clamp((h*uCast.z-t)/max(1.0,uShade.y)+.5,0.0,1.0)*step(.5,h));
-    if(shade>=1.0)break;
+    float exit=min(next.x,next.y);
+    if(cell.x>=0.0&&cell.y>=0.0&&cell.x<uTexels&&cell.y<uTexels){
+      // Filtered read where the ray runs through this texel: continuous across neighbouring rays.
+      float mid=.5*(t+min(exit,leave));
+      float r=texture2D(uCaster,uv+back*mid).r;
+      if(r>.002)shade=max(shade,clamp((mix(uHeight.x,uHeight.y,r)*uCast.z-mid)/soft+.5,0.0,1.0));
+      if(shade>=1.0)break;
+    }
+    if(next.x<next.y){t=next.x;next.x+=delta.x;cell.x+=stepCell.x;}
+    else{t=next.y;next.y+=delta.y;cell.y+=stepCell.y;}
   }
   if(shade<=.001)discard;
   gl_FragColor=shadowMultiply(1.0-uShade.x*shade);

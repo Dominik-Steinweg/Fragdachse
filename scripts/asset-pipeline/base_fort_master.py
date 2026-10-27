@@ -160,18 +160,21 @@ class FortMaster:
         self.sockets = {}
         self.p = dict(
             bark=m('Bark log', (92, 74, 54), .35), cut=m('Cut log end', (150, 126, 92), .3), mossy=m('Stake moss tip', (78, 94, 44), .3),
-            plank=m('Silvered timber', (94, 86, 74), .3), oak=m('Weathered oak', (76, 62, 46), .32), tar=m('Dark tarred timber', (56, 48, 40), .2),
+            plank=m('Silvered timber', (94, 86, 74), .3), worn=m('Trodden board', (132, 122, 104), .32), oak=m('Weathered oak', (76, 62, 46), .32), tar=m('Dark tarred timber', (56, 48, 40), .2),
             iron=m('Forged iron', (86, 90, 88), .25), dark=m('Soot iron', (40, 41, 37), .18), stone=m('Fieldstone', (128, 124, 112), .4),
             ringstone=m('Wall walk flagstone', (122, 118, 108), .35), chip=m('Wood chips', (150, 120, 84), .25),
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
             brass=m('Worn brass fittings', (150, 112, 58), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7),
             moss=m('Stake moss', (70, 92, 38), .3), moss2=m('Old moss', (84, 96, 46), .3),
             lichen=m('Grey lichen', (150, 152, 128), .2), ringrock=m('Ring fieldstone', (112, 108, 98), .4),
-            grass=m('Turf tuft', (66, 82, 40), .3), grass2=m('Dry turf tuft', (118, 108, 70), .3), fern=m('Fern frond', (52, 78, 34), .3))
+            grass=m('Turf tuft', (66, 82, 40), .3), grass2=m('Dry turf tuft', (118, 108, 70), .3), fern=m('Fern frond', (52, 78, 34), .3),
+            sill=m('Threshold stone', (96, 92, 84), .4), sill2=m('Mossy threshold stone', (80, 82, 68), .35), charred=m('Charred bits', (34, 30, 27), .1))
         # Partial covers over the game's gravel: the path pales and compacts it, moss grows over it in patches.
         self.path = image_material('Worn path gravel', 'gravel-path-03.png', 2.2, .98, .9, patchy=1.25)
         self.mossmat = image_material('Moss carpet', 'moss-carpet-01.png', 1.4, .78, .78, (92, 98, 56), .3, (40, 46, 28), patchy=1.8)
         self.rut = ground_tint('Trodden earth', (78, 66, 50))
+        self.soot_mat = ground_tint('Torch soot', (30, 27, 24))
+        self.soot = []
 
     def socket(self, name, xyz):
         self.sockets[f'{name}_{len(self.sockets)}'] = xyz
@@ -233,6 +236,12 @@ class FortMaster:
         b.cylinder(t.p(hx, hy, z + .015), .03 * size, .05, p['dark'], 10, .004)
         b.ell(t.p(hx, hy, z + .05), (.024 * size, .021 * size, .03 * size), p['ember'], 8, 4, t.r(0, 0, rng.uniform(0, 3)))
         self.socket('torch' if size >= 1 else 'torchlet', t.p(hx, hy, z + .1))
+        gx, gy, _ = t.p(hx + ox * .03, hy + oy * .03)
+        self.soot.append((gx, gy, .1 + .07 * size))
+        for _ in range(rng.randrange(2, 5)):
+            a, d = rng.uniform(0, math.tau), rng.uniform(0, .09 * size)
+            b.box((gx + d * math.cos(a), gy + d * math.sin(a), .004), (rng.uniform(.012, .03), rng.uniform(.008, .016), .008),
+                  p['charred'], .002, (0, 0, rng.uniform(0, 3)))
 
     def torches(self, t):
         """Torches outside one quarter: never an even row. Gate ends and the corner are always lit;
@@ -340,13 +349,41 @@ class FortMaster:
         self.gate(t)
 
     def gate(self, t):
-        """North gate: two thin dark doorsteps flush in the ground, on the outer and the inner line."""
-        b, p = self.b, self.p
-        x = GATE - POST_R - .01
-        for y, width in ((LINE, .1), (INNER + .05, .07)):
-            self.beam(t, (-x, y), (x, y), .016, width, .036, p['tar'])
-            for f in (-.66, 0, .66):
-                b.box(t.p(f * x, y, .016), (.035, width + .008, .034), p['iron'], .003, t.r())
+        """North gate thresholds, laid by hand instead of ruled: on the outer line hewn stone slabs, on the
+        inner line old boards, both with open joints (a few centimetres, so they still read at game scale),
+        pieces lost or kicked askew, and the middle trodden flatter and paler than the ends."""
+        b, p, rng = self.b, self.p, self.rng
+        x = GATE - POST_R - .02
+        u = -x + rng.uniform(0, .05)
+        while u < x - .06:                                              # outer: hewn slabs, now and then two small stones
+            s = min(rng.uniform(.16, .4), x - u)
+            c = u + s / 2
+            mid = 1 - abs(c) / x
+            if rng.random() < .12 + .1 * mid:                           # a stone gone: grit and a tuft of moss
+                b.ell(t.p(c, LINE + rng.uniform(-.02, .02), .003), (s * .3, .035, .005), p['moss2'], 8, 3, t.r(0, 0, rng.uniform(-.4, .4)))
+            else:
+                mat = p['sill'] if rng.random() < .4 + .4 * mid else p['sill2']
+                parts = [(c, s)] if s < .24 or rng.random() > .3 else [(u + s * .26, s * .48), (u + s * .76, s * .42)]
+                for pc, ps in parts:
+                    h = .026 - .008 * mid
+                    b.box(t.p(pc, LINE + rng.uniform(-.03, .03), h * .5 - .006 - .004 * mid), (ps - .03, rng.uniform(.08, .13), h), mat,
+                          .007, t.r(0, 0, rng.gauss(0, .07)), .01 + .006 * (1 - mid), rng)
+            u += s + rng.uniform(.04, .11)
+        y = INNER + .05
+        u = -x + rng.uniform(.02, .1)
+        while u < x - .1:                                               # inner: old boards, one now and then split or gone
+            length = min(rng.uniform(.3, .75), x - u)
+            mid = 1 - abs(u + length / 2) / x
+            if length > .16 and rng.random() > .14:
+                mat = p['worn'] if rng.random() < .35 + .5 * mid else (p['plank'] if rng.random() < .6 else p['oak'])
+                w, cy, rz = rng.uniform(.07, .1), y + rng.uniform(-.025, .025), rng.gauss(0, .035 + .03 * (1 - mid))
+                b.box(t.p(u + length / 2, cy, .011), (length, w, .022), mat, .006, t.r(0, 0, rz), .005, rng)
+                for end in (u + .04, u + length - .04):
+                    if rng.random() < .75:
+                        b.cylinder(t.p(end, cy + rng.uniform(-.015, .015), .023), .008, .004, p['dark'], 6, 0)
+                if rng.random() < .5 * (1 - mid):
+                    b.ell(t.p(u + length * rng.choice((.05, .95)), cy + rng.choice((-1, 1)) * w * .55, .012), (.04, .022, .008), p['moss'], 8, 3)
+            u += length + rng.uniform(.05, .14)
 
     # -- ground -------------------------------------------------------------------------
     def ground(self):
@@ -371,6 +408,37 @@ class FortMaster:
             return (.003, max(0.0, min(1.0, f * 1.2)), .25 * (1 - rim))
         ground_sheet(self.c, 'Moss carpet', -4.8, -4.8, 4.8, 4.8, moss, self.mossmat, .07)
         self.ground_growth()
+        self.torch_soot()
+        self.glades(moss)
+
+    def torch_soot(self):
+        """One translucent sheet of ash and soot under all torch heads, ragged and densest under the flame."""
+        soot = self.soot
+
+        def sample(x, y):
+            keep = 1.0
+            for sx, sy, r in soot:
+                d = math.hypot(x - sx, y - sy) / (r * (1 + .25 * wobble(x * 9 + sx, y * 9 + sy, 3)))
+                if d < 1: keep *= 1 - .62 * (1 - d) ** 1.6
+            a = 1 - keep
+            return None if a <= .004 else (.005, a, 0.0)
+        ground_sheet(self.c, 'Torch soot', -5.4, -5.4, 5.4, 5.4, sample, self.soot_mat, .035)
+
+    def glades(self, moss):
+        """Points in the mossy shade outside the palisade and in the courtyard corners where fireflies hang
+        at dusk; the runtime spawns them, the asset only says where the moss is deep."""
+        rng, placed, tries = self.rng, [], 0
+        while len(placed) < 16 and tries < 4000:
+            tries += 1
+            x, y = rng.uniform(-4.9, 4.9), rng.uniform(-4.9, 4.9)
+            far, near = max(abs(x), abs(y)), min(abs(x), abs(y))
+            outside = 3.9 < far < 4.9
+            corner = 1.0 < near and far < 2.3
+            if not (outside or (corner and len(placed) % 4 == 0)) or path_wear(x, y) > .12: continue
+            if outside and (moss(x, y) or (0, 0))[1] < .45: continue
+            if any(math.hypot(x - px, y - py) < 1.1 for px, py in placed): continue
+            placed.append((x, y))
+            self.socket('glade', (x, y, rng.uniform(.25, .5)))
 
     def wear_marks(self):
         """Countless faint, overlapping wheel and foot marks through every gate.
@@ -563,6 +631,7 @@ class FortMaster:
         self.ring()
         self.ground()
         for ob in self.b.flush('Fort master'):
-            if any(key in ob.name for key in ('Wood chips', 'Fieldstone', 'Ring fieldstone', 'Turf tuft', 'Dry turf tuft', 'Fern frond')):
+            if any(key in ob.name for key in ('Wood chips', 'Fieldstone', 'Ring fieldstone', 'Turf tuft', 'Dry turf tuft', 'Fern frond',
+                                              'Threshold stone', 'Mossy threshold stone', 'Charred bits')):
                 ob['fdGround'] = True
         return self.sockets

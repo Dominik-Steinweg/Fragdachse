@@ -77,6 +77,7 @@ export class RockVisualHelper {
   ) {
     this.worldPort = worldPort ?? null;
     this.ensureTurretTextures();
+    shadowSystem?.turretSilhouettes.addSource(visit => { for (const visual of this.turretVisuals.values()) visit(visual.image); });
     this.rockPresentation = new RockPresentation(
       {
         scene,

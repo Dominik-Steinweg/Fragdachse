@@ -1,0 +1,24 @@
+{
+  "name": "BaseFortEmber",
+  "contract": {
+    "id": "gpu:BaseFortEmber",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "BaseFortEmber",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.56
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "PowerUpPedestal"
+    ]
+  }
+}

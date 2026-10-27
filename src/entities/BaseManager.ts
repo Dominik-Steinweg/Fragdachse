@@ -31,7 +31,7 @@ import { SpawnStructureRenderer, type SpawnStructureShadowCell } from '../effect
 import type { SpawnStructureView } from '../effects/spawnStructure/SpawnStructureModel';
 import { worldCellCenter } from '../world/WorldMetrics';
 import { CELL_SIZE } from '../config';
-import { BaseFortRenderer } from '../arena/baseStructures/BaseFortRenderer';
+import { BaseFortRenderer, type BaseFortParticleFactory } from '../arena/baseStructures/BaseFortRenderer';
 import { isBaseFortLoaded } from '../arena/baseStructures/BaseFortAssets';
 import type { ShadowSystem } from '../effects/ShadowSystem';
 import type { LobbyStructureSunlight } from '../arena/lobbyStructures/LobbyStructureRenderer';
@@ -92,6 +92,7 @@ export class BaseManager {
   private readonly structureViews: SpawnStructureView[] = [];
   /** The persistent core's fort art (GDD Rustikale Basis); null without a core or before its art loads. */
   private readonly fortRenderer: BaseFortRenderer | null;
+  private releaseTurretSilhouettes: (() => void) | null = null;
   /** Outline rects of the live outlined structures, rebuilt only when obstacleGeneration changes. */
   private structureRects: readonly StructureRect[] = [];
   private structureRectsGeneration = -1;
@@ -241,9 +242,18 @@ export class BaseManager {
     this.fortRenderer?.setLighting(lighting);
   }
 
-  /** Shadow bearing and sun relief of the persistent fort, lent by the World presentation. */
-  setFortPresentation(shadows: Pick<ShadowSystem, 'getLongCasterFrame'> | null): void {
+  /**
+   * Shadow system and particle backend lent by the World presentation: the fort's bearing and
+   * particles, and the sun-cast silhouettes of every mounted base turret.
+   */
+  setFortPresentation(shadows: Pick<ShadowSystem, 'getLongCasterFrame' | 'turretSilhouettes'> | null,
+    particles: BaseFortParticleFactory | null = null): void {
     this.fortRenderer?.setShadows(shadows);
+    this.fortRenderer?.setParticles(particles);
+    this.releaseTurretSilhouettes?.();
+    this.releaseTurretSilhouettes = shadows?.turretSilhouettes.addSource(visit => {
+      for (const entity of this.entities) entity.forEachTurretSprite(visit);
+    }) ?? null;
   }
 
   setFortSunlight(sunlight: LobbyStructureSunlight | null): void {
@@ -631,6 +641,7 @@ export class BaseManager {
     this.structureRenderer?.destroy();
     this.destructionRenderer?.destroy();
     this.fortRenderer?.destroy();
+    this.releaseTurretSilhouettes?.(); this.releaseTurretSilhouettes = null;
     for (const entity of this.entities) entity.destroy();
     this.entities.length = 0;
     this.byId.clear();

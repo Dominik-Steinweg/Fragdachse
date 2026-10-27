@@ -90,6 +90,7 @@ export class PersistentBaseEditorWorld {
     this.shadows = new ShadowSystem(scene);
     this.shadows.setWorldBoundsOverride({ minX: 0, minY: 0, maxX: this.size, maxY: this.size });
     this.shadows.setTimeOfDay(this.timeOfDay);
+    this.shadows.turretSilhouettes.addSource(visit => { for (const turret of this.turrets.values()) visit(turret.image); });
     const surfaces = this.bases.getBases().flatMap(base => [...base.getSurfaceImages()]);
     this.shadows.syncBaseShadows(surfaces);
     // Editing needs an unobscured build surface, regardless of the gameplay fog preference.

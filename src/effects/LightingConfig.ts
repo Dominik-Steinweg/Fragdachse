@@ -804,9 +804,9 @@ export const LIGHT_PRESETS = {
   baseFortLantern: {
     enabled: true,
     shape: 'radial',
-    radiusPx: 42,
+    radiusPx: 48,
     color: 0xffbd6e,
-    intensity: 0.48,
+    intensity: 0.6,
     durationMs: 0,
     decayExponent: 1.1,
     occludes: false,
@@ -819,9 +819,9 @@ export const LIGHT_PRESETS = {
   baseFortTorch: {
     enabled: true,
     shape: 'radial',
-    radiusPx: 36,
+    radiusPx: 42,
     color: 0xff9447,
-    intensity: 0.48,
+    intensity: 0.6,
     durationMs: 0,
     decayExponent: 1.15,
     occludes: false,

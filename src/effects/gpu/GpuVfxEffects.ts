@@ -120,6 +120,9 @@ export const GpuVfxEffectId = {
   LobbySpark: 106,
   LobbyEmber: 107,
   LobbySmoke: 108,
+  BaseFortFlame: 109,
+  BaseFortEmber: 110,
+  BaseFortSmoke: 111,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -759,6 +762,14 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
   { id: GpuVfxEffectId.LobbyEmber, label: 'lobby.ember', lane: GpuVfxLaneId.PowerUpPedestal,
     frame: GpuVfxFrameId.DeathGlow, importance: 'decorative', release: 'kill-with-source' },
   { id: GpuVfxEffectId.LobbySmoke, label: 'lobby.smoke', lane: GpuVfxLaneId.TrainSmoke,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'decorative', release: 'kill-with-source' },
+  // Persistent base fort: torch flames in the emissive fire band, embers and night motes above the light map,
+  // torch smoke in the lit smoke band.
+  { id: GpuVfxEffectId.BaseFortFlame, label: 'base-fort.flame', lane: GpuVfxLaneId.TrainHeat,
+    frame: GpuVfxFrameId.FlameCore, importance: 'decorative', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.BaseFortEmber, label: 'base-fort.ember', lane: GpuVfxLaneId.PowerUpPedestal,
+    frame: GpuVfxFrameId.DeathGlow, importance: 'decorative', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.BaseFortSmoke, label: 'base-fort.smoke', lane: GpuVfxLaneId.TrainSmoke,
     frame: GpuVfxFrameId.ExplosionSmoke, importance: 'decorative', release: 'kill-with-source' },
 ];
 

@@ -60,9 +60,9 @@ describe('Lobby structure presentation', () => {
     }
   });
 
-  it('marches the ground shadow over its full reach in steps shorter than a caster texel', () => {
-    expect(STRUCTURE_SHADOW.marchStepPx).toBeLessThan(2);
-    expect(STRUCTURE_SHADOW.maxReachPx / STRUCTURE_SHADOW.marchStepPx).toBeLessThanOrEqual(LOBBY_STRUCTURE_SHADOW_MAX_STEPS);
+  it('walks every caster texel a shadow ray crosses within its full reach', () => {
+    // A diagonal ray crosses up to sqrt(2) texel boundaries per texel length.
+    expect(STRUCTURE_SHADOW.maxReachPx / STRUCTURE_SHADOW.casterTexelPx * Math.SQRT2).toBeLessThanOrEqual(LOBBY_STRUCTURE_SHADOW_MAX_STEPS);
   });
 
   it('places each structure on its canvas, its plaque outside the outline and its staff at the staff socket', () => {

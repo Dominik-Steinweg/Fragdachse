@@ -28,6 +28,7 @@ import { generateWorldLayout } from './WorldLayout';
 import { WorldMaterialization } from './WorldMaterialization';
 import { WorldPresentationBinding } from './WorldPresentationBinding';
 import { LobbyStructureRenderer } from '../arena/lobbyStructures/LobbyStructureRenderer';
+import { BaseFortFx } from '../arena/baseStructures/BaseFortFx';
 import { lobbyBuildingsOfWorld } from '../config/authoring/lobbyBuildings';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import type { WorldPresentationHandoff } from './WorldPresentationHandoff';
@@ -292,7 +293,8 @@ export function materializeWorldComposition(
       layout.water ?? [], world.definition?.fogStrength ?? DEFAULT_FOG_STRENGTH)
     : null;
   baseManager?.setLightingSystem(input.lighting);
-  baseManager?.setFortPresentation(input.sunlight?.shadow ?? null);
+  const gpuVfx = input.gpuVfx ?? null;
+  baseManager?.setFortPresentation(input.sunlight?.shadow ?? null, gpuVfx ? emitters => new BaseFortFx(gpuVfx, emitters) : null);
   if (input.createRockRegistry) materialization.setRocks(new RockRegistry(layout));
 
   if(presentationRequired && input.sunlight && input.runtime.presentationFrame) {

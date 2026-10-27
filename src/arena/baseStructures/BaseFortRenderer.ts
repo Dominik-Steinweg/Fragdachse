@@ -12,6 +12,11 @@ import type { FogSurfaceStamp } from '../../effects/groundFog/FogSurfaceMask';
 import type { LobbyStructureSunlight } from '../lobbyStructures/LobbyStructureRenderer';
 import { LOBBY_STRUCTURE_RELIEF_FRAGMENT, LOBBY_STRUCTURE_SHADOW_FRAGMENT } from '../lobbyStructures/lobbyStructureShaders';
 import { baseFortCoreAsset, baseFortTextureKey, type BaseFortAsset, type BaseFortLayer } from './BaseFortAssets';
+import type { BaseFortEmitter, BaseFortEmitterKind, BaseFortFx } from './BaseFortFx';
+
+/** Ambient particles of one fort; supplied by the World presentation, which owns the GPU particle backend. */
+export type BaseFortParticles = Pick<BaseFortFx, 'setActive' | 'setNight' | 'destroy'>;
+export type BaseFortParticleFactory = (emitters: readonly BaseFortEmitter[]) => BaseFortParticles;
 
 type FortLighting = Pick<LightingSystem, 'setLight' | 'releaseLight' | 'getArtificialLightFactor'>;
 type FortShadows = Pick<ShadowSystem, 'getLongCasterFrame'>;
@@ -45,6 +50,7 @@ const SOCKET_LIGHTS: readonly { prefix: string; preset: LightPresetKey; day: num
   { prefix: 'lamp', preset: 'baseFortLantern', day: .25, scale: 1 },
   { prefix: 'torch', preset: 'baseFortTorch', day: .3, scale: 1 },
 ];
+const EMITTER_KINDS: readonly BaseFortEmitterKind[] = ['torch', 'torchlet', 'lamp', 'glade'];
 /** The structure fades with the staggered cell explosions instead of vanishing at once. */
 const DESTROYED_ALPHA = 0;
 
@@ -62,6 +68,8 @@ interface FortView {
   readonly emission: { layer: BaseFortLayer; image: Phaser.GameObjects.Image; phase: number }[];
   readonly lights: { key: string; preset: LightPresetKey; day: number; scale: number; x: number; y: number; phase: number }[];
   readonly stamp: { -readonly [K in keyof FogSurfaceStamp]: FogSurfaceStamp[K] };
+  readonly emitters: readonly BaseFortEmitter[];
+  fx: BaseFortParticles | null;
   readonly cellCount: number;
   destroyedCells: number;
 }
@@ -79,6 +87,7 @@ export class BaseFortRenderer {
   private lighting: FortLighting | null = null;
   private shadows: FortShadows | null = null;
   private sunlight: LobbyStructureSunlight | null = null;
+  private particles: BaseFortParticleFactory | null = null;
   private readonly castFrame: LongCasterFrame = { x: 0, y: 1, lengthMult: 1, softnessMult: 1, opacityMult: 1, visible: true };
   private readonly surfaceLights = createSurfaceLightFrame();
   private readonly canvasUniform = new Float32Array(4);
@@ -105,8 +114,10 @@ export class BaseFortRenderer {
     const emission = asset.layers.map((layer, index) => ({ layer, phase: index * .21,
       image: this.scene.add.image(left, top, baseFortTextureKey(asset, `emission-${layer}`)).setOrigin(0).setDisplaySize(size, size)
         .setDepth(EMISSION_DEPTH).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0) }));
-    const lights: FortView['lights'] = [];
+    const lights: FortView['lights'] = [], emitters: BaseFortEmitter[] = [];
     for (const [name, socket] of Object.entries(asset.sockets)) {
+      const kind = EMITTER_KINDS.find(candidate => name.startsWith(candidate + '_'));
+      if (kind) emitters.push({ kind, x: centreX + socket.x, y: centreY + socket.y });
       const rule = SOCKET_LIGHTS.find(candidate => name.startsWith(candidate.prefix + '_'));
       if (!rule) continue;
       lights.push({ key: `base-fort:${baseId}:${name}`, preset: rule.preset, day: rule.day, scale: rule.scale,
@@ -115,7 +126,8 @@ export class BaseFortRenderer {
     const stamp = { active: true, visible: true, alpha: 1, x: left, y: top, displayWidth: size, displayHeight: size,
       scaleX: size / asset.sourceSize, scaleY: size / asset.sourceSize, originX: 0, originY: 0, rotation: 0,
       texture: { key: baseFortTextureKey(asset, 'solid') }, frame: { name: '__BASE' } };
-    this.views.set(baseId, { ground, body, emission, lights, stamp, cellCount, destroyedCells: 0,
+    this.views.set(baseId, { ground, body, emission, lights, stamp, emitters, cellCount, destroyedCells: 0,
+      fx: this.particles?.(emitters) ?? null,
       relief: lit ? this.makeRelief(left, top) : null, shadow: lit ? this.makeShadow(left, top) : null });
   }
 
@@ -141,6 +153,7 @@ export class BaseFortRenderer {
     view.ground.destroy(); view.body.destroy();
     this.destroyQuad(view.relief); this.destroyQuad(view.shadow);
     for (const { image } of view.emission) image.destroy();
+    view.fx?.destroy();
     this.views.delete(baseId);
   }
 
@@ -158,6 +171,16 @@ export class BaseFortRenderer {
 
   setShadows(shadows: FortShadows | null): void { this.shadows = shadows; }
 
+  /** Torch flames, embers, smoke, moths and fireflies on the World's GPU particle backend. */
+  setParticles(particles: BaseFortParticleFactory | null): void {
+    if (particles === this.particles) return;
+    this.particles = particles;
+    for (const view of this.views.values()) {
+      view.fx?.destroy();
+      view.fx = particles?.(view.emitters) ?? null;
+    }
+  }
+
   /** Lent by the World sunlight owner while it presents this World; null when it leaves. */
   setSunlight(sunlight: LobbyStructureSunlight | null): void { this.sunlight = sunlight; }
 
@@ -166,7 +189,7 @@ export class BaseFortRenderer {
     for (const view of this.views.values()) if (view.stamp.visible) yield view.stamp;
   }
 
-  /** Per frame: glow, light-map lights and the shadow bearing. */
+  /** Per frame: glow, particles, light-map lights and the shadow bearing. */
   update(): void {
     const seconds = this.scene.time.now / 1000;
     this.shadows?.getLongCasterFrame(this.castFrame);
@@ -175,6 +198,8 @@ export class BaseFortRenderer {
     for (const view of this.views.values()) {
       view.shadow?.setVisible(this.castFrame.visible && view.destroyedCells < view.cellCount);
       const standing = view.destroyedCells < view.cellCount;
+      view.fx?.setActive(standing && lighting !== null);
+      view.fx?.setNight(night);
       for (const glow of view.emission) {
         const look = LAYER_LOOK[glow.layer];
         const level = look.day + (look.night - look.day) * night;
@@ -215,12 +240,14 @@ export class BaseFortRenderer {
   private makeShadow(left: number, top: number): Phaser.GameObjects.Shader {
     const asset = this.asset, size = asset.displaySize, reach = STRUCTURE_SHADOW.maxReachPx;
     const quadLeft = left - reach, quadTop = top - reach, quadSize = size + reach * 2;
+    const caster = this.scene.textures.get(baseFortTextureKey(asset, 'caster-height'));
+    const casterTexels = caster.source[0].width;
     const quad = new Phaser.GameObjects.Shader(this.scene, {
       name: 'LobbyStructureShadow', shaderName: 'LobbyStructureShadow', fragmentSource: LOBBY_STRUCTURE_SHADOW_FRAGMENT,
       setupUniforms: (set: (name: string, value: unknown) => void) => {
         const frame = this.castFrame;
         set('uCaster', 0);
-        set('uStep', STRUCTURE_SHADOW.marchStepPx);
+        set('uTexels', casterTexels);
         this.canvasUniform[0] = left; this.canvasUniform[1] = top; this.canvasUniform[2] = size; this.canvasUniform[3] = 0;
         set('uCanvas', this.canvasUniform);
         this.heightUniform[0] = asset.heightPx.min; this.heightUniform[1] = asset.heightPx.max;
@@ -234,7 +261,7 @@ export class BaseFortRenderer {
         this.shadeUniform[1] = STRUCTURE_SHADOW.softnessPx * FORT_SHADOW.softness * frame.softnessMult;
         set('uShade', this.shadeUniform);
       },
-    }, quadLeft, quadTop, quadSize, quadSize, [this.scene.textures.get(baseFortTextureKey(asset, 'caster-height'))]);
+    }, quadLeft, quadTop, quadSize, quadSize, [caster]);
     return this.scene.add.existing(quad).setOrigin(0).setDepth(STRUCTURE_SHADOW.layerDepth).setBlendMode(Phaser.BlendModes.MULTIPLY);
   }
 
@@ -253,6 +280,6 @@ export class BaseFortRenderer {
 
   destroy(): void {
     for (const id of [...this.views.keys()]) this.remove(id);
-    this.lighting = null; this.shadows = null; this.sunlight = null;
+    this.lighting = null; this.shadows = null; this.sunlight = null; this.particles = null;
   }
 }

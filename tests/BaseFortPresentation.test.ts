@@ -16,7 +16,7 @@ vi.mock('../src/arena/baseStructures/BaseFortRenderer', () => ({
     add(...args: unknown[]) { fort.calls.push(['add', ...args]); }
     destroyCell(...args: unknown[]) { fort.calls.push(['destroyCell', ...args]); }
     remove(...args: unknown[]) { fort.calls.push(['remove', ...args]); }
-    setLighting() {} setShadows() {} setSunlight() {} releaseLights() {} update() {} destroy() {}
+    setLighting() {} setShadows() {} setParticles() {} setSunlight() {} releaseLights() {} update() {} destroy() {}
     *getFogSurfaces() {}
   },
 }));

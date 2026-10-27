@@ -243,6 +243,11 @@ export class BaseEntity {
   }
 
   /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist; das Fort bringt eigene Lichter. */
+  /** Mounted turret sprites, for the sun-cast silhouettes of the shadow system. */
+  forEachTurretSprite(visit: (sprite: Phaser.GameObjects.Sprite) => void): void {
+    for (const image of this.turretImages.values()) visit(image);
+  }
+
   getLightSpots(): readonly { x: number; y: number; radius: number }[] {
     return !this.presentation || this.spec.surface === 'none' || this.role === 'spawn-point' || this.isInert() || this.isFortCore()
       ? EMPTY_LIGHT_SPOTS : this.lightSpots;

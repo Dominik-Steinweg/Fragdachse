@@ -5,6 +5,7 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"lane:VoidMeteorMaterial","deviation":"material-outside-sun","finding":"D06"},
   {"id":"gpu:VoidMeteorSmoke","deviation":"material-outside-sun","finding":"D06"},
   {"id":"gpu:LobbySmoke","deviation":"material-outside-sun","finding":"D06"},
+  {"id":"gpu:BaseFortSmoke","deviation":"material-outside-sun","finding":"D06"},
   {"id":"gpu:VoidMeteorFragment","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.warningGlow/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.warningRing/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
