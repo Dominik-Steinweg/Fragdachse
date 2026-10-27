@@ -203,6 +203,13 @@ Ein Gegner-Meshschatten gehoert zur Sheet-Revision, aus der er gebacken wurde, u
 dargestellte Runtime-Asset (`imageKey`) gefunden, nicht ueber die Gegnerart; ein Sheet anderer
 Revision (etwa ein Animationsentwurf) behaelt den Ellipsenschatten
 ([EnemyMeshRenderer.test.ts](../../tests/EnemyMeshRenderer.test.ts)).
+Starre Pipeline-Assets wie Tuerme sind dieselben Mesh-Caster (`MeshShadowCaster`, Exportprofil
+`rigid` ohne Kontakte); es gibt keinen eigenen Turmschatten. Sie melden sich als Quelle bei
+`ShadowSystem.turretCasters` und compositen im montierten Band direkt unter ihrem Sprite
+(`MOUNTED_SHADOW_DEPTH`), Figuren im Figurenband. Die Empfaengermaske fuehrt zwei Ebenen: R ist
+der Boden (Basiszellen ausgeschlossen, Figuren stehen unten), G zusaetzlich die Basisoberflaechen
+fuer Caster, die auf ihnen stehen (Tuerme auf Fort-Decks und Vorposten)
+([CharacterShadowRenderer.test.ts](../../tests/CharacterShadowRenderer.test.ts)).
 Die binaeren, hashgebundenen Meshdaten bleiben im game-owned Loader-Cache. Schatten lesen den
 tatsaechlich dargestellten Sprite-Frame und dessen Rotation, nicht Netzwerk-Facing oder eine
 eigene Animationsuhr. Meshpositionen sind X rechts, Y Sued, Z oben; Projektion erfolgt erst nach

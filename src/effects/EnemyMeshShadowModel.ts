@@ -5,6 +5,8 @@ import { extendMeshBounds, meshShadowSoftness } from './CharacterMeshModel';
 export const ENEMY_SHADOW_CAPACITY = 512;
 export const ENEMY_SHADOW_COLUMNS = 32;
 export const ENEMY_SHADOW_DEPTH = 9.92;
+/** Mounted casters (turrets): above ground and structure decks (ROCKS + .04), below turret aura and sprite (ROCKS + .1/.2). */
+export const MOUNTED_SHADOW_DEPTH = 9.09;
 export const ENEMY_SHADOW_PAD = 5;
 
 /**

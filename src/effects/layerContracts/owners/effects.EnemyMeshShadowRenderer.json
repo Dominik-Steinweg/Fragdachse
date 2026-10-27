@@ -12,6 +12,13 @@
         "blends": [
           "MULTIPLY"
         ]
+      },
+      {
+        "key": "module/this.mountedDisplay/setDepth/0",
+        "expression": "MOUNTED_SHADOW_DEPTH",
+        "blends": [
+          "MULTIPLY"
+        ]
       }
     ],
     "bindings": {}
@@ -37,6 +44,28 @@
       "source": {
         "selector": "module/this.display/setDepth/0",
         "expression": "ENEMY_SHADOW_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:effects/EnemyMeshShadowRenderer.ts:module/this.mountedDisplay/setDepth/0",
+      "owner": "effects/EnemyMeshShadowRenderer.ts",
+      "component": "module/this.mountedDisplay/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.09
+      ],
+      "blends": [
+        "MULTIPLY"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.mountedDisplay/setDepth/0",
+        "expression": "MOUNTED_SHADOW_DEPTH"
       }
     }
   ]

@@ -136,7 +136,8 @@ export async function auditPublished({repo=repoRoot,sources,jobs=2}={}) {
   const names=(await readdir(directory)).filter(n=>/^(enemy-mesh-|character-(material-|mesh-|badger-))/.test(n));
   const enemies=new Map(),players=[];let meshes=0;
   for(const name of names){const m=await json(path.join(directory,name));
-    if(m.schema==='fd-enemy-mesh-runtime')for(const asset of m.assets)enemies.set(asset.id+'/'+asset.revision,asset);
+    // Rigid meshes (turrets) carry no material sheets; their shadow binaries are covered by the asset tests.
+    if(m.schema==='fd-enemy-mesh-runtime')for(const asset of m.assets)if(asset.profile!=='rigid')enemies.set(asset.id+'/'+asset.revision,asset);
     else if(m.pages)players.push(m);
     else if(m.meshes){
       for(const mesh of m.meshes){await auditMesh(mesh,repo);meshes++;}

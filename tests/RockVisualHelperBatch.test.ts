@@ -122,7 +122,7 @@ function createFixture(order: readonly number[], materialize = true) {
   const shadowSystem = {
     rebuildArenaStaticShadows: vi.fn(),
     rebuildArenaStaticShadowRegions: vi.fn(),
-    turretSilhouettes: { addSource: vi.fn(() => () => {}) },
+    turretCasters: { addSource: vi.fn(() => () => {}) },
   };
   const runtimeRocks = new Map(changes.added.map((rock) => [rock.id, rock]));
   const combatCore = { invalidateObstacleIndex: vi.fn() };

@@ -49,18 +49,19 @@ attribute vec2 inPosition;
 attribute vec4 inBounds;
 attribute vec4 inTileAlpha;
 attribute vec4 inFoot0,inFoot1,inFoot2,inFoot3;
+attribute vec4 inPlane;
 uniform mat4 uProjectionMatrix;
 uniform mat3 uViewMatrix;
 uniform vec2 uGrid;
 varying vec2 world,uv;
-varying float opacity;
+varying float opacity,plane;
 varying vec4 foot0,foot1,foot2,foot3;
 void main(){
  world=inBounds.xy+inPosition*inBounds.zw;
  vec3 view=uViewMatrix*vec3(world,1);
  gl_Position=uProjectionMatrix*vec4(view.xy,0,1);
  uv=vec2((inTileAlpha.x+inPosition.x)/uGrid.x,1.0-(inTileAlpha.y+inPosition.y)/uGrid.y);
- opacity=inTileAlpha.z;
+ opacity=inTileAlpha.z;plane=inPlane.x;
  foot0=inFoot0;foot1=inFoot1;foot2=inFoot2;foot3=inFoot3;
 }`;
 export const ENEMY_MESH_DISPLAY_FRAGMENT = `
@@ -69,14 +70,15 @@ uniform sampler2D uMask,uReceiver;
 uniform vec4 uReceiverWorld;
 uniform float uStrength,uDebugSolid;
 varying vec2 world,uv;
-varying float opacity;
+varying float opacity,plane;
 varying vec4 foot0,foot1,foot2,foot3;
 ${CLOUD_SHADOW_GLSL}
 float contact(vec4 foot){return (1.0-smoothstep(.25,1.0,length(world-foot.xy)/max(.01,foot.z)))*foot.w;}
 void main(){
  vec2 r=(world-uReceiverWorld.xy)/uReceiverWorld.zw;
  float response=0.0;
- if(all(greaterThanEqual(r,vec2(0)))&&all(lessThanEqual(r,vec2(1))))response=texture2D(uReceiver,r).r;
+ // R: the ground plane; G: raised base tops, which receive only casters standing on them.
+ if(all(greaterThanEqual(r,vec2(0)))&&all(lessThanEqual(r,vec2(1)))){vec4 rec=texture2D(uReceiver,r);response=mix(rec.r,rec.g,plane);}
  float mask=texture2D(uMask,uv).r;
  if(uDebugSolid>.5){float a=mask*response*opacity;gl_FragColor=vec4(a,0,a,a);return;}
  float direct=mask*uStrength*cloudTransmission(world);

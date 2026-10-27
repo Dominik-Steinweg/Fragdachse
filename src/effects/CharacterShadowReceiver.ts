@@ -64,8 +64,10 @@ export class CharacterShadowReceiver {
           offsetY + (tower.gridY + cell.dy + .5) * CELL_SIZE, 255);
       }
     }
-    for (const cell of bases) this.set(cell.x, cell.y, 0);
     for (const rect of structures) this.setRect(rect, 0);
+    // G mirrors the ground plane; base tops then receive in G only, for casters standing on them (turrets).
+    for (let i = 0; i < this.data.length; i += 4) this.data[i + 1] = this.data[i];
+    for (const cell of bases) { this.set(cell.x, cell.y, 0); this.set(cell.x, cell.y, 255, 1); }
     const renderer = this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, gl = renderer.gl;
     renderer.glTextureUnits.bind(this.texture.source[0].glTexture!, 0);
     // Image uploads can leave flipY enabled. Receiver rows are world north-to-south;
@@ -74,27 +76,27 @@ export class CharacterShadowReceiver {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, this.data);
     this.revision++;
   }
-  /** Writes the whole world cell containing the point. */
-  private set(x: number, y: number, value: number): void {
+  /** Writes the whole world cell containing the point; channel 0 is the ground plane, 1 the raised base plane. */
+  private set(x: number, y: number, value: number, channel = 0): void {
     const left = Math.floor((x - this.world[0]) / CELL_SIZE) * CELL_SIZE + this.world[0];
     const top = Math.floor((y - this.world[1]) / CELL_SIZE) * CELL_SIZE + this.world[1];
-    this.setRect({ x: left, y: top, width: CELL_SIZE, height: CELL_SIZE }, value);
+    this.setRect({ x: left, y: top, width: CELL_SIZE, height: CELL_SIZE }, value, channel);
   }
   /** Writes every texel whose centre lies inside the world-pixel rect; uploaded with the next update. */
-  setRect(rect: CharacterShadowReceiverRect, value: number): void {
+  setRect(rect: CharacterShadowReceiverRect, value: number, channel = 0): void {
     const step = this.texelPx;
     const minCol = Math.max(0, Math.ceil((rect.x - this.world[0]) / step - .5));
     const maxCol = Math.min(this.width, Math.ceil((rect.x + rect.width - this.world[0]) / step - .5));
     const minRow = Math.max(0, Math.ceil((rect.y - this.world[1]) / step - .5));
     const maxRow = Math.min(this.height, Math.ceil((rect.y + rect.height - this.world[1]) / step - .5));
     for (let row = minRow; row < maxRow; row++) for (let col = minCol; col < maxCol; col++) {
-      this.data[(row * this.width + col) * 4] = value;
+      this.data[(row * this.width + col) * 4 + channel] = value;
     }
   }
-  sample(x: number, y: number): number {
+  sample(x: number, y: number, channel = 0): number {
     const col = Math.floor((x - this.world[0]) / this.texelPx), row = Math.floor((y - this.world[1]) / this.texelPx);
     return col >= 0 && col < this.width && row >= 0 && row < this.height
-      ? this.data[(row * this.width + col) * 4] / 255 : 0;
+      ? this.data[(row * this.width + col) * 4 + channel] / 255 : 0;
   }
   destroy(): void { this.scene.textures.remove(this.texture.key); }
 }

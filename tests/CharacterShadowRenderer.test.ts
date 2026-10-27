@@ -130,6 +130,17 @@ it('excludes structure outlines on 8-px texels while cell rules keep covering wh
  fine.destroy();f.renderer.destroy();
 });
 
+it('lets base tops receive only on the raised plane, for casters standing on them', () => {
+ const f=fixture();
+ const layout:any={rocks:[{gridX:5,gridY:5}],water:[]};
+ f.receiver.update(layout,0,0,()=>true,[],[{x:80,y:80}]);
+ // Ground figures never shade a base top; a turret on the deck does. Rocks block both planes.
+ expect(f.receiver.sample(80,80)).toBe(0);expect(f.receiver.sample(80,80,1)).toBe(1);
+ expect(f.receiver.sample(176,176)).toBe(0);expect(f.receiver.sample(176,176,1)).toBe(0);
+ expect(f.receiver.sample(300,300)).toBe(1);expect(f.receiver.sample(300,300,1)).toBe(1);
+ f.renderer.destroy();
+});
+
 it('receives figure shadows across the whole live tower deck and restores ground rules after removal', () => {
  const f=fixture();
  const tower={id:0,kind:'watchtower',gridX:1,gridY:1,hp:1};

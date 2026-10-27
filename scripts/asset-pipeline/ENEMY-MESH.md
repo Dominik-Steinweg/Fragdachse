@@ -34,6 +34,13 @@ Render-only sub-pixel detail (the Kabummtula's setae spikes) carries
 `ob['meshShadowDetail']`: it stays in Beauty and the material passes but is
 excluded from the proxy, its silhouette reference and the contacts.
 
+Assets whose catalog category is not `enemy` (turrets) use the `rigid` profile of the
+same flow: any forward and clips, no move/claw requirement, no paw contacts (`feet: []`). Their
+selected sprite material stays; `seal` skips the data passes and binds the mesh to the live Beauty
+sheet at source size, which `import` references instead of copying. Extract an archived selection's
+`source-bundle.zip` (and the zip itself) to `art/poc/pipeline-v2/runs/<source-revision>/<asset>/`
+before `prepare`. Pilot: `rocket`, `enemy-mesh-rigid-r1` from `towers-r03`.
+
 Pose counts and sheet rows follow the selected clips, including optional `cast`
 poses. `move` and `claw` remain required; clip blocks must cover every non-rest
 pose exactly once. Biped and quadruped contacts use the shared authored paw names.

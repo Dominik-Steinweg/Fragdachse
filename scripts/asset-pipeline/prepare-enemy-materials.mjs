@@ -15,7 +15,9 @@ export async function prepareEnemies({sources='D:/Fragdachse-render',output,repa
   const root=path.resolve(output);
   if(!/^D:[\\/]/i.test(root)||!root.toLowerCase().startsWith(path.resolve(sources).toLowerCase()+path.sep))throw Error('Output must be a new revision below the D: source root');
   await mkdir(root); // Exclusive revision; existing evidence is immutable.
-  const started=performance.now(),runtime=await json(path.join(repo,'src/assets/manifests/enemy-mesh-families.json'));
+  const started=performance.now(),families=await json(path.join(repo,'src/assets/manifests/enemy-mesh-families.json'));
+  // Rigid meshes (turrets) carry no enemy material sheets.
+  const runtime={...families,assets:families.assets.filter(a=>a.profile!=='rigid')};
   const catalog=(await readDemandCatalog(repo)).assets.filter(a=>a.category==='enemy').map(a=>a.id).sort();
   if(JSON.stringify(runtime.assets.map(a=>a.id).sort())!==JSON.stringify(catalog))throw Error('Incomplete enemy catalog coverage');
   const toolHashes={};for(const name of ['prepare-enemy-materials.mjs','verify-published-assets.mjs','pass-quality.mjs','material-repair.mjs'])toolHashes[name]=await fileHash(path.join(repo,'scripts/asset-pipeline',name));

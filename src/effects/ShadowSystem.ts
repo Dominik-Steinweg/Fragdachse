@@ -1,11 +1,11 @@
 import * as Phaser from 'phaser';
-import { ShadowTurretSilhouettes } from './ShadowTurretSilhouettes';
+import { ShadowTurretCasters } from './ShadowTurretCasters';
 import { isReactivePropObstacleId } from '../world/reactiveProps/ReactivePropObstacleIds';
 import { getCharacterMeshes, CHARACTER_MESH_MANIFEST } from '../assets/CharacterMeshAssets';
 import { quantizeSunAzimuth, type SunPathState } from './sunlight/SunPath';
 import type { SunCloudState } from './sunlight/cloudShadow';
 import { CharacterMeshShadowRenderer } from './CharacterMeshShadowRenderer';
-import { EnemyMeshShadowRenderer } from './EnemyMeshShadowRenderer';
+import { EnemyMeshShadowRenderer, type MeshShadowCaster } from './EnemyMeshShadowRenderer';
 import { CharacterShadowReceiver, STRUCTURE_RECEIVER_TEXEL_PX, type CharacterShadowReceiverRect } from './CharacterShadowReceiver';
 import { writeShadowCellHull } from './sunlight/ShadowProjection';
 import {
@@ -237,6 +237,7 @@ export class ShadowSystem {
     return this.figureReceiver;
   }
   private readonly enemyShadowSources: EnemyEntity[] = [];
+  private readonly meshShadowSources: MeshShadowCaster[] = [];
   private enemyMeshesSuppressed = false;
   private readonly collectShadowEnemy = (enemy: EnemyEntity): void => { this.enemyShadowSources.push(enemy); };
   setEnemyMeshShadowsSuppressed(value: boolean): void {
@@ -598,14 +599,13 @@ export class ShadowSystem {
   private readonly cellPts: Phaser.Math.Vector2[] =
     Array.from({ length: 6 }, () => new Phaser.Math.Vector2());
 
-  /** Sun-cast silhouettes of every turret sprite its owners register, on this system's bearing. */
-  readonly turretSilhouettes: ShadowTurretSilhouettes;
+  /** Turret sprites its owners register; they cast mesh shadows beside the enemies. */
+  readonly turretCasters = new ShadowTurretCasters();
 
   constructor(
     private readonly scene: Phaser.Scene,
   ) {
     this.quality = getGraphicsQualityProfile(scene);
-    this.turretSilhouettes = new ShadowTurretSilhouettes(scene, out => this.getLongCasterFrame(out), this.quality.level !== 'low');
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
       this.quality = profile;
       this.destroyFigureShadows();
@@ -1296,7 +1296,11 @@ export class ShadowSystem {
       this.enemyShadows ??= new EnemyMeshShadowRenderer(this.scene, this.characterClouds,
         this.characterShadows.receiver, this.quality.level === 'high' ? 64 : 48);
       this.enemyShadows.setDebugSolid(this.characterSolid);
-      this.enemyShadows.sync(this.enemyShadowSources, this.dynamicVisible);
+      const casters = this.meshShadowSources;
+      casters.length = 0;
+      for (const enemy of this.enemyShadowSources) casters.push(enemy);
+      this.turretCasters.collect(casters);
+      this.enemyShadows.sync(casters, this.dynamicVisible);
     } else this.enemyShadows?.setVisible(false);
     this.enemyPrimitives = 0; this.enemyCasters = 0;
     if (this.sunDirection) for (const enemy of this.enemyShadowSources) this.drawSunEnemy(enemy);
@@ -1368,7 +1372,7 @@ export class ShadowSystem {
   }
 
   destroy(): void {
-    this.turretSilhouettes.destroy();
+    this.turretCasters.destroy();
     this.setCharacterSunlight(null);
     this.sunEnemies = null;
     this.sunDirection=null;this.staticSunDirection=null;this.sunAzimuth=null;this.bakedAzimuth=null;

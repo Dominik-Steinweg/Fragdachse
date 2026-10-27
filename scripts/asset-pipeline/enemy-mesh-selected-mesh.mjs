@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {verifySelectionV2} from './export-v2.mjs';
-import {enemyCoordinates,enemyPoses,validateEnemyMeshManifest,decodeEnemyMesh,ENEMY_MESH_VIEWS,relativeMember} from './enemy-mesh-contract.mjs';
+import {enemyCoordinates,enemyPoses,meshProfile,validateEnemyMeshManifest,decodeEnemyMesh,ENEMY_MESH_VIEWS,relativeMember} from './enemy-mesh-contract.mjs';
 import {project,extents,raster,compare} from './enemy-mesh-raster.mjs';
 import {rgba,inspectPasses} from './pass-quality.mjs';
 import {readPipelineRegistry} from './pipeline-registry.mjs';
@@ -33,7 +33,7 @@ if(mode==='prepare'){
     const member='source-tools/'+name;await copyFile(path.join(repo,'scripts/asset-pipeline',name),path.join(root,member),constants.COPYFILE_EXCL);sourceFiles[member]=await fileHash(path.join(root,member));
   }
 
-  await write(path.join(root,'job.json'),{id,revision,sourceRevision,source,outputRoot:path.dirname(root),render,
+  await write(path.join(root,'job.json'),{id,revision,sourceRevision,source,outputRoot:path.dirname(root),render,profile:meshProfile(render),
     poses:enemyPoses(render),coordinates:enemyCoordinates(render),layout:selection.layout,sourceFiles});
   console.log(path.join(root,'job.json'));
 }else if(mode==='validate'){
@@ -62,14 +62,33 @@ if(mode==='prepare'){
   console.log(JSON.stringify({...validation,rows:undefined}));
 }else if(mode==='seal'){
   const job=await read(path.join(root,'job.json')),m=validateEnemyMeshManifest(await read(path.join(root,'mesh-manifest.json')));
-  const silhouettes=await read(path.join(root,'silhouette-review.json')),passes=await read(path.join(root,'render-passes.json'));
+  const silhouettes=await read(path.join(root,'silhouette-review.json'));
   const visual=await read(path.resolve(repo,sourceRevision));
   if(visual.status!=='reviewed'||!visual.assessment)throw Error('Actual visual review JSON required');
   if(silhouettes.samples!==m.poses.length*81||silhouettes.minimumIou<.95||silhouettes.minimumFineIou<.95)throw Error('Failed silhouette gate');
-  if(passes.frames.length!==m.poses.length||passes.sourceBlendSha256!==job.sourceFiles['candidate.blend']||passes.persistentData!==false||!passes.passMajor)throw Error('Material source/policy mismatch');
   for(const [file,h] of Object.entries(job.sourceFiles))if(await fileHash(path.join(root,relativeMember(file)))!==h)throw Error('Changed source '+file);
-  for(const [file,h] of Object.entries(passes.outputs))if(await fileHash(path.join(root,relativeMember(file)))!==h)throw Error('Changed pass '+file);
   const selected=await verifySelectionV2(job.source),images={},qa=[];
+  if(m.profile==='rigid'){
+    // Rigid assets keep their selected sprite material; only the shadow proxy is new. The Beauty sheet at
+    // source size binds the mesh to the exact live sheet it was baked from.
+    const member=`beauty/sheet-${job.layout.frameWidth}.png`,dest=path.join(root,member);
+    await mkdir(path.dirname(dest),{recursive:true});
+    await copyFile(path.join(job.source,selected.variant,`sheet-${job.layout.frameWidth}.png`),dest,constants.COPYFILE_EXCL);
+    images[member]=await fileHash(dest);
+    const validation={fullSilhouettes:silhouettes.samples,minimumIou:silhouettes.minimumIou,minimumFineIou:silhouettes.minimumFineIou,
+      materialMetrics:[],evidence:{'candidate.blend':job.sourceFiles['candidate.blend'],'silhouette-review.json':await fileHash(path.join(root,'silhouette-review.json'))}};
+    const final={...m,status:'reviewed-not-imported',layout:job.layout,images,validation,visualReview:visual,materialEncoding:null,
+      provenance:{source:'selected-v2',sourceRevision:job.sourceRevision,blenderVersion:m.blenderVersion}};
+    validateEnemyMeshManifest(final);
+    await write(path.join(root,'enemy-mesh.json'),final);
+    await copyFile(fileURLToPath(import.meta.url),path.join(root,'sealed-import-tool.mjs'),constants.COPYFILE_EXCL);
+    await write(path.join(root,'review-result.json'),{status:'reviewed-not-imported',id,revision,validation});
+    console.log('Sealed',id);
+    process.exit(0);
+  }
+  const passes=await read(path.join(root,'render-passes.json'));
+  if(passes.frames.length!==m.poses.length||passes.sourceBlendSha256!==job.sourceFiles['candidate.blend']||passes.persistentData!==false||!passes.passMajor)throw Error('Material source/policy mismatch');
+  for(const [file,h] of Object.entries(passes.outputs))if(await fileHash(path.join(root,relativeMember(file)))!==h)throw Error('Changed pass '+file);
   for(const pose of m.poses){
     const name=`frame-${String(pose.index).padStart(4,'0')}.png`,data={};
     // Approved Beauty remains the exact selected bytes; data passes never replace it.
@@ -128,12 +147,14 @@ if(mode==='prepare'){
   for(const [member,h] of Object.entries(m.images)){
     const data=await readFile(path.join(root,relativeMember(member)));if(hash(data)!==h)throw Error('Changed image');
     const [,pass,size]=member.match(/^(beauty|albedo|normal|emission)\/sheet-(\d+)\.png$/);
+    // Rigid assets reference the live Beauty sheet the game already ships instead of a copy.
+    if(m.profile==='rigid'){images[`${pass}${size}`]={file:live.sheetPath.replace(/^\.\//,''),sha256:h};continue;}
     const file=`${folder}/${pass}-${size}.png`;images[`${pass}${size}`]={file,sha256:h};copies.push({file,data});
   }
   if(images[`beauty${live.sourceSize}`].sha256!==live.hashes.sheet)throw Error('Selected Beauty changed');
-  const asset={id,revision:live.revision,meshRevision:revision,coordinates:m.coordinates,poses:m.poses,contacts:m.contacts,
+  const asset={id,revision:live.revision,meshRevision:revision,...(m.profile==='rigid'?{profile:'rigid'}:{}),coordinates:m.coordinates,poses:m.poses,contacts:m.contacts,
     provenance:m.provenance,mesh,images,materialEncoding:m.materialEncoding,sourceManifestSha256:hash(bytes),sourceArchiveSha256:receipt.sha256,
-    inheritedEyeAnchorSource:live.eyeAnchors.source,validation:m.validation};
+    inheritedEyeAnchorSource:live.eyeAnchors?.source??null,validation:m.validation};
   const file=path.join(repo,'src/assets/manifests/enemy-mesh-families.json'),manifest=await read(file);
   // Preserve every unrelated family, including their accepted revisions and bytes.
   manifest.assets=[...manifest.assets.filter(a=>a.id!==id),asset];

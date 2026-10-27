@@ -1,6 +1,5 @@
 import * as Phaser from 'phaser';
 import { getEnemyMeshAssets, type EnemyMeshData } from '../assets/EnemyMeshAssets';
-import type { EnemyEntity } from '../entities/EnemyEntity';
 import { createVisibleWorldView, getVisibleWorldView } from '../graphics/CameraWorldView';
 import { runWithScopedBlend } from '../graphics/PhaserScopedBlend';
 import type { CharacterShadowReceiver } from './CharacterShadowReceiver';
@@ -9,14 +8,32 @@ import { CHARACTER_MESH_MASK } from './characterMeshShaders';
 import { EnemyMeshGpu } from './EnemyMeshGpu';
 import { ENEMY_MESH_VERTEX, ENEMY_MESH_BLUR, ENEMY_MESH_BLUR_VERTEX, ENEMY_MESH_DISPLAY_VERTEX, ENEMY_MESH_DISPLAY_FRAGMENT } from './enemyMeshShaders';
 import { enemyMeshMatrix, enemyMeshPose, enemyShadowBounds, ENEMY_SHADOW_CAPACITY as CAPACITY,
-  ENEMY_SHADOW_COLUMNS as COLUMNS, ENEMY_SHADOW_DEPTH } from './EnemyMeshShadowModel';
+  ENEMY_SHADOW_COLUMNS as COLUMNS, ENEMY_SHADOW_DEPTH, MOUNTED_SHADOW_DEPTH } from './EnemyMeshShadowModel';
 import { SunRenderTarget, sunShaderName, ownSunShader } from './sunlight/SunRenderTarget';
 import { setCloudUniforms, type SunCloudState } from './sunlight/cloudShadow';
 import { registerGraphicsObject } from './EffectUtils';
 import { registerEnemyMeshWarmup } from './EnemyMeshWarmup';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 
-const MASK_WORDS = 13, DISPLAY_WORDS = 24;
+const MASK_WORDS = 13, DISPLAY_WORDS = 28;
+const DISPLAY_ATTRIBUTES = ['inBounds', 'inTileAlpha', 'inFoot0', 'inFoot1', 'inFoot2', 'inFoot3', 'inPlane'].map(name => ({ name, size: 4 }));
+
+/**
+ * A sprite whose Blender mesh casts its sun shadow: enemies, and rigid pipeline assets such as turrets.
+ * The mesh is found through the pipeline asset of the displayed image, the pose through the sprite frame.
+ */
+export interface MeshShadowCaster {
+  readonly kind: string;
+  readonly sprite: Phaser.GameObjects.Sprite;
+  getImageKey(): string;
+  getHp(): number;
+  isBurrowed(): boolean;
+  getHopLiftScale(): number;
+  /** 1 when the caster stands on a raised base surface whose top receives its shadow; ground casters omit it. */
+  getShadowReceiverPlane?(): number;
+  /** Mounted casters (turrets) are drawn below the figures: their shadow lies just under their own sprite. */
+  readonly mountedShadow?: boolean;
+}
 const MASK_ATTRIBUTES = [{ name: 'inMatrix', size: 4 }, { name: 'inTranslation', size: 3 }, { name: 'inBounds', size: 4 }, { name: 'inTile', size: 2 }];
 interface Group { gpu: EnemyMeshGpu; data: Float32Array; count: number }
 
@@ -29,12 +46,13 @@ export class EnemyMeshShadowRenderer {
   private readonly horizontal: SunRenderTarget;
   private readonly blurred: SunRenderTarget;
   private readonly display: Phaser.GameObjects.Shader;
+  private readonly mountedDisplay: Phaser.GameObjects.Shader;
   private readonly composite: EnemyMeshGpu;
   private readonly blurGpu: EnemyMeshGpu;
   private readonly groups = new Map<string, Group>();
   private readonly prepared = new Map<string, number>();
-  private readonly active = new Set<EnemyEntity>();
-  private readonly assignments = new Map<EnemyEntity, number>();
+  private readonly active = new Set<MeshShadowCaster>();
+  private readonly assignments = new Map<MeshShadowCaster, number>();
   private readonly free = Array.from({ length: CAPACITY }, (_, i) => CAPACITY - 1 - i);
   private readonly displayData = new Float32Array(CAPACITY * DISPLAY_WORDS);
   private readonly matrix = new Float32Array(16);
@@ -46,6 +64,8 @@ export class EnemyMeshShadowRenderer {
   private strength = 0;
   private solid = false;
   private count = 0;
+  /** Instances before this index composite in the figure band, the rest in the mounted band. */
+  private figureCount = 0;
   private draws = 0;
   private triangles = 0;
   private cpuMs = 0;
@@ -77,24 +97,30 @@ export class EnemyMeshShadowRenderer {
     const name = sunShaderName('EnemyMeshComposite'); this.programNames.push(name);
     this.composite = new EnemyMeshGpu(this.renderer, name, ENEMY_MESH_DISPLAY_VERTEX, ENEMY_MESH_DISPLAY_FRAGMENT,
       new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2, new Uint16Array([0, 1, 2, 0, 2, 3]),
-      ['inBounds', 'inTileAlpha', 'inFoot0', 'inFoot1', 'inFoot2', 'inFoot3'].map(name => ({ name, size: 4 })), CAPACITY);
-    // Display-list entry delegates to the instanced composite; no per-enemy objects/filters.
+      DISPLAY_ATTRIBUTES, CAPACITY);
+    // Display-list entries delegate to the instanced composite; no per-enemy objects/filters. Figures and
+    // mounted casters share the atlas but composite in their own depth band.
     const displayName = sunShaderName('EnemyMeshDisplayEntry');
-    this.display = new Phaser.GameObjects.Shader(scene, { name: displayName, shaderName: displayName, fragmentSource: CHARACTER_MESH_MASK }, 0, 0, 1, 1);
-    ownSunShader(this.display, displayName);
     const owner = this;
-    this.display.renderNode.run = function(context, object, parent): void {
-      runWithScopedBlend(this, () => owner.drawComposite(context), context, owner.solid ? Phaser.BlendModes.NORMAL : Phaser.BlendModes.MULTIPLY, object, parent);
+    const entry = (band: 'figures' | 'mounted'): Phaser.GameObjects.Shader => {
+      const display = new Phaser.GameObjects.Shader(scene, { name: displayName, shaderName: displayName, fragmentSource: CHARACTER_MESH_MASK }, 0, 0, 1, 1);
+      ownSunShader(display, displayName);
+      display.renderNode.run = function(context, object, parent): void {
+        runWithScopedBlend(this, () => owner.drawComposite(context, band), context, owner.solid ? Phaser.BlendModes.NORMAL : Phaser.BlendModes.MULTIPLY, object, parent);
+      };
+      display.setVisible(false);
+      scene.add.existing(display); registerGraphicsObject(scene, 'dynamicShadows', display);
+      return display;
     };
-    this.display.setDepth(ENEMY_SHADOW_DEPTH).setBlendMode(Phaser.BlendModes.MULTIPLY).setVisible(false).setName('enemy-mesh-shadows');
-    scene.add.existing(this.display); registerGraphicsObject(scene, 'dynamicShadows', this.display);
+    this.display = entry('figures').setDepth(ENEMY_SHADOW_DEPTH).setBlendMode(Phaser.BlendModes.MULTIPLY).setName('enemy-mesh-shadows');
+    this.mountedDisplay = entry('mounted').setDepth(MOUNTED_SHADOW_DEPTH).setBlendMode(Phaser.BlendModes.MULTIPLY).setName('mounted-mesh-shadows');
     const projectionName = sunShaderName('EnemyMeshProjection'); this.programNames.push(projectionName);
     this.projectionProbe = new EnemyMeshGpu(this.renderer, projectionName, ENEMY_MESH_VERTEX, CHARACTER_MESH_MASK,
       new Float32Array([0, 0, 0]), 3, new Uint16Array([0, 0, 0]), MASK_ATTRIBUTES, 1);
     const blurName = sunShaderName('EnemyMeshWorldBlur'); this.programNames.push(blurName);
     this.blurGpu = new EnemyMeshGpu(this.renderer, blurName, ENEMY_MESH_BLUR_VERTEX, ENEMY_MESH_BLUR,
       new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2, new Uint16Array([0, 1, 2, 0, 2, 3]),
-      ['inBounds', 'inTileAlpha', 'inFoot0', 'inFoot1', 'inFoot2', 'inFoot3'].map(name => ({ name, size: 4 })), CAPACITY);
+      DISPLAY_ATTRIBUTES, CAPACITY);
     for (const [axis, target, source] of [[0, this.horizontal, this.raw], [1, this.blurred, this.horizontal]] as const) {
       target.shader.drawingContext!.setAutoClear(true, false, false);
       target.shader.drawingContext!.setClearColor(0, 0, 0, 0);
@@ -144,11 +170,12 @@ export class EnemyMeshShadowRenderer {
     }
   }
   private readonly typesScratch = new Set<string>();
-  private readonly liveScratch = new Set<EnemyEntity>();
-  sync(enemies: readonly EnemyEntity[], visible: boolean): void {
+  private readonly liveScratch = new Set<MeshShadowCaster>();
+  sync(enemies: readonly MeshShadowCaster[], visible: boolean): void {
     if (this.destroyed) return;
     const start = performance.now(); this.active.clear(); this.count = this.draws = this.triangles = 0;
-    this.display.setVisible(false); for (const group of this.groups.values()) group.count = 0;
+    this.display.setVisible(false); this.mountedDisplay.setVisible(false); this.figureCount = 0;
+    for (const group of this.groups.values()) group.count = 0;
     // Scratch collections: this runs per frame for every enemy in large hordes.
     const types = this.typesScratch; types.clear();
     for (const enemy of enemies) if (enemy.getHp() > 0) types.add(meshIdOf(enemy));
@@ -167,8 +194,11 @@ export class EnemyMeshShadowRenderer {
       this.assignments.delete(enemy); this.free.push(slot);
     }
     live.clear();
+    // Figures first, then mounted casters: each band composites one contiguous instance range.
+    for (let band = 0; band < 2; band++) {
+    if (band === 1) this.figureCount = this.count;
     for (const enemy of enemies) {
-      if (!this.eligible(enemy)) continue;
+      if (!this.eligible(enemy) || Number(!!enemy.mountedShadow) !== band) continue;
       const asset = getPipelineAssetForTexture(enemy.getImageKey()), meshId = asset?.id ?? enemy.kind;
       const mesh = this.assets.ready.get(meshId); if (!mesh || this.prepared.get(meshId) !== mesh.asset.poses.length) continue;
       // A mesh belongs to the sheet revision it was baked from; a newer sheet (draft) keeps the ellipse.
@@ -185,25 +215,28 @@ export class EnemyMeshShadowRenderer {
       }
       let slot = this.assignments.get(enemy);
       if (slot === undefined) { slot = this.free.pop(); if (slot === undefined) continue; this.assignments.set(enemy, slot); }
-      this.active.add(enemy); this.writeInstance(mesh, pose, slot, s.alpha);
+      this.active.add(enemy); this.writeInstance(mesh, pose, slot, s.alpha, enemy.getShadowReceiverPlane?.() ?? 0);
+    }
     }
     this.releaseUnseen();
     if (this.count) {
       this.raw.draw(this.width, this.height); this.horizontal.draw(this.width, this.height); this.blurred.draw(this.width, this.height);
       this.atlasAllocated = true;
-      // Phaser culls the entry against the camera; its instance positions are already world-space.
-      this.display.setPosition(view.x + view.width / 2, view.y + view.height / 2).setSize(view.width, view.height).setVisible(true);
+      // Phaser culls the entries against the camera; their instance positions are already world-space.
+      for (const [display, count] of [[this.display, this.figureCount], [this.mountedDisplay, this.count - this.figureCount]] as const) {
+        display.setPosition(view.x + view.width / 2, view.y + view.height / 2).setSize(view.width, view.height).setVisible(count > 0);
+      }
     }
     this.cpuMs = performance.now() - start;
   }
-  private eligible(enemy: EnemyEntity): boolean {
+  private eligible(enemy: MeshShadowCaster): boolean {
     const s = enemy.sprite;
     return s.active && s.visible && s.alpha > 0 && !!s.scaleX && !!s.scaleY && enemy.getHp() > 0 && !enemy.isBurrowed();
   }
   private releaseUnseen(): void {
     for (const [enemy, slot] of this.assignments) if (!this.active.has(enemy)) { this.assignments.delete(enemy); this.free.push(slot); }
   }
-  private writeInstance(mesh: EnemyMeshData, pose: number, slot: number, alpha: number): void {
+  private writeInstance(mesh: EnemyMeshData, pose: number, slot: number, alpha: number, plane: number): void {
     const group = this.groups.get(`${mesh.asset.id}:${pose}`)!, m = this.matrix, b = this.bounds;
     const tx = slot % COLUMNS, ty = Math.floor(slot / COLUMNS), offset = group.count++ * MASK_WORDS;
     const data = group.data, display = this.displayData;
@@ -217,7 +250,8 @@ export class EnemyMeshShadowRenderer {
     display[d] = b[0]; display[d + 1] = b[1]; display[d + 2] = b[2]; display[d + 3] = b[3];
     display[d + 4] = tx; display[d + 5] = ty; display[d + 6] = alpha; display[d + 7] = softness;
     // A pooled tile may switch from a quadruped to a biped; clear unused contacts.
-    display.fill(0, d + 8, d + 24);
+    display.fill(0, d + 8, d + DISPLAY_WORDS);
+    display[d + 24] = plane;
     const feet = mesh.asset.contacts[pose].feet;
     for (let i = 0; i < feet.length; i++) {
       const foot = feet[i], p = foot.position, f = d + 8 + i * 4;
@@ -225,10 +259,11 @@ export class EnemyMeshShadowRenderer {
       display[f + 2] = 2.5 * m[10]; display[f + 3] = foot.groundWeight;
     }
   }
-  private drawComposite(context: Phaser.Renderer.WebGL.DrawingContext): void {
+  private drawComposite(context: Phaser.Renderer.WebGL.DrawingContext, band: 'figures' | 'mounted'): void {
     // Camera targets apply their viewport when composited, matching SpriteGPULayer's transform.
     const camera = context.camera!.getViewMatrix(!context.useCanvas); this.renderer.setProjectionMatrixFromDrawingContext(context);
-    this.composite.draw(context, this.displayData.subarray(0, this.count * DISPLAY_WORDS), this.count,
+    const first = band === 'figures' ? 0 : this.figureCount, count = band === 'figures' ? this.figureCount : this.count - this.figureCount;
+    this.composite.draw(context, this.displayData.subarray(first * DISPLAY_WORDS, (first + count) * DISPLAY_WORDS), count,
       [(this.solid ? this.raw : this.blurred).shader.texture!.get().source.glTexture!, this.receiver.texture.get().source.glTexture!], set => {
         set('uProjectionMatrix', this.renderer.projectionMatrix.val);
         set('uViewMatrix', [camera.a, camera.b, 0, camera.c, camera.d, 0, camera.tx, camera.ty, 1]);
@@ -236,10 +271,12 @@ export class EnemyMeshShadowRenderer {
         set('uStrength', this.strength); set('uDebugSolid', Number(this.solid)); setCloudUniforms(set, this.clouds);
       });
   }
-  handles(enemy: EnemyEntity): boolean { return this.active.has(enemy); }
+  handles(enemy: MeshShadowCaster): boolean { return this.active.has(enemy); }
   setDebugSolid(value: boolean): void { this.solid = value; }
   get activeCount(): number { return this.count; }
-  setVisible(value: boolean): void { this.display.setVisible(value && this.count > 0); }
+  setVisible(value: boolean): void {
+    this.display.setVisible(value && this.figureCount > 0); this.mountedDisplay.setVisible(value && this.count > this.figureCount);
+  }
   inspect() { return { activeInstances: this.count, allocatedSlots: this.assignments.size, tileSize: this.tileSize,
     readyTypes: [...this.assets.ready].filter(([id, data]) => this.prepared.get(id) === data.asset.poses.length).map(([id]) => id),
     prepared: Object.fromEntries(this.prepared), assets: this.assets.inspect(), costs: { cpuMs: this.cpuMs,
@@ -252,7 +289,7 @@ export class EnemyMeshShadowRenderer {
   destroy(): void {
     if (this.destroyed) return; this.destroyed = true;
     this.releaseWarmup(); this.projectionProbe.destroy();
-    this.display.destroy(); this.composite.destroy(); this.blurGpu.destroy(); for (const g of this.groups.values()) g.gpu.destroy();
+    this.display.destroy(); this.mountedDisplay.destroy(); this.composite.destroy(); this.blurGpu.destroy(); for (const g of this.groups.values()) g.gpu.destroy();
     this.groups.clear(); this.assignments.clear(); this.active.clear();
     this.blurred.destroy(); this.horizontal.destroy(); this.raw.destroy();
     const programs = this.renderer.shaderProgramFactory.programs as Record<string, Phaser.Renderer.WebGL.Wrappers.WebGLProgramWrapper>;
@@ -264,6 +301,6 @@ export class EnemyMeshShadowRenderer {
 }
 
 /** Mesh families are keyed by their runtime asset; an enemy kind resolves through the image it shows. */
-function meshIdOf(enemy: EnemyEntity): string {
+function meshIdOf(enemy: MeshShadowCaster): string {
   return getPipelineAssetForTexture(enemy.getImageKey())?.id ?? enemy.kind;
 }

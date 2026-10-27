@@ -92,7 +92,7 @@ export class BaseManager {
   private readonly structureViews: SpawnStructureView[] = [];
   /** The persistent core's fort art (GDD Rustikale Basis); null without a core or before its art loads. */
   private readonly fortRenderer: BaseFortRenderer | null;
-  private releaseTurretSilhouettes: (() => void) | null = null;
+  private releaseTurretCasters: (() => void) | null = null;
   /** Outline rects of the live outlined structures, rebuilt only when obstacleGeneration changes. */
   private structureRects: readonly StructureRect[] = [];
   private structureRectsGeneration = -1;
@@ -244,15 +244,16 @@ export class BaseManager {
 
   /**
    * Shadow system and particle backend lent by the World presentation: the fort's bearing and
-   * particles, and the sun-cast silhouettes of every mounted base turret.
+   * particles, and the mesh shadows of every mounted base turret.
    */
-  setFortPresentation(shadows: Pick<ShadowSystem, 'getLongCasterFrame' | 'turretSilhouettes'> | null,
+  setFortPresentation(shadows: Pick<ShadowSystem, 'getLongCasterFrame' | 'turretCasters'> | null,
     particles: BaseFortParticleFactory | null = null): void {
     this.fortRenderer?.setShadows(shadows);
     this.fortRenderer?.setParticles(particles);
-    this.releaseTurretSilhouettes?.();
-    this.releaseTurretSilhouettes = shadows?.turretSilhouettes.addSource(visit => {
-      for (const entity of this.entities) entity.forEachTurretSprite(visit);
+    this.releaseTurretCasters?.();
+    // Mounted base turrets stand on their base cells.
+    this.releaseTurretCasters = shadows?.turretCasters.addSource(visit => {
+      for (const entity of this.entities) entity.forEachTurretSprite(sprite => visit(sprite, true));
     }) ?? null;
   }
 
@@ -641,7 +642,7 @@ export class BaseManager {
     this.structureRenderer?.destroy();
     this.destructionRenderer?.destroy();
     this.fortRenderer?.destroy();
-    this.releaseTurretSilhouettes?.(); this.releaseTurretSilhouettes = null;
+    this.releaseTurretCasters?.(); this.releaseTurretCasters = null;
     for (const entity of this.entities) entity.destroy();
     this.entities.length = 0;
     this.byId.clear();

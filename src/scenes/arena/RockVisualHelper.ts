@@ -43,6 +43,8 @@ interface TurretVisualState {
   healthBar: HealthBarHandle | null;
   constructionId?: SyncedPlaceableRock['constructionId'];
   turretWeaponId?: SyncedPlaceableRock['turretWeaponId'];
+  /** Base-owned reward turrets stand on the base surface (the fort decks), not on the ground. */
+  raised: boolean;
 }
 
 const TEX_TURRET_AURA = '__placeable_turret_aura';
@@ -77,7 +79,7 @@ export class RockVisualHelper {
   ) {
     this.worldPort = worldPort ?? null;
     this.ensureTurretTextures();
-    shadowSystem?.turretSilhouettes.addSource(visit => { for (const visual of this.turretVisuals.values()) visit(visual.image); });
+    shadowSystem?.turretCasters.addSource(visit => { for (const visual of this.turretVisuals.values()) visit(visual.image, visual.raised); });
     this.rockPresentation = new RockPresentation(
       {
         scene,
@@ -419,7 +421,7 @@ export class RockVisualHelper {
     let visual = this.turretVisuals.get(rock.id);
     if (!visual) {
       visual = { ...createWorldTurretVisual(this.scene, weaponId, world.x, world.y, rock.ownerColor),
-        healthBar: null, constructionId: rock.constructionId, turretWeaponId: rock.turretWeaponId };
+        healthBar: null, constructionId: rock.constructionId, turretWeaponId: rock.turretWeaponId, raised: false };
       this.turretVisuals.set(rock.id, visual);
     }
 
@@ -432,6 +434,7 @@ export class RockVisualHelper {
       !!this.turretAnimations && !bridge.isHost() && rock.rotationSpeedDegPerSec !== undefined && weaponId !== 'TURRET_TESLA');
     visual.constructionId = rock.constructionId;
     visual.turretWeaponId = rock.turretWeaponId;
+    visual.raised = rock.ownership === 'base-owned';
 
     if (!indestructible && !this.healthBars?.isValid(visual.healthBar)) {
       visual.healthBar = this.healthBars?.bind(TURRET_HEALTH_BAR_STYLE, rock.hp, rock.maxHp,

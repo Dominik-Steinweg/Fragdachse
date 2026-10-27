@@ -36,9 +36,10 @@ def main():
     scene.frame_set(0); bpy.context.view_layer.update()
     scale = job['coordinates']['worldPxPerBlenderUnit']
     parts, excluded = candidates(scene, 0)
-    # The shared paw builder names biped and quadruped feet explicitly.
+    rigid = job.get('profile') == 'rigid'
+    # The shared paw builder names biped and quadruped feet explicitly; rigid assets have none.
     biped = any(p['ob'].name.startswith('left broad paw') for p in parts)
-    names = {'left_leg': 'left', 'right_leg': 'right'} if biped else {
+    names = {} if rigid else {'left_leg': 'left', 'right_leg': 'right'} if biped else {
         name: name for name in ['front_left', 'front_right', 'rear_left', 'rear_right']}
     legs = list(names)
     paws = {}
@@ -72,6 +73,7 @@ def main():
     mesh = emit(root, job['id'], np.stack(samples), proxy['triangles'], [p['index'] for p in job['poses']], audit)
     refs = dict(poses=reference, indices=save(root, 'reference/indices.bin', faces.tobytes()), vertexCount=len(points))
     result = dict(schema='fd-projected-enemy-mesh', version=1, status='diagnostic', id=job['id'],
+                  profile=job.get('profile', 'creature'),
                   revision=job['revision'], sourceRevision=job['sourceRevision'], coordinates=job['coordinates'],
                   poses=job['poses'], contacts=contacts, mesh=mesh, sourceFiles=job['sourceFiles'],
                   blenderVersion=bpy.app.version_string, reference=refs)

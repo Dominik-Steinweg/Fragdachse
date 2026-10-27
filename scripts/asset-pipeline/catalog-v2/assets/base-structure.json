@@ -3,6 +3,7 @@
   "label": "Rustic persistent base and outposts",
   "category": "construction",
   "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/base-fort-core.png",
   "targetSize": 352,
   "sourceSizes": [
     704
@@ -19,7 +20,7 @@
     "animation": "Static; fire, lanterns and windows are separate emission materials, chimneys and Kohten carry smoke sockets."
   },
   "requiredClips": [],
-  "production": "concept",
+  "production": "reference",
   "recipe": "base-structure",
   "model": {
     "style": "burg",

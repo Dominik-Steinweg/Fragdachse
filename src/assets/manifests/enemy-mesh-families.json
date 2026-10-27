@@ -39200,6 +39200,207 @@
           "render-passes.json": "e7b0c22cbc2e9c96bcafb2c454b2c8ace3e07cf44414e05401627b1ac9882016"
         }
       }
+    },
+    {
+      "id": "rocket",
+      "revision": "towers-r03",
+      "meshRevision": "enemy-mesh-rigid-r1",
+      "profile": "rigid",
+      "coordinates": {
+        "axes": "X-right,Y-south,Z-up",
+        "conversion": [
+          1,
+          -1,
+          1
+        ],
+        "groundZBlender": 0,
+        "pivot": [
+          0.5,
+          0.5
+        ],
+        "canvasWorldPx": 40,
+        "orthoScaleBlender": 2.8,
+        "worldPxPerBlenderUnit": 14.285714285714286,
+        "heightPolicy": "evaluated rigid geometry above its own ground plane"
+      },
+      "poses": [
+        {
+          "index": 0,
+          "blenderFrame": 0,
+          "clip": "rest",
+          "clipFrame": 0,
+          "sourceBeautySha256": "0e556cd89ef72ac0b7bfe1c5f6a99ed846ae77b49faa5f90eae313384cc3d938"
+        },
+        {
+          "index": 1,
+          "blenderFrame": 1,
+          "clip": "fire",
+          "clipFrame": 0,
+          "sourceBeautySha256": "919ef642d99a2929fec6f18130bf951b0613d2df0c455ab95d672fac14b39349"
+        },
+        {
+          "index": 2,
+          "blenderFrame": 2,
+          "clip": "fire",
+          "clipFrame": 1,
+          "sourceBeautySha256": "651adfc4a7ff9083ea4b6b67f12186b8a9a97e9842433fc80bae5fa951136880"
+        },
+        {
+          "index": 3,
+          "blenderFrame": 3,
+          "clip": "fire",
+          "clipFrame": 2,
+          "sourceBeautySha256": "2b1589ec270cb68a84cd1cc665893bcfdef184b9fc4e024bca763ddda841aec5"
+        },
+        {
+          "index": 4,
+          "blenderFrame": 4,
+          "clip": "fire",
+          "clipFrame": 3,
+          "sourceBeautySha256": "81a6bc0987c03779322380355c6c41eb9370198c13f5c67f2a059205603a6780"
+        },
+        {
+          "index": 5,
+          "blenderFrame": 5,
+          "clip": "fire",
+          "clipFrame": 4,
+          "sourceBeautySha256": "88984c45a28306d280a0725aa10ef050f663273f32355a930d2eaebabca87375"
+        },
+        {
+          "index": 6,
+          "blenderFrame": 6,
+          "clip": "fire",
+          "clipFrame": 5,
+          "sourceBeautySha256": "ee0a16a4d6990d8c6ff3ac40cb7aff7d4b0e20b0e3c1e4b8fa736b55a152650f"
+        },
+        {
+          "index": 7,
+          "blenderFrame": 7,
+          "clip": "fire",
+          "clipFrame": 6,
+          "sourceBeautySha256": "b7e094f62e3cd4be65d6aa5405ed3af49d4f40c9a182de1c26e00725b2b9f77c"
+        },
+        {
+          "index": 8,
+          "blenderFrame": 8,
+          "clip": "fire",
+          "clipFrame": 7,
+          "sourceBeautySha256": "cf3fb60e97fe1b8103d98880d4f372ff6cce380dadef4cbf03d0628e658b5db5"
+        }
+      ],
+      "contacts": [
+        {
+          "pose": 0,
+          "feet": []
+        },
+        {
+          "pose": 1,
+          "feet": []
+        },
+        {
+          "pose": 2,
+          "feet": []
+        },
+        {
+          "pose": 3,
+          "feet": []
+        },
+        {
+          "pose": 4,
+          "feet": []
+        },
+        {
+          "pose": 5,
+          "feet": []
+        },
+        {
+          "pose": 6,
+          "feet": []
+        },
+        {
+          "pose": 7,
+          "feet": []
+        },
+        {
+          "pose": 8,
+          "feet": []
+        }
+      ],
+      "provenance": {
+        "source": "selected-v2",
+        "sourceRevision": "towers-r03",
+        "blenderVersion": "5.2.1 LTS"
+      },
+      "mesh": {
+        "id": "rocket",
+        "encoding": "uint16-le-xyz-bounds",
+        "bounds": {
+          "min": [
+            -12.42776546702038,
+            -12.428465173160413,
+            0
+          ],
+          "max": [
+            16.960936733832284,
+            12.428238468876478,
+            12.905042244883457
+          ]
+        },
+        "vertexCount": 1990,
+        "triangleCount": 4000,
+        "poseIndices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "positions": {
+          "file": "assets/sprites/pipeline-v2/rocket/mesh/enemy-mesh-rigid-r1/rocket-positions-2e207d40627b9d1d005d7111238c52a1535568f302afb1192aa8552d7b47b3b9.bin",
+          "bytes": 107460,
+          "sha256": "2e207d40627b9d1d005d7111238c52a1535568f302afb1192aa8552d7b47b3b9",
+          "url": "assets/sprites/pipeline-v2/rocket/mesh/enemy-mesh-rigid-r1/rocket-positions-2e207d40627b9d1d005d7111238c52a1535568f302afb1192aa8552d7b47b3b9.bin?v=2e207d40627b9d1d005d7111238c52a1535568f302afb1192aa8552d7b47b3b9"
+        },
+        "indices": {
+          "file": "assets/sprites/pipeline-v2/rocket/mesh/enemy-mesh-rigid-r1/rocket-indices-8b567c1ed4def642592daaa10051a6e018199e388dcf8a6018e24be006bfdea2.bin",
+          "bytes": 24000,
+          "sha256": "8b567c1ed4def642592daaa10051a6e018199e388dcf8a6018e24be006bfdea2",
+          "encoding": "uint16-le-triangles",
+          "url": "assets/sprites/pipeline-v2/rocket/mesh/enemy-mesh-rigid-r1/rocket-indices-8b567c1ed4def642592daaa10051a6e018199e388dcf8a6018e24be006bfdea2.bin?v=8b567c1ed4def642592daaa10051a6e018199e388dcf8a6018e24be006bfdea2"
+        },
+        "topologySha256": "8b567c1ed4def642592daaa10051a6e018199e388dcf8a6018e24be006bfdea2",
+        "downloadBytes": 131460,
+        "gpuFloat32Bytes": 238920,
+        "quantizationMaxErrorWorld": [
+          0.00022422142519915055,
+          0.00018964449257676731,
+          0.00009845916109623451
+        ]
+      },
+      "images": {
+        "beauty160": {
+          "file": "assets/sprites/pipeline-v2/rocket/sheet.png",
+          "sha256": "38fc22a10d10fd150e31b575b3a2e3ea03531c78833a2e1b93b1a48ad3b234e6"
+        }
+      },
+      "materialEncoding": null,
+      "sourceManifestSha256": "5fdc21a76237b632260c495f8332f6df02f182de4157be5dd9f3eb0d24c00b64",
+      "sourceArchiveSha256": "0f0c60c12d426fbe5e60a30d4468952e09ffa6ef0914bca9c3fdac83613dab5a",
+      "inheritedEyeAnchorSource": null,
+      "validation": {
+        "fullSilhouettes": 729,
+        "minimumIou": 0.9930906096731464,
+        "minimumFineIou": 0.9948634642444487,
+        "materialMetrics": [],
+        "evidence": {
+          "candidate.blend": "18675520e0d4199b612506f3a9c41777fb495042597d13c0efaa572fc5c7586d",
+          "silhouette-review.json": "e7513e39bfa9a4e6e6eca4535f9bbdfa68107848ba9682d90363bfecc09e5db3"
+        }
+      }
     }
   ]
 }

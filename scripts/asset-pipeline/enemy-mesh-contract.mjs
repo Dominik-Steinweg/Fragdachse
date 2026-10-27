@@ -1,4 +1,8 @@
-/** Enemy-only contract. No dependency on the immutable 37-pose player manifest. */
+/**
+ * Projected mesh contract for selected V2 assets. Enemies use the `creature` profile (move/claw clips,
+ * paw contacts); other categories such as turrets use `rigid` (any clips, no contacts). No dependency
+ * on the immutable 37-pose player manifest.
+ */
 export const ENEMY_MESH_SCHEMA = 'fd-projected-enemy-mesh';
 export const ENEMY_MESH_BUDGET = Object.freeze({ minVertices: 1000, maxVertices: 2000, maxTriangles: 4000 });
 export const ENEMY_MESH_VIEWS = Object.freeze([20, 28, 35, 45, 60].flatMap(elevation =>
@@ -12,15 +16,19 @@ export function relativeMember(value) {
   return value;
 }
 
+export const meshProfile = render => render.category === 'enemy' ? 'creature' : 'rigid';
+
 export function enemyCoordinates(render) {
-  if (render.category !== 'enemy' || render.forward !== 'north'
-    || JSON.stringify(render.pivot) !== '[0.5,0.5]') throw Error('Enemy requires centered north-facing source');
+  const creature = meshProfile(render) === 'creature';
+  if ((creature && render.forward !== 'north') || JSON.stringify(render.pivot) !== '[0.5,0.5]')
+    throw Error(creature ? 'Enemy requires centered north-facing source' : 'Rigid mesh requires a centered source');
   const canvasWorldPx = render.targetSize * (render.displayScale ?? 1);
   if (![canvasWorldPx, render.orthoScale].every(v => Number.isFinite(v) && v > 0)) throw Error('Enemy scale missing');
   return { axes: 'X-right,Y-south,Z-up', conversion: [1, -1, 1], groundZBlender: 0,
     pivot: [0.5, 0.5], canvasWorldPx, orthoScaleBlender: render.orthoScale,
     worldPxPerBlenderUnit: canvasWorldPx / render.orthoScale,
-    heightPolicy: 'evaluated geometry includes attack root Z; never add the jump twice' };
+    heightPolicy: creature ? 'evaluated geometry includes attack root Z; never add the jump twice'
+      : 'evaluated rigid geometry above its own ground plane' };
 }
 
 export function enemyPoses(render) {
@@ -28,8 +36,8 @@ export function enemyPoses(render) {
   const clips = render.clips;
   if (!clips?.length || new Set(clips.map(c => c.name)).size !== clips.length) throw Error('Expected unique enemy clips');
   const move = clips.find(c => c.name === 'move'), claw = clips.find(c => c.name === 'claw');
-  if (!move?.loop || claw?.loop !== false || !(claw.markers?.strike > 0)
-    || !(claw.markers.impact > claw.markers.strike) || !(claw.markers.impact < claw.frames.length - 1))
+  if (meshProfile(render) === 'creature' && (!move?.loop || claw?.loop !== false || !(claw.markers?.strike > 0)
+    || !(claw.markers.impact > claw.markers.strike) || !(claw.markers.impact < claw.frames.length - 1)))
     throw Error('Unsupported enemy clip mapping');
   const mapped = clips.flatMap(c => c.frames);
   if (JSON.stringify(mapped) !== JSON.stringify(Array.from({length:render.frames.length-1},(_,i)=>i+1)))
@@ -64,6 +72,8 @@ export function validateEnemyMeshManifest(m) {
   if (m.schema !== ENEMY_MESH_SCHEMA || m.version !== 1 || !/^enemy-mesh-[a-z0-9-]+$/.test(m.revision))
     throw Error('Invalid enemy mesh manifest');
   if (!['diagnostic', 'awaiting-visual-review', 'reviewed-not-imported'].includes(m.status)) throw Error('Invalid enemy mesh status');
+  const rigid = m.profile === 'rigid';
+  if (m.profile !== undefined && !['creature', 'rigid'].includes(m.profile)) throw Error('Invalid mesh profile');
   const seenClips = new Set();
   if (!m.poses?.length || m.poses[0].clip !== 'rest' || m.poses[0].clipFrame !== 0 || m.poses.some((p, i) => {
     const previous = m.poses[i-1];
@@ -71,7 +81,7 @@ export function validateEnemyMeshManifest(m) {
     const invalid = p.index !== i || !Number.isFinite(p.blenderFrame) || !shaPattern.test(p.sourceBeautySha256)
       || !/^[a-z][a-z0-9-]*$/.test(p.clip) || (newClip ? seenClips.has(p.clip) || p.clipFrame !== 0 : p.clipFrame !== previous.clipFrame + 1);
     seenClips.add(p.clip); return invalid;
-  }) || !seenClips.has('move') || !seenClips.has('claw'))
+  }) || (!rigid && (!seenClips.has('move') || !seenClips.has('claw'))))
     throw Error('Incomplete enemy poses');
   const c = m.coordinates;
   if (c?.axes !== 'X-right,Y-south,Z-up' || JSON.stringify(c.pivot) !== '[0.5,0.5]'
@@ -91,7 +101,8 @@ export function validateEnemyMeshManifest(m) {
   if (mesh.positions.bytes !== m.poses.length * mesh.vertexCount * 6 || mesh.indices.bytes !== mesh.triangleCount * 6
     || mesh.topologySha256 !== mesh.indices.sha256) throw Error('Enemy binary size/topology mismatch');
   if (m.contacts?.length !== m.poses.length) throw Error('Missing pose contact anchors');
-  const legs = m.contacts[0]?.feet?.length === 2 ? ['left_leg', 'right_leg'] : ENEMY_LEGS;
+  // Rigid assets stand on their whole base; only creatures carry paw contacts.
+  const legs = rigid ? [] : m.contacts[0]?.feet?.length === 2 ? ['left_leg', 'right_leg'] : ENEMY_LEGS;
   for (const [i, contact] of m.contacts.entries()) {
     if (contact.pose !== i || !Array.isArray(contact.feet) || contact.feet.length !== legs.length
       || contact.feet.some((f, j) => f.leg !== legs[j] || !Array.isArray(f.position) || f.position.length !== 3
