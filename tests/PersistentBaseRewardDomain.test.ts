@@ -105,7 +105,9 @@ describe('PersistentBaseRewardState', () => {
   });
 
   it('rejects duplicate, unknown and runtime-shaped placement data', () => {
-    const base = { schemaVersion: 1, revision: 1, placements: [] };
+    const base = { schemaVersion: 2, revision: 1, quarterTurns: 0, placements: [] };
+    expect(sanitizePersistentBaseRewardState({ ...base, quarterTurns: 4 })).toBeNull();
+    expect(sanitizePersistentBaseRewardState({ ...base, quarterTurns: undefined })).toBeNull();
     expect(sanitizePersistentBaseRewardState({ ...base, placements: [
       { rewardId: 'unknown', relativeGridX: 0, relativeGridY: 0, angle: 0 },
     ] })).toBeNull();
@@ -118,8 +120,9 @@ describe('PersistentBaseRewardState', () => {
       runtimeId: 17, hp: 100,
     }] });
     expect(sanitized).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       revision: 1,
+      quarterTurns: 0,
       placements: [{ rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 0 }],
     });
   });

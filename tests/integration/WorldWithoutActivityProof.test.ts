@@ -466,7 +466,7 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
         placed!,
         construction,
         construction.footprint,
-        anchor,
+        { anchor, quarterTurns: 0 },
         buildArea,
       )).toMatchObject({ origin: 'new' });
       const confirmed = contributionSession.completeTransaction('commit', (id) => hostPlacement.hasRuntimeRock(id));
@@ -523,7 +523,7 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
         repositioned!,
         construction,
         construction.footprint,
-        anchor,
+        { anchor, quarterTurns: 0 },
         buildArea,
       )).toMatchObject({ origin: 'new' });
       const repositionedConfirmed = contributionSession.completeTransaction('commit', (id) => hostPlacement.hasRuntimeRock(id));

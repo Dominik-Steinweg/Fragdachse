@@ -99,7 +99,7 @@ describe('destructible persistent reward lifetime', () => {
     rewards.placeReward(record);
     const contributions = new PersistentBaseContributionStore();
     const binding = new PersistentBaseWorldBinding({ finalizeRuntimeObjects: () => {}, releaseRewardRuntime: () => {} });
-    const site = { baseId: 'base', anchor: { gridX: 10, gridY: 10 }, orientation: 'open-left', buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA } as WorldPersistentBaseSite;
+    const site = { baseId: 'base', anchor: { gridX: 10, gridY: 10 }, buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA } as WorldPersistentBaseSite;
     let materializer: PersistentBaseWorldMaterializer;
     const construction = new ConstructionWorldRuntime({ placementSystem: placement,
       rockVisualHelper: { removePlaceableRockVisual: () => {}, updatePlaceableRock: () => {} },
@@ -139,5 +139,53 @@ describe('destructible persistent reward lifetime', () => {
     expect(placement.getAllRuntimeRocks()).toHaveLength(1);
     expect(placement.getAllRuntimeRocks()[0]).toMatchObject({ kind: 'watchtower', gridX: 10, gridY: 10, hp: COOP_DEFENSE_CONSTRUCTIONS.watchtower.maxHp });
     expect(placement.getAllRuntimeRocks()[0].id).not.toBe(tower.id);
+  });
+});
+
+describe('host base rotation', () => {
+  it('moves rewards, personal constructions and their start angles to the turned cells', () => {
+    const placement = new PlacementSystem({ seed: 1, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: [] },
+      new RockGridIndex([]), { getAllPlayers: () => [] } as never, resolveActiveArenaWorldMetrics());
+    const rewards = new PersistentBaseRewardStore();
+    rewards.placeReward({ rewardId: 'base_watchtower', relativeGridX: 1, relativeGridY: 1, angle: 0 });
+    const contributions = new PersistentBaseContributionStore();
+    contributions.offerContribution({ schemaVersion: 1, ownerId: 'owner', revision: 1, constructions: [{
+      persistentId: 'wall', tool: { kind: 'construction', id: 'rock_barrier' }, relativeGridX: 2, relativeGridY: -2, angle: 0.5, placementOrder: 0,
+    }] });
+    const binding = new PersistentBaseWorldBinding({ finalizeRuntimeObjects: () => {}, releaseRewardRuntime: () => {} });
+    const site = { baseId: 'base', anchor: { gridX: 10, gridY: 10 }, buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA } as WorldPersistentBaseSite;
+    const materializer = new PersistentBaseWorldMaterializer({
+      binding, contributions, rewards, placementSystem: placement, powerUpSystem: null, baseManager: null,
+      getSite: () => site, isHost: () => true, getMapId: () => '18',
+      getLocalOwnerId: () => 'owner', resolvePlayerIdForOwner: () => 'player', getPlayerColor: () => 0,
+      rockVisualHelper: { gridToWorld: (x, y) => ({ x, y }), materializePlaceableRock: () => {} },
+      construction: { getCapacity: () => 20, getBuildRevision: () => 0, getOwnership: () => 'host-persistent',
+        resolveRestoreTools: () => [{ id: 'rock_barrier', footprint: [{ dx: 0, dy: 0 }], capacityCost: 1, unlocked: true, active: true } as never],
+        materializeRestoreCandidate: (candidate, player, color, ownership) => placement.materializePersistentPlaceable(
+          COOP_DEFENSE_CONSTRUCTIONS.rock_barrier, candidate.gridX, candidate.gridY, candidate.angle, player, color, ownership),
+        materializeRewardConstruction: (id, reward, x, y, angle, owner, color) => placement.materializePersistentBaseReward(COOP_DEFENSE_CONSTRUCTIONS[id], reward, x, y, angle, owner, color),
+        releaseRuntime: () => {},
+      },
+      emitRestoreAdded: () => {}, emitGridChanged: () => {}, onDiagnosticEvent: () => {},
+    });
+    binding.setMaterializer(materializer);
+    const kinds = () => Object.fromEntries(placement.getAllRuntimeRocks().map((rock) => [rock.kind, rock]));
+
+    materializer.reconcile();
+    expect(kinds().watchtower).toMatchObject({ gridX: 11, gridY: 11 });
+    expect(kinds().rock).toMatchObject({ gridX: 12, gridY: 8, angle: 0.5 });
+
+    // One clockwise quarter turn of the whole base: canonical (x, y) stands at world (-y, x).
+    rewards.replaceCommittedState({ ...rewards.getState(), revision: rewards.getState().revision + 1, quarterTurns: 1 });
+    materializer.reconcile();
+
+    expect(placement.getAllRuntimeRocks()).toHaveLength(2);
+    expect(kinds().watchtower).toMatchObject({ gridX: 8, gridY: 11 });
+    expect(kinds().rock).toMatchObject({ gridX: 12, gridY: 12 });
+    expect(kinds().rock.angle).toBeCloseTo(0.5 + Math.PI / 2);
+    expect(placement.getRuntimeRockAt(12, 8)).toBeUndefined();
+    // The stored documents stay canonical.
+    expect(rewards.getState().placements[0]).toMatchObject({ relativeGridX: 1, relativeGridY: 1 });
+    expect(contributions.getContribution('owner')!.constructions[0]).toMatchObject({ relativeGridX: 2, relativeGridY: -2, angle: 0.5 });
   });
 });

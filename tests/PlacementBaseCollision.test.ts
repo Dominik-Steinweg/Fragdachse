@@ -400,7 +400,7 @@ describe('PlacementSystem Coop-Defense base collision contract', () => {
     const materializeCheck = vi.spyOn(placement, 'canMaterializeCells');
     const toolsById = new Map(tools.map((tool) => [tool.id, tool] as const));
     const result = mergePersistentBaseComposite({
-      anchor: { gridX: 10, gridY: 10 },
+      frame: { anchor: { gridX: 10, gridY: 10 }, quarterTurns: 0 },
       buildArea: { kind: 'radius', radiusCells: 5 },
       hostContribution: {
         schemaVersion: 1,

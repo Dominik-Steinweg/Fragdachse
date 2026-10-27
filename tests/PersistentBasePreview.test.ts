@@ -33,12 +33,11 @@ describe('Persistent-Base-Vorschau – Map 1 Authoring', () => {
     expect(preview).toEqual({
       checkpointId: 'final-extraction',
       anchor: { gridX: 280, gridY: 14 },
-      orientation: 'open-left',
       buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA,
     });
   });
 
-  it('weist unbekannte Checkpoints und Ausrichtungen an der Authoring-Grenze zurück', () => {
+  it('weist unbekannte Checkpoints und jede Ausrichtung an der Authoring-Grenze zurück', () => {
     const map = getCoopDefenseMapConfig('1');
     expect(() => normalizeCoopDefenseMapConfig({
       ...rawMap,
@@ -46,8 +45,8 @@ describe('Persistent-Base-Vorschau – Map 1 Authoring', () => {
     } as unknown as CoopDefenseMapConfig)).toThrow(/unknown checkpoint/);
     expect(() => normalizeCoopDefenseMapConfig({
       ...rawMap,
-      persistentBasePreview: { checkpointId: 'final-extraction', orientation: 'diagonal' as never },
-    } as unknown as CoopDefenseMapConfig)).toThrow(/unknown orientation/);
+      persistentBasePreview: { checkpointId: 'final-extraction', orientation: 'open-left' as never },
+    } as unknown as CoopDefenseMapConfig)).toThrow(/cannot author an orientation/);
   });
 
   it('transportiert die Vorschau als Activity und nicht als World-Inhalt', () => {
@@ -63,7 +62,7 @@ describe('Persistent-Base-Vorschau – Map 1 Authoring', () => {
 describe('Persistent-Base-Vorschau – Presentation', () => {
   it('verwendet exakt den kanonischen Kern und den zentralen Baubereich', () => {
     const preview = resolveCoopDefenseMapPersistentBasePreview(getCoopDefenseMapConfig('1'))!;
-    const core = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation);
+    const core = resolvePersistentBaseCoreCells(preview.anchor);
 
     expect(core.filter((cell) => cell.domain === 'base-surface')).toHaveLength(12);
     expect(core.filter((cell) => cell.domain === 'courtyard-build-area')).toHaveLength((PERSISTENT_BASE_CORE_SIZE_CELLS - 2) ** 2);
@@ -95,7 +94,7 @@ describe('Persistent-Base-Vorschau – Presentation', () => {
     expect(renderer.getSurfaceImages()).toHaveLength(12);
     expect(images.some(image => image.key === 'test-base-accent')).toBe(true);
     expect(scene.events.listenerCount('postupdate')).toBe(1);
-    const surfaceCells = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation)
+    const surfaceCells = resolvePersistentBaseCoreCells(preview.anchor)
       .filter((cell) => cell.domain === 'base-surface');
     const grounding = images.filter((image) => image.key.startsWith('base-grounding-'));
     expect(grounding.map((image) => image.key)).toEqual(

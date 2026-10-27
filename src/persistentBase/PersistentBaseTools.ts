@@ -26,6 +26,8 @@ export type PersistentToolUnavailableReason = 'class-not-allowed' | 'mode-not-al
 export interface PersistentRestoreCandidate {
   readonly blueprint: PersistentConstruction;
   readonly tool: PersistentRestoreToolDefinition;
+  /** Weltlage im Bezugsrahmen der Basis; der Blueprint selbst bleibt kanonisch. */
   readonly gridX: number;
   readonly gridY: number;
+  readonly angle: number;
 }

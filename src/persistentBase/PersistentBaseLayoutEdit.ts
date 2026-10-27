@@ -42,7 +42,7 @@ export function applyPersistentBaseLayoutEdit(current: PersistentPlayerBaseContr
     for (const cell of footprint ?? []) {
       const x = entry.relativeGridX + cell.dx, y = entry.relativeGridY + cell.dy;
       if (moved && (!isCellInsidePersistentBaseBuildArea(x, y, area)
-        || resolvePersistentBaseCell({ gridX: 0, gridY: 0 }, x, y, undefined, area)?.domain === 'base-surface')) {
+        || resolvePersistentBaseCell({ gridX: 0, gridY: 0 }, x, y, area)?.domain === 'base-surface')) {
         return { ok: false, reason: 'placement' };
       }
       const key = `${x},${y}`;

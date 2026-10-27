@@ -59,8 +59,8 @@ function startMission(): PersistentBaseRoomSession {
   const session = new PersistentBaseRoomSession();
   const store = session.contributions;
   session.beginTransaction(MISSION);
-  store.registerNew('owner-host', runtime(1, 'host', 11), tool, footprint, anchor, buildArea);
-  store.registerNew('owner-guest', runtime(2, 'guest-a', 9), tool, footprint, anchor, buildArea);
+  store.registerNew('owner-host', runtime(1, 'host', 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
+  store.registerNew('owner-guest', runtime(2, 'guest-a', 9), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
   return session;
 }
 
@@ -148,7 +148,7 @@ describe('persistent base round outcome', () => {
         }],
       });
       session.beginTransaction(MISSION);
-      store.registerNew('owner-host', runtime(3, 'host', 9), tool, footprint, anchor, buildArea);
+      store.registerNew('owner-host', runtime(3, 'host', 9), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
 
       expect(applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
         session: session,
@@ -180,8 +180,8 @@ describe('persistent base round outcome', () => {
       expect(openMission?.isOpen, String(conclusion)).toBe(false);
 
       session.beginTransaction(MISSION);
-      contributions.registerNew('owner-host', runtime(1, 'host', 11), tool, footprint, anchor, buildArea);
-      contributions.registerNew('owner-guest', runtime(2, 'guest-a', 9), tool, footprint, anchor, buildArea);
+      contributions.registerNew('owner-host', runtime(1, 'host', 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
+      contributions.registerNew('owner-guest', runtime(2, 'guest-a', 9), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
       expect(rewards.dismantleReward('base_health_pedestal'), String(conclusion)).toBe(true);
       const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
         session,
@@ -236,7 +236,7 @@ describe('persistent base round outcome', () => {
         const session = startMissionFromCommittedConstruction();
         const store = session.contributions;
         if (mutation === 'build') {
-          store.registerNew('owner-host', runtime(11, 'host', 11), tool, footprint, anchor, buildArea);
+          store.registerNew('owner-host', runtime(11, 'host', 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
         } else if (mutation === 'dismantle') {
           expect(store.removeByRuntimeId(10), `${mutation}/${conclusion}`).toBe(true);
         }
@@ -332,7 +332,7 @@ describe('persistent base round outcome', () => {
     expect(store.getRuntimeMetadata(1)).toBeNull();
 
     // Und ein Sieg im zweiten Lauf schreibt genau eine Revision fort, nicht zwei.
-    store.registerNew('owner-host', runtime(3, 'host', 9), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-host', runtime(3, 'host', 9), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
     const confirmed = applyPersistentBaseRoundOutcome('commit', {
       session,
       isRuntimeObjectAlive: () => true,

@@ -73,7 +73,7 @@ export class PersistentBaseEditorModel {
       const cx = x + cell.dx, cy = y + cell.dy;
       if (!isCellInsidePersistentBaseBuildArea(cx, cy, this.area)) return 'outside';
       if (object.kind === 'construction'
-        && resolvePersistentBaseCell({ gridX: 0, gridY: 0 }, cx, cy, undefined, this.area)?.domain === 'base-surface') return 'surface';
+        && resolvePersistentBaseCell({ gridX: 0, gridY: 0 }, cx, cy, this.area)?.domain === 'base-surface') return 'surface';
       if (occupied.has(`${cx},${cy}`)) return 'occupied';
     }
     return null;

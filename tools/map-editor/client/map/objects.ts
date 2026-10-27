@@ -3,7 +3,6 @@ import { CELL_SIZE } from '../../../../src/config';
 import { resolveCoopDefenseWorldMetrics } from '../../../../src/world/WorldMetrics';
 import { resolveCoopDefenseBasePlacement } from '../../../../src/arena/BaseRegistry';
 import { buildPersistentBaseCoreBaseConfig } from '../../../../src/persistentBase/PersistentBaseCore';
-import { DEFAULT_PERSISTENT_BASE_ORIENTATION, type PersistentBaseOrientation } from '../../../../src/persistentBase/PersistentBaseCore';
 import { COOP_DEFENSE_TUTORIAL_PANEL_WIDTH, COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS, getCoopDefenseTutorialPanelHeight, getCoopDefenseTutorialPanelCenterX, getCoopDefenseTutorialPanelTopY, getCoopDefenseTutorialBackingRegion } from '../../../../src/config/coopDefenseTutorial';
 import { getMapTutorial, getPowerUpName } from '../../../../src/i18n/contentPresentation';
 import { geometryRevision } from '../preview/PreviewController';
@@ -116,7 +115,7 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft, g
   });
   if (draft.persistentBase) {
     const site = object(draft.persistentBase), anchor = object(site.anchor);
-    const config = buildPersistentBaseCoreBaseConfig({ baseId: String(site.baseId), anchor: { gridX: Number(anchor.gridX), gridY: Number(anchor.gridY) }, orientation: (site.orientation ?? DEFAULT_PERSISTENT_BASE_ORIENTATION) as PersistentBaseOrientation });
+    const config = buildPersistentBaseCoreBaseConfig({ baseId: String(site.baseId), anchor: { gridX: Number(anchor.gridX), gridY: Number(anchor.gridY) } });
     const p = resolveCoopDefenseBasePlacement(config, metrics);
     items.push({ id: 'persistent-base', label: 'Persistenter Basiskern', reservationRadius: MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS, path: ['persistentBase', 'anchor'], layer: 'structures', kind: 'base', x: p.minGridX, y: p.minGridY, w: p.width, h: p.height, anchorX: Number(anchor.gridX), anchorY: Number(anchor.gridY), cells: p.cells.map(c => ({ gridX: p.minGridX + c.gridX, gridY: p.minGridY + c.gridY })) });
   }

@@ -1,5 +1,6 @@
 import { resolvePersistentRewardWorldCell, getPersistentBaseRewardCells } from '../src/persistentBase/PersistentBasePlacementRules';
-import { PERSISTENT_BASE_ORIENTATIONS, rotatePersistentBaseCoreOffset, DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
+import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
+import { rotatePersistentBaseOffset, type PersistentBaseQuarterTurns } from '../src/persistentBase/PersistentBaseFrame';
 import { getConstructionCells } from '../src/systems/ConstructionGeometry';
 import { describe, expect, it } from 'vitest';
 import { PersistentBaseEditorModel, getMissedBaseRewards } from '../src/persistentBase/PersistentBaseEditorModel';
@@ -145,15 +146,15 @@ describe('watchtower editor footprint', () => {
   });
 });
 
-it('materializes the entire canonical tower footprint correctly in every site orientation', () => {
+it('materializes the entire canonical tower footprint correctly in every base rotation', () => {
   const placement = { rewardId: 'base_watchtower' as const, relativeGridX: 0, relativeGridY: 1 };
-  for (const orientation of PERSISTENT_BASE_ORIENTATIONS) {
-    const site = { anchor: { gridX: 20, gridY: 20 }, orientation, buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA };
-    const cell = resolvePersistentRewardWorldCell(site, placement)!;
+  for (const quarterTurns of [0, 1, 2, 3] as PersistentBaseQuarterTurns[]) {
+    const frame = { anchor: { gridX: 20, gridY: 20 }, quarterTurns };
+    const cell = resolvePersistentRewardWorldCell(frame, DEFAULT_PERSISTENT_BASE_BUILD_AREA, placement)!;
     const actual = getConstructionCells({ ...cell, constructionId: 'watchtower' });
     const expected = getPersistentBaseRewardCells(placement).map(c => {
-      const offset = rotatePersistentBaseCoreOffset(c.gridX, c.gridY, orientation);
-      return { gridX: site.anchor.gridX + offset.relativeGridX, gridY: site.anchor.gridY + offset.relativeGridY };
+      const offset = rotatePersistentBaseOffset(c.gridX, c.gridY, quarterTurns);
+      return { gridX: frame.anchor.gridX + offset.dx, gridY: frame.anchor.gridY + offset.dy };
     });
     expect(new Set(actual.map(c => JSON.stringify(c)))).toEqual(new Set(expected.map(c => JSON.stringify(c))));
   }

@@ -60,21 +60,24 @@ describe('Persistent-Base-Rewards – V5-Persistenz', () => {
 
   it('rejects unknown and unowned placements, then round-trips a valid host state', () => {
     expect(setStoredPersistentBaseRewardState({
-      schemaVersion: 1,
+      schemaVersion: 2,
       revision: 1,
+      quarterTurns: 0,
       placements: [{ rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 0 }],
     })).toBe(false);
     expect(getStoredPersistentBaseRewardState()).toEqual(DEFAULT_PERSISTENT_BASE_REWARD_STATE);
 
     grantStoredPersistentBaseRewards(['base_health_pedestal'] as const);
     expect(setStoredPersistentBaseRewardState({
-      schemaVersion: 1,
+      schemaVersion: 2,
       revision: 1,
+      quarterTurns: 0,
       placements: [{ rewardId: 'base_health_pedestal', relativeGridX: 2, relativeGridY: -1, angle: 0.5 }],
     })).toBe(true);
     expect(setStoredPersistentBaseRewardState({
-      schemaVersion: 1,
+      schemaVersion: 2,
       revision: 1,
+      quarterTurns: 0,
       placements: [{ rewardId: 'base_health_pedestal', relativeGridX: 9, relativeGridY: 9, angle: 0 }],
     })).toBe(false);
 
@@ -91,7 +94,7 @@ describe('Persistent-Base-Rewards – V5-Persistenz', () => {
 
   it('saves, reloads and restores placements of expansion-derived Dawn rewards without storing them (D-46)', () => {
     const rewardId = 'base_plasma_turret_dawn_1';
-    const state = { schemaVersion: 1 as const, revision: 1,
+    const state = { schemaVersion: 2 as const, revision: 1, quarterTurns: 0 as const,
       placements: [{ rewardId, relativeGridX: 3, relativeGridY: 1, angle: 0 }] };
     expect(setStoredPersistentBaseRewardState(state)).toBe(false);
     expect(updateStoredDawnProgress(draft => { draft.expansionLevel = 5; })).toBe(true);
@@ -114,7 +117,7 @@ describe('Persistent-Base-Rewards – V5-Persistenz', () => {
 
   it('round-trips a watchtower placement with its fixed orientation', () => {
     grantStoredPersistentBaseRewards(['base_watchtower']);
-    expect(setStoredPersistentBaseRewardState({ schemaVersion: 1, revision: 1, placements: [
+    expect(setStoredPersistentBaseRewardState({ schemaVersion: 2, revision: 1, quarterTurns: 3, placements: [
       { rewardId: 'base_watchtower', relativeGridX: 0, relativeGridY: 0, angle: 2 },
     ] })).toBe(true);
     const exported = exportStoredGameProgressJson();
@@ -123,6 +126,26 @@ describe('Persistent-Base-Rewards – V5-Persistenz', () => {
     expect(getStoredPersistentBaseRewardState().placements).toEqual([
       { rewardId: 'base_watchtower', relativeGridX: 0, relativeGridY: 0, angle: 0 },
     ]);
+    // The host's base rotation belongs to the same document and survives export and import.
+    expect(getStoredPersistentBaseRewardState().quarterTurns).toBe(3);
+  });
+
+  it('migrates a reward document without base rotation as an unturned base', () => {
+    grantStoredPersistentBaseRewards(['base_health_pedestal']);
+    const exported = JSON.parse(exportStoredGameProgressJson());
+    exported.progress.coopDefense.persistentBaseRewardState = {
+      schemaVersion: 1,
+      revision: 3,
+      placements: [{ rewardId: 'base_health_pedestal', relativeGridX: 1, relativeGridY: 0, angle: 0.5 }],
+    };
+    resetStoredCoopDefenseCharacter();
+    expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
+    expect(getStoredPersistentBaseRewardState()).toEqual({
+      schemaVersion: 2,
+      revision: 3,
+      quarterTurns: 0,
+      placements: [{ rewardId: 'base_health_pedestal', relativeGridX: 1, relativeGridY: 0, angle: 0.5 }],
+    });
   });
 
   it('rejects V3 and incomplete or cross-document V5 imports without backfill', () => {

@@ -59,7 +59,7 @@ const singleCellTool: PersistentCompositeTool = { footprint: [{ dx: 0, dy: 0 }],
 
 function merge(overrides: Partial<PersistentBaseCompositeMergeInput> = {}) {
   return mergePersistentBaseComposite({
-    anchor,
+    frame: { anchor, quarterTurns: 0 },
     buildArea,
     hostContribution: null,
     resolveTool: () => singleCellTool,

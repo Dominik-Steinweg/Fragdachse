@@ -87,7 +87,7 @@ describe('Persoenlicher Basisbeitrag – Angebot ueber die Raumgrenze', () => {
       store.offerContribution(received!);
 
       const result = mergePersistentBaseComposite({
-        anchor,
+        frame: { anchor, quarterTurns: 0 },
         buildArea,
         hostContribution: store.getContribution('owner-b'),
         guestContributions: [store.getContribution('owner-a')!],
@@ -128,7 +128,7 @@ describe('Persoenlicher Basisbeitrag – Angebot ueber die Raumgrenze', () => {
       store.offerContribution(host.getPlayerPersistentBaseContribution(clientId)!);
 
       const result = mergePersistentBaseComposite({
-        anchor,
+        frame: { anchor, quarterTurns: 0 },
         buildArea,
         hostContribution: store.getContribution('owner-b'),
         guestContributions: [store.getContribution('owner-a')!],

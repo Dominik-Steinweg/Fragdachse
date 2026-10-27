@@ -99,7 +99,6 @@ function testSite(): WorldPersistentBaseSite {
       powerUpPedestals: [],
     },
     anchor: { ...ANCHOR },
-    orientation: 'open-left',
     areaStage: 0,
     buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA,
   };
@@ -295,6 +294,7 @@ function useClientPreviewState(
   vi.spyOn(bridge, 'getPersistentBaseRewardSessionState').mockReturnValue({
     worldRevision: WORLD_REVISION,
     revision: 1,
+    quarterTurns: 0,
     availableRewardIds: ['base_health_pedestal'],
     placements: [],
   } as never);
@@ -869,7 +869,7 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
     const source = placementSystem.materializePersistentPlaceable(definition,
       cell.gridX, cell.gridY, 0, playerId, 0xffffff, 'host-persistent')!;
     contributionStore.registerNew(playerId, source, { kind: 'construction', id: definition.id },
-      definition.footprint, harness.site.anchor, harness.site.buildArea);
+      definition.footprint, { anchor: harness.site.anchor, quarterTurns: 0 }, harness.site.buildArea);
     persistentBaseSession.bindPlayerOwner(playerId, playerId);
     const before = worldCellCenter(METRICS, source.gridX, source.gridY);
     energyInjectorSystem.applyConstructionEffect(String(source.id), playerId, before.x, before.y,
@@ -906,7 +906,7 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
     const source = placementSystem.materializePersistentPlaceable(definition,
       cell.gridX, cell.gridY, 0, playerId, 0xffffff, 'host-persistent')!;
     contributionStore.registerNew(playerId, source, { kind: 'construction', id: definition.id },
-      definition.footprint, harness.site.anchor, harness.site.buildArea);
+      definition.footprint, { anchor: harness.site.anchor, quarterTurns: 0 }, harness.site.buildArea);
     const before = worldCellCenter(METRICS, source.gridX, source.gridY);
     energyInjectorSystem.applyConstructionEffect(String(source.id), playerId, before.x, before.y,
       definition.energyInjectorEffect!,
@@ -931,7 +931,7 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
     const { coordinator, placementSystem, contributionStore, persistentBaseSession, playerId } = harness;
     const source = placeOwnConstruction(harness, playerId, 0, 0);
     contributionStore.registerNew(playerId, source, { kind: 'construction', id: 'rock_barrier' },
-      getCoopDefenseConstructionDefinition('rock_barrier').footprint, harness.site.anchor, harness.site.buildArea);
+      getCoopDefenseConstructionDefinition('rock_barrier').footprint, { anchor: harness.site.anchor, quarterTurns: 0 }, harness.site.buildArea);
     persistentBaseSession.bindPlayerOwner(playerId, playerId);
     const contribution = contributionStore.getCommittedContribution(playerId)!;
     coordinator.ctx.playerManager.getPlayer = () => null;
@@ -1025,7 +1025,7 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
     const { coordinator, contributionStore, persistentBaseSession, placementSystem, playerId, site } = harness;
     const source = placeOwnConstruction(harness, playerId, 0, 0);
     contributionStore.registerNew(playerId, source, { kind: 'construction', id: 'rock_barrier' },
-      getCoopDefenseConstructionDefinition('rock_barrier').footprint, site.anchor, site.buildArea);
+      getCoopDefenseConstructionDefinition('rock_barrier').footprint, { anchor: site.anchor, quarterTurns: 0 }, site.buildArea);
     const baseline = contributionStore.getCommittedContribution(playerId)!;
     const identity = { worldRevision: WORLD_REVISION, activityRevision: ACTIVITY_A_REVISION };
     persistentBaseSession.beginTransaction(identity);
@@ -1050,7 +1050,7 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
     const { coordinator, placementSystem, contributionStore, playerId } = harness;
     const source = placeOwnConstruction(harness, playerId, 0, 0);
     contributionStore.registerNew(playerId, source, { kind: 'construction', id: 'rock_barrier' },
-      getCoopDefenseConstructionDefinition('rock_barrier').footprint, harness.site.anchor, harness.site.buildArea);
+      getCoopDefenseConstructionDefinition('rock_barrier').footprint, { anchor: harness.site.anchor, quarterTurns: 0 }, harness.site.buildArea);
     placementSystem.applyDamage(source.id, 60);
     const hp = placementSystem.getRuntimeRock(source.id)!.hp;
     coordinator.persistentBaseWorldBinding.reconcile =

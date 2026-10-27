@@ -171,6 +171,7 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
       host.publishPersistentBaseRewardSessionState({
         worldRevision: 404,
         revision: 2,
+        quarterTurns: 1,
         availableRewardIds: ['base_spore_turret', 'base_health_pedestal', 'base_watchtower'],
         placements: [{
           rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0.5,
@@ -181,6 +182,7 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
       expect(client.getPersistentBaseRewardSessionState()).toEqual({
         worldRevision: 404,
         revision: 2,
+        quarterTurns: 1,
         availableRewardIds: ['base_spore_turret', 'base_health_pedestal', 'base_watchtower'],
         placements: [{
           rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0.5,
@@ -191,6 +193,7 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
       host.publishPersistentBaseRewardSessionState({
         worldRevision: 404,
         revision: 1,
+        quarterTurns: 0,
         availableRewardIds: ['base_spore_turret'],
         placements: [],
       });
@@ -213,6 +216,7 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
       const state = {
         worldRevision: 406,
         revision: 2,
+        quarterTurns: 0 as const,
         availableRewardIds: ['base_health_pedestal'] as PersistentBaseRewardId[],
         placements: [],
       };

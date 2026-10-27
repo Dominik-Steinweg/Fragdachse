@@ -38,7 +38,7 @@ function setup(stage: PersistentBaseAreaStage | undefined, classId: CoopDefenseC
   vi.spyOn(bridge, 'isHost').mockReturnValue(true);
   vi.spyOn(bridge, 'publishUtilityCooldownUntil').mockImplementation(() => {});
   vi.spyOn(bridge, 'recordConstructionBuilt').mockImplementation(() => {});
-  const site = { baseId: 'base', anchor, orientation: 'open-left', areaStage: stage ?? 0,
+  const site = { baseId: 'base', anchor, areaStage: stage ?? 0,
     buildArea: resolvePersistentBaseBuildAreaForStage(stage ?? 0) };
   const world = { descriptor, persistentBaseSite: site, metrics };
   const layout: ArenaLayout = { seed: 1, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: [] };

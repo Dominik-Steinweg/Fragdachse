@@ -48,7 +48,9 @@
 // points are the canonical carcass footprint with the brood pit centre as spawn point.
 // Persistent base core: four 3-cell corner bastions and 3-cell entrances (12 base cells instead of
 // 20); host and client derive the core collision from code that the layout fingerprint does not cover.
-export const PEER_PROTOCOL_VERSION = 50;
+// Lagekarte: the host base document carries the base rotation (pbrs quarterTurns); maps no longer
+// author a base orientation, and lsy carries the host-owned deployment seed of the next round.
+export const PEER_PROTOCOL_VERSION = 51;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

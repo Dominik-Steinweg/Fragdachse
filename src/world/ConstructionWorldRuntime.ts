@@ -1,3 +1,4 @@
+import { toCanonicalAngle, toCanonicalFootprintOrigin, type PersistentBaseFrame } from '../persistentBase/PersistentBaseFrame';
 import { isCoopDefenseLoadoutItemUnlocked } from '../utils/coopDefenseUpgrades';
 import { isCellInsidePersistentBaseBuildArea } from '../persistentBase/PersistentBaseCore';
 import * as Phaser from 'phaser';
@@ -60,6 +61,11 @@ export interface ConstructionPersistentBaseContext {
   readonly buildArea: PersistentBaseBuildArea;
   readonly contributions: PersistentBaseContributionStore;
   readonly rewards: PersistentBaseRewardStore;
+}
+
+/** Anker der Site, Ausrichtung aus dem Basisdokument des Hosts. */
+function persistentBaseFrame(context: ConstructionPersistentBaseContext): PersistentBaseFrame {
+  return { anchor: context.anchor, quarterTurns: context.rewards.getState().quarterTurns };
 }
 
 export interface ConstructionWorldRuntimeOptions {
@@ -541,13 +547,13 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
       const modifiers = this.options.modifierReadPort?.getModifiers(ownerId);
       const modified = modifiers ? applyCoopDefenseModifiersToUtilityConfig(config as PlaceableUtilityConfig, { additive: modifiers.additiveStats, percentage: modifiers.percentageStats }) as PlaceableUtilityConfig : config as PlaceableUtilityConfig;
       const effective = { ...modified, id: utilityId, placeable: { ...modified.placeable, lifetimeMs: 0, maxHp: candidate.tool.maxHp } } as PlaceableUtilityConfig;
-      const runtime = this.options.placementSystem.materializePersistentPlaceable(effective, candidate.gridX, candidate.gridY, candidate.blueprint.angle, ownerId, ownerColor, ownership);
+      const runtime = this.options.placementSystem.materializePersistentPlaceable(effective, candidate.gridX, candidate.gridY, candidate.angle, ownerId, ownerColor, ownership);
       if (!runtime) return null;
       this.options.rockVisualHelper.materializePlaceableRock(runtime, false);
       return runtime;
     }
     const definition = this.getEffectiveDefinition(constructionId, ownerId, ownership !== 'base-owned');
-    const runtime = this.options.placementSystem.materializePersistentPlaceable({ ...definition, maxHp: candidate.tool.maxHp }, candidate.gridX, candidate.gridY, candidate.blueprint.angle, ownerId, ownerColor, ownership);
+    const runtime = this.options.placementSystem.materializePersistentPlaceable({ ...definition, maxHp: candidate.tool.maxHp }, candidate.gridX, candidate.gridY, candidate.angle, ownerId, ownerColor, ownership);
     if (!runtime) return null;
     if (definition.kind === 'pedestal') {
       const world = this.options.rockVisualHelper.gridToWorld(runtime.gridX, runtime.gridY);
@@ -588,7 +594,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     const normalizedTool: PersistentToolRef = constructionId ? { kind: 'construction', id: constructionId } : { ...tool };
     const ownerId = this.options.resolveOwnerId(runtime.ownerId);
     if (!ownerId) return;
-    const registered = context.contributions.registerNew(ownerId, runtime, normalizedTool, footprint, context.anchor, context.buildArea);
+    const registered = context.contributions.registerNew(ownerId, runtime, normalizedTool, footprint, persistentBaseFrame(context), context.buildArea);
     if (registered && !context.contributions.hasActiveMission) this.options.publishImmediateContribution(ownerId);
   }
 
@@ -621,10 +627,12 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     const relocated = this.relocateRuntime(source.id, preview.gridX, preview.gridY, preview.angle, footprint);
     if (!relocated) return { ok: false, reason: 'placement' };
     const binding = context.contributions.getRuntimeBindings().find((entry) => entry.runtimeId === source.id);
+    const frame = persistentBaseFrame(context);
+    const canonical = toCanonicalFootprintOrigin(frame, preview.gridX, preview.gridY, footprint);
     const inside = (footprint.length > 0 ? footprint : [{ dx: 0, dy: 0 }]).every(offset => (
       isCellInsidePersistentBaseBuildArea(
-        preview.gridX + offset.dx - context.anchor.gridX,
-        preview.gridY + offset.dy - context.anchor.gridY,
+        canonical.relativeGridX + offset.dx,
+        canonical.relativeGridY + offset.dy,
         context.buildArea,
       )
     ));
@@ -632,7 +640,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
       if (!inside) {
         // Leaving the save area detaches only the blueprint; the live construction survives.
         context.contributions.removeByRuntimeId(source.id);
-      } else if (!context.contributions.moveConstruction(binding.ownerId, binding.blueprint.persistentId, { relativeGridX: preview.gridX - context.anchor.gridX, relativeGridY: preview.gridY - context.anchor.gridY, angle: preview.angle }, footprint, context.buildArea)) {
+      } else if (!context.contributions.moveConstruction(binding.ownerId, binding.blueprint.persistentId, { ...canonical, angle: toCanonicalAngle(frame, preview.angle) }, footprint, context.buildArea)) {
         this.relocateRuntime(source.id, previous.gridX, previous.gridY, previous.angle, footprint);
         return { ok: false, reason: 'placement' };
       }

@@ -1,15 +1,19 @@
 import { getCoopDefenseConstructionDefinition, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { getPersistentBaseRewardDefinition } from './PersistentBaseRewardCatalog';
-import { resolvePersistentBaseCell, rotatePersistentBaseCoreOffset, DEFAULT_PERSISTENT_BASE_BUILD_AREA, DEFAULT_PERSISTENT_BASE_ORIENTATION, getCanonicalPersistentBaseCoreCells, isCellInsidePersistentBaseBuildArea, type PersistentBaseBuildArea, type PersistentBaseOrientation } from './PersistentBaseCore';
+import { resolvePersistentBaseCell, DEFAULT_PERSISTENT_BASE_BUILD_AREA, getCanonicalPersistentBaseCoreCells, isCellInsidePersistentBaseBuildArea, type PersistentBaseBuildArea } from './PersistentBaseCore';
+import { toCanonicalFootprintOrigin, toWorldFootprint, type PersistentBaseFrame } from './PersistentBaseFrame';
 import type { PersistentBaseRewardId, PersistentBaseRewardPlacement, PersistentBaseRewardState } from './PersistentBaseRewardTypes';
 import type { PersistentConstruction } from './PersistentBaseTypes';
 
-/** Shared by in-world reward placement and the editor; presentation never invents a domain. */
+/**
+ * Shared by in-world reward placement and the editor; presentation never invents a domain.
+ * Checks canonical cells: domains and build areas are identical under every base rotation.
+ */
 export function isPersistentBaseRewardCellAllowed(id: PersistentBaseRewardId, x: number, y: number,
-  area: PersistentBaseBuildArea, orientation?: PersistentBaseOrientation): boolean {
+  area: PersistentBaseBuildArea): boolean {
   const rule = getPersistentBaseRewardDefinition(id).placementRule;
   return getPersistentBaseRewardFootprint(id).every(({ dx, dy }) => {
-    const cell = resolvePersistentBaseCell({ gridX: 0, gridY: 0 }, x + dx, y + dy, orientation, area);
+    const cell = resolvePersistentBaseCell({ gridX: 0, gridY: 0 }, x + dx, y + dy, area);
     return !!cell && (rule === 'base-surface' ? cell.domain === 'base-surface'
       : cell.domain !== 'base-surface' && isCellInsidePersistentBaseBuildArea(x + dx, y + dy, area));
   });
@@ -73,15 +77,32 @@ export function relocateStrandedBaseSurfaceRewards(state: PersistentBaseRewardSt
   };
 }
 
-/** Rotate the stored footprint with the site, then recover its top-left runtime anchor. */
+/**
+ * World top-left cell of a stored reward placement inside the base frame, or `null` when the
+ * canonical cell lies outside the core and the build area.
+ */
 export function resolvePersistentRewardWorldCell(
-  site: { anchor: { gridX: number; gridY: number }; orientation?: PersistentBaseOrientation; buildArea: PersistentBaseBuildArea },
+  frame: PersistentBaseFrame,
+  buildArea: PersistentBaseBuildArea,
   placement: { rewardId?: PersistentBaseRewardId; relativeGridX: number; relativeGridY: number },
 ) {
-  const anchor = resolvePersistentBaseCell(site.anchor, placement.relativeGridX, placement.relativeGridY, site.orientation, site.buildArea);
-  if (!anchor) return null;
+  const canonical = resolvePersistentBaseCell(frame.anchor, placement.relativeGridX, placement.relativeGridY, buildArea);
+  if (!canonical) return null;
   const footprint = placement.rewardId ? getPersistentBaseRewardFootprint(placement.rewardId) : [{ dx: 0, dy: 0 }];
-  const offsets = footprint.map(c => rotatePersistentBaseCoreOffset(c.dx, c.dy, site.orientation ?? DEFAULT_PERSISTENT_BASE_ORIENTATION));
-  return { ...anchor, gridX: anchor.gridX + Math.min(...offsets.map(c => c.relativeGridX)),
-    gridY: anchor.gridY + Math.min(...offsets.map(c => c.relativeGridY)) };
+  const world = toWorldFootprint(frame, placement.relativeGridX, placement.relativeGridY, footprint);
+  return { gridX: world.gridX, gridY: world.gridY, domain: canonical.domain };
+}
+
+/** Inverse of {@link resolvePersistentRewardWorldCell}: canonical origin of a world top-left cell. */
+export function resolvePersistentRewardCanonicalCell(
+  frame: PersistentBaseFrame,
+  buildArea: PersistentBaseBuildArea,
+  gridX: number,
+  gridY: number,
+  rewardId?: PersistentBaseRewardId,
+) {
+  const footprint = rewardId ? getPersistentBaseRewardFootprint(rewardId) : [{ dx: 0, dy: 0 }];
+  const relative = toCanonicalFootprintOrigin(frame, gridX, gridY, footprint);
+  const canonical = resolvePersistentBaseCell(frame.anchor, relative.relativeGridX, relative.relativeGridY, buildArea);
+  return canonical ? { ...relative, domain: canonical.domain } : null;
 }

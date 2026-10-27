@@ -237,7 +237,7 @@ describe('PersistentBaseRoomSession – der Raum ueberlebt seine Activities', ()
     expect(first.identity).toEqual(MISSION_A);
     expect(store.hasActiveMission).toBe(true);
 
-    store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
     // Der committed Stand bleibt unberuehrt, solange die Activity laeuft.
     expect(store.getCommittedContribution('owner-a')?.constructions).toHaveLength(1);
     expect(store.getContribution('owner-a')?.constructions).toHaveLength(2);
@@ -253,7 +253,7 @@ describe('PersistentBaseRoomSession – der Raum ueberlebt seine Activities', ()
     const session = new PersistentBaseRoomSession();
     const store = session.contributions;
     const abandoned = session.beginTransaction(MISSION_A);
-    store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
 
     const next = session.beginTransaction(MISSION_B);
     expect(next).not.toBe(abandoned);
@@ -318,7 +318,7 @@ describe('PersistentBaseTransaction – genau ein terminaler Abschluss', () => {
 
     // Die naechste Activity oeffnet ihren eigenen Arbeitsstand ...
     session.beginTransaction(MISSION_B);
-    store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
 
     // ... und der verspaetete Abschluss der vorherigen trifft ihn nicht.
     expect(applyPersistentBaseRoundOutcome('commit', {
@@ -349,7 +349,7 @@ describe('PersistentBaseTransaction – Activity-Identity folgt dem echten World
     harness.lifecycle.attachRuntime(worldContext());
     const transactionA = harness.session.transaction;
     expect(transactionA?.identity).toEqual(MISSION_A);
-    store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
 
     harness.lifecycle.beginCreate(WORLD, activityDescriptor(MISSION_B.activityRevision));
 
@@ -369,13 +369,13 @@ describe('PersistentBaseTransaction – Activity-Identity folgt dem echten World
 
     harness.lifecycle.beginCreate(WORLD, activityDescriptor(MISSION_A.activityRevision));
     harness.lifecycle.attachRuntime(worldContext());
-    store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
 
     harness.lifecycle.beginCreate(WORLD, null);
 
     expect(harness.session.hasOpenTransaction).toBe(false);
     expect(store.hasActiveMission).toBe(false);
-    store.registerNew('owner-a', runtime(2, 11), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-a', runtime(2, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
     expect(store.getCommittedContribution('owner-a')?.constructions.map((entry) => entry.persistentId))
       .toEqual(['committed', 'pb-owner-a-5-1']);
     expect(harness.identityEnds).toEqual([MISSION_A.activityRevision]);

@@ -105,7 +105,7 @@ describe('PersistentBaseContributionStore – Angebot und Revision', () => {
     const store = storeSession.contributions;
     store.offerContribution(contribution('owner-a', [blueprint('a-1', 0)]));
     storeSession.beginTransaction(MISSION);
-    store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
 
     store.offerContribution(contribution('owner-b', [blueprint('b-1', 1)]));
     expect(store.ownerIds).toEqual(['owner-a', 'owner-b']);
@@ -146,7 +146,7 @@ describe('PersistentBaseContributionStore – Lobby-Sofort-Commit', () => {
     const store = new PersistentBaseRoomSession().contributions;
     store.offerContribution(contribution('owner-a', [], 4));
 
-    expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea))
+    expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea))
       .toMatchObject({ origin: 'new' });
     expect(store.hasActiveMission).toBe(false);
     expect(store.getCommittedContribution('owner-a')).toMatchObject({
@@ -173,7 +173,7 @@ describe('PersistentBaseContributionStore – Lobby-Sofort-Commit', () => {
   it('verwendet den bestaetigten Stand nach erneutem Betreten als neue Grundlage', () => {
     const firstVisit = new PersistentBaseRoomSession().contributions;
     firstVisit.offerContribution(contribution('owner-a', [], 2));
-    firstVisit.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+    firstVisit.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
     const confirmed = firstVisit.getCommittedContribution('owner-a')!;
 
     const reload = new PersistentBaseRoomSession().contributions;
@@ -186,7 +186,7 @@ describe('PersistentBaseContributionStore – Lobby-Sofort-Commit', () => {
     store.offerContribution(contribution('owner-host', [blueprint('host-kept', 0)], 9));
     store.offerContribution(contribution('owner-guest', [], 3));
 
-    store.registerNew('owner-guest', runtime(2, 11), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-guest', runtime(2, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
 
     expect(store.getCommittedContribution('owner-host')).toEqual(
       contribution('owner-host', [blueprint('host-kept', 0)], 9),
@@ -205,10 +205,10 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
     const store = storeSession.contributions;
     storeSession.beginTransaction(MISSION);
 
-    expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea))
+    expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea))
       .toMatchObject({ origin: 'new' });
     // Vier Zellen rechts vom Anker liegt ausserhalb des Baubereichs.
-    expect(store.registerNew('owner-a', runtime(2, 14), tool, footprint, anchor, buildArea))
+    expect(store.registerNew('owner-a', runtime(2, 14), tool, footprint, { anchor, quarterTurns: 0 }, buildArea))
       .toBeNull();
     expect(store.getContribution('owner-a')?.constructions).toHaveLength(1);
   });
@@ -219,7 +219,7 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
     store.offerContribution(contribution('owner-a', [blueprint('lobby-kept', 0)], 4));
     storeSession.beginTransaction(MISSION);
 
-    expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea))
+    expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea))
       .toMatchObject({ origin: 'new' });
     expect(store.getContribution('owner-a')?.constructions).toHaveLength(2);
     expect(store.getCommittedContribution('owner-a')).toEqual(
@@ -235,7 +235,7 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
     store.offerContribution(contribution('owner-a', [blueprint('restored', 1)]));
     storeSession.beginTransaction(MISSION);
     store.registerRestored('owner-a', blueprint('restored', 1), 7);
-    store.registerNew('owner-a', runtime(8, 9), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-a', runtime(8, 9), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
 
     expect(store.getRuntimeMetadata(7)).toMatchObject({ persistentId: 'restored', origin: 'restored' });
     expect(store.getRuntimeMetadata(8)).toMatchObject({ origin: 'new' });
@@ -306,7 +306,7 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
     const store = storeSession.contributions;
     store.offerContribution(contribution('owner-a', [blueprint('kept', 0)], 4));
     storeSession.beginTransaction(MISSION);
-    store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+    store.registerNew('owner-a', runtime(1, 11), tool, footprint, { anchor, quarterTurns: 0 }, buildArea);
 
     storeSession.completeTransaction('rollback', () => true);
     const kept = store.getCommittedContribution('owner-a');

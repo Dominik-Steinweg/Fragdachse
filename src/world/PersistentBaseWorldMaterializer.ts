@@ -4,10 +4,7 @@ import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { ConstructionOwnership, SyncedPlaceableRock } from '../types';
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, TEAM_BLUE_COLOR } from '../config';
-import {
-  getPersistentBaseBuildAreaExtentCells,
-  resolvePersistentBaseCell,
-} from '../persistentBase/PersistentBaseCore';
+import { toWorldAngle, toWorldFootprint, type PersistentBaseFrame } from '../persistentBase/PersistentBaseFrame';
 import { isPersistentBaseRewardCellAllowed, getPersistentBaseRewardFootprint } from '../persistentBase/PersistentBasePlacementRules';
 import type { PersistentBaseContributionStore } from '../persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRewardStore } from '../persistentBase/PersistentBaseRewardStore';
@@ -252,8 +249,14 @@ export class PersistentBaseWorldMaterializer {
     }
   }
 
+  /** Anker der World-Site, Ausrichtung aus dem Basisdokument des Hosts. */
+  private frameFor(site: WorldPersistentBaseSite): PersistentBaseFrame {
+    return { anchor: site.anchor, quarterTurns: this.options.rewards.getState().quarterTurns };
+  }
+
   private reconcileComposite(site: WorldPersistentBaseSite): void {
     const store = this.options.contributions;
+    const frame = this.frameFor(site);
     const reservedRewardCells = this.getRewardReservedCells(site);
     const toolCache = new Map<string, ReadonlyMap<string, PersistentRestoreToolDefinition>>();
     const resolveOwnerTools = (ownerId: string): ReadonlyMap<string, PersistentRestoreToolDefinition> => {
@@ -270,10 +273,9 @@ export class PersistentBaseWorldMaterializer {
     const materializedCells = new Set<string>();
     for (const binding of store.getRuntimeBindings()) {
       const tool = resolveOwnerTools(binding.ownerId).get(binding.blueprint.tool.id);
-      const footprint = tool && tool.footprint.length > 0 ? tool.footprint : [{ dx: 0, dy: 0 }];
-      const gridX = site.anchor.gridX + binding.blueprint.relativeGridX;
-      const gridY = site.anchor.gridY + binding.blueprint.relativeGridY;
-      for (const offset of footprint) materializedCells.add(cellKey(gridX + offset.dx, gridY + offset.dy));
+      const placed = toWorldFootprint(frame, binding.blueprint.relativeGridX, binding.blueprint.relativeGridY,
+        tool?.footprint ?? []);
+      for (const offset of placed.footprint) materializedCells.add(cellKey(placed.gridX + offset.dx, placed.gridY + offset.dy));
     }
     const capacityMaxByOwner = new Map<string, number>();
     for (const ownerId of store.ownerIds) {
@@ -282,7 +284,7 @@ export class PersistentBaseWorldMaterializer {
     }
     const hostOwnerId = this.options.getLocalOwnerId();
     const result = mergePersistentBaseComposite({
-      anchor: site.anchor,
+      frame,
       buildArea: site.buildArea,
       hostContribution: store.getContribution(hostOwnerId),
       guestContributions: store.getContributions().filter((entry) => entry.ownerId !== hostOwnerId),
@@ -301,12 +303,17 @@ export class PersistentBaseWorldMaterializer {
         && !this.options.placementSystem.canMaterializeCells([{ dx: 0, dy: 0 }], gridX, gridY),
     });
 
-    const activeKeys = new Set(result.active.map((entry) => (
-      `${entry.ownerId}\u0000${entry.blueprint.persistentId}`
-    )));
+    // A bound runtime stays only on the cell its frame wants. After the host turned the base in the
+    // lobby it is released here and materializes again on its turned cell below.
+    const activeCells = new Map(result.active.map((entry) => [
+      `${entry.ownerId}\u0000${entry.blueprint.persistentId}`,
+      cellKey(entry.gridX, entry.gridY),
+    ]));
     let dematerializedCount = 0;
     for (const binding of store.getRuntimeBindings()) {
-      if (activeKeys.has(`${binding.ownerId}\u0000${binding.blueprint.persistentId}`)) continue;
+      const desiredCell = activeCells.get(`${binding.ownerId}\u0000${binding.blueprint.persistentId}`);
+      const runtime = this.options.placementSystem.getRuntimeRock(binding.runtimeId);
+      if (desiredCell !== undefined && (!runtime || cellKey(runtime.gridX, runtime.gridY) === desiredCell)) continue;
       store.releaseRuntimeBinding(binding.runtimeId);
       const removed = this.options.placementSystem.removeRock(binding.runtimeId);
       if (!removed) continue;
@@ -321,7 +328,7 @@ export class PersistentBaseWorldMaterializer {
       const tool = resolveOwnerTools(entry.ownerId).get(entry.blueprint.tool.id);
       if (!playerId || !tool) continue;
       const runtime = this.options.construction.materializeRestoreCandidate(
-        { blueprint: entry.blueprint, tool, gridX: entry.gridX, gridY: entry.gridY },
+        { blueprint: entry.blueprint, tool, gridX: entry.gridX, gridY: entry.gridY, angle: entry.angle },
         playerId,
         this.options.getPlayerColor(playerId),
         this.options.construction.getOwnership(playerId),
@@ -361,6 +368,7 @@ export class PersistentBaseWorldMaterializer {
     if (definition.category === 'baseTurret' && !this.isPersistentBaseRuntimeActive(site)) return null;
     const cell = this.resolveRewardCell(site, placement);
     if (!cell) return null;
+    const angle = toWorldAngle(this.frameFor(site), placement.angle);
     const ownerId = COOP_DEFENSE_BASE_TURRET_OWNER_ID;
     const ownerColor = TEAM_BLUE_COLOR;
     let runtime: SyncedPlaceableRock | null = null;
@@ -373,7 +381,7 @@ export class PersistentBaseWorldMaterializer {
           placement.rewardId,
           cell.gridX,
           cell.gridY,
-          placement.angle,
+          angle,
           ownerId,
           ownerColor,
         )
@@ -382,7 +390,7 @@ export class PersistentBaseWorldMaterializer {
             placement.rewardId,
             cell.gridX,
             cell.gridY,
-            placement.angle,
+            angle,
             ownerId,
             ownerColor,
           )
@@ -468,7 +476,7 @@ export class PersistentBaseWorldMaterializer {
     site: WorldPersistentBaseSite,
     placement: Pick<PersistentBaseRewardPlacement, 'relativeGridX' | 'relativeGridY'> & { rewardId?: PersistentBaseRewardId },
   ): { gridX: number; gridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
-    return resolvePersistentRewardWorldCell(site, placement);
+    return resolvePersistentRewardWorldCell(this.frameFor(site), site.buildArea, placement);
   }
 
   private isRewardPlacementInDomain(
@@ -481,7 +489,6 @@ export class PersistentBaseWorldMaterializer {
       placement.relativeGridX,
       placement.relativeGridY,
       site.buildArea,
-      site.orientation,
     );
   }
 

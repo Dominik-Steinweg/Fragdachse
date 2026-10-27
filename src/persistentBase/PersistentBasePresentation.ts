@@ -1,9 +1,5 @@
 import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import {
-  DEFAULT_PERSISTENT_BASE_ORIENTATION,
-  type PersistentBaseBuildArea,
-  type PersistentBaseOrientation,
-} from './PersistentBaseCore';
+import type { PersistentBaseBuildArea } from './PersistentBaseCore';
 import type { PersistentBaseAnchor } from './PersistentBaseTypes';
 import type { GroundSurfacePersistentBaseGravelZone } from '../arena/chunks/GroundSurfaceStreamer';
 import type { WorldPersistentBaseSite } from '../world/WorldRuntimeContext';
@@ -12,7 +8,6 @@ import { resolveCoopDefenseMapPersistentBasePreview } from '../config/coopDefens
 /** Gemeinsame, rein visuelle Projektion einer kanonischen Persistent Base. */
 export interface PersistentBaseVisualSite {
   readonly anchor: PersistentBaseAnchor;
-  readonly orientation: PersistentBaseOrientation;
   readonly buildArea: PersistentBaseBuildArea;
   /** Optional authored World seed; callers may provide a frame seed as fallback. */
   readonly layoutSeed?: number;
@@ -43,7 +38,6 @@ export function resolvePersistentBaseVisualSite(
   if (worldSite) {
     const site = {
       anchor: worldSite.anchor,
-      orientation: mapConfig?.persistentBase?.orientation ?? DEFAULT_PERSISTENT_BASE_ORIENTATION,
       buildArea: worldSite.buildArea,
     } satisfies PersistentBaseVisualSite;
     return layoutSeed === undefined ? site : { ...site, layoutSeed };
@@ -53,7 +47,6 @@ export function resolvePersistentBaseVisualSite(
   if (!preview) return null;
   const site = {
     anchor: preview.anchor,
-    orientation: preview.orientation,
     buildArea: preview.buildArea,
   } satisfies PersistentBaseVisualSite;
   return layoutSeed === undefined ? site : { ...site, layoutSeed };

@@ -836,6 +836,15 @@ function sanitizeCompactProfile(raw: unknown): CompactUpgradeProfile | null {
   return result;
 }
 
+/**
+ * Reward-Dokument V1 kannte keine Basisausrichtung. Die Ausrichtung kam damals aus der Map und
+ * galt nur fuer Rewards; gespeichert wurde immer kanonisch. V1 wird deshalb ungedreht uebernommen.
+ */
+function migrateLegacyPersistentBaseRewardState(value: unknown): unknown {
+  if (!isRecord(value) || value.schemaVersion !== 1) return value;
+  return { ...value, schemaVersion: 2, quarterTurns: 0 };
+}
+
 function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' | 'loadout' | 'loadoutByClass' | 'progression'> | null {
   if (isRecord(raw) && raw.schemaVersion === 5 && isRecord(raw.coopDefense)) {
     const highest = raw.coopDefense.highestUnlockedMapId;
@@ -914,7 +923,9 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   if (!persistentBase) return null;
   const persistentBaseRewardUnlocks = sanitizePersistentBaseRewardIds(coop.persistentBaseRewardUnlocks);
   if (!persistentBaseRewardUnlocks) return null;
-  const storedRewardState = sanitizePersistentBaseRewardState(coop.persistentBaseRewardState);
+  const storedRewardState = sanitizePersistentBaseRewardState(
+    migrateLegacyPersistentBaseRewardState(coop.persistentBaseRewardState),
+  );
   if (!storedRewardState) return null;
   const persistentBaseRewardState = relocateStrandedBaseSurfaceRewards(storedRewardState);
   const ownerId = document.profile.ownerId;

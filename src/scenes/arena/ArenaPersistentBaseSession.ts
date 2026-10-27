@@ -1,4 +1,5 @@
-import { resolvePersistentRewardWorldCell } from '../../persistentBase/PersistentBasePlacementRules';
+import { resolvePersistentRewardCanonicalCell, resolvePersistentRewardWorldCell } from '../../persistentBase/PersistentBasePlacementRules';
+import { toCanonicalAngle, toWorldAngle, toWorldFootprint, type PersistentBaseFrame } from '../../persistentBase/PersistentBaseFrame';
 import { selectDawnRepairDroneRuntimeIds } from '../../persistentBase/PersistentBaseRepairDrones';
 import { getPersistentBaseRewardFootprint, persistentBaseRewardsOverlap } from '../../persistentBase/PersistentBasePlacementRules';
 import { applyPersistentBaseLayoutEdit, type PersistentBaseLayoutEdit, type PersistentBaseLayoutEditResult } from '../../persistentBase/PersistentBaseLayoutEdit';
@@ -42,11 +43,7 @@ import {
   sanitizePersistentBaseMoveRequest,
   type PersistentBaseMoveRequest,
 } from '../../persistentBase/PersistentBaseMove';
-import {
-  getPersistentBaseBuildAreaExtentCells,
-  isCellInsidePersistentBaseBuildArea,
-  resolvePersistentBaseCell,
-} from '../../persistentBase/PersistentBaseCore';
+import { isCellInsidePersistentBaseBuildArea } from '../../persistentBase/PersistentBaseCore';
 import {
   applyPersistentBaseRoundOutcome,
   resolvePersistentBaseRoundOutcome,
@@ -264,6 +261,7 @@ export class ArenaPersistentBaseSession {
     if (!result.ok) return result;
     const bindings = this.session.contributions.getRuntimeBindings().filter(b => b.ownerId === ownerId);
     const site = this.worldContext?.persistentBaseSite;
+    const frame = site ? this.resolvePersistentBaseFrame(site) : null;
     const placement = this.placementSystem;
     const moves: Parameters<NonNullable<typeof placement>['relocateRocks']>[0][number][] = [];
     const previous = new Map<number, SyncedPlaceableRock>();
@@ -271,7 +269,7 @@ export class ArenaPersistentBaseSession {
       const next = result.contribution.constructions.find(p => p.persistentId === binding.blueprint.persistentId);
       if (!next) {
         this.world.getWorldBinding()?.releasePersonalRuntimeForRewardConflict(binding.runtimeId);
-      } else if (site && placement && (next.relativeGridX !== binding.blueprint.relativeGridX || next.relativeGridY !== binding.blueprint.relativeGridY)) {
+      } else if (site && frame && placement && (next.relativeGridX !== binding.blueprint.relativeGridX || next.relativeGridY !== binding.blueprint.relativeGridY)) {
         const runtime = placement.getRuntimeRock(binding.runtimeId);
         if (!runtime) continue;
         if (!(getPersistentConstructionFootprint(next) ?? []).every(cell => isCellInsidePersistentBaseBuildArea(
@@ -279,9 +277,9 @@ export class ArenaPersistentBaseSession {
           this.world.getWorldBinding()?.releasePersonalRuntimeForRewardConflict(runtime.id); continue;
         }
         previous.set(runtime.id, { ...runtime });
-        moves.push({ id: runtime.id, gridX: site.anchor.gridX + next.relativeGridX,
-          gridY: site.anchor.gridY + next.relativeGridY, angle: next.angle,
-          footprint: getPersistentConstructionFootprint(next) ?? [{ dx: 0, dy: 0 }] });
+        const world = toWorldFootprint(frame, next.relativeGridX, next.relativeGridY, getPersistentConstructionFootprint(next) ?? []);
+        moves.push({ id: runtime.id, gridX: world.gridX, gridY: world.gridY, angle: toWorldAngle(frame, next.angle),
+          footprint: world.footprint });
       }
     }
     const relocated = this.world.getConstructionRuntime()?.relocateRuntimeBatch(moves);
@@ -304,6 +302,13 @@ export class ArenaPersistentBaseSession {
     const stored = getStoredPersistentBaseRewardState();
     const current = this.session.rewards.getState();
     if (stored.revision <= current.revision) return;
+    if (stored.quarterTurns !== current.quarterTurns) {
+      // A turned base moves every reward and every personal construction. The world binding
+      // releases what no longer stands on its turned cell and materializes it there again.
+      this.session.rewards.replaceCommittedState(stored);
+      this.reconcilePersistentBaseWorld();
+      return;
+    }
     const site = this.worldContext?.persistentBaseSite;
     const binding = this.world.getWorldBinding();
     const placement = this.placementSystem;
@@ -316,9 +321,11 @@ export class ArenaPersistentBaseSession {
       if (!site || !placement || !runtimeBinding || (next.relativeGridX === before.relativeGridX && next.relativeGridY === before.relativeGridY)) continue;
       const runtime = placement.getRuntimeRock(runtimeBinding.runtimeId);
       const cell = this.resolvePersistentBaseRewardCell(site, next);
-      if (!runtime || !cell || !isPersistentBaseRewardCellAllowed(next.rewardId, next.relativeGridX, next.relativeGridY, site.buildArea, site.orientation)) { binding?.releaseRewardRuntime(before.rewardId); continue; }
+      if (!runtime || !cell || !isPersistentBaseRewardCellAllowed(next.rewardId, next.relativeGridX, next.relativeGridY, site.buildArea)) { binding?.releaseRewardRuntime(before.rewardId); continue; }
+      const frame = this.resolvePersistentBaseFrame(site)!;
       previous.set(runtime.id, { ...runtime });
-      moves.push({ id: runtime.id, gridX: cell.gridX, gridY: cell.gridY, angle: next.angle, footprint: getPersistentBaseRewardFootprint(next.rewardId) });
+      moves.push({ id: runtime.id, gridX: cell.gridX, gridY: cell.gridY, angle: toWorldAngle(frame, next.angle),
+        footprint: toWorldFootprint(frame, next.relativeGridX, next.relativeGridY, getPersistentBaseRewardFootprint(next.rewardId)).footprint });
     }
     const moved = this.world.getConstructionRuntime()?.relocateRuntimeBatch(moves);
     if (moved) for (const runtime of moved) {
@@ -588,14 +595,15 @@ export class ArenaPersistentBaseSession {
     const site = this.worldContext?.persistentBaseSite ?? null;
     const world = bridge.getWorldDescriptor();
     if (!site || !world || !isKnownPersistentBaseRewardId(rewardId)) return { ok: false, reason: 'blocked' };
+    const frame = this.resolvePersistentBaseFrame(site);
     const relative = this.resolvePersistentBaseRewardRelativeCell(site, preview.gridX, preview.gridY, rewardId);
-    if (!relative) return { ok: false, reason: 'placement' };
+    if (!frame || !relative) return { ok: false, reason: 'placement' };
     return bridge.sendPersistentBaseRewardPlacement({
       worldRevision: world.worldRevision,
       rewardId,
       relativeGridX: relative.relativeGridX,
       relativeGridY: relative.relativeGridY,
-      angle: preview.angle,
+      angle: toCanonicalAngle(frame, preview.angle),
     });
   }
 
@@ -790,7 +798,7 @@ export class ArenaPersistentBaseSession {
 
     // Ein Reward hat hoehere Composite-Prioritaet als persoenliche Beitraege. Verdraengt wird nur
     // das Runtime-Objekt; der Blueprint seines Besitzers bleibt gespeichert.
-    if (!isPersistentBaseRewardCellAllowed(rewardId, relative.relativeGridX, relative.relativeGridY, site.buildArea, site.orientation)
+    if (!isPersistentBaseRewardCellAllowed(rewardId, relative.relativeGridX, relative.relativeGridY, site.buildArea)
       || !placementSystem.canMaterializePersistentBaseRewardCell(preview.gridX, preview.gridY, true, source.id, rewardId)) return { ok: false, reason: 'placement' };
     const conflicts = this.getRewardPlacementConflicts(rewardId, preview.gridX, preview.gridY, source.id);
     if (!conflicts) return { ok: false, reason: 'placement' };
@@ -802,7 +810,7 @@ export class ArenaPersistentBaseSession {
       rewardId,
       relativeGridX: relative.relativeGridX,
       relativeGridY: relative.relativeGridY,
-      angle: preview.angle,
+      angle: toCanonicalAngle(this.resolvePersistentBaseFrame(site)!, preview.angle),
     })) {
       if (displacedPersonalRuntime) this.reconcilePersistentBaseWorld();
       return { ok: false, reason: 'blocked' };
@@ -1119,6 +1127,7 @@ export class ArenaPersistentBaseSession {
     const signature = JSON.stringify({
       worldRevision: world.worldRevision,
       availableRewardIds,
+      quarterTurns: state.quarterTurns,
       placements: state.placements,
     });
     if (signature === this.projectionSignature) return;
@@ -1130,6 +1139,7 @@ export class ArenaPersistentBaseSession {
     const session: PersistentBaseRewardSessionState = {
       worldRevision: world.worldRevision,
       revision: this.projectionRevision,
+      quarterTurns: state.quarterTurns,
       availableRewardIds,
       placements: state.placements,
     };
@@ -1154,11 +1164,23 @@ export class ArenaPersistentBaseSession {
       ? null : [...occupants.values()];
   }
 
+  /**
+   * Bezugsrahmen der Basis dieser World. Der Host liest die Ausrichtung aus seinem Store, ein
+   * Client aus der replizierten Reward-Projektion; ohne sie gibt es keine Vorschau.
+   */
+  resolvePersistentBaseFrame(site: WorldPersistentBaseSite): PersistentBaseFrame | null {
+    const quarterTurns = bridge.isHost()
+      ? this.session.rewards?.getState().quarterTurns
+      : bridge.getPersistentBaseRewardSessionState()?.quarterTurns;
+    return quarterTurns === undefined ? null : { anchor: site.anchor, quarterTurns };
+  }
+
   resolvePersistentBaseRewardCell(
     site: WorldPersistentBaseSite,
     placement: Pick<PersistentBaseRewardPlacement, 'relativeGridX' | 'relativeGridY'> & { rewardId?: PersistentBaseRewardId },
   ): { gridX: number; gridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
-    return resolvePersistentRewardWorldCell(site, placement);
+    const frame = this.resolvePersistentBaseFrame(site);
+    return frame ? resolvePersistentRewardWorldCell(frame, site.buildArea, placement) : null;
   }
 
   resolvePersistentBaseRewardRelativeCell(
@@ -1167,16 +1189,8 @@ export class ArenaPersistentBaseSession {
     gridY: number,
     rewardId?: PersistentBaseRewardId,
   ): { relativeGridX: number; relativeGridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
-    const extent = Math.max(2, getPersistentBaseBuildAreaExtentCells(site.buildArea));
-    for (let relativeGridY = -extent; relativeGridY <= extent; relativeGridY += 1) {
-      for (let relativeGridX = -extent; relativeGridX <= extent; relativeGridX += 1) {
-        const cell = resolvePersistentRewardWorldCell(site, { rewardId, relativeGridX, relativeGridY });
-        if (cell?.gridX === gridX && cell.gridY === gridY) {
-          return { relativeGridX, relativeGridY, domain: cell.domain };
-        }
-      }
-    }
-    return null;
+    const frame = this.resolvePersistentBaseFrame(site);
+    return frame ? resolvePersistentRewardCanonicalCell(frame, site.buildArea, gridX, gridY, rewardId) : null;
   }
 
   isPersistentBaseRewardPlacementInDomain(
@@ -1184,7 +1198,7 @@ export class ArenaPersistentBaseSession {
     site: WorldPersistentBaseSite,
     placement: PersistentBaseRewardPlacement,
   ): boolean {
-    return isPersistentBaseRewardCellAllowed(definition.id, placement.relativeGridX, placement.relativeGridY, site.buildArea, site.orientation);
+    return isPersistentBaseRewardCellAllowed(definition.id, placement.relativeGridX, placement.relativeGridY, site.buildArea);
   }
 
   /** Stellt jedem Besitzer seinen host-bestaetigten Beitrag zu und speichert den eigenen lokal. */

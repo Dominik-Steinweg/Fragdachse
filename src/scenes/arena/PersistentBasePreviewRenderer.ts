@@ -40,7 +40,6 @@ export class PersistentBasePreviewRenderer {
       ? [
         preview.anchor.gridX,
         preview.anchor.gridY,
-        preview.orientation,
         metrics.offsetX,
         metrics.offsetY,
         metrics.gridCols,
@@ -54,7 +53,7 @@ export class PersistentBasePreviewRenderer {
     this.currentKey = nextKey;
     if (!preview || !metrics) return;
 
-    const coreCells = resolvePersistentBaseCoreCells(preview.anchor, preview.orientation);
+    const coreCells = resolvePersistentBaseCoreCells(preview.anchor);
     const surfaceCells = coreCells.filter((cell) => cell.domain === 'base-surface');
     this.cellImages.push(...createBaseSurfaceImages(this.scene, surfaceCells, metrics, 'base'));
     this.grounding = new BaseGroundingRenderer(this.scene, { cells: surfaceCells }, metrics, {

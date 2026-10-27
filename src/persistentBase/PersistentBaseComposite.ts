@@ -2,8 +2,8 @@ import {
   isCellInsidePersistentBaseBuildArea,
   type PersistentBaseBuildArea,
 } from './PersistentBaseCore';
+import { toWorldAngle, toWorldFootprint, type PersistentBaseFrame } from './PersistentBaseFrame';
 import type {
-  PersistentBaseAnchor,
   PersistentConstruction,
   PersistentPlayerBaseContribution,
 } from './PersistentBaseTypes';
@@ -35,9 +35,11 @@ export interface PersistentCompositeCandidate {
 }
 
 export interface PersistentCompositeActiveEntry extends PersistentCompositeCandidate {
+  /** Weltlage im Bezugsrahmen der Basis: obere linke Zelle, gedrehte Grundflaeche, Startwinkel. */
   readonly footprint: readonly PersistentGridCellOffset[];
   readonly gridX: number;
   readonly gridY: number;
+  readonly angle: number;
   readonly capacityCost: number;
 }
 
@@ -74,7 +76,8 @@ export interface PersistentCompositeTool {
 }
 
 export interface PersistentBaseCompositeMergeInput {
-  readonly anchor: PersistentBaseAnchor;
+  /** Anker und Ausrichtung der Basis; Blueprints sind kanonisch gespeichert. */
+  readonly frame: PersistentBaseFrame;
   /** Die einzige Geometriequelle fuer "darf hier gebaut werden". */
   readonly buildArea: PersistentBaseBuildArea;
   /** Persoenlicher Beitrag des Hosts; er hat Vorrang vor allen Gastbeitraegen. */
@@ -135,14 +138,13 @@ export function mergePersistentBaseComposite(
       continue;
     }
 
-    const gridX = input.anchor.gridX + candidate.blueprint.relativeGridX;
-    const gridY = input.anchor.gridY + candidate.blueprint.relativeGridY;
-    const footprint = tool.footprint.length > 0 ? tool.footprint : [{ dx: 0, dy: 0 }];
+    const canonicalFootprint = tool.footprint.length > 0 ? tool.footprint : [{ dx: 0, dy: 0 }];
 
-    // Jede Zelle des Fussabdrucks muss im Baubereich liegen, nicht nur der Ursprung.
-    const insideBuildArea = footprint.every((offset) => isCellInsidePersistentBaseBuildArea(
-      gridX + offset.dx - input.anchor.gridX,
-      gridY + offset.dy - input.anchor.gridY,
+    // Jede Zelle des Fussabdrucks muss im Baubereich liegen, nicht nur der Ursprung. Der
+    // Baubereich ist unter Vierteldrehungen deckungsgleich und wird deshalb kanonisch geprueft.
+    const insideBuildArea = canonicalFootprint.every((offset) => isCellInsidePersistentBaseBuildArea(
+      candidate.blueprint.relativeGridX + offset.dx,
+      candidate.blueprint.relativeGridY + offset.dy,
       input.buildArea,
     ));
     if (!insideBuildArea) {
@@ -150,6 +152,12 @@ export function mergePersistentBaseComposite(
       continue;
     }
 
+    const { gridX, gridY, footprint } = toWorldFootprint(
+      input.frame,
+      candidate.blueprint.relativeGridX,
+      candidate.blueprint.relativeGridY,
+      canonicalFootprint,
+    );
     const cells = footprint.map((offset) => cellKey(gridX + offset.dx, gridY + offset.dy));
     if (input.isCellBlocked
       && footprint.some((offset) => input.isCellBlocked!(gridX + offset.dx, gridY + offset.dy))) {
@@ -175,6 +183,7 @@ export function mergePersistentBaseComposite(
       footprint,
       gridX,
       gridY,
+      angle: toWorldAngle(input.frame, candidate.blueprint.angle),
       capacityCost: Math.max(0, tool.capacityCost),
     });
   }

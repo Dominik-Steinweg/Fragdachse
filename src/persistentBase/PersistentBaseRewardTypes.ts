@@ -2,6 +2,7 @@ import {
   MAX_PERSISTENT_BASE_REWARD_PLACEMENTS,
   PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
 } from '../config/persistentBase';
+import { isPersistentBaseQuarterTurns, type PersistentBaseQuarterTurns } from './PersistentBaseFrame';
 import type { PersistentBaseMutationIdentity } from './PersistentBaseTransaction';
 
 export const PERSISTENT_BASE_REWARD_IDS = [
@@ -34,9 +35,16 @@ export interface PersistentBaseRewardPlacement {
   readonly angle: number;
 }
 
+/**
+ * Das Basisdokument des Hosts: seine Reward-Platzierungen und die Ausrichtung der ganzen Basis.
+ *
+ * Platzierungen sind kanonisch gespeichert. `quarterTurns` dreht die Basis des Raums samt aller
+ * persoenlichen Beitraege; nur der Host schreibt sie, und eine Mission friert sie ein.
+ */
 export interface PersistentBaseRewardState {
   readonly schemaVersion: typeof PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION;
   readonly revision: number;
+  readonly quarterTurns: PersistentBaseQuarterTurns;
   readonly placements: readonly PersistentBaseRewardPlacement[];
 }
 
@@ -44,6 +52,7 @@ export interface PersistentBaseRewardState {
 export interface PersistentBaseRewardSessionState {
   readonly worldRevision: number;
   readonly revision: number;
+  readonly quarterTurns: PersistentBaseQuarterTurns;
   readonly availableRewardIds: readonly PersistentBaseRewardId[];
   readonly placements: readonly PersistentBaseRewardPlacement[];
 }
@@ -57,6 +66,7 @@ export interface PersistentBaseRewardSessionState {
  */
 export interface PersistentBaseRewardPlacementRequest extends PersistentBaseMutationIdentity {
   readonly rewardId: PersistentBaseRewardId;
+  /** Kanonische Zelle und kanonischer Winkel, wie sie gespeichert werden. */
   readonly relativeGridX: number;
   readonly relativeGridY: number;
   readonly angle: number;
@@ -74,6 +84,7 @@ export type PersistentBaseRewardStatus = 'locked' | 'unplaced' | 'placed';
 export const DEFAULT_PERSISTENT_BASE_REWARD_STATE: PersistentBaseRewardState = Object.freeze({
   schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
   revision: 0,
+  quarterTurns: 0,
   placements: Object.freeze([]),
 });
 
@@ -127,6 +138,7 @@ export function sanitizePersistentBaseRewardState(value: unknown): PersistentBas
   if (!isRecord(value)
     || value.schemaVersion !== PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION
     || !isSafeIntegerInRange(value.revision, 0, Number.MAX_SAFE_INTEGER)
+    || !isPersistentBaseQuarterTurns(value.quarterTurns)
     || !Array.isArray(value.placements)
     || value.placements.length > MAX_PERSISTENT_BASE_REWARD_PLACEMENTS) {
     return null;
@@ -142,6 +154,7 @@ export function sanitizePersistentBaseRewardState(value: unknown): PersistentBas
   return {
     schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
     revision: value.revision,
+    quarterTurns: value.quarterTurns,
     placements,
   };
 }
@@ -166,6 +179,7 @@ export function clonePersistentBaseRewardState(
   return {
     schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
     revision: state.revision,
+    quarterTurns: state.quarterTurns,
     placements: state.placements.map(clonePersistentBaseRewardPlacement),
   };
 }
@@ -176,6 +190,7 @@ export function clonePersistentBaseRewardSessionState(
   return {
     worldRevision: state.worldRevision,
     revision: state.revision,
+    quarterTurns: state.quarterTurns,
     availableRewardIds: [...state.availableRewardIds],
     placements: state.placements.map(clonePersistentBaseRewardPlacement),
   };
@@ -192,6 +207,7 @@ export function sanitizePersistentBaseRewardSessionState(
   const placements = sanitizePersistentBaseRewardState({
     schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
     revision: value.revision,
+    quarterTurns: value.quarterTurns,
     placements: value.placements,
   });
   if (!placements) return null;
@@ -199,6 +215,7 @@ export function sanitizePersistentBaseRewardSessionState(
   return {
     worldRevision: value.worldRevision,
     revision: value.revision,
+    quarterTurns: placements.quarterTurns,
     availableRewardIds,
     placements: placements.placements,
   };

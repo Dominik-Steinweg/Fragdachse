@@ -143,30 +143,6 @@ export function isCellInsidePersistentBaseBuildArea(
   return insideCircle || insideCardinalStrip;
 }
 
-/**
- * Ausrichtung des Kerns. `open-left` ist die kanonische Form und der Default jeder World.
- *
- * Die uebrigen drei existieren, damit eine Map aus Leveldesign-Gruenden eine gedrehte Basis
- * tragen kann, ohne dass Persistenz oder Authoring dafuer umgebaut werden muessten. Die aktuelle
- * vierseitige Kernform bleibt dabei unter jeder Vierteldrehung geometrisch gleich.
- */
-export type PersistentBaseOrientation = 'open-left' | 'open-up' | 'open-right' | 'open-down';
-
-export const DEFAULT_PERSISTENT_BASE_ORIENTATION: PersistentBaseOrientation = 'open-left';
-
-export const PERSISTENT_BASE_ORIENTATIONS = [
-  'open-left',
-  'open-up',
-  'open-right',
-  'open-down',
-] as const satisfies readonly PersistentBaseOrientation[];
-
-/** Authoring-Grenze: eine unbekannte Ausrichtung wird abgelehnt, nicht still ersetzt. */
-export function isPersistentBaseOrientation(value: unknown): value is PersistentBaseOrientation {
-  return typeof value === 'string'
-    && (PERSISTENT_BASE_ORIENTATIONS as readonly string[]).includes(value);
-}
-
 export interface PersistentBaseCoreCell {
   /** -3 ... +3, relativ zum Anker. Der Anker selbst ist `(0, 0)` und liegt im Innenhof. */
   readonly relativeGridX: number;
@@ -239,45 +215,20 @@ export function getCanonicalPersistentBaseCoreCells(
 }
 
 /**
- * Dreht einen relativen Offset aus der kanonischen Ausrichtung in die angegebene.
+ * Die Kernzellen relativ zum Anker.
  *
- * Reine Vierteldrehung um den Anker: Weil der Anker die Mittelzelle ist, bleibt die Form dabei
- * deckungsgleich und der Anker unveraendert.
+ * Der Kern ist unter jeder Vierteldrehung deckungsgleich. Eine gedrehte Basis (siehe
+ * `PersistentBaseFrame`) dreht deshalb nur Rewards und Konstruktionen, nie den Kern selbst.
  */
-export function rotatePersistentBaseCoreOffset(
-  relativeGridX: number,
-  relativeGridY: number,
-  orientation: PersistentBaseOrientation,
-): { readonly relativeGridX: number; readonly relativeGridY: number } {
-  switch (orientation) {
-    case 'open-left':
-      return { relativeGridX, relativeGridY };
-    case 'open-up':
-      return { relativeGridX: -relativeGridY, relativeGridY: relativeGridX };
-    case 'open-right':
-      return { relativeGridX: -relativeGridX, relativeGridY: -relativeGridY };
-    case 'open-down':
-      return { relativeGridX: relativeGridY, relativeGridY: -relativeGridX };
-  }
-}
-
-/** Die kanonischen Zellen in der angegebenen Ausrichtung, weiterhin relativ zum Anker. */
-export function resolvePersistentBaseCoreCellsRelative(
-  orientation: PersistentBaseOrientation = DEFAULT_PERSISTENT_BASE_ORIENTATION,
-): readonly PersistentBaseCoreCell[] {
-  if (orientation === DEFAULT_PERSISTENT_BASE_ORIENTATION) return CANONICAL_PERSISTENT_BASE_CORE_CELLS;
-  return CANONICAL_PERSISTENT_BASE_CORE_CELLS.map((cell) => {
-    const rotated = rotatePersistentBaseCoreOffset(cell.relativeGridX, cell.relativeGridY, orientation);
-    return { ...rotated, domain: cell.domain };
-  });
+export function resolvePersistentBaseCoreCellsRelative(): readonly PersistentBaseCoreCell[] {
+  return CANONICAL_PERSISTENT_BASE_CORE_CELLS;
 }
 
 /** Die Kernzellen einer konkreten World in absoluten Rasterkoordinaten. */
 export function resolvePersistentBaseCoreCells(
   anchor: PersistentBaseAnchor,
-  orientation: PersistentBaseOrientation = DEFAULT_PERSISTENT_BASE_ORIENTATION,
 ): readonly PersistentBaseCoreWorldCell[] {
-  return resolvePersistentBaseCoreCellsRelative(orientation).map((cell) => ({
+  return CANONICAL_PERSISTENT_BASE_CORE_CELLS.map((cell) => ({
     gridX: anchor.gridX + cell.relativeGridX,
     gridY: anchor.gridY + cell.relativeGridY,
     domain: cell.domain,
@@ -285,17 +236,15 @@ export function resolvePersistentBaseCoreCells(
 }
 
 /**
- * Loest eine gespeicherte kanonische Offset-Koordinate in die aktuelle World-Zelle auf.
+ * Domain einer kanonischen Offset-Koordinate samt ungedrehter Zelle relativ zu `anchor`.
  *
- * Persistenz kennt nur den kanonischen Offset. Die Ausrichtung wird erst hier, genau einmal,
- * angewendet; dadurch bleiben Domain-Pruefung und World-Aufloesung fuer alle Reward-Kategorien
- * identisch.
+ * Domains sind kanonisch definiert und unter Vierteldrehungen gleich; die Lage einer gedrehten
+ * Basis in der Welt bestimmt allein `PersistentBaseFrame`.
  */
 export function resolvePersistentBaseCell(
   anchor: PersistentBaseAnchor,
   relativeGridX: number,
   relativeGridY: number,
-  orientation: PersistentBaseOrientation = DEFAULT_PERSISTENT_BASE_ORIENTATION,
   buildArea: PersistentBaseBuildArea = DEFAULT_PERSISTENT_BASE_BUILD_AREA,
 ): PersistentBaseCoreWorldCell | null {
   const canonical = CANONICAL_PERSISTENT_BASE_CORE_CELLS.find((cell) => (
@@ -304,10 +253,9 @@ export function resolvePersistentBaseCell(
   if (!canonical && !isCellInsidePersistentBaseBuildArea(relativeGridX, relativeGridY, buildArea)) {
     return null;
   }
-  const offset = rotatePersistentBaseCoreOffset(relativeGridX, relativeGridY, orientation);
   return {
-    gridX: anchor.gridX + offset.relativeGridX,
-    gridY: anchor.gridY + offset.relativeGridY,
+    gridX: anchor.gridX + relativeGridX,
+    gridY: anchor.gridY + relativeGridY,
     domain: canonical?.domain ?? 'courtyard-build-area',
   };
 }
@@ -319,10 +267,8 @@ export function resolvePersistentBaseCell(
  * `'cells'` traegt beliebige, auch konkave Formen, deshalb braucht die Kernform keinen neuen
  * Shape-Typ.
  */
-export function getPersistentBaseCoreSurfaceOffsets(
-  orientation: PersistentBaseOrientation = DEFAULT_PERSISTENT_BASE_ORIENTATION,
-): readonly CoopBaseCellOffset[] {
-  return resolvePersistentBaseCoreCellsRelative(orientation)
+export function getPersistentBaseCoreSurfaceOffsets(): readonly CoopBaseCellOffset[] {
+  return CANONICAL_PERSISTENT_BASE_CORE_CELLS
     .filter((cell) => cell.domain === 'base-surface')
     .map((cell) => ({
       gridX: cell.relativeGridX + CORE_EXTENT_CELLS,
@@ -330,11 +276,10 @@ export function getPersistentBaseCoreSurfaceOffsets(
     }));
 }
 
-/** Authored Beschreibung einer persistenten Basisstelle: Lage, Ausrichtung, Grunddauerhaftigkeit. */
+/** Authored Beschreibung einer persistenten Basisstelle: Lage und Grunddauerhaftigkeit. */
 export interface PersistentBaseCoreSite {
   readonly baseId: string;
   readonly anchor: PersistentBaseAnchor;
-  readonly orientation?: PersistentBaseOrientation;
 }
 
 /** Gitterursprung der 7x7-Grundflaeche, also die obere linke Zelle ihrer Bounding-Box. */
@@ -355,7 +300,7 @@ export function buildPersistentBaseCoreBaseConfig(site: PersistentBaseCoreSite):
   const anchor: CoopBaseAnchor = { kind: 'grid', gridX: origin.gridX, gridY: origin.gridY };
   const shape: CoopBaseShape = {
     kind: 'cells',
-    cells: getPersistentBaseCoreSurfaceOffsets(site.orientation),
+    cells: getPersistentBaseCoreSurfaceOffsets(),
   };
   return {
     id: site.baseId,

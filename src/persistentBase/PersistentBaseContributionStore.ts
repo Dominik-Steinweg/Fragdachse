@@ -2,7 +2,6 @@ import {
   arePersistentContributionsEqual,
   clonePersistentPlayerBaseContribution,
   normalizePersistentToolRef,
-  type PersistentBaseAnchor,
   type PersistentConstruction,
   type PersistentPlayerBaseContribution,
   type PersistentRuntimeMetadata,
@@ -17,6 +16,7 @@ import {
   PersistentBaseRuntimeBindings,
   type PersistentRuntimeBinding,
 } from './PersistentBaseRuntimeBindings';
+import { toCanonicalAngle, toCanonicalFootprintOrigin, type PersistentBaseFrame } from './PersistentBaseFrame';
 import type { PersistentBaseTransaction } from './PersistentBaseTransaction';
 
 export type { PersistentRuntimeBinding } from './PersistentBaseRuntimeBindings';
@@ -137,21 +137,23 @@ export class PersistentBaseContributionStore {
    * Nimmt eine neu platzierte Konstruktion in den aktuellen Stand ihres Besitzers auf.
    *
    * Der Host ruft das erst, nachdem er die Platzierung selbst akzeptiert hat; die Pruefung hier
-   * ist die letzte Zusicherung, dass nichts ausserhalb des Baubereichs persistent wird.
+   * ist die letzte Zusicherung, dass nichts ausserhalb des Baubereichs persistent wird. Die
+   * Runtime steht in Weltkoordinaten; gespeichert wird sie kanonisch im Rahmen `frame`.
    */
   registerNew(
     ownerId: string,
     runtime: { readonly id: number; readonly gridX: number; readonly gridY: number; readonly angle: number; readonly ownerId: string; readonly expiresAt: number },
     tool: PersistentToolRef,
     footprint: readonly { readonly dx: number; readonly dy: number }[],
-    anchor: PersistentBaseAnchor,
+    frame: PersistentBaseFrame,
     buildArea: PersistentBaseBuildArea,
   ): PersistentRuntimeMetadata | null {
     if (!ownerId || runtime.expiresAt > 0) return null;
+    const canonical = toCanonicalFootprintOrigin(frame, runtime.gridX, runtime.gridY, footprint);
     const inside = (footprint.length > 0 ? footprint : [{ dx: 0, dy: 0 }]).every((offset) => (
       isCellInsidePersistentBaseBuildArea(
-        runtime.gridX + offset.dx - anchor.gridX,
-        runtime.gridY + offset.dy - anchor.gridY,
+        canonical.relativeGridX + offset.dx,
+        canonical.relativeGridY + offset.dy,
         buildArea,
       )
     ));
@@ -173,9 +175,9 @@ export class PersistentBaseContributionStore {
     const blueprint: PersistentConstruction = {
       persistentId,
       tool: normalizePersistentToolRef(tool),
-      relativeGridX: runtime.gridX - anchor.gridX,
-      relativeGridY: runtime.gridY - anchor.gridY,
-      angle: Number.isFinite(runtime.angle) ? runtime.angle : 0,
+      relativeGridX: canonical.relativeGridX,
+      relativeGridY: canonical.relativeGridY,
+      angle: Number.isFinite(runtime.angle) ? toCanonicalAngle(frame, runtime.angle) : 0,
       placementOrder,
     };
     target.set(ownerId, {

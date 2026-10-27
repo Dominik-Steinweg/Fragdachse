@@ -5,8 +5,6 @@ import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 import {
   resolvePersistentBaseBuildAreaForStage,
-  DEFAULT_PERSISTENT_BASE_ORIENTATION,
-  type PersistentBaseOrientation,
   type PersistentBaseBuildArea,
   type PersistentBaseAreaStage,
 } from '../persistentBase/PersistentBaseCore';
@@ -43,8 +41,8 @@ export interface WorldPersistentBaseSite {
   readonly baseId: string;
   /** Die Basis dieser World, die als Anker dient. */
   readonly base: BaseSpec;
+  /** Der Anker. Die Ausrichtung gehoert dem Basisdokument des Raum-Hosts (`PersistentBaseFrame`). */
   readonly anchor: PersistentBaseAnchor;
-  readonly orientation: PersistentBaseOrientation;
   /** Host-autoritative, fuer diese World-Instanz eingefrorene Area-Stufe. */
   readonly areaStage: PersistentBaseAreaStage;
   /** Aktuelle Regel fuer die bebaubare Flaeche dieser Instanz. */
@@ -149,7 +147,6 @@ function resolvePersistentBaseSite(
     baseId,
     base,
     anchor: getPersistentBaseAnchor(base),
-    orientation: definition.persistentBaseSite?.orientation ?? DEFAULT_PERSISTENT_BASE_ORIENTATION,
     areaStage,
     buildArea,
   };

@@ -38,13 +38,10 @@ import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import {
   buildPersistentBaseCoreBaseConfig,
   DEFAULT_PERSISTENT_BASE_BUILD_AREA,
-  DEFAULT_PERSISTENT_BASE_ORIENTATION,
-  isPersistentBaseOrientation,
   isPersistentBaseAreaStage,
   resolvePersistentBaseReservationRadiusCells,
   type PersistentBaseAreaStage,
   type PersistentBaseBuildArea,
-  type PersistentBaseOrientation,
 } from '../persistentBase/PersistentBaseCore';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 import {
@@ -895,10 +892,11 @@ export interface CoopDefenseMapPersistentBaseConfig {
   readonly baseId: string;
   /** Maximum frozen stage supported by this site; omitted = campaign maximum. */
   readonly maxAreaStage?: PersistentBaseAreaStage;
-  /** Kanonischer Bezugspunkt des Kerns: die Mittelzelle seiner 7x7-Grundflaeche. */
+  /**
+   * Kanonischer Bezugspunkt des Kerns: die Mittelzelle seiner 7x7-Grundflaeche. Eine Map legt
+   * keine Ausrichtung fest; die Basis dreht allein der Raum-Host (`PersistentBaseFrame`).
+   */
   readonly anchor: PersistentBaseAnchor;
-  /** Ohne Angabe die kanonische Ausrichtung. */
-  readonly orientation?: PersistentBaseOrientation;
 }
 
 /**
@@ -911,13 +909,11 @@ export interface CoopDefenseMapPersistentBaseConfig {
  */
 export interface CoopDefenseMapPersistentBasePreviewConfig {
   readonly checkpointId: string;
-  readonly orientation?: PersistentBaseOrientation;
 }
 
 export interface ResolvedCoopDefenseMapPersistentBasePreviewConfig
   extends CoopDefenseMapPersistentBasePreviewConfig {
   readonly anchor: PersistentBaseAnchor;
-  readonly orientation: PersistentBaseOrientation;
   readonly buildArea: PersistentBaseBuildArea;
 }
 
@@ -1163,7 +1159,6 @@ export function resolveCoopDefenseMapPersistentBasePreview(
   return {
     checkpointId: preview.checkpointId,
     anchor: { gridX: checkpoint.gridX, gridY: checkpoint.gridY },
-    orientation: preview.orientation ?? DEFAULT_PERSISTENT_BASE_ORIENTATION,
     buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA,
   };
 }
@@ -1753,8 +1748,8 @@ function normalizePersistentBaseConfig(
     || !Number.isSafeInteger(anchor.gridY)) {
     throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} needs an integer grid anchor`);
   }
-  if (config.orientation !== undefined && !isPersistentBaseOrientation(config.orientation)) {
-    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} has an unknown orientation`);
+  if ('orientation' in config) {
+    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} cannot author an orientation; the room host turns the base`);
   }
   if ('hpMax' in config) {
     throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} cannot author hpMax`);
@@ -1778,7 +1773,6 @@ function normalizePersistentBaseConfig(
     baseId,
     ...(config.maxAreaStage === undefined ? {} : { maxAreaStage: config.maxAreaStage }),
     anchor: { gridX: anchor.gridX, gridY: anchor.gridY },
-    ...(config.orientation === undefined ? {} : { orientation: config.orientation }),
   };
   return { site, base: normalizeBaseConfig(buildPersistentBaseCoreBaseConfig(site)) };
 }
@@ -1798,13 +1792,10 @@ function normalizePersistentBasePreviewConfig(
       `[coopDefenseMaps] Persistent base preview on map ${mapId} references unknown checkpoint: ${checkpointId}`,
     );
   }
-  if (config.orientation !== undefined && !isPersistentBaseOrientation(config.orientation)) {
-    throw new Error(`[coopDefenseMaps] Persistent base preview on map ${mapId} has an unknown orientation`);
+  if ('orientation' in config) {
+    throw new Error(`[coopDefenseMaps] Persistent base preview on map ${mapId} cannot author an orientation`);
   }
-  return {
-    checkpointId,
-    ...(config.orientation === undefined ? {} : { orientation: config.orientation }),
-  };
+  return { checkpointId };
 }
 
 function normalizeSurviveDurationSec(

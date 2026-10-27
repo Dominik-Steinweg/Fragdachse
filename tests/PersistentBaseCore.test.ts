@@ -4,9 +4,7 @@ import {
   CANONICAL_PERSISTENT_BASE_CORE_CELLS,
   DEFAULT_PERSISTENT_BASE_AREA_STAGE,
   DEFAULT_PERSISTENT_BASE_BUILD_AREA,
-  DEFAULT_PERSISTENT_BASE_ORIENTATION,
   PERSISTENT_BASE_CORE_SIZE_CELLS,
-  PERSISTENT_BASE_ORIENTATIONS,
   PERSISTENT_BASE_AREA_STAGES,
   PERSISTENT_BASE_MAX_AREA_STAGE,
   isCampaignPersistentBaseAreaStage,
@@ -18,7 +16,6 @@ import {
   isCellInsidePersistentBaseBuildArea,
   isPersistentBaseBuildArea,
   isPersistentBaseAreaStage,
-  isPersistentBaseOrientation,
   resolvePersistentBaseCell,
   resolvePersistentBaseBuildAreaForStage,
   resolvePersistentBaseCoreCells,
@@ -39,9 +36,6 @@ import type { WorldDefinition } from '../src/config/authoring/WorldDefinition';
  * Map beschrieben worden waere.
  */
 
-function cellKeys(cells: readonly { gridX: number; gridY: number }[]): string[] {
-  return cells.map((cell) => `${cell.gridX}:${cell.gridY}`).sort();
-}
 
 function domainOf(
   cells: readonly { relativeGridX: number; relativeGridY: number; domain: PersistentBaseCellDomain }[],
@@ -150,77 +144,43 @@ describe('PersistentBaseCore – kanonische Form', () => {
   });
 });
 
-describe('PersistentBaseCore – Ausrichtung', () => {
-  it('kennt vier Ausrichtungen und weist alles andere ab', () => {
-    expect(DEFAULT_PERSISTENT_BASE_ORIENTATION).toBe('open-left');
-    expect(PERSISTENT_BASE_ORIENTATIONS).toContain(DEFAULT_PERSISTENT_BASE_ORIENTATION);
-    expect(isPersistentBaseOrientation('open-up')).toBe(true);
-    expect(isPersistentBaseOrientation('open-sideways')).toBe(false);
-    expect(isPersistentBaseOrientation(undefined)).toBe(false);
+describe('PersistentBaseCore – Vierteldrehungen', () => {
+  // Der Host dreht die ganze Basis (PersistentBaseFrame). Das setzt voraus, dass Kern und
+  // Baubereiche unter Vierteldrehungen deckungsgleich sind; sonst muesste die Fort-Grafik mitdrehen.
+  const quarterTurn = (x: number, y: number) => ({ x: -y, y: x });
+
+  it('haelt jede Kerndomain unter einer Vierteldrehung an ihrer Stelle', () => {
+    expect(resolvePersistentBaseCoreCells({ gridX: 0, gridY: 0 })).toHaveLength(PERSISTENT_BASE_CORE_SIZE_CELLS ** 2);
+    for (const cell of CANONICAL_PERSISTENT_BASE_CORE_CELLS) {
+      const turned = quarterTurn(cell.relativeGridX, cell.relativeGridY);
+      expect(resolvePersistentBaseCell({ gridX: 0, gridY: 0 }, turned.x, turned.y)?.domain,
+        `${cell.relativeGridX}:${cell.relativeGridY}`).toBe(cell.domain);
+    }
   });
 
-  it('dreht dieselbe Form, statt eine zweite zu beschreiben', () => {
-    const anchor = { gridX: 40, gridY: 40 };
-    for (const orientation of PERSISTENT_BASE_ORIENTATIONS) {
-      const cells = resolvePersistentBaseCoreCells(anchor, orientation);
-      expect(cells).toHaveLength(PERSISTENT_BASE_CORE_SIZE_CELLS ** 2);
-      // Die Domainverteilung ist eine Eigenschaft der Form, nicht ihrer Lage im Raum.
-      for (const [domain, count] of [
-        ['base-surface', 12],
-        ['courtyard-build-area', 25],
-        ['entrance', 12],
-      ] as const) {
-        expect(cells.filter((cell) => cell.domain === domain), orientation).toHaveLength(count);
+  it('haelt jeden Baubereich unter einer Vierteldrehung deckungsgleich', () => {
+    for (const stage of PERSISTENT_BASE_AREA_STAGES) {
+      const area = resolvePersistentBaseBuildAreaForStage(stage);
+      for (let y = -12; y <= 12; y += 1) {
+        for (let x = -12; x <= 12; x += 1) {
+          const turned = quarterTurn(x, y);
+          expect(isCellInsidePersistentBaseBuildArea(turned.x, turned.y, area), `${stage} ${x}:${y}`)
+            .toBe(isCellInsidePersistentBaseBuildArea(x, y, area));
+        }
       }
-      // Die Drehung erfolgt um den Anker; die belegte Flaeche bleibt exakt dieselbe 7x7-Box.
-      expect(cellKeys(cells), orientation)
-        .toEqual(cellKeys(resolvePersistentBaseCoreCells(anchor)));
     }
   });
 
-  it('haelt die vier mittigen Eingangsseiten je Ausrichtung frei', () => {
-    const anchor = { gridX: 40, gridY: 40 };
-    const entranceOf = (orientation: typeof PERSISTENT_BASE_ORIENTATIONS[number]) =>
-      resolvePersistentBaseCoreCells(anchor, orientation).filter((cell) => cell.domain === 'entrance');
-
-    for (const orientation of PERSISTENT_BASE_ORIENTATIONS) {
-      expect(entranceOf(orientation).map((cell) => `${cell.gridX}:${cell.gridY}`).sort()).toEqual([
-        '37:39', '37:40', '37:41',
-        '39:37', '39:43',
-        '40:37', '40:43',
-        '41:37', '41:43',
-        '43:39', '43:40', '43:41',
-      ]);
-    }
-  });
-
-  it('loest Reward-Offsets immer kanonisch und genau einmal in World-Zellen auf', () => {
-    const anchor = { gridX: 40, gridY: 40 };
-    const canonicalSurfaceCell = { relativeGridX: -3, relativeGridY: -2 };
-    const openLeft = resolvePersistentBaseCell(
-      anchor,
-      canonicalSurfaceCell.relativeGridX,
-      canonicalSurfaceCell.relativeGridY,
-      'open-left',
-    );
-    const openUp = resolvePersistentBaseCell(
-      anchor,
-      canonicalSurfaceCell.relativeGridX,
-      canonicalSurfaceCell.relativeGridY,
-      'open-up',
-    );
-
-    expect(openLeft).toEqual({ gridX: 37, gridY: 38, domain: 'base-surface' });
-    expect(openUp).toEqual({ gridX: 42, gridY: 37, domain: 'base-surface' });
-
-    const canonicalPedestalCell = { relativeGridX: 1, relativeGridY: 0 };
-    const pedestalOpenUp = resolvePersistentBaseCell(
-      anchor,
-      canonicalPedestalCell.relativeGridX,
-      canonicalPedestalCell.relativeGridY,
-      'open-up',
-    );
-    expect(pedestalOpenUp).toEqual({ gridX: 40, gridY: 41, domain: 'courtyard-build-area' });
+  it('haelt die vier mittigen Eingangsseiten frei', () => {
+    const entrances = resolvePersistentBaseCoreCells({ gridX: 40, gridY: 40 })
+      .filter((cell) => cell.domain === 'entrance');
+    expect(entrances.map((cell) => `${cell.gridX}:${cell.gridY}`).sort()).toEqual([
+      '37:39', '37:40', '37:41',
+      '39:37', '39:43',
+      '40:37', '40:43',
+      '41:37', '41:43',
+      '43:39', '43:40', '43:41',
+    ]);
   });
 });
 
