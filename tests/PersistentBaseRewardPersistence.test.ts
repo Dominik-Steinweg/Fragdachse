@@ -118,13 +118,13 @@ describe('Persistent-Base-Rewards – V5-Persistenz', () => {
   it('round-trips a watchtower placement with its fixed orientation', () => {
     grantStoredPersistentBaseRewards(['base_watchtower']);
     expect(setStoredPersistentBaseRewardState({ schemaVersion: 2, revision: 1, quarterTurns: 3, placements: [
-      { rewardId: 'base_watchtower', relativeGridX: 0, relativeGridY: 0, angle: 2 },
+      { rewardId: 'base_watchtower', relativeGridX: 1, relativeGridY: 1, angle: 2 },
     ] })).toBe(true);
     const exported = exportStoredGameProgressJson();
     resetStoredCoopDefenseCharacter();
     expect(importStoredGameProgressJson(exported).ok).toBe(true);
     expect(getStoredPersistentBaseRewardState().placements).toEqual([
-      { rewardId: 'base_watchtower', relativeGridX: 0, relativeGridY: 0, angle: 0 },
+      { rewardId: 'base_watchtower', relativeGridX: 1, relativeGridY: 1, angle: 0 },
     ]);
     // The host's base rotation belongs to the same document and survives export and import.
     expect(getStoredPersistentBaseRewardState().quarterTurns).toBe(3);

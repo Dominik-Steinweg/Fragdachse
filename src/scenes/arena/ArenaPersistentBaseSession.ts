@@ -43,7 +43,7 @@ import {
   sanitizePersistentBaseMoveRequest,
   type PersistentBaseMoveRequest,
 } from '../../persistentBase/PersistentBaseMove';
-import { isCellInsidePersistentBaseBuildArea } from '../../persistentBase/PersistentBaseCore';
+import { isCellInsidePersistentBaseBuildArea, type PersistentBaseCellDomain } from '../../persistentBase/PersistentBaseCore';
 import {
   applyPersistentBaseRoundOutcome,
   resolvePersistentBaseRoundOutcome,
@@ -1178,7 +1178,7 @@ export class ArenaPersistentBaseSession {
   resolvePersistentBaseRewardCell(
     site: WorldPersistentBaseSite,
     placement: Pick<PersistentBaseRewardPlacement, 'relativeGridX' | 'relativeGridY'> & { rewardId?: PersistentBaseRewardId },
-  ): { gridX: number; gridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
+  ): { gridX: number; gridY: number; domain: PersistentBaseCellDomain } | null {
     const frame = this.resolvePersistentBaseFrame(site);
     return frame ? resolvePersistentRewardWorldCell(frame, site.buildArea, placement) : null;
   }
@@ -1188,7 +1188,7 @@ export class ArenaPersistentBaseSession {
     gridX: number,
     gridY: number,
     rewardId?: PersistentBaseRewardId,
-  ): { relativeGridX: number; relativeGridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
+  ): { relativeGridX: number; relativeGridY: number; domain: PersistentBaseCellDomain } | null {
     const frame = this.resolvePersistentBaseFrame(site);
     return frame ? resolvePersistentRewardCanonicalCell(frame, site.buildArea, gridX, gridY, rewardId) : null;
   }

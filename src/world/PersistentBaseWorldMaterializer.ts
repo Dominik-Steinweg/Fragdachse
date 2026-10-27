@@ -4,6 +4,7 @@ import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { ConstructionOwnership, SyncedPlaceableRock } from '../types';
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, TEAM_BLUE_COLOR } from '../config';
+import type { PersistentBaseCellDomain } from '../persistentBase/PersistentBaseCore';
 import { toWorldAngle, toWorldFootprint, type PersistentBaseFrame } from '../persistentBase/PersistentBaseFrame';
 import { isPersistentBaseRewardCellAllowed, getPersistentBaseRewardFootprint } from '../persistentBase/PersistentBasePlacementRules';
 import type { PersistentBaseContributionStore } from '../persistentBase/PersistentBaseContributionStore';
@@ -475,7 +476,7 @@ export class PersistentBaseWorldMaterializer {
   private resolveRewardCell(
     site: WorldPersistentBaseSite,
     placement: Pick<PersistentBaseRewardPlacement, 'relativeGridX' | 'relativeGridY'> & { rewardId?: PersistentBaseRewardId },
-  ): { gridX: number; gridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
+  ): { gridX: number; gridY: number; domain: PersistentBaseCellDomain } | null {
     return resolvePersistentRewardWorldCell(this.frameFor(site), site.buildArea, placement);
   }
 

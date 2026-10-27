@@ -15,7 +15,7 @@ import { getBaseEditorAppearance } from '../src/persistentBase/PersistentBaseEdi
 import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
 
 const construction: PersistentConstruction = { persistentId: 'own-wall', tool: { kind: 'construction', id: 'rock_barrier' },
-  relativeGridX: 0, relativeGridY: 0, angle: .7, placementOrder: 1 };
+  relativeGridX: 0, relativeGridY: 1, angle: .7, placementOrder: 1 };
 function baseline() {
   const progress = getStoredCoopDefenseProgress();
   progress.persistentBaseUnlocked = true;
@@ -44,7 +44,8 @@ describe('personal base editor draft', () => {
     expect(model.dirty).toBe(true);
     expect(model.move(object, 1, 1)).toBe(true);
     expect(model.constructions).toEqual([{ ...construction, relativeGridX: 1, relativeGridY: 1 }]);
-    expect(model.move(object, 0, 0)).toBe(true);
+    expect(model.move(object, 0, 0)).toBe(false);
+    expect(model.move(object, 0, 1)).toBe(true);
     expect(model.dirty).toBe(false);
     expect(model.validate({ kind: 'construction', id: 'invented' }, 1, 1)).toBe('unknown');
   });
@@ -84,11 +85,16 @@ describe('personal base editor draft', () => {
       if (domain === 'base-surface') {
         expect(model.validate({ kind: 'reward', id: pedestal }, x, y)).toBe('surface');
         expect(model.validate({ kind: 'reward', id: turret }, x, y)).toBeNull();
-      } else if (x !== 0 || y !== 0) {
+      } else if (domain === 'hearth') {
+        // The hearth is part of the fort: neither pedestals, turrets nor personal builds go there.
+        expect(model.validate({ kind: 'reward', id: pedestal }, x, y)).toBe('surface');
+        expect(model.validate({ kind: 'reward', id: turret }, x, y)).toBe('surface');
+        expect(model.validate({ kind: 'construction', id: construction.persistentId }, x, y)).toBe('surface');
+      } else if (x !== 0 || y !== 1) {
         expect(model.validate({ kind: 'reward', id: pedestal }, x, y)).toBeNull();
       }
     }
-    expect(model.validate({ kind: 'reward', id: pedestal }, 0, 0)).toBe('occupied');
+    expect(model.validate({ kind: 'reward', id: pedestal }, 0, 1)).toBe('occupied');
     model.move({ kind: 'reward', id: pedestal }, 1, 1);
     const anotherPedestal = PERSISTENT_BASE_REWARD_IDS.find(id => id !== pedestal
       && getPersistentBaseRewardDefinition(id).category === 'basePedestal')!;
@@ -97,7 +103,7 @@ describe('personal base editor draft', () => {
   it('keeps changes local, uses the actual surface rules, rejects occupied/outside cells and preserves angles', () => {
     const progress = baseline(); const original = structuredClone(progress);
     const model = new PersistentBaseEditorModel(progress);
-    expect(model.move({ kind: 'reward', id: pedestal }, 0, 0)).toBe(false);
+    expect(model.move({ kind: 'reward', id: pedestal }, 0, 1)).toBe(false);
     expect(model.move({ kind: 'reward', id: turret }, 1, 1)).toBe(false);
     expect(model.move({ kind: 'reward', id: pedestal }, 100, 100)).toBe(false);
     expect(model.move({ kind: 'reward', id: pedestal }, 1, 1)).toBe(true);
@@ -143,16 +149,17 @@ describe('watchtower editor footprint', () => {
     const progress = baseline(); progress.personalBaseContribution.constructions = [];
     const model = new PersistentBaseEditorModel(progress);
     const tower = { kind: 'reward' as const, id: 'base_watchtower' as const };
-    expect(model.move(tower, 0, 0)).toBe(true);
+    expect(model.validate(tower, 0, 0)).toBe('surface');
+    expect(model.move(tower, 1, 1)).toBe(true);
     const footprint = getCoopDefenseConstructionDefinition('watchtower').footprint;
     expect(getBaseEditorAppearance(model, tower)).toMatchObject({ watchtower: true, wall: false, footprint, angle: 0 });
-    for (const { dx, dy } of footprint) expect(model.validate({ kind: 'reward', id: pedestal }, dx, dy)).toBe('occupied');
+    for (const { dx, dy } of footprint) expect(model.validate({ kind: 'reward', id: pedestal }, 1 + dx, 1 + dy)).toBe('occupied');
     expect(model.move(tower, 1, 0)).toBe(true);
     expect(model.validate(tower, 2, 2)).not.toBeNull();
     expect(model.validate(tower, 3, 0)).not.toBeNull();
     model.remove(tower);
     expect(model.move({ kind: 'reward', id: pedestal }, 1, 1)).toBe(true);
-    expect(model.validate(tower, 0, 0)).toBe('occupied');
+    expect(model.validate(tower, 1, 0)).toBe('occupied');
   });
 
   it('offers the victory reward retroactively for a previously completed map', () => {

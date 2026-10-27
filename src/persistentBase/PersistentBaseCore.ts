@@ -39,7 +39,20 @@ export type PersistentBaseCellDomain =
   /** Innenhof: die Flaeche fuer persistente Konstruktionen und frei platzierbare Rewards. */
   | 'courtyard-build-area'
   /** Offener Zugang. Bleibt frei, damit der Hof von allen vier Seiten erreichbar bleibt. */
-  | 'entrance';
+  | 'entrance'
+  /**
+   * Gemauerte Feuerstelle auf dem Anker: fester, nicht begehbarer Teil des Forts. Sie traegt weder
+   * Basistuerme noch Bauten; der Hof bleibt um sie herum frei.
+   */
+  | 'hearth';
+
+/**
+ * Domains, die das Fort selbst belegt: Sie gehoeren zur Basisform (Kollision, Wegfindung) und
+ * stehen keinem frei platzierten Bau zur Verfuegung.
+ */
+export function isPersistentBaseSolidDomain(domain: PersistentBaseCellDomain | undefined): boolean {
+  return domain === 'base-surface' || domain === 'hearth';
+}
 
 /**
  * Regel, die den bebaubaren Bereich relativ zum persistenten Basisanker beschreibt.
@@ -144,7 +157,7 @@ export function isCellInsidePersistentBaseBuildArea(
 }
 
 export interface PersistentBaseCoreCell {
-  /** -3 ... +3, relativ zum Anker. Der Anker selbst ist `(0, 0)` und liegt im Innenhof. */
+  /** -3 ... +3, relativ zum Anker. Der Anker selbst ist `(0, 0)` und traegt die Feuerstelle. */
   readonly relativeGridX: number;
   readonly relativeGridY: number;
   readonly domain: PersistentBaseCellDomain;
@@ -170,6 +183,7 @@ function resolveCanonicalDomain(relativeGridX: number, relativeGridY: number): P
   );
   if (isCenteredSideCell) return 'entrance';
   if (isBoundaryCell) return 'base-surface';
+  if (relativeGridX === 0 && relativeGridY === 0) return 'hearth';
   return 'courtyard-build-area';
 }
 
@@ -192,9 +206,9 @@ function buildCanonicalCells(): PersistentBaseCoreCell[] {
  *
  * ```
  *   B B E E E B B      B = base-surface          (12 Zellen)
- *   B H H H H H B      H = courtyard-build-area  (25 Zellen)
+ *   B H H H H H B      H = courtyard-build-area  (24 Zellen)
  *   E H H H H H E      E = entrance              (12 Zellen)
- *   E H H H H H E
+ *   E H H F H H E      F = hearth                (1 Zelle, der Anker)
  *   E H H H H H E
  *   B H H H H H B
  *   B B E E E B B
@@ -202,7 +216,8 @@ function buildCanonicalCells(): PersistentBaseCoreCell[] {
  *
  * Je Seite ist ein drei Felder breiter Eingang offen. Uebrig bleiben vier Eck-Bastionen aus je
  * drei Zellen (L-Form); sie bilden die feste Basisflaeche und sind untereinander nicht verbunden.
- * Die aktive Bauzone wird separat aus der Area-Stufe aufgeloest.
+ * Die Feuerstelle auf dem Anker gehoert ebenfalls zur festen Form. Die aktive Bauzone wird separat
+ * aus der Area-Stufe aufgeloest.
  */
 export const CANONICAL_PERSISTENT_BASE_CORE_CELLS: readonly PersistentBaseCoreCell[] =
   Object.freeze(buildCanonicalCells());
@@ -261,15 +276,16 @@ export function resolvePersistentBaseCell(
 }
 
 /**
- * Die feste Basisflaeche als Shape-Offsets, auf den Ursprung `(0, 0)` normalisiert.
+ * Die feste Form des Kerns (Bastionen und Feuerstelle) als Shape-Offsets, auf den Ursprung `(0, 0)`
+ * normalisiert.
  *
  * Das ist der Uebergang von der Kerngeometrie in den bestehenden Basisvertrag: `shape.kind`
  * `'cells'` traegt beliebige, auch konkave Formen, deshalb braucht die Kernform keinen neuen
  * Shape-Typ.
  */
-export function getPersistentBaseCoreSurfaceOffsets(): readonly CoopBaseCellOffset[] {
+export function getPersistentBaseCoreSolidOffsets(): readonly CoopBaseCellOffset[] {
   return CANONICAL_PERSISTENT_BASE_CORE_CELLS
-    .filter((cell) => cell.domain === 'base-surface')
+    .filter((cell) => isPersistentBaseSolidDomain(cell.domain))
     .map((cell) => ({
       gridX: cell.relativeGridX + CORE_EXTENT_CELLS,
       gridY: cell.relativeGridY + CORE_EXTENT_CELLS,
@@ -300,7 +316,7 @@ export function buildPersistentBaseCoreBaseConfig(site: PersistentBaseCoreSite):
   const anchor: CoopBaseAnchor = { kind: 'grid', gridX: origin.gridX, gridY: origin.gridY };
   const shape: CoopBaseShape = {
     kind: 'cells',
-    cells: getPersistentBaseCoreSurfaceOffsets(),
+    cells: getPersistentBaseCoreSolidOffsets(),
   };
   return {
     id: site.baseId,

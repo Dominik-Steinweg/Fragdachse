@@ -207,6 +207,46 @@ class Batch:
         faces += [(last + s, last + (s + 1) % segments, top) for s in range(segments)]
         self._add(mat, 0, local, faces, [True] * len(faces), loc, rot)
 
+    def hewn_log(self, x, y, top, radius, bark, wood, rng, lean=.04, slope=(2.3, 3.0)):
+        """A round log sharpened by axe: six to eight flat cuts, each a plane through the point, are
+        hewn into the round stem itself. Every cut bites lowest in its middle, so the edge between bark
+        and bare wood runs in scallops round the stem and the cuts meet in raised ridges; the point
+        sits a little off centre and the log leans slightly. From above: a round stem whose pale,
+        faceted cone catches the light on one side."""
+        facets = rng.choice((6, 7, 7, 8))
+        phase, span = rng.uniform(0, math.tau), math.tau / facets
+        bounds = [phase + i * span + rng.uniform(-.15, .15) * span for i in range(facets)]
+        apex = (rng.uniform(-.014, .014), rng.uniform(-.014, .014))
+        planes = []
+        for i in range(facets):
+            mid = (bounds[i] + bounds[(i + 1) % facets] + (math.tau if i == facets - 1 else 0)) / 2
+            normal = mid + rng.uniform(-.1, .1)
+            planes.append((math.cos(normal), math.sin(normal), rng.uniform(*slope)))   # long points, over two diameters
+
+        def cut(plane, angle):
+            nx, ny, slope = plane
+            reach = radius * math.cos(angle) * nx + radius * math.sin(angle) * ny - (apex[0] * nx + apex[1] * ny)
+            return min(top - .02, top - slope * reach)
+
+        # Wood remains below every cut: the surface is the lowest plane; ridges stand where two cuts meet.
+        ring = []
+        for i in range(facets):
+            a0 = bounds[i]
+            a1 = bounds[(i + 1) % facets] + (math.tau if i == facets - 1 else 0)
+            for f in (0, 1 / 3, 2 / 3):
+                angle = a0 + (a1 - a0) * f
+                ring.append((angle, min(cut(plane, angle) for plane in planes)))
+        n = len(ring)
+        stem = [(radius * math.cos(a), radius * math.sin(a), -.02) for a, _ in ring] + \
+               [(radius * math.cos(a), radius * math.sin(a), z) for a, z in ring]
+        rot = (rng.uniform(-lean, lean), rng.uniform(-lean, lean), 0)
+        self._add(bark, 0, stem, [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)], [True] * n, (x, y, 0), rot)
+        # Each cut keeps its own corners: shared ones would let the batch's weighted normals round the
+        # point into a dome, in the colour and in the relief alike.
+        rim = [(radius * math.cos(a), radius * math.sin(a), z) for a, z in ring]
+        point = [corner for i in range(n) for corner in (rim[i], rim[(i + 1) % n], (apex[0], apex[1], top))]
+        self._add(wood, 0, point, [(3 * i, 3 * i + 1, 3 * i + 2) for i in range(n)], [False] * n, (x, y, 0), rot)
+
     def rock(self, loc, scale, mat, rng, rough=.18, rot=None, segments=10, rings=6):
         """Irregular field stone: an ellipsoid whose vertices are pushed in and out at random."""
         sx, sy, sz = scale

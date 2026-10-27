@@ -1,6 +1,7 @@
 import { getCoopDefenseConstructionDefinition, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { getPersistentBaseRewardDefinition } from './PersistentBaseRewardCatalog';
-import { resolvePersistentBaseCell, DEFAULT_PERSISTENT_BASE_BUILD_AREA, getCanonicalPersistentBaseCoreCells, isCellInsidePersistentBaseBuildArea, type PersistentBaseBuildArea } from './PersistentBaseCore';
+import { resolvePersistentBaseCell, DEFAULT_PERSISTENT_BASE_BUILD_AREA, CANONICAL_PERSISTENT_BASE_CORE_CELLS,
+  isCellInsidePersistentBaseBuildArea, isPersistentBaseSolidDomain, type PersistentBaseBuildArea } from './PersistentBaseCore';
 import { toCanonicalFootprintOrigin, toWorldFootprint, type PersistentBaseFrame } from './PersistentBaseFrame';
 import type { PersistentBaseRewardId, PersistentBaseRewardPlacement, PersistentBaseRewardState } from './PersistentBaseRewardTypes';
 import type { PersistentConstruction } from './PersistentBaseTypes';
@@ -15,7 +16,7 @@ export function isPersistentBaseRewardCellAllowed(id: PersistentBaseRewardId, x:
   return getPersistentBaseRewardFootprint(id).every(({ dx, dy }) => {
     const cell = resolvePersistentBaseCell({ gridX: 0, gridY: 0 }, x + dx, y + dy, area);
     return !!cell && (rule === 'base-surface' ? cell.domain === 'base-surface'
-      : cell.domain !== 'base-surface' && isCellInsidePersistentBaseBuildArea(x + dx, y + dy, area));
+      : !isPersistentBaseSolidDomain(cell.domain) && isCellInsidePersistentBaseBuildArea(x + dx, y + dy, area));
   });
 }
 
@@ -42,22 +43,31 @@ export function persistentBaseRewardsOverlap(a: Parameters<typeof getPersistentB
 }
 
 /**
- * Moves stored base-surface rewards whose cell is no longer base surface (the core footprint
- * shrank from 20 to 12 ring cells) onto the nearest free base-surface cell. Without a free cell the
- * reward drops out of the placements and is unplaced again. Idempotent; valid states pass unchanged.
+ * True when a stored placement lies on a core cell its rule no longer allows: a base turret off the
+ * bastions (the ring shrank from 20 to 12 cells), or a courtyard reward on the fort itself (the
+ * hearth took the anchor cell). Cells outside the 7x7 core are judged by the area stage, not here.
  */
-export function relocateStrandedBaseSurfaceRewards(state: PersistentBaseRewardState): PersistentBaseRewardState {
-  const isStranded = (placement: PersistentBaseRewardPlacement) =>
-    getPersistentBaseRewardDefinition(placement.rewardId).placementRule === 'base-surface'
-    && !isPersistentBaseRewardCellAllowed(placement.rewardId, placement.relativeGridX, placement.relativeGridY,
-      DEFAULT_PERSISTENT_BASE_BUILD_AREA);
-  if (!state.placements.some(isStranded)) return state;
-  const taken = state.placements.filter((placement) => !isStranded(placement));
+function isStrandedOnCore(placement: PersistentBaseRewardPlacement): boolean {
+  const baseSurface = getPersistentBaseRewardDefinition(placement.rewardId).placementRule === 'base-surface';
+  return getPersistentBaseRewardCells(placement).some(({ gridX, gridY }) => {
+    const core = CANONICAL_PERSISTENT_BASE_CORE_CELLS.find((cell) => cell.relativeGridX === gridX && cell.relativeGridY === gridY);
+    return baseSurface ? core?.domain !== 'base-surface' : !!core && isPersistentBaseSolidDomain(core.domain);
+  });
+}
+
+/**
+ * Moves stored rewards stranded by a change of the core's shape onto the nearest free core cell
+ * their rule allows. Without a free cell the reward drops out of the placements and is unplaced
+ * again. Idempotent; valid states pass unchanged.
+ */
+export function relocateStrandedCoreRewards(state: PersistentBaseRewardState): PersistentBaseRewardState {
+  if (!state.placements.some(isStrandedOnCore)) return state;
+  const taken = state.placements.filter((placement) => !isStrandedOnCore(placement));
   const relocated = new Map<PersistentBaseRewardId, PersistentBaseRewardPlacement>();
-  for (const stranded of state.placements.filter(isStranded)) {
+  for (const stranded of state.placements.filter(isStrandedOnCore)) {
     const distance = (cell: { relativeGridX: number; relativeGridY: number }) =>
       Math.hypot(cell.relativeGridX - stranded.relativeGridX, cell.relativeGridY - stranded.relativeGridY);
-    const target = getCanonicalPersistentBaseCoreCells('base-surface')
+    const target = CANONICAL_PERSISTENT_BASE_CORE_CELLS
       .map((cell): PersistentBaseRewardPlacement => ({ ...stranded, relativeGridX: cell.relativeGridX, relativeGridY: cell.relativeGridY }))
       .filter((candidate) => isPersistentBaseRewardCellAllowed(candidate.rewardId, candidate.relativeGridX,
         candidate.relativeGridY, DEFAULT_PERSISTENT_BASE_BUILD_AREA)
@@ -70,7 +80,7 @@ export function relocateStrandedBaseSurfaceRewards(state: PersistentBaseRewardSt
   return {
     ...state,
     placements: state.placements.flatMap((placement) => {
-      if (!isStranded(placement)) return [placement];
+      if (!isStrandedOnCore(placement)) return [placement];
       const target = relocated.get(placement.rewardId);
       return target ? [target] : [];
     }),

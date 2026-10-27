@@ -217,10 +217,12 @@ Reservation und Baurecht bleiben getrennte Begriffe.
 
 Die Form des Basiskerns und die Domains seiner Zellen beschreibt ausschließlich
 [`PersistentBaseCore.ts`](../../src/persistentBase/PersistentBaseCore.ts): vier Eck-Bastionen als
-`base-surface` und drei Felder breite Eingänge als `entrance`. Gespeichert werden nur kanonische
-Offsets. Verliert eine gespeicherte `base-surface`-Reward-Zelle durch eine Formänderung ihre Domain,
-setzt der Ladepfad das Reward auf die nächste freie Basiszelle um oder macht es wieder unplatziert
-([`relocateStrandedBaseSurfaceRewards`](../../src/persistentBase/PersistentBasePlacementRules.ts)).
+`base-surface`, drei Felder breite Eingänge als `entrance` und die Feuerstelle auf dem Anker als
+`hearth`. Bastionen und Feuerstelle sind die feste Form der Basis (`isPersistentBaseSolidDomain`):
+Sie kollidieren und tragen keine frei platzierten Bauten. Gespeichert werden nur kanonische
+Offsets. Liegt ein gespeichertes Reward durch eine Formänderung auf einer Kernzelle, die seine Regel
+nicht mehr erlaubt, setzt der Ladepfad es auf die nächste freie erlaubte Kernzelle um oder macht es
+wieder unplatziert ([`relocateStrandedCoreRewards`](../../src/persistentBase/PersistentBasePlacementRules.ts)).
 Ein Reward bleibt nie unsichtbar platziert.
 
 Alle Basisobjekte – Rewards, persönliche Beiträge und Turmwinkel – werden kanonisch, also ungedreht,

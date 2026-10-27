@@ -37,7 +37,7 @@ import {
   getLobbyWorldDefinition,
   isLobbyWorldDefinitionId,
 } from '../../src/config/authoring/lobbyWorld';
-import { getPersistentBaseCoreSurfaceOffsets } from '../../src/persistentBase/PersistentBaseCore';
+import { getPersistentBaseCoreSolidOffsets } from '../../src/persistentBase/PersistentBaseCore';
 import { isValidPersistentBaseSite } from '../../src/world/WorldRuntimeContext';
 import { CANOPY_RADIUS, CELL_SIZE, ROCK_HP_MAX } from '../../src/config';
 import { CANOPY_ASSETS } from '../../src/arena/trees/CanopyAssets';
@@ -113,7 +113,7 @@ describe('LobbyWorld – Authoring', () => {
     expect(core?.role).toBe('main');
     expect(core?.shape).toEqual({
       kind: 'cells',
-      cells: getPersistentBaseCoreSurfaceOffsets(),
+      cells: getPersistentBaseCoreSolidOffsets(),
     });
     // Der Anker der Stelle ist die Mittelzelle; der Shape-Ursprung liegt drei Zellen davor.
     expect(core?.anchor).toEqual({
@@ -493,11 +493,13 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
       gridY: LOBBY_SPAWN_FOCUS_CELL.gridY,
     });
     expect(isValidPersistentBaseSite(world.persistentBaseSite)).toBe(true);
-    // Die vierseitig offene Kernform; der Hof bleibt begehbar.
-    expect(world.bases[0]?.cells).toHaveLength(getPersistentBaseCoreSurfaceOffsets().length);
-    expect(world.bases[0]?.cells.some((cell) => (
-      cell.gridX === LOBBY_SPAWN_FOCUS_CELL.gridX && cell.gridY === LOBBY_SPAWN_FOCUS_CELL.gridY
-    ))).toBe(false);
+    // Die vierseitig offene Kernform mit der Feuerstelle auf dem Anker; der Hof um sie bleibt begehbar.
+    expect(world.bases[0]?.cells).toHaveLength(getPersistentBaseCoreSolidOffsets().length);
+    const isBaseCell = (dx: number, dy: number) => world.bases[0]?.cells.some((cell) => (
+      cell.gridX === LOBBY_SPAWN_FOCUS_CELL.gridX + dx && cell.gridY === LOBBY_SPAWN_FOCUS_CELL.gridY + dy
+    ));
+    expect(isBaseCell(0, 0)).toBe(true);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 2], [-2, -2]] as const) expect(isBaseCell(dx, dy)).toBe(false);
   });
 
   it('stellt die Gebaeude nach und nach mit den Host-Freischaltungen auf', () => {
