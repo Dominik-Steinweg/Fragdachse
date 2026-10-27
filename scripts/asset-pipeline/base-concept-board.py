@@ -35,7 +35,7 @@ TURRETS = dict(core=[((0, 0), 'plasma', 225), ((1, 0), 'rocket', 260), ((6, 1), 
 LAMP_GAIN = 3.0
 # Light-map lights by socket kind: colour, strength, reach in metres; tuned so that pools stay local
 # and the courtyard centre stays dark, as in the chosen night reference.
-GAME_LIGHTS = {'lamp': ((1.0, .68, .38), .55, 2.2), 'fire': ((1.0, .55, .25), .75, 2.8)}
+GAME_LIGHTS = {'lamp': ((1.0, .68, .38), .55, 2.2), 'fire': ((1.0, .55, .25), .75, 2.8), 'torch': ((1.0, .56, .26), .45, 1.5)}
 N, NE, E, SE, S, SW, W, NW = 1, 2, 4, 8, 16, 32, 64, 128
 
 
@@ -294,7 +294,7 @@ def reference_board(folder, ground, round_label, ref_day, ref_night):
     height = 84 + sum(28 + max(im.height for _, im in row) + gap for row in rows)
     board = Image.new('RGB', (width, height), BG)
     d = ImageDraw.Draw(board)
-    label(d, (gap, 12), f'{round_label} · Palisadenschanze in Blender nach Referenz 5', 26)
+    label(d, (gap, 12), f'{round_label} · Palisadenschanze in Blender nach Referenz 5 · Spielkies mit transparenten Schichten', 26)
     label(d, (gap, 48), 'Spielboden Karte 04 (12:00 / 23:00) als Grund, ohne Nebel wie die Referenz, Nachtleuchten wie Bloom nachgestellt · '
                         '1:1 = 32 px pro Feld · Probetürme mittig auf ihren Zellen', 15, MUTED)
     y = 84

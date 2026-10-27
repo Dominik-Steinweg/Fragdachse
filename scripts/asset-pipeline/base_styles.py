@@ -7,7 +7,7 @@ rampart toe. Corners get small accents only; gate ends carry the lights. Sockets
 particle sources: lamp_* (warm lamp light), fire_* (open fire), chimney_* (smoke).
 """
 import math
-from base_structure_parts import (Batch, quadrants, cell_class, end_direction, corner_direction,
+from base_structure_parts import (Batch, quadrants, cell_class, end_direction, corner_direction, side_normals,
                                   height_sheet, cone, scatter_rects)
 
 
@@ -168,6 +168,17 @@ class Fort(Style):
             a = rng.uniform(0, math.tau)
             self.b.ell((x + r * .55 * math.cos(a), y + r * .55 * math.sin(a), h - .02), (r * .6, r * .45, .025), self.p['moss'], 8, 4)
 
+    def torch_out(self, x, y, outward, rng):
+        """Small torch on an iron bracket outside the palisade, as on the core."""
+        b, p = self.b, self.p
+        z = 1.18 + rng.uniform(-.04, .04)
+        ox, oy = outward
+        b.rod((x - ox * .12, y - oy * .12, z - .1), (x, y, z - .1), .012, p['dark'], 6)
+        b.rod((x - ox * .02, y - oy * .02, z - .26), (x + ox * .015, y + oy * .015, z), .018, p['oak'], 6)
+        b.cylinder((x + ox * .015, y + oy * .015, z + .015), .034, .05, p['iron'], 10, .004)
+        b.ell((x + ox * .015, y + oy * .015, z + .05), (.026, .026, .03), p['ember'], 8, 4)
+        self.socket('torch', x + ox * .015, y + oy * .015, z + .1)
+
     def post_lantern(self, x, y, rng):
         """Small square gate post with a lantern standing on top, as on the core."""
         b, p, h = self.b, self.p, 1.45
@@ -203,12 +214,16 @@ class Fort(Style):
 
     def feature(self, kind, cx, cy, mask, rng):
         b, p = self.b, self.p
+        # Decks stay free for turrets: light hangs outside, small torches on the open sides and corners.
+        for nx, ny in side_normals(mask):
+            if kind in ('straight', 'end') and rng.random() < .5:
+                self.torch_out(cx + nx * (self.HALF + .06) + ny * .12, cy + ny * (self.HALF + .06) + nx * .12, (nx, ny), rng)
         if kind == 'corner':
-            # A heavier corner stake and a fire basket in the inner corner of the deck.
+            # A heavier corner stake with a torch hanging out over the outer corner.
             dx, dy = corner_direction(mask)
             x, y = cx + dx * (self.HALF - self.R - .02), cy + dy * (self.HALF - self.R - .02)
             self.log(x, y, rng, .12, self.PZ + .8)
-            self.brazier(cx + dx * .22, cy + dy * .22, self.PZ, .1, rng)
+            self.torch_out(x + dx * .14, y + dy * .14, (dx * .7, dy * .7), rng)
         elif kind == 'end':
             # Two uniform gate posts on the end corners, each with a lantern on top.
             dx, dy = end_direction(mask)

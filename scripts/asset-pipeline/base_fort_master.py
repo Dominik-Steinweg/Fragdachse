@@ -2,14 +2,15 @@
 
 Built after the chosen reference (refs round 5, variant 5): four L-shaped bastions of individual
 mossy sharpened stakes round flat plank decks, small uniform square gate posts with a lantern on
-top at both ends of every arm, a fire basket in the inner corner of every tower deck, and two thin
+top at both ends of every arm, many small torches on brackets outside the palisade, and two thin
 dark doorsteps across every gate. The core never changes shape, so it is built once as a whole
 instead of from the cell kit; blocking cells (decks, palisade) stay clearly apart from the walkable
 ground. Every deck centre stays clear, because each cell is a turret place.
 
-The ground belongs to the asset: decades of light traffic have worn broad, softly bounded bands of
-hard-packed pale earth through all four gates and round the stone ring in the middle; moss carpets
-the courtyard corners and the palisade feet; stones, broken plank ends and chips lie at the inner
+The ground belongs to the asset, but only as translucent layers over the game's own gravel: decades of
+light traffic have worn broad, softly bounded bands of paler compacted ground through all four gates
+and round the stone ring, made of countless faint overlapping marks; loose pebbles lie along their
+edges; moss grows in patches over the courtyard corners and the palisade feet; stones, broken plank ends and chips lie at the inner
 corners and the gate posts. Ground objects carry `fdGround` so a runtime pass can split them from
 the structure. The north-west quarter is authored once and turned by quarter turns.
 Ground textures: art/poc/base-rustic/{path-ref5,moss-ref5}.png, cut from the chosen reference and made
@@ -53,8 +54,12 @@ def smooth(f):
     return f * f * (3 - 2 * f)
 
 
-def image_material(name, file, tile, value=1.0, saturation=1.0, tint=None, tint_amount=0.0, dark=(70, 60, 48)):
-    """Ground from a seamless photo texture in world metres; FD_Alpha gives coverage, FD_Dark wear."""
+def image_material(name, file, tile, value=1.0, saturation=1.0, tint=None, tint_amount=0.0, dark=(70, 60, 48), patchy=0.0):
+    """Ground from a seamless photo texture in world metres; FD_Alpha gives coverage, FD_Dark wear.
+
+    `patchy` lets the texture's own brightness break the cover up, so the game ground shows through
+    the darker parts of the texture.
+    """
     import bpy
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
@@ -79,11 +84,40 @@ def image_material(name, file, tile, value=1.0, saturation=1.0, tint=None, tint_
     l.new(shade.outputs['Fac'], darken.inputs[0]); l.new(color, darken.inputs[1]); darken.inputs[2].default_value = (*linear(dark), 1)
     l.new(darken.outputs['Color'], bsdf.inputs['Base Color'])
     alpha = n.new('ShaderNodeAttribute'); alpha.attribute_name = 'FD_Alpha'
-    l.new(alpha.outputs['Fac'], bsdf.inputs['Alpha'])
-    bump = n.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .35; bump.inputs['Distance'].default_value = .01
     bw = n.new('ShaderNodeRGBToBW'); l.new(tex.outputs['Color'], bw.inputs[0])
+    if patchy:
+        spread = n.new('ShaderNodeMapRange'); spread.clamp = True
+        spread.inputs['From Min'].default_value = .5 - .5 / patchy; spread.inputs['From Max'].default_value = .5 + .5 / patchy
+        l.new(bw.outputs[0], spread.inputs['Value'])
+        both = n.new('ShaderNodeMath'); both.operation = 'MULTIPLY'
+        l.new(alpha.outputs['Fac'], both.inputs[0]); l.new(spread.outputs['Result'], both.inputs[1])
+        l.new(both.outputs[0], bsdf.inputs['Alpha'])
+    else:
+        l.new(alpha.outputs['Fac'], bsdf.inputs['Alpha'])
+    bump = n.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = .35; bump.inputs['Distance'].default_value = .01
     l.new(bw.outputs[0], bump.inputs['Height']); l.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
     return mat
+
+
+def ground_tint(name, rgb):
+    """Flat matte colour whose coverage comes only from FD_Alpha: wear marks over the game ground."""
+    import bpy
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    n, l = mat.node_tree.nodes, mat.node_tree.links
+    bsdf = n['Principled BSDF']; bsdf.inputs['Roughness'].default_value = .95
+    bsdf.inputs['Base Color'].default_value = (*linear(rgb), 1)
+    alpha = n.new('ShaderNodeAttribute'); alpha.attribute_name = 'FD_Alpha'
+    l.new(alpha.outputs['Fac'], bsdf.inputs['Alpha'])
+    return mat
+
+
+def turned_sheet(c, name, k, x0, y0, x1, y1, sample, mat, step=.07):
+    """ground_sheet over a local rectangle of quarter turn k."""
+    t, inv = Turn(k), Turn(-k)
+    a, b = t.p(x0, y0)[:2], t.p(x1, y1)[:2]
+    return ground_sheet(c, name, min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]),
+                        lambda x, y: sample(*inv.p(x, y)[:2]), mat, step)
 
 
 def ground_sheet(c, name, x0, y0, x1, y1, sample, mat, step=.08):
@@ -103,6 +137,7 @@ def ground_sheet(c, name, x0, y0, x1, y1, sample, mat, step=.08):
             if all(k in index for k in quad) and max(alphas[index[k]] for k in quad) > .01:
                 faces.append(tuple(index[k] for k in quad))
     ob = mesh_object(c, name, verts, faces, mat, True)
+    ob.visible_shadow = False                   # ground layers lie flat: they never shade the ground below
     for attr, values in (('FD_Alpha', alphas), ('FD_Dark', darks)):
         layer = ob.data.color_attributes.new(attr, 'FLOAT_COLOR', 'POINT')
         for v, value in zip(layer.data, values): v.color = (value, value, value, 1)
@@ -131,8 +166,10 @@ class FortMaster:
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
             brass=m('Worn brass fittings', (150, 112, 58), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7),
             moss=m('Stake moss', (70, 92, 38), .3))
-        self.path = image_material('Worn path earth', 'path-ref5.png', 1.35, .95, .95)
-        self.mossmat = image_material('Moss carpet', 'moss-ref5.png', 1.3, 1.7, .9, (118, 108, 78), .3, (40, 46, 28))
+        # Partial covers over the game's gravel: the path pales and compacts it, moss grows over it in patches.
+        self.path = image_material('Worn path earth', 'path-ref5.png', 1.35, .95, .95, patchy=1.6)
+        self.mossmat = image_material('Moss carpet', 'moss-ref5.png', 1.3, 1.7, .9, (118, 108, 78), .3, (40, 46, 28), patchy=2.2)
+        self.rut = ground_tint('Trodden earth', (78, 66, 50))
 
     def socket(self, name, xyz):
         self.sockets[f'{name}_{len(self.sockets)}'] = xyz
@@ -174,16 +211,16 @@ class FortMaster:
         b.box(t.p(x, y, z + .175), (.14, .14, .025), p['dark'], .006, t.r())
         self.socket('lamp', t.p(x, y, z + .1))
 
-    def fire_basket(self, t, x, y, z):
+    def torch(self, t, x, y, outward):
+        """Small torch on an iron bracket fixed to the outside of the palisade."""
         b, p, rng = self.b, self.p, self.rng
-        b.cylinder(t.p(x, y, z + .07), .13, .14, p['iron'], 12, .006)
-        b.cylinder(t.p(x, y, z + .135), .135, .02, p['dark'], 12, .004)
-        b.cylinder(t.p(x, y, z + .13), .11, .015, p['coal'], 12, 0)
-        b.cylinder(t.p(x, y, z + .14), .075, .014, p['ember'], 12, 0)
-        for i in range(6):
-            a = i * 1.1 + rng.uniform(0, .5)
-            b.ell(t.p(x + .06 * math.cos(a), y + .06 * math.sin(a), z + .15), (.025, .02, .014), p['coal'], 8, 4)
-        self.socket('fire', t.p(x, y, z + .3))
+        z = 1.18 + rng.uniform(-.04, .04)
+        ox, oy = outward
+        b.rod(t.p(x - ox * .12, y - oy * .12, z - .1), t.p(x, y, z - .1), .012, p['dark'], 6)
+        b.rod(t.p(x - ox * .02, y - oy * .02, z - .26), t.p(x + ox * .015, y + oy * .015, z), .018, p['oak'], 6)
+        b.cylinder(t.p(x + ox * .015, y + oy * .015, z + .015), .034, .05, p['iron'], 10, .004)
+        b.ell(t.p(x + ox * .015, y + oy * .015, z + .05), (.026, .026, .03), p['ember'], 8, 4)
+        self.socket('torch', t.p(x + ox * .015, y + oy * .015, z + .1))
 
     def deck(self, t, x0, y0, x1, y1, boards_along_y):
         """Plank deck on a tarred frame; staggered butt joints, the odd darker board, nail heads."""
@@ -239,10 +276,15 @@ class FortMaster:
         for a, b_ in (((-LINE + .2, LINE - LOG_R - .035), (-GATE - .15, LINE - LOG_R - .035)),
                       ((-LINE + LOG_R + .035, GATE + .15), (-LINE + LOG_R + .035, LINE - .2))):
             self.beam(t, a, b_, 1.15, .06, .08)                                  # binding wale inside the stakes
-        # Uniform gate posts with lanterns at both ends of both arms; a fire basket in the corner.
+        # Uniform gate posts with lanterns at both ends of both arms; the decks stay free for turrets,
+        # so all other light hangs outside: small torches on brackets along the outer palisade.
         for x, y in ((-GATE, LINE), (-GATE, inner_post), (-LINE, GATE), (-inner_post, GATE)):
             self.post(t, x, y)
-        self.fire_basket(t, -3.5 + WALL + .2, 3.5 - WALL - .2, DECK)
+        out = LINE + LOG_R + .1
+        for u in (-3.0, -2.5, -2.0):
+            self.torch(t, u, out, (0, 1))
+            self.torch(t, -out, -u, (-1, 0))
+        self.torch(t, -LINE - .2, LINE + .2, (-.7, .7))
         self.gate(t)
 
     def gate(self, t):
@@ -265,6 +307,8 @@ class FortMaster:
             dark = .1 + .2 * max(0.0, wobble(x * 1.9, y * 1.9, 5))
             return (.004, max(0.0, min(1.0, cover)), min(1.0, dark))
         ground_sheet(self.c, 'Worn path ground', -5.6, -5.6, 5.6, 5.6, worn, self.path, .08)
+        self.wear_marks()
+        self.pebbles()
 
         def moss(x, y):
             far = max(abs(x), abs(y))
@@ -272,8 +316,51 @@ class FortMaster:
             if rim <= .01: return None
             f = rim * (1 - smooth(path_wear(x, y) * 1.25 - .15))
             f *= .8 + .2 * wobble(x * 3.1, y * 3.1, 2)
-            return (.003, max(0.0, min(1.0, f * 1.15)), .25 * (1 - rim))
+            return (.003, max(0.0, min(1.0, f * .95)), .25 * (1 - rim))
         ground_sheet(self.c, 'Moss carpet', -4.6, -4.6, 4.6, 4.6, moss, self.mossmat, .07)
+
+    def wear_marks(self):
+        """Countless faint, overlapping wheel and foot marks through every gate.
+
+        The marks of one gate are summed into a single translucent sheet (alpha = 1 - prod(1 - a)):
+        dozens of stacked transparent sheets would exceed the renderer's transparency depth and
+        render black.
+        """
+        rng = self.rng
+        for k in range(4):
+            marks = []
+            for _ in range(70):
+                x0 = rng.gauss(0, .55)
+                y_end, y_start = rng.uniform(.8, 1.9), rng.uniform(4.0, 5.3)
+                marks.append((x0, rng.uniform(-.12, .12), rng.uniform(.07, .18), y_end, y_start, rng.uniform(.035, .09)))
+
+            def sample(x, y, marks=marks):
+                keep = 1.0
+                for x0, drift, width, y_end, y_start, strength in marks:
+                    if not y_end < y < y_start: continue
+                    centre = x0 + drift * (y - y_end) / (y_start - y_end) + .03 * math.sin(y * 2.7 + x0 * 5)
+                    across = abs(x - centre)
+                    if across >= width: continue
+                    along = min(1.0, (y - y_end) / .6, (y_start - y) / .9)
+                    keep *= 1 - strength * (1 - across / width) * along
+                a = 1 - keep
+                return None if a <= .003 else (.0045, a, 0.0)
+            turned_sheet(self.c, 'Wear marks', k, -2.0, .8, 2.0, 5.3, sample, self.rut, .04)
+
+    def pebbles(self):
+        """Loose pebbles and grit pushed to the sides of the worn bands, a few in the middle."""
+        b, rng, p = self.b, self.rng, self.p
+        placed = 0
+        while placed < 520:
+            x, y = rng.uniform(-5.2, 5.2), rng.uniform(-5.2, 5.2)
+            f = path_wear(x, y)
+            edge = 1 - abs(f - .45) / .45                                  # most along the band edges
+            if f < .05 or rng.random() > .15 + .85 * max(0.0, edge): continue
+            if max(abs(x), abs(y)) > 2.45 and min(abs(x), abs(y)) > 1.45 and max(abs(x), abs(y)) < 3.65: continue
+            s = rng.uniform(.012, .035) if rng.random() < .85 else rng.uniform(.04, .07)
+            b.box((x, y, s * .25), (s * rng.uniform(1, 1.5), s, s * .6), p['stone'] if rng.random() < .7 else p['ringstone'],
+                  s * .25, (0, 0, rng.uniform(0, 3)), s * .2, rng)
+            placed += 1
 
     def rubble(self, k):
         """Stones, broken plank ends and chips at the inner corner and at the gate post feet."""
@@ -321,6 +408,6 @@ class FortMaster:
         self.ring()
         self.ground()
         for ob in self.b.flush('Fort master'):
-            if any(key in ob.name for key in ('Wood chips', 'Fieldstone', 'Wall walk flagstone')):
+            if any(key in ob.name for key in ('Wood chips', 'Fieldstone')):
                 ob['fdGround'] = True
         return self.sockets
