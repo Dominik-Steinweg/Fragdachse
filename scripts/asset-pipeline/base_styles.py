@@ -154,7 +154,7 @@ class Fort(Style):
             oak=m('Weathered oak', (104, 84, 60), .32), tar=m('Dark tarred timber', (58, 50, 42), .2), rope=m('Hemp cord', (142, 128, 94), .3),
             iron=m('Forged iron', (92, 96, 94), .25), dark=m('Soot iron', (43, 44, 39), .18),
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
-            brass=m('Worn brass fittings', (158, 119, 61), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7),
+            log=m('Charred fire log', (38, 33, 29), .12),
             mossy=m('Mossy log tip', (90, 100, 56), .35), moss=m('Masonry moss', (60, 76, 38), .5))
 
     def log(self, x, y, rng, r=None, top=None):
@@ -168,28 +168,47 @@ class Fort(Style):
         self.b.ell((x + r * .5 * math.cos(a), y + r * .5 * math.sin(a), h - .02), (r * .8, r * .65, .035), self.p['moss'], 8, 4)
 
     def torch_out(self, x, y, outward, rng):
-        """Small torch on an iron bracket outside the palisade, as on the core."""
+        """Large torch on an iron bracket outside the palisade, as on the core."""
         b, p = self.b, self.p
-        z = self.PZ + rng.uniform(.05, .45)
-        size = rng.choice((.75, 1.0, 1.0, 1.25))
+        z = self.PZ + rng.uniform(.1, .4)
+        size = rng.choice((1.0, 1.0, 1.15))
         ox, oy = outward
-        b.rod((x - ox * .12, y - oy * .12, z - .1), (x, y, z - .1), .012, p['dark'], 6)
-        b.rod((x - ox * .02, y - oy * .02, z - .26), (x + ox * .015, y + oy * .015, z), .018, p['oak'], 6)
-        b.cylinder((x + ox * .015, y + oy * .015, z + .015), .03 * size, .05, p['dark'], 10, .004)
-        b.ell((x + ox * .015, y + oy * .015, z + .05), (.024 * size, .021 * size, .03 * size), p['ember'], 8, 4)
-        self.socket('torch' if size >= 1 else 'torchlet', x + ox * .015, y + oy * .015, z + .1)
+        b.rod((x - ox * .18, y - oy * .18, z - .14), (x, y, z - .14), .018, p['dark'], 6)
+        b.rod((x - ox * .03, y - oy * .03, z - .34), (x + ox * .02, y + oy * .02, z), .028, p['oak'], 6)
+        hx, hy = x + ox * .02, y + oy * .02
+        b.cylinder((hx, hy, z + .03), .06 * size, .1, p['tar'], 12, .008)
+        for i in range(4):
+            b.box((hx, hy, z + .03), (.13 * size, .012, .1), p['dark'], .002, (0, 0, i * math.pi / 4))
+        b.ell((hx, hy, z + .085), (.05 * size, .045 * size, .03 * size), p['ember'], 10, 4, (0, 0, rng.uniform(0, 3)))
+        self.socket('torch', hx, hy, z + .14)
 
-    def post_lantern(self, x, y, rng):
-        """Small square gate post with a lantern standing on top, as on the core."""
+    def post_bowl(self, x, y, rng):
+        """Small square gate post with an iron fire bowl on top, as on the core."""
         b, p, h = self.b, self.p, self.PZ + .5
         b.box((x, y, h / 2), (.18, .18, h), p['oak'], .012, None, .006, rng)
         b.box((x, y, h + .02), (.21, .21, .04), p['tar'], .005)
-        b.box((x, y, h + .06), (.13, .13, .04), p['dark'], .006)
-        b.cylinder((x, y, h + .14), .05, .12, p['lamp'], 10, 0)
-        for cx, cy, w, d in ((0, -.06, .14, .02), (0, .06, .14, .02), (-.06, 0, .02, .14), (.06, 0, .02, .14)):
-            b.box((x + cx, y + cy, h + .215), (w, d, .025), p['dark'], .004)
-        b.cylinder((x, y, h + .21), .03, .02, p['lamp'], 10, 0)
-        self.socket('lamp', x, y, h + .14)
+        z = h + .04
+        r = .15
+        b.cylinder((x, y, z + .02), .07, .04, p['dark'], 10, .006)                  # foot on the post cap
+        b.cylinder((x, y, z + .085), r, .09, p['dark'], 16, .012)                    # the iron bowl
+        b.cylinder((x, y, z + .132), r - .035, .01, p['coal'], 16, 0)               # ash and coal bed inside the rim
+        for _ in range(6):                                                             # glowing gaps between the coals
+            a, d = rng.uniform(0, math.tau), (r - .07) * math.sqrt(rng.random())
+            s = rng.uniform(.03, .05)
+            b.ell((x + d * math.cos(a), y + d * math.sin(a), z + .136), (s, s * .75, .012), p['ember'], 8, 3)
+        for _ in range(12):                                                            # black coal lumps over the glow
+            a, d = rng.uniform(0, math.tau), (r - .055) * math.sqrt(rng.random())
+            s = rng.uniform(.02, .038)
+            b.ell((x + d * math.cos(a), y + d * math.sin(a), z + .145), (s, s * .8, s * .6), p['coal'], 8, 4)
+        for i in range(3):                                                             # charred log ends meeting in the fire
+            a = i * math.tau / 3 + rng.uniform(-.3, .3)
+            ln = rng.uniform(.1, .13)
+            b.rod((x + math.cos(a) * ln, y + math.sin(a) * ln, z + .15), (x - math.cos(a) * .015, y - math.sin(a) * .015, z + .19),
+                  .026, p['log'], 6)
+        for i in range(8):
+            a = i * math.tau / 8
+            b.cylinder((x + (r - .008) * math.cos(a), y + (r - .008) * math.sin(a), z + .132), .008, .006, p['iron'], 6, 0)
+        self.socket('bowl', x, y, z + .2)
 
     def quadrant(self, q, rng):
         b, p, H, R = self.b, self.p, self.HALF, self.R
@@ -216,9 +235,9 @@ class Fort(Style):
 
     def feature(self, kind, cx, cy, mask, rng):
         b, p = self.b, self.p
-        # Decks stay free for turrets: light hangs outside, small torches on the open sides and corners.
+        # Decks stay free for turrets: light hangs outside, large torches at the corners and now and then on an open side.
         for nx, ny in side_normals(mask):
-            if kind in ('straight', 'end') and rng.random() < .3:
+            if kind in ('straight', 'end') and rng.random() < .12:
                 shift = rng.uniform(-.3, .3)
                 self.torch_out(cx + nx * (self.HALF + .06) + ny * shift, cy + ny * (self.HALF + .06) + nx * shift, (nx, ny), rng)
         if kind == 'isolated':
@@ -233,10 +252,10 @@ class Fort(Style):
             self.log(x, y, rng, .12, self.PZ + .8)
             self.torch_out(x + dx * .14, y + dy * .14, (dx * .7, dy * .7), rng)
         elif kind == 'end':
-            # Two uniform gate posts on the end corners, each with a lantern on top.
+            # Two uniform gate posts on the end corners, each with a fire bowl on top.
             dx, dy = end_direction(mask)
             for side in (-1, 1):
-                self.post_lantern(cx + dx * .36 - dy * side * .34, cy + dy * .36 + dx * side * .34, rng)
+                self.post_bowl(cx + dx * .36 - dy * side * .34, cy + dy * .36 + dx * side * .34, rng)
 
 
 # -- Feldstellung: sandbag walls, earth floor, steel turret plate, oil-drum fire ------------

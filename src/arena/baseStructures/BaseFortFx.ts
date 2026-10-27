@@ -5,23 +5,29 @@ import type { GpuVfxSpawnSpec } from '../../effects/gpu/GpuVfxSpawnSpec';
 import type { GpuVfxSystem } from '../../effects/gpu/GpuVfxSystem';
 
 /** Socket kinds of the fort asset that carry particles; positions are world pixels. */
-export type BaseFortEmitterKind = 'torch' | 'torchlet' | 'lamp' | 'glade';
+export type BaseFortEmitterKind = 'torch' | 'bowl';
 export interface BaseFortEmitter { readonly kind: BaseFortEmitterKind; readonly x: number; readonly y: number }
 
 /** The breeze the asset's pennants show: towards world +X, a little north. */
 const WIND = { x: 1, y: -.2 };
 const WIND_ANGLE = Math.atan2(WIND.y, WIND.x);
 /**
- * Pitch fire: the flame motif bakes its own colour (white-hot head to red tip); the core is pale and
- * licks cool towards red. Daylight washes the flame out.
+ * Two fires of one fort. Torches burn pitch: a yellow-orange flame with a pale core. The fire bowls
+ * burn wood on coal: a wider, redder flame with more smoke and sparks. Both are seen from above,
+ * where a flame rises towards the camera and leans downwind; daylight washes them out a little.
  */
-const FLAME = { core: 0xfff2c8, lick: 0xffa060, dayAlpha: .72 } as const;
+const FIRE = {
+  torch: { core: 0xffd8a0, flame: 0xffe0b8, dayAlpha: .75 },
+  bowl: { core: 0xff7a34, flame: 0xff8a48, dayAlpha: .9 },
+} as const;
+const SPARKS = [0xffc070, 0xff8a40] as const;
+const SMOKE = 0x4c4540;
 /** The flame motif's head sits this far behind the frame centre (px of the 32 px frame). */
 const FLAME_HEAD_OFFSET = 8;
 
 /**
- * One particle stream at an emitter: mean interval by day and at night (0 = silent), scaled by the
- * shared GPU quality. Night is the World's artificial-light factor (0 noon … 1 night).
+ * One particle stream at an emitter: mean interval by day and at night, scaled by the shared GPU
+ * quality. Night is the World's artificial-light factor (0 noon … 1 night).
  */
 interface Channel {
   readonly emitter: BaseFortEmitter;
@@ -33,9 +39,10 @@ interface Channel {
 }
 
 /**
- * GPU particles of the persistent base fort on the scene's shared VFX backend: torch flames,
- * embers and thin smoke at the torches, a breathing glow and moths at the lanterns, fireflies over
- * the moss at dusk. Allocation-free per frame; release kills the live members with their sources.
+ * GPU particles of the persistent base fort on the scene's shared VFX backend: large torches and
+ * fire bowls, each a slowly breathing flame over a steady glow, with sparks and smoke. The night's
+ * atmosphere comes from these fires and their light. Allocation-free per frame; release kills the
+ * live members with their sources.
  */
 export class BaseFortFx {
   private readonly flame: GpuVfxSpawnSpec;
@@ -60,27 +67,16 @@ export class BaseFortFx {
     for (const emitter of emitters) {
       const add = (dayMs: number, nightMs: number, effect: GpuVfxEffectId, spawn: Channel['spawn']) =>
         this.channels.push({ emitter, dayMs, nightMs, effect, spawn, carry: Math.random() });
-      switch (emitter.kind) {
-        case 'torch':
-          add(90, 90, flame, (e, n, t) => this.emitCore(e, 1, n, t));
-          add(70, 70, flame, (e, n, t) => this.emitFlame(e, 1, n, t));
-          add(420, 380, flame, (e, n, t) => this.emitLick(e, 1, n, t));
-          add(1800, 900, ember, (e, n, t) => this.emitEmber(e, 1, t));
-          add(700, 900, smoke, (e, n, t) => this.emitSmoke(e, n, t));
-          break;
-        case 'torchlet':
-          add(100, 100, flame, (e, n, t) => this.emitCore(e, .7, n, t));
-          add(85, 85, flame, (e, n, t) => this.emitFlame(e, .7, n, t));
-          add(640, 560, flame, (e, n, t) => this.emitLick(e, .7, n, t));
-          add(3400, 1700, ember, (e, n, t) => this.emitEmber(e, .7, t));
-          break;
-        case 'lamp':
-          add(0, 700, ember, (e, n, t) => this.emitHalo(e, n, t));
-          add(0, 1300, ember, (e, n, t) => this.emitMoth(e, t));
-          break;
-        case 'glade':
-          add(0, 1100, ember, (e, n, t) => this.emitFirefly(e, t));
-          break;
+      if (emitter.kind === 'torch') {
+        add(170, 170, flame, (e, n, t) => this.emitTorchCore(e, n, t));
+        add(130, 130, flame, (e, n, t) => this.emitTorchFlame(e, n, t));
+        add(1500, 900, ember, (e, n, t) => this.emitSpark(e, .8, SPARKS[0], t));
+        add(800, 1000, smoke, (e, n, t) => this.emitSmoke(e, n, .8, t));
+      } else {
+        add(190, 190, flame, (e, n, t) => this.emitBowlCore(e, n, t));
+        add(130, 130, flame, (e, n, t) => this.emitBowlFlame(e, n, t));
+        add(380, 280, ember, (e, n, t) => this.emitSpark(e, 1, SPARKS[Math.random() < .4 ? 0 : 1], t));
+        add(420, 520, smoke, (e, n, t) => this.emitSmoke(e, n, 1.3, t));
       }
     }
     this.unregister = system.registerEmission((deltaMs, nowMs) => this.emit(deltaMs, nowMs));
@@ -95,10 +91,8 @@ export class BaseFortFx {
     if (!this.active) return;
     const night = this.night;
     for (const channel of this.channels) {
-      // Night-only streams fade in with the dusk instead of switching on at a threshold.
-      const base = channel.dayMs > 0 ? channel.dayMs + (channel.nightMs - channel.dayMs) * night
-        : night > .15 ? channel.nightMs / night : 0;
-      const interval = base > 0 ? this.system.quality.scaleFrequency(base, channel.effect) : 0;
+      const base = channel.dayMs + (channel.nightMs - channel.dayMs) * night;
+      const interval = this.system.quality.scaleFrequency(base, channel.effect);
       if (interval <= 0) continue;
       channel.carry += deltaMs / interval;
       while (channel.carry >= 1) {
@@ -108,155 +102,101 @@ export class BaseFortFx {
     }
   }
 
-  /** Daylight washes the flame out; at night it burns at full strength. */
-  private flameAlpha(night: number): number {
-    return FLAME.dayAlpha + (1 - FLAME.dayAlpha) * night;
+  /** Daylight washes a flame out; at night it burns at full strength. */
+  private static dayFade(dayAlpha: number, night: number): number {
+    return dayAlpha + (1 - dayAlpha) * night;
   }
 
-  /**
-   * Places a flame motif with its head on the torch: the frame centre lies downwind of the head
-   * along the member's own lean.
-   */
-  private placeFlame(spec: GpuVfxSpawnSpec, emitter: BaseFortEmitter, lean: number, scale: number, jitter: number): void {
-    const back = FLAME_HEAD_OFFSET * scale;
-    spec.x = emitter.x + Math.cos(lean) * back + (Math.random() - .5) * jitter;
-    spec.y = emitter.y + Math.sin(lean) * back + (Math.random() - .5) * jitter;
-    spec.rotation = lean;
-  }
-
-  /**
-   * The hot core at the torch head: small, pale and nearly still. Members live several spawn
-   * intervals, so the core holds steady instead of strobing.
-   */
-  private emitCore(emitter: BaseFortEmitter, size: number, night: number, nowMs: number): void {
+  /** A steady glow under a flame: long, overlapping lives and next to no motion keep it from strobing. */
+  private glow(emitter: BaseFortEmitter, scale: number, alpha: number, tint: number, nowMs: number): void {
     const spec = this.flame;
     spec.frame = GpuVfxFrameId.FlameCore;
-    spec.lifeMs = 300 + Math.random() * 80;
-    spec.x = emitter.x + (Math.random() - .5) * .8 * size; spec.y = emitter.y + (Math.random() - .5) * .8 * size;
-    spec.vx = WIND.x * 2; spec.vy = WIND.y * 2;
+    spec.lifeMs = 700 + Math.random() * 160;
+    spec.x = emitter.x + (Math.random() - .5); spec.y = emitter.y + (Math.random() - .5);
+    spec.vx = WIND.x * 1.5; spec.vy = WIND.y * 1.5;
     spec.positionEase = GpuVfxEase.Linear;
-    spec.scaleStart = .11 * size; spec.scaleEnd = .09 * size; spec.scaleEase = GpuVfxEase.Linear;
-    spec.stretchStart = 1; spec.stretchEnd = 1;
-    spec.alphaStart = .7 * this.flameAlpha(night); spec.alphaEnd = .15;
+    spec.scaleStart = scale; spec.scaleEnd = scale * .9; spec.scaleEase = GpuVfxEase.Linear;
+    spec.stretchStart = 1; spec.stretchEnd = 1.1;
+    spec.alphaStart = alpha; spec.alphaEnd = alpha * .25;
     spec.alphaEase = GpuVfxEase.Linear;
-    spec.rotation = 0; spec.angularVelocity = 0;
-    spec.tint = FLAME.core; spec.tintBlendStart = 1; spec.tintBlendEnd = 1;
+    spec.rotation = WIND_ANGLE; spec.angularVelocity = 0;
+    spec.tint = tint; spec.tintBlendStart = 1; spec.tintBlendEnd = 1;
     this.system.spawn(spec, this.flameSource, nowMs);
   }
 
   /**
-   * The flame itself, seen from above: it rises towards the camera, so it shows as short tongues
-   * fanning out of the hot core, most of them downwind. A few overlap at any time and each curls
-   * and stretches slowly while it fades, so the outline changes calmly.
+   * One soft flame motif with its head over the fire, leaning `lean`. It rises towards the camera, so
+   * it grows a little, stretches downwind and fades; many overlapping members make one flame whose
+   * outline changes slowly.
    */
-  private emitFlame(emitter: BaseFortEmitter, size: number, night: number, nowMs: number): void {
+  private lick(x: number, y: number, lean: number, scale: number, lifeMs: number, alpha: number,
+    tint: number, cooling: number, nowMs: number): void {
     const spec = this.flame;
     spec.frame = GpuVfxFrameId.TorchFlame;
-    spec.lifeMs = 320 + Math.random() * 120;
-    const scale = (.2 + Math.random() * .06) * size, lean = WIND_ANGLE + (Math.random() - .5) * 2.4;
-    this.placeFlame(spec, emitter, lean, scale, .6 * size);
-    const speed = (3 + Math.random() * 3) * size;
-    spec.vx = Math.cos(lean) * speed + WIND.x * 2; spec.vy = Math.sin(lean) * speed + WIND.y * 2;
+    spec.lifeMs = lifeMs;
+    spec.x = x + Math.cos(lean) * FLAME_HEAD_OFFSET * scale; spec.y = y + Math.sin(lean) * FLAME_HEAD_OFFSET * scale;
+    const speed = 2 + Math.random() * 2;
+    spec.vx = WIND.x * speed; spec.vy = WIND.y * speed;
     spec.positionEase = GpuVfxEase.Linear;
-    spec.scaleStart = scale; spec.scaleEnd = scale * .85; spec.scaleEase = GpuVfxEase.Linear;
-    spec.stretchStart = .7; spec.stretchEnd = .95;
-    spec.alphaStart = (.48 + .12 * night) * this.flameAlpha(night); spec.alphaEnd = 0;
+    spec.scaleStart = scale * .85; spec.scaleEnd = scale * 1.05; spec.scaleEase = GpuVfxEase.Linear;
+    spec.stretchStart = .8; spec.stretchEnd = 1.05;
+    spec.alphaStart = alpha; spec.alphaEnd = 0;
     spec.alphaEase = GpuVfxEase.Linear;
-    spec.angularVelocity = (Math.random() - .5) * 1.2;
-    spec.tint = 0xffffff; spec.tintBlendStart = 1; spec.tintBlendEnd = 1;
+    spec.rotation = lean; spec.angularVelocity = (Math.random() - .5) * .25;
+    spec.tint = tint; spec.tintBlendStart = cooling; spec.tintBlendEnd = 1;
     this.system.spawn(spec, this.flameSource, nowMs);
   }
 
-  /** Now and then a thin lick stretches off the flame's tip with the breeze and cools to red. */
-  private emitLick(emitter: BaseFortEmitter, size: number, night: number, nowMs: number): void {
-    const spec = this.flame;
-    spec.frame = GpuVfxFrameId.TorchFlame;
-    spec.lifeMs = 220 + Math.random() * 80;
-    const scale = .26 * size, lean = WIND_ANGLE + (Math.random() - .5) * 1;
-    this.placeFlame(spec, emitter, lean, scale, .6 * size);
-    const speed = (9 + Math.random() * 5) * size;
-    spec.vx = Math.cos(lean) * speed; spec.vy = Math.sin(lean) * speed;
-    spec.positionEase = GpuVfxEase.Linear;
-    spec.scaleStart = scale; spec.scaleEnd = scale * .7; spec.scaleEase = GpuVfxEase.Linear;
-    spec.stretchStart = .95; spec.stretchEnd = 1.3;
-    spec.alphaStart = .4 * this.flameAlpha(night); spec.alphaEnd = 0;
-    spec.alphaEase = GpuVfxEase.Linear;
-    spec.angularVelocity = 0;
-    spec.tint = FLAME.lick; spec.tintBlendStart = .3; spec.tintBlendEnd = 1;
-    this.system.spawn(spec, this.flameSource, nowMs);
+  private emitTorchCore(emitter: BaseFortEmitter, night: number, nowMs: number): void {
+    this.glow(emitter, .24, .5 * BaseFortFx.dayFade(FIRE.torch.dayAlpha, night), FIRE.torch.core, nowMs);
   }
 
-  /** Small embers break off, ride the breeze and burn out. */
-  private emitEmber(emitter: BaseFortEmitter, size: number, nowMs: number): void {
+  /** The torch flame: a narrow fan of soft licks downwind, each slow and long-lived. */
+  private emitTorchFlame(emitter: BaseFortEmitter, night: number, nowMs: number): void {
+    this.lick(emitter.x + (Math.random() - .5) * 1.2, emitter.y + (Math.random() - .5) * 1.2,
+      WIND_ANGLE + (Math.random() - .5) * .5, .44 + Math.random() * .08, 820 + Math.random() * 220,
+      (.3 + .06 * night) * BaseFortFx.dayFade(FIRE.torch.dayAlpha, night), FIRE.torch.flame, 1, nowMs);
+  }
+
+  private emitBowlCore(emitter: BaseFortEmitter, night: number, nowMs: number): void {
+    this.glow(emitter, .32, .5 * BaseFortFx.dayFade(FIRE.bowl.dayAlpha, night), FIRE.bowl.core, nowMs);
+  }
+
+  /** The bowl fire: licks rise from all over the coal bed, spread wider and redder than a torch's. */
+  private emitBowlFlame(emitter: BaseFortEmitter, night: number, nowMs: number): void {
+    const a = Math.random() * Math.PI * 2, d = 2.6 * Math.sqrt(Math.random());
+    this.lick(emitter.x + Math.cos(a) * d, emitter.y + Math.sin(a) * d,
+      WIND_ANGLE + (Math.random() - .5) * 1.4, .36 + Math.random() * .1, 900 + Math.random() * 260,
+      (.26 + .06 * night) * BaseFortFx.dayFade(FIRE.bowl.dayAlpha, night), FIRE.bowl.flame, .45, nowMs);
+  }
+
+  /** Sparks break off, drift with the breeze and burn out. */
+  private emitSpark(emitter: BaseFortEmitter, size: number, tint: number, nowMs: number): void {
     const spec = this.ember;
     spec.frame = GpuVfxFrameId.DeathGlow;
-    spec.lifeMs = 600 + Math.random() * 600;
-    spec.x = emitter.x + (Math.random() - .5) * 2; spec.y = emitter.y + (Math.random() - .5) * 2;
-    const speed = 10 + Math.random() * 12;
-    spec.vx = WIND.x * speed + (Math.random() - .5) * 8; spec.vy = WIND.y * speed + (Math.random() - .5) * 8;
-    spec.scaleStart = (.045 + Math.random() * .02) * size; spec.scaleEnd = .015;
+    spec.lifeMs = 650 + Math.random() * 400;
+    spec.x = emitter.x + (Math.random() - .5) * 3; spec.y = emitter.y + (Math.random() - .5) * 3;
+    const lean = WIND_ANGLE + (Math.random() - .5) * 1.6, speed = 8 + Math.random() * 14;
+    spec.vx = Math.cos(lean) * speed; spec.vy = Math.sin(lean) * speed;
+    spec.scaleStart = (.045 + Math.random() * .025) * size; spec.scaleEnd = .015;
     spec.alphaStart = 1; spec.alphaEnd = 0;
     spec.rotation = 0; spec.angularVelocity = 0;
-    spec.tint = Math.random() < .4 ? 0xffd88a : 0xffa04a;
+    spec.tint = tint;
     this.system.spawn(spec, this.emberSource, nowMs);
   }
 
-  /** Thin pitch smoke, visible by day; at night it is lit by the light map and mostly gone. */
-  private emitSmoke(emitter: BaseFortEmitter, night: number, nowMs: number): void {
+  /** Smoke drifting off downwind, visible by day; at night it is lit by the light map and thinner. */
+  private emitSmoke(emitter: BaseFortEmitter, night: number, size: number, nowMs: number): void {
     const spec = this.smoke;
-    spec.lifeMs = 2000 + Math.random() * 1200;
-    spec.x = emitter.x + WIND.x * 3; spec.y = emitter.y + WIND.y * 3;
-    const speed = 7 + Math.random() * 6;
+    spec.lifeMs = 2200 + Math.random() * 900;
+    spec.x = emitter.x + WIND.x * 4; spec.y = emitter.y + WIND.y * 4;
+    const speed = 6 + Math.random() * 5;
     spec.vx = WIND.x * speed + (Math.random() - .5) * 3; spec.vy = WIND.y * speed + (Math.random() - .5) * 3;
-    spec.scaleStart = .1 + Math.random() * .04; spec.scaleEnd = .42 + Math.random() * .16;
-    spec.alphaStart = .26 - .1 * night; spec.alphaEnd = 0;
-    spec.rotation = Math.random() * Math.PI * 2; spec.angularVelocity = (Math.random() - .5) * .6;
-    spec.tint = 0x5f5850;
+    spec.scaleStart = (.12 + Math.random() * .04) * size; spec.scaleEnd = (.48 + Math.random() * .16) * size;
+    spec.alphaStart = .28 - .1 * night; spec.alphaEnd = 0;
+    spec.rotation = Math.random() * Math.PI * 2; spec.angularVelocity = (Math.random() - .5) * .4;
+    spec.tint = SMOKE;
     this.system.spawn(spec, this.smokeSource, nowMs);
-  }
-
-  /** A slow, soft breathing of the lantern glass at dusk and night. */
-  private emitHalo(emitter: BaseFortEmitter, night: number, nowMs: number): void {
-    const spec = this.ember;
-    spec.frame = GpuVfxFrameId.DeathGlow;
-    spec.lifeMs = 1300 + Math.random() * 400;
-    spec.x = emitter.x; spec.y = emitter.y; spec.vx = 0; spec.vy = 0;
-    spec.scaleStart = .75 + Math.random() * .15; spec.scaleEnd = 1.15;
-    spec.alphaStart = .14 * night; spec.alphaEnd = 0;
-    spec.rotation = 0; spec.angularVelocity = 0;
-    spec.tint = 0xffc070;
-    this.system.spawn(spec, this.emberSource, nowMs);
-  }
-
-  /** Moths flitting through the lantern light: pale specks on short crossing arcs. */
-  private emitMoth(emitter: BaseFortEmitter, nowMs: number): void {
-    const spec = this.ember;
-    spec.frame = GpuVfxFrameId.DeathGlow;
-    const angle = Math.random() * Math.PI * 2, radius = 5 + Math.random() * 8;
-    spec.lifeMs = 450 + Math.random() * 400;
-    spec.x = emitter.x + Math.cos(angle) * radius; spec.y = emitter.y + Math.sin(angle) * radius;
-    const turn = angle + (Math.random() < .5 ? 1 : -1) * Math.PI / 2, speed = 18 + Math.random() * 16;
-    spec.vx = Math.cos(turn) * speed; spec.vy = Math.sin(turn) * speed;
-    spec.scaleStart = .1; spec.scaleEnd = .08;
-    spec.alphaStart = .75; spec.alphaEnd = 0;
-    spec.rotation = 0; spec.angularVelocity = 0;
-    spec.tint = 0xfff0d6;
-    this.system.spawn(spec, this.emberSource, nowMs);
-  }
-
-  /** Fireflies over the moss: a slow drift and a single fading blink each. */
-  private emitFirefly(emitter: BaseFortEmitter, nowMs: number): void {
-    const spec = this.ember;
-    spec.frame = GpuVfxFrameId.DeathGlow;
-    const angle = Math.random() * Math.PI * 2, speed = 3 + Math.random() * 6;
-    spec.lifeMs = 1500 + Math.random() * 1100;
-    spec.x = emitter.x + (Math.random() - .5) * 44; spec.y = emitter.y + (Math.random() - .5) * 44;
-    spec.vx = Math.cos(angle) * speed; spec.vy = Math.sin(angle) * speed;
-    spec.scaleStart = .22; spec.scaleEnd = .14;
-    spec.alphaStart = .85; spec.alphaEnd = 0;
-    spec.rotation = 0; spec.angularVelocity = 0;
-    spec.tint = 0xd8f27a;
-    this.system.spawn(spec, this.emberSource, nowMs);
   }
 
   destroy(): void {

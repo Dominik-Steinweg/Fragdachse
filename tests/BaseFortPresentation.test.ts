@@ -91,7 +91,7 @@ describe('persistent base fort presentation', () => {
     expect(fort.calls.at(-1)).toEqual(['remove', core.id]);
   });
 
-  it('publishes every runtime pass of the core with lights on the posts and outside the palisade', () => {
+  it('publishes every runtime pass of the core with fire bowls on the posts and torches outside the palisade', () => {
     const asset = baseFortCoreAsset()!;
     expect(asset).not.toBeNull();
     const passes: BaseFortPass[] = ['beauty', 'albedo', 'elevation', 'solid', 'caster-height', 'ground',
@@ -103,9 +103,11 @@ describe('persistent base fort presentation', () => {
       expect(Math.abs(socket.x)).toBeLessThan(half);
       expect(Math.abs(socket.y)).toBeLessThan(half);
     }
-    // Four gate posts per bastion carry a lantern; no light stands inside the deck cells' centres.
-    expect(sockets.filter(([name]) => name.startsWith('lamp_'))).toHaveLength(16);
-    expect(sockets.some(([name]) => name.startsWith('torch'))).toBe(true);
+    // Four gate posts per bastion carry a fire bowl, three large torches stand outside each bastion;
+    // every socket is one of the runtime's fire kinds.
+    expect(sockets.filter(([name]) => name.startsWith('bowl_'))).toHaveLength(16);
+    expect(sockets.filter(([name]) => name.startsWith('torch_'))).toHaveLength(12);
+    expect(sockets.every(([name]) => /^(bowl|torch)_\d+$/.test(name))).toBe(true);
   });
 
   it('publishes the outpost kit variants with one frame per corner-suppressed mask and sockets inside their frames', () => {

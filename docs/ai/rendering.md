@@ -383,8 +383,9 @@ Turmzellen bleiben zellbasiert; das Fort präsentiert sie nur.
   Körper unter Turm-Aura und -Sprite) und eine durchscheinende Bodenschicht (`fdGround`) in `DEPTH.BASES` über dem
   Baubereichskies. Die Bodenschicht liegt über den Boden-Chunks und bekommt deren Sonnenschattierung nicht; ein
   fester Tint gleicht sie an.
-- Fackeln und Laternen sind Sockets; nur Laternen und große Fackeln setzen kleine Lightmap-Lichter, sonst überflutet
-  die Summe der Lichter das Fort.
+- Fackeln und Feuerschalen sind Sockets (`torch_*`, `bowl_*`); Flammen, Funken und Rauch kommen als GPU-Partikel,
+  das Licht als ein Lightmap-Licht je Socket. Wenige große Feuer statt vieler kleiner, sonst überflutet die Summe der
+  Lichter das Fort; die Nachtstimmung trägt diese Beleuchtung, nicht zusätzliche Umgebungspartikel.
 - Alle anderen freundlichen Zellbasen (Vorposten, Mittelbasen; nicht Spawnpunkte, nicht Gegnerbasen) setzt derselbe
   Renderer einmalig aus dem Fort-Kit zusammen: je Zelle der Rahmen ihrer corner-suppressed Maske (gleiche Masken wie
   `AutoTiler`), Variante deterministisch aus der Zellposition, Farb-Passes überlagert, Caster-Höhen per Maximum. Danach

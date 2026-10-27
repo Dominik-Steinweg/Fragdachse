@@ -2,7 +2,7 @@ import type * as Phaser from 'phaser';
 import manifest from '../../assets/manifests/base-structures.json';
 
 /** Runtime emission layers of the fort: torch embers and lantern glass. */
-export type BaseFortLayer = 'forge' | 'lamp';
+export type BaseFortLayer = 'forge';
 export type BaseFortPass = 'beauty' | 'albedo' | 'elevation' | 'solid' | 'caster-height' | 'ground' | `emission-${BaseFortLayer}`;
 
 export interface BaseFortSocket { readonly x: number; readonly y: number; readonly z: number }

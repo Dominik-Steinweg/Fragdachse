@@ -1,9 +1,10 @@
 """Palisadenschanze master: the persistent base core as one coherent fort (1 BU = 1 m = 32 px).
 
 Built after the chosen reference (refs round 5, variant 5): four L-shaped bastions of individual
-mossy sharpened stakes round flat plank decks, small uniform square gate posts with a lantern on
-top at both ends of every arm, many small torches on brackets outside the palisade, and two thin
-dark doorsteps across every gate. The core never changes shape, so it is built once as a whole
+mossy sharpened stakes round flat plank decks, small uniform square gate posts with an iron fire
+bowl on top at both ends of every arm, a few large torches outside the palisade (gate ends and the
+outer corner), and two thin dark doorsteps across every gate. A dark, damp foot strip sets the decks
+off from the courtyard gravel. The core never changes shape, so it is built once as a whole
 instead of from the cell kit; blocking cells (decks, palisade) stay clearly apart from the walkable
 ground. Every deck centre stays clear, because each cell is a turret place.
 
@@ -164,15 +165,17 @@ class FortMaster:
             iron=m('Forged iron', (86, 90, 88), .25), dark=m('Soot iron', (40, 41, 37), .18), stone=m('Fieldstone', (128, 124, 112), .4),
             ringstone=m('Wall walk flagstone', (122, 118, 108), .35), chip=m('Wood chips', (150, 120, 84), .25),
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
-            brass=m('Worn brass fittings', (150, 112, 58), .3), lamp=m('Separate lantern emission', (244, 153, 53), .01, .7),
+            brass=m('Worn brass fittings', (150, 112, 58), .3),
             moss=m('Stake moss', (70, 92, 38), .3), moss2=m('Old moss', (84, 96, 46), .3),
             lichen=m('Grey lichen', (150, 152, 128), .2), ringrock=m('Ring fieldstone', (112, 108, 98), .4),
             grass=m('Turf tuft', (66, 82, 40), .3), grass2=m('Dry turf tuft', (118, 108, 70), .3), fern=m('Fern frond', (52, 78, 34), .3),
-            sill=m('Threshold stone', (96, 92, 84), .4), sill2=m('Mossy threshold stone', (80, 82, 68), .35), charred=m('Charred bits', (34, 30, 27), .1))
+            sill=m('Threshold stone', (96, 92, 84), .4), sill2=m('Mossy threshold stone', (80, 82, 68), .35), charred=m('Charred bits', (34, 30, 27), .1),
+            log=m('Charred fire log', (38, 33, 29), .12))
         # Partial covers over the game's gravel: the path pales and compacts it, moss grows over it in patches.
         self.path = image_material('Worn path gravel', 'gravel-path-03.png', 2.2, .98, .9, patchy=1.25)
         self.mossmat = image_material('Moss carpet', 'moss-carpet-01.png', 1.4, .78, .78, (92, 98, 56), .3, (40, 46, 28), patchy=1.8)
         self.rut = ground_tint('Trodden earth', (78, 66, 50))
+        self.foot = ground_tint('Damp deck foot', (44, 38, 31))
         self.soot_mat = ground_tint('Torch soot', (30, 27, 24))
         self.soot = []
 
@@ -203,73 +206,77 @@ class FortMaster:
             self.stake(t, *((v, fixed) if along_x else (fixed, v)))
 
     def post(self, t, x, y):
-        """Small square gate post, iron-banded, a lantern standing on top."""
+        """Small square gate post, iron-banded, a fire bowl standing on top."""
         b, p = self.b, self.p
         b.box(t.p(x, y, POST_H / 2), (2 * POST_R, 2 * POST_R, POST_H), p['oak'], .012, t.r(), .006, self.rng)
         b.box(t.p(x, y, POST_H + .02), (2 * POST_R + .03, 2 * POST_R + .03, .04), p['tar'], .005, t.r())
         b.box(t.p(x, y, POST_H - .25), (2 * POST_R + .015, 2 * POST_R + .015, .04), p['iron'], .003, t.r())
-        b.ell(t.p(x - .03, y + .03, POST_H + .045), (.07, .055, .016), p['moss'], 8, 3)
-        self.lantern(t, x, y, POST_H + .04)
+        self.fire_bowl(t, x, y, POST_H + .04)
 
-    def lantern(self, t, x, y, z):
-        b, p = self.b, self.p
-        b.box(t.p(x, y, z + .02), (.13, .13, .04), p['dark'], .006, t.r())
-        b.cylinder(t.p(x, y, z + .1), .05, .12, p['lamp'], 10, 0)
-        for cx, cy in ((-.055, -.055), (.055, -.055), (.055, .055), (-.055, .055)):
-            b.box(t.p(x + cx, y + cy, z + .1), (.016, .016, .13), p['dark'], 0, t.r())
-        for cx, cy, w, d in ((0, -.06, .14, .02), (0, .06, .14, .02), (-.06, 0, .02, .14), (.06, 0, .02, .14)):
-            b.box(t.p(x + cx, y + cy, z + .175), (w, d, .025), p['dark'], .004, t.r())      # open frame: the glass shows from above
-        b.cylinder(t.p(x, y, z + .17), .03, .02, p['lamp'], 10, 0)
-        self.socket('lamp', t.p(x, y, z + .1))
+    def fire_bowl(self, t, x, y, z):
+        """Iron fire bowl, wider than the post: a dark rim round a bed of glowing coal under charred
+        log ends; the flames and their light come from the runtime."""
+        b, p, rng = self.b, self.p, self.rng
+        r = .15
+        b.cylinder(t.p(x, y, z + .02), .07, .04, p['dark'], 10, .006)                  # foot on the post cap
+        b.cylinder(t.p(x, y, z + .085), r, .09, p['dark'], 16, .012)                    # the iron bowl
+        b.cylinder(t.p(x, y, z + .132), r - .035, .01, p['coal'], 16, 0)               # ash and coal bed inside the rim
+        for _ in range(6):                                                             # glowing gaps between the coals
+            a, d = rng.uniform(0, math.tau), (r - .07) * math.sqrt(rng.random())
+            s = rng.uniform(.03, .05)
+            b.ell(t.p(x + d * math.cos(a), y + d * math.sin(a), z + .136), (s, s * .75, .012), p['ember'], 8, 3)
+        for _ in range(12):                                                            # black coal lumps over the glow
+            a, d = rng.uniform(0, math.tau), (r - .055) * math.sqrt(rng.random())
+            s = rng.uniform(.02, .038)
+            b.ell(t.p(x + d * math.cos(a), y + d * math.sin(a), z + .145), (s, s * .8, s * .6), p['coal'], 8, 4)
+        for i in range(3):                                                             # charred log ends meeting in the fire
+            a = i * math.tau / 3 + rng.uniform(-.3, .3)
+            ln = rng.uniform(.1, .13)
+            b.rod(t.p(x + math.cos(a) * ln, y + math.sin(a) * ln, z + .15), t.p(x - math.cos(a) * .015, y - math.sin(a) * .015, z + .19),
+                  .026, p['log'], 6)
+        for i in range(8):                                                             # rivets round the rim
+            a = i * math.tau / 8
+            b.cylinder(t.p(x + (r - .008) * math.cos(a), y + (r - .008) * math.sin(a), z + .132), .008, .006, p['iron'], 6, 0)
+        self.socket('bowl', t.p(x, y, z + .2))
 
     def torch(self, t, x, y, outward, z, size=1.0, pole=False):
-        """Torch on an iron bracket at the palisade, or on its own pole stuck in the earth bank."""
+        """Large torch on an iron bracket at the palisade, or on its own pole stuck in the earth bank:
+        a pitch-wrapped head in an iron basket, glowing at the top."""
         b, p, rng = self.b, self.p, self.rng
         ox, oy = outward
         if pole:
-            b.cylinder(t.p(x, y, z / 2), .028, z, p['bark'], 8, .004, t.r(rng.uniform(-.05, .05), rng.uniform(-.05, .05)))
+            b.cylinder(t.p(x, y, z / 2), .04, z, p['bark'], 8, .005, t.r(rng.uniform(-.05, .05), rng.uniform(-.05, .05)))
         else:
-            arm = rng.uniform(.1, .18)
-            b.rod(t.p(x - ox * arm, y - oy * arm, z - .1), t.p(x, y, z - .1), .012, p['dark'], 6)
-        b.rod(t.p(x - ox * .02, y - oy * .02, z - .24), t.p(x + ox * .015, y + oy * .015, z), .018, p['oak'], 6)
-        hx, hy = x + ox * .015, y + oy * .015
-        b.cylinder(t.p(hx, hy, z + .015), .03 * size, .05, p['dark'], 10, .004)
-        b.ell(t.p(hx, hy, z + .05), (.024 * size, .021 * size, .03 * size), p['ember'], 8, 4, t.r(0, 0, rng.uniform(0, 3)))
-        self.socket('torch' if size >= 1 else 'torchlet', t.p(hx, hy, z + .1))
-        gx, gy, _ = t.p(hx + ox * .03, hy + oy * .03)
-        self.soot.append((gx, gy, .1 + .07 * size))
-        for _ in range(rng.randrange(2, 5)):
-            a, d = rng.uniform(0, math.tau), rng.uniform(0, .09 * size)
+            arm = rng.uniform(.16, .24)
+            b.rod(t.p(x - ox * arm, y - oy * arm, z - .14), t.p(x, y, z - .14), .018, p['dark'], 6)
+        b.rod(t.p(x - ox * .03, y - oy * .03, z - .34), t.p(x + ox * .02, y + oy * .02, z), .028, p['oak'], 6)
+        hx, hy = x + ox * .02, y + oy * .02
+        b.cylinder(t.p(hx, hy, z + .03), .06 * size, .1, p['tar'], 12, .008)               # pitch-wrapped head
+        for i in range(4):                                                               # iron basket straps
+            a = i * math.pi / 4
+            b.box(t.p(hx, hy, z + .03), (.13 * size, .012, .1), p['dark'], .002, t.r(0, 0, a))
+        b.ell(t.p(hx, hy, z + .085), (.05 * size, .045 * size, .03 * size), p['ember'], 10, 4, t.r(0, 0, rng.uniform(0, 3)))
+        self.socket('torch', t.p(hx, hy, z + .14))
+        gx, gy, _ = t.p(hx + ox * .05, hy + oy * .05)
+        self.soot.append((gx, gy, .2 + .1 * size))
+        for _ in range(rng.randrange(3, 7)):
+            a, d = rng.uniform(0, math.tau), rng.uniform(0, .16 * size)
             b.box((gx + d * math.cos(a), gy + d * math.sin(a), .004), (rng.uniform(.012, .03), rng.uniform(.008, .016), .008),
                   p['charred'], .002, (0, 0, rng.uniform(0, 3)))
 
     def torches(self, t):
-        """Torches outside one quarter: never an even row. Gate ends and the corner are always lit;
-        the walls carry a few more at irregular spacing, on the palisade or on poles in the bank."""
+        """Three large torches outside one quarter, never in an even row: one beside each gate end,
+        one at the outer corner, on the palisade or on a pole in the bank."""
         rng = self.rng
-        face = LINE + LOG_R + .08
-        lit = []
-
-        def place(u, side, pole=False, z=None, size=None):
-            # side 'n': along the north face at x = u; side 'w': along the west face at y = -u.
-            out = face + (rng.uniform(.3, .6) if pole else 0)
-            x, y, ow = (u, out, (0, 1)) if side == 'n' else (-out, -u, (-1, 0))
-            lit.append((x, y))
-            self.torch(t, x, y, ow, z or rng.uniform(DECK + .05, DECK + .45), size or rng.choice((.75, 1.0, 1.0, 1.25)), pole)
-
-        place(-GATE - rng.uniform(.22, .4), 'n')
-        place(-GATE - rng.uniform(.22, .4), 'w')
-        if rng.random() < .55:
-            self.torch(t, -LINE - rng.uniform(.4, .65), LINE + rng.uniform(.4, .65), (-.7, .7), rng.uniform(1.5, 1.85), 1.25, True)
-        else:
-            self.torch(t, -LINE - .14, LINE + .14, (-.7, .7), DECK + .4, 1.0)
+        face = LINE + LOG_R + .1
         for side in ('n', 'w'):
-            count = rng.choice((0, 1, 1, 2))
-            for _ in range(count):
-                for _ in range(10):
-                    u = rng.uniform(-3.15, -2.3)
-                    if all(abs(u - (q[0] if side == 'n' else -q[1])) > .45 for q in lit): break
-                place(u, side, rng.random() < .35)
+            u = -GATE - rng.uniform(.24, .42)
+            x, y, ow = (u, face, (0, 1)) if side == 'n' else (-face, -u, (-1, 0))
+            self.torch(t, x, y, ow, rng.uniform(DECK + .1, DECK + .4), rng.choice((1.0, 1.0, 1.15)))
+        if rng.random() < .55:
+            self.torch(t, -LINE - rng.uniform(.45, .7), LINE + rng.uniform(.45, .7), (-.7, .7), rng.uniform(1.55, 1.85), 1.15, True)
+        else:
+            self.torch(t, -LINE - .16, LINE + .16, (-.7, .7), DECK + .4, 1.1)
 
     def deck(self, t, x0, y0, x1, y1, boards_along_y):
         """Plank deck on a tarred frame; staggered butt joints, the odd darker board, nail heads."""
@@ -330,7 +337,7 @@ class FortMaster:
         for a, b_ in (((-INNER, INNER), (-INNER, 3.5 - WALL)), ((-3.5 + WALL, INNER), (-INNER, INNER))):
             self.beam(t, a, b_, DECK + .006, .05, .03)                           # flush seam between corner and arms
         for a, b_ in (((-INNER, INNER + .04), (-GATE + POST_R, INNER + .04)), ((-INNER - .04, GATE - POST_R), (-INNER - .04, INNER))):
-            self.beam(t, a, b_, DECK + .03, .1, .1, p['oak'])                    # courtyard edge beams
+            self.beam(t, a, b_, DECK + .03, .13, .1)                             # tarred courtyard edge beams
         # Outer palisade, a heavier corner stake, closed arm ends between the gate posts.
         self.stakes(t, -LINE + .2, -GATE - .16, LINE, True)
         self.stakes(t, GATE + .16, LINE - .2, -LINE, False)
@@ -340,8 +347,8 @@ class FortMaster:
         for a, b_ in (((-LINE + .2, LINE - LOG_R - .035), (-GATE - .15, LINE - LOG_R - .035)),
                       ((-LINE + LOG_R + .035, GATE + .15), (-LINE + LOG_R + .035, LINE - .2))):
             self.beam(t, a, b_, DECK + .28, .06, .08)                            # binding wale inside the stakes
-        # Uniform gate posts with lanterns at both ends of both arms; the decks stay free for turrets,
-        # so all other light hangs outside: small torches on brackets along the outer palisade.
+        # Uniform gate posts with fire bowls at both ends of both arms; the decks stay free for turrets,
+        # so all other light hangs outside: large torches at the gate ends and the outer corner.
         for x, y in ((-GATE, LINE), (-GATE, inner_post), (-LINE, GATE), (-inner_post, GATE)):
             self.post(t, x, y)
         self.torches(t)
@@ -409,7 +416,7 @@ class FortMaster:
         ground_sheet(self.c, 'Moss carpet', -4.8, -4.8, 4.8, 4.8, moss, self.mossmat, .07)
         self.ground_growth()
         self.torch_soot()
-        self.glades(moss)
+        self.deck_foot()
 
     def torch_soot(self):
         """One translucent sheet of ash and soot under all torch heads, ragged and densest under the flame."""
@@ -424,21 +431,29 @@ class FortMaster:
             return None if a <= .004 else (.005, a, 0.0)
         ground_sheet(self.c, 'Torch soot', -5.4, -5.4, 5.4, 5.4, sample, self.soot_mat, .035)
 
-    def glades(self, moss):
-        """Points in the mossy shade outside the palisade and in the courtyard corners where fireflies hang
-        at dusk; the runtime spawns them, the asset only says where the moss is deep."""
-        rng, placed, tries = self.rng, [], 0
-        while len(placed) < 16 and tries < 4000:
-            tries += 1
-            x, y = rng.uniform(-4.9, 4.9), rng.uniform(-4.9, 4.9)
-            far, near = max(abs(x), abs(y)), min(abs(x), abs(y))
-            outside = 3.9 < far < 4.9
-            corner = 1.0 < near and far < 2.3
-            if not (outside or (corner and len(placed) % 4 == 0)) or path_wear(x, y) > .12: continue
-            if outside and (moss(x, y) or (0, 0))[1] < .45: continue
-            if any(math.hypot(x - px, y - py) < 1.1 for px, py in placed): continue
-            placed.append((x, y))
-            self.socket('glade', (x, y, rng.uniform(.25, .5)))
+    def deck_foot(self):
+        """A dark, damp strip of trodden earth and drip along the decks' courtyard side: rain runs off the
+        planks there and nobody walks in it, so the bastions stand off clearly from the courtyard gravel.
+        Its width breathes and it frays into the gravel, so it stays organic."""
+        turns = [Turn(-k) for k in range(4)]
+
+        def edge_distance(x, y):
+            best = 9.0
+            for inv in turns:
+                lx, ly, _ = inv.p(x, y)
+                if lx < -INNER - .02 and ly > INNER + .02: continue                 # under the corner deck
+                along_e = max(-INNER, min(-GATE + POST_R, lx))                        # east arm, its courtyard edge y = INNER
+                along_s = max(GATE - POST_R, min(INNER, ly))                         # south arm, its courtyard edge x = -INNER
+                best = min(best, math.hypot(lx - along_e, ly - INNER), math.hypot(lx + INNER, ly - along_s))
+            return best
+
+        def sample(x, y):
+            d = edge_distance(x, y)
+            reach = .3 + .12 * wobble(x * 2.3, y * 2.3, 21) + .05 * wobble(x * 9, y * 9, 22)
+            if d > reach + .12: return None
+            a = (1 - smooth((d - reach + .12) / .24)) * (.62 + .12 * wobble(x * 4.7, y * 4.7, 23))
+            return None if a <= .01 else (.0042, min(1.0, a), 0.0)
+        ground_sheet(self.c, 'Damp deck foot', -2.9, -2.9, 2.9, 2.9, sample, self.foot, .035)
 
     def wear_marks(self):
         """Countless faint, overlapping wheel and foot marks through every gate.
@@ -453,7 +468,7 @@ class FortMaster:
             for _ in range(70):
                 x0 = rng.gauss(0, .55)
                 y_end, y_start = rng.uniform(.8, 1.9), rng.uniform(4.0, 5.3)
-                marks.append((x0, rng.uniform(-.12, .12), rng.uniform(.07, .18), y_end, y_start, rng.uniform(.035, .09)))
+                marks.append((x0, rng.uniform(-.12, .12), rng.uniform(.12, .26), y_end, y_start, rng.uniform(.035, .09)))
 
             def sample(x, y, marks=marks):
                 keep = 1.0
@@ -464,7 +479,8 @@ class FortMaster:
                     if across >= width: continue
                     along = min(1.0, (y - y_end) / .6, (y_start - y) / .9)
                     keep *= 1 - strength * (1 - across / width) * along
-                a = 1 - keep
+                # Soft ceiling: marks that happen to coincide must not sum to one dark line.
+                a = .3 * (1 - math.exp((keep - 1) / .3))
                 return None if a <= .003 else (.0045, a, 0.0)
             turned_sheet(self.c, 'Wear marks', k, -2.0, .8, 2.0, 5.3, sample, self.rut, .04)
 

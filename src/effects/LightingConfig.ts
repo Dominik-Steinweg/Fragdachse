@@ -800,34 +800,34 @@ export const LIGHT_PRESETS = {
     flickerHz: 1.3,
     surfaceRelief: true,
   },
-  /** Lanterns on the gate posts of the persistent base fort: warm, steady, local pools. */
-  baseFortLantern: {
+  /** Fire bowls on the gate posts of the persistent base fort: red-orange, lit by day too, slowly breathing. */
+  baseFortBowl: {
     enabled: true,
     shape: 'radial',
-    radiusPx: 48,
-    color: 0xffbd6e,
-    intensity: 0.6,
+    radiusPx: 64,
+    color: 0xff7a38,
+    intensity: 0.72,
     durationMs: 0,
     decayExponent: 1.1,
     occludes: false,
     priority: 2,
     flickerAmount: 0.05,
-    flickerHz: 1.1,
+    flickerHz: 0.9,
     surfaceRelief: true,
   },
-  /** Torches outside the fort's palisade: orange, slowly breathing, a small pool each. */
+  /** Large torches outside the fort's palisade: orange, slowly breathing, a pool each. */
   baseFortTorch: {
     enabled: true,
     shape: 'radial',
-    radiusPx: 42,
+    radiusPx: 58,
     color: 0xff9447,
-    intensity: 0.6,
+    intensity: 0.65,
     durationMs: 0,
     decayExponent: 1.15,
     occludes: false,
     priority: 2,
-    flickerAmount: 0.06,
-    flickerHz: 1.6,
+    flickerAmount: 0.05,
+    flickerHz: 1.2,
     surfaceRelief: true,
   },
   /** The light strip of finished base floor tiles in the yard: small, cool, steady. */

@@ -43,22 +43,21 @@ const GROUND_TINT = 0xb6b2aa;
 /** Low decks and stakes: a lighter, softer ground shadow than the tall lobby buildings. */
 const FORT_SHADOW = { opacity: .34, softness: 1.6 };
 /**
- * Embers glow by day too; lantern glass is visible by day and bright at night. Torch glow breathes
- * slowly: fast flicker reads as strobing at this scale.
+ * The glowing torch heads and bowl coals glow by day too and breathe slowly: fast flicker reads as
+ * strobing at this scale.
  */
 const LAYER_LOOK: Record<BaseFortLayer, { day: number; night: number; flicker: number; hz: number }> = {
   forge: { day: .6, night: 1, flicker: .08, hz: 1.3 },
-  lamp: { day: .4, night: 1, flicker: .05, hz: 1.1 },
 };
 /**
- * Light-map lights by socket prefix; daylight keeps a faint pool, night the full one. Small pools
- * only: dozens of overlapping lights would flood the fort. The small torches only glow.
+ * Light-map lights by socket prefix; daylight keeps a pool, night the full one. The fire bowls stay
+ * clearly lit by day; the torches only faintly.
  */
 const SOCKET_LIGHTS: readonly { prefix: string; preset: LightPresetKey; day: number; scale: number }[] = [
-  { prefix: 'lamp', preset: 'baseFortLantern', day: .25, scale: 1 },
+  { prefix: 'bowl', preset: 'baseFortBowl', day: .55, scale: 1 },
   { prefix: 'torch', preset: 'baseFortTorch', day: .3, scale: 1 },
 ];
-const EMITTER_KINDS: readonly BaseFortEmitterKind[] = ['torch', 'torchlet', 'lamp', 'glade'];
+const EMITTER_KINDS: readonly BaseFortEmitterKind[] = ['torch', 'bowl'];
 /** The structure fades with the staggered cell explosions instead of vanishing at once. */
 const DESTROYED_ALPHA = 0;
 
