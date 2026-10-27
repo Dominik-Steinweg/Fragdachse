@@ -27,13 +27,10 @@ import type { ArenaLayout, SyncedPlaceableRock, SyncedPowerUpPedestal, TurretWea
 import { buildPersistentBaseCoreBaseConfig, type PersistentBaseAreaStage, type PersistentBaseBuildArea } from './PersistentBaseCore';
 import type { BaseEditorObject, PersistentBaseEditorModel } from './PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from './PersistentBaseEditorAppearance';
-import { getPersistentBaseEditorDetailWindow, getPersistentBaseEditorSize } from './PersistentBaseExpansionPreview';
+import { getPersistentBaseEditorDetailWindow, getPersistentBaseEditorSize, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS } from './PersistentBaseExpansionPreview';
 import { toWorldAngle, toWorldFootprint, type PersistentBaseFrame } from './PersistentBaseFrame';
 import type { PersistentBaseAnchor } from './PersistentBaseTypes';
-export { getPersistentBaseEditorSize } from './PersistentBaseExpansionPreview';
-
-/** Cells the situation map shows around the anchor; wider than high, like the editor panel. */
-export const PERSISTENT_BASE_EDITOR_DETAIL_RADIUS = { x: 20, y: 14 } as const;
+export { getPersistentBaseEditorSize, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS } from './PersistentBaseExpansionPreview';
 /** Terrain built beyond the view, so rock autotiling and canopies do not end at its edge. */
 const CROP_MARGIN_CELLS = 3;
 

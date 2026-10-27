@@ -1,7 +1,8 @@
 import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, COOP_DEFENSE_TRACK_CROSSING_CLEARANCE_SIDE_CELLS, COOP_DEFENSE_TRACK_CROSSING_INTERVAL_CELLS, COOP_DEFENSE_TRACK_CROSSING_WIDTH_CELLS, ROCK_FILL_RATIO, DIRT_FILL_RATIO, CANOPY_RADIUS, CELL_SIZE, CA_SMOOTHING_STEPS, CA_MIN_ROCK_NEIGHBORS, CA_MAX_FLOOR_NEIGHBORS, getArenaActivityValuesForMode, getArenaModeFlags, getCaptureTheBeerBaseRegion, getCaptureTheBeerMiddleThirdRegion, isGridCellInArenaRegion } from '../config';
+import { listEnemySpawnSources } from './EnemySpawnSources';
 import { placeReactiveProps, type ReactivePropAnchor } from './ReactivePropLayout';
 import { REACTIVE_PROP_ARENA_SCATTER, type ReactivePropScatterSpec } from '../config/reactiveProps/reactivePropKinds';
-import { spawnZoneArea, type WorldSpawnZone } from '../config/spawnZones';
+import type { WorldSpawnZone } from '../config/spawnZones';
 import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isCoopDefenseBaseCell, isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseReservationCell, resolveCoopDefenseActivityBases, resolveCoopDefenseBases } from './BaseRegistry';
 import type { BaseSpec } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
@@ -28,7 +29,6 @@ import {
 } from '../config/coopDefenseTutorial';
 import { getMapTutorial } from '../i18n/contentPresentation';
 import { createOrganicDirtMargin } from './OrganicDirtMargin';
-import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
 import type { GameMode } from '../types';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import { WaterGeometry } from './WaterGeometry';
@@ -899,7 +899,8 @@ export class ArenaGenerator {
 
   /**
    * Authored enemy spawn sources (encounter areas and fronts, persistent spawns, boss) as walkable
-   * cell groups, in a stable order. Route checks and strategic prop placement share this rule.
+   * cell groups, in a stable order. Route checks and strategic prop placement share this rule; the
+   * sources themselves come from `listEnemySpawnSources`, which the base editor's routes read too.
    */
   private resolveSpawnSourceGroups(
     blocked: boolean[][],
@@ -908,44 +909,15 @@ export class ArenaGenerator {
     baseCells: ReadonlySet<number>,
   ): Array<Array<{ gridX: number; gridY: number }>> {
     const sourceGroups: Array<Array<{ gridX: number; gridY: number }>> = [];
-    const fronts = new Set<SpawnFront>();
-    for (const encounter of mapConfig.encounters ?? []) {
-      for (const group of encounter.groups) {
-        // Eine Gruppe mit authored Bereich startet nie am Randband; geprueft wird dann genau
-        // der Bereich, aus dem sie wirklich kommt.
-        if (group.spawnArea) sourceGroups.push(this.getSpawnAreaCells(
-          group.spawnArea,
-          blocked,
-          baseCells,
-          bases,
-        ));
-        else fronts.add(group.front ?? DEFAULT_SPAWN_FRONT);
-      }
-    }
-    const zoneArea = (zoneId: string) => {
-      const zone = mapConfig.spawnZones?.find(({ id }) => id === zoneId);
-      return zone ? spawnZoneArea(zone) : null;
-    };
-    for (const spawn of mapConfig.persistentSpawns ?? []) {
-      const sourceConfig = spawn.source;
-      if (sourceConfig.type === 'map') fronts.add(spawn.front ?? DEFAULT_SPAWN_FRONT);
-      else if (sourceConfig.type === 'zone') {
-        const area = zoneArea(sourceConfig.zoneId);
-        if (area) sourceGroups.push(this.getSpawnAreaCells(area, blocked, baseCells, bases));
-      } else {
+    for (const { place } of listEnemySpawnSources(mapConfig)) {
+      if (place.kind === 'area') sourceGroups.push(this.getSpawnAreaCells(place.area, blocked, baseCells, bases));
+      else if (place.kind === 'front') sourceGroups.push(this.getSpawnFrontCells(place.front, blocked, baseCells, bases));
+      else {
         // Gegner steigen in der Brutgrube auf und verlassen sie durch die Oeffnung.
-        const area = bases.find((base) => base.id === sourceConfig.baseId)?.spawnArea;
+        const area = bases.find((base) => base.id === place.baseId)?.spawnArea;
         if (area) sourceGroups.push(area.mouth.filter((cell) => !blocked[cell.gridY]?.[cell.gridX]
           && !baseCells.has(this.cellKey(cell.gridX, cell.gridY))));
       }
-    }
-    if (mapConfig.boss) {
-      const area = mapConfig.boss.spawnZoneId ? zoneArea(mapConfig.boss.spawnZoneId) : null;
-      if (area) sourceGroups.push(this.getSpawnAreaCells(area, blocked, baseCells, bases));
-      else fronts.add(DEFAULT_SPAWN_FRONT);
-    }
-    for (const front of fronts) {
-      sourceGroups.push(this.getSpawnFrontCells(front, blocked, baseCells, bases));
     }
     // Each portal endpoint must reach the base on land: after the generator falls, travelers that
     // stand at either end still need a way home without the link.

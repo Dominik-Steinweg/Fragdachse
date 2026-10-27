@@ -44,6 +44,9 @@ export function getPersistentBaseEditorWorldFraming(panel: EditorRect, world: Ed
       y: view.y + ((anchorCell.gridY + .5) * CELL_SIZE - world.y) * zoom } };
 }
 
+/** Cells the situation map shows around the anchor; wider than high, like the editor panel. */
+export const PERSISTENT_BASE_EDITOR_DETAIL_RADIUS = { x: 20, y: 14 } as const;
+
 /** Inclusive cell window around an anchor, clamped to the World. */
 export function getPersistentBaseEditorDetailWindow(world: { readonly widthCells: number; readonly heightCells: number },
   anchor: { readonly gridX: number; readonly gridY: number }, radius: { readonly x: number; readonly y: number }) {

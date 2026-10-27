@@ -39,13 +39,10 @@ import {
 } from '../systems/flowfield/FlowFieldCoordinator';
 import { createFlowFieldRunner } from '../systems/flowfield/FlowFieldRunnerFactory';
 import {
-  applyEnemyTargetingToBaseDescriptors,
-  buildBaseDescriptors,
-  buildStaticKindRaster,
   createFlowFieldTuning,
+  resolveCoopMissionFlowFieldInputs,
   resolveGridChange,
 } from '../systems/flowfield/FlowFieldSources';
-import type { FlowFieldMetrics } from '../systems/flowfield/FlowFieldKernel';
 import { ARENA_MAP_GRID_CHANGED_EVENT, type ArenaMapGridChangedEvent } from '../scenes/arena/ArenaEvents';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type {
@@ -146,30 +143,15 @@ export class CoopMissionCombatComposition {
     const bossClearanceCells = bossConfig
       ? Math.ceil(Math.max(0, bossConfig.size * 0.5 - CELL_SIZE * 0.5) / CELL_SIZE)
       : 0;
-    const worldGridMetrics: FlowFieldMetrics = {
-      cols: this.options.worldMetrics.gridCols,
-      rows: this.options.worldMetrics.gridRows,
-      cellSize: CELL_SIZE,
-      arenaOffsetX: this.options.worldMetrics.offsetX,
-      arenaOffsetY: this.options.worldMetrics.offsetY,
-    };
     const exact = this.options.geometryProvider !== undefined;
-    const metrics: FlowFieldMetrics = exact ? { ...worldGridMetrics,
-      cols: worldGridMetrics.cols * 2 + 1, rows: worldGridMetrics.rows * 2 + 1,
-      cellSize: 16, pointOffset: 0 } : worldGridMetrics;
-    const worldTerrain = buildStaticKindRaster(this.options.layout, worldGridMetrics);
-    const terrain = exact ? new Uint8Array(metrics.cols * metrics.rows) : worldTerrain;
-    if (exact) for (let y = 0; y < metrics.rows; y++) for (let x = 0; x < metrics.cols; x++) {
-      terrain[y * metrics.cols + x] = worldTerrain[Math.min(worldGridMetrics.rows - 1, Math.floor(y / 2))
-        * worldGridMetrics.cols + Math.min(worldGridMetrics.cols - 1, Math.floor(x / 2))];
-    }
+    const { metrics, staticKind, bases } = resolveCoopMissionFlowFieldInputs({ worldMetrics: this.options.worldMetrics,
+      layout: this.options.layout, baseSpecs: this.options.getBaseSpecs(),
+      enemyTargeting: this.options.activity.mapConfig.enemyTargeting, exact });
     const flowFieldCoordinator = new FlowFieldCoordinator({
       metrics,
       tuning: createFlowFieldTuning(),
-      staticKind: terrain,
-      bases: applyEnemyTargetingToBaseDescriptors(buildBaseDescriptors(this.options.getBaseSpecs()),
-        this.options.activity.mapConfig.enemyTargeting).map(base => exact
-        ? { ...base, cellCoords: base.cellCoords.map(coordinate => coordinate * 2 + 1) } : base),
+      staticKind,
+      bases,
       activeBaseIds: this.options.getNavigationBaseIds(),
       obstacleCellProvider: exact ? () => [] : this.options.obstacleCellProvider,
       barrierCells: exact ? [] : this.options.barrierCells,

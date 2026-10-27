@@ -8,6 +8,7 @@ import type { BaseSpec } from '../../arena/BaseRegistry';
 import type { ArenaMapGridChangedEvent } from '../../scenes/arena/ArenaEvents';
 import type { CoopDefenseMapEnemyTargeting } from '../../config/coopDefenseMapAuthoring';
 import {
+  CELL_SIZE,
   COOP_DEFENSE_FLOW_FIELD_BASE_COST,
   COOP_DEFENSE_FLOW_FIELD_DIRT_COST,
   COOP_DEFENSE_FLOW_FIELD_GROUND_COST,
@@ -159,6 +160,42 @@ export function applyEnemyTargetingToBaseDescriptors(
   enemyTargeting: CoopDefenseMapEnemyTargeting | undefined,
 ): FlowFieldBaseDescriptor[] {
   return enemyTargeting === 'players' ? bases.map(base => ({ ...base, isGoalSource: false })) : bases;
+}
+
+/**
+ * Raster, terrain costs and base goals of a coop mission's navigation, from its World data.
+ *
+ * The mission and the base editor's situation map build their flow fields from this one function,
+ * so a previewed route uses the same raster and the same goals as the enemies of the round. With
+ * exact geometry the raster is the 2c+1 node grid at 16 px; terrain costs and base cells are
+ * mapped onto it.
+ */
+export function resolveCoopMissionFlowFieldInputs(input: {
+  readonly worldMetrics: { readonly gridCols: number; readonly gridRows: number; readonly offsetX: number; readonly offsetY: number };
+  readonly layout: ArenaLayout;
+  readonly baseSpecs: readonly BaseSpec[];
+  readonly enemyTargeting: CoopDefenseMapEnemyTargeting | undefined;
+  readonly exact: boolean;
+}): { readonly metrics: FlowFieldMetrics; readonly staticKind: Uint8Array; readonly bases: FlowFieldBaseDescriptor[] } {
+  const worldGridMetrics: FlowFieldMetrics = {
+    cols: input.worldMetrics.gridCols,
+    rows: input.worldMetrics.gridRows,
+    cellSize: CELL_SIZE,
+    arenaOffsetX: input.worldMetrics.offsetX,
+    arenaOffsetY: input.worldMetrics.offsetY,
+  };
+  const metrics: FlowFieldMetrics = input.exact ? { ...worldGridMetrics,
+    cols: worldGridMetrics.cols * 2 + 1, rows: worldGridMetrics.rows * 2 + 1,
+    cellSize: 16, pointOffset: 0 } : worldGridMetrics;
+  const worldTerrain = buildStaticKindRaster(input.layout, worldGridMetrics);
+  const staticKind = input.exact ? new Uint8Array(metrics.cols * metrics.rows) : worldTerrain;
+  if (input.exact) for (let y = 0; y < metrics.rows; y++) for (let x = 0; x < metrics.cols; x++) {
+    staticKind[y * metrics.cols + x] = worldTerrain[Math.min(worldGridMetrics.rows - 1, Math.floor(y / 2))
+      * worldGridMetrics.cols + Math.min(worldGridMetrics.cols - 1, Math.floor(x / 2))];
+  }
+  const bases = applyEnemyTargetingToBaseDescriptors(buildBaseDescriptors(input.baseSpecs), input.enemyTargeting)
+    .map(base => input.exact ? { ...base, cellCoords: base.cellCoords.map(coordinate => coordinate * 2 + 1) } : base);
+  return { metrics, staticKind, bases };
 }
 
 function isBaseGoalSource(spec: BaseSpec): boolean {

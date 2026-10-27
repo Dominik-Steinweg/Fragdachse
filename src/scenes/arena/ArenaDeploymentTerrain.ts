@@ -1,5 +1,7 @@
-import { getCoopDefenseMapConfig, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import type { CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { isCoopDefenseMode } from '../../gameModes';
+import { toWorldDefinitionId } from '../../world/arenaDescriptorAdapter';
+import { resolveCoopDefenseMapConfig } from '../../world/WorldDefinitionResolution';
 import { DeploymentLayoutCache, type DeploymentLayout } from '../../world/deployment/DeploymentLayoutCache';
 import { createDeploymentLayoutGenerator } from '../../world/deployment/DeploymentLayoutGeneratorFactory';
 import type { GameMode, GamePhase } from '../../types';
@@ -36,8 +38,8 @@ export class ArenaDeploymentTerrain {
   current(): Deployment | null {
     if (!isCoopDefenseMode(this.source.getGameMode()) || this.source.getCoopProgram().kind !== 'campaign') return null;
     const seed = this.source.getDeploymentSeed();
-    const mapConfig = getCoopDefenseMapConfig(this.source.getCoopDefenseMapId());
-    return seed === null || !mapConfig.persistentBase ? null : { mapConfig, seed };
+    const mapConfig = resolveCoopDefenseMapConfig({ definitionId: toWorldDefinitionId(this.source.getCoopDefenseMapId()) }, null);
+    return seed === null || !mapConfig?.persistentBase ? null : { mapConfig, seed };
   }
 
   /** Generates the announced terrain once per map and seed while the room is in the lobby. */

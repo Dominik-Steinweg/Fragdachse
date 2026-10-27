@@ -12,6 +12,7 @@
  *   Fassade baut sich einen eigenen Coordinator mit Inline-Runner und rechnet synchron. Das ist der
  *   Pfad fuer Tests und fuer Umgebungen ohne Worker.
  */
+import { nextFlowFieldNode } from './flowfield/FlowFieldRouteTracer';
 import type { ArenaLayout } from '../types';
 import type { BaseSpec } from '../arena/BaseRegistry';
 import type { NavigationResult, NavigationVersion } from './navigation/NavigationContracts';
@@ -286,10 +287,9 @@ export class EnemyFlowFieldService {
     if (best < 0) return region ? { ...version, status: 'unreachable', region } : { ...version, status: 'invalid-start' };
     let waypoint = navigationPoint(this.view.metrics, best);
     for (let step = 0; step < 4; step++) {
-      const vx = snapshot.vectorField[best * 2], vy = snapshot.vectorField[best * 2 + 1];
-      // Zero marks a goal or a portal entry: the waypoint stays inside the crossing circle.
-      if (!vx && !vy) break;
-      const next = best + Math.sign(vx) + Math.sign(vy) * this.view.metrics.cols;
+      const next = nextFlowFieldNode(snapshot, this.view.metrics, best);
+      // -1 marks a goal or a portal entry: the waypoint stays inside the crossing circle.
+      if (next < 0) break;
       const point = navigationPoint(this.view.metrics, next);
       if (!geometry.canMove(x, y, point.x, point.y, radius)) break;
       waypoint = point; best = next;
