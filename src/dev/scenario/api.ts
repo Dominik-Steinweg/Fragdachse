@@ -1,5 +1,6 @@
 import { runLobbyBuildingReview } from './LobbyBuildingReview';
 import { runWatchtowerReview, releaseWatchtowerReview } from './WatchtowerReview';
+import { runBaseReview, releaseBaseReview } from './BaseReview';
 import { setReactivePropVariantOverride } from '../../effects/reactiveProps/ReactivePropVariantOverride';
 import { runBridgeReview, releaseBridgeReview, runBridgeCommand } from './BridgeReview';
 import { runPortalReview, releasePortalReview } from './PortalReview';
@@ -73,6 +74,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       return reloadKrakenDraftAssets(c.source);
     case 'krakenReloadAssets': return reloadKrakenDraftAssets();
     case 'watchtowerReview': return runWatchtowerReview(controller, c);
+    case 'baseReview': return runBaseReview(controller, c);
     case 'lobbyBuildingReview': return runLobbyBuildingReview(controller, c);
     case 'bridgeReview': return runBridgeReview(controller, c);
     case 'portalReview': return runPortalReview(controller, c);
@@ -336,6 +338,7 @@ export function installScenarioApi(controller: DevScenarioController) {
     stopDraftPolling();
     active = false;
     releaseWatchtowerReview(controller);
+    releaseBaseReview(controller);
     releaseBridgeReview(controller);
     releasePortalReview(controller);
     releaseSpawnStructureReview(controller);

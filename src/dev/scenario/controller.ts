@@ -266,6 +266,7 @@ export class DevScenarioController {
     };
     this.bots = new ScenarioBots(runtime, () => this.clock.now);
     bindWatchtowerReview(this, this.runtime);
+    bindBaseReview(this, this.runtime);
     bindBridgeReview(this, this.runtime);
     bindPortalReview(this, this.runtime);
     bindSpawnStructureReview(this, this.runtime);
@@ -1128,6 +1129,7 @@ export class DevScenarioController {
 }
 
 import { bindWatchtowerReview } from './WatchtowerReview';
+import { bindBaseReview } from './BaseReview';
 import { bindLobbyBuildingReview, releaseLobbyBuildingReview } from './LobbyBuildingReview';
 import type { WorldInteractionView } from '../../systems/WorldInteractionCandidate';
 import { bindBridgeReview } from './BridgeReview';

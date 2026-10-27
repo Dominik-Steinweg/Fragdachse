@@ -1,4 +1,7 @@
 import { resolveConstructionPlacementRange } from '../../config/coopDefenseConstructions';
+import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, TEAM_BLUE_COLOR } from '../../config';
+import { getPersistentBaseRewardDefinition } from '../../persistentBase/PersistentBaseRewardCatalog';
+import type { PersistentBaseRewardId } from '../../persistentBase/PersistentBaseRewardTypes';
 import { KRAKEN_RISE_INTRO, readBossIntroState } from '../../config/bossIntros';
 import type { PlayerManager } from '../../entities/PlayerManager';
 import type { TrainShowcaseState } from '../../dev/scenario/trainShowcase';
@@ -69,6 +72,18 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       if (!tower || !visuals) throw new Error('Watchtower fixture placement failed');
       visuals.materializePlaceableRock(tower, false);
       return tower;
+    },
+    /** Base turret on a base-surface cell through the reward materializer, without touching stored rewards. */
+    arrangeBaseTurret(rewardId: PersistentBaseRewardId, gridX: number, gridY: number, angle: number) {
+      requireLocal();
+      const source = getPersistentBaseRewardDefinition(rewardId).gameplaySource;
+      const constructionId = source.kind === 'construction-definition' ? source.constructionId : undefined;
+      if (constructionId !== 'spore_turret' && constructionId !== 'rocket_turret') throw new Error(`${rewardId} is no base turret`);
+      const turret = flow.getConstructionWorldRuntime()?.materializeRewardConstruction(constructionId, rewardId, gridX, gridY, angle,
+        COOP_DEFENSE_BASE_TURRET_OWNER_ID, TEAM_BLUE_COLOR);
+      if (!turret || !visuals) throw new Error(`Base turret ${rewardId} at ${gridX},${gridY} failed`);
+      visuals.materializePlaceableRock(turret, false);
+      return turret;
     },
     readWatchtower(id: number) {
       requireLocal();
