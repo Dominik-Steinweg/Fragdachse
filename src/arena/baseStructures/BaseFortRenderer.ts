@@ -13,7 +13,7 @@ import type { LobbyStructureSunlight } from '../lobbyStructures/LobbyStructureRe
 import { LOBBY_STRUCTURE_RELIEF_FRAGMENT, LOBBY_STRUCTURE_SHADOW_FRAGMENT } from '../lobbyStructures/lobbyStructureShaders';
 import { baseFortCoreAsset, baseFortKitAsset, baseFortTextureKey, TURRET_PLINTH, type BaseFortLayer, type BaseFortPass, type BaseFortSocket } from './BaseFortAssets';
 import { composeOutpost, type ComposedFort, type FortCell } from './BaseFortKitComposer';
-import { fortFreeSquare } from './fortFreeSquare';
+import { fortObstacleCover, type FortHeightWindow } from './fortObstacleCover';
 import type { BaseFortEmitter, BaseFortEmitterKind, BaseFortFx } from './BaseFortFx';
 import { BaseFortMountedHeights, MOUNTED_HEIGHT_RANGE_PX } from './BaseFortMountedHeights';
 import type { MeshShadowCaster } from '../../effects/EnemyMeshShadowRenderer';
@@ -63,8 +63,12 @@ const EMITTER_KINDS: readonly BaseFortEmitterKind[] = ['torch', 'bowl'];
 const DESTROYED_ALPHA = 0;
 /** Turret plinths lie on the decks, under the turrets' mounted shadow (ROCKS + 0.09) and sprite. */
 const PLINTH_DEPTH = DEPTH.ROCKS + 0.06;
-/** The plinth's stone fills 0.70 m of its 0.78 m canvas (catalog orthoScale); the largest one is 24 px. */
-const PLINTH = { fill: .70 / .78, maxSidePx: 24, minSidePx: 14, fallbackSidePx: 18, clearancePx: 3 };
+/**
+ * The plinth's stone fills 0.70 m of its 0.78 m canvas (catalog orthoScale) and shows 22 px wide, centred under
+ * its turret. Where something rises more than 10 px above the deck (stakes, posts, fire bowls) it is cut away,
+ * so the palisade stands in front of its rim; without readable caster heights it shrinks to stay clear.
+ */
+const PLINTH = { fill: .70 / .78, sidePx: 22, fallbackSidePx: 13, risePx: 10 };
 
 const EMPTY_CASTERS: readonly MeshShadowCaster[] = [];
 
@@ -112,8 +116,10 @@ interface FortView {
   readonly mounted: FortMounted;
   readonly cellCount: number;
   destroyedCells: number;
-  /** Per cell: the largest free deck square inside the stakes and posts, found once from the caster heights. */
-  freeSquares: ({ x: number; y: number; side: number })[] | null;
+  /** Per cell: the caster heights around it (the core's grid or an outpost's kit frame), read once; null if unreadable. */
+  heightWindows: (FortHeightWindow | null)[] | null;
+  /** Plinth textures cut to this fort's cells, owned by the view. */
+  readonly plinthKeys: string[];
   /** Stone plinths under the turrets standing on the cells, by cell index. */
   readonly plinths: Map<number, Phaser.GameObjects.Image>;
 }
@@ -204,7 +210,7 @@ export class BaseFortRenderer {
       texture: { key: key('solid') }, frame: { name: '__BASE' } };
     const mounted: FortMounted = { left, top, target: null, uniform: new Float32Array([art.deckPx, 0, MOUNTED_FLIP]) };
     this.views.set(baseId, { art, ground, body, emission, lights, stamp, emitters, cells, mounted, cellCount: cells.length,
-      destroyedCells: 0, fx: this.particles?.(emitters) ?? null, freeSquares: null, plinths: new Map(),
+      destroyedCells: 0, fx: this.particles?.(emitters) ?? null, heightWindows: null, plinths: new Map(), plinthKeys: [],
       relief: lit ? this.makeRelief(left, top, art) : null, shadow: lit ? this.makeShadow(left, top, mounted, art) : null });
   }
 
@@ -231,6 +237,7 @@ export class BaseFortRenderer {
     this.destroyQuad(view.relief); this.destroyQuad(view.shadow);
     for (const { image } of view.emission) image.destroy();
     for (const plinth of view.plinths.values()) plinth.destroy();
+    for (const key of view.plinthKeys) if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
     view.fx?.destroy();
     if (view.mounted.target) this.scene.textures.remove(view.mounted.target);
     for (const key of view.art.owned) if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
@@ -300,7 +307,7 @@ export class BaseFortRenderer {
     }
   }
 
-  /** A stone plinth under every turret standing on one of this fort's cells, in that cell's free deck square. */
+  /** A stone plinth centred under every turret standing on one of this fort's cells. */
   private syncPlinths(view: FortView, casters: readonly MeshShadowCaster[]): void {
     const half = CELL_SIZE / 2, occupied = this.occupiedScratch;
     occupied.clear();
@@ -312,35 +319,54 @@ export class BaseFortRenderer {
     }
     for (const [index, plinth] of view.plinths) plinth.setVisible(occupied.has(index));
     if (!occupied.size) return;
-    view.freeSquares ??= this.freeSquares(view);
+    view.heightWindows ??= this.heightWindows(view);
     for (const index of occupied) {
       if (view.plinths.has(index)) continue;
-      const square = view.freeSquares[index], size = square.side / PLINTH.fill;
-      view.plinths.set(index, this.scene.add.image(square.x, square.y, TURRET_PLINTH.textureKey)
+      const cell = view.cells[index], window = view.heightWindows[index];
+      const key = window ? this.cutPlinth(view, index, window) : null;
+      const size = (key ? PLINTH.sidePx : PLINTH.fallbackSidePx) / PLINTH.fill;
+      view.plinths.set(index, this.scene.add.image(cell.x, cell.y, key ?? TURRET_PLINTH.textureKey)
         .setDisplaySize(size, size).setDepth(PLINTH_DEPTH));
     }
   }
 
   /**
-   * The largest square of free deck in every cell: caster texels at deck height, clear of stakes, posts and
-   * beams by a few px. The core reads its own caster grid, an outpost the kit frame of each cell. Without
-   * readable caster heights (low quality) a plinth sits centred and small.
+   * The plinth of one cell as its own texture: the stone at source resolution with everything rising above the
+   * deck there (stakes, posts) cut away softly, so the plinth reads as lying under the palisade's rim.
    */
-  private freeSquares(view: FortView): { x: number; y: number; side: number }[] {
+  private cutPlinth(view: FortView, index: number, window: FortHeightWindow): string | null {
+    const source = this.scene.textures.get(TURRET_PLINTH.textureKey).getSourceImage();
+    if (!(source instanceof HTMLImageElement || source instanceof HTMLCanvasElement)) return null;
+    const key = `base-fort-plinth:${view.stamp.x}:${view.stamp.y}:${index}`, size = source.width;
+    if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
+    const texture = this.scene.textures.createCanvas(key, size, size);
+    if (!texture) return null;
+    texture.context.drawImage(source, 0, 0, size, size);
+    const image = texture.context.getImageData(0, 0, size, size), cell = view.cells[index];
+    const display = PLINTH.sidePx / PLINTH.fill, perPixel = display / size;
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      if (!image.data[i + 3]) continue;
+      const cover = fortObstacleCover(window, view.art.heightPx, view.art.deckPx, PLINTH.risePx,
+        cell.x - display / 2 + (x + .5) * perPixel, cell.y - display / 2 + (y + .5) * perPixel);
+      if (cover > 0) image.data[i + 3] = Math.round(image.data[i + 3] * (1 - cover));
+    }
+    texture.context.putImageData(image, 0, 0);
+    texture.refresh();
+    view.plinthKeys.push(key);
+    return key;
+  }
+
+  /** The caster heights around every cell: the core's grid, or for an outpost the kit frame each cell came from. */
+  private heightWindows(view: FortView): (FortHeightWindow | null)[] {
     const art = view.art, core = art.keys['caster-height'];
     const whole = !art.cellHeights && core ? this.readPixels(core) : null;
     return view.cells.map((cell, index) => {
-      const fallback = { x: cell.x, y: cell.y, side: PLINTH.fallbackSidePx };
-      let window: { data: Uint8ClampedArray; width: number; height: number; left: number; top: number; texelPx: number } | null = null;
-      if (whole) {
-        window = { ...whole, left: view.mounted.left, top: view.mounted.top, texelPx: art.size / whole.width };
-      } else if (art.cellHeights) {
-        const { key, frame, framePx } = art.cellHeights[index];
-        const pixels = this.readPixels(key, frame);
-        if (pixels) window = { ...pixels, left: cell.x - framePx / 2, top: cell.y - framePx / 2, texelPx: framePx / pixels.width };
-      }
-      const square = window ? fortFreeSquare(cell, window, art.heightPx, art.deckPx, PLINTH.clearancePx) : null;
-      return square && square.side >= PLINTH.minSidePx ? { ...square, side: Math.min(PLINTH.maxSidePx, square.side) } : fallback;
+      if (whole) return { ...whole, left: view.mounted.left, top: view.mounted.top, texelPx: art.size / whole.width };
+      if (!art.cellHeights) return null;
+      const { key, frame, framePx } = art.cellHeights[index];
+      const pixels = this.readPixels(key, frame);
+      return pixels ? { ...pixels, left: cell.x - framePx / 2, top: cell.y - framePx / 2, texelPx: framePx / pixels.width } : null;
     });
   }
 

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { fortFreeSquare } from '../src/arena/baseStructures/fortFreeSquare';
+import { fortObstacleCover } from '../src/arena/baseStructures/fortObstacleCover';
 import { describe, expect, it, vi } from 'vitest';
 
 const fort = vi.hoisted(() => ({ calls: [] as unknown[][] }));
@@ -60,16 +60,23 @@ function lobbyBases() {
 }
 
 describe('persistent base fort presentation', () => {
-  it('lays a turret plinth in the largest free deck square of its cell, clear of the stakes', () => {
-    // A 32 px cell (texels 0..15 of a 2 px grid that continues as deck to the south-east): stakes (60 px) along
-    // its north and west edge, 4 texels deep, deck at 40 px elsewhere.
-    const width = 20, data = new Uint8ClampedArray(width * width * 4);
-    for (let y = 0; y < width; y++) for (let x = 0; x < width; x++) data[(y * width + x) * 4] = x < 4 || y < 4 ? 200 : 136;
-    const heightPx = { min: 0, max: 76.8 }, deck = 136 / 255 * 76.8;
-    const square = fortFreeSquare({ x: 16, y: 16 }, { data, width, height: width, left: 0, top: 0, texelPx: 2 }, heightPx, deck, 3)!;
-    // Clearance 3 px = 2 texels: free texels 6..15 -> a 10-texel (20 px) square in the south-east of the cell.
-    expect(square).toEqual({ x: 22, y: 22, side: 20 });
-    expect(square.x - square.side / 2).toBeGreaterThanOrEqual(8 + 3);
+  it('cuts a turret plinth where stakes rise above the deck, never on the deck or under low beams', () => {
+    // A 32 px corner cell in 2 px texels: stakes (deck + 20 px) along the north and west edge, 4 texels deep, a low
+    // binding wale (deck + 8 px) inside them; deck at 40 px elsewhere.
+    const width = 20, data = new Uint8ClampedArray(width * width * 4), heightPx = { min: 0, max: 76.8 };
+    const value = (h: number) => Math.round(h / 76.8 * 255), deck = value(40) / 255 * 76.8;
+    for (let y = 0; y < width; y++) for (let x = 0; x < width; x++) {
+      data[(y * width + x) * 4] = x < 4 || y < 4 ? value(60) : x === 4 || y === 4 ? value(48) : value(40);
+    }
+    const window = { data, width, height: width, left: 0, top: 0, texelPx: 2 };
+    const cover = (x: number, y: number) => fortObstacleCover(window, heightPx, deck, 10, x, y);
+    expect(cover(16, 16)).toBe(0);
+    expect(cover(9, 16)).toBe(0);
+    expect(cover(3, 16)).toBe(1);
+    expect(cover(16, 2)).toBe(1);
+    // The edge is soft: between the last stake texel and the wale the cut fades.
+    expect(cover(8.6, 16)).toBeGreaterThan(0);
+    expect(cover(8.6, 16)).toBeLessThan(1);
   });
 
   it('presents the friendly persistent core as the fort, centred on its anchor cell, without tiles or base glow', () => {
