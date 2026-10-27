@@ -4,29 +4,16 @@
   "gameIds": [
     "TURRET_TESLA"
   ],
-  "revision": "towers-r03",
+  "revision": "towers-r07",
   "variant": "standard",
   "sourceSize": 160,
   "textureKey": "turret_weapon_tesla",
-  "sheetTextureKey": "turret_weapon_tesla_animated",
-  "idlePath": "./assets/sprites/pipeline-v2/tesla/idle.png",
-  "sheetPath": "./assets/sprites/pipeline-v2/tesla/sheet.png",
+  "runtimeContract": "sheet",
   "forward": "east",
   "pivot": [
     0.5,
     0.5
   ],
-  "layout": {
-    "frameWidth": 160,
-    "frameHeight": 160,
-    "margin": 2,
-    "spacing": 4,
-    "columns": 8,
-    "rows": 2,
-    "frameCount": 13,
-    "width": 1312,
-    "height": 328
-  },
   "idleFrame": 0,
   "clips": [
     {
@@ -46,11 +33,26 @@
         12
       ],
       "frameRate": 12,
-      "loop": true
+      "loop": true,
+      "end": "rest"
     }
   ],
+  "sheetTextureKey": "turret_weapon_tesla_animated",
+  "idlePath": "./assets/sprites/pipeline-v2/tesla/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/tesla/sheet.png",
+  "layout": {
+    "frameWidth": 160,
+    "frameHeight": 160,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 13,
+    "width": 1312,
+    "height": 328
+  },
   "hashes": {
-    "idle": "1b8e301b3568041ab4e7353995b0ceee9c6816c4d3a4cc080327fff62f94fccb",
-    "sheet": "879ea9572da1fa4055d03fd71acccb0e5288d9f571e13627fc11382a404a8662"
+    "idle": "d70cdd407662431d3f1401ede4f9a6454fd154727ba9a808d48e39937479981d",
+    "sheet": "3a95b2d8acaf4381a26ebfcf699749eded3a4c82660c6958af853a902c682461"
   }
 }

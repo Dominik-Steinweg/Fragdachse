@@ -17,6 +17,11 @@ export interface ComposedFort {
   readonly keys: Readonly<Partial<Record<BaseFortPass, string>>>;
   /** Sockets relative to the canvas centre, display px. */
   readonly sockets: readonly (readonly [string, BaseFortSocket])[];
+  /**
+   * Per cell, in cell order: the kit caster-height frame it was composed from (a CPU-readable image region of
+   * `framePx` display px centred on the cell); absent without the caster-height pass.
+   */
+  readonly cellHeights?: readonly { readonly key: string; readonly frame: string; readonly framePx: number }[];
 }
 
 const MARGIN_M = 1;
@@ -78,5 +83,7 @@ export function composeOutpost(scene: Phaser.Scene, kit: BaseFortKitAsset, id: s
       sockets.push([`${name}-${n}`, { x: cell.x + socket.x - centreX, y: cell.y + socket.y - centreY, z: socket.z }]);
     }
   });
-  return { centreX, centreY, size, sourceSize: Math.round(size * sourcePerDisplay), keys, sockets };
+  const cellHeights = passes.includes('caster-height') ? placed.map(({ index, variant }) =>
+    ({ key: baseFortTextureKey(variant, 'caster-height'), frame: `kit-frame-${index}`, framePx: kit.framePx })) : undefined;
+  return { centreX, centreY, size, sourceSize: Math.round(size * sourcePerDisplay), keys, sockets, cellHeights };
 }

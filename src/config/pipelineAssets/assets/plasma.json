@@ -4,29 +4,16 @@
   "gameIds": [
     "SPORE_TURRET_PLASMA"
   ],
-  "revision": "towers-r03",
+  "revision": "towers-r07",
   "variant": "standard",
   "sourceSize": 160,
   "textureKey": "turret_weapon_plasma",
-  "sheetTextureKey": "turret_weapon_plasma_animated",
-  "idlePath": "./assets/sprites/pipeline-v2/plasma/idle.png",
-  "sheetPath": "./assets/sprites/pipeline-v2/plasma/sheet.png",
+  "runtimeContract": "sheet",
   "forward": "east",
   "pivot": [
     0.5,
     0.5
   ],
-  "layout": {
-    "frameWidth": 160,
-    "frameHeight": 160,
-    "margin": 2,
-    "spacing": 4,
-    "columns": 8,
-    "rows": 2,
-    "frameCount": 9,
-    "width": 1312,
-    "height": 328
-  },
   "idleFrame": 0,
   "clips": [
     {
@@ -42,11 +29,26 @@
         8
       ],
       "frameRate": 24,
-      "loop": false
+      "loop": false,
+      "end": "rest"
     }
   ],
+  "sheetTextureKey": "turret_weapon_plasma_animated",
+  "idlePath": "./assets/sprites/pipeline-v2/plasma/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/plasma/sheet.png",
+  "layout": {
+    "frameWidth": 160,
+    "frameHeight": 160,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 9,
+    "width": 1312,
+    "height": 328
+  },
   "hashes": {
-    "idle": "a6b640edb343e675030b3a014e4fb6b8ccf7a366d550bcde0eb40defe082e950",
-    "sheet": "c6a9f0cad8496d74df2e86a0dec58275e2245f9e655ca4cdd15ad31b8d992984"
+    "idle": "d58ddc9c9f2c9bb8f6bd97a7d829db32f2f1df4a5cb8a547924fc5e2b4f45fd0",
+    "sheet": "27aa63952cf1e69a7319cdba52bb6751ca6d08a4ebe0a8f87e8590ac9c321957"
   }
 }

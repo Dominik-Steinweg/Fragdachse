@@ -27,7 +27,7 @@
   "production": "reference",
   "mount": {
     "rockSize": 32,
-    "maxBaseDiameter": 27
+    "maxBaseDiameter": 16
   },
   "model": {},
   "orthoScale": 2.8,
@@ -50,7 +50,9 @@
       "frameRate": 30,
       "loop": false,
       "parameters": {
-        "recoil": 0.075
+        "recoil": 0.075,
+        "idleEmission": 0.1,
+        "activeEmission": 1.5
       }
     }
   ]

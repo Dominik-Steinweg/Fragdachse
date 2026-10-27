@@ -1,7 +1,8 @@
 import type * as Phaser from 'phaser';
+import { getPipelineAsset } from '../../config/pipelineAssets';
 import manifest from '../../assets/manifests/base-structures.json';
 
-/** Runtime emission layers of the fort: torch embers and lantern glass. */
+/** Runtime emission layers of the fort: the glowing torch heads and fire-bowl coals. */
 export type BaseFortLayer = 'forge';
 export type BaseFortPass = 'beauty' | 'albedo' | 'elevation' | 'solid' | 'caster-height' | 'ground' | `emission-${BaseFortLayer}`;
 
@@ -65,15 +66,19 @@ function published(): { asset: Pick<BaseFortAsset, 'asset' | 'layers'>; ground: 
 }
 
 /** Same contract as the lobby structures: elevation and emission are data, read by the shaders. */
+/** The stone plinth the fort lays under a turret on its deck (pipeline asset turret-plinth). */
+export const TURRET_PLINTH = getPipelineAsset('turret-plinth');
+
 export function preloadBaseFortAssets(loader: Phaser.Loader.LoaderPlugin): void {
   for (const { asset, ground } of published()) for (const pass of passes(asset, ground)) {
     loader.image(baseFortTextureKey(asset, pass), `./assets/sprites/pipeline-v2/${asset.asset}/${pass}.png`);
   }
+  loader.image(TURRET_PLINTH.textureKey, TURRET_PLINTH.idlePath);
 }
 
 /** True once every pass of the core and the outpost kit is loaded into the scene's texture manager. */
 export function isBaseFortLoaded(scene: Phaser.Scene): boolean {
   const all = published();
-  return all.length > 0 && !!scene.textures
+  return all.length > 0 && !!scene.textures && scene.textures.exists(TURRET_PLINTH.textureKey)
     && all.every(({ asset, ground }) => passes(asset, ground).every(pass => scene.textures.exists(baseFortTextureKey(asset, pass))));
 }

@@ -1,7 +1,6 @@
 import type * as Phaser from 'phaser';
 import { PIPELINE_ASSETS } from '../config/pipelineAssets';
 import type { MeshShadowCaster } from './EnemyMeshShadowRenderer';
-import { TURRET_SHADOW_HEIGHT_SCALE } from './ShadowConfig';
 
 /** Visits every turret sprite an owner shows; `raised` when it stands on a base surface (fort decks, outposts). */
 export type TurretShadowSource = (visit: (sprite: Phaser.GameObjects.Sprite, raised: boolean) => void) => void;
@@ -20,7 +19,6 @@ class TurretCaster implements MeshShadowCaster {
   getHp(): number { return this.sprite.active ? 1 : 0; }
   isBurrowed(): boolean { return false; }
   getHopLiftScale(): number { return 1; }
-  getShadowHeightScale(): number { return TURRET_SHADOW_HEIGHT_SCALE; }
   getShadowReceiverPlane(): number { return this.plane; }
 }
 

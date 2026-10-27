@@ -210,6 +210,20 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0,
     flickerHz: 0,
   },
+  /** The glowing parts of a turret flaring up with its shot: small, coloured, slower than the muzzle flash. */
+  turretGlow: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 64,
+    color: 0xffffff,
+    intensity: 0.55,
+    durationMs: 320,
+    decayExponent: 1.1,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
   muzzleFlash: {
     enabled: true,
     shape: 'radial',

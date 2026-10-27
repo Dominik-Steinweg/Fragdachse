@@ -8,6 +8,7 @@ from turret_surface_parts import material
 def build(c, spec):
     p = palette(c, armor=(.065, .15, .15), accent=(.70, .29, .045))
     red = material(c, 'Terracotta warheads', (.48, .065, .038))
+    heat = c.material('Hot ignition glow', (1.0, .42, .08), emission=.15)
     base = support(c, p, radius=.87, facets=12, accent_lugs=True)
     c.box('Central recoil cradle', (-.04, 0, .47), (1.30, .36, .29), p['dark'], .085)
     c.box('Cast gimbal spine', (-.20, 0, .63), (.96, .32, .23), p['armor'], .070)
@@ -23,6 +24,8 @@ def build(c, spec):
         c.box('Rear magazine armored cap', (-.60, y, .69), (.19, .48, .24), p['steel'], .045)
         c.box('Ochre launch throat', (.94, y, .65), (.20, .46, .27), p['accent'], .038)
         c.box('Dark twin launch apertures', (1.06, y, .69), (.15, .34, .14), p['dark'], .020)
+        c.box('Glowing launch throat', (1.075, y, .765), (.10, .26, .018), heat, .006)
+        c.box('Rear exhaust ember', (-.705, y, .70), (.035, .30, .12), heat, .008)
         for dy in (-.093, .093):
             yy=y+dy
             cylinder_x(c, 'Ivory loaded missile', (.03, yy, .822), .064, .64, p['ivory'], 20)
@@ -36,4 +39,5 @@ def build(c, spec):
         for xx in (-.57, -.48):
             c.box('Rear magazine vent', (xx, y, .822), (.035, .27, .025), p['dark'], .005)
         groups['left_pod' if side < 0 else 'right_pod'] = new_meshes(c, before)
-    return finish(c, base, groups, sockets={'muzzle':(1.22,0,.78),'muzzle_left':(1.22,-.49,.78),'muzzle_right':(1.22,.49,.78)})
+    return finish(c, base, groups, emission=heat,
+                  sockets={'muzzle':(1.22,0,.78),'muzzle_left':(1.22,-.49,.78),'muzzle_right':(1.22,.49,.78)})

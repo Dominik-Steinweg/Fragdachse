@@ -1,8 +1,12 @@
-"""Shared machining details, compact supports and explicit turret control attachment."""
+"""Shared machining details, the fort emplacement and explicit turret control attachment."""
 import math
 import bpy
 from rigs_v2 import model, control, attach
 from turret_surface_parts import material
+
+# The weapon stands on a post: on a base deck its lowest part clears the stake tips (~1.47 BU above the deck)
+# and the head turns above the palisade. Recipes author the head as before; finish() lifts it.
+FORT_LIFT = 1.6
 
 
 def palette(c, armor=(.085, .15, .17), accent=(.64, .27, .055), charge=(.06, .58, .73)):
@@ -20,6 +24,9 @@ def palette(c, armor=(.085, .15, .17), accent=(.64, .27, .055), charge=(.06, .58
         'ivory': material(c, 'Warm ceramic contacts', (.63, .62, .49), 'ceramic'),
         'copper': material(c, 'Oxidized copper winding', (.38, .18, .060), 'copper'),
         'charge': c.material('Confined energy color', charge, emission=.30),
+        'timber': material(c, 'Weathered oak post', (.16, .12, .085), 'timber'),
+        'tar': material(c, 'Tarred timber foot', (.062, .052, .043), 'timber'),
+        'iron': material(c, 'Forged iron bands', (.085, .088, .085), 'steel'),
     }
 
 
@@ -55,18 +62,24 @@ def tube(c, name, location, radius, thickness, length, material):
 
 
 def support(c, p, radius=.86, facets=12, accent_lugs=False):
-    """All support details stay inside a 25px circle at ortho2.8/display40."""
-    parts = [c.cylinder('Compact structural foot', (0, 0, .10), radius, .20, p['base'], facets)]
-    parts.append(annulus(c, 'Recessed outer bearing edge', (0, 0, .23), radius*.95, radius*.83, .075, p['steel']))
-    parts.append(c.cylinder('Inset armored bearing', (0, 0, .265), radius*.84, .12, p['armor'], facets))
-    parts.append(annulus(c, 'Dark carrier rotation joint', (0, 0, .335), radius*.69, radius*.58, .065, p['dark']))
+    """Weapon mount: an iron foot flange, an iron-banded oak post and a swivel plate that carries the head,
+    lifted by finish() so it turns above a base palisade. On a fort deck the turret stands on a stone plinth
+    the fort lays under it (turret-plinth); from above only the head and its swivel collar show.
+    `facets` shapes the swivel plate, `accent_lugs` paints the band clamps; `radius` is kept for the recipes."""
+    c.fort_lift = FORT_LIFT
+    top = .335 + FORT_LIFT                                        # where the head's old carrier joint now sits
+    parts = [c.cylinder('Iron foot flange', (0, 0, .04), .3, .08, p['iron'], 12)]
     for i in range(4):
         a = math.pi/4 + i*math.pi/2
-        x, y = .69*math.cos(a), .69*math.sin(a)
-        tab = c.box('Recessed mounting lug', (x, y, .265), (.22, .16, .065), p['accent'] if accent_lugs else p['base'], .025)
-        tab.rotation_euler.z = a; parts.append(tab)
-        parts.append(c.cylinder('Large mounting bolt', (x, y, .310), .047, .026, p['edge'], 6))
-        parts.append(c.box('Bolt head slot', (x, y, .325), (.043, .011, .008), p['dark'], .002))
+        parts.append(c.cylinder('Flange bolt', (.22*math.cos(a), .22*math.sin(a), .09), .028, .02, p['edge'], 6))
+    post = top - .12 - .08
+    parts.append(c.cylinder('Oak emplacement post', (0, 0, .08 + post/2), .17, post, p['timber'], 8))
+    for z in (.45, .45 + post*.5):
+        parts.append(c.cylinder('Iron post band', (0, 0, z), .185, .055, p['iron'], 8))
+        parts.append(c.box('Band clamp', (.18, 0, z), (.05, .07, .07), p['accent'] if accent_lugs else p['iron'], .01))
+    r = min(.42, radius*.5)
+    parts.append(c.cylinder('Iron swivel plate', (0, 0, top - .07), r, .1, p['iron'], max(8, facets)))
+    parts.append(annulus(c, 'Dark carrier rotation joint', (0, 0, top), r*.86, r*.68, .065, p['dark']))
     return parts
 
 
@@ -86,13 +99,21 @@ def new_meshes(c, before):
 
 
 def finish(c, base_meshes, groups=None, pivots=None, sockets=None, emission=None):
+    """Attaches the controls; a weapon on the fort mount (support()) first has its head, pivots and sockets
+    lifted onto the post. Other users of this helper (drones) keep their geometry."""
+    lift = getattr(c, 'fort_lift', 0)
+    base = set(base_meshes)
+    for ob in c.scene.objects:
+        if ob.type == 'MESH' and ob not in base and ob.parent is None:
+            ob.location.z += lift
+    up = lambda xyz: (xyz[0], xyz[1], xyz[2] + lift)
     asset = model(c.scene)
     asset['parts']['base_meshes'] = list(base_meshes)
     for name, objects in (groups or {}).items():
-        pivot = control(c.scene, name+' animation control', (pivots or {}).get(name, (0, 0, 0)), asset['root'])
+        pivot = control(c.scene, name+' animation control', up((pivots or {}).get(name, (0, 0, 0))), asset['root'])
         attach(objects, pivot); asset['parts'][name] = pivot
     if emission is not None:
         asset['parts']['emission'] = emission.node_tree.nodes['Principled BSDF'].inputs['Emission Strength']
     for name, location in (sockets or {'muzzle': (1.28, 0, .70)}).items():
-        asset['sockets'][name] = control(c.scene, name+' socket', location, asset['root'])
+        asset['sockets'][name] = control(c.scene, name+' socket', up(location), asset['root'])
     return asset

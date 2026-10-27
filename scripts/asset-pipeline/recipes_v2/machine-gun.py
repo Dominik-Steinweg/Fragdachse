@@ -5,6 +5,7 @@ from turret_parts import palette, support, cylinder_x, tube, grille, new_meshes,
 
 def build(c,spec):
     p=palette(c,armor=(.13,.16,.105),accent=(.53,.29,.060))
+    heat=c.material('Hot barrel and ready lamp',(1.0,.40,.07),emission=.12)
     base=support(c,p,radius=.85,facets=12)
     c.box('Heavy receiver undercarriage',(-.17,-.055,.48),(1.01,.66,.28),p['dark'],.095)
     c.box('Sloped olive receiver',(-.18,-.06,.67),(.93,.61,.30),p['armor'],.085)
@@ -26,6 +27,7 @@ def build(c,spec):
         yy=-.075+.081*math.cos(a);zz=.704+.081*math.sin(a)
         cylinder_x(c,'Long separate machine-gun barrel',(.86,yy,zz),.043,.79,p['dark'],20)
         tube(c,'Open individual muzzle',(1.247,yy,zz),.045,.013,.052,p['edge'])
+        cylinder_x(c,'Glowing barrel tip',(1.17,yy,zz),.046,.09,heat,20)
     cylinder_x(c,'Rear rotary barrel band',(.55,-.075,.704),.144,.070,p['edge'])
     cylinder_x(c,'Forward barrel stabilizer',(1.10,-.075,.704),.133,.075,p['steel'])
     c.box('Barrel upper alignment rail',(.64,-.075,.854),(.57,.060,.047),p['steel'],.009)
@@ -35,4 +37,5 @@ def build(c,spec):
     c.box('Warm bolt indicator',(.070,-.12,.928),(.10,.15,.024),p['accent'],.012)
     c.box('Offset bolt handle',(-.11,-.327,.79),(.18,.095,.075),p['edge'],.024)
     bolt=new_meshes(c,before)
-    return finish(c,base,{'left_pod':gun,'right_pod':bolt},sockets={'muzzle':(1.29,-.075,.72)})
+    c.box('Amber ready lamp',(-.62,-.27,.80),(.07,.07,.035),heat,.012)
+    return finish(c,base,{'left_pod':gun,'right_pod':bolt},emission=heat,sockets={'muzzle':(1.29,-.075,.72)})

@@ -5,6 +5,9 @@ import bpy
 from turret_parts import finish
 from turret_surface_parts import finish as surface_finish
 
+# The cap's underside clears the stake tips of a base palisade (~1.74 BU above the deck at ortho 2.65/display 32).
+SPORE_LIFT = 1.3
+
 
 def surface(x, y):
     radius = min(1, math.hypot((x + .055) / 1.01, y / .96))
@@ -62,11 +65,17 @@ def build(c, spec):
     under = surface_finish(c.material('Muted cream rolled rim', (.64, .49, .30), 'organic'), 'fibre')
     skin = fungal_material(c, 'Weathered terracotta cuticle', (.46, .075, .033),
                            (.20, .027, .012), (.68, .18, .065), .013)
+    # The cap itself glows deep red as it swells to release its spores (keyed by organic_pulse).
+    glow = skin.node_tree.nodes['Principled BSDF']
+    glow.inputs['Emission Color'].default_value = (1.0, .10, .035, 1)
+    glow.inputs['Emission Strength'].default_value = 0
     pale = fungal_material(c, 'Dry broken ivory veil', (.85, .77, .56),
                            (.57, .47, .31), (.94, .86, .67), .023)
     dark = c.material('Recessed eastern spore slit', (.08, .027, .014), 'organic')
-    base = [c.ell('Compact mycelium cushion', (0, 0, .14), (.62, .60, .14), stem),
-            c.ell('Short concealed stalk', (-.055, 0, .42), (.35, .33, .38), stem)]
+    # Like the weapons, the cap stands above a base palisade: a tall fibrous stalk carries it (finish lifts it).
+    c.fort_lift = SPORE_LIFT
+    base = [c.ell('Compact mycelium cushion', (0, 0, .14), (.58, .56, .14), stem),
+            c.ell('Tall fibrous stalk', (-.055, 0, (.20 + .62 + SPORE_LIFT) / 2), (.30, .28, (.62 + SPORE_LIFT - .20) / 2 + .06), stem)]
     # One continuous surface avoids a manufactured ring of repeated lobes.
     segments, rings = 128, 24
     vertices = [(-.055, 0, surface(-.055, 0))]
@@ -110,5 +119,5 @@ def build(c, spec):
     mouth = [c.ell('Folded eastern gill lip', (.88, 0, .67), (.23, .15, .09), under),
              c.ell('Inset spore slit', (.965, 0, .732), (.12, .065, .018), dark)]
     return finish(c, base, {'cap': cap, 'gills': mouth},
-                  pivots={'cap': (-.055, 0, .65), 'gills': (.84, 0, .67)},
+                  pivots={'cap': (-.055, 0, .65), 'gills': (.84, 0, .67)}, emission=skin,
                   sockets={'muzzle': (1.12, 0, .81)})

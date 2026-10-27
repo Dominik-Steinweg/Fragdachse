@@ -1,6 +1,24 @@
 import { getPipelineAsset, pipelineAnimationKey, type PipelineAsset } from './pipelineAssets';
 import type * as Phaser from 'phaser';
 import type { TurretWeaponId } from '../types';
+import emissionManifest from '../assets/manifests/turret-emission.json';
+
+/**
+ * Emission sheets derived from the selected turret builds (scripts/asset-pipeline/turret-emission.mjs): the glowing
+ * parts of every beauty frame, same layout, RGB hue and alpha intensity. Only an entry of the live revision counts.
+ */
+const EMISSION = emissionManifest.assets as Readonly<Record<string, { readonly revision: string; readonly sheet: string; readonly color: string }>>;
+
+/** Texture key of a turret's emission sheet, or null while its live revision has none. */
+export function turretEmissionKey(asset: PipelineAsset): string | null {
+  return EMISSION[asset.id]?.revision === asset.revision ? `${asset.sheetTextureKey}_emission` : null;
+}
+
+/** Colour of a turret's glow, the intensity-weighted hue of its emission sheet. */
+export function turretEmissionColor(asset: PipelineAsset): number | null {
+  const entry = EMISSION[asset.id];
+  return entry?.revision === asset.revision ? parseInt(entry.color.slice(1), 16) : null;
+}
 
 export interface TurretVisualSpec {
   readonly textureKey: string;
@@ -85,6 +103,14 @@ export function preloadTurretVisualAssets(loader: Phaser.Loader.LoaderPlugin, ad
     loaded.add(asset.textureKey);
     loader.image(asset.textureKey, asset.idlePath);
     loader.spritesheet(asset.sheetTextureKey, asset.sheetPath, {
+      frameWidth: asset.layout.frameWidth,
+      frameHeight: asset.layout.frameHeight,
+      margin: asset.layout.margin,
+      spacing: asset.layout.spacing,
+      endFrame: asset.layout.frameCount - 1,
+    });
+    const emission = turretEmissionKey(asset);
+    if (emission) loader.spritesheet(emission, EMISSION[asset.id].sheet, {
       frameWidth: asset.layout.frameWidth,
       frameHeight: asset.layout.frameHeight,
       margin: asset.layout.margin,

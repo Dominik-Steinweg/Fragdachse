@@ -435,6 +435,8 @@ export class RockVisualHelper {
     visual.constructionId = rock.constructionId;
     visual.turretWeaponId = rock.turretWeaponId;
     visual.raised = rock.ownership === 'base-owned';
+    // A turret on a base deck stands on its emplacement post: no ground aura spilling over the palisade.
+    if (visual.raised) visual.aura.setVisible(false);
 
     if (!indestructible && !this.healthBars?.isValid(visual.healthBar)) {
       visual.healthBar = this.healthBars?.bind(TURRET_HEALTH_BAR_STYLE, rock.hp, rock.maxHp,

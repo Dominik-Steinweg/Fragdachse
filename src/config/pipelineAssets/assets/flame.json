@@ -4,29 +4,16 @@
   "gameIds": [
     "TURRET_FLAME"
   ],
-  "revision": "towers-r03",
+  "revision": "towers-r07",
   "variant": "standard",
   "sourceSize": 160,
   "textureKey": "turret_weapon_flame",
-  "sheetTextureKey": "turret_weapon_flame_animated",
-  "idlePath": "./assets/sprites/pipeline-v2/flame/idle.png",
-  "sheetPath": "./assets/sprites/pipeline-v2/flame/sheet.png",
+  "runtimeContract": "sheet",
   "forward": "east",
   "pivot": [
     0.5,
     0.5
   ],
-  "layout": {
-    "frameWidth": 160,
-    "frameHeight": 160,
-    "margin": 2,
-    "spacing": 4,
-    "columns": 8,
-    "rows": 2,
-    "frameCount": 13,
-    "width": 1312,
-    "height": 328
-  },
   "idleFrame": 0,
   "clips": [
     {
@@ -46,11 +33,26 @@
         12
       ],
       "frameRate": 12,
-      "loop": true
+      "loop": true,
+      "end": "rest"
     }
   ],
+  "sheetTextureKey": "turret_weapon_flame_animated",
+  "idlePath": "./assets/sprites/pipeline-v2/flame/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/flame/sheet.png",
+  "layout": {
+    "frameWidth": 160,
+    "frameHeight": 160,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 13,
+    "width": 1312,
+    "height": 328
+  },
   "hashes": {
-    "idle": "63daf131594d6b79be7adce9b911ed053c9264e8866ef979f9c888195b17c82c",
-    "sheet": "766d19ecdc259536211a10cd27ee9c9815819ce70b94d1fc8927b19b6b250c3d"
+    "idle": "dad3678f4530eb75c911d199c8fa81595c03cc68bddd846fdf726cbc82f8263b",
+    "sheet": "768a4679d1d09ef6a545dd592244ddd5f5013ca03f0f76fbe5e1916a58d90bf0"
   }
 }

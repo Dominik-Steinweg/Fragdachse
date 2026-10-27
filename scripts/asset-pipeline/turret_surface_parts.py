@@ -56,15 +56,20 @@ def finish(material, kind='paint'):
         links.new(vector.outputs[0], out.inputs['Vector'])
         return out.outputs['Fac']
 
-    organic = kind in ('cuticle', 'veil', 'fibre')
+    organic = kind in ('cuticle', 'veil', 'fibre', 'timber')
+    timber = kind == 'timber'
     recess = kind == 'recess'
-    ceramic = kind in ('ceramic', 'frost')
+    ceramic = kind in ('ceramic', 'frost', 'stone')
     patches = noise(4.5, (1, 1, 1), 'Broad outdoor weathering')
     grain = noise(22, (.12, 1, 1), 'Readable brushed striations')
     values = ramp(patches, [(.24, .35), (.42, .63), (.59, 1.12), (.76, 1.48)], 'Uneven aged finish')
     surface = mix(original, values, .78 if organic else .60 if ceramic else .90,
                   'Material variation at game scale', 'MULTIPLY')
-    if organic:
+    if timber:
+        # Weathered post and foot timber: long grain along the piece, darker checks between.
+        rings = ramp(noise(16, (.08, 1, 1), 'Timber grain'), [(.30, .55), (.48, .92), (.66, 1.22), (.80, 1.40)], 'Weathered grain')
+        surface = mix(surface, rings, .65, 'Timber grain at game scale', 'MULTIPLY')
+    elif organic:
         freckles = noise(13, (1, 1, 1), 'Dry cuticle granulation')
         dry = ramp(freckles, [(.25, .45), (.45, .78), (.60, 1.06), (.78, 1.28)], 'Fine fungal fibres')
         surface = mix(surface, dry, .60 if kind == 'cuticle' else .40, 'Dry organic skin', 'MULTIPLY')
@@ -88,6 +93,13 @@ def finish(material, kind='paint'):
             # Only the structural foot: broad soil stains and moss in protected seams.
             moss = ramp(noise(6, (1, 1, .4), 'Moss colonies on foot'), [(.40, 0), (.52, .25), (.65, .85)], 'Broken moss coverage')
             surface = mix(surface, (.10, .14, .036, 1), moss, 'Earth and moss contact')
+
+    if kind == 'stone':
+        # Dressed field stone: broad weathering, grit and moss settled in the protected seams.
+        grit = ramp(noise(30, (1, 1, 1), 'Stone grit'), [(.30, .80), (.50, 1.0), (.70, 1.18)], 'Granular stone face')
+        surface = mix(surface, grit, .55, 'Stone grain at game scale', 'MULTIPLY')
+        moss = ramp(noise(6, (1, 1, .4), 'Moss colonies on stone'), [(.46, 0), (.56, .3), (.68, .8)], 'Broken stone moss')
+        surface = mix(surface, (.10, .14, .036, 1), moss, 'Moss on stone')
 
     # Short-range material AO grounds intersecting assemblies, without a baked ground plane.
     ao = node('ShaderNodeAmbientOcclusion', 'Dirt in mechanical contact seams')

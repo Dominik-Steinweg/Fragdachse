@@ -4,29 +4,16 @@
   "gameIds": [
     "TURRET_MG"
   ],
-  "revision": "towers-r03",
+  "revision": "towers-r07",
   "variant": "standard",
   "sourceSize": 160,
   "textureKey": "turret_weapon_machine_gun",
-  "sheetTextureKey": "turret_weapon_machine_gun_animated",
-  "idlePath": "./assets/sprites/pipeline-v2/machine-gun/idle.png",
-  "sheetPath": "./assets/sprites/pipeline-v2/machine-gun/sheet.png",
+  "runtimeContract": "sheet",
   "forward": "east",
   "pivot": [
     0.5,
     0.5
   ],
-  "layout": {
-    "frameWidth": 160,
-    "frameHeight": 160,
-    "margin": 2,
-    "spacing": 4,
-    "columns": 7,
-    "rows": 1,
-    "frameCount": 7,
-    "width": 1148,
-    "height": 164
-  },
   "idleFrame": 0,
   "clips": [
     {
@@ -40,11 +27,26 @@
         6
       ],
       "frameRate": 30,
-      "loop": false
+      "loop": false,
+      "end": "rest"
     }
   ],
+  "sheetTextureKey": "turret_weapon_machine_gun_animated",
+  "idlePath": "./assets/sprites/pipeline-v2/machine-gun/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/machine-gun/sheet.png",
+  "layout": {
+    "frameWidth": 160,
+    "frameHeight": 160,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 7,
+    "rows": 1,
+    "frameCount": 7,
+    "width": 1148,
+    "height": 164
+  },
   "hashes": {
-    "idle": "b246a444b53de6de73cf093c4964b20ae4e0f6965a5044c522f3eefedd4698a9",
-    "sheet": "aa64f88509f516dbfc2470503102fec8594e76dcc32491a60147a1730f6c20aa"
+    "idle": "5acb760d714a82aedcd1a5d45999bc276c1f7ce4dd0b727c62fcf0d85192a9c9",
+    "sheet": "efb2f647f4b4a4947d9e7e6058033afab06984252e7f81c4e8df44397dc60d48"
   }
 }
