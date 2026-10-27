@@ -155,13 +155,13 @@
         }
       },
       "sha256": {
-        "beauty": "bfb43cd27355ebb004c23d01ae2ea025883b5543cc68727e464069179e2a385e",
-        "albedo": "ba0ad44b5c571bf201cdbee98503c78badc8c51a0213c24e6b743718a73d835d",
-        "elevation": "1031bd863a6ef77aa6008625c4add30489cf968ae04e0cb2b12eebd2280ac945",
-        "solid": "93a76fdb2d6c3047778c616947a001bac6597d0ff4c60a284be78f1e7aead99d",
-        "caster-height": "0ffdb149677661b12cafd84429829b4034877188f97d6dea03d5f24f80470f10",
-        "ground": "ebda0661dc650335be50fa7dc1cb8479f4315cd9cbb8d2edbd6fba5e45ce9864",
-        "emission-forge": "51a3c8e3f96f9d9071d4243b6072e0647ac14b8ad9d1ea603b74ea7d959d6d62"
+        "beauty": "7f10a5d751364e800dc096e1bc71e44b31df8bc40e54d00271cd3b6b0fc70e19",
+        "albedo": "320fd5a61cd227fb7ecf9b99d275d64faba337bdf8a38a05450ae15934ebe48e",
+        "elevation": "59df6cdcfc9e31718255b26abf50ef07d115eb4c466f04a808a392db3698dfd0",
+        "solid": "58c94d1de4aaa3f8f39b93bc327fdb51b57c1977eebdeb078e166df0dadc02f2",
+        "caster-height": "0a29673b1c6203156016a3bd93deaa467e13bd4bece9c0d4748a4c3e50073991",
+        "ground": "260cec965ee177e430277aa1fdd6f8e6e8310d204e2c08029c0e5f30aa5ea6b8",
+        "emission-forge": "7fb3dcdec7c3a08e68a837626ad1489e4039a25a19760fd8070719ae55e62477"
       }
     },
     "outpost-kit": {
@@ -1123,5 +1123,5 @@
       ]
     }
   },
-  "revision": "fort-r14"
+  "revision": "fort-r15"
 }

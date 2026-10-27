@@ -167,6 +167,7 @@ class FortMaster:
             ember=m('Separate forge ember', (230, 96, 24), .05, .9), coal=m('Forge coal', (30, 29, 25), .1),
             brass=m('Worn brass fittings', (150, 112, 58), .3),
             moss=m('Stake moss', (70, 92, 38), .3), moss2=m('Old moss', (84, 96, 46), .3),
+            gmoss=m('Ground moss', (70, 84, 42), .3), gmoss2=m('Old ground moss', (84, 88, 54), .3),
             lichen=m('Grey lichen', (150, 152, 128), .2), ringrock=m('Ring fieldstone', (112, 108, 98), .4),
             grass=m('Turf tuft', (66, 82, 40), .3), grass2=m('Dry turf tuft', (118, 108, 70), .3), fern=m('Fern frond', (52, 78, 34), .3),
             sill=m('Threshold stone', (96, 92, 84), .4), sill2=m('Mossy threshold stone', (80, 82, 68), .35), charred=m('Charred bits', (34, 30, 27), .1),
@@ -367,7 +368,7 @@ class FortMaster:
             c = u + s / 2
             mid = 1 - abs(c) / x
             if rng.random() < .12 + .1 * mid:                           # a stone gone: grit and a tuft of moss
-                b.ell(t.p(c, LINE + rng.uniform(-.02, .02), .003), (s * .3, .035, .005), p['moss2'], 8, 3, t.r(0, 0, rng.uniform(-.4, .4)))
+                b.ell(t.p(c, LINE + rng.uniform(-.02, .02), .003), (s * .3, .035, .005), p['gmoss2'], 8, 3, t.r(0, 0, rng.uniform(-.4, .4)))
             else:
                 mat = p['sill'] if rng.random() < .4 + .4 * mid else p['sill2']
                 parts = [(c, s)] if s < .24 or rng.random() > .3 else [(u + s * .26, s * .48), (u + s * .76, s * .42)]
@@ -599,14 +600,26 @@ class FortMaster:
         for _ in range(70):                                                      # moss and grass in and round the ring
             a, r = rng.uniform(0, math.tau), rng.choice((rng.uniform(.82, .9), rng.uniform(1.1, 1.3), rng.uniform(.3, .82)))
             s = rng.uniform(.02, .055)
-            b.ell((r * math.cos(a), r * math.sin(a), .02), (s, s * .7, .012), p['moss' if rng.random() < .6 else 'moss2'], 8, 3, (0, 0, a))
+            b.ell((r * math.cos(a), r * math.sin(a), .008), (s, s * .7, .008), p['gmoss' if rng.random() < .6 else 'gmoss2'], 8, 3, (0, 0, a))
         for _ in range(60):                                                      # grit washed over the stones
             a, r = rng.uniform(0, math.tau), rng.uniform(.2, 1.25)
             s = rng.uniform(.01, .022)
             b.box((r * math.cos(a), r * math.sin(a), .035), (s, s * .8, s * .5), p['stone'], s * .2, (0, 0, rng.uniform(0, 3)), s * .2, rng)
 
+    def moss_patch(self, x, y, size):
+        """A flat, ragged patch of moss on the ground: a few overlapping low lobes of two shades, so it
+        reads as growth in the ground layer rather than as a raised oval stone."""
+        b, rng, p = self.b, self.rng, self.p
+        main = 'gmoss' if rng.random() < .6 else 'gmoss2'
+        for _ in range(rng.randrange(3, 6)):
+            a, d = rng.uniform(0, math.tau), size * rng.uniform(0, .75)
+            r = size * rng.uniform(.35, .7)
+            mat = main if rng.random() < .75 else ('gmoss2' if main == 'gmoss' else 'gmoss')
+            b.ell((x + d * math.cos(a), y + d * math.sin(a), .004), (r, r * rng.uniform(.55, .95), .007), p[mat], 10, 3,
+                  (0, 0, rng.uniform(0, 3)))
+
     def ground_growth(self):
-        """Grass tufts and moss cushions where feet rarely go: along the band edges, the palisade feet
+        """Grass tufts and moss patches where feet rarely go: along the band edges, the palisade feet
         inside and outside, the courtyard corners; a few ferns at the outer corners."""
         b, rng, p = self.b, self.rng, self.p
         tufts = 0
@@ -629,8 +642,7 @@ class FortMaster:
             if 2.45 < far < 3.65 and near > 1.45: continue
             if path_wear(x, y) > .35: continue
             if not (far > 3.55 or (far < 2.55 and far > 2.0 and near > 1.0)): continue
-            s = rng.uniform(.04, .11)
-            b.ell((x, y, .015), (s, s * rng.uniform(.6, .9), .025), p['moss' if rng.random() < .6 else 'moss2'], 10, 4, (0, 0, rng.uniform(0, 3)))
+            self.moss_patch(x, y, rng.uniform(.05, .12))
             cushions += 1
         for k in range(4):
             t = Turn(k)
@@ -648,6 +660,6 @@ class FortMaster:
         self.ground()
         for ob in self.b.flush('Fort master'):
             if any(key in ob.name for key in ('Wood chips', 'Fieldstone', 'Ring fieldstone', 'Turf tuft', 'Dry turf tuft', 'Fern frond',
-                                              'Threshold stone', 'Mossy threshold stone', 'Charred bits')):
+                                              'Threshold stone', 'Mossy threshold stone', 'Charred bits', 'Ground moss', 'Old ground moss')):
                 ob['fdGround'] = True
         return self.sockets
