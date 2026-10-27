@@ -1,6 +1,6 @@
 # Lagekarte im Bauhof (V1)
 
-Status: Konzept vom 2026-10-22, noch nicht umgesetzt. Grundlage ist die
+Status: ersetzt durch [V2](Fragdachse_GDD_Lagekarte_Bauhof_V2.md) (2026-10-27). Konzept vom 2026-10-22. Grundlage ist die
 [Gameplay-Analyse vom 22.10.2026](../reports/gameplay-review-2026-10-22-inspector-td.md), Vorschlag V1.
 Die Entscheidungen hat der Projektinhaber am selben Tag getroffen.
 
