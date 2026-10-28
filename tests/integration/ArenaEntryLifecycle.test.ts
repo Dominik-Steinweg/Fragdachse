@@ -700,7 +700,8 @@ describe('Lobby exit gates local Arena work', () => {
     Object.assign(scene, { initializationReady: true, ctx: f.flow.ctx, arenaRuntime: f.flow,
       weaponBalanceLabPreviousMapId: null, syncArenaExitFade: () => false,
       inputBindings: { updateFrame: vi.fn() }, renderers: { gpuVfx: { update: vi.fn() } },
-      getArenaLoadingScreenState: () => ({}), resolveArenaFrameSignals: vi.fn() });
+      getArenaLoadingScreenState: () => ({}), resolveArenaFrameSignals: vi.fn(),
+      baseEditorPreparation: { release: vi.fn() } });
     vi.spyOn(bridge, 'updateNetwork').mockImplementation(() => {});
     vi.spyOn(bridge, 'flushNetwork').mockImplementation(() => {});
     const bake = vi.spyOn(ChunkedRenderSurface, 'flushBakeBudget').mockImplementation(() => {});

@@ -54,6 +54,11 @@ export class ArenaDeploymentTerrain {
   }
 
   /** The finished terrain of the announced deployment, if it is ready. */
+  /** The finished layout's fingerprint: cheap enough for every lobby frame, unlike `peek`. */
+  fingerprint(deployment: Deployment): string | null {
+    return this.cache?.fingerprint(deployment.mapConfig.mapId, deployment.seed) ?? null;
+  }
+
   peek(deployment: Deployment): DeploymentLayout | null {
     return this.cache?.peek(deployment.mapConfig.mapId, deployment.seed) ?? null;
   }

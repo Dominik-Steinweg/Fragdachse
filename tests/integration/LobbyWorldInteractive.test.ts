@@ -135,6 +135,7 @@ describe('Lobby building menu dispatch', () => {
     scene.lobbyOverlay = { setWorldEntryState: vi.fn(), setReadyButtonState: vi.fn() };
     scene.meta = { refreshLobbyProjection: vi.fn() };
     scene.deploymentTerrain = { prefetch: vi.fn(), current: () => null };
+    scene.baseEditorPreparation = { tick: vi.fn(), release: vi.fn() };
     scene.coopDefenseUpgradesOverlay = { hide: vi.fn() };
     scene.buildLocalLobbyLoadoutPreview = () => null;
     vi.spyOn(bridge, 'setLocalLobbyLoadoutPreview').mockImplementation(() => {});

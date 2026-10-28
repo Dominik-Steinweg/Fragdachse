@@ -22,7 +22,7 @@ import { preloadCharacterMeshAssets, assertCharacterMeshAssetsReady } from '../a
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { preloadRockBase } from '../arena/RockBaseConfig';
 import { TRACK_RAIL_TEXTURE } from '../arena/TrackGravelConfig';
-import { PersistentBaseEditorScene, type PersistentBaseEditorSaveResult } from './PersistentBaseEditorScene';
+import { PersistentBaseEditorScene, type PersistentBaseEditorSaveResult, type PersistentBaseEditorStageOptions } from './PersistentBaseEditorScene';
 import { PersistentBaseEditorModel, type PersistentBaseEditorRoomBase } from '../persistentBase/PersistentBaseEditorModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import { getStoredCoopDefenseProgress, getStoredLocalOwnerId, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, getStoredPersonalPersistentBaseAreaStage, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
@@ -174,7 +174,9 @@ import type { WorldDescriptor } from '../world/WorldDescriptor';
 import type { WorldPresentationRequirement } from '../world/WorldPresentation';
 import { lobbyBuildingCandidates, lobbyMenuBlockedLabel, lobbyMenuDenial, type LobbyMenuAccessState } from '../systems/LobbyBuildingInteraction';
 import { bridgeChargeCandidates } from '../systems/BridgeInteraction';
-import { lobbyBuildingsOfWorld, type LobbyMenu } from '../config/authoring/lobbyBuildings';
+import { lobbyBuildingsOfWorld, lobbyBuildingWorldRects, type LobbyMenu } from '../config/authoring/lobbyBuildings';
+import { LOBBY_MERCHANT } from '../config/authoring/lobbyMerchant';
+import { nearestStructurePoint } from '../arena/StructureOutline';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import { toArenaMetricsProfile } from '../world/WorldMetrics';
 import { resolvePresentationPolicy } from '../world/PresentationPolicy';
@@ -1609,6 +1611,8 @@ export class ArenaScene extends Phaser.Scene {
     diagnosticsFrame?.end('networkUpdate');
     diagnosticsFrame?.mark('networkEnd');
 
+    // A prepared Bauhof stage never lives on into the build of a round's World.
+    if (this.arenaRuntime.isArenaEntryProtected()) this.baseEditorPreparation.release();
     this.arenaRuntime.syncArenaEntryTransition();
 
     const phase = bridge.getGamePhase();
@@ -2044,6 +2048,7 @@ export class ArenaScene extends Phaser.Scene {
     // The next round's terrain is generated in the lobby; an open base editor follows the host's map.
     this.deploymentTerrain.prefetch();
     this.followBaseEditorDeployment();
+    this.tickBaseEditorPreparation();
     this.measureBaseEditorFrame();
     this.matchResultsOverlay?.refreshRestartState();
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
@@ -2409,14 +2414,14 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   /**
-   * The next round's terrain around the base (Lagekarte), or `null` without a previewable map.
-   * `undefined` means it is still being generated; the editor opens once it is ready.
+   * The next round's terrain around the base (Lagekarte) without its layout, cheap enough for every
+   * lobby frame; `null` without a previewable map, `undefined` while it is still being generated.
    */
-  private resolveBaseEditorTerrain(): PersistentBaseEditorTerrain | null | undefined {
+  private resolveBaseEditorTerrainIdentity() {
     const deployment = this.deploymentTerrain.current();
     if (!deployment) return null;
-    const layout = this.deploymentTerrain.peek(deployment);
-    if (!layout) return undefined;
+    const fingerprint = this.deploymentTerrain.fingerprint(deployment);
+    if (fingerprint === null) return undefined;
     const definition = resolveWorldDefinition({ definitionId: toWorldDefinitionId(deployment.mapConfig.mapId) }, null);
     if (!definition?.persistentBaseSite) return null;
     // The round freezes the host's stage, capped by the map's site.
@@ -2424,8 +2429,17 @@ export class ArenaScene extends Phaser.Scene {
       : bridge.getPersonalBaseAreaStage(bridge.getHostPlayerId()) ?? DEFAULT_PERSISTENT_BASE_AREA_STAGE;
     const areaStage = resolveFrozenPersistentBaseAreaStage({ personalStage: hostStage,
       siteMaxAreaStage: definition.persistentBaseSite.maxAreaStage ?? PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE });
-    return { mapId: deployment.mapConfig.mapId, definition, seed: layout.seed, fingerprint: layout.fingerprint,
-      layout: layout.layout, areaStage };
+    return { deployment, mapId: deployment.mapConfig.mapId, seed: deployment.seed, definition, fingerprint, areaStage };
+  }
+
+  /** The next round's terrain with its layout (a copy); see `resolveBaseEditorTerrainIdentity`. */
+  private resolveBaseEditorTerrain(): PersistentBaseEditorTerrain | null | undefined {
+    const identity = this.resolveBaseEditorTerrainIdentity();
+    if (!identity) return identity;
+    const layout = this.deploymentTerrain.peek(identity.deployment);
+    if (!layout) return undefined;
+    return { mapId: identity.mapId, definition: identity.definition, seed: layout.seed, fingerprint: layout.fingerprint,
+      layout: layout.layout, areaStage: identity.areaStage };
   }
 
   /** Teammates, ownership and the local owner's tools: what the editor needs to predict the host's merge. */
@@ -2480,23 +2494,48 @@ export class ArenaScene extends Phaser.Scene {
     return this.baseEditorGate;
   }
 
-  /** Key of the stage the next round's terrain needs; `null` for the personal draft without map terrain. */
-  private baseEditorStageKey(terrain: PersistentBaseEditorTerrain | null): string | null {
+  /** Key of the stage a terrain needs; `null` for the personal draft without map terrain. */
+  private baseEditorStageKey(terrain: Parameters<typeof baseEditorStageKey>[0] | null): string | null {
     return terrain ? baseEditorStageKey(terrain, getStoredGraphicsQuality()) : null;
   }
 
   /** The kept stage for the next round's terrain, when it can open a session at once. */
   private readyBaseEditorStage(): PersistentBaseEditorScene | null {
-    const terrain = this.resolveBaseEditorTerrain();
+    const terrain = this.resolveBaseEditorTerrainIdentity();
     return terrain === undefined ? null : this.baseEditorPreparation.readyStage(this.baseEditorStageKey(terrain));
   }
 
   /** The stage for this terrain, built over the confirmed draft. `urgent`: a player waits for it. */
   private acquireBaseEditorStage(terrain: PersistentBaseEditorTerrain | null, urgent: boolean): PersistentBaseEditorScene {
-    return this.baseEditorPreparation.acquire(this.baseEditorStageKey(terrain), () => ({ terrain,
+    return this.baseEditorPreparation.acquire(this.baseEditorStageKey(terrain), () => this.baseEditorStageOptions(terrain), urgent);
+  }
+
+  private baseEditorStageOptions(terrain: PersistentBaseEditorTerrain | null): PersistentBaseEditorStageOptions {
+    return { terrain, color: bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? 0xffffff,
       model: new PersistentBaseEditorModel(this.confirmedBaseEditorBaseline(), getStoredPersonalPersistentBaseAreaStage(),
-        this.roomBaseEditorBase()),
-      color: bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? 0xffffff }), urgent);
+        this.roomBaseEditorBase()) };
+  }
+
+  /** The Bauhof's stage is prepared in the lobby, ahead of the Bauhof button or building. */
+  private tickBaseEditorPreparation(): void {
+    // The next round's terrain exists only in co-op campaign lobbies (see ArenaDeploymentTerrain).
+    const eligible = getStoredPersistentBaseUnlocked() && bridge.getGamePhase() === 'LOBBY';
+    const identity = eligible ? this.resolveBaseEditorTerrainIdentity() : null;
+    this.baseEditorPreparation.tick({ now: performance.now(), eligible, busy: this.baseEditor !== null || this.pendingBaseEditor !== null,
+      key: identity === undefined ? undefined : this.baseEditorStageKey(identity),
+      near: eligible && this.isNearBaseEditorYard(),
+      options: () => this.baseEditorStageOptions(this.resolveBaseEditorTerrain() ?? null) });
+  }
+
+  /** The local player is about where the Bauhof's name plate shows. */
+  private isNearBaseEditorYard(): boolean {
+    const world = this.arenaRuntime.getWorldDescriptor(), metrics = this.arenaRuntime.getWorldMetrics();
+    if (!world || !metrics || !isLobbyWorldDefinitionId(world.definitionId)) return false;
+    const yard = lobbyBuildingsOfWorld(world.parameters).find((building) => building.menu === 'base');
+    const sprite = this.ctx?.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
+    if (!yard || !sprite) return false;
+    return nearestStructurePoint(lobbyBuildingWorldRects(metrics, yard), sprite.x, sprite.y).distance
+      <= LOBBY_MERCHANT.nameplate.hiddenAtCells * CELL_SIZE;
   }
 
   private confirmedBaseEditorBaseline() {

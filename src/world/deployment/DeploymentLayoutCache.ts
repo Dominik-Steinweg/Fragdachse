@@ -31,6 +31,11 @@ export class DeploymentLayoutCache {
     return `${ARENA_GENERATOR_VERSION}|${mapId}|${seed}`;
   }
 
+  /** The finished layout's fingerprint, without copying the layout; never starts a generation. */
+  fingerprint(mapId: string, seed: number): string | null {
+    return this.settled.get(DeploymentLayoutCache.key(mapId, seed))?.fingerprint ?? null;
+  }
+
   /** The finished layout, if it is ready; never starts a generation. */
   peek(mapId: string, seed: number): DeploymentLayout | null {
     const entry = this.settled.get(DeploymentLayoutCache.key(mapId, seed));
