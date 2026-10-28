@@ -103,7 +103,11 @@ Die Darstellung folgt [`visual-guidelines.md`](../ai/visual-guidelines.md) und d
 - **Reichweitenringe:** ein Schalter für alle eigenen Türme. Das ausgewählte Objekt zeigt seinen Ring
   immer.
 - **Miniübersicht:** die ganze Map, Norden oben, mit Basis, Spawnzonen, dem Rahmen des Detailbereichs
-  und der Strömung in einer zweiten, feineren Instanz.
+  und der Strömung in einer zweiten, feineren Instanz. Eine Legende darunter nennt nur, was die Map zeigt.
+- **Aufteilung:** Links steht die World in einem festen Rahmen; was die Map nicht füllt, ist dunkles
+  Passepartout. Eine Kopfzeile trägt links Stufe und Basis-HP, rechts „Drehen 90°“ und „Reichweiten“ und
+  über der rechten Spalte Titel und Einsatzbeginn der Lagekarte. Rechts folgen Übersicht, Legende,
+  Hinweis und die Simulationsschalter, darunter die Liste. Unten stehen nur „Abbruch“ und „Übernehmen“.
 
 ## 6. Regeln
 
@@ -252,3 +256,7 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
   Missionsstarts. Jede Route endet am Außenrand der Basis, die sie erreicht, statt bei manchen erst an der
   Feuerstelle. Die Strömung leuchtet nachts stärker, trägt violette Void-Partikel wie der Void-Nebel und
   lässt den Boden entlang der Wege violett schimmern.
+- 2026-10-28 (Layout): Fester World-Rahmen statt eines Rahmens, der mit der Map springt. Die Werkzeuge
+  wandern aus der Zeile der Hauptaktionen in die Kopfzeile. Die Übersicht wird größer und bekommt eine
+  Legende. Schalter (Reichweiten, Simulation) zeigen ihren Zustand als Kästchen. Die Liste ist kürzer
+  und meldet „leer“ mittig.

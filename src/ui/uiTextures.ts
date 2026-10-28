@@ -238,7 +238,9 @@ export type UiIconName =
   | 'trophy'
   | 'fullscreen-enter'
   | 'fullscreen-exit'
-  | 'spinner';
+  | 'spinner'
+  | 'box'
+  | 'box-checked';
 
 export function ensureIconTexture(
   scene: Phaser.Scene, name: UiIconName, size: number, color: number,
@@ -271,6 +273,18 @@ export function ensureIconTexture(
     case 'check':
       line(0.13);
       path([[0.22, 0.52], [0.42, 0.72], [0.78, 0.29]]);
+      break;
+
+    case 'box':
+    case 'box-checked':
+      // A toggle's check box; checked, it carries the check mark inside.
+      line(0.09);
+      roundRectPath(ctx, s * 0.14, s * 0.14, s * 0.72, s * 0.72, s * 0.12);
+      ctx.stroke();
+      if (name === 'box-checked') {
+        line(0.12);
+        path([[0.3, 0.52], [0.45, 0.67], [0.72, 0.36]]);
+      }
       break;
 
     case 'cross':

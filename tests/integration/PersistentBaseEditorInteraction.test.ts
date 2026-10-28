@@ -167,7 +167,7 @@ describe('base menu drag interaction', () => {
     scene.beginDrag(object, cell(0, 0)); scene.updateDrag(cell(-1, 1));
     const preview = scene.dragPreview;
     expect(preview.setPosition).toHaveBeenLastCalledWith(cell(-1, 1).x / scale, cell(-1, 1).y / scale);
-    const listPoint = point(1300, 560);
+    const listPoint = point(1300, 680);
     scene.updateDrag(listPoint); scene.drop(listPoint);
     expect(model.getPosition(object)).toBeUndefined();
     expect(model.unplaced).toContain(object.id);
