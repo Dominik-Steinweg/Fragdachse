@@ -1,7 +1,8 @@
 {
   "owner": "ui/WorldPlaque.ts",
   "notes": [
-    "Lobby building plaques replace the stall nameplate: world UI above light map and fog."
+    "Lobby building plaques replace the stall nameplate: world UI above light map and fog.",
+    "The busy ring after a plaque text (Bauhof prepared in the lobby) sits with the text."
   ],
   "source": {
     "blends": [],
@@ -30,6 +31,13 @@
       },
       {
         "key": "module/this.keycap/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensureSpinner/this.scene.add/setDepth/0",
         "expression": "DEPTH.LOCAL_UI + 1",
         "blends": [
           "NORMAL"
@@ -124,6 +132,28 @@
       "role": "ui",
       "source": {
         "selector": "module/this.keycap/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI + 1"
+      }
+    },
+    {
+      "id": "cpu:ui/WorldPlaque.ts:ensureSpinner/this.scene.add/setDepth/0",
+      "owner": "ui/WorldPlaque.ts",
+      "component": "ensureSpinner/this.scene.add/setDepth/0",
+      "height": "high",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        23
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "ensureSpinner/this.scene.add/setDepth/0",
         "expression": "DEPTH.LOCAL_UI + 1"
       }
     }
