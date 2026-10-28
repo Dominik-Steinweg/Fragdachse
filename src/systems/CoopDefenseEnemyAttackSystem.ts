@@ -63,6 +63,25 @@ interface EnemySalvoState {
   expiresAt: number;
 }
 
+/** Faction-resolved ground fire left by an enemy flame burst. */
+export interface EnemyFlameGroundCell {
+  readonly durationMs: number;
+  readonly burnDurationMs: number;
+  readonly burnDamagePerTick: number;
+  readonly visualStyle: import('../types').GroundFireVisualStyle;
+  readonly damageTarget: import('../types').GroundFireDamageTarget;
+  readonly sourceId: string;
+}
+
+export interface EnemyFlameGroundPort {
+  ignite(enemy: EnemyEntity, x: number, y: number, cell: EnemyFlameGroundCell, now: number): void;
+}
+
+/** A burst's ground fire lands this far behind its target (inside a struck base wall). */
+const FLAME_GROUND_OVERSHOOT_PX = 12;
+/** Cells lit along the end of the burst, measured back from its reach. */
+const FLAME_GROUND_CELL_OFFSETS = [0, 18] as const;
+
 export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   private readonly targetFacing = new WeakMap<EnemyEntity, { angle: number; at: number; held: boolean; from: number; budget: number }>();
   /** Overlapping centers do not define a stable bearing. Hysteresis avoids toggling at the boundary. */
@@ -91,6 +110,9 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   setIntents(intents: EnemyIntentSystem | null): void { this.intents = intents; }
   private decoyTargets: DecoyTargetPort | null = null;
   setDecoyTargets(port: DecoyTargetPort | null): void { this.decoyTargets = port; }
+  private flameGround: EnemyFlameGroundPort | null = null;
+  /** Ground fire of igniting enemy flames (a base inside the cells catches fire through its void-fire owner). */
+  setFlameGround(port: EnemyFlameGroundPort | null): void { this.flameGround = port; }
   /**
    * Hysterese der Mindest-Zieldistanz: eine bereits laufende Salve darf bis zu dieser Strecke
    * unterhalb ihrer Untergrenze weiterfeuern. Ohne den Puffer bricht ein Gegner seine Salve ab,
@@ -408,13 +430,10 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       ownerColor: COLORS.RED_2,
       visualMuzzleOrigin: muzzle > 0
         ? { x: enemy.sprite.x + Math.cos(angle) * muzzle, y: enemy.sprite.y + Math.sin(angle) * muzzle } : undefined,
-      options: clawAttackId ? { clawAttackId }
-        // Flames of enemy weapons that ignite the ground burn in the shooter's faction fire.
-        : config.fire.type === 'flamethrower' && (config.fire.burningGround?.createOnFlameExpiry ?? 0) > 0
-          ? { enemyFlameGround: resolveEnemyFlameGround(enemy.faction, `enemy.${enemy.kind}.spit_fire`) }
-          : undefined,
+      options: clawAttackId ? { clawAttackId } : undefined,
     });
     if (!didFire) return;
+    this.igniteFlameGround(enemy, attackWeapon, target, angle, now);
     if (target.targetRef) this.decoyTargets?.usedTarget(enemy.id, target.targetRef);
 
     if (!clawAttackId) enemy.pauseAttackMovement(now, attackWeapon.attackMovementSpeedFactor);
@@ -435,6 +454,31 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
         fireUntil: now + attackWeapon.minimumFireDurationMs,
         lastShotAt: now,
       });
+    }
+  }
+
+  /**
+   * A flame weapon that authors `burningGround.createOnFlameExpiry` sets the ground on fire where its
+   * burst ends: just behind the target, at most at its reach. The last flame of a salvo (or every
+   * single shot) ignites, whether the flames hit or died out, so a struck base reliably catches fire.
+   */
+  private igniteFlameGround(enemy: EnemyEntity, attackWeapon: EnemyAttackWeapon, target: EnemyAttackCandidate,
+    angle: number, now: number): void {
+    const config = attackWeapon.weapon.config, fire = config.fire;
+    if (!this.flameGround || fire.type !== 'flamethrower') return;
+    const ground = fire.burningGround;
+    if (!ground || ground.createOnFlameExpiry <= 0 || ground.durationMs <= 0) return;
+    const salvo = attackWeapon.salvo, current = this.salvoStates.get(enemy.id);
+    const shotsFired = current?.weaponId === config.id ? current.shotsFired + 1 : 1;
+    if (salvo && shotsFired < salvo.count) return;
+    const x = enemy.sprite.x, y = enemy.sprite.y;
+    const reach = Math.min(config.range, Math.hypot(target.targetX - x, target.targetY - y) + FLAME_GROUND_OVERSHOOT_PX);
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const fireGround = resolveEnemyFlameGround(enemy.faction, `enemy.${enemy.kind}.spit_fire`);
+    for (const back of FLAME_GROUND_CELL_OFFSETS) {
+      this.flameGround.ignite(enemy, x + cos * (reach - back), y + sin * (reach - back), {
+        durationMs: ground.durationMs, burnDurationMs: fire.burnDurationMs, burnDamagePerTick: fire.burnDamagePerTick, ...fireGround,
+      }, now);
     }
   }
 

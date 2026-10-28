@@ -219,15 +219,13 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
   handleNaturalFlameExpiry(projectile: ProjectileFlameExpiryEvent, now: number): void {
     const captured = projectile.flameExpiryGround;
     if (captured) {
-      // Enemy flames carry their own source; their cells keep the shooter's faction after its death.
-      const sourceId = captured.sourceId ?? 'ground_fire.flamethrower';
       if (captured.durationMs > 0) this.fireSystem.hostRefreshGroundCell(projectile.x, projectile.y, {
-        sourceKey: (captured.sourceId ? `${captured.sourceId}:` : 'flamethrower:') + projectile.ownerId, ownerId: projectile.ownerId,
+        sourceKey: 'flamethrower:' + projectile.ownerId, ownerId: projectile.ownerId,
         ...captured,
         burn: { ...captured.burn, damagePerTick: captured.burn.damagePerTick * portalDamageMultiplier(projectile.provenance.portalDamage) },
-        sourceId,
+        sourceId: 'ground_fire.flamethrower',
         combatSource: this.fireSystem.captureCombatSource?.(projectile.provenance.allegiance.ownerId,
-          sourceId, projectile.provenance),
+          'ground_fire.flamethrower', projectile.provenance),
       }, now);
       return;
     }

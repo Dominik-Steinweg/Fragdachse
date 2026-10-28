@@ -195,6 +195,13 @@ export class CoopMissionEnemyBehaviourComposition {
         && this.options.combatSystem.hasLineOfSight(enemy.x, enemy.y, x, y),
     }) : null;
     attack.setDecoyTargets(decoyTargets);
+    const fireSystem = this.options.fireSystem;
+    attack.setFlameGround({ ignite: (enemy, x, y, cell, now) => {
+      fireSystem.hostRefreshGroundCell(x, y, { sourceKey: `${cell.sourceId}:${enemy.id}`, ownerId: enemy.id,
+        durationMs: cell.durationMs, sourceId: cell.sourceId, visualStyle: cell.visualStyle, damageTarget: cell.damageTarget,
+        burn: { durationMs: cell.burnDurationMs, damagePerTick: cell.burnDamagePerTick, visualStyle: cell.visualStyle },
+        combatSource: fireSystem.captureCombatSource?.(enemy.id, cell.sourceId) }, now);
+    } });
     attack.setIntents(runtime.enemyIntents);
     attack.setObstacleExclusion(this.options.isReactivePropObstacle ?? null);
     runtime.enemyIntents?.setDecoys(decoyTargets);
