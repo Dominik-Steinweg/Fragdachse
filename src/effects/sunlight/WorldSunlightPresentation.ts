@@ -173,11 +173,8 @@ export class WorldSunlightPresentation {
  private voidCreepField:VoidCreepField|null=null;
  private readonly voidHazeSource:VoidCreepSource={
   intensityAt:(x,y)=>this.voidField?.intensityAt(x,y)??0,
-  hazeAt:(x,y)=>Math.max(this.voidField?.hazeAt(x,y,id=>this.voidPresence.get(id)??1,this.residueAt)??0,
-   this.activityDanger?.hazeLines?.hazeAt(x,y)??0),
+  hazeAt:(x,y)=>this.voidField?.hazeAt(x,y,id=>this.voidPresence.get(id)??1,this.residueAt)??0,
  };
- /** Revision and reach of the Activity's haze lines the creep shows. */
- private hazeLinesShown:{revision:number;bounds:VoidDangerBounds|null}|null=null;
  /** Small dense patches the haze keeps over the scar of a deactivated place. */
  private voidResidue:VoidHazeResidue|null=null;
  private readonly residueAt=(x:number,y:number):number=>this.voidResidue?.at(x,y)??0;
@@ -286,7 +283,6 @@ export class WorldSunlightPresentation {
   this.syncWoodland(targets);
   this.syncTaintCreep(targets);
   this.syncVoidPresence();
-  this.syncHazeLines();
   this.voidCreep?.setAlerts(this.activityDanger?.alerts??[]);
   const voidRevision=targets.rockOverlays?.syncVoidRevision()??-1;
   const voidRocksChanged=voidRevision===-1||voidRevision!==this.voidRockRevision;
@@ -394,18 +390,6 @@ export class WorldSunlightPresentation {
     this.voidCreep.setCreep(next);this.voidCreepField=next;
     targets.fog?.setVoidHaze(this.voidCreep.airHaze);
   }
-  /** Changed haze lines crossfade over where the old and the new lines reach; the flora stays. */
-  private syncHazeLines():void {
-    const lines=this.activityDanger?.hazeLines??null,shown=this.hazeLinesShown,creep=this.voidCreepField;
-    if((lines?.revision??-1)===(shown?.revision??-1))return;
-    this.hazeLinesShown=lines?{revision:lines.revision,bounds:lines.bounds}:null;
-    const a=shown?.bounds??null,b=lines?.bounds??null;
-    if(!creep||!this.voidCreep||(!a&&!b))return;
-    const x=Math.min(a?.x??Infinity,b?.x??Infinity),y=Math.min(a?.y??Infinity,b?.y??Infinity);
-    const union={x,y,width:Math.max(a?a.x+a.width:-Infinity,b?b.x+b.width:-Infinity)-x,height:Math.max(a?a.y+a.height:-Infinity,b?b.y+b.height:-Infinity)-y};
-    const rect=voidCreepTexelRect(creep,union);
-    if(rect)this.voidCreep.fadeHaze(rect,buildVoidCreepHaze(creep,this.voidHazeSource,rect));
-  }
   private syncWoodland(targets:Targets):void {
     const enabled=true;
     if(!enabled||targets.layout!==this.woodlandLayout) {
@@ -445,9 +429,6 @@ export class WorldSunlightPresentation {
       const creep=(danger?buildVoidCreepField(this.voidHazeSource,frame,this.voidPondPoints,landAt):null)
         ??(this.activityDanger?.marchers?buildVoidCreepLand(frame,landAt):null);
       this.voidCreepField=creep;
-      // The creep was built with the lines as they are now.
-      const lines=this.activityDanger?.hazeLines??null;
-      this.hazeLinesShown=lines?{revision:lines.revision,bounds:lines.bounds}:null;
       // The airborne half rides in the ground fog: wakes cut it, stirred air blows it apart. The
       // fog lets go of the old field before it is rebuilt.
       targets.fog?.setVoidHaze(null);
