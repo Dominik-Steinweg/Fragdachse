@@ -3,7 +3,7 @@ import { DEPLOYMENT_ROUTE_START, DeploymentRoutePlanner } from '../../src/activi
 import { CELL_SIZE, getAuthoredWorldMetricsProfile } from '../../src/config';
 import { getCoopDefenseMapConfig } from '../../src/config/coopDefenseMaps';
 import { COOP_DEFENSE_MODE } from '../../src/gameModes';
-import { getPersistentBaseEditorDetailWindow, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS } from '../../src/persistentBase/PersistentBaseExpansionPreview';
+import { getPersistentBaseEditorDetailRect } from '../../src/persistentBase/PersistentBaseExpansionPreview';
 import { resolveWorldDefinition } from '../../src/world/WorldDefinitionResolution';
 import { toWorldDefinitionId } from '../../src/world/arenaDescriptorAdapter';
 import { createWorldRuntimeContext } from '../../src/world/WorldRuntimeContext';
@@ -19,18 +19,16 @@ function planFor(mapId: string, seed = 4242) {
     worldRevision: 1, definitionId: definition.id, seed, generatorVersion: ARENA_GENERATOR_VERSION, layoutFingerprint: 'test',
     parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: 2, persistentBaseHealthRewards: [] } } });
   const site = world.persistentBaseSite!;
-  const detail = getPersistentBaseEditorDetailWindow({ widthCells: world.metrics.gridCols, heightCells: world.metrics.gridRows },
-    site.anchor, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS);
+  const detail = getPersistentBaseEditorDetailRect({ widthCells: world.metrics.gridCols, heightCells: world.metrics.gridRows }, site.anchor);
   const planner = new DeploymentRoutePlanner({ mapConfig, worldMetrics: world.metrics, layout,
     bases: world.bases.filter((base) => !base.dormant), persistentBaseId: world.persistentBaseSite?.baseId ?? null,
     spawnFocusCell: definition.spawnFocusCell,
-    detail: { x: detail.minX * CELL_SIZE, y: detail.minY * CELL_SIZE,
-      width: (detail.maxX - detail.minX + 1) * CELL_SIZE, height: (detail.maxY - detail.minY + 1) * CELL_SIZE } });
+    detail });
   return { planner, site, world };
 }
 
 describe('situation map routes', () => {
-  it.each(['2', '3', '6', '8', '10', '11', '13', '15', '18', '19', '20'])('shows routes that reach the base area on map %s', (mapId) => {
+  it.each(['2', '3', '5', '6', '8', '10', '11', '13', '15', '18', '19', '20'])('shows routes that reach the base area on map %s', (mapId) => {
     const { planner } = planFor(mapId);
     const plan = planner.plan([]);
     planner.destroy();
@@ -38,7 +36,7 @@ describe('situation map routes', () => {
     expect(plan.routes.some((route) => route.relevant && route.reachedGoal)).toBe(true);
   });
 
-  it.each([['4', 'front-base'], ['5', 'front-base'], ['12', 'front-base'], ['14', 'front-base'], ['17', 'front-base'],
+  it.each([['4', 'front-base'], ['12', 'front-base'], ['14', 'front-base'], ['17', 'front-base'],
     ['16', 'players-away']] as const)('explains on map %s why no route reaches the base (%s)', (mapId, hint) => {
     const { planner } = planFor(mapId);
     const plan = planner.plan([]);

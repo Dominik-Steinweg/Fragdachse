@@ -29,7 +29,7 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 ## 3. Modell
 
 - **Spawnzonen gehören zur World** (`WorldDefinition.spawnZones`, `src/config/spawnZones.ts`).
-  - Sie sind benannte Rechtecke in Arenazellen.
+  - Sie sind benannte Orte in Arenazellen: authored als Kasten, die Zone ist die organische Ellipse darin (seit 2026-10-28).
   - Optionale Felder: `medium: 'water'` (Wasserhöhle), `cluster` (Rudel-Spawn) und `keepClear: false` (der Generator hält keinen Kern frei).
 - **Die Activity referenziert Zonen per ID.** Das gilt für Encounter-Gruppen (`spawnZoneId`), Dauerquellen (`source: {type: 'zone'}`) und den Boss (`spawnZoneId`, nicht beim Kraken).
 - **Validierung:**
@@ -74,4 +74,5 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 - 2026-10-19 (Map 20, Spieltest "man sieht den großen Kraken nicht mehr gut"): Der Nebel-Composite liegt über den Figuren, der Dunst darin verdeckte den Kraken im Teich. Zwei allgemeine Regeln statt eines Map-Sonderfalls:
   - Der Dunst haftet an Land und Ufern. Über offenem Wasser bleibt ein Film von 20 %, Warnungen zu 60 %. Der Teich zeigt Tinte, Ufer und Ausgänge bleiben dicht.
   - Körper ab Bossgröße (56 px) halten Nebel und Dunst um sich offen, auch in Ruhe. Davon profitiert auch der normale Nebel, der über Wasser dichter ist.
+- 2026-10-28 (Spieltest Lagekarte): Spawnzonen sind rund statt rechteckig: die Ellipse im authored Kasten, ihr Rand schwingt organisch nach innen. Spawns, Routenquellen, Prüfungen, Dunst, Warnungen, Lagekarte und Map-Editor lesen dieselbe Form. Bodenzonen über Wasser wurden verlegt (Maps 02, 05, 08, 11, 13, 14; Map 02 bekommt dafür ein trockenes Westufer), sehr flache Randzonen wurden runder (Maps 05, 06, 08, 09, 10, 14, 15, 17). Generator 17, Protokoll 53.
 - 2026-10-19: Die Dawn-Angriffswellen behalten ihr intern erzeugtes Inline-Rechteck. Sie sind eine generierte Activity ohne authored Ort. Der Dunst über Dawn-Stätten kommt aus den feindlichen Stätten-Basen.

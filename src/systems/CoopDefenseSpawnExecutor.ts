@@ -13,6 +13,7 @@ import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 import { worldCellCenter, type WorldMetrics } from '../world/WorldMetrics';
 import type { KrakenBossSpawnPort, KrakenHabitatPort, KrakenHabitatReservation, KrakenHabitatResult } from './KrakenState';
 import type { BossTargetRef } from '../combat/CombatPartContact';
+import { isCellInSpawnArea } from '../config/spawnZones';
 
 const RECENT_CELL_MEMORY = 12;
 const MIN_INTRA_GROUP_DISTANCE_CELLS = 2;
@@ -245,11 +246,13 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
     const cells: SpawnCell[] = [];
     const edgeBand = spawnArea ? this.getAuthoredBand(spawnArea) : this.getEdgeBand(front);
-    if (spawnArea?.medium === 'water') return this.collectWaterCandidates(edgeBand, spawnRadius, enemies);
+    if (spawnArea?.medium === 'water') return this.collectWaterCandidates(spawnArea, edgeBand, spawnRadius, enemies);
     const allowPlayerTargetWithoutGoals = (this.isPlayerTarget(kind) || flowFieldService === this.playerFlowFieldService)
       && (flowFieldService.getGoalCells?.().length ?? 0) === 0;
     for (let gridX = edgeBand.minGridX; gridX <= edgeBand.maxGridX; gridX += 1) {
       for (let gridY = edgeBand.minGridY; gridY <= edgeBand.maxGridY; gridY += 1) {
+        // A round zone spawns only inside its organic outline; the band is its box.
+        if (spawnArea && !isCellInSpawnArea(spawnArea, gridX, gridY)) continue;
         const world = worldCellCenter(this.metrics, gridX, gridY);
         if (!flowFieldService.isCircleGroundFreeAt(world.x, world.y, spawnRadius)) continue;
         if (!this.isReachable(world.x, world.y, flowFieldService, allowPlayerTargetWithoutGoals)) continue;
@@ -264,12 +267,14 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
   }
 
   /** Amphibious units rise submerged from cells whose whole body lies over water; they swim to land on their own. */
-  private collectWaterCandidates(band: { minGridX: number; maxGridX: number; minGridY: number; maxGridY: number },
+  private collectWaterCandidates(area: CoopDefenseMapSpawnAreaConfig,
+    band: { minGridX: number; maxGridX: number; minGridY: number; maxGridY: number },
     spawnRadius: number, enemies: ReturnType<EnemyManager['getAllEnemies']>): SpawnCell[] {
     const water = this.enemyManager.getWaterGeometry(), cells: SpawnCell[] = [];
     if (!water) return cells;
     for (let gridX = band.minGridX; gridX <= band.maxGridX; gridX += 1) {
       for (let gridY = band.minGridY; gridY <= band.maxGridY; gridY += 1) {
+        if (!isCellInSpawnArea(area, gridX, gridY)) continue;
         const world = worldCellCenter(this.metrics, gridX, gridY);
         if (water.wetShare(world.x, world.y, spawnRadius) < 1 || water.wetShare(world.x, world.y, spawnRadius / .7) < 1) continue;
         if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) { this.waitingForSpace = true; continue; }

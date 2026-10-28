@@ -93,6 +93,8 @@ Die Darstellung folgt [`visual-guidelines.md`](../ai/visual-guidelines.md) und d
   - **Strom:** Violetter Void-Dunst treibt in zwei Schichten zur Basis und rollt dabei über sich
     selbst; hellere Schlieren statt Funken. Die Phase hängt an der Distanz zum Ziel, darum fließen
     zusammenlaufende Routen ohne Bruch weiter.
+  - **Verzweigungen:** Der am besten ausgerichtete Arm läuft in einer Rundung weiter; die übrigen fließen in den
+    Stamm aus oder aus ihm heraus. Breite und Helligkeit wechseln weich, ein Strom löst sich hinter seinem Ziel auf.
   - **Quellen** wirbeln. Spawnzonen, deren Routen die Basis erreichen, atmen mit ihrem Void-Dunst.
   - **Eintrittspunkte:** Wo eine Route in den Baubereich eintritt, glüht der Rand.
   - **Kein freier Weg:** Der Strom läuft heiß gegen die Mauer und erzeugt einen Druckring. Dazu
@@ -260,3 +262,8 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
   wandern aus der Zeile der Hauptaktionen in die Kopfzeile. Die Übersicht wird größer und bekommt eine
   Legende. Schalter (Reichweiten, Simulation) zeigen ihren Zustand als Kästchen. Die Liste ist kürzer
   und meldet „leer“ mittig.
+- 2026-10-28 (Strom, Ausschnitt, Spawnzonen): Die Strömung wird als Striche gezeichnet. An Verzweigungen läuft der am
+  besten ausgerichtete Arm in einer Rundung weiter, die übrigen fließen in den Stamm aus oder aus ihm heraus; Breite und
+  Helligkeit wechseln weich. Ein Strom wächst dünn aus dem Wirbel seiner Quelle und löst sich hinter seinem Ziel auf.
+  Der Ausschnitt hat das Seitenverhältnis des Panels und füllt es; am Kartenrand verschiebt er sich, statt
+  abgeschnitten zu werden. Spawnzonen sind rund (siehe Void-Gefahrenzonen V1).

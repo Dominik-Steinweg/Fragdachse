@@ -2,7 +2,7 @@ import { COOP_DEFENSE_MAX_REQUIRED_TRACK_RUN_CELLS, COOP_DEFENSE_TRACK_CROSSING_
 import { listEnemySpawnSources } from './EnemySpawnSources';
 import { placeReactiveProps, type ReactivePropAnchor } from './ReactivePropLayout';
 import { REACTIVE_PROP_ARENA_SCATTER, type ReactivePropScatterSpec } from '../config/reactiveProps/reactivePropKinds';
-import type { WorldSpawnZone } from '../config/spawnZones';
+import { isCellInSpawnArea, type WorldSpawnZone } from '../config/spawnZones';
 import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isCoopDefenseBaseCell, isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseCoreCell, isPersistentBaseReservationCell, resolveCoopDefenseActivityBases, resolveCoopDefenseBases } from './BaseRegistry';
 import type { BaseSpec } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
@@ -110,7 +110,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 16;
+export const ARENA_GENERATOR_VERSION = 17;
 
 /**
  * Anteil einzelliger Felsdurchlaesse, die bewusst eng bleiben. Der Rest wird um eine Felszelle
@@ -986,7 +986,7 @@ export class ArenaGenerator {
   }
 
   private getSpawnAreaCells(
-    area: { gridX: number; gridY: number; widthCells: number; heightCells: number },
+    area: { gridX: number; gridY: number; widthCells: number; heightCells: number; shape?: 'round' },
     blocked: boolean[][],
     baseCells: ReadonlySet<number>,
     bases: readonly BaseSpec[] = [],
@@ -997,7 +997,8 @@ export class ArenaGenerator {
     for (let gridY = Math.max(0, area.gridY); gridY <= maxGridY; gridY += 1) {
       for (let gridX = Math.max(0, area.gridX); gridX <= maxGridX; gridX += 1) {
         if (
-          blocked[gridY][gridX]
+          !isCellInSpawnArea(area, gridX, gridY)
+          || blocked[gridY][gridX]
           || baseCells.has(this.cellKey(gridX, gridY))
           || this.isReservedBaseObstacleCell(gridX, gridY, bases)
         ) continue;

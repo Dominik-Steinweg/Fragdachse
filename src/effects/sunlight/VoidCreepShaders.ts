@@ -52,15 +52,16 @@ float creepNoise(vec2 p) {
 // How strongly announced spawn zones thicken the haze here. A warning gathers in the zone's middle
 // and spreads outward as its level rises (user 2026-10-20: the haze must not pop up at once): a
 // wide, soft front, broken by two octaves of slowly drifting noise, so it creeps out of the resting
-// haze rather than drawing a box. At full level it covers the rectangle with a feathered rim.
+// haze rather than drawing a box. A zone is round: the ellipse in its rectangle, which it covers at
+// full level with a feathered rim.
 float creepAlert(vec2 world) {
   float clear=1.0;
   for(int i=0;i<8;i++) {
     float level=uVoidAlertLevel[i];
     if(level<=0.0) continue;
     vec4 zone=uVoidAlert[i];
-    vec2 q=abs(world-zone.xy-zone.zw*.5)-zone.zw*.5;
-    float d=length(max(q,0.0))+min(max(q.x,q.y),0.0);
+    vec2 radii=zone.zw*.5;
+    float d=(length((world-zone.xy-radii)/radii)-1.0)*min(radii.x,radii.y);
     vec2 drift=vec2(uCreepTime*.35,-uCreepTime*.22);
     float rim=(creepNoise((world+drift)*.0055+float(i)*3.7)-.5)*130.0+(creepNoise((world-drift)*.018+float(i)*1.9)-.5)*50.0;
     float front=mix(-.5*min(zone.z,zone.w)-120.0,84.0,level);

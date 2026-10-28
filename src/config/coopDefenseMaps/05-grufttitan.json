@@ -3,10 +3,10 @@
   "arenaWidthCells": 74,
   "arenaHeightCells": 37,
   "spawnZones": [
-    { "id": "west-upper", "gridX": 0, "gridY": 4, "widthCells": 8, "heightCells": 10 },
-    { "id": "west-lower", "gridX": 0, "gridY": 23, "widthCells": 8, "heightCells": 10 },
-    { "id": "south-mid", "gridX": 31, "gridY": 32, "widthCells": 12, "heightCells": 5 },
-    { "id": "titan-grave", "gridX": 0, "gridY": 14, "widthCells": 8, "heightCells": 10 }
+    { "id": "west-upper", "gridX": 0, "gridY": 0, "widthCells": 8, "heightCells": 8 },
+    { "id": "west-lower", "gridX": 0, "gridY": 16, "widthCells": 8, "heightCells": 8 },
+    { "id": "south-mid", "gridX": 35, "gridY": 31, "widthCells": 10, "heightCells": 6 },
+    { "id": "titan-grave", "gridX": 0, "gridY": 8, "widthCells": 8, "heightCells": 8 }
   ],
   "timeOfDay": "22:30",
   "objective": "defeat-boss",

@@ -6,8 +6,8 @@
     { "id": "west-upper", "gridX": 0, "gridY": 6, "widthCells": 8, "heightCells": 11 },
     { "id": "west-lower", "gridX": 0, "gridY": 21, "widthCells": 8, "heightCells": 11 },
     { "id": "east-mid", "gridX": 76, "gridY": 14, "widthCells": 8, "heightCells": 11 },
-    { "id": "north-mid", "gridX": 36, "gridY": 0, "widthCells": 13, "heightCells": 5 },
-    { "id": "south-mid", "gridX": 36, "gridY": 33, "widthCells": 13, "heightCells": 5 }
+    { "id": "north-mid", "gridX": 42, "gridY": 0, "widthCells": 10, "heightCells": 7 },
+    { "id": "south-mid", "gridX": 41, "gridY": 31, "widthCells": 10, "heightCells": 7 }
   ],
   "timeOfDay": "19:00",
   "rockFillRatio": 0.4,

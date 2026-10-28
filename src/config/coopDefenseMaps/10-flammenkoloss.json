@@ -6,8 +6,8 @@
     { "id": "west-lower", "gridX": 0, "gridY": 26, "widthCells": 8, "heightCells": 13 },
     { "id": "east-upper", "gridX": 88, "gridY": 8, "widthCells": 8, "heightCells": 13 },
     { "id": "east-lower", "gridX": 88, "gridY": 26, "widthCells": 8, "heightCells": 13 },
-    { "id": "north-mid", "gridX": 40, "gridY": 0, "widthCells": 15, "heightCells": 7 },
-    { "id": "south-mid", "gridX": 40, "gridY": 40, "widthCells": 15, "heightCells": 7 },
+    { "id": "north-mid", "gridX": 41, "gridY": 0, "widthCells": 12, "heightCells": 9 },
+    { "id": "south-mid", "gridX": 41, "gridY": 38, "widthCells": 12, "heightCells": 9 },
     { "id": "colossus-forge", "gridX": 0, "gridY": 17, "widthCells": 8, "heightCells": 13 }
   ],
   "timeOfDay": "22:45",

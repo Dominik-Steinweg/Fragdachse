@@ -69,7 +69,11 @@ Die dauerhafte Base-Konfiguration ist nicht mit dem laufenden HP- oder Cooldown-
 ## Spawnzonen
 
 Feste Spawnorte gehören zur World ([`src/config/spawnZones.ts`](../../src/config/spawnZones.ts), `WorldDefinition.spawnZones`).
-Eine Spawnzone ist ein benanntes Rechteck in Arenazellen mit kebab-case-ID. Optional sind:
+Eine Spawnzone ist ein benannter Ort in Arenazellen mit kebab-case-ID. Authored wird ein Kasten; die Zone selbst ist
+rund: die Ellipse in diesem Kasten, deren Rand organisch nach innen schwingt (`isCellInSpawnArea`). Spawn-Auswahl,
+Routenquellen des Generators, Wasser- und Brückenprüfung, Void-Dunst und Lagekarte lesen dieselbe Form; nur Inline-Flächen
+ohne `shape: 'round'` (Dawn) bleiben Kästen. Eine Bodenzone liegt deshalb mit ihrer Ellipse auf trockenem, offenem
+Boden; eine Wasserzone mit ihrer Ellipse im Wasser. Optional sind:
 
 - `medium: 'water'` für eine Wasserhöhle (nur amphibische Arten);
 - `cluster` für einen Rudel-Spawn;

@@ -4,8 +4,8 @@
   "arenaWidthCells": 70,
   "arenaHeightCells": 39,
   "spawnZones": [
-    { "id": "west-upper", "gridX": 0, "gridY": 6, "widthCells": 8, "heightCells": 11 },
-    { "id": "west-lower", "gridX": 0, "gridY": 22, "widthCells": 8, "heightCells": 11 },
+    { "id": "west-upper", "gridX": 0, "gridY": 5, "widthCells": 7, "heightCells": 12 },
+    { "id": "west-lower", "gridX": 0, "gridY": 27, "widthCells": 8, "heightCells": 11 },
     { "id": "east-mid", "gridX": 62, "gridY": 14, "widthCells": 8, "heightCells": 11 }
   ],
   "timeOfDay": "05:00",
@@ -151,12 +151,6 @@
       "heightCells": 25
     },
     {
-      "gridX": 5,
-      "gridY": 3,
-      "widthCells": 2,
-      "heightCells": 15
-    },
-    {
       "gridX": 8,
       "gridY": 26,
       "widthCells": 3,
@@ -170,14 +164,6 @@
     }
   ],
   "water": [
-    {
-      "gridX": 6,
-      "gridY": 2
-    },
-    {
-      "gridX": 6,
-      "gridY": 1
-    },
     {
       "gridX": 7,
       "gridY": 1
@@ -269,78 +255,6 @@
     {
       "gridX": 5,
       "gridY": 18
-    },
-    {
-      "gridX": 4,
-      "gridY": 16
-    },
-    {
-      "gridX": 4,
-      "gridY": 15
-    },
-    {
-      "gridX": 3,
-      "gridY": 15
-    },
-    {
-      "gridX": 4,
-      "gridY": 14
-    },
-    {
-      "gridX": 4,
-      "gridY": 13
-    },
-    {
-      "gridX": 4,
-      "gridY": 12
-    },
-    {
-      "gridX": 4,
-      "gridY": 10
-    },
-    {
-      "gridX": 4,
-      "gridY": 9
-    },
-    {
-      "gridX": 4,
-      "gridY": 8
-    },
-    {
-      "gridX": 4,
-      "gridY": 5
-    },
-    {
-      "gridX": 4,
-      "gridY": 3
-    },
-    {
-      "gridX": 4,
-      "gridY": 2
-    },
-    {
-      "gridX": 5,
-      "gridY": 2
-    },
-    {
-      "gridX": 4,
-      "gridY": 4
-    },
-    {
-      "gridX": 3,
-      "gridY": 5
-    },
-    {
-      "gridX": 3,
-      "gridY": 6
-    },
-    {
-      "gridX": 4,
-      "gridY": 6
-    },
-    {
-      "gridX": 4,
-      "gridY": 7
     },
     {
       "gridX": 6,

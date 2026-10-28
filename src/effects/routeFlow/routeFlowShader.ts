@@ -13,7 +13,10 @@ import { ROUTE_FLOW_SHAPE } from './RouteFlowStore';
  *
  * Every pattern moves along `dist + time · speed`, the arc distance to the route's goal. Routes
  * of one flow field share their distances where they merge, so a trunk flows on without seams.
- * Noise is sampled in World space; adjacent segments split the plane along their joint bisectors.
+ * Noise is sampled in World space; adjacent segments split the plane along their joint bisectors,
+ * blended over one pixel so rounding can never leave a seam between them.
+ * Width and presence are interpolated along each segment: a stroke tapers out of its source,
+ * widens where routes join, and frays into wisps where it fades (tributaries, the goal).
  * `uUnit` maps layer units to World pixels (the minimap draws the same data scaled down).
  * Output is premultiplied.
  */
@@ -141,9 +144,17 @@ void main() {
 
   if (kind < 0.5) {
     float len = vShape.x / uUnit;
-    float hw = vShape.y / uUnit;
-    if (dot(p, vJoin.xy) < 0.0 || dot(p - vec2(len, 0.0), vJoin.zw) > 0.0) discard;
+    // Joints hand over across one pixel: both sides' weights add up to one, whatever the rounding.
+    float seam = 1.0;
+    if (dot(vJoin.xy, vJoin.xy) > 0.5) seam *= clamp(dot(p, vJoin.xy) / px + 0.5, 0.0, 1.0);
+    if (dot(vJoin.zw, vJoin.zw) > 0.5) seam *= clamp(0.5 - dot(p - vec2(len, 0.0), vJoin.zw) / px, 0.0, 1.0);
+    if (seam <= 0.0) discard;
     float along = clamp(p.x / max(len, 0.001), 0.0, 1.0);
+    float hw = mix(vShape.y, vShape.z, along) / uUnit;
+    // Presence carries the route's strength; below it the current fades and frays.
+    float presence = mix(vShape.w, vFlow.z, along);
+    float fray = 1.0 - clamp(presence / max(vMisc.y, 0.001), 0.0, 1.0);
+    strength = presence * appear * seam;
     float dist = mix(vFlow.x, vFlow.y, along);
     float heat = mix(vMisc.z, vMisc.w, along);
     // A slow meander keeps the stream organic; World-space noise so joints agree.
@@ -172,7 +183,7 @@ void main() {
       float puff = fbm(vec2(s * 0.014, across * 0.8) + vec2(drift * 1.2, drift * 0.5));
       // Scaled far down (minimap) the billows would only shimmer: the haze evens out.
       float far = smoothstep(2.0, 8.0, px);
-      float density = mix(smoothstep(0.3, 0.8, puff * 0.7 + drift * 0.4), 0.6, far);
+      float density = mix(smoothstep(0.3 + 0.3 * fray, 0.8 + 0.1 * fray, puff * 0.7 + drift * 0.4), 0.6, far);
       // Across the stream the haze itself frays the edge.
       float body = exp(-sq(cd / (breadth * (0.7 + 0.5 * puff)))) * cap;
       float haze = body * mix(0.3, 1.0, density);

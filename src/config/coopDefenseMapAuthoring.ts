@@ -8,7 +8,7 @@ import { normalizeCoopDefenseWater, resolveAuthoredBaseOrigin } from './coopDefe
 import { isCellInsidePersistentBaseReservation } from '../persistentBase/PersistentBaseZone';
 import { normalizeCoopDefenseBridges } from './coopDefenseBridges';
 import { normalizeKrakenHabitat, type KrakenHabitatConfig } from './krakenHabitat';
-import { normalizeWorldSpawnZones, spawnZoneArea, type WorldSpawnZone } from './spawnZones';
+import { isCellInSpawnArea, normalizeWorldSpawnZones, spawnZoneArea, type WorldSpawnZone } from './spawnZones';
 import {
   getSpawnStructureTemplate, isSpawnStructureAreaCell, matchSpawnStructureShape, SPAWN_STRUCTURE_MAX_ENEMY_DIAMETER_PX,
 } from './spawnStructure';
@@ -205,6 +205,8 @@ export interface CoopDefenseMapSpawnAreaConfig {
   readonly medium?: 'ground' | 'water';
   /** The group spawns as a tight pack around one seed cell instead of spread over the area. */
   readonly cluster?: boolean;
+  /** `round`: a world spawn zone; only the organic ellipse inside the box counts (`isCellInSpawnArea`). */
+  readonly shape?: 'round';
 }
 
 /** Eine endliche Gegnergruppe innerhalb eines Encounters. */
@@ -2916,7 +2918,7 @@ function validateWaterSpawnAreas(mapId: string, encounters: readonly CoopDefense
     }
     let found = false;
     for (let y = area.gridY; y < area.gridY + area.heightCells && !found; y++) {
-      for (let x = area.gridX; x < area.gridX + area.widthCells && !found; x++) found = wet.has(`${x},${y}`);
+      for (let x = area.gridX; x < area.gridX + area.widthCells && !found; x++) found = isCellInSpawnArea(area, x, y) && wet.has(`${x},${y}`);
     }
     if (!found) throw new Error(`[coopDefenseMaps] ${mapId}:${encounter.id} has a water spawnArea without water`);
   }
@@ -2950,9 +2952,10 @@ function validateSpawnZoneUse(
   for (const zone of zones ?? []) {
     if (!used.has(zone.id)) throw new Error(`[coopDefenseMaps] Spawn zone ${mapId}:${zone.id} is never used`);
     if (zone.medium !== 'water') continue;
+    const area = spawnZoneArea(zone);
     let found = false;
     for (let y = zone.gridY; y < zone.gridY + zone.heightCells && !found; y++) {
-      for (let x = zone.gridX; x < zone.gridX + zone.widthCells && !found; x++) found = wet.has(`${x},${y}`);
+      for (let x = zone.gridX; x < zone.gridX + zone.widthCells && !found; x++) found = isCellInSpawnArea(area, x, y) && wet.has(`${x},${y}`);
     }
     if (!found) throw new Error(`[coopDefenseMaps] Water spawn zone ${mapId}:${zone.id} holds no water`);
   }

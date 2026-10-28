@@ -4,7 +4,7 @@
   "arenaHeightCells": 42,
   "spawnZones": [
     { "id": "kraken-heralds-1", "gridX": 56, "gridY": 35, "widthCells": 12, "heightCells": 6, "medium": "water", "cluster": true, "keepClear": false },
-    { "id": "west-mid", "gridX": 0, "gridY": 15, "widthCells": 8, "heightCells": 12 }
+    { "id": "west-mid", "gridX": 0, "gridY": 13, "widthCells": 8, "heightCells": 10 }
   ],
   "timeOfDay": "18:45",
   "reactiveProps": { "scatter": [{ "kind": "explosive_barrel", "placement": "chokepoints", "clusters": 3, "clusterSize": [2, 3], "minSpacingCells": 12 }] },

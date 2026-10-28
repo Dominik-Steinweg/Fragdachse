@@ -3,6 +3,10 @@
  * dem Gegner auftauchen. Sie existiert ohne laufende Mission – wie ein Basis-Spawnzentrum oder das
  * Kraken-Habitat – und gehoert deshalb zur World. Encounter, Dauerquellen und Boss einer Activity
  * referenzieren sie nur per ID. Die Praesentation markiert jede Zone als Gefahrenbereich.
+ *
+ * Authored wird ein Kasten; die Zone selbst ist rund: die Ellipse in diesem Kasten, deren Rand
+ * organisch nach innen schwingt (`isCellInSpawnArea`). Spawns, Generator, Pruefungen und Void-Dunst
+ * lesen dieselbe Form.
  */
 export interface WorldSpawnZone {
   /** Kebab-case, eindeutig pro World. */
@@ -22,7 +26,7 @@ export interface WorldSpawnZone {
 export const MAX_WORLD_SPAWN_ZONES = 64;
 const ZONE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-/** Rechteck einer Zone in der Form, die Spawn-Ausfuehrung und Generator bereits lesen. */
+/** Kasten einer Zone in der Form, die Spawn-Ausfuehrung und Generator bereits lesen. */
 export interface SpawnZoneArea {
   readonly gridX: number;
   readonly gridY: number;
@@ -30,6 +34,8 @@ export interface SpawnZoneArea {
   readonly heightCells: number;
   readonly medium?: 'ground' | 'water';
   readonly cluster?: boolean;
+  /** `round`: nur die organische Ellipse im Kasten zaehlt (World-Spawnzonen); sonst der ganze Kasten. */
+  readonly shape?: 'round';
 }
 
 export function spawnZoneArea(zone: WorldSpawnZone): SpawnZoneArea {
@@ -40,7 +46,43 @@ export function spawnZoneArea(zone: WorldSpawnZone): SpawnZoneArea {
     heightCells: zone.heightCells,
     ...(zone.medium === 'water' ? { medium: 'water' as const } : {}),
     ...(zone.cluster ? { cluster: true } : {}),
+    shape: 'round',
   };
+}
+
+type SpawnZoneBox = Pick<SpawnZoneArea, 'gridX' | 'gridY' | 'widthCells' | 'heightCells'>;
+
+/** Fester Phasenversatz des Randes, aus dem Kasten: dieselbe Zone sieht ueberall gleich aus. */
+export function spawnZoneRimPhase(box: SpawnZoneBox): number {
+  const h = Math.imul(box.gridX + 1, 73856093) ^ Math.imul(box.gridY + 1, 19349663)
+    ^ Math.imul(box.widthCells, 83492791) ^ Math.imul(box.heightCells, 2654435761);
+  return ((h >>> 0) % 6283) / 1000;
+}
+
+/**
+ * Radius des Zonenrandes als Anteil der Ellipse (0,8..1) beim Winkel `angle` im normierten
+ * Ellipsenraum: zwei ruhige Wellen, nie ueber die Ellipse hinaus, also nie ueber den Kasten.
+ */
+export function spawnZoneRimAt(phase: number, angle: number): number {
+  return .9 + .06 * Math.sin(3 * angle + phase) + .04 * Math.sin(5 * angle + phase * 1.7);
+}
+
+/** Umriss der runden Zone in Zellkoordinaten (Kanten des Kastens = ganze Zahlen), zum Zeichnen. */
+export function spawnZoneOutline(box: SpawnZoneBox, steps = 48): { x: number; y: number }[] {
+  const rx = box.widthCells / 2, ry = box.heightCells / 2, phase = spawnZoneRimPhase(box);
+  return Array.from({ length: steps }, (_, i) => {
+    const angle = i / steps * Math.PI * 2, rim = spawnZoneRimAt(phase, angle);
+    return { x: box.gridX + rx + Math.cos(angle) * rx * rim, y: box.gridY + ry + Math.sin(angle) * ry * rim };
+  });
+}
+
+/** Liegt die Mitte der Zelle im Bereich? Runde Zonen pruefen ihre Ellipse, andere den Kasten. */
+export function isCellInSpawnArea(area: SpawnZoneBox & { readonly shape?: 'round' }, gridX: number, gridY: number): boolean {
+  if (gridX < area.gridX || gridY < area.gridY || gridX >= area.gridX + area.widthCells || gridY >= area.gridY + area.heightCells) return false;
+  if (area.shape !== 'round') return true;
+  const rx = area.widthCells / 2, ry = area.heightCells / 2;
+  const dx = (gridX + .5 - area.gridX - rx) / rx, dy = (gridY + .5 - area.gridY - ry) / ry;
+  return Math.hypot(dx, dy) <= spawnZoneRimAt(spawnZoneRimPhase(area), Math.atan2(dy, dx));
 }
 
 /** Fail-fast: eindeutige kebab-case IDs, ganze Zellen innerhalb der Arena, bekannte Flags. */

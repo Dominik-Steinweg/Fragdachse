@@ -5,6 +5,7 @@ import {
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
 import { toWorldDefinition } from '../src/config/authoring/coopDefenseAuthoringAdapter';
+import { isCellInSpawnArea, spawnZoneArea } from '../src/config/spawnZones';
 
 /** A campaign map with zones, freshly cloned so each case can break one rule. */
 const map7 = (): CoopDefenseMapConfig => structuredClone(getCoopDefenseMapConfig('7')) as CoopDefenseMapConfig;
@@ -49,7 +50,7 @@ describe('World spawn zones', () => {
   it('resolves zone groups, zone sources and the boss zone into the zone area', () => {
     const map = map7() as Mutable<CoopDefenseMapConfig>;
     const zone = map.spawnZones![0]!;
-    const area = { gridX: zone.gridX, gridY: zone.gridY, widthCells: zone.widthCells, heightCells: zone.heightCells };
+    const area = { gridX: zone.gridX, gridY: zone.gridY, widthCells: zone.widthCells, heightCells: zone.heightCells, shape: 'round' };
     const group = resolveCoopDefenseMapEncounterConfigs(map, 1).flatMap(({ groups }) => groups)
       .find(({ spawnZoneId }) => spawnZoneId === zone.id)!;
     expect(group.spawnArea).toEqual(area);
@@ -57,6 +58,21 @@ describe('World spawn zones', () => {
     const normalized = normalizeCoopDefenseMapConfig(map);
     expect(resolveCoopDefenseMapPersistentSpawnConfigs(normalized, 1)[0]!.spawnArea).toEqual(area);
     expect(resolveCoopDefenseMapBossSpawnArea(normalized)).toBeNull();
+  });
+
+  it('is round: the organic ellipse in its box, not the box', () => {
+    const area = spawnZoneArea({ id: 'nest', gridX: 10, gridY: 20, widthCells: 12, heightCells: 8 });
+    const inside = (x: number, y: number) => isCellInSpawnArea(area, x, y);
+    expect(inside(15, 23) && inside(16, 24)).toBe(true);
+    for (const [x, y] of [[10, 20], [21, 20], [10, 27], [21, 27]]) expect(inside(x, y)).toBe(false);
+    expect(inside(9, 24) || inside(22, 24) || inside(16, 19) || inside(16, 28)).toBe(false);
+    // Most of the ellipse counts; its rim wobbles inward, never past the box.
+    let count = 0;
+    for (let x = 10; x < 22; x++) for (let y = 20; y < 28; y++) if (inside(x, y)) count++;
+    expect(count / (12 * 8)).toBeGreaterThan(.55);
+    expect(count / (12 * 8)).toBeLessThan(.8);
+    // A box without the round shape (authored inline areas) stays a box.
+    expect(isCellInSpawnArea({ gridX: 10, gridY: 20, widthCells: 12, heightCells: 8 }, 10, 20)).toBe(true);
   });
 
   it('rejects broken zones and references', () => {

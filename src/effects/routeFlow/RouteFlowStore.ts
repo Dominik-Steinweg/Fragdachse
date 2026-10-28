@@ -6,6 +6,12 @@
  * number of routes on it, and every vertex carries the arc distance to its route's goal. The
  * shader moves its pattern along that distance, so merged streams flow on seamlessly.
  *
+ * The tree's chains are drawn as strokes: at a junction the best aligned arm runs on into the
+ * trunk around a rounded bend, the other arms flow into the trunk and fade out there (or fade in
+ * from it where routes part). A stroke widens and narrows smoothly, starts thin inside its
+ * source's swirl and dissolves a little past its goal. Quality over cell accuracy: the stream
+ * follows the routes, not their grid.
+ *
  * One instance is one quad (six non-indexed vertices): a stream segment, a source swirl, an entry
  * glow at the build area or a breach. The CPU writes only when the plan changes.
  */
@@ -32,6 +38,22 @@ export const ROUTE_FLOW_SHAPE = {
   breachRadius: 52,
 } as const;
 
+/** How strokes begin, join, part and end (World px unless noted). */
+const STREAM_EASE = {
+  /** From a source the stream grows from this share of its width and presence over `sourceLength`. */
+  sourceLength: 120, sourceWidth: .45, sourcePresence: .3,
+  /** Where routes join or part, width and brightness change over this length. */
+  widthRamp: 72,
+  /** A tributary runs on inside the trunk for this many trunk half widths and fades; a branch fades in. */
+  confluence: 3.4, confluenceMin: 28, confluenceMax: 84,
+  /** The current flows this far past its goal (about to the wall) and dissolves over `goalFade`, fanning out a little. */
+  goalReach: 30, goalFade: 70, goalFan: .35,
+  /** Joints that turn more than this (cosine) get a rounded bend of up to `cornerRadius` half widths. */
+  cornerCos: .97, cornerRadius: 3,
+  /** Sample spacing where width or presence change. */
+  rampStep: 12,
+} as const;
+
 export interface RouteFlowPoint { readonly x: number; readonly y: number }
 
 export interface RouteFlowRoute {
@@ -49,8 +71,13 @@ export interface RouteFlowSegment {
   readonly bx: number; readonly by: number;
   /** Arc distance to the goal at both ends (World px); it falls along the stream. */
   readonly distA: number; readonly distB: number;
-  /** Routes sharing this segment. */
+  /** Routes sharing this section of the stream. */
   readonly usage: number;
+  /** Stream half width at both ends (World px). */
+  readonly halfWidthA: number; readonly halfWidthB: number;
+  /** Route strength times how much of the current is there (0..1) at both ends. */
+  readonly presenceA: number; readonly presenceB: number;
+  /** The route strength this section belongs to; `presence` below it means the current fades. */
   readonly strength: number;
   /** 0..1 towards a breach. */
   readonly heatA: number; readonly heatB: number;
@@ -92,6 +119,8 @@ interface FlowNode {
   kept: boolean;
 }
 
+interface FlowEdge { usage: number; strength: number }
+
 const SMOOTHING_PASSES = 4;
 const MERGE_ENTRY_PX = 40;
 
@@ -101,7 +130,7 @@ const MERGE_ENTRY_PX = 40;
  */
 export function buildRouteFlowGeometry(routes: readonly RouteFlowRoute[], options: RouteFlowGeometryOptions): RouteFlowGeometry {
   const nodes = new Map<string, FlowNode>();
-  const edges = new Map<string, { usage: number; strength: number }>();
+  const edges = new Map<string, FlowEdge>();
   const routeNodes: FlowNode[][] = [];
   const nodeAt = (point: RouteFlowPoint): FlowNode => {
     const key = `${Math.round(point.x * 2)}:${Math.round(point.y * 2)}`;
@@ -178,21 +207,10 @@ export function buildRouteFlowGeometry(routes: readonly RouteFlowRoute[], option
     }
   });
 
-  const segments: RouteFlowSegment[] = [];
-  for (const chain of chains) {
-    const kept = chain.filter((node, i) => i === 0 || i === chain.length - 1 || node.kept);
+  const segments = buildStrokeSegments(chains.map((chain) => {
     const edge = edges.get(edgeKey(chain[0]!, chain[1]!))!;
-    for (let i = 1; i < kept.length; i++) {
-      const a = kept[i - 1]!, b = kept[i]!;
-      if (Math.hypot(b.sx - a.sx, b.sy - a.sy) < .01) continue;
-      segments.push({
-        key: `${a.key}>${b.key}`, ax: a.sx, ay: a.sy, bx: b.sx, by: b.sy, distA: a.dist, distB: b.dist,
-        usage: edge.usage, strength: edge.strength, heatA: a.heat, heatB: b.heat,
-        joinA: i > 1 ? bisector(kept[i - 2]!, a, b) : null,
-        joinB: i < kept.length - 1 ? bisector(a, b, kept[i + 1]!) : null,
-      });
-    }
-  }
+    return { nodes: chain.filter((node, i) => i === 0 || i === chain.length - 1 || node.kept), usage: edge.usage, strength: edge.strength };
+  }));
 
   const marks: RouteFlowMark[] = [];
   const sources = new Set<string>();
@@ -281,20 +299,21 @@ export class RouteFlowStore {
   }
 
   private writeSegment(slot: number, segment: RouteFlowSegment, bornAt: number): void {
-    const { unit, originX, originY } = this.placement;
+    const { unit, originX, originY, minHalfWidth } = this.placement;
     const dx = segment.bx - segment.ax, dy = segment.by - segment.ay;
     const length = Math.hypot(dx, dy);
     const cos = dx / length, sin = dy / length;
-    const halfWidth = Math.max(this.placement.minHalfWidth, routeFlowHalfWidth(segment.usage) * unit);
+    const halfWidthA = Math.max(minHalfWidth, segment.halfWidthA * unit);
+    const halfWidthB = Math.max(minHalfWidth, segment.halfWidthB * unit);
     const local = (n: readonly [number, number] | null): [number, number] => n
       ? [n[0] * cos + n[1] * sin, -n[0] * sin + n[1] * cos] : [0, 0];
     const [nax, nay] = local(segment.joinA);
     const [nbx, nby] = local(segment.joinB);
-    const pad = halfWidth * ROUTE_FLOW_SHAPE.stainReach + 2;
+    const pad = Math.max(halfWidthA, halfWidthB) * ROUTE_FLOW_SHAPE.stainReach + 2;
     this.writeQuad(slot, originX + segment.ax * unit, originY + segment.ay * unit, cos, sin,
       -pad, length * unit + pad, -pad, pad,
-      [length * unit, halfWidth, cos, sin], [nax, nay, nbx, nby],
-      [segment.distA, segment.distB, segment.usage, RouteFlowKind.Segment],
+      [length * unit, halfWidthA, halfWidthB, segment.presenceA], [nax, nay, nbx, nby],
+      [segment.distA, segment.distB, segment.presenceB, RouteFlowKind.Segment],
       [bornAt, segment.strength, segment.heatA, segment.heatB]);
   }
 
@@ -303,7 +322,7 @@ export class RouteFlowStore {
     const radius = Math.max(this.placement.minHalfWidth * 3, mark.radius * unit);
     const pad = radius * 1.25 + 2;
     this.writeQuad(slot, originX + mark.x * unit, originY + mark.y * unit, 1, 0, -pad, pad, -pad, pad,
-      [radius, radius, 1, 0], [0, 0, 0, 0], [0, 0, 1, mark.kind], [bornAt, mark.strength, 0, 0]);
+      [radius, radius, radius, 1], [0, 0, 0, 0], [0, 0, 1, mark.kind], [bornAt, mark.strength, 0, 0]);
   }
 
   private writeQuad(slot: number, x: number, y: number, cos: number, sin: number,
@@ -324,6 +343,248 @@ export class RouteFlowStore {
   }
 }
 
+/** A simplified chain of the tree: its kept nodes and the routes on it. */
+interface FlowChain { readonly nodes: readonly FlowNode[]; readonly usage: number; readonly strength: number }
+
+/** What a section of a stroke carries: the chain it came from. */
+interface StrokeBase { readonly usage: number; readonly halfWidth: number; readonly strength: number }
+
+interface StrokePoint {
+  readonly x: number; readonly y: number;
+  readonly dist: number; readonly heat: number;
+  readonly key: string;
+  /** Base of the section that starts at this point. */
+  readonly base: StrokeBase;
+}
+
+interface Stroke {
+  points: StrokePoint[];
+  /** Arc length of a head (a branch fading in from a trunk) at the start, of a tail (fading into one) at the end. */
+  head: number;
+  tail: number;
+  fromSource: boolean;
+  toGoal: boolean;
+}
+
+/**
+ * Strokes from the chains: arms paired across junctions, tails into and heads out of trunks,
+ * rounded bends, then sampled densely wherever width or presence change.
+ */
+function buildStrokeSegments(chains: readonly FlowChain[]): RouteFlowSegment[] {
+  const usable = chains.filter((chain) => chain.nodes.length >= 2);
+  const baseOf = new Map<FlowChain, StrokeBase>(usable.map((chain) => [chain,
+    { usage: chain.usage, halfWidth: routeFlowHalfWidth(chain.usage), strength: chain.strength }]));
+  const ins = new Map<FlowNode, FlowChain[]>(), outs = new Map<FlowNode, FlowChain[]>();
+  for (const chain of usable) {
+    const first = chain.nodes[0]!, last = chain.nodes[chain.nodes.length - 1]!;
+    if (first === last) continue;
+    push(outs, first, chain);
+    push(ins, last, chain);
+  }
+  const inDir = (chain: FlowChain) => direction(chain.nodes[chain.nodes.length - 2]!, chain.nodes[chain.nodes.length - 1]!);
+  const outDir = (chain: FlowChain) => direction(chain.nodes[0]!, chain.nodes[1]!);
+  const turn = (a: readonly [number, number], b: readonly [number, number]) => a[0] * b[0] + a[1] * b[1];
+
+  // Each junction lets its best aligned arms run on; the rest fade into or out of the trunk.
+  const next = new Map<FlowChain, FlowChain>(), previous = new Map<FlowChain, FlowChain>();
+  for (const [node, incoming] of ins) {
+    const outgoing = outs.get(node);
+    if (!outgoing) continue;
+    const pairs = incoming.flatMap((a) => outgoing.map((b) => ({ a, b, cos: turn(inDir(a), outDir(b)) })))
+      .filter((pair) => pair.cos > -.2).sort((p, q) => q.cos - p.cos || q.b.usage - p.b.usage);
+    for (const { a, b } of pairs) if (!next.has(a) && !previous.has(b)) { next.set(a, b); previous.set(b, a); }
+  }
+
+  const strokes: Stroke[] = [];
+  const used = new Set<FlowChain>();
+  const follow = (start: FlowChain) => {
+    const points: StrokePoint[] = [];
+    let chain: FlowChain | undefined = start;
+    let last: FlowChain = start;
+    while (chain && !used.has(chain)) {
+      used.add(chain);
+      const base = baseOf.get(chain)!;
+      chain.nodes.forEach((node, i) => {
+        // The joint starts the next chain's section.
+        if (i === 0 && points.length) points[points.length - 1] = { ...points[points.length - 1]!, base };
+        else points.push({ x: node.sx, y: node.sy, dist: node.dist, heat: node.heat, key: node.key, base });
+      });
+      last = chain;
+      chain = next.get(chain);
+    }
+    const first = start.nodes[0]!, end = last.nodes[last.nodes.length - 1]!;
+    const stroke: Stroke = { points, head: 0, tail: 0, fromSource: first.preds.size === 0, toGoal: end.succs.size === 0 };
+    // A branch that parts from a trunk starts inside it; a tributary runs on inside it.
+    const from = ins.get(first)?.filter((chain) => chain !== start);
+    if (!previous.has(start) && from?.length) {
+      const trunk = from.reduce((best, chain) => turn(inDir(chain), outDir(start)) > turn(inDir(best), outDir(start)) ? chain : best);
+      const head = alongChain([...trunk.nodes].reverse(), confluenceLength(baseOf.get(trunk)!));
+      stroke.head = head.length;
+      points.unshift(...head.points.reverse().map((point) => ({ ...point, dist: first.dist + point.arc, heat: first.heat,
+        key: `${first.key}<${point.key}`, base: points[0]!.base })));
+    }
+    const into = outs.get(end)?.filter((chain) => chain !== last);
+    if (!next.has(last) && into?.length) {
+      const trunk = into.reduce((best, chain) => turn(inDir(last), outDir(chain)) > turn(inDir(last), outDir(best)) ? chain : best);
+      const tail = alongChain(trunk.nodes, confluenceLength(baseOf.get(trunk)!));
+      stroke.tail = tail.length;
+      const base = points[points.length - 1]!.base;
+      points.push(...tail.points.map((point) => ({ ...point, dist: end.dist - point.arc, heat: end.heat, key: `${end.key}>${point.key}`, base })));
+    } else if (stroke.toGoal && end.heat < .5 && points.length >= 2) {
+      // Past the goal the current runs on a little and dissolves against the base.
+      const [dx, dy] = direction(points[points.length - 2]!, end);
+      points.push({ x: end.x + dx * STREAM_EASE.goalReach, y: end.y + dy * STREAM_EASE.goalReach,
+        dist: end.dist - STREAM_EASE.goalReach, heat: end.heat, key: `${end.key}>goal`, base: points[points.length - 1]!.base });
+    }
+    strokes.push({ ...stroke, points: roundCorners(points) });
+  };
+  for (const chain of usable) if (!previous.has(chain)) follow(chain);
+  for (const chain of usable) if (!used.has(chain)) follow(chain);
+
+  return strokes.flatMap(strokeSegments);
+}
+
+/** Up to `length` along a chain's nodes from its first, with the arc of every point. */
+function alongChain(nodes: readonly FlowNode[], length: number): { points: (StrokePoint & { arc: number })[]; length: number } {
+  const points: (StrokePoint & { arc: number })[] = [];
+  let arc = 0;
+  for (let i = 1; i < nodes.length && arc < length; i++) {
+    const a = nodes[i - 1]!, b = nodes[i]!;
+    const step = Math.hypot(b.sx - a.sx, b.sy - a.sy);
+    if (step < .01) continue;
+    const t = Math.min(1, (length - arc) / step);
+    arc += step * t;
+    points.push({ x: a.sx + (b.sx - a.sx) * t, y: a.sy + (b.sy - a.sy) * t, dist: 0, heat: 0, arc,
+      key: t < 1 ? `${b.key}@${Math.round(t * 100)}` : b.key, base: { usage: 0, halfWidth: 0, strength: 0 } });
+  }
+  return { points, length: arc };
+}
+
+function confluenceLength(trunk: StrokeBase): number {
+  return Math.max(STREAM_EASE.confluenceMin, Math.min(STREAM_EASE.confluenceMax, trunk.halfWidth * STREAM_EASE.confluence));
+}
+
+/** Rounded bends: every sharp joint becomes a quadratic curve between its two neighbouring segments. */
+function roundCorners(points: readonly StrokePoint[]): StrokePoint[] {
+  if (points.length < 3) return [...points];
+  const result: StrokePoint[] = [points[0]!];
+  for (let i = 1; i < points.length - 1; i++) {
+    const a = points[i - 1]!, b = points[i]!, c = points[i + 1]!;
+    const l1 = Math.hypot(b.x - a.x, b.y - a.y), l2 = Math.hypot(c.x - b.x, c.y - b.y);
+    const cos = l1 < .01 || l2 < .01 ? 1 : ((b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y)) / (l1 * l2);
+    if (cos > STREAM_EASE.cornerCos) { result.push(b); continue; }
+    const radius = Math.min(.45 * l1, .45 * l2, STREAM_EASE.cornerRadius * Math.max(a.base.halfWidth, b.base.halfWidth));
+    const t0 = radius / l1, t2 = radius / l2;
+    const p0 = { x: b.x + (a.x - b.x) * t0, y: b.y + (a.y - b.y) * t0, dist: b.dist + (a.dist - b.dist) * t0, heat: b.heat + (a.heat - b.heat) * t0 };
+    const p2 = { x: b.x + (c.x - b.x) * t2, y: b.y + (c.y - b.y) * t2, dist: b.dist + (c.dist - b.dist) * t2, heat: b.heat + (c.heat - b.heat) * t2 };
+    const steps = Math.max(2, Math.min(8, Math.ceil(Math.acos(Math.max(-1, cos)) / .2)));
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps, u = 1 - t;
+      result.push({ x: u * u * p0.x + 2 * u * t * b.x + t * t * p2.x, y: u * u * p0.y + 2 * u * t * b.y + t * t * p2.y,
+        dist: p0.dist + (p2.dist - p0.dist) * t, heat: p0.heat + (p2.heat - p0.heat) * t,
+        key: `${b.key}~${k}`, base: k * 2 < steps ? a.base : b.base });
+    }
+  }
+  result.push(points[points.length - 1]!);
+  return result;
+}
+
+/** One stroke as segments: width, presence and their ramps sampled along its arc. */
+function strokeSegments(stroke: Stroke): RouteFlowSegment[] {
+  const points = stroke.points.filter((point, i) => i === 0
+    || Math.hypot(point.x - stroke.points[i - 1]!.x, point.y - stroke.points[i - 1]!.y) >= .01);
+  if (points.length < 2) return [];
+  const arcs = [0];
+  for (let i = 1; i < points.length; i++) arcs.push(arcs[i - 1]! + Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y));
+  const total = arcs[arcs.length - 1]!;
+
+  // Where routes join or part, width and strength move to the next chain's over a short ramp:
+  // after the joint where the stream grows, before it where it shrinks.
+  const ramps: { at: number; from: number; to: number; width: number; strength: number }[] = [];
+  const first = points[0]!.base;
+  for (let i = 1; i < points.length - 1; i++) {
+    const before = points[i - 1]!.base, after = points[i]!.base;
+    if (before === after) continue;
+    const grows = after.halfWidth >= before.halfWidth;
+    ramps.push({ at: arcs[i]!, from: arcs[i]! - (grows ? 6 : STREAM_EASE.widthRamp), to: arcs[i]! + (grows ? STREAM_EASE.widthRamp : 6),
+      width: after.halfWidth - before.halfWidth, strength: after.strength - before.strength });
+  }
+  const goalFrom = total - STREAM_EASE.goalFade - STREAM_EASE.goalReach;
+  const busy: [number, number][] = [...ramps.map((ramp) => [ramp.from, ramp.to] as [number, number])];
+  if (stroke.fromSource) busy.push([0, STREAM_EASE.sourceLength]);
+  if (stroke.head) busy.push([0, stroke.head * 1.25]);
+  if (stroke.tail) busy.push([total - stroke.tail * 1.25, total]);
+  if (stroke.toGoal) busy.push([goalFrom, total]);
+
+  const sample = (s: number, dist: number, heat: number) => {
+    let halfWidth = first.halfWidth, strength = first.strength;
+    for (const ramp of ramps) {
+      const t = smoothstep(ramp.from, ramp.to, s);
+      halfWidth += ramp.width * t; strength += ramp.strength * t;
+    }
+    let width = 1, presence = 1;
+    if (stroke.fromSource) {
+      const grow = smoothstep(0, STREAM_EASE.sourceLength, s);
+      width *= STREAM_EASE.sourceWidth + (1 - STREAM_EASE.sourceWidth) * grow;
+      presence *= STREAM_EASE.sourcePresence + (1 - STREAM_EASE.sourcePresence) * grow;
+    }
+    if (stroke.head) {
+      presence *= smoothstep(0, stroke.head * 1.25, s);
+      width *= .6 + .4 * smoothstep(0, stroke.head, s);
+    }
+    if (stroke.tail) {
+      presence *= 1 - smoothstep(total - stroke.tail * 1.25, total, s);
+      width *= 1 - .4 * smoothstep(total - stroke.tail, total, s);
+    }
+    if (stroke.toGoal) {
+      const fade = smoothstep(-STREAM_EASE.goalReach, STREAM_EASE.goalFade, dist);
+      // A breach keeps boiling against the wall.
+      presence *= Math.max(fade, heat * .85);
+      width *= 1 + STREAM_EASE.goalFan * (1 - fade) * (1 - heat);
+    }
+    return { halfWidth: halfWidth * width, presence: strength * presence, strength };
+  };
+
+  const samples: { point: StrokePoint; s: number }[] = [{ point: points[0]!, s: 0 }];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!, b = points[i]!, s0 = arcs[i - 1]!, s1 = arcs[i]!;
+    const dense = busy.some(([from, to]) => s1 > from && s0 < to);
+    const pieces = dense ? Math.ceil((s1 - s0) / STREAM_EASE.rampStep) : 1;
+    for (let k = 1; k < pieces; k++) {
+      const t = k / pieces;
+      samples.push({ s: s0 + (s1 - s0) * t, point: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t,
+        dist: a.dist + (b.dist - a.dist) * t, heat: a.heat + (b.heat - a.heat) * t, key: `${a.key}>${b.key}/${k}`, base: a.base } });
+    }
+    samples.push({ point: b, s: s1 });
+  }
+
+  const values = samples.map(({ point, s }) => sample(s, point.dist, point.heat));
+  const segments: RouteFlowSegment[] = [];
+  for (let i = 1; i < samples.length; i++) {
+    const a = samples[i - 1]!.point, b = samples[i]!.point, va = values[i - 1]!, vb = values[i]!;
+    segments.push({
+      key: `${a.key}>${b.key}`, ax: a.x, ay: a.y, bx: b.x, by: b.y, distA: a.dist, distB: b.dist, usage: a.base.usage,
+      halfWidthA: va.halfWidth, halfWidthB: vb.halfWidth, presenceA: va.presence, presenceB: vb.presence,
+      strength: Math.max(va.strength, vb.strength), heatA: a.heat, heatB: b.heat,
+      joinA: i > 1 ? bisector(samples[i - 2]!.point, a, b) : null,
+      joinB: i < samples.length - 1 ? bisector(a, b, samples[i + 1]!.point) : null,
+    });
+  }
+  return segments;
+}
+
+function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  const list = map.get(key);
+  if (list) list.push(value); else map.set(key, [value]);
+}
+
+function direction(a: { readonly sx?: number; readonly sy?: number; readonly x: number; readonly y: number },
+  b: { readonly sx?: number; readonly sy?: number; readonly x: number; readonly y: number }): [number, number] {
+  const dx = (b.sx ?? b.x) - (a.sx ?? a.x), dy = (b.sy ?? b.y) - (a.sy ?? a.y);
+  const length = Math.hypot(dx, dy);
+  return length < 1e-6 ? [0, 0] : [dx / length, dy / length];
+}
+
 function edgeKey(a: FlowNode, b: FlowNode): string {
   return `${a.key}>${b.key}`;
 }
@@ -332,11 +593,16 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = clamp01((x - edge0) / Math.max(1e-6, edge1 - edge0));
+  return t * t * (3 - 2 * t);
+}
+
 /** Plane normal through the joint `b`, along travel: the normalised sum of both directions. */
-function bisector(a: FlowNode, b: FlowNode, c: FlowNode): [number, number] | null {
-  const l1 = Math.hypot(b.sx - a.sx, b.sy - a.sy), l2 = Math.hypot(c.sx - b.sx, c.sy - b.sy);
+function bisector(a: RouteFlowPoint, b: RouteFlowPoint, c: RouteFlowPoint): [number, number] | null {
+  const l1 = Math.hypot(b.x - a.x, b.y - a.y), l2 = Math.hypot(c.x - b.x, c.y - b.y);
   if (l1 < .01 || l2 < .01) return null;
-  const x = (b.sx - a.sx) / l1 + (c.sx - b.sx) / l2, y = (b.sy - a.sy) / l1 + (c.sy - b.sy) / l2;
+  const x = (b.x - a.x) / l1 + (c.x - b.x) / l2, y = (b.y - a.y) / l1 + (c.y - b.y) / l2;
   const length = Math.hypot(x, y);
   return length < .05 ? null : [x / length, y / length];
 }

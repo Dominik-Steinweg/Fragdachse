@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { BaseSpec } from '../arena/BaseRegistry';
-import type { WorldSpawnZone } from '../config/spawnZones';
+import { spawnZoneOutline, type WorldSpawnZone } from '../config/spawnZones';
 import type { ArenaLayout } from '../types';
 import { getBridgeDeckRect } from '../arena/BridgeGeometry';
 
@@ -75,8 +75,12 @@ export function createPersistentBaseEditorMinimap(scene: Phaser.Scene, input: Pe
   }
   ctx.globalAlpha = .55;
   ctx.fillStyle = PERSISTENT_BASE_EDITOR_MINIMAP_COLORS.spawnZone;
+  // Spawn zones are round: the organic outline the spawns and the void haze use.
   for (const zone of input.spawnZones) {
-    ctx.fillRect(zone.gridX * PX_PER_CELL, zone.gridY * PX_PER_CELL, zone.widthCells * PX_PER_CELL, zone.heightCells * PX_PER_CELL);
+    ctx.beginPath();
+    for (const point of spawnZoneOutline(zone)) ctx.lineTo(point.x * PX_PER_CELL, point.y * PX_PER_CELL);
+    ctx.closePath();
+    ctx.fill();
   }
   ctx.globalAlpha = 1;
   ctx.strokeStyle = PERSISTENT_BASE_EDITOR_MINIMAP_COLORS.frame;

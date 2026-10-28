@@ -33,10 +33,10 @@ export function getPersistentBaseEditorFraming(panel: EditorRect, area: Persiste
     { gridX: anchorCell, gridY: anchorCell });
 }
 
-/** Fits a World rectangle into the panel, never enlarged beyond its native scale. */
+/** Fits a World rectangle into the panel inset by `inset`, never enlarged beyond its native scale. */
 export function getPersistentBaseEditorWorldFraming(panel: EditorRect, world: EditorRect,
-  anchorCell: { readonly gridX: number; readonly gridY: number }): PersistentBaseEditorFraming {
-  const zoom = Math.min(1, (panel.width - 40) / world.width, (panel.height - 40) / world.height);
+  anchorCell: { readonly gridX: number; readonly gridY: number }, inset = 40): PersistentBaseEditorFraming {
+  const zoom = Math.min(1, (panel.width - inset) / world.width, (panel.height - inset) / world.height);
   const width = world.width * zoom, height = world.height * zoom;
   const view = { x: panel.x + (panel.width - width) / 2, y: panel.y + (panel.height - height) / 2, width, height };
   return { zoom, view, world,
@@ -44,16 +44,35 @@ export function getPersistentBaseEditorWorldFraming(panel: EditorRect, world: Ed
       y: view.y + ((anchorCell.gridY + .5) * CELL_SIZE - world.y) * zoom } };
 }
 
-/** Cells the situation map shows around the anchor; wider than high, like the editor panel. */
-export const PERSISTENT_BASE_EDITOR_DETAIL_RADIUS = { x: 20, y: 14 } as const;
+/** The situation map's World view on screen; its detail view has the same aspect. */
+export const PERSISTENT_BASE_EDITOR_VIEW_SIZE = { width: 1000, height: 660 } as const;
+/** Cells the detail view shows from top to bottom; its width follows the view's aspect. */
+export const PERSISTENT_BASE_EDITOR_DETAIL_ROWS = 29;
 
-/** Inclusive cell window around an anchor, clamped to the World. */
+/**
+ * World-pixel rectangle of the situation map's detail view: the view's aspect around the anchor,
+ * shifted to stay on the map rather than cut off at its edge, so it always fills the view. A map
+ * smaller than that shows all of itself in that dimension, a little closer.
+ */
+export function getPersistentBaseEditorDetailRect(world: { readonly widthCells: number; readonly heightCells: number },
+  anchor: { readonly gridX: number; readonly gridY: number }): EditorRect {
+  const mapWidth = world.widthCells * CELL_SIZE, mapHeight = world.heightCells * CELL_SIZE;
+  let height = PERSISTENT_BASE_EDITOR_DETAIL_ROWS * CELL_SIZE;
+  let width = height * PERSISTENT_BASE_EDITOR_VIEW_SIZE.width / PERSISTENT_BASE_EDITOR_VIEW_SIZE.height;
+  const fit = Math.min(1, mapWidth / width, mapHeight / height);
+  width *= fit; height *= fit;
+  const clamp = (value: number, max: number) => Math.max(0, Math.min(max, value));
+  return { x: clamp((anchor.gridX + .5) * CELL_SIZE - width / 2, mapWidth - width),
+    y: clamp((anchor.gridY + .5) * CELL_SIZE - height / 2, mapHeight - height), width, height };
+}
+
+/** Inclusive cells under a World-pixel rectangle, grown by `marginCells` and clamped to the World. */
 export function getPersistentBaseEditorDetailWindow(world: { readonly widthCells: number; readonly heightCells: number },
-  anchor: { readonly gridX: number; readonly gridY: number }, radius: { readonly x: number; readonly y: number }) {
+  rect: EditorRect, marginCells = 0) {
   const clampX = (x: number) => Math.max(0, Math.min(world.widthCells - 1, x));
   const clampY = (y: number) => Math.max(0, Math.min(world.heightCells - 1, y));
-  return { minX: clampX(anchor.gridX - radius.x), maxX: clampX(anchor.gridX + radius.x),
-    minY: clampY(anchor.gridY - radius.y), maxY: clampY(anchor.gridY + radius.y) };
+  return { minX: clampX(Math.floor(rect.x / CELL_SIZE) - marginCells), maxX: clampX(Math.ceil((rect.x + rect.width) / CELL_SIZE) - 1 + marginCells),
+    minY: clampY(Math.floor(rect.y / CELL_SIZE) - marginCells), maxY: clampY(Math.ceil((rect.y + rect.height) / CELL_SIZE) - 1 + marginCells) };
 }
 
 export function projectPersistentBaseBoundary(edges: readonly ExpansionBoundaryEdge[],

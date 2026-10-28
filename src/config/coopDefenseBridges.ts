@@ -2,6 +2,7 @@ import { getBridgeAbutmentCells, getBridgeDeckCells } from '../arena/BridgeGeome
 import type { ArenaBridge, WaterCell } from '../types';
 import type { CoopDefenseMapConfig } from './coopDefenseMapAuthoring';
 import { createAuthoredTerrainGuard, type AuthoredTerrainGuardConfig } from './coopDefenseWater';
+import { isCellInSpawnArea, spawnZoneArea } from './spawnZones';
 
 /** Deck length bounds along the axis of travel; long spans would read as causeways, not bridges. */
 export const MIN_BRIDGE_SPAN_CELLS = 2;
@@ -51,8 +52,7 @@ export function normalizeCoopDefenseBridges(
       }
       const reason = guard(cell.gridX, cell.gridY);
       if (reason) throw new Error(`${label} ${role} ${reason}: ${key}`);
-      const zone = waterZones.find((z) => cell.gridX >= z.gridX && cell.gridX < z.gridX + z.widthCells
-        && cell.gridY >= z.gridY && cell.gridY < z.gridY + z.heightCells);
+      const zone = waterZones.find((z) => isCellInSpawnArea(spawnZoneArea(z), cell.gridX, cell.gridY));
       if (zone) throw new Error(`${label} ${role} overlaps water spawn zone ${zone.id}: ${key}`);
       const owner = claimed.get(key);
       if (owner) throw new Error(`${label} ${role} overlaps bridge ${owner}: ${key}`);

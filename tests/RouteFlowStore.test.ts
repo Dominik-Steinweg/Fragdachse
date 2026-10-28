@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildRouteFlowGeometry, ROUTE_FLOW_INSTANCE_FLOATS, RouteFlowKind, RouteFlowStore, type RouteFlowRoute,
+  buildRouteFlowGeometry, ROUTE_FLOW_INSTANCE_FLOATS, RouteFlowKind, routeFlowHalfWidth, RouteFlowStore, type RouteFlowRoute,
 } from '../src/effects/routeFlow/RouteFlowStore';
 
 /** A flow-field route on the 16 px node grid: straight runs and 45° steps. */
@@ -20,28 +20,42 @@ const south = route([...repeat([1, -1], 10), ...trunk], [10, 20]);
 describe('route flow geometry', () => {
   it('merges shared route sections into one wider stream', () => {
     const geometry = buildRouteFlowGeometry([north, south], { tolerance: .75 });
-    const shared = geometry.segments.filter((segment) => segment.ax >= 20 * 16 - .01);
-    expect(shared.length).toBeGreaterThan(0);
-    expect(shared.every((segment) => segment.usage === 2)).toBe(true);
-    expect(geometry.segments.filter((segment) => segment.ax < 20 * 16 - .01).every((segment) => segment.usage === 1)).toBe(true);
+    // Past the confluence one stream is left, carrying both routes.
+    const trunk = geometry.segments.filter((segment) => segment.ax >= 26 * 16);
+    expect(trunk.length).toBeGreaterThan(0);
+    expect(trunk.every((segment) => segment.usage === 2 && segment.halfWidthA >= routeFlowHalfWidth(2) - 1e-6)).toBe(true);
+    expect(geometry.segments.filter((segment) => segment.bx < 19 * 16).every((segment) => segment.usage === 1)).toBe(true);
     // No duplicate stream on the trunk.
     const keys = geometry.segments.map((segment) => segment.key);
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('flows on across a junction: distances to the goal agree and fall along every segment', () => {
+  it('flows on across a junction: the aligned arm runs on, the other fades into the trunk', () => {
     const geometry = buildRouteFlowGeometry([north, south], { tolerance: .75 });
     for (const segment of geometry.segments) expect(segment.distB).toBeLessThan(segment.distA);
-    const junction = { x: 20 * 16, y: 10 * 16 };
-    const at = (x: number, y: number) => Math.hypot(x - junction.x, y - junction.y) < .01;
-    const into = geometry.segments.filter((segment) => at(segment.bx, segment.by));
-    const out = geometry.segments.filter((segment) => at(segment.ax, segment.ay));
-    expect(into).toHaveLength(2);
-    expect(out).toHaveLength(1);
-    for (const segment of into) expect(segment.distB).toBeCloseTo(out[0]!.distA, 6);
-    // The goal is where the distance ends.
-    const end = geometry.segments.find((segment) => Math.abs(segment.bx - 40 * 16) < .01)!;
-    expect(end.distB).toBeCloseTo(0, 6);
+    const starts = geometry.segments.filter((segment) => segment.joinA === null);
+    const ends = geometry.segments.filter((segment) => segment.joinB === null);
+    // Two sources start; the aligned arm reaches the goal, the other ends as a faded tail in the trunk.
+    expect(starts.map((segment) => [segment.ax, segment.ay])).toEqual(expect.arrayContaining([[0, 0], [10 * 16, 20 * 16]]));
+    expect(starts).toHaveLength(2);
+    expect(ends).toHaveLength(2);
+    for (const end of ends) expect(end.presenceB).toBeLessThan(.02);
+    const tail = ends.find((segment) => segment.bx < 38 * 16)!;
+    expect(tail.by).toBeCloseTo(10 * 16, 0);
+    expect(tail.bx).toBeGreaterThan(20 * 16);
+    // The goal is where the distance ends; the current dissolves a little past it.
+    const goal = geometry.segments.find((segment) => Math.abs(segment.bx - 40 * 16) < .01 && Math.abs(segment.by - 10 * 16) < .01)!;
+    expect(goal.distB).toBeCloseTo(0, 6);
+    expect(Math.max(...geometry.segments.map((segment) => segment.bx))).toBeGreaterThan(40 * 16);
+  });
+
+  it('grows a stream out of its source', () => {
+    const geometry = buildRouteFlowGeometry([north], { tolerance: .75 });
+    const first = geometry.segments.find((segment) => segment.joinA === null)!;
+    const middle = geometry.segments.find((segment) => segment.ax > 25 * 16)!;
+    expect(first.halfWidthA).toBeLessThan(middle.halfWidthA * .6);
+    expect(first.presenceA).toBeLessThan(.5);
+    expect(middle.presenceA).toBeCloseTo(1, 6);
   });
 
   it('heats a breach route towards the wall and marks sources, entries and the breach', () => {

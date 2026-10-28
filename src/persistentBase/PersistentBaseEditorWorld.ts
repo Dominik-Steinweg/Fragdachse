@@ -34,10 +34,10 @@ import { buildPersistentBaseCoreBaseConfig, isCellInsidePersistentBaseBuildArea,
   type PersistentBaseBuildArea } from './PersistentBaseCore';
 import type { BaseEditorObject, PersistentBaseEditorModel } from './PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from './PersistentBaseEditorAppearance';
-import { getPersistentBaseEditorDetailWindow, getPersistentBaseEditorSize, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS } from './PersistentBaseExpansionPreview';
+import { getPersistentBaseEditorDetailRect, getPersistentBaseEditorDetailWindow, getPersistentBaseEditorSize } from './PersistentBaseExpansionPreview';
 import { toWorldAngle, toWorldFootprint, type PersistentBaseFrame } from './PersistentBaseFrame';
 import type { PersistentBaseAnchor } from './PersistentBaseTypes';
-export { getPersistentBaseEditorSize, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS } from './PersistentBaseExpansionPreview';
+export { getPersistentBaseEditorSize } from './PersistentBaseExpansionPreview';
 /** Terrain built beyond the view, so rock autotiling and canopies do not end at its edge. */
 const CROP_MARGIN_CELLS = 3;
 
@@ -134,9 +134,8 @@ export class PersistentBaseEditorWorld {
       this.anchor = site.anchor;
       this.siteArea = site.buildArea;
       const cells = { widthCells: this.world.metrics.gridCols, heightCells: this.world.metrics.gridRows };
-      this.view = cellRect(getPersistentBaseEditorDetailWindow(cells, this.anchor, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS));
-      window = getPersistentBaseEditorDetailWindow(cells, this.anchor, { x: PERSISTENT_BASE_EDITOR_DETAIL_RADIUS.x + CROP_MARGIN_CELLS,
-        y: PERSISTENT_BASE_EDITOR_DETAIL_RADIUS.y + CROP_MARGIN_CELLS });
+      this.view = getPersistentBaseEditorDetailRect(cells, this.anchor);
+      window = getPersistentBaseEditorDetailWindow(cells, this.view, CROP_MARGIN_CELLS);
       this.layout = cropArenaLayout(this.terrain.layout, window);
       this.collectBlockedCells();
     } else {

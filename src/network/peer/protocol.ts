@@ -51,7 +51,9 @@
 // The core's anchor cell carries a solid hearth (13 base cells), derived from code the same way.
 // Lagekarte: the host base document carries the base rotation (pbrs quarterTurns); maps no longer
 // author a base orientation, and lsy carries the host-owned deployment seed of the next round.
-export const PEER_PROTOCOL_VERSION = 52;
+// Round spawn zones: generator 17; a zone's organic outline (not its box) feeds route sources, and
+// several campaign maps moved their zones (and map 2 its lake shore), so layouts differ between builds.
+export const PEER_PROTOCOL_VERSION = 53;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

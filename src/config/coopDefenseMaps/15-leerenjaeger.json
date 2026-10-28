@@ -6,8 +6,8 @@
   "spawnZones": [
     { "id": "west-mid", "gridX": 0, "gridY": 16, "widthCells": 8, "heightCells": 12 },
     { "id": "east-mid", "gridX": 92, "gridY": 16, "widthCells": 8, "heightCells": 12 },
-    { "id": "north-mid", "gridX": 42, "gridY": 0, "widthCells": 16, "heightCells": 6 },
-    { "id": "south-mid", "gridX": 42, "gridY": 38, "widthCells": 16, "heightCells": 6 }
+    { "id": "north-mid", "gridX": 44, "gridY": 0, "widthCells": 12, "heightCells": 8 },
+    { "id": "south-mid", "gridX": 44, "gridY": 36, "widthCells": 12, "heightCells": 8 }
   ],
   "timeOfDay": "20:45",
   "dynamicTimeOfDay": {

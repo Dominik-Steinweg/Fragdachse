@@ -119,8 +119,10 @@ export class MapCanvas {
     } else {
       if (item.backing) { const r = item.backing, halo = item.halo ?? 0; c.save(); c.setLineDash([3 / this.scale, 4 / this.scale]); c.strokeRect(r.x - halo, r.y - halo, r.w + halo * 2, r.h + halo * 2); c.fillStyle = color + '35'; c.fillRect(r.x, r.y, r.w, r.h); c.restore(); }
       if (item.cells) { c.fillStyle = color + '70'; for (const cell of item.cells) c.fillRect(cell.gridX, cell.gridY, 1, 1); }
+      else if (item.outline) { c.beginPath(); for (const p of item.outline) c.lineTo(p.x, p.y); c.closePath(); c.fill(); c.stroke(); }
       else c.fillRect(item.x, item.y, item.w, item.h);
-      c.strokeRect(item.x, item.y, item.w, item.h);
+      if (item.outline) { c.save(); c.setLineDash([3 / this.scale, 4 / this.scale]); c.strokeRect(item.x, item.y, item.w, item.h); c.restore(); }
+      else c.strokeRect(item.x, item.y, item.w, item.h);
       if (item.spawnPit) this.paintSpawnPit(c, item.spawnPit);
     }
     c.setLineDash([]);

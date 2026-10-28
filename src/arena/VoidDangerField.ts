@@ -1,13 +1,15 @@
 import { CELL_SIZE } from '../config';
 import type { WorldVoidDangerConfig } from '../config/nightWorld';
 import type { KrakenHabitatConfig } from '../config/krakenHabitat';
-import type { WorldSpawnZone } from '../config/spawnZones';
+import { spawnZoneRimAt, spawnZoneRimPhase, type WorldSpawnZone } from '../config/spawnZones';
 import { ecologyHash } from './ecologyHash';
 
 /** Outline of a danger area in world px; its rim fades outside it. */
 export type VoidDangerShape =
   | { readonly kind: 'disc'; readonly x: number; readonly y: number; readonly radius: number }
   | { readonly kind: 'rect'; readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+  /** The organic ellipse in a box, its rim wobbling inward like a spawn zone's (`spawnZoneRimAt`). */
+  | { readonly kind: 'ellipse'; readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly rimPhase: number }
   | { readonly kind: 'capsule'; readonly ax: number; readonly ay: number; readonly bx: number; readonly by: number; readonly radius: number }
   /** Arena cells (top-left `offsetX`/`offsetY`), e.g. the cells of a permanent ground hazard. */
   | { readonly kind: 'cells'; readonly offsetX: number; readonly offsetY: number; readonly cells: readonly { readonly gridX: number; readonly gridY: number }[] };
@@ -197,6 +199,14 @@ function resolveShape(shape: VoidDangerShape): ResolvedShape {
         return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
       } };
     }
+    case 'ellipse': {
+      const rx = shape.width / 2, ry = shape.height / 2, cx = shape.x + rx, cy = shape.y + ry, scale = Math.min(rx, ry);
+      // Distance in units of the shorter radius: exact on the axes, close enough for a soft rim.
+      return { bounds: { x: shape.x, y: shape.y, width: shape.width, height: shape.height }, distance: (x, y) => {
+        const dx = (x - cx) / rx, dy = (y - cy) / ry;
+        return (Math.hypot(dx, dy) - spawnZoneRimAt(shape.rimPhase, Math.atan2(dy, dx))) * scale;
+      } };
+    }
     case 'capsule': {
       const { ax, ay, bx, by, radius } = shape, ex = bx - ax, ey = by - ay, length2 = Math.max(1e-6, ex * ex + ey * ey);
       return { bounds: { x: Math.min(ax, bx) - radius, y: Math.min(ay, by) - radius, width: Math.abs(ex) + radius * 2, height: Math.abs(ey) + radius * 2 },
@@ -307,8 +317,8 @@ export function resolveVoidDangerSources(world: VoidDangerWorldSources): VoidDan
       rim: kind.rimCells * CELL_SIZE * reach, plants: kind.plants, haze: kind.haze });
   }
   for (const zone of world.spawnZones ?? []) {
-    out.push({ id: `zone:${zone.id}`, shapes: [{ kind: 'rect', x: world.offsetX + zone.gridX * CELL_SIZE, y: world.offsetY + zone.gridY * CELL_SIZE,
-      width: zone.widthCells * CELL_SIZE, height: zone.heightCells * CELL_SIZE }],
+    out.push({ id: `zone:${zone.id}`, shapes: [{ kind: 'ellipse', x: world.offsetX + zone.gridX * CELL_SIZE, y: world.offsetY + zone.gridY * CELL_SIZE,
+      width: zone.widthCells * CELL_SIZE, height: zone.heightCells * CELL_SIZE, rimPhase: spawnZoneRimPhase(zone) }],
     rim: DANGER.zone.rimCells * CELL_SIZE * reach, plants: DANGER.zone.plants, haze: DANGER.zone.haze });
   }
   const habitat = world.krakenHabitat;

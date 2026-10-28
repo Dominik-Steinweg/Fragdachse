@@ -547,7 +547,8 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
 - Die Geflecht-Textur trägt getränkten Boden (R), Landanteil (G) und Dunst (B). Ein Präsenzwechsel schreibt nur B im
   Begrenzungsrahmen der Quelle neu und blendet über Teil-Uploads über. Daten im Alpha einer Canvas-Textur würden
   vormultipliziert, und ein weiterer Sampler passt nicht in den Nebel-Pass.
-- Angekündigte Spawnzonen verdichten B im Shader (`uVoidAlert[8]`, `uVoidAlertLevel[8]` in `VOID_CREEP_GLSL`). Boden,
+- Angekündigte Spawnzonen verdichten B im Shader (`uVoidAlert[8]`, `uVoidAlertLevel[8]` in `VOID_CREEP_GLSL`). Der
+  Uniform trägt den Kasten der Zone; der Shader verdichtet die Ellipse darin, wie die Zone selbst rund ist. Boden,
   Fels, Glow, Nebelluft und Partikel lesen denselben Wert. Der Client glättet die Stärke, damit ein ersetzter Takt
   abklingt statt abzureißen ([CoopDefenseSpawnZoneAlerts.test.ts](../../tests/CoopDefenseSpawnZoneAlerts.test.ts)).
 - Das Feld verbraucht nie Zufall des Layouts, die Map-Fingerprints bleiben unverändert. Der Befall ist zusammenhängend:

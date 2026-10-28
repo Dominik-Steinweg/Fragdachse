@@ -8,7 +8,7 @@ import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { getStoredGraphicsQuality } from '../utils/localPreferences';
 import { getRenderScale } from '../graphics/RenderResolution';
 import { ClarityCameraRegistry } from './arena/ClarityCameraRegistry';
-import { PERSISTENT_BASE_EDITOR_DETAIL_RADIUS, PersistentBaseEditorWorld, type PersistentBaseEditorTerrain } from '../persistentBase/PersistentBaseEditorWorld';
+import { PersistentBaseEditorWorld, type PersistentBaseEditorTerrain } from '../persistentBase/PersistentBaseEditorWorld';
 import { resolvePersistentBaseEditorPreview, type PersistentBaseEditorRoom } from '../persistentBase/PersistentBaseEditorPreview';
 import type { DeploymentRoutePlan } from '../activity/DeploymentRoutes';
 import type { PersistentCompositeConflictReason } from '../persistentBase/PersistentBaseComposite';
@@ -35,8 +35,8 @@ import { activateUi } from '../ui/UiAudio';
 import { attachHoverEffect } from '../ui/uiHover';
 import { getLocale, t } from '../i18n';
 import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
-import { buildPersistentBaseExpansionPreview, getPersistentBaseEditorDetailWindow, getPersistentBaseEditorFraming,
-  getPersistentBaseEditorWorldFraming, type PersistentBaseEditorFraming } from '../persistentBase/PersistentBaseExpansionPreview';
+import { buildPersistentBaseExpansionPreview, getPersistentBaseEditorDetailRect, getPersistentBaseEditorFraming,
+  getPersistentBaseEditorWorldFraming, PERSISTENT_BASE_EDITOR_VIEW_SIZE, type PersistentBaseEditorFraming } from '../persistentBase/PersistentBaseExpansionPreview';
 import { createDawnExpansionRewardNote } from '../ui/DawnMerchantExpansionPreview';
 import { createDawnMerchantExpansionPreview, createPersistentBaseEditorBoundary } from '../ui/DawnMerchantExpansionPreview';
 import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
@@ -48,7 +48,7 @@ import type { UiIconName } from '../ui/uiTextures';
 import { getChunkBakeScheduler } from '../arena/chunks/ChunkBakeScheduler';
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 
-const WORLD_PANEL = { x: 88, y: 262, width: 1000, height: 660 };
+const WORLD_PANEL = { x: 88, y: 262, ...PERSISTENT_BASE_EDITOR_VIEW_SIZE };
 /** Header row above both columns: stage and tools on the left, the situation map's title on the right. */
 const HEADER_Y = 222;
 /** Overview of the whole map (Lagekarte); empty without map terrain. */
@@ -185,10 +185,10 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.expansion = expansionFor(stage.model);
     const terrainSite = stage.terrain?.definition.persistentBaseSite;
     if (stage.terrain && terrainSite) {
+      // The detail view fills the whole panel: the panel's aspect and no inset.
       const { widthCells, heightCells } = stage.terrain.definition.metrics;
-      const detail = getPersistentBaseEditorDetailWindow({ widthCells, heightCells }, terrainSite.anchor, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS);
-      this.framing = getPersistentBaseEditorWorldFraming(WORLD_PANEL, { x: detail.minX * CELL_SIZE, y: detail.minY * CELL_SIZE,
-        width: (detail.maxX - detail.minX + 1) * CELL_SIZE, height: (detail.maxY - detail.minY + 1) * CELL_SIZE }, terrainSite.anchor);
+      this.framing = getPersistentBaseEditorWorldFraming(WORLD_PANEL,
+        getPersistentBaseEditorDetailRect({ widthCells, heightCells }, terrainSite.anchor), terrainSite.anchor, 0);
     } else {
       this.framing = getPersistentBaseEditorFraming(WORLD_PANEL, stage.model.area, this.expansion?.area);
     }
@@ -694,7 +694,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const color = (css: string) => Number.parseInt(css.slice(1), 16);
     const all: { show: boolean; label: string; draw: (g: Phaser.GameObjects.Graphics, x: number) => void }[] = [
       { show: has.routes, label: t('ui.base.legend.routes'), draw: (g, x) => g.lineStyle(3, 0xb347ff, 1).lineBetween(x, y + 2, x + 14, y - 2) },
-      { show: has.spawn, label: t('ui.base.legend.spawn'), draw: (g, x) => g.fillStyle(color(colors.spawnZone), .7).fillRect(x + 1, y - 6, 12, 12) },
+      { show: has.spawn, label: t('ui.base.legend.spawn'), draw: (g, x) => g.fillStyle(color(colors.spawnZone), .7).fillEllipse(x + 7, y, 14, 11) },
       { show: has.hostile, label: t('ui.base.legend.hostile'), draw: (g, x) => g.fillStyle(color(colors.hostileBase), 1).fillRect(x + 1, y - 6, 12, 12) },
       { show: true, label: t('ui.base.legend.base'), draw: (g, x) => g.fillStyle(color(colors.persistentBase), 1).fillRect(x + 1, y - 6, 12, 12) },
       { show: true, label: t('ui.base.legend.view'), draw: (g, x) => g.lineStyle(2, color(colors.frame), 1).strokeRect(x + 1, y - 6, 12, 12) },

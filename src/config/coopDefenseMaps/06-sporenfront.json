@@ -10,7 +10,7 @@
     { "id": "west-lower", "gridX": 0, "gridY": 26, "widthCells": 8, "heightCells": 13 },
     { "id": "east-upper", "gridX": 92, "gridY": 7, "widthCells": 8, "heightCells": 13 },
     { "id": "east-lower", "gridX": 92, "gridY": 26, "widthCells": 8, "heightCells": 13 },
-    { "id": "south-east", "gridX": 60, "gridY": 40, "widthCells": 16, "heightCells": 6 }
+    { "id": "south-east", "gridX": 66, "gridY": 38, "widthCells": 12, "heightCells": 8 }
   ],
   "timeOfDay": "08:00",
   "rockFillRatio": 0.1,

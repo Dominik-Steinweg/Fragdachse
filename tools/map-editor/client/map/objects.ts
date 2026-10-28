@@ -15,6 +15,7 @@ import { reactivePropKindLabel } from './reactivePropLabels';
 import { activeSpawnFronts, FRONT_LABELS, type SpawnFrontSource } from '../../shared/spawns';
 import type { SpawnFront } from '../../../../src/types';
 import { isEditableFireFront } from '../../shared/editPolicy';
+import { spawnZoneOutline } from '../../../../src/config/spawnZones';
 
 export const LAYERS: Record<string, { label: string; color: string }> = {
   terrain: { label: 'Felsen / Boden', color: '#79838a' }, water: { label: 'Wasser', color: '#3eaddb' }, trees: { label: 'Bäume', color: '#5c9b63' },
@@ -35,6 +36,8 @@ export interface MapObject {
   points?: { x: number; y: number }[]; radius?: number;
   readonly?: boolean; cells?: { gridX: number; gridY: number }[];
   reservationRadius?: number; anchorX?: number; anchorY?: number; backing?: { x: number; y: number; w: number; h: number }; halo?: number;
+  /** Round spawn zones: the outline inside the box, in cells. */
+  outline?: { x: number; y: number }[];
   /** Spawn structures: the free brood pit and the side it opens to. */
   spawnPit?: { x: number; y: number; w: number; h: number; outlet: SpawnStructureOutlet };
 }
@@ -128,6 +131,9 @@ export function mapObjects(session: MapDocumentSession, draft = session.draft, g
   });
   array(draft.spawnZones).forEach((zone, i) => {
     rect(`zone:${zone.id}`, `Spawnzone · ${zone.id}${zone.medium === 'water' ? ' (Wasser)' : ''}`, ['spawnZones', i], 'spawns');
+    // The zone is the organic ellipse in its box; the box stays the handle.
+    const item = items[items.length - 1]!;
+    item.outline = spawnZoneOutline({ gridX: item.x, gridY: item.y, widthCells: item.w, heightCells: item.h });
   });
   array(draft.encounters).forEach((e, i) => array(e.groups).forEach((g, j) => {
     if (g.spawnArea && !g.spawnZoneId) rect(`spawn:${e.id}:${session.key(['encounters', i, 'groups'], j)}`, `${e.id} · ${g.enemyKind} · Gruppe ${j + 1}`, ['encounters', i, 'groups', j, 'spawnArea'], 'spawns');
