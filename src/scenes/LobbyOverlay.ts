@@ -159,6 +159,8 @@ export class LobbyOverlay {
   private container:      Phaser.GameObjects.Container | null = null;
   private exitingWithWorldButton = false;
   private cardContent:    Phaser.GameObjects.Container | null = null;
+  /** Scrolled roster rows, team headers and invite row; clipped by the roster scroller. */
+  private rosterLayer:    Phaser.GameObjects.Container | null = null;
   private systemBar:      Phaser.GameObjects.Container | null = null;
   /** Austritt aus dem Testgelaende; unabhaengig vom Lobby-Panel sichtbar. */
   private worldExitBar:   Phaser.GameObjects.Container | null = null;
@@ -291,6 +293,9 @@ export class LobbyOverlay {
     this.forestRelief = forestOrnament(this.scene, 'relief', relief.x, relief.y, relief.width, relief.height)
       .setTint(0x977b51).setTintMode(Phaser.TintModes.FILL).setAlpha(0.16);
     objects.push(this.forestRelief);
+    // Directly above the relief: footer and header controls stay above clipped row overhangs.
+    this.rosterLayer = this.scene.add.container(0, 0).setScrollFactor(0);
+    objects.push(this.rosterLayer);
 
     objects.push(this.scene.add.text(PANEL_CX, 306, t('ui.lobby.title'),
       textStyle('title', { color: FOREST.muted })).setOrigin(0.5, 0).setScrollFactor(0));
@@ -367,7 +372,7 @@ export class LobbyOverlay {
       textStyle('caption', { color: TEAM_RED_COLOR }),
     ).setOrigin(0, 0.5).setScrollFactor(0).setVisible(false);
     this.teamHeaders = { blue: blueHeader, red: redHeader };
-    objects.push(blueHeader, redHeader);
+    this.rosterLayer.add([blueHeader, redHeader]);
 
     // Einladen-Zeile: beantwortet die eigentliche Frage einer wartenden Lobby und ersetzt den
     // frueheren, gleich lauten Kopieren-Button in der Fusszeile.
@@ -386,7 +391,7 @@ export class LobbyOverlay {
       ensureIconTexture(this.scene, 'copy', 28, COLORS.GREY_4),
     ).setDisplaySize(14, 14).setScrollFactor(0);
     this.inviteRow.getRoot().add(this.inviteCopyIcon);
-    objects.push(this.inviteRow.getRoot());
+    this.rosterLayer.add(this.inviteRow.getRoot());
 
     // ── Handlungsaufruf ───────────────────────────────────────────────────
     this.ctaDivider = this.scene.add
@@ -482,7 +487,7 @@ export class LobbyOverlay {
     this.container.add(this.deferredIndicator.root);
     promoteToClarityCamera(this.scene, this.container);
     this.settings = new LobbySettingsControls(this.scene, this.bridge, this.cardContent, this.container);
-    this.rosterScroller = new LobbyRosterScroller(this.scene, this.container,
+    this.rosterScroller = new LobbyRosterScroller(this.scene, this.container, this.rosterLayer,
       () => this.visible && !this.settings?.isOpen() && !this.playerContextMenu?.isOpen(),
       () => { this.loadoutTooltip?.hide(); this.playerNameTooltip?.hide(); this.layoutList(); });
     this.playerContextMenu = new UiContextMenu(this.scene, this.container, DEPTH.OVERLAY + 3, 'forest');
@@ -584,6 +589,7 @@ export class LobbyOverlay {
       this.container = null;
     }
     this.cardContent = null;
+    this.rosterLayer = null;
     if (this.systemBar) {
       this.systemBar.destroy(true);
       this.systemBar = null;
@@ -1096,7 +1102,7 @@ export class LobbyOverlay {
     name.on('pointerdown', handlePlayerPointerDown);
 
     const root = this.scene.add.container(0, 0, [bg, name, badge, mark, loadoutFrame, loadout, ping]).setScrollFactor(0);
-    this.cardContent!.add(root);
+    this.rosterLayer!.add(root);
     if (!this.bootPreparing) {
       root.setAlpha(0);
       this.scene.tweens.add({ targets: root, alpha: 1, duration: MOTION.base, ease: MOTION.ease.out });
@@ -1314,7 +1320,9 @@ export class LobbyOverlay {
     const height = slots.length * ROSTER_ROW_STEP + (teamMode ? TEAM_HEADER_H * 2 : 0);
     this.rosterScroller.setContentHeight(height);
     let y = LIST_Y - this.rosterScroller.scrollOffset;
-    const inView = (top: number, height: number) => top >= LIST_Y && top + height <= LOBBY_CARD.rosterBottom;
+    // Rows crossing an edge stay visible, cropped by the scroller, as a cue that the list continues.
+    const inView = (top: number, height: number) => top < LOBBY_CARD.rosterBottom && top + height > LIST_Y;
+    let hiddenBelow = 0;
     this.teamHeaders?.blue.setVisible(false);
     this.teamHeaders?.red.setVisible(false);
     this.inviteRow.setVisible(false);
@@ -1324,6 +1332,7 @@ export class LobbyOverlay {
       if (teamId && this.teamHeaders) {
         this.teamHeaders[teamId].setPosition(LOBBY_ROSTER_CONTENT.left, y + TEAM_HEADER_H / 2)
           .setVisible(inView(y, TEAM_HEADER_H));
+        this.rosterScroller.clip(this.teamHeaders[teamId]);
         y += TEAM_HEADER_H;
       }
       for (const slot of slots.filter(slot => slot.teamId === teamId || !teamMode)) {
@@ -1335,13 +1344,17 @@ export class LobbyOverlay {
             this.positionPlayerRow(row, PANEL_CX, centerY, ROSTER_SLOT_W, ROSTER_SLOT_H,
               slot.playerId === this.bridge.getLocalPlayerId(), this.bridge.getPlayerProfile(slot.playerId)?.colorHex ?? COLORS.GREY_4);
             row.root.setVisible(visible);
+            if (visible) this.rosterScroller.clip(row.root);
           }
+          if (y + ROSTER_SLOT_H > LOBBY_CARD.rosterBottom) hiddenBelow++;
         } else if (slot.invite) {
           this.inviteRow.setPosition(PANEL_CX, centerY).setVisible(visible && !this.connectionEnded);
+          if (visible) this.rosterScroller.clip(this.inviteRow.getRoot());
         }
         y += ROSTER_ROW_STEP;
       }
     }
+    this.rosterScroller.setHiddenBelow(hiddenBelow);
   }
 
   /**
