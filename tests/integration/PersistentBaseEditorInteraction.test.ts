@@ -6,7 +6,7 @@ vi.mock('../../src/ui/PersistentBaseDragPreview', () => ({ createPersistentBaseD
   setPosition: vi.fn().mockReturnThis(), setScale: vi.fn().mockReturnThis(), destroy: vi.fn(),
 })) }));
 
-import { PersistentBaseEditorScene } from '../../src/scenes/PersistentBaseEditorScene';
+import { PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS, PersistentBaseEditorScene } from '../../src/scenes/PersistentBaseEditorScene';
 import { PersistentBaseEditorModel } from '../../src/persistentBase/PersistentBaseEditorModel';
 import { getStoredCoopDefenseProgress } from '../../src/utils/localPreferences';
 import { CELL_SIZE, GAME_WIDTH } from '../../src/config';
@@ -32,16 +32,16 @@ function harness(scale = 1, stage: PersistentBaseAreaStage = 0, room?: Persisten
     relativeGridX: 1, relativeGridY: 1, angle: 0, placementOrder: 1,
   }] };
   const model = new PersistentBaseEditorModel(progress, undefined, room);
-  // Drive the pointer entry points without a DOM or a fake full GPU renderer.
-  const scene: any = new PersistentBaseEditorScene({ model, color: 0xffffff,
-    newRewardIds: [], close() {}, save: async () => ({ ok: true }) });
+  // Drive the pointer entry points without a DOM or a fake full GPU renderer: a ready stage with a session open.
+  const scene: any = new PersistentBaseEditorScene({ terrain: null, model, color: 0xffffff });
   const size = getPersistentBaseEditorSize(model.area);
   const world = { size, anchor: (size / CELL_SIZE - 1) / 2, syncObjects: vi.fn(), setMates: vi.fn(), planRoutes: () => null,
     view: { x: 0, y: 0, width: size, height: size }, siteArea: model.area, isCellBlocked: () => false,
     get frame() { return { anchor: { gridX: this.anchor, gridY: this.anchor }, quarterTurns: model.quarterTurns }; } };
   Object.assign(scene, { world, scale: { width: GAME_WIDTH * scale }, preview: graphics(),
     selection: graphics(), grid: graphics(), conflictHalo: graphics(), tableOutline: graphics(), error: graphics(), ui: { add() {} },
-    refreshList: vi.fn(() => scene.refreshSelection()),
+    refreshList: vi.fn(() => scene.refreshSelection()), ready: true, closed: false,
+    options: { model, color: 0xffffff, newRewardIds: [], close() {}, save: async () => ({ ok: true }) },
   });
   const point = (x: number, y: number) => ({ x: x * scale, y: y * scale, id: 1, button: 0 });
   const cell = (x: number, y: number) => point(scene.view.x + (world.anchor + x + .5) * CELL_SIZE * scene.worldZoom,
@@ -51,51 +51,53 @@ function harness(scale = 1, stage: PersistentBaseAreaStage = 0, room?: Persisten
 const object = { kind: 'reward', id: 'base_health_pedestal' } as const;
 
 describe('base menu drag interaction', () => {
-  it.each([false, true])('reveals the whole editor only after its World is ready (transition: %s)', transitioning => {
+  it('prepares the stage hidden with the background budget, faster while a player waits, then rests', async () => {
     const { scene, world } = harness(1, 11);
     let ready = false;
+    Object.assign(world, { update: vi.fn(), isReadyForView: vi.fn(() => ready) });
+    Object.assign(scene, { ready: false, closed: true, options: null });
+    const view = { x: 0, y: 0, width: world.size, height: world.size };
+    scene.update(0, 16);
+    expect(world.update).toHaveBeenLastCalledWith(0, 16, view, PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.background);
+    scene.setUrgent(true);
+    scene.update(16, 16);
+    expect(world.update).toHaveBeenLastCalledWith(16, 16, view, PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.urgent);
+    expect(scene.isReady()).toBe(false);
+    const whenReady = scene.whenReady();
+    ready = true;
+    scene.update(32, 16);
+    await expect(whenReady).resolves.toBeUndefined();
+    expect(scene.isReady()).toBe(true);
+    // Ready and without a session, the stage rests until the next one.
+    scene.update(48, 16);
+    expect(world.update).toHaveBeenCalledTimes(3);
+  });
+  it.each([false, true])('shows a session on the ready stage at once (transition: %s)', transitioning => {
+    const { scene } = harness(1, 11);
     const camera = { setAlpha: vi.fn() };
     const presented = vi.fn(), revealed = vi.fn();
-    Object.assign(world, { update: vi.fn(), isReadyForView: vi.fn(() => ready) });
     Object.assign(scene, { cameras: { cameras: [camera] },
-      input: { enabled: false, keyboard: { enabled: false, resetKeys: vi.fn() } } });
+      input: { enabled: false, keyboard: { enabled: false, resetKeys: vi.fn() } },
+      tweens: { add: vi.fn((config: any) => { config.targets.alpha = config.alpha; config.onUpdate(); config.onComplete(); return { remove() {} }; }) } });
     if (transitioning) scene.options.presented = presented;
     scene.options.revealed = revealed;
     scene.getTransitionView().setAlpha(0);
     scene.setTransitionInputBlocked(false);
-    scene.update(0, 16);
     expect(scene.input.enabled).toBe(false);
-    expect(scene.input.keyboard.enabled).toBe(false);
-    expect(camera.setAlpha).toHaveBeenLastCalledWith(0);
-    expect(presented).not.toHaveBeenCalled();
-    expect(revealed).not.toHaveBeenCalled();
-    // Hidden behind the loading panel, the World warms up with the larger bake budget.
-    const view = { x: 0, y: 0, width: world.size, height: world.size };
-    expect(world.update).toHaveBeenLastCalledWith(0, 16, view, true);
-    ready = true;
-    scene.update(16, 16);
-    scene.update(32, 16);
+    scene.present();
     expect(revealed).toHaveBeenCalledTimes(1);
-    expect(world.update).toHaveBeenLastCalledWith(32, 16, view, false);
     if (transitioning) {
       expect(presented).toHaveBeenCalledTimes(1);
       expect(scene.input.enabled).toBe(false);
       presented.mock.calls[0][0].setAlpha(1);
       scene.setTransitionInputBlocked(false);
+    } else {
+      // Its own short fade-in.
+      expect(scene.tweens.add).toHaveBeenCalledWith(expect.objectContaining({ duration: PersistentBaseEditorScene.REVEAL_MS }));
     }
     expect(camera.setAlpha).toHaveBeenLastCalledWith(1);
     expect(scene.input.enabled).toBe(true);
     expect(scene.input.keyboard.enabled).toBe(true);
-  });
-  it('does not present a closed editor when its pending terrain finishes', () => {
-    const { scene, world } = harness();
-    const presented = vi.fn();
-    scene.options.presented = presented;
-    Object.assign(world, { update: vi.fn(), isReadyForView: () => true });
-    scene.closed = true;
-    scene.update(0, 16);
-    expect(world.update).not.toHaveBeenCalled();
-    expect(presented).not.toHaveBeenCalled();
   });
   it.each([0, 1, 2] as const)('retains unscaled campaign geometry at stage %s', stage => {
     const { scene, world } = harness(1, stage);

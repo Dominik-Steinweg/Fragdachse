@@ -26,6 +26,7 @@ import { ChunkedRenderSurface } from '../../src/arena/chunks/ChunkedRenderSurfac
 import { ArenaCountdownOverlay } from '../../src/ui/ArenaCountdownOverlay';
 import { MatchResultsOverlay } from '../../src/ui/MatchResultsOverlay';
 import { PersistentBaseEditorScene } from '../../src/scenes/PersistentBaseEditorScene';
+import { ArenaBaseEditorPreparation } from '../../src/scenes/arena/ArenaBaseEditorPreparation';
 import { bridge } from '../../src/network/bridge';
 import * as config from '../../src/config';
 import { WorldLifecycle } from '../../src/world/WorldLifecycle';
@@ -40,6 +41,8 @@ describe('ArenaScene after-round handoff', () => {
       tweens: { add: (config: any) => { animations.push(config); return { remove: vi.fn() }; } },
       scene: { stop: vi.fn(), remove: vi.fn() },
     });
+    // A stage without kept terrain goes with its session.
+    scene.baseEditorPreparation = new ArenaBaseEditorPreparation({ add: vi.fn(), remove: (stage) => stage.dispose() });
     const source = { depth: 105, setDepth: vi.fn(), setAlpha: vi.fn(), retire: vi.fn() };
     scene.beginAfterRoundTransition(source);
     expect(scene.input.enabled).toBe(false);

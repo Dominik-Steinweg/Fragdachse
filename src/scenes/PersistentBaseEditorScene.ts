@@ -42,6 +42,7 @@ import { createDawnMerchantExpansionPreview, createPersistentBaseEditorBoundary 
 import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
 import { formatTimeOfDay } from '../effects/TimeOfDay';
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 
 const WORLD_PANEL = { x: 88, y: 236, width: 1000, height: 680 };
 /** Overview of the whole map (Lagekarte); empty without map terrain. */
@@ -57,35 +58,53 @@ interface DragState { pointerId: number; x: number; y: number; offsetX: number; 
 /** Why Apply did not save. `stale` means the draft was reloaded from the newer confirmed state. */
 export type PersistentBaseEditorSaveResult = { readonly ok: true }
   | { readonly ok: false; readonly reason: 'stale' | 'blocked' | 'placement' | 'invalid' };
+/** What a stage is built for: the next round's terrain around the base, or the personal draft alone. */
+export interface PersistentBaseEditorStageOptions {
+  /** Terrain of the host's next map around the base (Lagekarte); `null` shows the base alone. */
+  readonly terrain: PersistentBaseEditorTerrain | null;
+  /** The draft the World is first built with; a stage prepared ahead uses the confirmed one. */
+  readonly model: PersistentBaseEditorModel;
+  readonly color: number;
+}
+/** One editing session on a ready stage. */
 export interface PersistentBaseEditorOptions {
   readonly model: PersistentBaseEditorModel;
   readonly color: number;
   readonly newRewardIds: readonly PersistentBaseRewardId[];
   readonly save: () => Promise<PersistentBaseEditorSaveResult>;
-  /** Terrain of the host's next map around the base (Lagekarte); `null` shows the base alone. */
-  readonly terrain?: PersistentBaseEditorTerrain | null;
   /** Teammates and ownership in the room, for teammates' buildings and conflicts on the map. */
   readonly room?: PersistentBaseEditorRoom | null;
   /** Range of the local player's turret as built in a round (personal upgrades included). */
   readonly resolveTurretRange?: (constructionId: string) => number | null;
   readonly close: () => void;
   readonly presented?: (view: AfterRoundView) => void;
-  /** Once, when the World is ready and the editor shows (the loading panel can go). */
+  /** Once, when the session shows (the loading panel can go). */
   readonly revealed?: () => void;
   readonly retire?: () => void;
 }
+/** Bake budget per frame while the hidden stage prepares in the lobby, and while a player waits for it. */
+export const PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS = { background: 1.5, urgent: 24 } as const;
 
 /**
  * Menu-only input over a small regular World. No avatar or movement bindings. The draft is
  * canonical; the World shows it turned by the base orientation, and input is turned back.
+ *
+ * The scene is a stage that outlives its sessions: World, cameras, chrome and overview are built
+ * once (ahead, hidden, in the lobby) and rest between sessions; `open` lays a session's draft,
+ * list and tools over it and `closeSession` takes them away again.
  */
 export class PersistentBaseEditorScene extends Phaser.Scene {
   static readonly KEY = 'PersistentBaseEditor';
+  /** Fade-in of a session on a ready stage. */
+  static readonly REVEAL_MS = 150;
   private quality!: GraphicsQualityController;
   private world!: PersistentBaseEditorWorld;
   private cameraRegistry!: ClarityCameraRegistry;
   private clarity!: Phaser.Cameras.Scene2D.Camera;
-  private ui!: Phaser.GameObjects.Container;
+  /** Long-lived chrome: frame, titles, overview, table, pager and actions. */
+  private chrome!: Phaser.GameObjects.Container;
+  /** The open session's own objects (boundary, expansion ring); rebuilt for every session. */
+  private ui: Phaser.GameObjects.Container | null = null;
   private list!: Phaser.GameObjects.Container;
   private grid!: Phaser.GameObjects.Graphics;
   private preview!: Phaser.GameObjects.Graphics;
@@ -93,18 +112,29 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private expansionPreview: Phaser.GameObjects.Container | null = null;
   private dragPreview: Phaser.GameObjects.Container | null = null;
   private tableOutline!: Phaser.GameObjects.Rectangle;
+  private stats!: Phaser.GameObjects.Text;
   private error!: Phaser.GameObjects.Text;
   private pageText!: Phaser.GameObjects.Text;
   private previous!: UiButton;
   private next!: UiButton;
+  private rotate!: UiButton;
+  private hostRoomBase!: Phaser.GameObjects.Text;
   private buttons: UiButton[] = [];
   private rowBackgrounds = new Map<string, Phaser.GameObjects.Rectangle>();
   private selected: BaseEditorObject | null = null;
   private drag: DragState | null = null;
   private saving = false;
-  private closed = false;
+  /** No session is open. A stage starts closed and returns to it after every session. */
+  private closed = true;
   private disposed = false;
+  /** The stage's World is ready to show; until then it prepares hidden. */
+  private ready = false;
+  private readyWaiters: { resolve: () => void; reject: (error: Error) => void }[] = [];
+  private urgent = false;
+  /** The open session shows. */
   private presentationReady = false;
+  private revealTween: Phaser.Tweens.Tween | null = null;
+  private framesShown = 0;
   private page = 0;
   private readonly framing: PersistentBaseEditorFraming;
   private readonly expansion: ReturnType<typeof buildPersistentBaseExpansionPreview>;
@@ -116,36 +146,35 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   /** Why the World view shows no routes (forward base, players hunted away); below the minimap. */
   private routeHint: Phaser.GameObjects.Text | null = null;
   private breachWarning: Phaser.GameObjects.Container | null = null;
-  constructor(private readonly options: PersistentBaseEditorOptions) {
+  private options: PersistentBaseEditorOptions | null = null;
+  constructor(private readonly stage: PersistentBaseEditorStageOptions) {
     super(PersistentBaseEditorScene.KEY);
-    // The local menu uses the lobby ceiling but can edit a personal area larger than that site.
-    const site = resolveWorldDefinition({ definitionId: LOBBY_WORLD_DEFINITION_ID }, null)?.persistentBaseSite;
-    const baseline = options.model.baseline;
-    this.expansion = site ? buildPersistentBaseExpansionPreview(baseline.dawn,
-      baseline.persistentBaseAreaStage, isDawnUnlocked(baseline), site.maxAreaStage) : null;
-    const terrainSite = options.terrain?.definition.persistentBaseSite;
-    if (options.terrain && terrainSite) {
-      const { widthCells, heightCells } = options.terrain.definition.metrics;
+    this.expansion = expansionFor(stage.model);
+    const terrainSite = stage.terrain?.definition.persistentBaseSite;
+    if (stage.terrain && terrainSite) {
+      const { widthCells, heightCells } = stage.terrain.definition.metrics;
       const detail = getPersistentBaseEditorDetailWindow({ widthCells, heightCells }, terrainSite.anchor, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS);
       this.framing = getPersistentBaseEditorWorldFraming(WORLD_PANEL, { x: detail.minX * CELL_SIZE, y: detail.minY * CELL_SIZE,
         width: (detail.maxX - detail.minX + 1) * CELL_SIZE, height: (detail.maxY - detail.minY + 1) * CELL_SIZE }, terrainSite.anchor);
     } else {
-      this.framing = getPersistentBaseEditorFraming(WORLD_PANEL, options.model.area, this.expansion?.area);
+      this.framing = getPersistentBaseEditorFraming(WORLD_PANEL, stage.model.area, this.expansion?.area);
     }
   }
+  /** The terrain this stage shows; `null` for the personal draft alone. */
+  get terrain(): PersistentBaseEditorTerrain | null { return this.stage.terrain; }
   private get view() { return this.framing.view; }
   /** Overview of the whole map beside the table; without map terrain a short note. */
   private createSituationMap(): void {
-    const panel = PERSISTENT_BASE_EDITOR_MINIMAP_PANEL, terrain = this.options.terrain;
-    this.ui.add(this.add.rectangle(panel.x, panel.y, panel.width, panel.height, 0x101b14, .55)
+    const panel = PERSISTENT_BASE_EDITOR_MINIMAP_PANEL, terrain = this.stage.terrain, chrome = this.chrome;
+    chrome.add(this.add.rectangle(panel.x, panel.y, panel.width, panel.height, 0x101b14, .55)
       .setOrigin(0).setStrokeStyle(1, 0x718160, .5));
     const title = terrain ? `${t('ui.base.situationMap')} · ${getMapName(terrain.mapId, getLocale())}` : t('ui.base.situationMap');
-    this.label(panel.x + 16, 216, title.toLocaleUpperCase(), 'section');
+    this.label(panel.x + 16, 216, title.toLocaleUpperCase(), 'section', 0, undefined, chrome);
     // The World shows the map at the time the round starts.
     if (terrain) this.label(panel.x + panel.width - 16, 216, t('ui.base.missionTime', { time: formatTimeOfDay(this.world.timeOfDay) }),
-      'caption', 1).setColor('#d9cfa8');
+      'caption', 1, undefined, chrome).setColor('#d9cfa8');
     if (!terrain) {
-      this.label(panel.x + panel.width / 2, panel.y + panel.height / 2, t('ui.base.noSituationMap'), 'body', .5, panel.width - 40)
+      this.label(panel.x + panel.width / 2, panel.y + panel.height / 2, t('ui.base.noSituationMap'), 'body', .5, panel.width - 40, chrome)
         .setColor('#d9cfa8');
       return;
     }
@@ -160,50 +189,52 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       detail: { minX: view.x / CELL_SIZE, minY: view.y / CELL_SIZE,
         maxX: (view.x + view.width) / CELL_SIZE - 1, maxY: (view.y + view.height) / CELL_SIZE - 1 },
     }, { x: panel.x + 8, y: panel.y + 8, width: panel.width - 16, height: panel.height - 16 - hintHeight });
-    this.ui.add(this.minimap.image);
+    chrome.add(this.minimap.image);
     const origin = this.minimap.cellToScreen(0, 0);
-    this.world.attachRouteMinimap(this.ui, { originX: origin.x - this.minimap.scale / 2, originY: origin.y - this.minimap.scale / 2,
+    this.world.attachRouteMinimap(chrome, { originX: origin.x - this.minimap.scale / 2, originY: origin.y - this.minimap.scale / 2,
       unit: this.minimap.scale / CELL_SIZE });
-    this.routeHint = this.label(panel.x + panel.width / 2, panel.y + panel.height - 26, hint ?? '', 'caption', .5, panel.width - 40)
-      .setColor('#e3d2ff').setVisible(hint !== null);
+    // The strip exists only where the prepared plan needed it; a session's plans update its text.
+    if (hint !== null) this.routeHint = this.label(panel.x + panel.width / 2, panel.y + panel.height - 26, hint, 'caption', .5,
+      panel.width - 40, chrome).setColor('#e3d2ff');
     // No free path: the warning sits on the World view, where the breach glows.
     const warning = this.add.container(WORLD_PANEL.x + WORLD_PANEL.width / 2, this.view.y + this.view.height - 30).setVisible(false);
     const text = this.add.text(0, 0, t('ui.base.routes.breach').toLocaleUpperCase(), textStyle('label', { color: 0xffd0da }))
       .setOrigin(.5).setStroke('#2a0610', 4);
     warning.add([this.add.rectangle(0, 0, text.width + 48, 36, 0x3a0a18, .82).setStrokeStyle(2, 0xff5a7a, .9), text]);
     this.tweens.add({ targets: warning, alpha: { from: 1, to: .6 }, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.ui.add(warning);
+    chrome.add(warning);
     this.breachWarning = warning;
   }
   private get worldZoom(): number { return this.framing.zoom; }
 
+  /** Builds the stage: hidden, without a session, until `open`. */
   create(): void {
     this.quality = new GraphicsQualityController(getStoredGraphicsQuality());
     this.quality.attach(this);
     this.clarity = this.cameras.add(0, 0, this.scale.width, this.scale.height, false, 'base-ui');
-    // Keep the previous menu visible while this standalone World's worker/chunk queue warms up.
+    // Hidden until a session shows: the previous menu or the lobby stays visible meanwhile.
     this.getTransitionView().setAlpha(0);
     this.cameraRegistry = new ClarityCameraRegistry(this, this.cameras.main, this.clarity);
     this.cameraRegistry.install();
-    this.ui = this.add.container(0, 0);
-    this.cameraRegistry.promote(this.ui);
-    const chrome = UPGRADE_MENU;
+    const chrome = this.chrome = this.add.container(0, 0);
+    this.cameraRegistry.promote(chrome);
+    const menu = UPGRADE_MENU;
     // Match Upgrades: the existing lobby remains visible outside the timber frame.
     for (const crop of this.outsideWorld(0, 0, GAME_WIDTH, GAME_HEIGHT)) {
-      this.ui.add(this.add.rectangle(crop.x, crop.y, crop.width, crop.height, chrome.dimColor, chrome.dimAlpha).setOrigin(0));
+      chrome.add(this.add.rectangle(crop.x, crop.y, crop.width, crop.height, menu.dimColor, menu.dimAlpha).setOrigin(0));
     }
-    const panel = ensureModalPanelTexture(this, '_base_panel', chrome.width, chrome.height);
-    this.addBackdrop(panel, chrome.width - 80, chrome.height - 80);
-    this.addBackdrop(MATCH_RESULTS_BACKGROUND.key, chrome.width - chrome.forestInsetX,
-      chrome.height - chrome.forestInsetY, chrome.forestTint);
-    this.ui.add(this.add.image(chrome.centerX, chrome.centerY, ensureModalFrame(this, chrome.width, chrome.height))
-      .setDisplaySize(chrome.width, chrome.height));
+    const panel = ensureModalPanelTexture(this, '_base_panel', menu.width, menu.height);
+    this.addBackdrop(panel, menu.width - 80, menu.height - 80);
+    this.addBackdrop(MATCH_RESULTS_BACKGROUND.key, menu.width - menu.forestInsetX,
+      menu.height - menu.forestInsetY, menu.forestTint);
+    chrome.add(this.add.image(menu.centerX, menu.centerY, ensureModalFrame(this, menu.width, menu.height))
+      .setDisplaySize(menu.width, menu.height));
     const headerArt = PERSISTENT_BASE_HEADER;
     const headerReady = this.textures.exists(headerArt.key);
-    const header = this.add.image(chrome.centerX, chrome.headerY, headerReady ? headerArt.key
+    const header = this.add.image(menu.centerX, menu.headerY, headerReady ? headerArt.key
       : ensureGlossyButtonTexture(this, 'base-header', headerArt.width, headerArt.height, INTENT.neutral.fill))
       .setDisplaySize(headerArt.width, headerArt.height);
-    this.ui.add(header);
+    chrome.add(header);
     if (!headerReady) {
       // The lobby owns deferred loading; opening this menu early must not enqueue a second load.
       const event = Phaser.Textures.Events.ADD_KEY + headerArt.key;
@@ -211,77 +242,55 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       this.textures.once(event, refresh);
       header.once('destroy', () => this.textures.off(event, refresh));
     }
-    this.label(chrome.centerX, chrome.headerY + 4, t('ui.base.title').toLocaleUpperCase(), 'display', .5)
+    this.label(menu.centerX, menu.headerY + 4, t('ui.base.title').toLocaleUpperCase(), 'display', .5, undefined, chrome)
       .setFontSize(44).setColor('#efe4bd').setStroke('#1e160f', 3);
-    this.label(chrome.centerX, 170, t('ui.base.subtitle'), 'body', .5, 1700);
-    const model = this.options.model;
-    this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 216,
-      t(model.area.kind === 'radius' ? 'ui.base.statsRadius' : 'ui.base.stats', {
-        stage: model.areaStage, hp: resolvePersistentBaseMaxHp(model.baseline.persistentBaseHealthRewards),
-        radius: model.area.kind === 'radius' ? model.area.radiusCells : 0,
-      }), 'section', .5, WORLD_PANEL.width);
+    this.label(menu.centerX, 170, t('ui.base.subtitle'), 'body', .5, 1700, chrome);
+    this.stats = this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 216, '', 'section', .5, WORLD_PANEL.width, chrome);
     const frameWidth = Math.round(this.view.width + 40), frameHeight = Math.round(this.view.height + 40);
-    this.ui.add(this.add.image(this.view.x + this.view.width / 2, this.view.y + this.view.height / 2,
+    chrome.add(this.add.image(this.view.x + this.view.width / 2, this.view.y + this.view.height / 2,
       ensureUpgradeFrame(this, frameWidth, frameHeight)).setDisplaySize(frameWidth, frameHeight));
     const columnsY = TABLE.y - 20;
-    this.label(TABLE.x + 16, columnsY, t('ui.base.rewards'), 'section');
-    this.label(STATUS_X, columnsY, t('ui.base.status'), 'section', .5);
-    this.label(PERSONAL_X, columnsY, t('ui.base.personal'), 'section', .5);
+    this.label(TABLE.x + 16, columnsY, t('ui.base.rewards'), 'section', 0, undefined, chrome);
+    this.label(STATUS_X, columnsY, t('ui.base.status'), 'section', .5, undefined, chrome);
+    this.label(PERSONAL_X, columnsY, t('ui.base.personal'), 'section', .5, undefined, chrome);
     this.tableOutline = this.add.rectangle(TABLE.x, TABLE.y, TABLE.width, TABLE.height, 0x101b14, .25)
       .setOrigin(0).setStrokeStyle(1, 0x718160, .5);
-    this.ui.add(this.tableOutline);
-    this.list = this.add.container(0, 0); this.ui.add(this.list);
+    chrome.add(this.tableOutline);
+    this.list = this.add.container(0, 0); chrome.add(this.list);
     const pagerY = TABLE.y + TABLE.height + 28;
     this.previous = this.button(TABLE.x + 58, pagerY, 108, 36, '‹', () => this.changePage(-1));
     this.next = this.button(TABLE.x + TABLE.width - 58, pagerY, 108, 36, '›', () => this.changePage(1));
-    this.pageText = this.label(TABLE.x + TABLE.width / 2, pagerY, '', 'body', .5);
-    this.error = this.label(chrome.centerX, 192, '', 'caption', .5, 1600).setColor('#ffc2a9').setVisible(false);
-    this.actionButton('cancel', chrome.centerX - (chrome.buttonGap + chrome.buttonWidth) / 2, () => this.finish());
-    this.actionButton('apply', chrome.centerX + (chrome.buttonGap + chrome.buttonWidth) / 2, () => { void this.save(); });
+    this.pageText = this.label(TABLE.x + TABLE.width / 2, pagerY, '', 'body', .5, undefined, chrome);
+    this.error = this.label(menu.centerX, 192, '', 'caption', .5, 1600, chrome).setColor('#ffc2a9').setVisible(false);
+    this.actionButton('cancel', menu.centerX - (menu.buttonGap + menu.buttonWidth) / 2, () => this.finish());
+    this.actionButton('apply', menu.centerX + (menu.buttonGap + menu.buttonWidth) / 2, () => { void this.save(); });
     const toolsY = 942, toolsX = WORLD_PANEL.x + WORLD_PANEL.width / 2;
-    if (model.rewardsEditable) {
-      this.button(toolsX - 130, toolsY, 220, 40, t('ui.base.rotate'), () => {
-        if (this.drag || this.saving || !model.rotate()) return;
-        this.syncDraft();
-      });
-    } else {
-      this.label(toolsX - 130, toolsY, t('ui.base.hostRoomBase'), 'caption', .5, 360).setColor('#d9cfa8');
-    }
+    // Rewards and the orientation belong to the room host: a session shows either the tool or the note.
+    this.rotate = this.button(toolsX - 130, toolsY, 220, 40, t('ui.base.rotate'), () => {
+      if (this.drag || this.saving || !this.options?.model.rotate()) return;
+      this.syncDraft();
+    });
+    this.hostRoomBase = this.label(toolsX - 130, toolsY, t('ui.base.hostRoomBase'), 'caption', .5, 360, chrome).setColor('#d9cfa8');
     this.button(toolsX + 130, toolsY, 220, 40, t('ui.base.ranges'), () => {
       this.showRanges = !this.showRanges;
       this.refreshRanges();
     });
-    const expansion = this.expansion;
-    this.world = new PersistentBaseEditorWorld(this, model, this.options.color,
-      { previewArea: expansion?.area, terrain: this.options.terrain ?? null });
+    this.world = new PersistentBaseEditorWorld(this, this.stage.model, this.stage.color,
+      { previewArea: this.expansion?.area, terrain: this.stage.terrain });
+    const situationMap = loadingTimeline.start();
     this.createSituationMap();
-    this.ui.add(createPersistentBaseEditorBoundary(this, model.area, this.framing));
-    if (expansion?.edges.length) {
-      this.expansionPreview = createDawnMerchantExpansionPreview(this, this.framing, expansion.edges,
-        t(expansion.dawnOnly ? 'ui.base.expansionRingLabelDawnOnly' : 'ui.base.expansionRingLabel',
-          { radius: expansion.radius, cost: expansion.cost }));
-      this.ui.add(this.expansionPreview);
-    } else if (expansion?.reward?.kind === 'core') {
-      this.expansionPreview = createDawnExpansionRewardNote(this, this.framing,
-        t('ui.base.expansionCoreReward', { hp: expansion.reward.coreHpBonus, cost: expansion.cost }));
-      this.ui.add(this.expansionPreview);
-    }
-    this.grid = this.add.graphics().setDepth(10000);
+    loadingTimeline.end('editor/situation-map', situationMap);
+    this.grid = this.add.graphics().setDepth(10000).setVisible(false);
     this.selection = this.add.graphics().setDepth(10001);
     this.preview = this.add.graphics().setDepth(10002);
     this.conflictHalo = this.add.graphics().setDepth(10003);
     this.tweens.add({ targets: this.conflictHalo, alpha: { from: 1, to: .35 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    const extent = getPersistentBaseBuildAreaExtentCells(model.area);
-    const anchor = this.world.anchor;
-    this.grid.lineStyle(1, 0xbdc99c, .18);
-    for (let y = -extent; y <= extent; y++) for (let x = -extent; x <= extent; x++) {
-      if (isCellInsidePersistentBaseBuildArea(x, y, model.area))
-        this.grid.strokeRect((anchor.gridX + x) * CELL_SIZE, (anchor.gridY + y) * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-    }
-    this.resize(); this.refreshPreview(); this.refreshList();
+    this.resize();
     this.scale.on('resize', this.resize, this);
+    // Handlers stay for the stage's lifetime and act on the session that is open.
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.saving || this.closed || pointer.button !== 0) return;
+      const model = this.options?.model;
+      if (!model || this.saving || this.closed || pointer.button !== 0) return;
       const cell = this.cellAt(pointer);
       if (!cell) return;
       const reward = model.rewardsEditable ? model.rewards.find(p => getPersistentBaseRewardCells(p).some(c =>
@@ -301,14 +310,15 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.drop(pointer));
     this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => this.drop(pointer));
     this.input.on('wheel', (pointer: Phaser.Input.Pointer, _objects: unknown, _dx: number, dy: number) => {
-      if (!this.drag && this.isOverTable(pointer) && dy !== 0) this.changePage(Math.sign(dy));
+      if (!this.closed && !this.drag && this.isOverTable(pointer) && dy !== 0) this.changePage(Math.sign(dy));
     });
     this.input.keyboard?.on('keydown-ESC', () => {
-      if (this.saving) return;
+      if (this.saving || this.closed) return;
       if (this.drag) this.endDrag(); else this.finish();
     });
     this.input.keyboard?.on('keydown-DELETE', () => {
-      if (!this.saving && this.selected && model.getPosition(this.selected)) {
+      const model = this.options?.model;
+      if (model && !this.saving && !this.closed && this.selected && model.getPosition(this.selected)) {
         model.remove(this.selected); this.endDrag(); this.syncDraft();
       }
     });
@@ -316,13 +326,81 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.setTransitionInputBlocked(true);
   }
 
+  /** The stage's World is ready: a session opens at once. */
+  isReady(): boolean { return this.ready; }
+  /** Settles once the World is ready; rejects when the stage goes first. */
+  whenReady(): Promise<void> {
+    if (this.ready) return Promise.resolve();
+    if (this.disposed) return Promise.reject(new Error('Base editor stage disposed'));
+    return new Promise((resolve, reject) => { this.readyWaiters.push({ resolve, reject }); });
+  }
+  /** A player waits for this stage: its bakes may take most of the frame. */
+  setUrgent(urgent: boolean): void { this.urgent = urgent; }
+
+  /** Lays a session over the ready stage and shows it. */
+  open(options: PersistentBaseEditorOptions): void {
+    if (this.disposed || !this.ready || !this.closed) throw new Error('[PersistentBaseEditorScene] The stage cannot open a session now');
+    this.options = options;
+    this.closed = false; this.saving = false; this.selected = null; this.drag = null; this.page = 0;
+    this.showRanges = false; this.conflicts = new Map(); this.framesShown = 0;
+    const model = options.model;
+    this.world.setModel(model, options.color);
+    this.stats.setText(t(model.area.kind === 'radius' ? 'ui.base.statsRadius' : 'ui.base.stats', {
+      stage: model.areaStage, hp: resolvePersistentBaseMaxHp(model.baseline.persistentBaseHealthRewards),
+      radius: model.area.kind === 'radius' ? model.area.radiusCells : 0,
+    }));
+    this.rotate.getRoot().setVisible(model.rewardsEditable);
+    this.hostRoomBase.setVisible(!model.rewardsEditable);
+    const ui = this.ui = this.add.container(0, 0);
+    this.cameraRegistry.promote(ui);
+    ui.add(createPersistentBaseEditorBoundary(this, model.area, this.framing));
+    const expansion = expansionFor(model);
+    if (expansion?.edges.length) {
+      this.expansionPreview = createDawnMerchantExpansionPreview(this, this.framing, expansion.edges,
+        t(expansion.dawnOnly ? 'ui.base.expansionRingLabelDawnOnly' : 'ui.base.expansionRingLabel',
+          { radius: expansion.radius, cost: expansion.cost }));
+      ui.add(this.expansionPreview);
+    } else if (expansion?.reward?.kind === 'core') {
+      this.expansionPreview = createDawnExpansionRewardNote(this, this.framing,
+        t('ui.base.expansionCoreReward', { hp: expansion.reward.coreHpBonus, cost: expansion.cost }));
+      ui.add(this.expansionPreview);
+    }
+    const extent = getPersistentBaseBuildAreaExtentCells(model.area);
+    const anchor = this.world.anchor;
+    this.grid.clear().lineStyle(1, 0xbdc99c, .18);
+    for (let y = -extent; y <= extent; y++) for (let x = -extent; x <= extent; x++) {
+      if (isCellInsidePersistentBaseBuildArea(x, y, model.area))
+        this.grid.strokeRect((anchor.gridX + x) * CELL_SIZE, (anchor.gridY + y) * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    }
+    this.refreshPreview(); this.refreshList();
+    this.present();
+  }
+
+  /** Ends the session; the stage stays, hidden and resting, for the next one. */
+  closeSession(): void {
+    if (this.disposed) return;
+    this.closed = true; this.presentationReady = false; this.saving = false;
+    this.revealTween?.remove(); this.revealTween = null;
+    this.getTransitionView().setAlpha(0);
+    this.setTransitionInputBlocked(true);
+    this.endDrag(); this.selected = null;
+    this.ui?.destroy(true); this.ui = null; this.expansionPreview = null;
+    for (const ring of this.rangeRings.values()) ring.destroy();
+    this.rangeRings.clear();
+    this.list.removeAll(true); this.rowBackgrounds.clear();
+    this.grid.clear().setVisible(false); this.selection.clear(); this.conflictHalo.clear();
+    this.error.setVisible(false); this.breachWarning?.setVisible(false);
+    this.options = null;
+  }
+
   getTransitionView(): AfterRoundView {
+    const options = this.options;
     return {
       depth: 0,
       // This Scene is rendered above ArenaScene, including both of its cameras.
       setDepth: () => {},
       setAlpha: alpha => { for (const camera of this.cameras.cameras) camera.setAlpha(alpha); },
-      retire: () => this.options.retire?.(),
+      retire: () => options?.retire?.(),
     };
   }
 
@@ -336,19 +414,24 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.disposed = true; this.closed = true;
     this.input.enabled = false;
     this.scale.off('resize', this.resize, this);
+    this.revealTween?.remove(); this.revealTween = null;
     this.dragPreview?.destroy(true);
     this.expansionPreview?.destroy(true); this.expansionPreview = null;
     for (const ring of this.rangeRings.values()) ring.destroy();
     this.rangeRings.clear();
     this.minimap?.destroy(); this.minimap = null;
+    const run = loadingTimeline.get('editor');
+    if (run?.endedAt === null) run.finish('cancelled');
+    for (const waiter of this.readyWaiters.splice(0)) waiter.reject(new Error('Base editor stage disposed'));
     this.world?.destroy(); this.cameraRegistry?.destroy(); this.quality?.destroy();
     for (const button of this.buttons) button.destroy();
     this.buttons = [];
   }
-  private label(x: number, y: number, value: string, role: Parameters<typeof textStyle>[0], origin = 0, width?: number) {
+  private label(x: number, y: number, value: string, role: Parameters<typeof textStyle>[0], origin = 0, width?: number,
+    into: Phaser.GameObjects.Container | null = this.ui) {
     const label = this.add.text(x, y, value, textStyle(role, { color: TEXT.primary })).setOrigin(origin, .5);
     if (width) label.setWordWrapWidth(width);
-    this.ui.add(label); return label;
+    into?.add(label); return label;
   }
   private outsideWorld(x: number, y: number, width: number, height: number) {
     const bottom = this.view.y + this.view.height, right = this.view.x + this.view.width;
@@ -365,22 +448,22 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       const image = this.add.image(x, y, key).setOrigin(0).setDisplaySize(width, height).setTint(tint);
       image.setCrop((crop.x - x) * image.width / width, (crop.y - y) * image.height / height,
         crop.width * image.width / width, crop.height * image.height / height);
-      this.ui.add(image);
+      this.chrome.add(image);
     }
   }
   private button(x: number, y: number, w: number, h: number, label: string, onClick: () => void) {
     const button = new UiButton(this, { x, y, w, h, label, skin: 'forest', onClick, isEnabled: () => !this.saving });
-    this.buttons.push(button); this.ui.add(button.getRoot()); return button;
+    this.buttons.push(button); this.chrome.add(button.getRoot()); return button;
   }
   private actionButton(kind: 'cancel' | 'apply', x: number, onClick: () => void): void {
     const { buttonWidth: w, buttonHeight: h, buttonY: y } = UPGRADE_MENU;
     const texture = kind === 'apply' ? ensureUpgradeApply(this, w, h) : ensureGlossyButtonTexture(this, kind, w, h, INTENT.neutral.fill);
     const image = this.add.image(x, y, texture).setInteractive({ cursor: BUTTON_CURSOR });
-    const label = this.label(x, y, t(`ui.upgrades.${kind}`), 'label', .5).setFontSize(22);
+    const label = this.label(x, y, t(`ui.upgrades.${kind}`), 'label', .5, undefined, this.chrome).setFontSize(22);
     if (kind === 'apply') label.setColor('#f3ffca');
     image.on('pointerdown', () => { if (!this.saving && !this.drag) activateUi(this, onClick); });
     attachHoverEffect(this, image, label);
-    this.ui.add(image); this.ui.bringToTop(label);
+    this.chrome.add(image); this.chrome.bringToTop(label);
   }
   private resize(): void {
     const scale = getRenderScale(this.scale);
@@ -399,7 +482,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   }
   /** World top-left cell of the selected object at a canonical origin. */
   private worldOrigin(x: number, y: number): { gridX: number; gridY: number } {
-    const cells = this.selected ? getBaseEditorAppearance(this.options.model, this.selected)?.footprint ?? [] : [];
+    const cells = this.selected ? getBaseEditorAppearance(this.session.model, this.selected)?.footprint ?? [] : [];
     return toWorldFootprint(this.world.frame, x, y, cells);
   }
   private isOverTable(pointer: Phaser.Input.Pointer): boolean {
@@ -419,14 +502,14 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     if (!drag.started && Math.hypot(pointer.x - drag.x, pointer.y - drag.y) / scale < 4) return;
     if (!drag.started) {
       drag.started = true;
-      const appearance = getBaseEditorAppearance(this.options.model, this.selected);
-      if (appearance) { this.dragPreview = createPersistentBaseDragPreview(this, appearance, this.options.color); this.ui.add(this.dragPreview); }
+      const appearance = getBaseEditorAppearance(this.session.model, this.selected);
+      if (appearance) { this.dragPreview = createPersistentBaseDragPreview(this, appearance, this.session.color); this.ui?.add(this.dragPreview); }
     }
     const cell = this.cellAt(pointer);
     this.preview.clear();
     if (cell) {
       cell.x -= drag.offsetX; cell.y -= drag.offsetY;
-      const valid = !this.options.model.validate(this.selected, cell.x, cell.y);
+      const valid = !this.session.model.validate(this.selected, cell.x, cell.y);
       this.drawFootprint(this.preview, cell.x, cell.y, valid ? 0xb1ed94 : 0xff9991, .2);
       const origin = this.worldOrigin(cell.x, cell.y);
       this.dragPreview?.setScale(this.worldZoom).setPosition(
@@ -436,7 +519,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       const offset = rotatePersistentBaseOffset(drag.offsetX, drag.offsetY, this.world.frame.quarterTurns);
       this.dragPreview?.setScale(1).setPosition(pointer.x / scale - offset.dx * CELL_SIZE, pointer.y / scale - offset.dy * CELL_SIZE);
     }
-    const removing = this.isOverTable(pointer) && !!this.options.model.getPosition(this.selected);
+    const removing = this.isOverTable(pointer) && !!this.session.model.getPosition(this.selected);
     this.tableOutline.setStrokeStyle(removing ? 2 : 1, removing ? 0xb1ed94 : 0x718160, removing ? 1 : .5);
   }
   private drop(pointer: Phaser.Input.Pointer): void {
@@ -444,7 +527,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     if (!drag || drag.pointerId !== pointer.id) return;
     let changed = false;
     if (drag.started && this.selected && !this.saving) {
-      const model = this.options.model;
+      const model = this.session.model;
       const cell = this.cellAt(pointer);
       if (cell) changed = model.move(this.selected, cell.x - drag.offsetX, cell.y - drag.offsetY);
       else if (this.isOverTable(pointer) && model.getPosition(this.selected)) { model.remove(this.selected); changed = true; }
@@ -460,15 +543,15 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private syncDraft(): void { this.world.syncObjects(); this.refreshPreview(); this.refreshList(); }
   /** Teammates' buildings and own conflicts as the host would merge them on the shown map. */
   private refreshPreview(): void {
-    const room = this.options.room;
-    const preview = room ? resolvePersistentBaseEditorPreview({ model: this.options.model, frame: this.world.frame,
+    const room = this.session.room;
+    const preview = room ? resolvePersistentBaseEditorPreview({ model: this.session.model, frame: this.world.frame,
       siteArea: this.world.siteArea, room, isCellBlocked: (x, y) => this.world.isCellBlocked(x, y) }) : null;
     this.conflicts = preview?.conflicts ?? new Map();
     this.world.setMates(preview?.mates ?? []);
     this.conflictHalo.clear().lineStyle(3, 0xff5a4a, 1);
     for (const persistentId of this.conflicts.keys()) {
-      const entry = this.options.model.constructions.find(p => p.persistentId === persistentId);
-      const appearance = entry && getBaseEditorAppearance(this.options.model, { kind: 'construction', id: persistentId });
+      const entry = this.session.model.constructions.find(p => p.persistentId === persistentId);
+      const appearance = entry && getBaseEditorAppearance(this.session.model, { kind: 'construction', id: persistentId });
       if (!entry || !appearance) continue;
       const placed = toWorldFootprint(this.world.frame, entry.relativeGridX, entry.relativeGridY, appearance.footprint);
       for (const cell of placed.footprint) {
@@ -482,6 +565,8 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private refreshRoutes(): void {
     const plan = this.world.planRoutes();
     this.breachWarning?.setVisible(!!plan?.routes.some((route) => route.relevant && route.breach));
+    const hint = this.routeHintText(plan);
+    this.routeHint?.setText(hint ?? '').setVisible(hint !== null);
   }
   private routeHintText(plan: DeploymentRoutePlan | null): string | null {
     return plan?.hint === 'front-base' ? t('ui.base.routes.frontBase')
@@ -489,7 +574,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   }
   /** Rings of every own turret while toggled on; the selected turret always shows its ring. */
   private refreshRanges(): void {
-    const model = this.options.model, frame = this.world.frame;
+    const model = this.session.model, frame = this.world.frame;
     const wanted = new Map<string, { x: number; y: number; radius: number }>();
     const consider = (object: BaseEditorObject, position: { relativeGridX: number; relativeGridY: number } | undefined, constructionId: string | undefined) => {
       const key = baseEditorObjectKey(object);
@@ -498,7 +583,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       // Personal turrets carry the builder's upgrades; base-owned reward turrets their authored range.
       const id = normalizeConstructionId(constructionId);
       const definition = id ? getCoopDefenseConstructionDefinition(id) : null;
-      const radius = object.kind === 'construction' ? this.options.resolveTurretRange?.(constructionId) ?? null
+      const radius = object.kind === 'construction' ? this.session.resolveTurretRange?.(constructionId) ?? null
         : definition?.kind === 'turret' ? definition.targetRange : null;
       const appearance = getBaseEditorAppearance(model, object);
       if (!radius || !appearance) return;
@@ -514,12 +599,12 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     for (const [key, ring] of wanted) {
       let visual = this.rangeRings.get(key);
       if (!visual) { visual = new TurretRangePreviewVisual(this, 9990); this.rangeRings.set(key, visual); }
-      visual.show(ring.x, ring.y, ring.radius, this.options.color, true, 0);
+      visual.show(ring.x, ring.y, ring.radius, this.session.color, true, 0);
     }
   }
   private drawFootprint(graphics: Phaser.GameObjects.Graphics, x: number, y: number, color: number, alpha: number): void {
     if (!this.selected) return;
-    const cells = getBaseEditorAppearance(this.options.model, this.selected)?.footprint ?? [{ dx: 0, dy: 0 }];
+    const cells = getBaseEditorAppearance(this.session.model, this.selected)?.footprint ?? [{ dx: 0, dy: 0 }];
     const placed = toWorldFootprint(this.world.frame, x, y, cells);
     graphics.fillStyle(color, alpha).lineStyle(2, color, 1);
     for (const offset of placed.footprint) {
@@ -529,11 +614,11 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   }
   private objectLabel(object: BaseEditorObject): string {
     if (object.kind === 'reward') return t(getPersistentBaseRewardDefinition(object.id).presentation.labelKey);
-    const construction = this.options.model.getConstruction(object.id);
+    const construction = this.session.model.getConstruction(object.id);
     return t(construction?.tool.kind === 'utility' ? `loadout.${construction.tool.id}.name` : `construction.${construction?.tool.id}.name`);
   }
   private rows(): EditorRow[] {
-    const model = this.options.model;
+    const model = this.session.model;
     const rewardIds = model.rewardsEditable ? model.baseline.persistentBaseRewardUnlocks : model.rewards.map(p => p.rewardId);
     const objects: BaseEditorObject[] = [
       ...rewardIds.map(id => ({ kind: 'reward' as const, id })),
@@ -597,7 +682,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       .setFillStyle(key === selectedKey ? 0x435735 : 0x18291f, key === selectedKey ? .92 : .6)
       .setStrokeStyle(key === selectedKey ? 2 : 0, 0xd6e9a2, 1);
     this.selection.clear();
-    const position = this.selected && this.options.model.getPosition(this.selected);
+    const position = this.selected && this.session.model.getPosition(this.selected);
     if (position) this.drawFootprint(this.selection, position.relativeGridX, position.relativeGridY, 0xe4d499, .1);
     this.grid.setVisible(this.selected !== null);
     if (this.world) this.refreshRanges();
@@ -607,7 +692,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.saving = true; this.endDrag(); this.error.setVisible(false);
     let result: PersistentBaseEditorSaveResult = { ok: true };
     try {
-      if (this.options.model.dirty) result = await this.options.save();
+      if (this.session.model.dirty) result = await this.session.save();
     } catch { result = { ok: false, reason: 'invalid' }; }
     if (this.closed) return;
     this.saving = false;
@@ -618,20 +703,58 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       : result.reason === 'blocked' ? 'ui.base.saveBlocked'
         : result.reason === 'placement' ? 'ui.base.savePlacement' : 'ui.base.saveFailed')).setVisible(true);
   }
-  private finish(): void { if (!this.closed) { this.closed = true; this.options.close(); } }
+  private finish(): void {
+    if (this.closed) return;
+    const session = this.session;
+    this.closed = true; session.close();
+  }
+  /** The open session; editing paths run only while one is open. */
+  private get session(): PersistentBaseEditorOptions {
+    if (!this.options) throw new Error('[PersistentBaseEditorScene] No session is open');
+    return this.options;
+  }
+  /** Shows the open session: the after-round transition fades it in, otherwise a short fade of its own. */
+  private present(): void {
+    const session = this.session;
+    this.presentationReady = true;
+    session.revealed?.();
+    const transition = this.getTransitionView();
+    if (session.presented) { session.presented(transition); return; }
+    this.setTransitionInputBlocked(false);
+    const fade = { alpha: 0 };
+    transition.setAlpha(0);
+    this.revealTween = this.tweens.add({ targets: fade, alpha: 1, duration: PersistentBaseEditorScene.REVEAL_MS, ease: 'Sine.easeOut',
+      onUpdate: () => transition.setAlpha(fade.alpha),
+      onComplete: () => { this.revealTween = null; transition.setAlpha(1); } });
+  }
+  /** The Bauhof's loading run: reveal barriers until shown, then a few frames for first-render work. */
+  private measureLoading(view: { x: number; y: number; width: number; height: number }): void {
+    const run = loadingTimeline.get('editor');
+    if (!run || run.endedAt !== null) return;
+    for (const [gate, ready] of Object.entries(this.world.getRevealGates(view))) run.gate(gate, ready);
+    if (this.presentationReady && ++this.framesShown >= 3) run.finish('ready');
+  }
   update(now: number, delta: number): void {
-    if (!this.world || this.closed) return;
+    if (!this.world || this.disposed) return;
+    // A ready stage without a session rests until the next one.
+    if (this.ready && this.closed) return;
     const view = this.world.view;
-    this.world.update(now, delta, view, !this.presentationReady);
-    if (!this.presentationReady && this.world.isReadyForView(view)) {
-      this.presentationReady = true;
-      this.options.revealed?.();
-      const transition = this.getTransitionView();
-      if (this.options.presented) this.options.presented(transition);
-      else {
-        transition.setAlpha(1);
-        this.setTransitionInputBlocked(false);
-      }
+    const budget = this.ready ? undefined
+      : this.urgent ? PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.urgent : PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.background;
+    this.world.update(now, delta, view, budget);
+    this.measureLoading(view);
+    if (!this.ready && this.world.isReadyForView(view)) {
+      this.ready = true;
+      for (const waiter of this.readyWaiters.splice(0)) waiter.resolve();
     }
   }
+}
+
+/** The next ring the merchant can sell for this draft's base. */
+function expansionFor(model: PersistentBaseEditorModel): ReturnType<typeof buildPersistentBaseExpansionPreview> {
+  // The local menu uses the lobby ceiling but can edit a personal area larger than that site.
+  const site = resolveWorldDefinition({ definitionId: LOBBY_WORLD_DEFINITION_ID }, null)?.persistentBaseSite;
+  const baseline = model.baseline;
+  return site ? buildPersistentBaseExpansionPreview(baseline.dawn,
+    baseline.persistentBaseAreaStage, isDawnUnlocked(baseline), site.maxAreaStage) : null;
 }

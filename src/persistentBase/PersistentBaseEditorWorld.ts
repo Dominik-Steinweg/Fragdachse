@@ -21,6 +21,7 @@ import { CameraPostFxController } from '../effects/postfx/CameraPostFxController
 import { resolveBaseGrade, resolveMapWorldGrade, type WorldGradeInputs } from '../effects/postfx/worldGrade';
 import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../effects/TimeOfDay';
 import { GpuVfxSystem } from '../effects/gpu/GpuVfxSystem';
+import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { PowerUpRenderer } from '../powerups/PowerUpRenderer';
 import { bindBaseFortPresentation } from '../world/BaseFortPresentationBinding';
 import { resolveCoopDefenseMapConfig } from '../world/WorldDefinitionResolution';
@@ -38,8 +39,6 @@ import type { PersistentBaseAnchor } from './PersistentBaseTypes';
 export { getPersistentBaseEditorSize, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS } from './PersistentBaseExpansionPreview';
 /** Terrain built beyond the view, so rock autotiling and canopies do not end at its edge. */
 const CROP_MARGIN_CELLS = 3;
-/** Bake budget per frame while the hidden World warms up behind the loading panel. */
-const WARMUP_BAKE_BUDGET_MS = 24;
 
 /** Terrain of the next round around the base (Lagekarte): the host's map at its deployment seed. */
 export interface PersistentBaseEditorTerrain {
@@ -104,11 +103,16 @@ export class PersistentBaseEditorWorld {
   private readonly routePlanner: DeploymentRoutePlanner | null;
   private readonly routes: RouteFlowPresentation | null;
   private shadowsInitialized = false;
+  /** The last plan and the cells it was planned with; an unchanged draft reuses it. */
+  private lastPlan: { readonly cells: string; readonly plan: DeploymentRoutePlan } | null = null;
   /** Minutes: the map's time when the round starts; the personal draft keeps the lobby's. */
   readonly timeOfDay: number;
 
-  constructor(private readonly scene: Phaser.Scene, private readonly model: PersistentBaseEditorModel, private readonly color: number,
+  constructor(private readonly scene: Phaser.Scene, private model: PersistentBaseEditorModel, private color: number,
     options: { readonly previewArea?: PersistentBaseBuildArea; readonly terrain?: PersistentBaseEditorTerrain | null } = {}) {
+    // Measured sections of the Bauhof's loading run ('editor'); free without an open run.
+    let mark = loadingTimeline.start();
+    const section = (name: string): void => { loadingTimeline.end(`editor/${name}`, mark); mark = loadingTimeline.start(); };
     ensureWatchtowerTexture(scene);
     this.terrain = options.terrain ?? null;
     this.timeOfDay = (this.terrain && parseTimeOfDay(this.terrain.definition.initialTimeOfDay)) ?? DEFAULT_LOBBY_TIME_OF_DAY_MINUTES;
@@ -151,10 +155,12 @@ export class PersistentBaseEditorWorld {
       this.view = cellRect(window);
       this.layout = { seed: this.world.descriptor.seed, rocks: [], trees: [], tracks: [], dirt: [], water: [], decals: [], powerUpPedestals: [] };
     }
+    section('context');
     this.bounds = cellRect(window);
     const viewport = { width: this.bounds.width, height: this.bounds.height };
     this.background = createArenaBackground(scene, this.bounds.x + this.bounds.width / 2, this.bounds.y + this.bounds.height / 2,
       viewport.width, viewport.height);
+    section('background');
     // Only bases that stand when the round starts; dormant objectives appear later in a mission.
     const bases = this.world.bases.filter((base) => !base.dormant
       && base.cells.some((cell) => cell.gridX >= window.minX && cell.gridX <= window.maxX && cell.gridY >= window.minY && cell.gridY <= window.maxY));
@@ -162,12 +168,15 @@ export class PersistentBaseEditorWorld {
     // Terrain is built once. Personal buildings enter through the normal runtime wall path.
     this.arena = new ArenaBuilder(scene).buildDynamic(this.layout, { worldMetrics: this.world.metrics, presentation: true,
       enablePersistentBaseGravel: true, persistentBaseGravel: gravel, vegetationClearings: resolveSpawnStructureVegetationClearings(bases) });
+    section('arena');
     this.bridges = this.layout.bridges?.length ? new BridgeRenderer(scene, this.layout.bridges, this.world.metrics) : null;
+    section('bridges');
     this.lighting = new LightingSystem(scene, viewport);
     this.lighting.setTimeOfDay(this.timeOfDay);
     this.lighting.setActive(true);
     this.bases = new BaseManager(scene, bases, this.world.metrics);
     this.bases.setPersistentBaseGravel(gravel);
+    section('lighting+bases');
     this.occluders = new LightOccluderIndex({ rocks: () => this.arena.rockPhysicsProxies,
       trunks: () => [], baseCells: () => this.bases.getObstacleRectangles(), baseGeneration: () => this.bases.getObstacleGeneration() });
     this.lighting.setOccluderIndex(this.occluders);
@@ -175,6 +184,7 @@ export class PersistentBaseEditorWorld {
     this.powerUps = new PowerUpRenderer(scene);
     this.powerUps.setLightingSystem(this.lighting);
     this.powerUps.registerGpuVfx(this.gpu);
+    section('gpu+powerups');
     this.shadows = new ShadowSystem(scene);
     this.shadows.setWorldBoundsOverride({ minX: this.bounds.x, minY: this.bounds.y,
       maxX: this.bounds.x + this.bounds.width, maxY: this.bounds.y + this.bounds.height });
@@ -185,6 +195,7 @@ export class PersistentBaseEditorWorld {
     bindBaseFortPresentation(this.bases, { lighting: this.lighting, shadow: this.shadows, gpuVfx: this.gpu, camera: scene.cameras.main });
     const surfaces = this.bases.getBases().flatMap(base => [...base.getShadowSurfaceCells()]);
     this.shadows.syncBaseShadows(surfaces);
+    section('shadows+fort');
     // Editing needs an unobscured build surface, regardless of the gameplay fog preference.
     this.fx = new CameraPostFxController(scene, scene.cameras.main);
     const mapConfig = this.terrain ? resolveCoopDefenseMapConfig({ definitionId: this.terrain.definition.id }, null) : null;
@@ -192,20 +203,42 @@ export class PersistentBaseEditorWorld {
     const grade: WorldGradeInputs = { skyState: resolveSkyState(this.timeOfDay), ...resolveMapWorldGrade(mapConfig),
       bossPhase: 0, localHpFraction: 1, gamePhase: 'ARENA' };
     this.fx.setBaseGrade(resolveBaseGrade(grade), grade);
+    section('postfx');
     this.sunlight=new WorldSunlightPresentation(scene,{
       ground:this.arena.groundSurface,rocks:this.arena.rockVisualSystem,rockOverlays:this.arena.rockOverlaySurface,
       canopies:this.arena.canopyObjects,water:this.arena.waterSurface,wildlife:this.arena.wildlife,
       shadow:this.shadows,lighting:this.lighting,fog:null,postFx:this.fx,layout:this.layout,worldContext:this.world,
       structures:{setSunlight:(light)=>this.bases.setFortSunlight(light)},
     });
+    section('sunlight');
     // Enemy routes of the next round over the real terrain (Lagekarte); only maps with a mission.
     this.routePlanner = this.terrain && mapConfig ? new DeploymentRoutePlanner({ mapConfig, worldMetrics: this.world.metrics,
       layout: this.terrain.layout, bases: this.world.bases.filter((base) => !base.dormant),
       spawnFocusCell: this.terrain.definition.spawnFocusCell, detail: this.view }) : null;
     this.routes = this.routePlanner ? new RouteFlowPresentation(scene, this.lighting) : null;
     if (this.routes) this.sunlight.setActivityVoidDanger(this.routes.voidDanger);
+    section('routes');
     this.sunlight.update(this.timeOfDay,0);
+    section('sunlight-first-update');
     this.syncObjects();
+    section('sync-objects');
+  }
+  /** A round's reveal barriers (WorldPresentationFrameBinding) for this World, named for the loading run. */
+  getRevealGates(view: WorldRect): Readonly<Record<string, boolean>> {
+    return {
+      'surface-chunks': ArenaBuilder.isSurfaceWorkingSetReady(this.arena, view),
+      'shadow-chunks': this.shadows.isStaticReadyForView(view),
+      'rock-formation': this.arena.rockVisualSystem?.getPreparationState().ready ?? true,
+      // Needs a rendered frame; a hidden editor reaches it only once it shows.
+      'sunlight': this.sunlight.isPrepared(),
+      'gpu-shaders': this.gpu.isShaderWarmupComplete(),
+    };
+  }
+  /** Texture memory of the chunked surfaces and the rock formation, for the loading run. */
+  getDiagnostics(): { readonly chunkBytes: number; readonly formationBytes: number } {
+    const surfaces = [this.arena.groundSurface?.getStats(), this.arena.rockOverlaySurface?.getStats(), this.shadows.getStaticSurfaceStats()];
+    return { chunkBytes: surfaces.reduce((sum, stats) => sum + (stats?.allocatedPixels ?? 0) * 4, 0),
+      formationBytes: this.arena.rockVisualSystem?.getFormationDiagnostics()?.textureBytes ?? 0 };
   }
   /** The site's anchor with the draft's orientation; the draft itself stays canonical. */
   get frame(): PersistentBaseFrame {
@@ -214,6 +247,11 @@ export class PersistentBaseEditorWorld {
   /** Map terrain that blocks a construction on this cell, for the conflict preview. */
   isCellBlocked(gridX: number, gridY: number): boolean {
     return this.blocked.has(`${gridX}:${gridY}`);
+  }
+  /** Another draft on the same terrain: an editor session over a World built ahead of it. */
+  setModel(model: PersistentBaseEditorModel, color: number): void {
+    this.model = model; this.color = color;
+    this.syncObjects();
   }
   /** Teammates' constructions as the round would materialize them; drawn, never edited. */
   setMates(mates: readonly PersistentBaseEditorMateObject[]): void {
@@ -226,7 +264,10 @@ export class PersistentBaseEditorWorld {
    */
   planRoutes(): DeploymentRoutePlan | null {
     if (!this.routePlanner || !this.routes) return null;
+    const cells = this.constructionCells.map(({ gridX, gridY }) => `${gridX}:${gridY}`).sort().join(',');
+    if (this.lastPlan?.cells === cells) return this.lastPlan.plan;
     const plan = this.routePlanner.plan(this.constructionCells);
+    this.lastPlan = { cells, plan };
     const toFlow = (dim: number) => plan.routes.filter((route) => route.points.length > 1)
       .map((route): RouteFlowRoute => ({ points: route.points, breach: route.breach !== null, strength: route.relevant ? 1 : dim }));
     const zones = new Map<string, { x: number; y: number; width: number; height: number }>();
@@ -346,8 +387,8 @@ export class PersistentBaseEditorWorld {
     return ArenaBuilder.isSurfaceWorkingSetReady(this.arena, view)
       && this.shadows.isStaticReadyForView(view);
   }
-  /** `warming`: still hidden behind the loading panel, so bakes may take most of the frame. */
-  update(now: number, delta: number, view: WorldRect, warming = false): void {
+  /** `bakeBudgetMs`: the frame budget while the World prepares hidden; otherwise the scheduler's own. */
+  update(now: number, delta: number, view: WorldRect, bakeBudgetMs?: number): void {
     // Water masks are prepared over several frames, as in a round's presentation frame.
     this.arena.waterSurface?.prepareMasks();
     ArenaBuilder.updateSurfaceResidency(this.arena, view);
@@ -367,7 +408,7 @@ export class PersistentBaseEditorWorld {
     this.fx.update(delta);
     // Residency enqueues the same grass, gravel, detail and shadow bakes used by a map.
     // This standalone scene owns its own queue, so ArenaScene cannot service it.
-    ChunkedRenderSurface.flushBakeBudget(this.scene, warming ? WARMUP_BAKE_BUDGET_MS : undefined);
+    ChunkedRenderSurface.flushBakeBudget(this.scene, bakeBudgetMs);
   }
   destroy(): void {
     for (const visual of this.watchtowers.values()) visual.destroy();

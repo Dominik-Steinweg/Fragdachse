@@ -1,6 +1,6 @@
 /** Bounded attribution for the existing boot/world diagnostics. No polling, observers,
  * GPU fences or reports on the frame path. Times use performance.now(), never game time. */
-type Scope = 'boot' | 'world' | 'scenario' | 'deferred';
+type Scope = 'boot' | 'world' | 'scenario' | 'deferred' | 'editor';
 type WorkKind = 'cpu-submit' | 'elapsed' | 'worker';
 interface Work { name: string; kind: WorkKind; calls: number; totalMs: number; maxMs: number; firstAt: number; lastAt: number }
 interface Gate { name: string; ready: boolean; firstObservedAt: number; fulfilledAt: number | null; changedAt: number; waitingMs: number }
