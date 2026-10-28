@@ -44,7 +44,8 @@ def main():
     legs = list(names)
     paws = {}
     for leg in legs:
-        matches = [p['ob'] for p in parts if p['ob'].name.startswith(names[leg]+' broad paw')]
+        # enemy_parts_b names the contact mesh '<leg> broad paw', enemy_parts_a.paw '<leg> broad articulated paw'.
+        matches = [p['ob'] for p in parts if p['ob'].name.startswith((names[leg]+' broad paw', names[leg]+' broad articulated paw'))]
         if len(matches) != 1:
             raise ValueError('Expected one authored paw for '+leg)
         paws[leg] = matches[0]
