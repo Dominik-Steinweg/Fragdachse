@@ -4,6 +4,7 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager, EnemyMovementOverride, EnemySpecialMovementSource } from '../entities/EnemyManager';
 import { enemyHopPhaseAt, type EnemyHopJump, type EnemyHopPhase } from './EnemyHopState';
 import { selectHopLanding } from './enemyHopLanding';
+import { beginEnemyFlightTracking, enemyFlightVelocity, stepEnemyFlight } from './enemyFlight';
 import { restHealCapacity, restHealClusterValue, selectRestHealLinks, type RestHealBody } from './enemyRestHeal';
 
 interface Point { readonly x: number; readonly y: number }
@@ -54,23 +55,12 @@ interface HopperState {
   retimedAt: number;
 }
 
-/** Below this residual distance a flight counts as having reached its landing point. */
-const ARRIVAL_EPSILON_PX = 3;
-/** A body further behind its timeline than this republishes a stretched flight. */
-const RETIME_LAG_PX = 8;
-const RETIME_INTERVAL_MS = 100;
-const RETIME_END_GUARD_MS = 34;
-/** A flight without movement for this long ends where the body is. */
-const STALL_MS = 120;
-/** A flight lasting this many times its plan is aborted (frozen in a time bubble, wedged). */
-const MAX_FLIGHT_STRETCH = 4;
 /** A shock only fires if the body landed this close (share of the shock radius) to the announced point. */
 const SHOCK_LANDING_TOLERANCE = 0.5;
 /** Landing decisions per host frame; further hoppers wait one frame. */
 const MAX_DECISIONS_PER_FRAME = 4;
 /** Heal ticks caught up in one frame at most (long frames, tab switches). */
 const MAX_TICKS_PER_FRAME = 10;
-const NOMINAL_FRAME_S = 1 / 60;
 /** Two hops without route progress force the next one to advance. */
 const STALLED_HOPS_BEFORE_FORCE = 2;
 
@@ -119,14 +109,8 @@ export class CoopDefenseEnemyHopSystem implements EnemySpecialMovementSource {
     if (phase === 'rest') return { vx: 0, vy: 0, keepsRouting: true };
     const jump = state.jump;
     if (phase !== 'air' || !jump) return { vx: 0, vy: 0 };
-    const dx = jump.targetX - enemy.sprite.x, dy = jump.targetY - enemy.sprite.y, remaining = Math.hypot(dx, dy);
-    if (remaining <= ARRIVAL_EPSILON_PX) return { vx: 0, vy: 0 };
-    // Nominal flight speed of the authored air time; slowing (time bubble, slow status) is applied
-    // by physics, and a stretched timeline only re-describes it for clients.
     const airMs = getCoopDefenseEnemyConfig(enemy.kind).hop?.airMs ?? Math.max(1, jump.landAt - jump.takeoffAt);
-    const length = Math.hypot(jump.targetX - jump.originX, jump.targetY - jump.originY);
-    const speed = Math.min(length / airMs * 1000, remaining / NOMINAL_FRAME_S);
-    return { vx: dx / remaining * speed, vy: dy / remaining * speed };
+    return enemyFlightVelocity(jump, enemy.sprite.x, enemy.sprite.y, airMs);
   }
 
   /** Crouch, flight and landing own the body; regular attacks wait for the rest. */
@@ -176,9 +160,7 @@ export class CoopDefenseEnemyHopSystem implements EnemySpecialMovementSource {
       enemy.faceAngle(Math.atan2(state.jump!.targetY - state.jump!.originY, state.jump!.targetX - state.jump!.originX));
     } else if (phase === 'air' || (phase === 'land' && state.phase === 'air')) {
       // A flight whose timeline ran out before the body arrived is still a flight (stretched below).
-      if (state.phase !== 'air') {
-        state.lastX = enemy.sprite.x; state.lastY = enemy.sprite.y; state.lastMovedAt = now; state.retimedAt = now;
-      }
+      if (state.phase !== 'air') beginEnemyFlightTracking(state, enemy.sprite.x, enemy.sprite.y, now);
       phase = this.flightStep(state, config, now, stunned || hidden || teleported);
     }
 
@@ -264,42 +246,22 @@ export class CoopDefenseEnemyHopSystem implements EnemySpecialMovementSource {
   private flightStep(state: HopperState, config: CoopDefenseEnemyHopConfig, now: number, interrupted: boolean): EnemyHopPhase {
     const enemy = state.enemy, jump = state.jump!;
     enemy.setKnockbackImmune(true);
-    const x = enemy.sprite.x, y = enemy.sprite.y;
-    if (Math.hypot(x - state.lastX, y - state.lastY) >= 0.5) { state.lastMovedAt = now; state.lastX = x; state.lastY = y; }
-    const remaining = Math.hypot(jump.targetX - x, jump.targetY - y);
-    if (remaining <= ARRIVAL_EPSILON_PX) {
+    const step = stepEnemyFlight(jump, state, enemy.sprite.x, enemy.sprite.y, now, config.airMs, interrupted);
+    if (step.kind === 'arrived') {
       // Early arrival lands now; the timeline is shortened so clients do not keep the body airborne.
-      if (now < jump.landAt) {
+      if (step.early) {
         state.jump = { ...jump, landAt: now, settleUntil: now + config.landMs };
         this.publish(state);
       }
       return 'land';
     }
-    const stalled = now - state.lastMovedAt > STALL_MS;
-    const overdue = now > jump.takeoffAt + (jump.landAt - jump.takeoffAt) * MAX_FLIGHT_STRETCH
-      || now > jump.takeoffAt + config.airMs * MAX_FLIGHT_STRETCH;
-    if (interrupted || stalled || overdue) {
+    if (step.kind === 'abort') {
       this.endJump(state, config, now, 'abort');
       return 'land';
     }
-    const length = Math.hypot(jump.targetX - jump.originX, jump.targetY - jump.originY);
-    const travelled = Math.max(0, length - remaining);
-    const planned = length * Math.min(1, (now - jump.takeoffAt) / Math.max(1, jump.landAt - jump.takeoffAt));
-    const elapsed = Math.max(1, now - jump.takeoffAt);
-    const speed = Math.max(1e-3, travelled / elapsed);
-    const landAt = now + remaining / speed;
-    const due = now - state.retimedAt >= RETIME_INTERVAL_MS || now >= jump.landAt;
-    const lagging = planned - travelled > RETIME_LAG_PX;
-    // Near the planned landing a flight that will arrive late is stretched, so clients never see it land short.
-    const endingLate = now >= jump.landAt
-      || (now >= jump.landAt - RETIME_END_GUARD_MS && landAt > jump.landAt + RETIME_END_GUARD_MS);
-    if (due && (lagging || endingLate)) {
-      // Slowed flight (time bubble, slow status): stretch the timeline around the current progress
-      // so clients keep the body where it is and the arc continues without a jump.
-      const progress = Math.min(0.99, travelled / Math.max(1e-6, length));
-      const takeoffAt = landAt - (landAt - now) / (1 - progress);
+    if (step.retime) {
+      const { takeoffAt, landAt } = step.retime;
       state.jump = { ...jump, crouchAt: Math.min(jump.crouchAt, takeoffAt), takeoffAt, landAt, settleUntil: landAt + config.landMs };
-      state.retimedAt = now;
       this.publish(state);
     }
     return 'air';
