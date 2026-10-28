@@ -1309,6 +1309,42 @@
       "visiblePixelSha256": "67ffcf5371e05028df4e9d25df818c6013b3757311cc8bb1d540dedd2689130c",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/rabid-rabbit/mesh/enemy-mesh-rr-v1-r2/albedo-128.png": {
+      "file": "assets/sprites/pipeline-v2/rabid-rabbit/mesh/enemy-mesh-rr-v1-r2/albedo-128.webp",
+      "source": "assets/sprites/pipeline-v2/rabid-rabbit/mesh/enemy-mesh-rr-v1-r2/albedo-128.png",
+      "width": 1056,
+      "height": 1188,
+      "sourceBytes": 318132,
+      "downloadBytes": 185302,
+      "sourceSha256": "5f6f306a8b51e9c9207c95e3b13ea29f5570043c391162673e9123f1421df898",
+      "sha256": "ab572aa1b567d2d81270fe2f07c93e8e06e0c6622b949b03702200e700a1ed02",
+      "visiblePixelSha256": "5c0bde3c8002bdeae0a94582db4a3c1b5a9bec7d5e3abc09429f8101e343783c",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/rabid-rabbit/mesh/enemy-mesh-rr-v1-r2/beauty-128.png": {
+      "file": "assets/sprites/pipeline-v2/rabid-rabbit/mesh/enemy-mesh-rr-v1-r2/beauty-128.webp",
+      "source": "assets/sprites/pipeline-v2/rabid-rabbit/mesh/enemy-mesh-rr-v1-r2/beauty-128.png",
+      "width": 1056,
+      "height": 1188,
+      "sourceBytes": 396578,
+      "downloadBytes": 311234,
+      "sourceSha256": "a557f7abab50c8739fcc6ce132a86a1534e22a50ea17e8157e5bccd1e3f84bc7",
+      "sha256": "28b201bd3ca795b44f909592dafe49463a54b84e014e5663e48288135a653a53",
+      "visiblePixelSha256": "1b06aa58bbb4a115f81ee5672fb66d49c863108d80c4307c5e07eb5b7e889e14",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/rabid-rabbit/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/rabid-rabbit/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/rabid-rabbit/sheet.png",
+      "width": 1056,
+      "height": 1188,
+      "sourceBytes": 396578,
+      "downloadBytes": 311234,
+      "sourceSha256": "a557f7abab50c8739fcc6ce132a86a1534e22a50ea17e8157e5bccd1e3f84bc7",
+      "sha256": "28b201bd3ca795b44f909592dafe49463a54b84e014e5663e48288135a653a53",
+      "visiblePixelSha256": "1b06aa58bbb4a115f81ee5672fb66d49c863108d80c4307c5e07eb5b7e889e14",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/reactive-bee-hive/sheet.png": {
       "file": "assets/sprites/pipeline-v2/reactive-bee-hive/sheet.webp",
       "source": "assets/sprites/pipeline-v2/reactive-bee-hive/sheet.png",

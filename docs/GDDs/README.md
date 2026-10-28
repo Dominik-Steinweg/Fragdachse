@@ -45,7 +45,7 @@ gesetzt.
 | [Brandstifter](Fragdachse_GDD_Brandstifter.md) | umgesetzt |
 | [Kabummtula V1](Fragdachse_GDD_Kabummtula_V1.md) | umgesetzt (ersetzt den Zeitbomben-Dachs); Optimierungsphase mit Testfeedback offen |
 | [Mörser-Dachs V1](Fragdachse_GDD_Moerser_Dachs_V1.md) | umgesetzt |
-| [Rabid Rabbit V1](Fragdachse_GDD_Rabid_Rabbit_V1.md) | in Umsetzung (ersetzt den Rabid Badger); neues Modell über Prototyp-Gate offen |
+| [Rabid Rabbit V1](Fragdachse_GDD_Rabid_Rabbit_V1.md) | umgesetzt (ersetzt den Rabid Badger); Feel-Abnahme und Balance-Tuning offen |
 | [Schild-Anstürmer V1](Fragdachse_GDD_Schild_Anstuermer_V1.md) | umgesetzt (die Kopfzeile „keine Implementierung“ ist veraltet) |
 
 ## Modi, Kampagne und Basis

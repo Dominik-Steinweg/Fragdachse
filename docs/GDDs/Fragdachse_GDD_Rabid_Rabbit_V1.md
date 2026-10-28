@@ -2,7 +2,7 @@
 
 - Version: 1.0
 - Datum: 2026-10-28
-- Status: in Umsetzung (Code-Kern mit Platzhalter-Sheet des Dachses; neues Blender-Modell folgt über die Gates GA1–GA3)
+- Status: umgesetzt (Produktion `rr-v1-r2` „Nightshade Tips“, Schattenmesh `enemy-mesh-rr-v1-r2`); Feel-Abnahme, Balance-Tuning (Dawn-Kosten, Map 3) und Endabnahme offen
 - Spielmodus: Coop Defense (Kampagne, From Dachs Till Dawn)
 - Name: Rabid Rabbit (DE und EN)
 - Gegner-ID: `rabid-rabbit` (ersetzt den Prototyp `rabid-badger` an derselben Registry-Position, Wire-Kind-Index 2)
@@ -55,8 +55,11 @@ Der Vertragstest prüft `lockMs + airMinMs ≥ Reaktion + (Radius + 16) / 280` f
   (`EnemyClawRenderer`); Rot ist Telegraph, Void-Violett allgemeine Gefahr, kein Gelb.
 - Flug mit Anhebung zur Kamera; Clients setzen den Körper auf die replizierte Fluglinie; Absprung- und
   Landespuren über den Bewegungsmodus `airborne`.
-- Clips des neuen Sheets: `idle`, `move` (Halbsprung-Galopp), `claw` (Bisslunge), `windup` (Zielen,
-  Schleife), `leap` (`launch`/`land`). Ältere Sheets ohne `leap` dehnen die `claw`-Lunge.
+- Modell (GA1, Wahl des Users): schlanker Feldhase geduckt, lange Ohren 46° seitlich nach hinten
+  (Pfeilsilhouette von oben), blau-schwarzes Fell mit violettem Fellrand, große violette Ringaugen und
+  void-violett leuchtende Ohrspitzen; das Leuchten kriecht in Bewegung fast bis zur Ohrwurzel.
+- Clips: `idle`, `move` (Halbsprung-Galopp), `claw` (Bisslunge), `windup` (Zielen, Schleife),
+  `leap` (`launch`/`land`). Sheets ohne `leap` dehnen die `claw`-Lunge.
 
 ## 6. Technik
 

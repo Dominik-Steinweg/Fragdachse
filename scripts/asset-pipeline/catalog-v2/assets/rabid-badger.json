@@ -2,7 +2,7 @@
   "id": "rabid-badger",
   "label": "Tollwütiger Dachs",
   "category": "enemy",
-  "gameIds": ["rabid-rabbit"],
+  "gameIds": [],
   "reference": "public/assets/sprites/enemies/enemy_rabid_badger.png",
   "targetSize": 22,
   "sourceSizes": [

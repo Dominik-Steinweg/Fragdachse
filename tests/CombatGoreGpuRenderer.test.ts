@@ -212,7 +212,7 @@ describe('combat gore gpu renderer', () => {
     const { scene, renderer, stats } = setup();
     addVisualTexture(scene, 'badger');
     addVisualTexture(scene, 'badger_walking', 'walk-4');
-    addVisualTexture(scene, 'enemy_rabid_badger');
+    addVisualTexture(scene, 'enemy_rabid_rabbit');
     addVisualTexture(scene, 'enemy_grave_titan');
 
     renderer.playDeath({ ...death, textureKey: 'badger', frame: '__BASE', displayWidth: 32, displayHeight: 32 });
@@ -225,7 +225,7 @@ describe('combat gore gpu renderer', () => {
       rotation: -0.4,
       tint: 0xe6a2d0,
     });
-    renderer.playDeath({ ...death, textureKey: 'enemy_rabid_badger', frame: '__BASE', displayWidth: 22, displayHeight: 22 });
+    renderer.playDeath({ ...death, textureKey: 'enemy_rabid_rabbit', frame: '__BASE', displayWidth: 22, displayHeight: 22 });
     renderer.playDeath({
       ...death,
       textureKey: 'enemy_grave_titan',
