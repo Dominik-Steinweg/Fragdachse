@@ -49,23 +49,26 @@ describe('route flow geometry', () => {
     expect(Math.max(...geometry.segments.map((segment) => segment.bx))).toBeGreaterThan(40 * 16);
   });
 
-  it('grows a stream out of its source', () => {
-    const geometry = buildRouteFlowGeometry([north], { tolerance: .75 });
+  it('gathers a stream out of its spawn zone: wide and faint at the source, a stream past the rim', () => {
+    const geometry = buildRouteFlowGeometry([{ ...north, sourceReach: 120 }], { tolerance: .75 });
     const first = geometry.segments.find((segment) => segment.joinA === null)!;
     const middle = geometry.segments.find((segment) => segment.ax > 25 * 16)!;
-    expect(first.halfWidthA).toBeLessThan(middle.halfWidthA * .6);
-    expect(first.presenceA).toBeLessThan(.5);
+    expect(first.halfWidthA).toBeGreaterThan(middle.halfWidthA * 1.5);
+    expect(first.presenceA).toBeLessThan(.02);
     expect(middle.presenceA).toBeCloseTo(1, 6);
+    // Gathered over the way out of the zone and a little beyond.
+    const gathered = geometry.segments.find((segment) => segment.presenceA > .99)!;
+    expect(Math.hypot(gathered.ax, gathered.ay)).toBeGreaterThan(120);
   });
 
-  it('heats a breach route towards the wall and marks sources, entries and the breach', () => {
+  it('heats a breach route towards the wall and marks its entry and the breach', () => {
     const breach = route(repeat([1, 0], 30), [0, 40], { breach: true });
     const geometry = buildRouteFlowGeometry([breach], { tolerance: .75, isInsideBuildArea: (x) => x >= 24 * 16 });
     const last = geometry.segments.reduce((best, segment) => segment.bx > best.bx ? segment : best);
     const first = geometry.segments.reduce((best, segment) => segment.ax < best.ax ? segment : best);
     expect(last.heatB).toBeCloseTo(1, 6);
     expect(first.heatA).toBe(0);
-    expect(geometry.marks.map((mark) => mark.kind).sort()).toEqual([RouteFlowKind.Source, RouteFlowKind.Entry, RouteFlowKind.Breach].sort());
+    expect(geometry.marks.map((mark) => mark.kind).sort()).toEqual([RouteFlowKind.Entry, RouteFlowKind.Breach].sort());
     expect(geometry.marks.find((mark) => mark.kind === RouteFlowKind.Entry)!.x).toBe(24 * 16);
   });
 

@@ -415,6 +415,9 @@ Die Bauhof-Bühne ([PersistentBaseEditorScene](../../src/scenes/PersistentBaseEd
   Durchlauf derselben Schritte, die Runde baut also unverändert. Schritte mit `'heavy'` warten im Hintergrund auf
   eine ruhige Lobby.
 - Eine verdeckte World wird spätestens beim Arena-Einstieg freigegeben, vor dem Bau der Runden-World.
+- Der Bauhof trägt den Bodennebel der Runde und hält ihn wie über Basisplatten mit einem Flächenstempel von der
+  Baufläche fern. Er speist Nebel, Luft und Form in derselben Reihenfolge wie der Runden-Frame: Sonne, Nebelschritt,
+  dann `setFogAir`/`setFogShape`.
 
 ## Große World-Flächen
 
@@ -551,6 +554,10 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
   Uniform trägt den Kasten der Zone; der Shader verdichtet die Ellipse darin, wie die Zone selbst rund ist. Boden,
   Fels, Glow, Nebelluft und Partikel lesen denselben Wert. Der Client glättet die Stärke, damit ein ersetzter Takt
   abklingt statt abzureißen ([CoopDefenseSpawnZoneAlerts.test.ts](../../tests/CoopDefenseSpawnZoneAlerts.test.ts)).
+- Eine Activity kann Dunst entlang von Linien legen (`ActivityVoidDanger.hazeLines`, z. B. die Ströme der
+  Lagekarte). Er geht in den Dunst-Kanal ein, Nebel, Bodenschleier und Sporen folgen ihm, die Flora aber nie: Eine
+  neue Revision blendet nur den Dunst über alte und neue Reichweite über. Ein neues `sources`-Array baut dagegen
+  Flora, Teiche und Creep neu und ist für häufige Änderungen zu teuer.
 - Das Feld verbraucht nie Zufall des Layouts, die Map-Fingerprints bleiben unverändert. Der Befall ist zusammenhängend:
   Es gibt keinen Wurf je Pflanze, der einzelne befallene Pflanzen neben unberührte setzt.
 - Void-Frames tragen zwingend das Präfix `void-` und liegen in eigenen Atlanten mit deckungsgleichem Emissive-Atlas.

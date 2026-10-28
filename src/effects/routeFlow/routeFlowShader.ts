@@ -1,15 +1,19 @@
+import { FOG_SHAPE_RANGE } from '../sunlight/fogShape';
 import { ROUTE_FLOW_SHAPE } from './RouteFlowStore';
 
 /**
  * Void-Strömung: the enemy routes of the next round as a living void current, one quad per
- * stream segment plus swirls at the sources, glows where routes enter the build area and the
- * pressure wave of a breach. No lines, no arrows: direction is the motion of the current.
+ * stream segment plus glows where routes enter the build area and the pressure wave of a breach.
+ * Sources have no mark of their own: the current gathers out of its spawn zone's void haze. No
+ * lines, no arrows: direction is the motion of the current.
  *
  * Pass 0 (ground, NORMAL, decal band) soaks the soil with dark void ink.
  * Pass 1 (bed, NORMAL, above water and below rocks) carries the readable stream by day: violet
  * void haze that billows downstream in two layers, with lighter wisps where it rolls over itself.
  * Pass 2 (emissive, ADD with alpha 0, above the canopies and the light map) carries the light of
- * the current and its void motes, so routes stay readable under trees and at night.
+ * the current and its void motes, so routes stay readable under trees and at night. Where the
+ * ground fog lends its shape, thick banks veil that light: the current glows through the fog
+ * rather than over it. The streams' own haze tints the fog violet (VoidHazeLines).
  *
  * Every pattern moves along `dist + time · speed`, the arc distance to the route's goal. Routes
  * of one flow field share their distances where they merge, so a trunk flows on without seams.
@@ -60,6 +64,10 @@ uniform float uAlpha;
 uniform float uDetail;
 uniform float uUnit;
 uniform float uGlow;
+// The ground fog's shape after its draw this frame (World px rect), lent while uFogShapeLent is 1.
+uniform sampler2D uFogShape;
+uniform vec4 uFogShapeView;
+uniform float uFogShapeLent;
 varying vec2 vWorld;
 varying vec2 vLocal;
 varying vec4 vShape;
@@ -122,6 +130,15 @@ float streamMotes(vec2 q, float cell, float share, float radius, float px) {
     }
   }
   return light;
+}
+// How much of the light below a fog bank still passes: 1 in clear air, about a third in thick banks.
+float fogPass(vec2 world) {
+  if (uFogShapeLent < 0.5) return 1.0;
+  vec2 lent = (world - uFogShapeView.xy) / uFogShapeView.zw;
+  if (any(lessThan(lent, vec2(0.0))) || any(greaterThan(lent, vec2(1.0)))) return 1.0;
+  vec4 shape = texture2D(uFogShape, vec2(lent.x, 1.0 - lent.y));
+  float thick = shape.r * shape.r * ${f(FOG_SHAPE_RANGE)};
+  return mix(1.0, 0.35, 1.0 - exp(-thick * 0.8));
 }
 // Premultiplied "over".
 void over(inout vec4 acc, vec3 color, float alpha) {
@@ -211,17 +228,7 @@ void main() {
     float r = length(p);
     float a = atan(p.y, p.x);
     if (r > radius * 1.25) discard;
-    if (kind < 1.5) {
-      // Source: a slow void swirl over a dark pool.
-      float pool = 1.0 - smoothstep(radius * 0.45, radius, r + (noise(w * 0.09) - 0.5) * radius * 0.4);
-      if (uPass < 0.5) over(acc, INK, pool * 0.42 * strength);
-      else {
-        float arms = 0.5 + 0.5 * sin(a * 3.0 - r * 0.12 + uTime * 0.0024);
-        float swirl = smoothstep(0.55, 1.0, arms) * pool * smoothstep(0.0, radius * 0.2, r);
-        if (uPass < 1.5) over(acc, VOID_MID, swirl * 0.45 * strength);
-        glow += VOID_LIGHT * swirl * 0.5 + VOID_MID * exp(-sq(r / (radius * 0.3))) * 0.6;
-      }
-    } else if (kind < 2.5) {
+    if (kind < 2.5) {
       // Entry into the build area: the haze pools here and swells outward in soft waves.
       float phase = fract(uTime / 1800.0);
       float billow = fbm(w * 0.06 + vec2(uTime * 0.0004, 0.0));
@@ -251,7 +258,7 @@ void main() {
   }
 
   vec4 color = acc;
-  if (uPass > 1.5) color = vec4(glow * strength * uGlow, 0.0);
+  if (uPass > 1.5) color = vec4(glow * strength * uGlow * fogPass(vWorld), 0.0);
   if (color.a <= 0.003 && max(color.r, max(color.g, color.b)) <= 0.003) discard;
   gl_FragColor = color * uAlpha;
 }`;

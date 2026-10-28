@@ -89,7 +89,7 @@ describe('base editor World terrain', () => {
       shadows: { updateStaticResidency() {}, syncDynamicShadows() {}, isStaticReadyForView: () => true }, bridges: null,
       bases: { syncLights() {} }, animations: { update() {} }, powerUps: { updatePedestals() {}, updatePresentation() {} },
       presentationTimeMs:0,sunlight:{update:vi.fn()},
-      gpu: { update() {} }, fog: { update() {} }, lighting: { update() {} }, fx: { update() {} },
+      gpu: { update() {} }, fog: null, lighting: { update() {} }, fx: { update() {} },
     }) as PersistentBaseEditorWorld;
     ground.updateResidency(view);
     expect(world.isReadyForView(view)).toBe(false);

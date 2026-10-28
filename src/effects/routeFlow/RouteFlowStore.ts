@@ -8,12 +8,13 @@
  *
  * The tree's chains are drawn as strokes: at a junction the best aligned arm runs on into the
  * trunk around a rounded bend, the other arms flow into the trunk and fade out there (or fade in
- * from it where routes part). A stroke widens and narrows smoothly, starts thin inside its
- * source's swirl and dissolves a little past its goal. Quality over cell accuracy: the stream
- * follows the routes, not their grid.
+ * from it where routes part). A stroke widens and narrows smoothly, gathers out of its spawn
+ * zone's void haze (wide and faint at the source, a stream where it leaves the zone) and
+ * dissolves a little past its goal. Quality over cell accuracy: the stream follows the routes,
+ * not their grid.
  *
- * One instance is one quad (six non-indexed vertices): a stream segment, a source swirl, an entry
- * glow at the build area or a breach. The CPU writes only when the plan changes.
+ * One instance is one quad (six non-indexed vertices): a stream segment, an entry glow at the
+ * build area or a breach. The CPU writes only when the plan changes.
  */
 
 export const ROUTE_FLOW_FLOATS_PER_VERTEX = 20;
@@ -21,7 +22,7 @@ export const ROUTE_FLOW_VERTICES = 6;
 export const ROUTE_FLOW_INSTANCE_FLOATS = ROUTE_FLOW_FLOATS_PER_VERTEX * ROUTE_FLOW_VERTICES;
 export const ROUTE_FLOW_CAPACITY = 2048;
 
-export const RouteFlowKind = { Segment: 0, Source: 1, Entry: 2, Breach: 3 } as const;
+export const RouteFlowKind = { Segment: 0, Entry: 2, Breach: 3 } as const;
 export type RouteFlowKind = (typeof RouteFlowKind)[keyof typeof RouteFlowKind];
 
 /** Shared with the shader: the stream's look in World pixels. */
@@ -33,15 +34,17 @@ export const ROUTE_FLOW_SHAPE = {
   stainReach: 2.3,
   /** Breach routes heat up over this arc length before the wall. */
   heatRange: 192,
-  sourceRadius: 34,
   entryRadius: 30,
   breachRadius: 52,
 } as const;
 
 /** How strokes begin, join, part and end (World px unless noted). */
 const STREAM_EASE = {
-  /** From a source the stream grows from this share of its width and presence over `sourceLength`. */
-  sourceLength: 120, sourceWidth: .45, sourcePresence: .3,
+  /**
+   * Out of its source the current gathers: wide and faint where the zone's haze is thickest, a stream
+   * `gatherPast` beyond the zone's rim (at least `gatherMin` from the source).
+   */
+  gatherMin: 96, gatherPast: 64, gatherWidth: .9,
   /** Where routes join or part, width and brightness change over this length. */
   widthRamp: 72,
   /** A tributary runs on inside the trunk for this many trunk half widths and fades; a branch fades in. */
@@ -63,6 +66,8 @@ export interface RouteFlowRoute {
   readonly breach: boolean;
   /** 0..1; dim routes pass the view without mattering for the base. */
   readonly strength: number;
+  /** Arc length (World px) from the source to where the route leaves its spawn zone. */
+  readonly sourceReach?: number;
 }
 
 export interface RouteFlowSegment {
@@ -88,7 +93,7 @@ export interface RouteFlowSegment {
 
 export interface RouteFlowMark {
   readonly key: string;
-  readonly kind: typeof RouteFlowKind.Source | typeof RouteFlowKind.Entry | typeof RouteFlowKind.Breach;
+  readonly kind: typeof RouteFlowKind.Entry | typeof RouteFlowKind.Breach;
   readonly x: number; readonly y: number;
   readonly radius: number;
   readonly strength: number;
@@ -207,22 +212,21 @@ export function buildRouteFlowGeometry(routes: readonly RouteFlowRoute[], option
     }
   });
 
+  // A source gathers its current over the longest way out of its zone.
+  const gather = new Map<FlowNode, number>();
+  routes.forEach((route, index) => {
+    const start = routeNodes[index]![0];
+    if (start) gather.set(start, Math.max(gather.get(start) ?? 0, route.sourceReach ?? 0));
+  });
   const segments = buildStrokeSegments(chains.map((chain) => {
     const edge = edges.get(edgeKey(chain[0]!, chain[1]!))!;
     return { nodes: chain.filter((node, i) => i === 0 || i === chain.length - 1 || node.kept), usage: edge.usage, strength: edge.strength };
-  }));
+  }), gather);
 
   const marks: RouteFlowMark[] = [];
-  const sources = new Set<string>();
   const entries: { x: number; y: number; strength: number; routes: number }[] = [];
   routes.forEach((route, index) => {
     const path = routeNodes[index]!;
-    const start = path[0];
-    if (start && !sources.has(start.key)) {
-      sources.add(start.key);
-      marks.push({ key: `source:${start.key}`, kind: RouteFlowKind.Source, x: start.x, y: start.y,
-        radius: ROUTE_FLOW_SHAPE.sourceRadius, strength: route.strength });
-    }
     const inside = options.isInsideBuildArea;
     const entry = inside && !inside(path[0]?.x ?? NaN, path[0]?.y ?? NaN) ? path.find((node) => inside(node.x, node.y)) : undefined;
     if (entry) {
@@ -362,7 +366,8 @@ interface Stroke {
   /** Arc length of a head (a branch fading in from a trunk) at the start, of a tail (fading into one) at the end. */
   head: number;
   tail: number;
-  fromSource: boolean;
+  /** Arc length over which the current gathers out of its source; 0 when the stroke starts elsewhere. */
+  gather: number;
   toGoal: boolean;
 }
 
@@ -370,7 +375,7 @@ interface Stroke {
  * Strokes from the chains: arms paired across junctions, tails into and heads out of trunks,
  * rounded bends, then sampled densely wherever width or presence change.
  */
-function buildStrokeSegments(chains: readonly FlowChain[]): RouteFlowSegment[] {
+function buildStrokeSegments(chains: readonly FlowChain[], gather: ReadonlyMap<FlowNode, number>): RouteFlowSegment[] {
   const usable = chains.filter((chain) => chain.nodes.length >= 2);
   const baseOf = new Map<FlowChain, StrokeBase>(usable.map((chain) => [chain,
     { usage: chain.usage, halfWidth: routeFlowHalfWidth(chain.usage), strength: chain.strength }]));
@@ -413,7 +418,8 @@ function buildStrokeSegments(chains: readonly FlowChain[]): RouteFlowSegment[] {
       chain = next.get(chain);
     }
     const first = start.nodes[0]!, end = last.nodes[last.nodes.length - 1]!;
-    const stroke: Stroke = { points, head: 0, tail: 0, fromSource: first.preds.size === 0, toGoal: end.succs.size === 0 };
+    const stroke: Stroke = { points, head: 0, tail: 0, toGoal: end.succs.size === 0,
+      gather: first.preds.size === 0 ? Math.max(STREAM_EASE.gatherMin, (gather.get(first) ?? 0) + STREAM_EASE.gatherPast) : 0 };
     // A branch that parts from a trunk starts inside it; a tributary runs on inside it.
     const from = ins.get(first)?.filter((chain) => chain !== start);
     if (!previous.has(start) && from?.length) {
@@ -511,7 +517,7 @@ function strokeSegments(stroke: Stroke): RouteFlowSegment[] {
   }
   const goalFrom = total - STREAM_EASE.goalFade - STREAM_EASE.goalReach;
   const busy: [number, number][] = [...ramps.map((ramp) => [ramp.from, ramp.to] as [number, number])];
-  if (stroke.fromSource) busy.push([0, STREAM_EASE.sourceLength]);
+  if (stroke.gather) busy.push([0, stroke.gather]);
   if (stroke.head) busy.push([0, stroke.head * 1.25]);
   if (stroke.tail) busy.push([total - stroke.tail * 1.25, total]);
   if (stroke.toGoal) busy.push([goalFrom, total]);
@@ -523,10 +529,11 @@ function strokeSegments(stroke: Stroke): RouteFlowSegment[] {
       halfWidth += ramp.width * t; strength += ramp.strength * t;
     }
     let width = 1, presence = 1;
-    if (stroke.fromSource) {
-      const grow = smoothstep(0, STREAM_EASE.sourceLength, s);
-      width *= STREAM_EASE.sourceWidth + (1 - STREAM_EASE.sourceWidth) * grow;
-      presence *= STREAM_EASE.sourcePresence + (1 - STREAM_EASE.sourcePresence) * grow;
+    if (stroke.gather) {
+      // Inside the zone the haze is the current; the stream draws itself together towards the rim.
+      const gathered = smoothstep(0, stroke.gather, s);
+      width *= 1 + STREAM_EASE.gatherWidth * (1 - gathered);
+      presence *= gathered;
     }
     if (stroke.head) {
       presence *= smoothstep(0, stroke.head * 1.25, s);

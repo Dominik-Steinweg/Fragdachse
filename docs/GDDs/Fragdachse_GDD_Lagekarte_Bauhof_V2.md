@@ -95,7 +95,13 @@ Die Darstellung folgt [`visual-guidelines.md`](../ai/visual-guidelines.md) und d
     zusammenlaufende Routen ohne Bruch weiter.
   - **Verzweigungen:** Der am besten ausgerichtete Arm läuft in einer Rundung weiter; die übrigen fließen in den
     Stamm aus oder aus ihm heraus. Breite und Helligkeit wechseln weich, ein Strom löst sich hinter seinem Ziel auf.
-  - **Quellen** wirbeln. Spawnzonen, deren Routen die Basis erreichen, atmen mit ihrem Void-Dunst.
+  - **Quellen:** Spawnzonen stehen wie in der Mission kurz vor einer Freigabe: dichter Void-Dunst und
+    violetter Nebel, der langsam atmet. Der Strom sammelt sich darin, breit und blass im Zentrum, und tritt
+    am Zonenrand als Strom heraus. Kein eigenes Zeichen an der Quelle.
+  - **Nebel:** Der Bodennebel der Runde liegt auch über der Lagekarte, mit ihrer Startzeit; um den
+    Baubereich bleibt die Luft klar. Die Ströme tragen Void-Dunst: Der Nebel färbt sich entlang der Wege
+    violett und verdichtet sich leicht, Sporen treiben mit, und dicke Bänke verschleiern das Leuchten des
+    Stroms, statt dass es darüber liegt.
   - **Eintrittspunkte:** Wo eine Route in den Baubereich eintritt, glüht der Rand.
   - **Kein freier Weg:** Der Strom läuft heiß gegen die Mauer und erzeugt einen Druckring. Dazu
     erscheint die Warnung „Kein freier Weg – Gegner brechen durch“.
@@ -264,6 +270,12 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
   und meldet „leer“ mittig.
 - 2026-10-28 (Strom, Ausschnitt, Spawnzonen): Die Strömung wird als Striche gezeichnet. An Verzweigungen läuft der am
   besten ausgerichtete Arm in einer Rundung weiter, die übrigen fließen in den Stamm aus oder aus ihm heraus; Breite und
-  Helligkeit wechseln weich. Ein Strom wächst dünn aus dem Wirbel seiner Quelle und löst sich hinter seinem Ziel auf.
+  Helligkeit wechseln weich. Ein Strom löst sich hinter seinem Ziel auf.
   Der Ausschnitt hat das Seitenverhältnis des Panels und füllt es; am Kartenrand verschiebt er sich, statt
   abgeschnitten zu werden. Spawnzonen sind rund (siehe Void-Gefahrenzonen V1).
+- 2026-10-28 (Quellen, Nebel): Die Wirbel an den Quellen entfallen. Spawnzonen stehen im aktiven Zustand
+  (Warnstärke 0,8–1, atmend) mit Void-Dunst und Nebel wie in der Mission; der Strom sammelt sich darin und
+  tritt am Zonenrand heraus. Der Bauhof zeigt den Bodennebel der Runde (Spielereinstellung gilt), der
+  Baubereich bleibt über einen weichen Nebelstempel frei. Gemessen: etwa 0,2 ms CPU je Frame, rund 18 ms im
+  ruhegebundenen Aufbauschritt, 30 MB GPU-Speicher; Öffnen und Lobby unverändert. Die Ströme legen Void-Dunst
+  entlang ihrer Wege (Nebelfarbe, Bodenschleier, Sporen), dicker Nebel verschleiert ihr Leuchten.

@@ -363,6 +363,21 @@ export interface ActivityVoidDanger {
   presenceOf(id: string): number;
   /** Spawn zones about to release enemies, strongest first; the haze over them thickens. */
   readonly alerts?: readonly VoidDangerAlert[];
+  /** Haze along lines (the situation map's void streams); joins the spore haze, never the flora. */
+  readonly hazeLines?: VoidHazeLines | null;
+}
+
+/**
+ * Spore haze an Activity lays along lines. It joins the haze of the World's places, so ground veil,
+ * the fog's void air and colour and the motes follow it, but it never changes the flora: a new
+ * revision only crossfades the haze over the old and new bounds.
+ */
+export interface VoidHazeLines {
+  readonly revision: number;
+  /** World rectangle the haze reaches; null without lines. */
+  readonly bounds: VoidDangerBounds | null;
+  /** Haze thickness 0..1 at a world point. */
+  hazeAt(x: number, y: number): number;
 }
 
 /** A spawn zone warning for the shaders: world rectangle and build-up 0..1 (E4/E8). */

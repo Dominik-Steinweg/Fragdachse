@@ -14,8 +14,12 @@ const DETAIL = { high: 1, medium: 1, low: 0 } as const;
  * data; this node uploads it after a new plan and sets the per-frame uniforms. WebGL-only, like
  * SpriteGPULayer; returns null for headless or canvas renderers.
  */
+/** The ground fog's shape this frame: its texture and the World px rect it covers. */
+export type RouteFlowFogShape = () => { readonly texture: Phaser.Textures.Texture; readonly view: Float32Array } | null;
+
 export function createRouteFlowGpuLayer(scene: Phaser.Scene, store: RouteFlowStore, pass: RouteFlowPass,
-  depth: number, time: () => number, options: { readonly unit?: number; readonly glow?: () => number } = {}): Phaser.GameObjects.Image | null {
+  depth: number, time: () => number,
+  options: { readonly unit?: number; readonly glow?: () => number; readonly fogShape?: RouteFlowFogShape } = {}): Phaser.GameObjects.Image | null {
   const renderer = scene.sys?.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
   if (!renderer?.gl) return null;
   const manager = renderer.renderNodes;
@@ -25,6 +29,8 @@ export function createRouteFlowGpuLayer(scene: Phaser.Scene, store: RouteFlowSto
   image.setDepth(depth);
   const unit = options.unit ?? 1;
   const glow = options.glow ?? (() => 1);
+  const fogShape = options.fogShape ?? (() => null);
+  const fogView = new Float32Array(4);
   let ready = false;
 
   class RouteFlowBatch extends Phaser.Renderer.WebGL.RenderNodes.BatchHandler {
@@ -78,8 +84,15 @@ export function createRouteFlowGpuLayer(scene: Phaser.Scene, store: RouteFlowSto
         program.setUniform('uDetail', DETAIL[getGraphicsQualityProfile(scene).level]);
         program.setUniform('uUnit', unit);
         program.setUniform('uGlow', glow());
+        // Unit 1: the fog's lent shape, so thick banks veil the current's light.
+        const shape = fogShape();
+        if (shape) fogView.set(shape.view);
+        program.setUniform('uFogShape', 1);
+        program.setUniform('uFogShapeView', fogView);
+        program.setUniform('uFogShapeLent', shape ? 1 : 0);
         program.applyUniforms(suite.program);
-        renderer!.drawElements(context, [image.frame.source.glTexture!], suite.program, suite.vao,
+        const fogTexture = shape?.texture.source[0]?.glTexture ?? image.frame.source.glTexture!;
+        renderer!.drawElements(context, [image.frame.source.glTexture!, fogTexture], suite.program, suite.vao,
           Math.max(1, store.count) * ROUTE_FLOW_VERTICES, 0, this.topology);
       }
       this.onRunEnd(context);
@@ -119,11 +132,12 @@ export interface RouteFlowLayers { destroy(): void }
  * above the canopies and the light map, where trees and the night would otherwise hide a route.
  * `glow` scales that light; it grows towards the night.
  */
-export function createRouteFlowLayers(scene: Phaser.Scene, store: RouteFlowStore, time: () => number, glow: () => number): RouteFlowLayers {
+export function createRouteFlowLayers(scene: Phaser.Scene, store: RouteFlowStore, time: () => number, glow: () => number,
+  fogShape: RouteFlowFogShape): RouteFlowLayers {
   const layers = [
     createRouteFlowGpuLayer(scene, store, RouteFlowPass.Ground, DEPTH.DECALS + 0.06, time),
     createRouteFlowGpuLayer(scene, store, RouteFlowPass.Bed, DEPTH.GROUND_FOG + 0.05, time),
-    createRouteFlowGpuLayer(scene, store, RouteFlowPass.Emissive, DEPTH.CANOPY + 0.3, time, { glow }),
+    createRouteFlowGpuLayer(scene, store, RouteFlowPass.Emissive, DEPTH.CANOPY + 0.3, time, { glow, fogShape }),
   ];
   return { destroy: () => { for (const layer of layers) layer?.destroy(); layers.length = 0; } };
 }

@@ -28,10 +28,14 @@ import { resolveCoopDefenseMapConfig } from '../world/WorldDefinitionResolution'
 import { DEPLOYMENT_ROUTE_START, DeploymentRoutePlanner, type DeploymentRoutePlan, type DeploymentRouteScenario,
   type DeploymentRouteScenarioOptions } from '../activity/DeploymentRoutes';
 import { RouteFlowPresentation } from '../effects/routeFlow/RouteFlowPresentation';
+import { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
+import type { FogSurfaceStamp } from '../effects/groundFog/FogSurfaceMask';
+import { DEFAULT_FOG_STRENGTH } from '../config/groundFog';
+import { getGraphicsQualityController } from '../graphics/GraphicsQuality';
 import type { RouteFlowRoute } from '../effects/routeFlow/RouteFlowStore';
 import type { ArenaLayout, SyncedPlaceableRock, SyncedPowerUpPedestal, TurretWeaponId } from '../types';
-import { buildPersistentBaseCoreBaseConfig, isCellInsidePersistentBaseBuildArea, type PersistentBaseAreaStage,
-  type PersistentBaseBuildArea } from './PersistentBaseCore';
+import { buildPersistentBaseCoreBaseConfig, getPersistentBaseBuildAreaExtentCells, isCellInsidePersistentBaseBuildArea,
+  type PersistentBaseAreaStage, type PersistentBaseBuildArea } from './PersistentBaseCore';
 import type { BaseEditorObject, PersistentBaseEditorModel } from './PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from './PersistentBaseEditorAppearance';
 import { getPersistentBaseEditorDetailRect, getPersistentBaseEditorDetailWindow, getPersistentBaseEditorSize } from './PersistentBaseExpansionPreview';
@@ -106,6 +110,9 @@ export class PersistentBaseEditorWorld {
   private constructionCells: readonly { gridX: number; gridY: number }[] = [];
   private routePlanner: DeploymentRoutePlanner | null = null;
   private routes: RouteFlowPresentation | null = null;
+  /** The round's ground fog with the void haze in its air; it stays off the build area. Map terrain only. */
+  private fog: GroundFogSystem | null = null;
+  private fogClearing: Phaser.GameObjects.Image | null = null;
   private shadowsInitialized = false;
   /** The last plan and the cells and what-if it was planned with; an unchanged draft reuses it. */
   private lastPlan: { readonly cells: string; readonly plan: DeploymentRoutePlan } | null = null;
@@ -223,10 +230,18 @@ export class PersistentBaseEditorWorld {
     this.fx.setBaseGrade(resolveBaseGrade(grade), grade);
     section('postfx');
     yield 'heavy';
+    // The round's fog as it starts, void haze in its air. Building needs a clear surface: the fog
+    // keeps off the build area like it keeps off base plates.
+    if (this.terrain) {
+      const metrics = this.world.metrics;
+      this.fog = new GroundFogSystem(scene, { offsetX: metrics.offsetX, offsetY: metrics.offsetY, width: metrics.widthPx, height: metrics.heightPx },
+        this.world.descriptor.seed, this.layout.water ?? [], this.terrain.definition.fogStrength ?? DEFAULT_FOG_STRENGTH);
+      this.fogClearing = createBuildAreaFogClearing(scene, this.anchor, this.siteArea);
+    }
     this.sunlight=new WorldSunlightPresentation(scene,{
       ground:this.arena.groundSurface,rocks:this.arena.rockVisualSystem,rockOverlays:this.arena.rockOverlaySurface,
       canopies:this.arena.canopyObjects,water:this.arena.waterSurface,wildlife:this.arena.wildlife,
-      shadow:this.shadows,lighting:this.lighting,fog:null,postFx:this.fx,layout:this.layout,worldContext:this.world,
+      shadow:this.shadows,lighting:this.lighting,fog:this.fog,postFx:this.fx,layout:this.layout,worldContext:this.world,
       structures:{setSunlight:(light)=>this.bases.setFortSunlight(light)},
     });
     section('sunlight');
@@ -242,6 +257,12 @@ export class PersistentBaseEditorWorld {
     yield 'heavy';
     this.sunlight.update(this.timeOfDay,0);
     section('sunlight-first-update');
+    if (this.fog) {
+      yield 'heavy';
+      this.syncFogInputs();
+      this.fog.prepare(this.timeOfDay, this.view);
+      section('fog');
+    }
     yield;
     this.syncObjects();
     section('sync-objects');
@@ -258,10 +279,12 @@ export class PersistentBaseEditorWorld {
     };
   }
   /** Texture memory of the chunked surfaces and the rock formation, for the loading run. */
-  getDiagnostics(): { readonly chunkBytes: number; readonly formationBytes: number } {
+  getDiagnostics(): { readonly chunkBytes: number; readonly formationBytes: number; readonly fogBytes: number; readonly fogCpuMs: number } {
     const surfaces = [this.arena.groundSurface?.getStats(), this.arena.rockOverlaySurface?.getStats(), this.shadows.getStaticSurfaceStats()];
+    const fog = this.fog?.getDiagnostics();
     return { chunkBytes: surfaces.reduce((sum, stats) => sum + (stats?.allocatedPixels ?? 0) * 4, 0),
-      formationBytes: this.arena.rockVisualSystem?.getFormationDiagnostics()?.textureBytes ?? 0 };
+      formationBytes: this.arena.rockVisualSystem?.getFormationDiagnostics()?.textureBytes ?? 0,
+      fogBytes: fog?.bytes ?? 0, fogCpuMs: fog?.cpuMs ?? 0 };
   }
   /** The site's anchor with the draft's orientation; the draft itself stays canonical. */
   get frame(): PersistentBaseFrame {
@@ -294,9 +317,12 @@ export class PersistentBaseEditorWorld {
     const plan = this.routePlanner.plan(this.constructionCells, this.scenario);
     this.lastPlan = { cells, plan };
     const toFlow = (dim: number) => plan.routes.filter((route) => route.points.length > 1)
-      .map((route): RouteFlowRoute => ({ points: route.points, breach: route.breach !== null, strength: route.relevant ? 1 : dim }));
+      .map((route): RouteFlowRoute => ({ points: route.points, breach: route.breach !== null, strength: route.relevant ? 1 : dim,
+        ...(route.zone ? { sourceReach: zoneExit(route.points, route.zone) } : {}) }));
     const zones = new Map<string, { x: number; y: number; width: number; height: number }>();
-    for (const route of plan.routes) if (route.relevant && route.zone) zones.set(`${route.zone.x}:${route.zone.y}`, route.zone);
+    for (const route of [...plan.routes].sort((a, b) => +b.relevant - +a.relevant)) {
+      if (route.zone) zones.set(`${route.zone.x}:${route.zone.y}`, route.zone);
+    }
     const { anchor, siteArea } = this;
     this.routes.setPlan({
       view: plan.mode === 'routes' ? toFlow(.4) : [], overview: toFlow(.75), zones: [...zones.values()], clip: this.view,
@@ -436,6 +462,15 @@ export class PersistentBaseEditorWorld {
     this.powerUps.updatePresentation(this.presentationTimeMs);
     this.routes?.update(delta);
     this.sunlight.update(this.timeOfDay,this.presentationTimeMs);
+    if (this.fog) {
+      // As in a round's frame: the fog steps after the sun, then lends its air and shape to the void motes.
+      this.syncFogInputs();
+      this.fog.update(delta, this.timeOfDay, view);
+      this.sunlight.setFogAir(this.fog.getAirBinding());
+      const shape = this.fog.getShapeBinding();
+      this.sunlight.setFogShape(shape);
+      this.routes?.setFogShape(shape);
+    }
     this.lighting.update();
     this.fx.update(delta);
     // Residency enqueues the same grass, gravel, detail and shadow bakes used by a map.
@@ -447,6 +482,7 @@ export class PersistentBaseEditorWorld {
     this.watchtowers.clear();
     this.routes?.destroy(); this.routePlanner?.destroy();
     this.sunlight?.destroy();
+    this.fog?.destroy(); this.fogClearing?.destroy();
     this.fx?.destroy(); this.powerUps?.destroy(); this.gpu?.destroy();
     this.animations.clear();
     for (const { visual } of this.turrets.values()) destroyWorldTurretVisual(visual);
@@ -456,6 +492,18 @@ export class PersistentBaseEditorWorld {
     this.background?.ground.destroy(); this.background?.macro.destroy();
   }
 
+  /** The player's fog setting, the base plates and the cleared build area, as a round's frame feeds them. */
+  private syncFogInputs(): void {
+    const fog = this.fog!, quality = getGraphicsQualityController(this.scene);
+    fog.enabled = quality?.getGroundFogEnabled() ?? true; fog.quality = quality?.getLevel() ?? 'high';
+    const stamps: FogSurfaceStamp[] = this.fogClearing ? [this.fogClearing] : [];
+    for (const base of this.bases.getBases()) stamps.push(...base.getSurfaceImages());
+    stamps.push(...this.bases.getFortFogSurfaces());
+    fog.setSurfaceStamps(stamps);
+    fog.setRockCoverage(this.arena.rockVisualSystem?.getFormationCoverage ?? null);
+    // Publish dirty geometry before the fog samples the borrowed formation field.
+    this.arena.rockVisualSystem?.flush();
+  }
   /** Cells of the round's terrain that a construction cannot use: rocks, trunks, water, other bases. */
   private collectBlockedCells(): void {
     const layout = this.terrain!.layout;
@@ -478,4 +526,45 @@ export class PersistentBaseEditorWorld {
 function cellRect(window: ArenaGridWindow): WorldRect {
   return { x: window.minX * CELL_SIZE, y: window.minY * CELL_SIZE,
     width: (window.maxX - window.minX + 1) * CELL_SIZE, height: (window.maxY - window.minY + 1) * CELL_SIZE };
+}
+
+const FOG_CLEARING_TEXTURE = 'persistent-base-fog-clearing';
+/** Cells of open air the fog keeps around the build area. */
+const FOG_CLEARING_MARGIN_CELLS = 3;
+
+/**
+ * A stamp that keeps the fog off the build area, feathered like a base plate's: a rounded square
+ * over the area's extent and a margin. Never drawn; the fog's surface mask reads it.
+ */
+function createBuildAreaFogClearing(scene: Phaser.Scene, anchor: { readonly gridX: number; readonly gridY: number },
+  area: PersistentBaseBuildArea): Phaser.GameObjects.Image {
+  if (!scene.textures.exists(FOG_CLEARING_TEXTURE)) {
+    const size = 128, canvas = scene.textures.createCanvas(FOG_CLEARING_TEXTURE, size, size)!;
+    const context = canvas.getContext(), image = context.createImageData(size, size);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const u = Math.abs((x + .5) / size * 2 - 1), v = Math.abs((y + .5) / size * 2 - 1);
+      const t = Math.min(1, Math.max(0, (Math.pow(u ** 4 + v ** 4, .25) - .55) / .45));
+      const i = (y * size + x) * 4;
+      image.data[i] = image.data[i + 1] = image.data[i + 2] = 255;
+      image.data[i + 3] = Math.round(255 * (1 - t * t * (3 - 2 * t)));
+    }
+    context.putImageData(image, 0, 0);
+    canvas.refresh();
+  }
+  const side = (getPersistentBaseBuildAreaExtentCells(area) * 2 + 1 + FOG_CLEARING_MARGIN_CELLS * 2) * CELL_SIZE;
+  return new Phaser.GameObjects.Image(scene, (anchor.gridX + .5) * CELL_SIZE, (anchor.gridY + .5) * CELL_SIZE, FOG_CLEARING_TEXTURE)
+    .setDisplaySize(side, side);
+}
+
+/** Arc length along a route until it leaves the round outline of its spawn zone's box. */
+function zoneExit(points: readonly { readonly x: number; readonly y: number }[],
+  zone: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }): number {
+  const rx = zone.width / 2, ry = zone.height / 2, cx = zone.x + rx, cy = zone.y + ry;
+  let arc = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!, b = points[i]!;
+    arc += Math.hypot(b.x - a.x, b.y - a.y);
+    if (Math.hypot((b.x - cx) / rx, (b.y - cy) / ry) > 1) break;
+  }
+  return arc;
 }
