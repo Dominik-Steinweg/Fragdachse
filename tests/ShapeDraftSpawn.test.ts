@@ -17,7 +17,7 @@ it('loads only a completed shape export through validated local asset paths', as
   const fetch = vi.fn(async () => new Response(JSON.stringify(responses.shift()))); vi.stubGlobal('fetch', fetch);
   const result = await loadShapeDraft('rabid-rabbit', new AbortController().signal);
   expect(result.asset.runtimeContract).toBe('sheet');
-  expect(result.url).toMatch(/^\/art\/poc\/pipeline-v2\/drafts\/rabid-badger\/shape-example\/standard\//);
+  expect(result.url).toMatch(/^\/art\/poc\/pipeline-v2\/drafts\/rabid-rabbit\/shape-example\/standard\//);
   await expect(loadShapeDraft('../production', new AbortController().signal)).rejects.toThrow(/Invalid/);
   expect(fetch).toHaveBeenCalledTimes(3);
 });
