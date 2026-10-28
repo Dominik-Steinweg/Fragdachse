@@ -34,8 +34,8 @@ export interface PersistentBaseEditorMinimap {
   /** Screen position of a World cell centre on the minimap; routes are drawn in this space. */
   cellToScreen(gridX: number, gridY: number): { x: number; y: number };
   readonly scale: number;
-  /** Redraws the overview without these own bases (fallen in the what-if). */
-  setFallen(baseIds: ReadonlySet<string>): void;
+  /** Redraws the overview without these own bases and bridges (fallen or blown in the what-if). */
+  setFallen(baseIds: ReadonlySet<string>, bridgeIds: ReadonlySet<string>): void;
   destroy(): void;
 }
 
@@ -56,13 +56,14 @@ export function createPersistentBaseEditorMinimap(scene: Phaser.Scene, input: Pe
     for (const cell of cells) ctx.fillRect(cell.gridX * PX_PER_CELL + inset, cell.gridY * PX_PER_CELL + inset,
       PX_PER_CELL - inset * 2, PX_PER_CELL - inset * 2);
   };
-  const draw = (fallen: ReadonlySet<string>) => {
+  const draw = (fallen: ReadonlySet<string>, blownBridges: ReadonlySet<string>) => {
     ctx.fillStyle = PERSISTENT_BASE_EDITOR_MINIMAP_COLORS.ground;
     ctx.fillRect(0, 0, width, height);
     fill(PERSISTENT_BASE_EDITOR_MINIMAP_COLORS.dirt, input.layout.dirt);
     fill(PERSISTENT_BASE_EDITOR_MINIMAP_COLORS.water, input.layout.water ?? []);
-    // Bridges cross the water as decks with rails along their span.
+    // Standing bridges cross the water as decks with rails along their span.
     for (const bridge of input.layout.bridges ?? []) {
+      if (blownBridges.has(bridge.id)) continue;
       const deck = getBridgeDeckRect(bridge);
       const x = deck.gridX * PX_PER_CELL, y = deck.gridY * PX_PER_CELL;
       const w = deck.widthCells * PX_PER_CELL, h = deck.heightCells * PX_PER_CELL;
@@ -109,7 +110,7 @@ export function createPersistentBaseEditorMinimap(scene: Phaser.Scene, input: Pe
       (detail.maxX - detail.minX + 1) * PX_PER_CELL - 2, (detail.maxY - detail.minY + 1) * PX_PER_CELL - 2);
     texture.refresh();
   };
-  draw(new Set());
+  draw(new Set(), new Set());
 
   const scale = Math.min(panel.width / width, panel.height / height);
   const displayWidth = width * scale, displayHeight = height * scale;
@@ -119,7 +120,7 @@ export function createPersistentBaseEditorMinimap(scene: Phaser.Scene, input: Pe
     image,
     scale: scale * PX_PER_CELL,
     cellToScreen: (gridX, gridY) => ({ x: left + (gridX + .5) * PX_PER_CELL * scale, y: top + (gridY + .5) * PX_PER_CELL * scale }),
-    setFallen: (baseIds) => { if (scene.textures.exists(key)) draw(baseIds); },
+    setFallen: (baseIds, bridgeIds) => { if (scene.textures.exists(key)) draw(baseIds, bridgeIds); },
     destroy: () => {
       image.destroy();
       if (scene.textures.exists(key)) scene.textures.remove(key);

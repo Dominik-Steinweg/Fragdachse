@@ -358,6 +358,10 @@ export class PersistentBaseEditorWorld {
   get fallenBaseIds(): ReadonlySet<string> {
     return this.scenario.outpostsDestroyed ? this.routePlanner?.outpostIds ?? NO_BASES : NO_BASES;
   }
+  /** Bridges the what-if has blown: all of the map's; empty in the round as it starts. */
+  get blownBridgeIds(): ReadonlySet<string> {
+    return this.scenario.bridgesDestroyed ? new Set((this.terrain?.layout.bridges ?? []).map((bridge) => bridge.id)) : NO_BASES;
+  }
   /** Generator portals for the situation map: their ends in cells (fractional) and their generators. */
   get situationPortals(): { readonly ends: readonly { readonly x: number; readonly y: number }[]; readonly generatorIds: ReadonlySet<string> } | null {
     const portals = this.portals;
@@ -371,12 +375,13 @@ export class PersistentBaseEditorWorld {
   get scenarioOptions(): DeploymentRouteScenarioOptions | null { return this.routePlanner?.scenarioOptions ?? null; }
   /**
    * Replans the routes for a what-if; the round itself always starts with all switches off. Fallen
-   * outposts fade out, or vanish at once with `immediate` (a new session).
+   * outposts and blown bridges fade out, or vanish at once with `immediate` (a new session).
    */
   setScenario(scenario: DeploymentRouteScenario, immediate = false): DeploymentRoutePlan | null {
     if (scenario.teleportersOpen && !this.scenario.teleportersOpen && this.portals) this.portals.openedAtMs = this.portals.clockMs;
     this.scenario = scenario;
     for (const id of this.routePlanner?.outpostIds ?? []) this.bases.setFallen(id, scenario.outpostsDestroyed, immediate);
+    this.bridges?.setFallen(scenario.bridgesDestroyed, immediate);
     return this.planRoutes();
   }
   /** The routes also flow over the situation map's minimap, in its panel space. */

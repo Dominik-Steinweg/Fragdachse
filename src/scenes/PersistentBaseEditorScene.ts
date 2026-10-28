@@ -465,7 +465,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const model = options.model;
     this.scenario = DEPLOYMENT_ROUTE_START;
     this.world.setScenario(this.scenario, true);
-    this.minimap?.setFallen(this.world.fallenBaseIds);
+    this.minimap?.setFallen(this.world.fallenBaseIds, this.world.blownBridgeIds);
     this.syncScenarioButtons();
     this.world.setModel(model, options.color);
     this.rotate.getRoot().setVisible(model.rewardsEditable);
@@ -921,7 +921,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.scenario = { ...this.scenario, [key]: !this.scenario[key] };
     this.syncScenarioButtons();
     this.world.setScenario(this.scenario);
-    this.minimap?.setFallen(this.world.fallenBaseIds);
+    this.minimap?.setFallen(this.world.fallenBaseIds, this.world.blownBridgeIds);
     this.refreshRoutes();
   }
   private syncScenarioButtons(): void {
