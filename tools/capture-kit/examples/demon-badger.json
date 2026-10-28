@@ -32,9 +32,9 @@
     { "id": "charge92", "label": "Hitze 92 % (kippt ins Violett)", "do": [
       { "op": "until", "expr": "e.d.heatBurst && (host.now - e.d.heatBurst.chargeStartAt) / (e.d.heatBurst.fullAt - e.d.heatBurst.chargeStartAt) >= 0.92", "maxFrames": 900 }
     ], "crops": [{ "of": "d", "size": [110, 110], "scale": 4, "label": "Körper" }] },
-    { "id": "warning", "label": "Warnzone (+300 ms)", "do": [
+    { "id": "warning", "label": "Warnzone (+600 ms)", "do": [
       { "op": "camera", "at": "$badger", "zoom": 1.4 },
-      { "op": "until", "expr": "e.d.heatBurst && e.d.heatBurst.telegraphAt > 0 && host.now >= e.d.heatBurst.telegraphAt + 300", "maxFrames": 900 }
+      { "op": "until", "expr": "e.d.heatBurst && e.d.heatBurst.telegraphAt > 0 && host.now >= e.d.heatBurst.telegraphAt + 600", "maxFrames": 900 }
     ], "crops": [{ "of": "d", "size": [360, 300], "scale": 2, "label": "Zone" }] },
     { "id": "burst", "label": "Explosion", "do": [
       { "op": "mark" },

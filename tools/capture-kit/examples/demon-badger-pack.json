@@ -1,0 +1,55 @@
+{
+  "name": "demon-badger-pack",
+  "description": "Demon Badger pack on map 04: six badgers spawned together glow up, then burst one after another in spawn order (rolling cascade, ~450 ms apart), never at once.",
+  "viewport": { "width": 1280, "height": 720 },
+  "board": { "columns": 4, "tileWidth": 480 },
+  "hud": false,
+  "scenario": {
+    "classId": "inspector_gadachs",
+    "seed": 12345,
+    "player": "$player"
+  },
+  "times": [
+    { "id": "dusk", "timeOfDay": 1170, "label": "19:30" }
+  ],
+  "layouts": [
+    { "id": "map04", "scenario": { "mapId": "4" },
+      "vars": { "player": { "gridX": 38, "gridY": 27 }, "view": { "gridX": 54, "gridY": 28 },
+        "a": { "gridX": 52, "gridY": 27 }, "b": { "gridX": 54, "gridY": 28 }, "c": { "gridX": 56, "gridY": 27 },
+        "d": { "gridX": 52.5, "gridY": 29.5 }, "f": { "gridX": 55.5, "gridY": 29.5 }, "g": { "gridX": 54, "gridY": 26 } } }
+  ],
+  "setup": [
+    { "op": "camera", "at": "$view", "zoom": 1.25 },
+    { "op": "settle" },
+    { "op": "spawn", "kind": "demon-badger", "at": "$a", "pinned": true, "name": "a" },
+    { "op": "spawn", "kind": "demon-badger", "at": "$b", "pinned": true, "name": "b" },
+    { "op": "spawn", "kind": "demon-badger", "at": "$c", "pinned": true, "name": "c" },
+    { "op": "spawn", "kind": "demon-badger", "at": "$d", "pinned": true, "name": "d" },
+    { "op": "spawn", "kind": "demon-badger", "at": "$f", "pinned": true, "name": "f" },
+    { "op": "spawn", "kind": "demon-badger", "at": "$g", "pinned": true, "name": "g" },
+    { "op": "mark" }
+  ],
+  "shots": [
+    { "id": "charging", "label": "Rudel lädt (erster bei 80 %)", "do": [
+      { "op": "until", "expr": "e.a.heatBurst && (host.now - e.a.heatBurst.chargeStartAt) / (e.a.heatBurst.fullAt - e.a.heatBurst.chargeStartAt) >= 0.8", "maxFrames": 900 }
+    ] },
+    { "id": "first", "label": "1. Explosion", "do": [
+      { "op": "mark" },
+      { "op": "until", "expr": "host.explosionsSinceMark.filter(x => x.style === 'demon_burst').length >= 1", "maxFrames": 900 },
+      { "op": "step", "frames": 4 }
+    ] },
+    { "id": "second", "label": "2. Explosion", "do": [
+      { "op": "until", "expr": "host.explosionsSinceMark.filter(x => x.style === 'demon_burst').length >= 2", "maxFrames": 300 },
+      { "op": "step", "frames": 4 }
+    ] },
+    { "id": "third", "label": "3. Explosion", "do": [
+      { "op": "until", "expr": "host.explosionsSinceMark.filter(x => x.style === 'demon_burst').length >= 3", "maxFrames": 300 },
+      { "op": "step", "frames": 4 }
+    ] },
+    { "id": "sixth", "label": "6. Explosion", "do": [
+      { "op": "until", "expr": "host.explosionsSinceMark.filter(x => x.style === 'demon_burst').length >= 6", "maxFrames": 900 },
+      { "op": "step", "frames": 4 }
+    ] },
+    { "id": "after", "label": "danach (+1 s)", "do": [{ "op": "ms", "ms": 1000 }] }
+  ]
+}

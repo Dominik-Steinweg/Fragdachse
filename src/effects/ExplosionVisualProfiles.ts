@@ -82,7 +82,7 @@ export const EXPLOSION_VISUAL_PROFILES = {
   // the red spark spray rides on top in EffectSystem.
   demon_burst: {
     family: 'energy', layering: 'legacy', countScale: 0.8, lifeScale: 0.7, bodyScale: 0.74,
-    smokeScale: 0.06, chunkScale: 0.3, upwardEmbers: true,
+    smokeScale: 0, chunkScale: 0.3, upwardEmbers: true,
   },
   // A killed charged badger only fizzles: a small void pop sized by its heat.
   demon_fizzle: {

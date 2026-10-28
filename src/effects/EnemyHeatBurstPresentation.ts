@@ -93,8 +93,10 @@ export class EnemyHeatBurstPresentation {
       const glow = enemyHeatGlowAt(this.glow, phase, heat, now, state.ventFromAt, enemy.faction === 'allied', visual.offset);
 
       const haloSize = size * (HALO_COLD + (HALO_HOT - HALO_COLD) * Math.max(heat, phase === 'vent' ? glow.alpha : 0));
+      // During the warning the red zone owns the ground around the body; the halo steps back.
+      const haloShare = phase === 'telegraph' ? HALO_SHARE * 0.25 : HALO_SHARE;
       visual.halo.setVisible(visible).setPosition(sprite.x, sprite.y).setDisplaySize(haloSize, haloSize)
-        .setTint(glow.color).setAlpha(emissiveAlpha(glow.alpha * HALO_SHARE * sprite.alpha));
+        .setTint(glow.color).setAlpha(emissiveAlpha(glow.alpha * haloShare * sprite.alpha));
       this.syncEmission(visual, sprite, visible, glow);
       this.syncLight(visual, sprite, visible, glow, size);
 

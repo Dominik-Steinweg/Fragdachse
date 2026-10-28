@@ -9,7 +9,7 @@ import type { EnemyHeatBurstPhase } from '../systems/EnemyHeatBurstState';
  */
 
 /** Red sparks of the burst: the telegraph red family, never orange or yellow. */
-export const DEMON_HEAT_SPARK_COLOR = 0xff3a22;
+export const DEMON_HEAT_SPARK_COLOR = 0xf01f2c;
 
 const DORMANT_EMBER = 0x5a0c06;
 const EMBER_RED = 0xc4200e;
@@ -66,10 +66,11 @@ export function enemyHeatGlowAt(out: EnemyHeatGlow, phase: EnemyHeatBurstPhase, 
       return out;
     }
     case 'telegraph': {
+      // The body throbs, but its halo and light step back so the red warning zone reads on top.
       const throb = 0.5 - 0.5 * Math.cos(2 * Math.PI * t / WARNING_THROB_MS);
-      out.color = mixColor(palette.bright, allied ? ALLIED_PALETTE.core : 0xeec4ff, throb);
-      out.alpha = 0.8 + 0.2 * throb;
-      out.light = 0.75 + 0.25 * throb;
+      out.color = mixColor(palette.primary, palette.bright, throb);
+      out.alpha = 0.55 + 0.35 * throb;
+      out.light = 0.08 + 0.06 * throb;
       return out;
     }
   }
