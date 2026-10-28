@@ -56,7 +56,8 @@
 // Rabid Rabbit: the rabid badger's registry slot (wire kind 2) became `rabid-rabbit`, and enemy
 // snapshots gained the pounce field (aim target, locked landing, flight timeline).
 // Rabid Rabbit tuning: the pounce landing travels as the new explosion style `pounce_impact`.
-export const PEER_PROTOCOL_VERSION = 55;
+// Void taint: enemy full states carry the spawn zone the enemy came out of (spawnZoneId).
+export const PEER_PROTOCOL_VERSION = 56;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

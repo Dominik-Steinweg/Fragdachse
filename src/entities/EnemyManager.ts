@@ -3,6 +3,7 @@ import type { ProjectileExplosionConfig } from '../types';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import type { WaterGeometry } from '../arena/WaterGeometry';
+import type { VoidMarcherSample } from '../arena/VoidDangerField';
 import {
   ENEMY_NET_REFRESH_CYCLE_TICKS,
   CELL_SIZE,
@@ -196,6 +197,8 @@ export interface EnemySpawnOptions {
   readonly spawnFront?: SpawnFront;
   /** Host-only generic provenance, e.g. the owning encounter id. */
   readonly originId?: string;
+  /** World spawn zone the enemy came out of; replicated so every peer can lift its void trail. */
+  readonly spawnZoneId?: string;
   /** Ein inszeniertes Intro uebernimmt die Ankuendigung; der generische Spawnblitz entfaellt. */
   readonly skipSpawnEffect?: boolean;
   /** Host-only: extra time underground, so bodies of one structure tick rise one after another. */
@@ -595,6 +598,7 @@ export class EnemyManager {
       options.originId,
       faction === 'hostile' && this.dawnElites
         ? rollDawnElite(this.dawnElites, options.originId ?? 'unassigned', id) : undefined,
+      options.spawnZoneId,
     );
     enemy.setLightingSystem(this.lighting);
     enemy.setEntityBurnGpuController(this.burnGpu);
@@ -1060,6 +1064,14 @@ export class EnemyManager {
     return [...this.enemies.values()].filter((enemy) => enemy.faction === 'allied' && (ownerId === undefined || enemy.ownerId === ownerId));
   }
 
+  /** Every enemy's void trail sample (E12), through one reused sample and without allocating. */
+  visitVoidMarchers(sample: VoidMarcherSample, visit: (sample: Readonly<VoidMarcherSample>) => void): void {
+    for (const enemy of this.enemies.values()) {
+      enemy.readVoidMarcherSample(sample);
+      visit(sample);
+    }
+  }
+
   hasActiveEnemyOrigin(originId: string): boolean {
     return this.getActiveEnemyIdsForOrigin(originId).length > 0;
   }
@@ -1350,7 +1362,7 @@ export class EnemyManager {
     this.destroyEnemyEntity(id, enemy);
     this.wildfirePanicStates.delete(id);
     this.smokeConfusionStates.delete(id);
-    const originId = enemy.originId;
+    const originId = enemy.originId, spawnZoneId = enemy.spawnZoneId;
     const eliteExplosion = dawnEliteDeathExplosion(enemy.eliteAffixId);
     this.committedDeathWork.set(outcome, isCurrent => {
       // The elite blast may end the owner or Combat scope; only then skip the authored death spawns.
@@ -1375,7 +1387,7 @@ export class EnemyManager {
             deathX + Math.cos(angle) * spawnConfig.offsetPx,
             deathY + Math.sin(angle) * spawnConfig.offsetPx,
             spawnConfig.enemyKind,
-            { originId },
+            { originId, spawnZoneId },
           );
           // A spawn hook may end the owner or its enclosing Combat scope mid-batch.
           if (!isCurrent()) return;
@@ -1670,6 +1682,7 @@ export class EnemyManager {
         remote.ownerColor,
         undefined,
         remote.eliteAffixId,
+        remote.spawnZoneId,
       );
       enemy.setLightingSystem(this.lighting);
       enemy.setEntityBurnGpuController(this.burnGpu);

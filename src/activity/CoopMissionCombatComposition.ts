@@ -276,8 +276,8 @@ export class CoopMissionCombatComposition {
     const createDirector = (configs: readonly ResolvedCoopDefenseMapEncounterConfig[], side: boolean) => configs.length > 0
       ? new CoopDefenseMapDirector(
         configs,
-        (enemyKind, count, originId, front, spawnArea) => spawnExecutor
-          .hostSpawnEncounterGroup(enemyKind, count, originId, front, spawnArea),
+        (enemyKind, count, originId, front, spawnArea, spawnZoneId) => spawnExecutor
+          .hostSpawnEncounterGroup(enemyKind, count, originId, front, spawnArea, spawnZoneId),
         {
           // Side encounters run on the scheduled path beside the chain and never complete it.
           mode: !side && objective === 'repel-assault' ? 'repel-assault' : 'scheduled',

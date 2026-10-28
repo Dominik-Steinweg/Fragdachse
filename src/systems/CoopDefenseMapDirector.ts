@@ -22,6 +22,8 @@ export type CoopDefenseEncounterSpawnHandler = (
   originId?: string,
   front?: SpawnFront,
   spawnArea?: CoopDefenseMapSpawnAreaConfig,
+  /** World spawn zone of the area; the enemies carry it so their void trail lifts with the zone. */
+  spawnZoneId?: string,
 ) => readonly string[] | CoopDefenseSpawnResult | void;
 
 /** Fronts and World spawn zones a set of groups comes from, in authored order. */
@@ -981,7 +983,9 @@ export class CoopDefenseMapDirector {
     // Ein authored Spawnbereich ersetzt das Frontband; ohne ihn bleibt der bestehende
     // Aufrufpfad inklusive des Weglassens der Standardfront unveraendert.
     const spawnResult = group.spawnArea
-      ? this.spawnGroup(group.enemyKind, spawnCount, state.encounterId, front, group.spawnArea)
+      ? group.spawnZoneId
+        ? this.spawnGroup(group.enemyKind, spawnCount, state.encounterId, front, group.spawnArea, group.spawnZoneId)
+        : this.spawnGroup(group.enemyKind, spawnCount, state.encounterId, front, group.spawnArea)
       : front === DEFAULT_SPAWN_FRONT
         ? this.spawnGroup(group.enemyKind, spawnCount, state.encounterId)
         : this.spawnGroup(group.enemyKind, spawnCount, state.encounterId, front);

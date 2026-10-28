@@ -18,6 +18,7 @@ import { EMPTY_KABOOMTULA_STATE, isKaboomtulaState, kaboomtulaLeapProgress, kabo
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
+import type { VoidMarcherSample } from '../arena/VoidDangerField';
 import { alliedEnemyHealthBarStyle, enemyHealthBarStyle } from '../effects/health/healthBarStyles';
 import { addPlayerGlow } from '../effects/PlayerGlow';
 import { addExternalGlow, removeExternalFx, removeInternalFx, type GlowHandle } from '../utils/phaserFx';
@@ -448,6 +449,8 @@ export class EnemyEntity {
     ownerColor?: number,
     originId?: string,
     readonly eliteAffixId?: DawnEliteAffixId,
+    /** World spawn zone the enemy came out of; fixed for its life and replicated with full states. */
+    readonly spawnZoneId?: string,
   ) {
     this.id = id;
     this.kind = kind;
@@ -687,6 +690,20 @@ export class EnemyEntity {
     out.isBurrowDash = false;
     out.revision = this.movementRevision;
     out.footprintGlow = this.faction === 'hostile' ? this.config.bossPresence?.footprintGlowColor ?? 0 : 0;
+  }
+
+  /** The trail this enemy lays in the fog (E12): only while it walks on the ground in view of the world. */
+  readVoidMarcherSample(out: VoidMarcherSample): void {
+    out.id = this.id;
+    out.x = this.sprite.x; out.y = this.sprite.y;
+    out.size = this.config.size;
+    out.revision = this.movementRevision;
+    out.zone = this.spawnZoneId ?? null;
+    out.strength = 1;
+    out.group = 0;
+    out.active = this.faction === 'hostile' && this.sprite.active && this.sprite.visible && this.currentHp > 0
+      && !this.burrowed && !this.submerged && !this.hopAirborne && !this.kaboomtulaAirborne && !this.pounceAirborne
+      && !this.config.krakenEgg && this.movementCorrectionRemaining < this.config.size * 0.3;
   }
 
   /**
@@ -1138,6 +1155,7 @@ export class EnemyEntity {
     if (this.pounceState.revision > 0) snapshot.pounce = this.pounceState;
     if (this.energyCone.revision > 0) snapshot.energyCone = this.energyCone;
     if (this.eliteAffixId) snapshot.eliteAffixId = this.eliteAffixId;
+    if (this.spawnZoneId) snapshot.spawnZoneId = this.spawnZoneId;
     if (this.areaClaw.revision > 0) snapshot.areaClaw = this.areaClaw;
     if (this.submerged) snapshot.submerged = true;
     return snapshot;

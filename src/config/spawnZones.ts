@@ -26,6 +26,11 @@ export interface WorldSpawnZone {
 export const MAX_WORLD_SPAWN_ZONES = 64;
 const ZONE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/** A zone id as it may cross the wire: kebab-case, at most 64 characters. */
+export function isWorldSpawnZoneId(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 64 && ZONE_ID.test(value);
+}
+
 /** Kasten einer Zone in der Form, die Spawn-Ausfuehrung und Generator bereits lesen. */
 export interface SpawnZoneArea {
   readonly gridX: number;

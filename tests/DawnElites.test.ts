@@ -161,6 +161,33 @@ describe('Dawn elites at the authoritative enemy boundary', () => {
     client.destroy(); host.manager.destroy();
   });
 
+  it('replicates the spawn zone on full refresh, keeps it across deltas and passes it to death spawns', async () => {
+    const phaser = await import('phaser') as unknown as { Math: { RND: { realInRange?: () => number } } };
+    phaser.Math.RND.realInRange ??= () => 0;
+    const configs = resolveCoopDefenseEnemyConfigs(1);
+    configs['rabid-rabbit'] = { ...configs['rabid-rabbit'], glow: undefined, imageKey: 'test-enemy',
+      deathSpawns: [{ enemyKind: 'rabid-rabbit', count: 1, offsetPx: 20 }] };
+    const host = new EnemyManager(healthBarTestScene().scene, configs), client = new EnemyManager(healthBarTestScene().scene, configs);
+    const enemy = host.hostSpawnAtWorld(100, 100, 'rabid-rabbit', { originId: 'wave', spawnZoneId: 'north-gate' });
+    host.requestFullNetSnapshot(); client.applySnapshot(JSON.parse(JSON.stringify(host.getNetSnapshot())));
+    expect(client.getEnemy(enemy.id)?.spawnZoneId).toBe('north-gate');
+    const u: (number | string)[] = []; encodeEnemyUpsert(u, { id: enemy.id, x: 110, y: 120 });
+    client.applySnapshot({ c: 1, u, r: [] });
+    expect(client.getEnemy(enemy.id)?.spawnZoneId).toBe('north-gate');
+    host.applyDamage(enemy.id, enemy.getMaxHp() * 2);
+    const children = host.getAllEnemies();
+    expect(children.length).toBe(1);
+    expect(children.map(child => child.spawnZoneId)).toEqual(['north-gate']);
+    client.destroy(); host.destroy();
+  });
+
+  it('rejects invalid spawn zone ids without losing subsequent codec entries', () => {
+    const u: (number | string)[] = [];
+    encodeEnemyUpsert(u, { id: 'e1', spawnZoneId: 'Not A Zone' });
+    encodeEnemyUpsert(u, { id: 'e2', spawnZoneId: 'north-gate', x: 5, y: 6 });
+    expect(decodeEnemyUpserts(u)).toEqual([{ id: 'e1' }, { id: 'e2', x: 5, y: 6, spawnZoneId: 'north-gate' }]);
+  });
+
   it('rejects unknown affixes without losing subsequent codec entries', () => {
     const u: (number | string)[] = [];
     encodeEnemyUpsert(u, { id: 'e1', eliteAffixId: 'invalid' as DawnEliteAffixId });

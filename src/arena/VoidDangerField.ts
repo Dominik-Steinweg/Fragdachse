@@ -365,6 +365,45 @@ export interface ActivityVoidDanger {
   readonly alerts?: readonly VoidDangerAlert[];
   /** Haze along lines (the situation map's void streams); joins the spore haze, never the flora. */
   readonly hazeLines?: VoidHazeLines | null;
+  /** Bodies that taint the fog where they walk (E12): the mission's enemies, the situation map's marchers. */
+  readonly marchers?: VoidMarchers | null;
+}
+
+/** Thickness of a resting spawn zone's haze; a fresh trail carries the same (E12). */
+export const ZONE_HAZE = DANGER.zone.haze;
+
+/**
+ * Bodies that lay a void trail this frame, pulled once per frame. Rounds report the mission's
+ * hostile enemies, the situation map phantom marchers along its planned routes; both read the same.
+ */
+export interface VoidMarchers {
+  /** Visits every body with one reused sample; keep nothing of it beyond the call. */
+  forEach(visit: (sample: Readonly<VoidMarcherSample>) => void): void;
+  /** Trail groups that dissolve quickly now (dropped routes); each revision applies once. */
+  readonly retired?: { readonly revision: number; readonly groups: readonly number[] } | null;
+}
+
+/** One trail-laying body, refilled per visit. */
+export interface VoidMarcherSample {
+  id: string;
+  x: number;
+  y: number;
+  /** Body size in world px; the trail widens with it. */
+  size: number;
+  /** Changes on a teleport: the trail breaks instead of bridging the jump. */
+  revision: number;
+  /** World spawn zone the body came out of; its trail lifts with that zone's wave. null never lifts. */
+  zone: string | null;
+  /** Trail strength 0..1. */
+  strength: number;
+  /** Trails retire together by group; 0 belongs to none. */
+  group: number;
+  /** False while the body lays nothing: hidden, dead, burrowed, under water or in the air. */
+  active: boolean;
+}
+
+export function createVoidMarcherSample(): VoidMarcherSample {
+  return { id: '', x: 0, y: 0, size: 0, revision: 0, zone: null, strength: 1, group: 0, active: false };
 }
 
 /**

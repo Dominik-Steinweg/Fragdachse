@@ -147,6 +147,21 @@ describe('Spawn coordinates across World and navigation grids', () => {
     world.destroy();
   });
 
+  it('tags zone group and zone source enemies with their spawn zone and leaves front groups untagged', () => {
+    const world = setup();
+    const area = { gridX: 1, gridY: 1, widthCells: 2, heightCells: 2 };
+    const director = new CoopDefenseMapDirector([{
+      id: 'mixed', start: { type: 'time', atMs: 0 },
+      groups: [{ enemyKind: 'zombie-badger', count: 1, spawnArea: area, spawnZoneId: 'north-gate' },
+        { enemyKind: 'zombie-badger', count: 1, front: 'east' }],
+    }], (...args) => world.executor.hostSpawnEncounterGroup(...args));
+    director.hostUpdate(100, false);
+    expect(world.spawned.map(p => p.options?.spawnZoneId)).toEqual(['north-gate', undefined]);
+    expect(world.executor.hostSpawnPersistentMapGroup('zombie-badger', 1, undefined, area, 'south-gate')).toHaveLength(1);
+    expect(world.spawned.at(-1)!.options?.spawnZoneId).toBe('south-gate');
+    world.destroy();
+  });
+
   it('spawns while moving goals await a new field, using current connected regions', () => {
     const world = setup();
     world.goal(224, 176);
