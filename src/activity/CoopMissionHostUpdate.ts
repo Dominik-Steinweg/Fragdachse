@@ -279,6 +279,11 @@ export class CoopMissionHostUpdate {
     if (!countdownActive && !weaponBalanceLabActive) this.runtime.coopDefenseEnemyHopSystem?.hostUpdate(nowMs);
     // Pounce aims, locks, flights and side-cuts are decided before movement in this frame.
     if (!countdownActive && !weaponBalanceLabActive) this.runtime.coopDefenseEnemyPounceSystem?.hostUpdate(nowMs);
+    // Heat charge, slot booking, warning heading and bursts precede movement; the speed ramp applies this frame.
+    // The cycle reads the players' view geometry (held while nobody can see the body), never the detail tier.
+    if (!countdownActive && !weaponBalanceLabActive) {
+      this.runtime.coopDefenseEnemyHeatBurstSystem?.hostUpdate(nowMs, aiDetail ? this.aiDetail : null);
+    }
     // Mortar windup/spacing decisions must precede the movement override in this same frame.
     if (!countdownActive && !weaponBalanceLabActive) this.runtime.coopDefenseMortarSystem?.hostUpdate(nowMs);
     if (metrics) { metrics.enemyMortarMs = performance.now() - measuredAt; measuredAt = performance.now(); }

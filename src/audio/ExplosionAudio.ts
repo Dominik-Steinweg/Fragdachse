@@ -78,6 +78,8 @@ export function resolveExplosionAudio(sourceId: string, chargeDamage?: number): 
   if (sourceId === 'ATTACK_DRONE_BOMB') return { key: 'sfx_explosion_mini_rocket', scale: .45 };
   if (sourceId === 'ATTACK_DRONE_CHUNK') return { key: 'sfx_explosion_rocket_aftershock', scale: .15 };
   if (sourceId === 'brood_hatch') return { key: 'shot_throw', scale: 1 };
+  // Recurring pack bursts share the void timebomb blast at a restrained gain until a studio sound exists.
+  if (sourceId === 'enemy.demon-badger.heat_burst') return { key: 'sfx_explosion_timebomb', scale: .5 };
   const key = EXPLOSION_AUDIO[sourceId as keyof typeof EXPLOSION_AUDIO] ?? 'sfx_explosion_he';
   const closeBoost = 1 / 0.58;
   if (sourceId === 'TIME_BUBBLE') {

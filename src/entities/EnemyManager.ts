@@ -1451,6 +1451,7 @@ export class EnemyManager {
     enemy.syncHopPresentation(now);
     enemy.syncKaboomtulaPresentation(now);
     enemy.syncPouncePresentation(now);
+    enemy.syncHeatBurstPresentation(now);
     enemy.syncCastAnimation();
     this.visualSink?.syncEnemyClaw?.(enemy.id, enemy.getClawAttackState(), enemy.sprite.x, enemy.sprite.y, now,
       enemy.sprite.visible && !enemy.isBurrowed() && enemy.getHp() > 0,
@@ -1576,6 +1577,7 @@ export class EnemyManager {
     if (current.hop?.revision !== previous.hop?.revision) delta.hop = current.hop;
     if (current.kaboomtula?.revision !== previous.kaboomtula?.revision) delta.kaboomtula = current.kaboomtula;
     if (current.pounce?.revision !== previous.pounce?.revision) delta.pounce = current.pounce;
+    if (current.heatBurst?.revision !== previous.heatBurst?.revision) delta.heatBurst = current.heatBurst;
     if (current.energyCone?.revision !== previous.energyCone?.revision) delta.energyCone = current.energyCone;
     if (current.claw?.revision !== previous.claw?.revision) {
       delta.claw = current.claw;
@@ -1697,6 +1699,7 @@ export class EnemyManager {
       if (remote.hop) enemy.applyHopState(remote.hop);
       if (remote.kaboomtula) enemy.applyKaboomtulaState(remote.kaboomtula);
       if (remote.pounce) enemy.applyPounceState(remote.pounce);
+      if (remote.heatBurst) enemy.applyHeatBurstState(remote.heatBurst);
       if (remote.areaClaw) enemy.applyAreaClawState(remote.areaClaw);
       const pendingArea = this.pendingAreaClawEvents.get(remote.id);
       if (pendingArea) { this.pendingAreaClawEvents.delete(remote.id); this.applyAreaClawEvent(pendingArea); }
@@ -1718,12 +1721,13 @@ export class EnemyManager {
     if (remote.claw) enemy.applyClawAttackState(remote.claw);
     if (remote.burrowed !== undefined) this.setEnemyBurrowed(remote.id, remote.burrowed);
     if (remote.submerged !== undefined) enemy.setSubmerged(remote.submerged);
-    // Charge, cone, hop, spider and pounce states change on living enemies, not only at creation.
+    // Charge, cone, hop, spider, pounce and heat states change on living enemies, not only at creation.
     if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
     if (remote.energyCone) enemy.applyEnergyConeState(remote.energyCone);
     if (remote.hop) enemy.applyHopState(remote.hop);
     if (remote.kaboomtula) enemy.applyKaboomtulaState(remote.kaboomtula);
     if (remote.pounce) enemy.applyPounceState(remote.pounce);
+    if (remote.heatBurst) enemy.applyHeatBurstState(remote.heatBurst);
 
     if (remote.hp !== undefined || remote.maxHp !== undefined) {
       enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp(), wasBurrowed);

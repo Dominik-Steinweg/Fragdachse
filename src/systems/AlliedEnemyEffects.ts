@@ -64,6 +64,14 @@ export function resolveEnemyFireEffect<T extends EnemyFireEffectFields>(
     damageTarget: faction === 'allied' ? 'enemies' : 'players' };
 }
 
+/** Ground fire an enemy flame leaves where it dies out: the shooter's faction style and targets, fixed at the shot. */
+export function resolveEnemyFlameGround(faction: EnemyFaction, sourceId: string): {
+  readonly visualStyle: GroundFireVisualStyle; readonly damageTarget: GroundFireDamageTarget; readonly sourceId: string;
+} {
+  const { visualStyle, damageTarget } = resolveEnemyFireEffect(faction, {});
+  return { visualStyle: visualStyle!, damageTarget: damageTarget!, sourceId };
+}
+
 /** Resolve enemy fire at creation so its faction survives the actor's death. */
 export function resolveEnemyWeaponFirePayloads(config: WeaponConfig, faction: EnemyFaction): WeaponConfig {
   const color = faction === 'allied' ? ALLIED_COLOR : VOID_PALETTE.primary;

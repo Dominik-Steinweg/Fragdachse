@@ -3,6 +3,7 @@ import type { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShiel
 import type { CoopDefenseEnergyConeSystem } from '../systems/CoopDefenseEnergyConeSystem';
 import type { CoopDefenseEnemyHopSystem } from '../systems/CoopDefenseEnemyHopSystem';
 import type { CoopDefenseEnemyPounceSystem } from '../systems/CoopDefenseEnemyPounceSystem';
+import type { CoopDefenseEnemyHeatBurstSystem } from '../systems/CoopDefenseEnemyHeatBurstSystem';
 import type { SyncedMortarStrike, SyncedTurretWebSnapshot } from '../types';
 import type { CoopDefenseMortarSystem } from '../systems/CoopDefenseMortarSystem';
 import type { CoopDefenseMortarStrikeSystem } from '../systems/CoopDefenseMortarStrikeSystem';
@@ -275,10 +276,18 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.refreshSpecialMovementSource();
     this.publishBindings();
   }
+  private heatBurstOwner: CoopDefenseEnemyHeatBurstSystem | null = null;
+  get coopDefenseEnemyHeatBurstSystem() { return this.heatBurstOwner; }
+  setHeatBurst(system: CoopDefenseEnemyHeatBurstSystem): void {
+    this.claimEmptySlot('heat burst runtime', this.heatBurstOwner);
+    this.heatBurstOwner = system;
+    this.refreshSpecialMovementSource();
+    this.publishBindings();
+  }
   private refreshSpecialMovementSource(): void {
     this.specialMovementOwner = new CompositeEnemySpecialMovementSource([
       this.coopDefenseKaboomtulaSystem, this.coopDefenseMortarSystem, this.firestarterOwner, this.shieldChargerOwner,
-      this.energyConeOwner, this.hopOwner, this.pounceOwner,
+      this.energyConeOwner, this.hopOwner, this.pounceOwner, this.heatBurstOwner,
     ]);
   }
   private mortarOwner: { behavior: CoopDefenseMortarSystem; strikes: CoopDefenseMortarStrikeSystem } | null = null;
@@ -636,6 +645,8 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.hopOwner = null;
     this.pounceOwner?.clear();
     this.pounceOwner = null;
+    this.heatBurstOwner?.clear();
+    this.heatBurstOwner = null;
     this.mortarOwner?.behavior.clear();
     this.mortarOwner?.strikes.clear();
     this.mortarOwner = null;

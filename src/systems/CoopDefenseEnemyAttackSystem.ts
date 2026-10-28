@@ -12,6 +12,7 @@ import type { PlacementSystem } from './PlacementSystem';
 import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import { COLORS, PLAYER_SIZE } from '../config';
+import { resolveEnemyFlameGround } from './AlliedEnemyEffects';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 import type { EnemyIntentSystem } from './navigation/EnemyIntentSystem';
@@ -396,7 +397,8 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     const angle = forcedAngle ?? this.aimAt(enemy, target.targetX, target.targetY, now);
     enemy.faceAngle(angle);
 
-    const didFire = this.weaponExecution.fire(weapon.config, {
+    const config = weapon.config, muzzle = attackWeapon.muzzleForwardPx;
+    const didFire = this.weaponExecution.fire(config, {
       x: enemy.sprite.x,
       y: enemy.sprite.y,
       angle: clawAttackId ? angle : angle + enemy.rollWeaponSpreadOffset(weapon),
@@ -404,7 +406,13 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       targetY: target.targetY,
       ownerId: enemy.id,
       ownerColor: COLORS.RED_2,
-      options: clawAttackId ? { clawAttackId } : undefined,
+      visualMuzzleOrigin: muzzle > 0
+        ? { x: enemy.sprite.x + Math.cos(angle) * muzzle, y: enemy.sprite.y + Math.sin(angle) * muzzle } : undefined,
+      options: clawAttackId ? { clawAttackId }
+        // Flames of enemy weapons that ignite the ground burn in the shooter's faction fire.
+        : config.fire.type === 'flamethrower' && (config.fire.burningGround?.createOnFlameExpiry ?? 0) > 0
+          ? { enemyFlameGround: resolveEnemyFlameGround(enemy.faction, `enemy.${enemy.kind}.spit_fire`) }
+          : undefined,
     });
     if (!didFire) return;
     if (target.targetRef) this.decoyTargets?.usedTarget(enemy.id, target.targetRef);
@@ -463,6 +471,8 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     updateLock = true,
   ): EnemyAttackCandidate | null {
     const weapon = attackWeapon.weapon;
+    // A weapon that cannot damage rocks (e.g. a flame) never takes a rock or an obstacle as its target.
+    const hitsRocks = (weapon.config.rockDamageMult ?? 1) > 0;
     if (this.intents) {
       const intent = this.intents.get(enemy.id), ref = intent?.target;
       let target: EnemyAttackCandidate | null = null;
@@ -474,7 +484,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       } else if (intent?.attackContext === 'breach' && attackWeapon.targetMode !== 'players') {
         const blocker = this.intents.getBreach(enemy.id)?.nextBlocker;
         if (blocker?.startsWith('base:')) target = this.findNearestBaseTarget(enemy, weapon.config.range, blocker.slice(5));
-        else if (blocker?.startsWith('rock:')) target = this.findNearestObstacleTarget(enemy, weapon.config.range, now, Number(blocker.slice(5)));
+        else if (blocker?.startsWith('rock:') && hitsRocks) target = this.findNearestObstacleTarget(enemy, weapon.config.range, now, Number(blocker.slice(5)));
       } else if (ref && intent?.attackContext === 'primary') {
         if (ref.kind === 'base' && attackWeapon.targetMode !== 'players' && attackWeapon.targetMode !== 'rocks') {
           target = this.findNearestBaseTarget(enemy, weapon.config.range, ref.id);
@@ -505,10 +515,10 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       : attackWeapon.targetMode === 'players'
         ? this.findLivingTargetWithLock(enemy, weapon.config.range, now, updateLock)
       : attackWeapon.targetMode === 'rocks'
-        ? this.findNearestObstacleTarget(enemy, weapon.config.range, now)
+        ? (hitsRocks ? this.findNearestObstacleTarget(enemy, weapon.config.range, now) : null)
         : attackWeapon.targetMode === 'structures'
-          ? this.selectStructureTarget(enemy, weapon.config.range, now)
-          : this.selectTarget(enemy, weapon.config.range, now, updateLock);
+          ? this.selectStructureTarget(enemy, weapon.config.range, now, hitsRocks)
+          : this.selectTarget(enemy, weapon.config.range, now, updateLock, hitsRocks);
     const trainTarget = (weapon.config.trainDamageMult ?? 1) > 0
       ? this.findTrainTarget(enemy, weapon.config.range)
       : null;
@@ -660,13 +670,13 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     return !this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, range);
   }
 
-  private selectTarget(enemy: EnemyEntity, range: number, now: number, updateLock = true): EnemyAttackCandidate | null {
+  private selectTarget(enemy: EnemyEntity, range: number, now: number, updateLock = true, hitsRocks = true): EnemyAttackCandidate | null {
     let best = this.findNearestBaseTarget(enemy, range);
 
     const armedConstruct = this.findNearestArmedConstructTarget(enemy, range);
     if (this.isBetterCandidate(armedConstruct, best)) best = armedConstruct;
 
-    const obstacle = this.findNearestObstacleTarget(enemy, range, now);
+    const obstacle = hitsRocks ? this.findNearestObstacleTarget(enemy, range, now) : null;
     if (this.isBetterCandidate(obstacle, best)) {
       best = obstacle;
     }
@@ -680,9 +690,9 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   }
 
   /** Wie {@link selectTarget}, aber ohne Spieler und Verbuendete – reine Belagerungsziele. */
-  private selectStructureTarget(enemy: EnemyEntity, range: number, now: number): EnemyAttackCandidate | null {
+  private selectStructureTarget(enemy: EnemyEntity, range: number, now: number, hitsRocks = true): EnemyAttackCandidate | null {
     const best = this.findNearestBaseTarget(enemy, range);
-    const obstacle = this.findNearestObstacleTarget(enemy, range, now);
+    const obstacle = hitsRocks ? this.findNearestObstacleTarget(enemy, range, now) : null;
     return this.isBetterCandidate(obstacle, best) ? obstacle : best;
   }
 

@@ -45,6 +45,28 @@
       "movementTarget": "bases",
       "weapons": [
         {
+          "weaponId": "DEMON_BADGER_VOID_SPIT",
+          "targetMode": "players",
+          "attackMovementSpeedFactor": 0.35,
+          "muzzleForwardPx": 13,
+          "salvo": {
+            "count": 5,
+            "intervalMs": 45,
+            "cooldownMs": 1700
+          }
+        },
+        {
+          "weaponId": "DEMON_BADGER_VOID_SPIT_SIEGE",
+          "targetMode": "structures",
+          "attackMovementSpeedFactor": 0.35,
+          "muzzleForwardPx": 13,
+          "salvo": {
+            "count": 5,
+            "intervalMs": 45,
+            "cooldownMs": 1700
+          }
+        },
+        {
           "weaponId": "DEMON_BADGER_BITE",
           "targetMode": "all",
           "meleeTiming": {
@@ -58,6 +80,48 @@
       "attackStopDurationMs": 200,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_demon_badger",
+      "heatBurst": {
+        "chargeMinMs": 4800,
+        "chargeMaxMs": 5200,
+        "telegraphMs": 900,
+        "ventMs": 400,
+        "initialDelayMs": 1500,
+        "speedBoost": 0.6,
+        "speedCurveExponent": 1.6,
+        "cascade": {
+          "stepMs": 450,
+          "jitterMs": 60,
+          "neighbourRadiusPx": 420,
+          "maxPerSlot": 3
+        },
+        "telegraphTurnRateDegPerSec": 75,
+        "alliedTriggerRadiusPx": 140,
+        "burst": {
+          "radiusPx": 110,
+          "damage": 20,
+          "minDamage": 6,
+          "knockbackSpeed": 360,
+          "knockbackMs": 160,
+          "friendlyBaseDamageMult": 0.5,
+          "constructionDamageMult": 0.5,
+          "trainDamageMult": 0.3
+        },
+        "fireChunks": {
+          "count": 4,
+          "searchRadius": 140,
+          "flightMs": 460,
+          "igniteCenter": false,
+          "durationMs": 2600,
+          "burnDurationMs": 1500,
+          "burnDamagePerTick": 0.5,
+          "sourceId": "enemy.demon-badger.heat_fire"
+        },
+        "fizzle": {
+          "minHeat": 0.25,
+          "minRadiusPx": 20,
+          "maxRadiusPx": 48
+        }
+      },
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
       }

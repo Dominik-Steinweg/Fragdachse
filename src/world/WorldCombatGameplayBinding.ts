@@ -302,6 +302,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getEnergyConeSystem?: () => import('../systems/CoopDefenseEnergyConeSystem').CoopDefenseEnergyConeSystem | null;
   readonly getHopSystem?: () => import('../systems/CoopDefenseEnemyHopSystem').CoopDefenseEnemyHopSystem | null;
   readonly getPounceSystem?: () => import('../systems/CoopDefenseEnemyPounceSystem').CoopDefenseEnemyPounceSystem | null;
+  readonly getHeatBurstSystem?: () => import('../systems/CoopDefenseEnemyHeatBurstSystem').CoopDefenseEnemyHeatBurstSystem | null;
   readonly getMortarSystem: () => import('../systems/CoopDefenseMortarSystem').CoopDefenseMortarSystem | null;
   readonly getKaboomtulaSystem: () => CoopDefenseKaboomtulaSystem | null;
   /** Activity-owned turret webs; a webbed turret neither aims nor fires. */
@@ -834,6 +835,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       if (death) o.getEnergyConeSystem?.()?.handleKilled(death);
       if (death) o.getHopSystem?.()?.handleKilled(death);
       if (death) o.getPounceSystem?.()?.handleKilled(death);
+      if (death) o.getHeatBurstSystem?.()?.handleKilled(death, combat.getHostTime());
       // A killed spider only pops: no generic death body, no slime bloom, never raised by necromancy.
       const wasKaboomtula = death ? (o.getKaboomtulaSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
       if (!current()) return true;

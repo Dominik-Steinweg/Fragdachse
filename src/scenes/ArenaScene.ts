@@ -1156,6 +1156,8 @@ export class ArenaScene extends Phaser.Scene {
       const player = this.ctx.playerManager.getPlayer(target.id);
       return player ? { x: player.x, y: player.y } : null;
     });
+    this.renderers.enemyHeatBursts.setEnemySource(() => this.arenaRuntime?.getCombatEnemyVisuals() ?? []);
+    this.renderers.enemyHeatBursts.setClock(() => bridge.getSynchronizedNow());
 
     this.aimPresentation = new ArenaAimPresentationController(
       {

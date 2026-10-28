@@ -77,6 +77,10 @@ export interface ProjectileFlameExpiryGround {
   readonly burn: BurnOnHitConfig;
   readonly igniteProjectiles: boolean;
   readonly baseDamageMult: number;
+  /** Enemy flames: faction style, targets and authored source of the cell (absent = flamethrower fire). */
+  readonly visualStyle?: import('../types').GroundFireVisualStyle;
+  readonly damageTarget?: import('../types').GroundFireDamageTarget;
+  readonly sourceId?: string;
 }
 
 /**

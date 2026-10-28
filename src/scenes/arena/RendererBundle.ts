@@ -16,6 +16,7 @@ import { EnemyVulnerabilityRenderer } from '../../effects/EnemyVulnerabilityRend
 import { EnemyHopPresentation } from '../../effects/EnemyHopPresentation';
 import { KaboomtulaPresentation } from '../../effects/KaboomtulaPresentation';
 import { EnemyPouncePresentation } from '../../effects/EnemyPouncePresentation';
+import { EnemyHeatBurstPresentation } from '../../effects/EnemyHeatBurstPresentation';
 import { TurretWebRenderer } from '../../effects/TurretWebRenderer';
 import { AmphibiousEnemyPresentation } from '../../effects/AmphibiousEnemyPresentation';
 import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer';
@@ -110,6 +111,7 @@ export interface RendererBundle {
   enemyHops: EnemyHopPresentation;
   kaboomtula: KaboomtulaPresentation;
   enemyPounces: EnemyPouncePresentation;
+  enemyHeatBursts: EnemyHeatBurstPresentation;
   turretWeb: TurretWebRenderer;
   eliteMarkers: EliteMarkerRenderer;
   enemyReadability: EnemyReadabilityRenderer;
@@ -475,6 +477,9 @@ export function* createRendererBundleSteps(
   cleanup.push(() => kaboomtula.destroy());
   const enemyPounces = new EnemyPouncePresentation(scene);
   cleanup.push(() => enemyPounces.destroy());
+  const enemyHeatBursts = new EnemyHeatBurstPresentation(scene);
+  cleanup.push(() => enemyHeatBursts.destroy());
+  enemyHeatBursts.setLightingSystem(lighting);
   const turretWeb = new TurretWebRenderer(scene);
   cleanup.push(() => turretWeb.destroy());
   const enemyReadability = new EnemyReadabilityRenderer(scene);
@@ -535,6 +540,7 @@ export function* createRendererBundleSteps(
     enemyHops,
     kaboomtula,
     enemyPounces,
+    enemyHeatBursts,
     turretWeb,
     eliteMarkers,
     enemyReadability,
@@ -637,6 +643,9 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.enemyPounces.setSinks(
     (id, attack, now, visible) => effectSystem.syncEnemyLane(`pounce-lane:${id}`, attack, now, visible, undefined, true),
     (id, attack, now, visible) => effectSystem.syncEnemyZone(`pounce-zone:${id}`, attack, now, visible, undefined, true));
+  // The heat warning travels with its running body: a tracking zone in the shared danger family.
+  bundle.enemyHeatBursts.setZoneSink((id, attack, now, visible) =>
+    effectSystem.syncEnemyZone(`heat-zone:${id}`, attack, now, visible, undefined, true));
 }
 
 /**

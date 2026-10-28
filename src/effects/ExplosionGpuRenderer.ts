@@ -172,6 +172,26 @@ export class ExplosionGpuRenderer {
     });
   }
 
+  /**
+   * Hot spark spray of a heat burst: streaks fly out past the burst edge and die quickly, a few
+   * glowing flecks drift up. `scale` thins the spray for small pops.
+   */
+  spawnHeatSparks(x: number, y: number, radius: number, tint: number, scale = 1): void {
+    this.spawnBurst(GpuVfxEffectId.ExplosionLowSpark, Math.round(Math.min(40, Math.max(10, radius / 2.6)) * scale), spec => {
+      const angle = Math.random() * TWO_PI, speed = radius * (1.1 + Math.random() * 1.6);
+      this.configure(spec, { x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, lifeMs: 260 + Math.random() * 420,
+        scaleStart: .45 + Math.random() * .55, scaleEnd: 0, alphaStart: .95, tint,
+        frame: GpuVfxFrameId.ExplosionStreak, rotation: angle, stretchStart: 2.2, stretchEnd: .5 });
+    });
+    this.spawnBurst(GpuVfxEffectId.ExplosionLowEmberDown, Math.round(Math.min(14, Math.max(4, radius / 9)) * scale), spec => {
+      const angle = Math.random() * TWO_PI, speed = radius * (.25 + Math.random() * .55);
+      this.configure(spec, { x: x + Math.cos(angle) * radius * .2, y: y + Math.sin(angle) * radius * .2,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - radius * .9, yMode: GpuVfxEase.Gravity, gravityFactor: .35,
+        lifeMs: 520 + Math.random() * 520, scaleStart: .35 + Math.random() * .35, scaleEnd: 0, alphaStart: .9, tint,
+        frame: GpuVfxFrameId.ExplosionSpark });
+    });
+  }
+
   /** Rundenwechsel duerfen keine verzoegerten Bursts in Lobby oder naechste Runde tragen. */
   clearPending(): void {
     this.pendingStages.length = 0;

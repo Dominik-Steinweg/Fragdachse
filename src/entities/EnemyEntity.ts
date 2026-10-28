@@ -15,6 +15,8 @@ import { EMPTY_ENEMY_POUNCE_STATE, enemyPounceAirProgress, enemyPouncePhaseAt, i
   type EnemyPounceState } from '../systems/EnemyPounceState';
 import { EMPTY_KABOOMTULA_STATE, isKaboomtulaState, kaboomtulaLeapProgress, kaboomtulaPhaseProgress,
   type KaboomtulaState } from '../systems/KaboomtulaState';
+import { EMPTY_ENEMY_HEAT_BURST_STATE, isEnemyHeatBurstState, type EnemyHeatBurstState } from '../systems/EnemyHeatBurstState';
+import { heatSpeedFactorAt } from '../systems/enemyHeatBurstRules';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
@@ -96,6 +98,8 @@ export interface EnemyAttackWeapon {
   readonly attackMovementSpeedFactor: number;
   readonly minTargetDistancePx: number;
   readonly salvo?: CoopDefenseEnemyWeaponSalvoConfig;
+  /** Visual muzzle ahead of the centre along the aim (0 = the centre). */
+  readonly muzzleForwardPx: number;
 }
 
 export class EnemyEntity {
@@ -196,6 +200,7 @@ export class EnemyEntity {
   /** Für die an dieser Entity hängenden Lichtquellen (aktuell: Brand). */
   private lighting: LightingSystem | null = null;
   private moveSpeedMultiplier = 1;
+  private abilitySpeedFactor = 1;
   private burrowed = false;
   private submerged = false;
   private dashPhase: 0 | 1 | 2 = 0;
@@ -291,6 +296,26 @@ export class EnemyEntity {
     this.pounceAnimating = syncEnemyPounceAnimation(this.sprite, this.config.imageKey, state, now,
       this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
     if (wasAnimating && !this.pounceAnimating) this.syncWalkingAnimation();
+  }
+
+  private heatBurstState: EnemyHeatBurstState = EMPTY_ENEMY_HEAT_BURST_STATE;
+
+  getHeatBurstState(): EnemyHeatBurstState { return this.heatBurstState; }
+
+  /** Host: publish a new heat cycle (revision must grow). Clients: apply a newer replicated state. */
+  applyHeatBurstState(state: EnemyHeatBurstState): void {
+    if (!isEnemyHeatBurstState(state) || state.revision <= this.heatBurstState.revision) return;
+    this.heatBurstState = state;
+  }
+
+  /**
+   * Host and clients: the gait keeps pace with the heat ramp, so faster bodies also step faster. Only
+   * this sprite's move-loop frame duration changes; no clock is scaled.
+   */
+  syncHeatBurstPresentation(now: number): void {
+    const config = this.config.heatBurst, sheet = this.walkingSheet;
+    if (!config || !sheet || this.sprite.anims.currentAnim?.key !== sheet.animationKey) return;
+    this.sprite.anims.msPerFrame = 1000 / (sheet.frameRate * heatSpeedFactorAt(this.heatBurstState, config, now));
   }
 
   private kaboomtulaState: KaboomtulaState = EMPTY_KABOOMTULA_STATE;
@@ -830,11 +855,17 @@ export class EnemyEntity {
   }
 
   getMoveSpeed(): number {
-    return (this.config.krakenBoss?.landMoveSpeedPxPerSec ?? this.config.moveSpeed) * this.moveSpeedMultiplier * dawnEliteSpeedMultiplier(this.eliteAffixId);
+    return (this.config.krakenBoss?.landMoveSpeedPxPerSec ?? this.config.moveSpeed) * this.moveSpeedMultiplier
+      * this.abilitySpeedFactor * dawnEliteSpeedMultiplier(this.eliteAffixId);
   }
 
   setMoveSpeedMultiplier(multiplier: number): void {
     this.moveSpeedMultiplier = Math.max(0, multiplier);
+  }
+
+  /** Host: speed factor of the body's own ability cycle (heat), set each frame; composes with the multiplier. */
+  setAbilitySpeedFactor(factor: number): void {
+    this.abilitySpeedFactor = Number.isFinite(factor) ? Math.max(0, Math.min(3, factor)) : 1;
   }
 
   /** Faktor, mit dem Wegstoss-Impulse auf diesen Gegner skaliert werden (1 = normal). */
@@ -1136,6 +1167,7 @@ export class EnemyEntity {
     if (this.hopState.revision > 0) snapshot.hop = this.hopState;
     if (this.kaboomtulaState.revision > 0) snapshot.kaboomtula = this.kaboomtulaState;
     if (this.pounceState.revision > 0) snapshot.pounce = this.pounceState;
+    if (this.heatBurstState.revision > 0) snapshot.heatBurst = this.heatBurstState;
     if (this.energyCone.revision > 0) snapshot.energyCone = this.energyCone;
     if (this.eliteAffixId) snapshot.eliteAffixId = this.eliteAffixId;
     if (this.areaClaw.revision > 0) snapshot.areaClaw = this.areaClaw;
@@ -1373,6 +1405,7 @@ export class EnemyEntity {
         attackMovementSpeedFactor: configuredWeapon.attackMovementSpeedFactor ?? 0,
         minTargetDistancePx: configuredWeapon.minTargetDistancePx ?? 0,
         salvo: configuredWeapon.salvo,
+        muzzleForwardPx: configuredWeapon.muzzleForwardPx ?? 0,
       };
     });
   }

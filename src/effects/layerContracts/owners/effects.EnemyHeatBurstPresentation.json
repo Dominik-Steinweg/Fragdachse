@@ -1,0 +1,77 @@
+{
+  "owner": "effects/EnemyHeatBurstPresentation.ts",
+  "notes": [
+    "Heat glow of a heat-burst enemy (Demon Badger): its emission sheet on the sprite's current frame, tinted by the heat and ADD just above the light map, like turret emission.",
+    "Soft ADD heat halo under the body, at the configured enemy glow halo's depth; the warning zone is drawn by EnemyClawRenderer."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncEmission/visual.emission/setDepth/0",
+        "expression": "EMISSION_DEPTH",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/halo/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.09",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EnemyHeatBurstPresentation.ts:syncEmission/visual.emission/setDepth/0",
+      "owner": "effects/EnemyHeatBurstPresentation.ts",
+      "component": "syncEmission/visual.emission/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncEmission/visual.emission/setDepth/0",
+        "expression": "EMISSION_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:effects/EnemyHeatBurstPresentation.ts:createVisual/halo/setDepth/0",
+      "owner": "effects/EnemyHeatBurstPresentation.ts",
+      "component": "createVisual/halo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.91
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/halo/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.09"
+      }
+    }
+  ]
+}

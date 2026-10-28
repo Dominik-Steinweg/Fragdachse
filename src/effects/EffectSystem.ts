@@ -9,6 +9,7 @@ import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { COLORS, VOID_PALETTE, ALLIED_PALETTE, ALLIED_COLOR, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
+import { DEMON_HEAT_SPARK_COLOR } from './enemyHeatGlowModel';
 import {
   TEX_BLOOD_EDGE_BOTTOM,
   TEX_BLOOD_EDGE_LEFT,
@@ -1031,6 +1032,15 @@ export class EffectSystem implements EnemyVisualSink {
       return;
     }
 
+    if (visualStyle === 'demon_burst' || visualStyle === 'demon_fizzle') {
+      // Void burst in the faction palette (no white or yellow core) with a red spark spray; allies stay jade.
+      const allied = color === ALLIED_COLOR, palette = allied ? ALLIED_PALETTE : VOID_PALETTE;
+      this.spawnCombatExplosionGpu(x, y, radius, visualStyle, palette.primary, palette.bright, palette.primary);
+      this.explosionGpuRenderer?.spawnHeatSparks(x, y, radius, allied ? ALLIED_PALETTE.bright : DEMON_HEAT_SPARK_COLOR,
+        visualStyle === 'demon_fizzle' ? 0.45 : 1);
+      return;
+    }
+
     if (visualStyle === 'timebomb_pop') {
       const popColor = color ?? 0xb82fff;
       const core = this.scene.add.circle(x, y, 5, 0xf3d9ff, 0.9).setDepth(DEPTH_FX + 0.4);
@@ -1327,11 +1337,12 @@ export class EffectSystem implements EnemyVisualSink {
     const voidLike = style === 'void_nuke';
     const holyLike = style === 'holy';
     const thermalLike = isThermalExplosionStyle(style);
-    const factionBurst = style === 'mortar' || style === 'firestarter_combo';
+    const heatBurst = style === 'demon_burst' || style === 'demon_fizzle';
+    const factionBurst = style === 'mortar' || style === 'firestarter_combo' || heatBurst;
     const mortarPalette = bodyColor === ALLIED_COLOR ? ALLIED_PALETTE : VOID_PALETTE;
     const palette: ExplosionCombatPalette = {
-      // The firestarter combo keeps a coloured heart; its white-hot accents come from the GPU layer.
-      core: factionBurst ? (style === 'firestarter_combo' ? mortarPalette.bright : mortarPalette.core) : thermalLike ? 0xfff2d0 : coreColor,
+      // The firestarter combo and the heat burst keep a coloured heart; white-hot accents belong to other layers.
+      core: factionBurst ? (style === 'firestarter_combo' || heatBurst ? mortarPalette.bright : mortarPalette.core) : thermalLike ? 0xfff2d0 : coreColor,
       hot: factionBurst ? mortarPalette.bright : thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
       body: factionBurst ? mortarPalette.primary : thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
       outer: thermalLike

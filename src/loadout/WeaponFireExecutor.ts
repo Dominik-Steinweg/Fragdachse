@@ -126,6 +126,15 @@ export interface WeaponFireOptions {
   payloadSourceDamageFactors?: readonly ProjectileDamageSourceFactor[];
   /** One-way muzzle portal of a fire-control deployment, fixed for this shot. */
   readonly fireControlRoute?: ProjectileFireControlRoute;
+  /**
+   * Faction-resolved ground fire that an enemy flame leaves where it dies out (its weapon authors
+   * `burningGround.createOnFlameExpiry`). Player flames keep the flamethrower upgrade path instead.
+   */
+  readonly enemyFlameGround?: {
+    readonly visualStyle: import('../types').GroundFireVisualStyle;
+    readonly damageTarget: import('../types').GroundFireDamageTarget;
+    readonly sourceId: string;
+  };
 }
 
 /** Only straight projectile and flame shots can enter a muzzle portal; others reject the route. */

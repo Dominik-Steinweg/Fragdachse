@@ -3,6 +3,7 @@ import { preloadLobbyStaffAssets } from './LobbyStaffAssets';
 import { preloadLobbyStructureAssets } from '../arena/lobbyStructures/LobbyStructureAssets';
 import { preloadBaseFortAssets } from '../arena/baseStructures/BaseFortAssets';
 import { PIPELINE_ASSETS, pipelineAnimationKey, getPipelineSpriteScale, isPipelineBossTexture } from '../config/pipelineAssets';
+import { enemyEmissionSheetPath, enemyEmissionTextureKey } from '../config/enemyEmission';
 
 /**
  * Shared walking-animation contract for every badger-shaped figure.
@@ -43,6 +44,8 @@ export interface WalkingSheet {
    * knows its image key – enemy configs – resolves its animated variant through this field.
    */
   readonly staticTextureKey?: string;
+  /** Emission sheet in the same layout (heat channels), loaded as `enemyEmissionTextureKey(textureKey)`. */
+  readonly emissionPath?: string;
 }
 
 /** Frame 0 ist die neutrale Ruhepose für inaktive Figuren und Sheets ohne Idle-Clip. */
@@ -69,6 +72,7 @@ const WALKING_SHEETS: readonly WalkingSheet[] = PIPELINE_ASSETS
       displayScale: getPipelineSpriteScale(asset.textureKey),
       idle: idle ? { animationKey: pipelineAnimationKey(asset, idle), frames: idle.frames, frameRate: idle.frameRate } : undefined,
       staticTextureKey: asset.textureKey,
+      emissionPath: enemyEmissionSheetPath(asset) ?? undefined,
     }];
   });
 
@@ -98,13 +102,15 @@ export function preloadBadgerAnimationAssets(loader: Phaser.Loader.LoaderPlugin)
   preloadLobbyStructureAssets(loader);
   preloadBaseFortAssets(loader);
   for (const sheet of WALKING_SHEETS) {
-    loader.spritesheet(sheet.textureKey, sheet.assetPath, {
+    const layout = {
       frameWidth: sheet.frameWidth,
       frameHeight: sheet.frameHeight,
       margin: sheet.margin,
       spacing: sheet.spacing,
       endFrame: sheet.frameCount - 1,
-    });
+    };
+    loader.spritesheet(sheet.textureKey, sheet.assetPath, layout);
+    if (sheet.emissionPath) loader.spritesheet(enemyEmissionTextureKey(sheet.textureKey), sheet.emissionPath, layout);
   }
 }
 

@@ -147,8 +147,15 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
       return true;
     }
 
+    const ground = fireConfig.burningGround, enemyGround = params.options?.enemyFlameGround;
     this.projectileSpawn.spawnProjectile({ ...this.createFlame(config, fireConfig, params),
-      fireControlRoute: params.options?.fireControlRoute });
+      fireControlRoute: params.options?.fireControlRoute,
+      // An enemy flame that dies out sets the ground (and a base it reaches) on fire in its faction's fire.
+      flameExpiryGround: enemyGround && (ground?.createOnFlameExpiry ?? 0) > 0 && (ground?.durationMs ?? 0) > 0 ? {
+        durationMs: ground!.durationMs, igniteProjectiles: false, baseDamageMult: config.baseDamageMult ?? 1,
+        burn: { durationMs: fireConfig.burnDurationMs, damagePerTick: fireConfig.burnDamagePerTick, visualStyle: enemyGround.visualStyle },
+        ...enemyGround,
+      } : undefined });
     return true;
   }
 

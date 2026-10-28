@@ -15,6 +15,7 @@ import { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShieldChar
 import { CoopDefenseEnergyConeSystem } from '../systems/CoopDefenseEnergyConeSystem';
 import { CoopDefenseEnemyHopSystem } from '../systems/CoopDefenseEnemyHopSystem';
 import { CoopDefenseEnemyPounceSystem, type EnemyPounceTarget } from '../systems/CoopDefenseEnemyPounceSystem';
+import { CoopDefenseEnemyHeatBurstSystem } from '../systems/CoopDefenseEnemyHeatBurstSystem';
 import { PLAYER_SIZE } from '../config';
 import { getFirestarterFactionTargets } from '../systems/firestarterAlliedTargeting';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
@@ -33,6 +34,19 @@ import type { TranslocatorProjectilePort } from '../projectile/ProjectileExterna
 import type { ProjectileThreatReadPort } from '../projectile/ProjectileReadPorts';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 
+export interface HeatBurstRequest {
+  readonly enemyId: string;
+  readonly kind: string;
+  readonly faction: 'hostile' | 'allied';
+  /** Necromancy owner of an allied body (kill credit). */
+  readonly ownerId?: string;
+  readonly x: number;
+  readonly y: number;
+  readonly config: import('../config/coopDefenseEnemies').CoopDefenseEnemyHeatBurstConfig;
+  readonly cycle: number;
+  readonly nowMs: number;
+}
+
 /** Host damage of enemy abilities that outlive or sweep past their source. */
 export interface EnemyAreaEffectsPort {
   deathBurst(enemyId: string, x: number, y: number, burst: import('../config/coopDefenseEnemies').CoopDefenseEnemyDeathBurstConfig, nowMs: number): void;
@@ -40,6 +54,10 @@ export interface EnemyAreaEffectsPort {
   landingShock(enemyId: string, x: number, y: number, shock: import('../config/coopDefenseEnemies').CoopDefenseEnemyLandingShockConfig, nowMs: number): void;
   /** Damage, player push and dust of a pounce arriving at its announced point. */
   pounceImpact(enemyId: string, kind: string, x: number, y: number, impact: import('../config/coopDefenseEnemies').CoopDefenseEnemyLandingImpactConfig, nowMs: number): void;
+  /** Area hit, fire chunks and effect of a heat burst around a body; its faction decides targets and palette. */
+  heatBurst(burst: HeatBurstRequest): void;
+  /** Harmless pop of a body killed with heat in it. */
+  heatFizzle(x: number, y: number, radius: number, faction: 'hostile' | 'allied'): void;
   sweepBases(enemyId: string, ax: number, ay: number, bx: number, by: number, radius: number, damage: number, nowMs: number): void;
 }
 
@@ -286,6 +304,25 @@ export class CoopMissionEnemyBehaviourComposition {
         onCommit: (enemy, ref) => {
           if (ref.kind === 'decoy') decoyTargets?.usedTarget(enemy.id, { kind: 'decoy', id: ref.id });
         },
+      }));
+      runtime.setHeatBurst(new CoopDefenseEnemyHeatBurstSystem({
+        enemies: enemyManager,
+        steeringPoint: enemy => {
+          const navigation = intents.get(enemy.id)?.navigation;
+          return navigation?.status === 'ready' ? navigation.waypoint
+            : navigation?.status === 'pending' ? navigation.continuation ?? null : null;
+        },
+        moveNormally: (enemy, point, speed, aimAngle) => {
+          const result = enemyManager.moveNormally(enemy, point, speed, aimAngle);
+          return { vx: result.vx, vy: result.vy, blocked: result.waitReason !== 'none' };
+        },
+        hasHostileWithin: (enemy, radius) => enemyManager.getHostileEnemies().some(other => other.sprite.active
+          && other.getHp() > 0 && !other.isBurrowed()
+          && Math.hypot(other.sprite.x - enemy.sprite.x, other.sprite.y - enemy.sprite.y) <= radius),
+        isEvadingTrain: enemyId => trainAwareness.blocksRegularAttacks(enemyId),
+        burst: (enemy, x, y, config, cycle, now) => this.options.enemyAreaEffects?.heatBurst({ enemyId: enemy.id, kind: enemy.kind,
+          faction: enemy.faction, ownerId: enemy.ownerId, x, y, config, cycle, nowMs: now }),
+        fizzle: (death, radius) => this.options.enemyAreaEffects?.heatFizzle(death.x, death.y, radius, death.faction),
       }));
       runtime.setEnergyCone(new CoopDefenseEnergyConeSystem({
         enemies: enemyManager,

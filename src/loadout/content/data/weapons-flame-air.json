@@ -105,6 +105,55 @@
         "failureKey": "shot_dry_trigger"
       }
     },
+    "DEMON_BADGER_VOID_SPIT": {
+      "id": "DEMON_BADGER_VOID_SPIT",
+      "_notes": "Short, forceful void-flame bursts of the Demon Badger (enemy salvo), no sustained stream; flames that die out set the ground on fire.",
+      "cooldown": 45,
+      "damage": 3.5,
+      "range": 170,
+      "fire": {
+        "type": "flamethrower",
+        "projectileSpeed": 470,
+        "hitboxStartSize": 22,
+        "hitboxEndSize": 96,
+        "hitboxGrowRate": 150,
+        "velocityDecay": 0.75,
+        "burnDurationMs": 1800,
+        "burnDamagePerTick": 0.3,
+        "piercingCount": 0,
+        "burningGround": {
+          "cellSize": 0,
+          "durationMs": 2200,
+          "igniteProjectiles": 0,
+          "createOnFlameExpiry": 1
+        }
+      },
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 6,
+      "spreadMoving": 9,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 0,
+      "spreadRecoveryRate": 0,
+      "spreadRecoverySpeed": 100,
+      "projectileStyle": "flame",
+      "projectileColor": "#b347ff",
+      "projectileBurnVisualStyle": "void",
+      "showCrosshair": false,
+      "rockDamageMult": 0,
+      "trainDamageMult": 1,
+      "shotAudio": {
+        "successKey": "shot_flame",
+        "failureKey": "shot_dry_trigger"
+      }
+    },
+    "DEMON_BADGER_VOID_SPIT_SIEGE": {
+      "id": "DEMON_BADGER_VOID_SPIT_SIEGE",
+      "_notes": "The same burst aimed at bases and armed constructions (an enemy may list a weapon only once per target mode).",
+      "baseId": "DEMON_BADGER_VOID_SPIT"
+    },
     "LEAF_BLOWER": {
       "id": "LEAF_BLOWER",
       "shotFeedbackProfile": "stream",

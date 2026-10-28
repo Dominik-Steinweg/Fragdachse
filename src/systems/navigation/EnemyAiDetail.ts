@@ -135,15 +135,22 @@ export class EnemyAiDetailTiers implements EnemyAiDetailSource {
 
   getFarCount(): number { return this.far.size; }
 
+  get nearMarginPx(): number { return this.options.nearMarginPx; }
+  get farMarginPx(): number { return this.options.farMarginPx; }
+
   clear(): void {
     this.far.clear();
     this.views.length = 0;
     this.bounds = null;
   }
 
-  /** Chebyshev distance to the nearest view; zero inside one. */
-  private viewGap(x: number, y: number): number {
+  /**
+   * Chebyshev distance of a point to the nearest view of this frame; zero inside one and without
+   * anchors. Behaviours that depend on being seen read this geometry, never the detail tier.
+   */
+  viewGap(x: number, y: number): number {
     const views = this.views;
+    if (!views.length) return 0;
     let best = Infinity;
     for (let i = 0; i < views.length; i += 4) {
       const gap = Math.max(views[i] - x, x - views[i + 1], views[i + 2] - y, y - views[i + 3], 0);

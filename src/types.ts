@@ -461,7 +461,7 @@ export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'ro
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'mortar' | 'default' | 'meteor' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'pounce_impact' | 'regeneration' | 'timebomb' | 'timebomb_pop' | 'time_bubble_release' | 'asmd_combo' | 'firestarter_combo' | 'barrel';
+export type ExplosionVisualStyle = 'mortar' | 'default' | 'meteor' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'pounce_impact' | 'regeneration' | 'timebomb' | 'timebomb_pop' | 'time_bubble_release' | 'asmd_combo' | 'firestarter_combo' | 'barrel' | 'demon_burst' | 'demon_fizzle';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {
@@ -2197,6 +2197,8 @@ export interface SyncedEnemyState {
   kaboomtula?: import('./systems/KaboomtulaState').KaboomtulaState;
   /** Host-decided pounce (aim, locked landing, flight); omitted while the enemy never pounced. */
   pounce?: import('./systems/EnemyPounceState').EnemyPounceState;
+  /** Host-decided heat cycle (charge, booked warning, burst); absent until the body's first cycle. */
+  heatBurst?: import('./systems/EnemyHeatBurstState').EnemyHeatBurstState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;
@@ -2242,6 +2244,8 @@ export interface SyncedEnemyDeltaState {
   kaboomtula?: import('./systems/KaboomtulaState').KaboomtulaState;
   /** Host-decided pounce (aim, locked landing, flight); omitted while the enemy never pounced. */
   pounce?: import('./systems/EnemyPounceState').EnemyPounceState;
+  /** Host-decided heat cycle (charge, booked warning, burst); absent until the body's first cycle. */
+  heatBurst?: import('./systems/EnemyHeatBurstState').EnemyHeatBurstState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;

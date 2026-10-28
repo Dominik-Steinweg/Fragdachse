@@ -42,7 +42,7 @@ import type { TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../systems/EnvironmentDamageResolver';
 import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
-import { resolveEnemyFireExplosion } from '../../systems/AlliedEnemyEffects';
+import { resolveEnemyFireEffect, resolveEnemyFireExplosion } from '../../systems/AlliedEnemyEffects';
 import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../../systems/CoopDefenseAirstrikeEventHandler';
 import type { RockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
 import { resolveCoopDefenseMapConfig } from '../../world/WorldDefinitionResolution';
@@ -1905,6 +1905,55 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         }
       },
     });
+  }
+
+  /**
+   * Heat burst of an enemy around itself. A hostile burst hits players, decoys and allied enemies in full
+   * and friendly bases, constructions and the train with its own multipliers – never rocks or hostile
+   * enemies; players are pushed. An allied burst only hits hostile enemies (mortar rule). The burning
+   * chunks take the burster's faction and survive its death.
+   */
+  applyEnemyHeatBurst(request: import('../../activity/CoopMissionEnemyBehaviourComposition').HeatBurstRequest): void {
+    const combat = this.ctx.getWorldCombatCore();
+    if (!combat) return;
+    const { enemyId, faction, x, y, config, nowMs } = request, burst = config.burst;
+    const sourceId = `enemy.${request.kind}.heat_burst`;
+    const source: import('../../combat/CombatScope').CombatSource = {
+      gameplaySource: { kind: 'enemy', id: enemyId }, actor: { kind: 'enemy', id: enemyId },
+      attribution: faction === 'allied' && request.ownerId ? { kind: 'player', id: request.ownerId } : { kind: 'enemy', id: enemyId },
+      allegiance: { ownerId: enemyId, factionId: faction }, authoredSourceId: sourceId, origin: 'explosion',
+    };
+    if (faction === 'allied') {
+      combat.applyAoeDamage(x, y, burst.radiusPx, burst.damage, enemyId, false, { source, sourceId, category: 'explosion',
+        baseDamageMult: 0, damageFalloff: { minDamage: burst.minDamage } });
+    } else {
+      applyHostileAreaStrikeDamage({
+        x, y, radius: burst.radiusPx, maxDamage: burst.damage, minDamage: burst.minDamage,
+        attackerId: enemyId, sourceId, source, includeSelf: false,
+        aoe: { source, baseDamageMult: 0 }, friendlyBaseDamageMult: burst.friendlyBaseDamageMult,
+        rockDamageMult: 0, constructionDamageMult: burst.constructionDamageMult, trainDamageMult: burst.trainDamageMult,
+      }, {
+        combat, bases: this.baseManager,
+        damageBase: (id, damage, multiplier) => combat.applyBaseStatusDamage(id, damage * multiplier, source, nowMs),
+        environment: this.arenaResult ? this.environmentRockSinkFor(source) : null,
+        isConstruction: id => !!this.placementSystem?.getRuntimeRock(id),
+        trainSegments: this.trainManager?.getNetSnapshot()?.alive ? this.trainManager.getSegmentPositions() : [],
+        damageTrain: damage => { this.worldMutation?.applyResolvedDamage('train', 'main', damage, enemyId, sourceId, 'explosion', undefined, source); },
+        damageDecoys: (bx, by, radius, damageAt) => {
+          for (const decoy of this.ctx.decoySystem.getHostTargets()) {
+            const distance = Math.hypot(decoy.x - bx, decoy.y - by);
+            if (distance <= radius) this.ctx.decoySystem.applyDamage(decoy.id, Math.round(damageAt(distance)), enemyId,
+              sourceId, { sourceX: bx, sourceY: by }, source);
+          }
+        },
+      });
+      if (burst.knockbackSpeed > 0) this.ctx.hostPhysics.applyRadialImpulse(x, y, burst.radiusPx, burst.knockbackSpeed, enemyId, 0,
+        burst.knockbackMs, targetId => !!this.ctx.playerManager.getPlayer(targetId));
+    }
+    if (config.fireChunks && config.fireChunks.count > 0) {
+      this.playerGameplayRuntime?.hostCreateFireChunkBurst(enemyId, x, y, resolveEnemyFireEffect(faction, config.fireChunks),
+        `heat-burst:${enemyId}:${request.cycle}`, nowMs, source);
+    }
   }
 
   /**

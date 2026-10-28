@@ -56,7 +56,9 @@
 // Rabid Rabbit: the rabid badger's registry slot (wire kind 2) became `rabid-rabbit`, and enemy
 // snapshots gained the pounce field (aim target, locked landing, flight timeline).
 // Rabid Rabbit tuning: the pounce landing travels as the new explosion style `pounce_impact`.
-export const PEER_PROTOCOL_VERSION = 55;
+// Demon Badger heat burst: enemy snapshots gained the heat timeline field, and the burst and the
+// fizzle of a killed charged badger travel as the new explosion styles `demon_burst`/`demon_fizzle`.
+export const PEER_PROTOCOL_VERSION = 56;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

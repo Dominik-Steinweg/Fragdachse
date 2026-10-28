@@ -1,7 +1,7 @@
 import { ENEMY_BURST_PRESETS } from '../../config/enemyBurstPresets';
 import { getCoopDefenseEnemyConfig, hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import type { StructureRect } from '../../arena/StructureOutline';
-import { CELL_SIZE, VOID_PALETTE } from '../../config';
+import { ALLIED_COLOR, CELL_SIZE, VOID_PALETTE } from '../../config';
 import { warmupKrakenShaders } from '../../effects/kraken/KrakenShaderWarmup';
 import { restrictStructureOccupant } from '../../world/PlayerCapabilities';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
@@ -1037,6 +1037,14 @@ export class ArenaLifecycleCoordinator {
           const glint = (hasCoopDefenseEnemyKind(kind) ? getCoopDefenseEnemyConfig(kind).eyeGlow?.color : undefined) ?? 0xb45cff;
           bridge.broadcastExplosionEffect(x, y, impact.radiusPx, glint, 'pounce_impact', undefined, 'brood_hatch');
         },
+        heatBurst: request => {
+          this.hostUpdate.applyEnemyHeatBurst(request);
+          // Void-violet burst with red sparks; allies burst in the allied palette.
+          bridge.broadcastExplosionEffect(request.x, request.y, request.config.burst.radiusPx,
+            request.faction === 'allied' ? ALLIED_COLOR : VOID_PALETTE.primary, 'demon_burst', undefined, `enemy.${request.kind}.heat_burst`);
+        },
+        heatFizzle: (x, y, radius, faction) => bridge.broadcastExplosionEffect(x, y, radius,
+          faction === 'allied' ? ALLIED_COLOR : VOID_PALETTE.primary, 'demon_fizzle', undefined, 'silent'),
         sweepBases: (enemyId, ax, ay, bx, by, radius, damage, nowMs) => this.hostUpdate.applyEnemySweepBaseDamage(enemyId, ax, ay, bx, by, radius, damage, nowMs),
       },
       broadcastExplosion: (x, y, radius, style, color) => bridge.broadcastExplosionEffect(x, y, radius, color ?? (style === 'mortar' ? VOID_PALETTE.primary : 0xb82fff), style, undefined, style === 'timebomb_pop' ? 'silent' : style === 'mortar' ? 'generic' : style === 'brood_hatch' ? 'brood_hatch' : 'enemy.kaboomtula'),

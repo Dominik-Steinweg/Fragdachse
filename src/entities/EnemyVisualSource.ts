@@ -15,6 +15,8 @@ export interface EnemyVisualSource {
   readonly getKaboomtulaState?: () => import('../systems/KaboomtulaState').KaboomtulaState;
   /** Replicated pounce timeline (aim, locked landing, flight); absent on non-pouncing views. */
   readonly getPounceState?: () => import('../systems/EnemyPounceState').EnemyPounceState;
+  /** Replicated heat cycle (charge, booked warning, burst); absent on views without a heat burst. */
+  readonly getHeatBurstState?: () => import('../systems/EnemyHeatBurstState').EnemyHeatBurstState;
   /** Presented general vulnerability (host status or replicated snapshot), never a rule input. */
   readonly isVulnerable: () => boolean;
   /** Optional local gesture; placeholders and other enemy views need no cast clip. */

@@ -88,7 +88,7 @@ export class GroundFogSystem {
   get displayedStrength(): number { return this.active && !this.debugDisplaySuppressed ? this.strength : 0; }
   addExplosion(x: number, y: number, radius: number, style: ExplosionVisualStyle = 'default'): void {
     if (!this.active || !this.reactions) return;
-    const scale = ['mini_rocket', 'mini_rocket_cascade', 'he_cluster_shard', 'he_demolition_shard', 'timebomb_pop'].includes(style) ? .6
+    const scale = ['mini_rocket', 'mini_rocket_cascade', 'he_cluster_shard', 'he_demolition_shard', 'timebomb_pop', 'demon_fizzle'].includes(style) ? .6
       : style === 'nuke' || style === 'void_nuke' ? 1.15 : 1;
     this.impulses.add({ x, y, endX: x, endY: y, radius: radius * 1.3, strength: Math.min(.95, (.4 + radius / 500) * scale), kind: 'explosion', priority: 100 + radius });
   }

@@ -67,6 +67,8 @@ export interface CoopDefenseEnemyWeaponConfig {
   /** Mindest-Zieldistanz; naeher gilt die Waffe als unpassend und eine andere uebernimmt. */
   readonly minTargetDistancePx?: number;
   readonly salvo?: CoopDefenseEnemyWeaponSalvoConfig;
+  /** Visual muzzle ahead of the body centre along its aim (e.g. a mouth); gameplay still fires from the centre. */
+  readonly muzzleForwardPx?: number;
 }
 
 export interface CoopDefenseEnemyStinkAuraConfig {
@@ -643,10 +645,67 @@ export interface CoopDefenseEnemyPounceConfig {
   readonly sideCuts?: CoopDefenseEnemySideCutConfig;
 }
 
+/** Area hit of a heat burst around the body; structures take their own multipliers, rocks never. */
+export interface CoopDefenseEnemyHeatBurstImpactConfig {
+  readonly radiusPx: number;
+  readonly damage: number;
+  /** Damage at the edge of the radius (linear falloff from `damage` in the centre). */
+  readonly minDamage: number;
+  /** Push for players only. */
+  readonly knockbackSpeed: number;
+  readonly knockbackMs: number;
+  readonly friendlyBaseDamageMult: number;
+  readonly constructionDamageMult: number;
+  readonly trainDamageMult: number;
+}
+
+/**
+ * Heat cycle of a body that charges while it runs and releases the heat as a burst around itself.
+ * Charging raises its speed; a full body announces the burst with the shared red zone that travels
+ * with it, bursts, cools down and charges again. Bursts of nearby bodies roll through a pack in a
+ * fixed order (cascade), never at once. A full body nobody can see holds its heat.
+ */
+export interface CoopDefenseEnemyHeatBurstConfig {
+  /** Charge time from cold to full; each body gets its own value in this range (hashed from its id). */
+  readonly chargeMinMs: number;
+  readonly chargeMaxMs: number;
+  readonly telegraphMs: number;
+  /** Cold phase right after a burst: heat 0 and the ordinary speed. */
+  readonly ventMs: number;
+  /** Grace after the first sighting of a body before its first charge completes. */
+  readonly initialDelayMs: number;
+  /** Speed share added at full heat (0.6 = ×1.6). */
+  readonly speedBoost: number;
+  /** Ease of the speed rise: boost × heat^exponent. */
+  readonly speedCurveExponent: number;
+  readonly cascade: {
+    /** Bursts sit on a shared grid of this step; two bodies within `neighbourRadiusPx` never share a slot. */
+    readonly stepMs: number;
+    /** Per-body offset in [-jitterMs, jitterMs] on its slot, so the rhythm is not mechanical. */
+    readonly jitterMs: number;
+    readonly neighbourRadiusPx: number;
+    /** Bursts per grid slot across the whole world (bounds the effect rate of large waves). */
+    readonly maxPerSlot: number;
+  };
+  /** While the warning runs the body keeps running but turns its heading at most this fast. */
+  readonly telegraphTurnRateDegPerSec: number;
+  /** An allied body only books its burst while a hostile is this close (it never bursts beside its owner for nothing). */
+  readonly alliedTriggerRadiusPx: number;
+  readonly burst: CoopDefenseEnemyHeatBurstImpactConfig;
+  /** Burning chunks thrown by the burst; fire style and targets follow the body's faction. */
+  readonly fireChunks?: FireChunkBurstConfig;
+  /** A killed body with at least `minHeat` fizzles harmlessly; the radius grows with its heat. */
+  readonly fizzle: { readonly minHeat: number; readonly minRadiusPx: number; readonly maxRadiusPx: number };
+}
+
+/** Reaction time and player speed of the dodge-window contract of every authored heat burst. */
+export const HEAT_BURST_FAIRNESS = { reactionMs: 250, playerSpeedPxPerSec: 280, playerRadiusPx: 16 } as const;
+
 export interface CoopDefenseEnemyConfig {
   readonly flee?: CoopDefenseEnemyFleeConfig;
   readonly hop?: CoopDefenseEnemyHopConfig;
   readonly pounce?: CoopDefenseEnemyPounceConfig;
+  readonly heatBurst?: CoopDefenseEnemyHeatBurstConfig;
   readonly amphibious?: CoopDefenseEnemyAmphibiousConfig;
   readonly engage?: CoopDefenseEnemyEngageConfig;
   readonly deathBurst?: CoopDefenseEnemyDeathBurstConfig;
@@ -847,6 +906,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
           heal: config.hop.heal ? { ...config.hop.heal } : undefined,
           landingShock: config.hop.landingShock ? { ...config.hop.landingShock } : undefined } : undefined,
         pounce: config.pounce ? clonePounceConfig(config.pounce) : undefined,
+        heatBurst: config.heatBurst ? cloneHeatBurstConfig(config.heatBurst) : undefined,
         turnRateDegPerSec: config.turnRateDegPerSec,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
@@ -957,6 +1017,12 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     || enemy.engage || enemy.movementTarget !== 'players')) {
     throw new Error(`[coopDefenseEnemies] Pouncing enemy has a second movement owner or no player target: ${enemy.id}`);
   }
+  // The heat cycle owns the speed ramp, the warning run and the death fizzle: no second ability owner on the body.
+  if (enemy.heatBurst && (flee || krakenBoss || krakenEgg || enemy.hop || enemy.kaboomtula || enemy.pounce || enemy.shieldCharger
+    || enemy.energyCone || enemy.firestarter || enemy.mortar || enemy.burrow || enemy.dodge || enemy.amphibious
+    || enemy.deathBurst || enemy.voidHunterBoss)) {
+    throw new Error(`[coopDefenseEnemies] Heat-burst enemy has a second ability owner: ${enemy.id}`);
+  }
   if (enemy.basePreference && enemy.movementTarget !== 'players') {
     throw new Error(`[coopDefenseEnemies] basePreference needs movementTarget players: ${enemy.id}`);
   }
@@ -1010,6 +1076,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     deathBurst: normalizeDeathBurstConfig(enemy.deathBurst),
     hop: normalizeHopConfig(enemy.hop),
     pounce: normalizePounceConfig(enemy.pounce),
+    heatBurst: normalizeHeatBurstConfig(enemy.heatBurst, enemy.id),
     turnRateDegPerSec: normalizeTurnRate(enemy.turnRateDegPerSec),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
@@ -1334,6 +1401,7 @@ function normalizeWeapons(
         ? undefined
         : Math.max(0, weapon.minTargetDistancePx),
       salvo: normalizeWeaponSalvoConfig(weapon.salvo),
+      muzzleForwardPx: weapon.muzzleForwardPx === undefined ? undefined : Math.max(0, weapon.muzzleForwardPx),
     };
   });
 }
@@ -1632,6 +1700,46 @@ export function normalizePounceConfig(config: CoopDefenseEnemyPounceConfig | und
     throw new Error('Invalid pounce side-cuts');
   }
   return clonePounceConfig(config);
+}
+
+function cloneHeatBurstConfig(config: CoopDefenseEnemyHeatBurstConfig): CoopDefenseEnemyHeatBurstConfig {
+  return { ...config, cascade: { ...config.cascade }, burst: { ...config.burst }, fizzle: { ...config.fizzle },
+    fireChunks: config.fireChunks ? { ...config.fireChunks } : undefined };
+}
+
+/**
+ * Reject malformed heat timing, ranges and an unfair warning at the authored boundary. A body that
+ * keeps running during its warning must leave a player time to react and step out of the zone sideways.
+ */
+export function normalizeHeatBurstConfig(config: CoopDefenseEnemyHeatBurstConfig | undefined,
+  enemyId: string): CoopDefenseEnemyHeatBurstConfig | undefined {
+  if (!config) return undefined;
+  const invalid = (positive: readonly number[], nonNegative: readonly number[]) =>
+    positive.some(v => !Number.isFinite(v) || v <= 0) || nonNegative.some(v => !Number.isFinite(v) || v < 0);
+  const { cascade, burst, fizzle, fireChunks } = config;
+  if (!cascade || !burst || !fizzle || invalid([config.chargeMinMs, config.chargeMaxMs, config.telegraphMs,
+    config.speedCurveExponent, config.telegraphTurnRateDegPerSec, config.alliedTriggerRadiusPx, cascade.stepMs,
+    cascade.neighbourRadiusPx, burst.radiusPx, fizzle.minRadiusPx, fizzle.maxRadiusPx],
+  [config.ventMs, config.initialDelayMs, config.speedBoost, cascade.jitterMs, burst.damage, burst.minDamage,
+    burst.knockbackSpeed, burst.knockbackMs, burst.friendlyBaseDamageMult, burst.constructionDamageMult, burst.trainDamageMult,
+    fizzle.minHeat])) {
+    throw new Error(`[coopDefenseEnemies] Invalid heat-burst value: ${enemyId}`);
+  }
+  if (config.chargeMinMs > config.chargeMaxMs || burst.minDamage > burst.damage || cascade.jitterMs * 2 >= cascade.stepMs
+    || !Number.isInteger(cascade.maxPerSlot) || cascade.maxPerSlot < 1 || fizzle.minHeat > 1
+    || fizzle.minRadiusPx > fizzle.maxRadiusPx || config.speedBoost > 2) {
+    throw new Error(`[coopDefenseEnemies] Invalid heat-burst relation: ${enemyId}`);
+  }
+  const { reactionMs, playerSpeedPxPerSec, playerRadiusPx } = HEAT_BURST_FAIRNESS;
+  if (config.telegraphMs < reactionMs + (burst.radiusPx + playerRadiusPx) / playerSpeedPxPerSec * 1000) {
+    throw new Error(`[coopDefenseEnemies] Heat-burst warning too short to step out of the zone: ${enemyId}`);
+  }
+  if (fireChunks && invalid([fireChunks.flightMs], [fireChunks.count, fireChunks.searchRadius, fireChunks.durationMs,
+    fireChunks.burnDurationMs, fireChunks.burnDamagePerTick])) {
+    throw new Error(`[coopDefenseEnemies] Invalid heat-burst fire chunks: ${enemyId}`);
+  }
+  return cloneHeatBurstConfig({ ...config, fireChunks: fireChunks ? { ...fireChunks,
+    count: Math.floor(fireChunks.count), igniteCenter: fireChunks.igniteCenter === true } : undefined });
 }
 
 export function normalizeDeathBurstConfig(config: CoopDefenseEnemyDeathBurstConfig | undefined): CoopDefenseEnemyDeathBurstConfig | undefined {

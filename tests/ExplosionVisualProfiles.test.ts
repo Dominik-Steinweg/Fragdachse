@@ -12,7 +12,7 @@ describe('explosion visual profiles', () => {
       'default', 'meteor', 'holy', 'energy', 'lightning', 'nuke', 'void_nuke', 'rocket',
       'mini_rocket', 'mini_rocket_cascade', 'train', 'brood_hatch', 'pounce_impact', 'regeneration',
       'timebomb', 'timebomb_pop', 'he_cluster_shard', 'he_demolition_shard',
-      'time_bubble_release', 'asmd_combo', 'mortar', 'firestarter_combo', 'barrel',
+      'time_bubble_release', 'asmd_combo', 'mortar', 'firestarter_combo', 'barrel', 'demon_burst', 'demon_fizzle',
     ];
     expect(Object.keys(EXPLOSION_VISUAL_PROFILES).sort()).toEqual([...styles].sort());
     for (const style of styles) {
@@ -33,6 +33,9 @@ describe('explosion visual profiles', () => {
     expect(getCombatExplosionProfile('mini_rocket_cascade')?.family).toBe('cascade');
     expect(getCombatExplosionProfile('timebomb')?.family).toBe('energy');
     expect(getCombatExplosionProfile('timebomb_pop')?.family).toBe('pop');
+    // The recurring heat burst is a light void energy burst; a killed charged badger only pops.
+    expect(getCombatExplosionProfile('demon_burst')?.family).toBe('energy');
+    expect(getCombatExplosionProfile('demon_fizzle')?.family).toBe('pop');
     expect(getCombatExplosionProfile('holy')?.family).toBe('holy');
     expect(getCombatExplosionProfile('lightning')?.family).toBe('lightning');
     expect(getCombatExplosionProfile('train')?.family).toBe('train');
