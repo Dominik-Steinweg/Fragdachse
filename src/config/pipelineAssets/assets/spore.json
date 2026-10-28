@@ -6,7 +6,7 @@
     "BASE_SPORES",
     "TURRET_SPORES"
   ],
-  "revision": "towers-r08",
+  "revision": "towers-r09",
   "variant": "standard",
   "sourceSize": 128,
   "textureKey": "turret_weapon_spore",
@@ -28,9 +28,17 @@
         5,
         6,
         7,
-        8
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
       ],
-      "frameRate": 24,
+      "frameRate": 16,
       "loop": false,
       "end": "rest"
     }
@@ -44,13 +52,13 @@
     "margin": 2,
     "spacing": 4,
     "columns": 8,
-    "rows": 2,
-    "frameCount": 9,
+    "rows": 3,
+    "frameCount": 17,
     "width": 1056,
-    "height": 264
+    "height": 396
   },
   "hashes": {
-    "idle": "c996a976c0f37870bc1d9d66df2e5c9d49166811fbbbf6b66cead196fc244cda",
-    "sheet": "e3c3e260418b7e067379af7841222a66975c8ec4a86b286aff3455ccad25ada2"
+    "idle": "3d24a23649cd970aef63903d402e0d364795dbd23d2ecf1f9d3cb0ba7854537f",
+    "sheet": "435738f40ccc050cb3b052d33b602fa71be89ef13b2e8b47196a628da790145f"
   }
 }

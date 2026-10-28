@@ -3,11 +3,14 @@ import type { GpuVfxSystem } from '../effects/gpu/GpuVfxSystem';
 import type { LightingSystem } from '../effects/LightingSystem';
 import type { ShadowSystem } from '../effects/ShadowSystem';
 import type { BaseManager } from '../entities/BaseManager';
+import type { CameraWorldViewSource } from '../graphics/CameraWorldView';
 
 export interface BaseFortPresentationSystems {
   readonly lighting: LightingSystem;
   readonly shadow: ShadowSystem | null;
   readonly gpuVfx: GpuVfxSystem | null;
+  /** The view the fort fires burn in; fires outside it do not emit. */
+  readonly camera: CameraWorldViewSource | null;
 }
 
 /**
@@ -20,5 +23,5 @@ export interface BaseFortPresentationSystems {
 export function bindBaseFortPresentation(bases: BaseManager, systems: BaseFortPresentationSystems): void {
   bases.setLightingSystem(systems.lighting);
   const gpuVfx = systems.gpuVfx;
-  bases.setFortPresentation(systems.shadow, gpuVfx ? emitters => new BaseFortFx(gpuVfx, emitters) : null);
+  bases.setFortPresentation(systems.shadow, gpuVfx ? emitters => new BaseFortFx(gpuVfx, emitters, systems.camera) : null);
 }

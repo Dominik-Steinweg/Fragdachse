@@ -75,6 +75,13 @@ const MODE_STYLES: Readonly<Record<PowerUpPedestalGpuMode, PedestalModeStyle>> =
 type GpuMember = Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member>;
 
 /**
+ * Pedestals stand on the ground but above a base fort's structure (BASE_FORT_DEPTH, ROCKS + 0.04)
+ * and its plinths: crates and sacks on the decks or in the courtyard must not cover them. They stay
+ * below the turret sprites (ROCKS + 0.2) and the lying power-up (POWERUP_ITEM_DEPTH).
+ */
+const PEDESTAL_DEPTH = { glow: DEPTH.ROCKS + 0.13, base: DEPTH.ROCKS + 0.14, owner: DEPTH.ROCKS + 0.141 } as const;
+
+/**
  * Persistente GPU-Darstellung der Pedestal-Koerper. Anders als das emissionsgetriebene
  * GpuVfxSystem besitzt sie langlebige Slots, die nur bei Snapshot-Aenderungen editiert werden.
  */
@@ -97,15 +104,15 @@ export class PowerUpPedestalGpuSystem {
       MAX_PEDESTALS * ADDITIVE_MEMBERS_PER_PEDESTAL,
     );
     this.additiveLayer.name = 'powerup-pedestal-glow';
-    this.configureLayer(this.additiveLayer, DEPTH.PLAYERS - 2.1, Phaser.BlendModes.ADD);
+    this.configureLayer(this.additiveLayer, PEDESTAL_DEPTH.glow, Phaser.BlendModes.ADD);
 
     this.baseLayer = scene.add.spriteGPULayer(this.texture, MAX_PEDESTALS);
     this.baseLayer.name = 'powerup-pedestal-base';
-    this.configureLayer(this.baseLayer, DEPTH.PLAYERS - 2, Phaser.BlendModes.NORMAL);
+    this.configureLayer(this.baseLayer, PEDESTAL_DEPTH.base, Phaser.BlendModes.NORMAL);
 
     this.ownerLayer = scene.add.spriteGPULayer(this.texture, MAX_PEDESTALS);
     this.ownerLayer.name = 'powerup-pedestal-owner';
-    this.configureLayer(this.ownerLayer, DEPTH.PLAYERS - 1.999, Phaser.BlendModes.NORMAL);
+    this.configureLayer(this.ownerLayer, PEDESTAL_DEPTH.owner, Phaser.BlendModes.NORMAL);
     for (const layer of [this.baseLayer, this.ownerLayer, this.additiveLayer]) configureGpuLayerCameraTransform(layer);
   }
 

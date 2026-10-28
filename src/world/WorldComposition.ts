@@ -293,7 +293,7 @@ export function materializeWorldComposition(
       layout.water ?? [], world.definition?.fogStrength ?? DEFAULT_FOG_STRENGTH)
     : null;
   if (baseManager) bindBaseFortPresentation(baseManager, { lighting: input.lighting,
-    shadow: input.sunlight?.shadow ?? null, gpuVfx: input.gpuVfx ?? null });
+    shadow: input.sunlight?.shadow ?? null, gpuVfx: input.gpuVfx ?? null, camera: input.scene.cameras?.main ?? null });
   if (input.createRockRegistry) materialization.setRocks(new RockRegistry(layout));
 
   if(presentationRequired && input.sunlight && input.runtime.presentationFrame) {

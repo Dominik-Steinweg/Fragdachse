@@ -1,7 +1,8 @@
 {
   "owner": "effects/TurretAnimationController.ts",
   "notes": [
-    "Glowing parts of a turret: its emission sheet on the sprite's current frame, ADD just above the light map, so the fire clip brightens it at night."
+    "Glowing parts of a turret: its emission sheet on the sprite's current frame, ADD just above the light map, so the fire clip brightens it at night.",
+    "Plasma turret: the animated, self-lit plasma charge over its core disc (above the glow) with an ADD bloom; flame turret: ADD burner heat bloom while it fires."
   ],
   "source": {
     "blends": [
@@ -12,6 +13,27 @@
       {
         "key": "bind/glow/setDepth/0",
         "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createPlasmaCore/scene.add/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.085",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createPlasmaCore/scene.add/setDepth/1",
+        "expression": "DEPTH_LIGHTING + 0.09",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createFlameHeat/glow/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.09",
         "blends": [
           "ADD"
         ]
@@ -40,6 +62,72 @@
       "source": {
         "selector": "bind/glow/setDepth/0",
         "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/TurretAnimationController.ts:createPlasmaCore/scene.add/setDepth/0",
+      "owner": "effects/TurretAnimationController.ts",
+      "component": "createPlasmaCore/scene.add/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.585
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createPlasmaCore/scene.add/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.085"
+      }
+    },
+    {
+      "id": "cpu:effects/TurretAnimationController.ts:createPlasmaCore/scene.add/setDepth/1",
+      "owner": "effects/TurretAnimationController.ts",
+      "component": "createPlasmaCore/scene.add/setDepth/1",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.59
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createPlasmaCore/scene.add/setDepth/1",
+        "expression": "DEPTH_LIGHTING + 0.09"
+      }
+    },
+    {
+      "id": "cpu:effects/TurretAnimationController.ts:createFlameHeat/glow/setDepth/0",
+      "owner": "effects/TurretAnimationController.ts",
+      "component": "createFlameHeat/glow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.59
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createFlameHeat/glow/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.09"
       }
     }
   ]

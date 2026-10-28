@@ -11,7 +11,7 @@ import { resolveSpawnStructureVegetationClearings } from '../arena/BaseRegistry'
 import { createArenaBackground } from '../arena/ArenaBackgroundRenderer';
 import { ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
 import { BaseManager } from '../entities/BaseManager';
-import { createWorldTurretVisual, syncWorldTurretVisualPose, type WorldTurretVisual } from '../entities/WorldTurretVisual';
+import { createWorldTurretVisual, destroyWorldTurretVisual, syncWorldTurretFoundation, syncWorldTurretVisualPose, type WorldTurretVisual } from '../entities/WorldTurretVisual';
 import { TurretAnimationController } from '../effects/TurretAnimationController';
 import { LightingSystem } from '../effects/LightingSystem';
 import { LightOccluderIndex } from '../effects/LightOccluderIndex';
@@ -182,7 +182,7 @@ export class PersistentBaseEditorWorld {
     // Rewards stand on the base (raised, as base-owned turrets in a round); personal turrets on the ground.
     this.shadows.turretCasters.addSource(visit => { for (const { visual, raised } of this.turrets.values()) visit(visual.image, raised); });
     // Same fort presentation as a round: torches and fire bowls burn, the fort casts its shadow.
-    bindBaseFortPresentation(this.bases, { lighting: this.lighting, shadow: this.shadows, gpuVfx: this.gpu });
+    bindBaseFortPresentation(this.bases, { lighting: this.lighting, shadow: this.shadows, gpuVfx: this.gpu, camera: scene.cameras.main });
     const surfaces = this.bases.getBases().flatMap(base => [...base.getShadowSurfaceCells()]);
     this.shadows.syncBaseShadows(surfaces);
     // Editing needs an unobscured build surface, regardless of the gameplay fog preference.
@@ -280,6 +280,7 @@ export class PersistentBaseEditorWorld {
         }
         entry.raised = raised;
         syncWorldTurretVisualPose(entry.visual, key, appearance.weapon, x, y, angle, color, this.animations);
+        syncWorldTurretFoundation(entry.visual, x, y, !raised);
       }
       if (appearance.powerUpDefId) {
         if (!this.pedestalIds.has(key)) this.pedestalIds.set(key, this.pedestalIds.size);
@@ -298,7 +299,7 @@ export class PersistentBaseEditorWorld {
     }
     for (const mate of this.mates) place(`mate:${mate.key}`, mate.color, false, mate);
     for (const [key, entry] of this.turrets) if (!turretKeys.has(key)) {
-      entry.visual.image.destroy(); entry.visual.aura.destroy(); this.turrets.delete(key);
+      destroyWorldTurretVisual(entry.visual); this.turrets.delete(key);
     }
     for (const [key, visual] of this.watchtowers) if (!watchtowerKeys.has(key)) { visual.destroy(); this.watchtowers.delete(key); }
     this.constructionCells = [...walls.values()].map(({ gridX, gridY }) => ({ gridX, gridY }));
@@ -375,7 +376,7 @@ export class PersistentBaseEditorWorld {
     this.sunlight.destroy();
     this.fx.destroy(); this.powerUps.destroy(); this.gpu.destroy();
     this.animations.clear();
-    for (const { visual } of this.turrets.values()) { visual.image.destroy(); visual.aura.destroy(); }
+    for (const { visual } of this.turrets.values()) destroyWorldTurretVisual(visual);
     this.bridges?.destroy();
     this.bases.destroy(); this.shadows.destroy(); this.lighting.destroy();
     ArenaBuilder.destroyDynamic(this.arena);

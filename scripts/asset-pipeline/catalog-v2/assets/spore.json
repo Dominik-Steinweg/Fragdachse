@@ -49,12 +49,12 @@
     {
       "name": "fire",
       "motion": "organic_pulse",
-      "frameCount": 8,
-      "frameRate": 24,
+      "frameCount": 16,
+      "frameRate": 16,
       "loop": false,
       "parameters": {
         "idleEmission": 0,
-        "activeEmission": 0.9
+        "activeEmission": 0.32
       }
     }
   ],

@@ -2,14 +2,14 @@
   "version": 1,
   "assets": {
     "flame": {
-      "revision": "towers-r07",
+      "revision": "towers-r09",
       "sheet": "./assets/sprites/pipeline-v2/flame/emission.png",
-      "sha256": "e241d66ea7fa9ed4a0f3e7d9e696d1949a0a4a92d4014cbb7f34379e017dc617",
-      "beautySheetSha256": "768a4679d1d09ef6a545dd592244ddd5f5013ca03f0f76fbe5e1916a58d90bf0",
+      "sha256": "62debf365faf9132c01271d76bc8ec11bf018efe8b814f34170273129da5209e",
+      "beautySheetSha256": "5562cea14f2d7cd46deac7841609afa516a0a62ee8c74edcd9a0b18410f90060",
       "encoding": "srgb-hue-alpha-intensity",
       "range": 2,
-      "peak": 0.5748692154884338,
-      "color": "#ff8a32"
+      "peak": 2.8966188430786133,
+      "color": "#ff8c33"
     },
     "gravity": {
       "revision": "towers-r07",
@@ -62,14 +62,14 @@
       "color": "#8bf1ff"
     },
     "spore": {
-      "revision": "towers-r08",
+      "revision": "towers-r09",
       "sheet": "./assets/sprites/pipeline-v2/spore/emission.png",
-      "sha256": "46f67c6a42831cede40a8ab53fe2e6d2de830a7a4d6546808bbde7ba504fb733",
-      "beautySheetSha256": "e3c3e260418b7e067379af7841222a66975c8ec4a86b286aff3455ccad25ada2",
+      "sha256": "e56bd52797ea3aedecb3301639ce9af7467b608ac4f6b87e61d4d958fd023670",
+      "beautySheetSha256": "435738f40ccc050cb3b052d33b602fa71be89ef13b2e8b47196a628da790145f",
       "encoding": "srgb-hue-alpha-intensity",
       "range": 2,
-      "peak": 0.91507488489151,
-      "color": "#ff5833"
+      "peak": 0.3392246961593628,
+      "color": "#ff5230"
     },
     "tesla": {
       "revision": "towers-r07",

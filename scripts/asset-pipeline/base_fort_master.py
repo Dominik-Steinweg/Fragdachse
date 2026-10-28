@@ -291,7 +291,8 @@ class FortMaster:
             x, y, ow = (u, face, (0, 1)) if side == 'n' else (-face, -u, (-1, 0))
             self.torch(t, x, y, ow, rng.uniform(DECK + .1, DECK + .4), rng.choice((1.0, 1.0, 1.15)))
         if rng.random() < .55:
-            self.torch(t, -LINE - rng.uniform(.45, .7), LINE + rng.uniform(.45, .7), (-.7, .7), rng.uniform(.28, .34), 1.15, True)
+            # On a short stake in the bank, right at the palisade foot: further out it reads as lost in the meadow.
+            self.torch(t, -LINE - rng.uniform(.22, .28), LINE + rng.uniform(.22, .28), (-.7, .7), rng.uniform(.28, .34), 1.15, True)
         else:
             self.torch(t, -LINE - .16, LINE + .16, (-.7, .7), DECK + .4, 1.1)
 
@@ -803,23 +804,11 @@ class FortMaster:
             mid = (outer + inner) * .5
             b.ell((mid * math.cos(a), mid * math.sin(a), .33), (.05, .02, .01), p['ember'], 8, 3, (0, 0, a))
         self.socket('hearth', (0.0, 0.0, .45))
-        # The hearth cell is solid, so its corners round the ring carry the fire's supplies.
+        # The hearth cell is solid, so a corner round the ring carries the fire's wood. No chopping block:
+        # its sawn round read as a stray disc beside the fire from above.
         self.firewood(Turn(0), .42, .4, -math.pi / 4, 0, .34, (4, 2))
-        self.chopping_block(-.42, -.4)
-
-    def chopping_block(self, x, y):
-        """A sawn stump with an axe struck into it, chips all round."""
-        b, p, rng = self.b, self.p, self.rng
-        b.cylinder((x, y, .14), .15, .28, p['bark'], 14, .01)
-        b.cylinder((x, y, .285), .14, .012, p['block'], 14, .003)
-        a = rng.uniform(0, math.tau)
-        hx, hy = x + .02 * math.cos(a), y + .02 * math.sin(a)
-        b.box((hx, hy, .31), (.14, .03, .06), p['iron'], .004, (0, 0, a))                                       # the axe head
-        b.rod((hx, hy, .31), (hx + .38 * math.cos(a + math.pi / 2), hy + .38 * math.sin(a + math.pi / 2), .14), .016, p['oak'], 6)
-        for _ in range(26):                                                    # chips and bark flakes
-            d, c = rng.uniform(.17, .42), rng.uniform(0, math.tau)
-            s_ = rng.uniform(.015, .04)
-            b.box((x + d * math.cos(c), y + d * math.sin(c), .006), (s_ * 1.8, s_, .008), p['chip'], 0, (0, 0, rng.uniform(0, 3)))
+        for _ in range(105):                     # the removed block's draws, so the ground details after it keep their places
+            self.rng.random()
 
     def moss_patch(self, x, y, size):
         """A flat, ragged patch of moss on the ground: a few overlapping low lobes of two shades, so it
