@@ -10,10 +10,12 @@ saddle, lit flanks and a pale violet fur edge that keeps the outline readable on
 softened by fur locks along the outline. Red stays with the telegraphs; no yellow.
 
 z = 0 is the ground. Parts for rabid_rabbit_motion_v2: `carriage` (whole animal, real leap
-height), the `ear_glow` emission socket (rest strength `ear_glow_rest`) and the rig: `body`
-(chest), `hips` (loin and rump, pivot mid-back), `head`, `jaw`, `ear_l`/`ear_r`, `tail`, per front
-leg `<leg>_upper/_lower/_foot` and per rear leg `<leg>_thigh/_shin/_foot`. Every bone rolls its Z
-axis up, so Euler Z is a yaw seen from the camera and Euler X lifts the bone's tip.
+height), the void glow sockets `ear_glow` (strength), `ear_glow_reach` (how far the glow creeps
+back from the tips) and `ear_glow_flow` (flicker phase) with their rest values, and the rig:
+`body` (chest), `hips` (loin and rump, pivot mid-back), `head`, `jaw`, two-segment ears
+`ear_l`/`ear_l_tip` and `ear_r`/`ear_r_tip`, `tail`, per front leg `<leg>_upper/_lower/_foot` and
+per rear leg `<leg>_thigh/_shin/_foot`. Every bone rolls its Z axis up, so Euler Z is a yaw seen
+from the camera and Euler X lifts the bone's tip.
 Feet are the authored paw meshes `<leg> broad paw ...` used by the enemy mesh contacts.
 Sockets: eyeLeft/eyeRight (irises) and `mouth` (between the incisors, on the jaw).
 """
@@ -64,7 +66,9 @@ EYE_TONES = ('#f6e2ff', '#c070ff', '#5d1aa6', '#14041f')  # iris rings: core, br
 EYE_GLOW = 2.2
 VOID = linear('#b347ff')
 VOID_HOT = linear('#e2a8ff')
-TIP_GLOW = 2.4
+TIP_GLOW = 1.1  # rest emission strength of the void ear tips; clips flare it up to about 1.8x, still violet
+TIP_REACH = .30  # rest share of the ear the glow fills from the tip; clips widen it in motion
+EAR_JOINT = 11  # ear path station (of 26) where the root bone hands over to the tip bone
 IVORY = linear('#ddd5c6')
 
 
@@ -154,9 +158,10 @@ def fur(c, name, density, softness=.8, roughness=(.74, .90), dark=None, light=No
     return material
 
 
-def tip_glow(material, strength):
-    """Void glow from the FD_Glow mask (G = how strongly a point glows), broken up by a slow
-    flicker so it reads as living light, hottest where the mask is full. Strength is a socket."""
+def tip_glow(material, strength, reach):
+    """Void glow creeping from the ear tips: FD_Glow G is the position along the ear (0 root .. 1 tip);
+    everything beyond 1 - reach glows, hottest at the tip, broken up by a 4D flicker so it reads as
+    living light. Returns the strength, reach and flicker-phase (noise W) sockets the clips key."""
     nodes, links = material.node_tree.nodes, material.node_tree.links
     bs = nodes['Principled BSDF']
     rest = nodes['Rest-pose skin coordinates'].outputs['Vector']
@@ -179,7 +184,17 @@ def tip_glow(material, strength):
     mask.layer_name = 'FD_Glow'
     split = node('ShaderNodeSeparateColor', 'Void glow mask channels')
     links.new(mask.outputs['Color'], split.inputs[0])
+    reach_value = node('ShaderNodeValue', 'Void glow reach')
+    reach_value.outputs[0].default_value = reach
+    front = math_node('SUBTRACT', 1, reach_value.outputs[0], 'Glow front along the ear')
+    fill = node('ShaderNodeMapRange', 'Glow fill behind the front')
+    fill.interpolation_type = 'SMOOTHSTEP'
+    fill.clamp = True
+    links.new(split.outputs[1], fill.inputs['Value'])
+    links.new(front, fill.inputs['From Min'])
+    links.new(math_node('ADD', front, .24, 'Soft glow front'), fill.inputs['From Max'])
     flicker = node('ShaderNodeTexNoise', 'Void glow breakup')
+    flicker.noise_dimensions = '4D'
     flicker.inputs['Scale'].default_value = 7
     flicker.inputs['Detail'].default_value = 2
     links.new(rest, flicker.inputs['Vector'])
@@ -189,12 +204,15 @@ def tip_glow(material, strength):
     for name, v in (('From Min', .30), ('From Max', .70), ('To Min', .55), ('To Max', 1.1)):
         breakup.inputs[name].default_value = v
     links.new(flicker.outputs['Fac'], breakup.inputs['Value'])
-    glow = math_node('MINIMUM', math_node('MULTIPLY', split.outputs[1], breakup.outputs[0], 'Void glow'), 1, 'Clamped void glow')
+    # Brighter towards the tip: the void wells out of the ear end.
+    tipward = math_node('ADD', .55, math_node('MULTIPLY', split.outputs[1], .45, 'Tipward glow'), 'Tip bias')
+    glow = math_node('MINIMUM', math_node('MULTIPLY', math_node('MULTIPLY', fill.outputs[0], breakup.outputs[0], 'Void glow'),
+                                          tipward, 'Tip-biased void glow'), 1, 'Clamped void glow')
     hot = node('ShaderNodeMix', 'Void glow colour')
     hot.data_type = 'RGBA'
     hot.inputs[6].default_value = (*VOID, 1)
     hot.inputs[7].default_value = (*VOID_HOT, 1)
-    links.new(math_node('MULTIPLY', glow, glow, 'Hot glow cores'), hot.inputs[0])
+    links.new(math_node('MULTIPLY', math_node('MULTIPLY', glow, glow, 'Hot glow cores'), .40, 'Hot core share'), hot.inputs[0])
     emission = node('ShaderNodeMix', 'Void emission colour')
     emission.data_type = 'RGBA'
     emission.inputs[6].default_value = (0, 0, 0, 1)
@@ -210,7 +228,7 @@ def tip_glow(material, strength):
     links.new(base, tinted.inputs[6])
     tinted.inputs[7].default_value = (*linear('#3c1660'), 1)
     links.new(tinted.outputs[2], bs.inputs['Base Color'])
-    return bs.inputs['Emission Strength']
+    return bs.inputs['Emission Strength'], reach_value.outputs[0], flicker.inputs['W']
 
 
 def ring_iris(c, name, tones, strength):
@@ -331,8 +349,8 @@ def ear(c, side, hull, material, ear_yaw):
     widths = [width * width_at(k / (stations - 1)) for k in range(stations)]
     thick = [.040 - .018 * k / (stations - 1) for k in range(stations)]
     ob, plan = leaf(c, f'Rabbit {"left" if side < 0 else "right"} ear', path, widths, thick, .42, material, side)
-    # FD_Pattern: dark tip and pale violet edge rim, a darker groove; FD_Glow G: the glowing tip,
-    # brightest at the very end and fading back over the dark tip.
+    # FD_Pattern: dark tip and pale violet edge rim, a darker groove; FD_Glow G: the position along
+    # the ear, from which the shader lets the void glow creep back from the tip.
     tip = EAR['tip']
     mesh = ob.data
     pattern = mesh.color_attributes.new(name='FD_Pattern', type='FLOAT_COLOR', domain='POINT')
@@ -342,13 +360,12 @@ def ear(c, side, hull, material, ear_yaw):
         dark_tip = smoothstep(1 - tip * 1.25, 1 - tip * .35, t)
         root_shade = (.80 + .20 * smoothstep(0, .25, t)) * (1 - .18 * math.exp(-(edge / .25) ** 2) * max(0, top))
         colours.extend((root_shade * (1 - dark_tip), .85 * smoothstep(.55, .98, edge) * (1 - dark_tip), .15, 1))
-        lit = smoothstep(1 - tip * 1.4, 1 - tip * .3, t) * (.75 + .25 * smoothstep(.90, 1, t))
-        glow.extend((0, lit, 0, 1))
+        glow.extend((0, t, 0, 1))
     pattern.data.foreach_set('color', colours)
     mask.data.foreach_set('color', glow)
     write_rest(ob)
     c.paint_form_mask(ob, lambda p: .72)
-    return ob, path
+    return ob, path, [t for t, _, _ in plan]
 
 
 def leg_points(joints, side):
@@ -412,9 +429,9 @@ def build_leg(c, leg, rows, materials):
     L, W, th = LENGTH, WIDTH, LEG_THICKNESS
     fur_mat, claw = materials['limb'], materials['claw']
     if leg.startswith('front'):
-        # Shoulder, elbow, wrist, toe tips: braced under the chest, the paws just outside the cheeks.
-        joints = leg_points([(.30 * W, .48 * L, .55), (.38 * W, .38 * L, .24), (.36 * W, .64 * L, .07)], side)
-        tip = Vector((side * .34 * W, .86 * L + .02, .03))
+        # Shoulder, elbow, wrist, toe tips: long hare forelegs braced under the chest and head.
+        joints = leg_points([(.30 * W, .50 * L, .58), (.40 * W, .40 * L, .26), (.38 * W, .70 * L, .07)], side)
+        tip = Vector((side * .36 * W, .96 * L + .02, .03))
         upper = horn(c, f'{leg} shoulder', joints[:2], [.12 * th, .075 * th], fur_mat, sides=14)
         elbow = ell(c, f'{leg} elbow', tuple(joints[1]), (.075 * th,) * 3, fur_mat)
         lower = horn(c, f'{leg} foreleg', joints[1:], [.07 * th, .05 * th], fur_mat, sides=14)
@@ -439,7 +456,7 @@ def build_leg(c, leg, rows, materials):
         names = REAR_SEGMENTS
     for segment, objects in segments.items():
         for ob in objects:
-            paint_limb(ob, paw_light=FOOT['light'] if segment == 'foot' and leg.startswith('rear') else 0)
+            paint_limb(ob, paw_light=FOOT['light'] if segment == 'foot' else 0)
             write_rest(ob)
             c.paint_form_mask(ob, lambda p: .62 + .38 * max(0, min(1, p.z / .4)))
     return dict(joints=joints, tip=tip, segments=segments, names=names, side=side)
@@ -573,10 +590,10 @@ def build(c, spec):
     write_rest(lower_jaw)
     c.paint_form_mask(lower_jaw, lambda p: .7)
 
-    ears, ear_paths = {}, {}
+    ears, ear_paths, ear_along = {}, {}, {}
     for side in (-1, 1):
-        ears[side], ear_paths[side] = ear(c, side, hull, ear_fur, ear_yaw)
-    ear_glow = tip_glow(ear_fur, TIP_GLOW)
+        ears[side], ear_paths[side], ear_along[side] = ear(c, side, hull, ear_fur, ear_yaw)
+    ear_glow, ear_reach, ear_flow = tip_glow(ear_fur, TIP_GLOW, TIP_REACH)
 
     tail_y = rows[-1][0] + .04
     tail = ell(c, 'Rabid Rabbit tail tuft', (0, tail_y, .58), (.14, .13, .14), tail_fur)
@@ -611,8 +628,11 @@ def build(c, spec):
     bone('head', (0, neck - .04, .74 - HEAD_DROP), (0, nose.y, .70 - HEAD_DROP), 'body')
     bone('jaw', tuple(nose + Vector((0, -.30, -.10))), tuple(nose + Vector((0, .02, -.10))), 'head')
     for side, key in ((-1, 'l'), (1, 'r')):
+        # Two-segment ears: the tip bone lags and whips behind the root.
         path = ear_paths[side]
-        bone(f'ear_{key}', tuple(path[0]), tuple(path[0] + (path[6] - path[0]).normalized() * .35), 'head')
+        bend = path[EAR_JOINT]
+        bone(f'ear_{key}', tuple(path[0]), tuple(bend), 'head')
+        bone(f'ear_{key}_tip', tuple(bend), tuple(path[-1]), f'ear_{key}', connect=True)
     bone('tail', (0, tail_y + .16, .58), (0, tail_y - .14, .64), 'hips')
     for leg, parts in legs.items():
         joints, tip = parts['joints'], parts['tip']
@@ -677,7 +697,13 @@ def build(c, spec):
     for ob in teeth:
         rigid(ob, 'head', 'incisors')
     rigid(lower_jaw, 'jaw', 'jaw'); rigid(mouth, 'jaw', 'jaw')
-    rigid(ears[-1], 'ear_l', 'ear-l'); rigid(ears[1], 'ear_r', 'ear-r')
+    joint = EAR_JOINT / (len(ear_paths[1]) - 1)
+    for side, key in ((-1, 'l'), (1, 'r')):
+        ob = ears[side]
+        ob.parent = carriage
+        bind(ob, rig, [[(f'ear_{key}', 1 - smoothstep(joint - .15, joint + .15, t)), (f'ear_{key}_tip', smoothstep(joint - .15, joint + .15, t))]
+                       for t in ear_along[side]])
+        ob['meshUnionGroup'] = f'ear-{key}'
     rigid(tail, 'tail', 'tail')
     for leg, parts in legs.items():
         for segment, objects in parts['segments'].items():
@@ -690,5 +716,6 @@ def build(c, spec):
     mouth_socket.parent, mouth_socket.parent_type, mouth_socket.parent_bone = rig, 'BONE', 'jaw'
     mouth_socket.matrix_parent_inverse = (rest.matrix_local @ Matrix.Translation((0, rest.length, 0))).inverted()
     mouth_socket.location = tuple(nose + Vector((0, .08, -.06)))
-    parts = {'carriage': carriage, 'rabbit_legs': list(LEGS), 'ear_glow': ear_glow, 'ear_glow_rest': TIP_GLOW}
+    parts = {'carriage': carriage, 'rabbit_legs': list(LEGS), 'ear_glow': ear_glow, 'ear_glow_rest': TIP_GLOW,
+             'ear_glow_reach': ear_reach, 'ear_glow_reach_rest': TIP_REACH, 'ear_glow_flow': ear_flow}
     return {'root': root, 'parts': parts, 'rig': rig, 'sockets': {'mouth': mouth_socket}}
