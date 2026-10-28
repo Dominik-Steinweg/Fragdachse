@@ -248,6 +248,7 @@ export class LobbyStructureRenderer {
         set('uSun', sunlight?.state.sun ?? [0, 0, 1]);
         this.optionsUniform[0] = sunlight?.state.enabled ? sunlight.clouds.strength : 0;
         set('uOptions', this.optionsUniform);
+        set('uFade', 1);
         const lights = sunlight ? sunlight.surfaceLights(left, top, size, size, this.surfaceLights) : null;
         setSurfaceLightUniforms(set, lights, sunlight?.moon ?? null, sunlight?.clouds.quality?.surfaceLights);
       },

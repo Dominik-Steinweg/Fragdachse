@@ -5,7 +5,9 @@ import { ROUTE_FLOW_SHAPE } from './RouteFlowStore';
  * Void-Strömung: the enemy routes of the next round as a living void current, one quad per
  * stream segment plus the pressure wave of a breach. Sources and goals have no mark of their own:
  * the current gathers out of its spawn zone's void haze and parts around the base it attacks. No
- * lines, no arrows: direction is the motion of the current.
+ * lines, no arrows: direction is the motion of the current. A portal jump is the one exception:
+ * nothing walks there, so it is a thin arc of void light with beads racing from entry to exit,
+ * without ink or haze.
  *
  * Pass 0 (ground, NORMAL, decal band) soaks the soil with dark void ink.
  * Pass 1 (bed, NORMAL, above water and below rocks) carries the readable stream by day: violet
@@ -222,6 +224,29 @@ void main() {
       }
       // Breach routes boil against the wall.
       glow += HOT * heat * heat * haze * (0.25 + 0.25 * sin(uTime * 0.012 - dist * 0.08));
+    }
+  } else if (kind < 2.0) {
+    // Portal jump: a parabola off the straight line (lift at its middle), rising out of the entry
+    // and sinking into the exit.
+    float len = vShape.x / uUnit, hw = vShape.y / uUnit, lift = vShape.z / uUnit;
+    float t = clamp(p.x / max(len, 0.001), 0.0, 1.0);
+    float slope = lift * 4.0 * (1.0 - 2.0 * t) / max(len, 0.001);
+    float d = abs(p.y + lift * 4.0 * t * (1.0 - t)) / sqrt(1.0 + slope * slope);
+    float ease = min(40.0, len * 0.2);
+    float rise = smoothstep(0.0, ease, p.x) * smoothstep(len, len - ease, p.x);
+    float r = max(hw, px * 0.9);
+    float thread = exp(-sq(d / (r * 0.55))) * rise;
+    float halo = exp(-sq(d / (r * 3.2))) * rise;
+    // Beads drift and comets race along the arc length (close enough for a flat parabola).
+    float arc = p.x * (1.0 + 2.67 * sq(lift / max(len, 1.0)));
+    float gap = max(15.0, px * 6.0);
+    float bead = fract(arc / gap - uTime * 0.0011);
+    float beads = exp(-sq((bead - 0.5) * gap / (r * 1.1))) * exp(-sq(d / (r * 1.1))) * rise;
+    float comet = fract(arc / 260.0 - uTime * 0.0009);
+    float rush = smoothstep(0.55, 0.96, comet) * (1.0 - smoothstep(0.96, 1.0, comet)) * rise;
+    if (uPass > 0.5) {
+      if (uPass < 1.5) over(acc, VOID_LIGHT, (thread * 0.35 + beads * 0.75 + rush * thread * 0.5) * strength);
+      glow += MOTE_BRIGHT * (halo * 0.18 + beads * 0.9 + rush * (thread * 1.6 + halo * 0.45));
     }
   } else {
     float radius = vShape.x / uUnit;

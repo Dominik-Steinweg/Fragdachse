@@ -107,7 +107,14 @@ Die Darstellung folgt [`visual-guidelines.md`](../ai/visual-guidelines.md) und d
     Basis, um sie anzugreifen. Am Rand des Baubereichs gibt es keine Marke.
   - **Kein freier Weg:** Der Strom läuft heiß gegen die Mauer und erzeugt einen Druckring. Dazu
     erscheint die Warnung „Kein freier Weg – Gegner brechen durch“.
+  - **Teleporter:** Generator und Portale stehen wie in der Mission: zu Beginn bilden sich die Portale
+    noch, mit „Teleporter aktiv“ öffnen sie sich. Ein Weg durch ein offenes Portal endet als Strom im
+    Eingang und steigt aus dem Ausgang wieder auf. Der Sprung dazwischen ist kein Strom, sondern ein dünner
+    Bogen aus Void-Licht mit Perlen und Kometen vom Eingang zum Ausgang, ohne Bodenspur und Dunst.
   - **Lage:** Das Leuchten des Stroms liegt über den Baumkronen; Dunst und Bodenspur bleiben am Boden.
+- **Gefallene Vorposten:** Mit „Vorposten zerstört“ blenden die Vorposten samt Türmen, Feuern, Licht,
+  Schatten und Bodenspur in 0,6 s aus und beim Zurückschalten wieder ein; die Übersicht lässt sie weg.
+  Eine Ruine wird nicht gezeigt.
 - **Mitspieler:** in Spielerfarbe wie in der Mission, nicht anwählbar.
 - **Konflikte:** pulsierender roter Halo am Objekt; die Kachel trägt einen roten Rand und nennt den
   Grund beim Überfahren.
@@ -115,8 +122,9 @@ Die Darstellung folgt [`visual-guidelines.md`](../ai/visual-guidelines.md) und d
   alle Türme; der ausgewählte und der gerade gehaltene Turm zeigen ihre Reichweite immer, etwas klarer.
 - **Baugrenze:** eine weiche, warme Lichtkante mit runden Ecken statt einer Linie; die Zellen erscheinen
   nur, während ein Objekt in der Hand ist.
-- **Miniübersicht:** die ganze Map, Norden oben, mit Basis, Spawnzonen, dem Rahmen des Detailbereichs
-  und der Strömung in einer zweiten, feineren Instanz. Eine Legende darunter nennt nur, was die Map zeigt.
+- **Miniübersicht:** die ganze Map, Norden oben, mit Basis, Spawnzonen, Portalen (violetter Ring) samt
+  Generator, dem Rahmen des Detailbereichs und der Strömung in einer zweiten, feineren Instanz. Eine
+  Legende darunter nennt nur, was die Map zeigt.
 - **Aufteilung:** Links steht die World in einem festen Rahmen. Unter dem Titel stehen die
   Bedienhinweise. Die Kopfzeile trägt links Badges (Stufe, Radius, Basis-HP, platziert x/y), rechts
   „Basis drehen“, „Reichweiten“ und „Alles zurück“, über der rechten Spalte Titel und Einsatzbeginn der
@@ -302,3 +310,6 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
 - 2026-10-28 (Routenenden): Statt pulsierender Eintrittsmarken am Rand des Baubereichs teilen sich die
   Ströme am Ziel in Arme entlang des Rings um die erreichte Basis (bis 5 Felder je Richtung, nur begehbare
   Zellen); Arme verbreitern sich nicht gegenseitig.
+- 2026-10-28 (Vorposten und Teleporter): Gefallene Vorposten blenden aus statt stehen zu bleiben; eine
+  verkohlte Ruine wurde verworfen. Portale und Generator sind sichtbar, Portalsprünge sind eigene Bögen
+  statt Strom über den Boden; die Übersicht zeigt Portale als Ringe mit Legendeneintrag „Teleporter“.

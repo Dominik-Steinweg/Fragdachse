@@ -14,6 +14,8 @@ export interface FlowFieldRoutePoint {
   readonly y: number;
   /** Remaining integration cost to the goal; it falls along the route and is shared where routes merge. */
   readonly goalDistance: number;
+  /** Reached from the previous point through a portal link, not by walking. */
+  readonly portal?: true;
 }
 
 export interface FlowFieldRoute {
@@ -38,16 +40,17 @@ export function nextFlowFieldNode(snapshot: Pick<FlowFieldRouteSnapshot, 'vector
 export function traceFlowFieldRoute(snapshot: FlowFieldRouteSnapshot, metrics: FlowFieldMetrics, startIndex: number): FlowFieldRoute {
   const points: FlowFieldRoutePoint[] = [];
   const visited = new Set<number>();
-  let index = startIndex;
+  let index = startIndex, jumped = false;
   const total = metrics.cols * metrics.rows;
   while (index >= 0 && index < total && !visited.has(index)) {
     const cost = snapshot.integrationField[index];
     if (!Number.isFinite(cost)) return { points, reachedGoal: false };
     visited.add(index);
     const point = navigationPoint(metrics, index);
-    points.push({ x: point.x, y: point.y, goalDistance: cost });
+    points.push(jumped ? { x: point.x, y: point.y, goalDistance: cost, portal: true } : { x: point.x, y: point.y, goalDistance: cost });
     if (cost === 0) return { points, reachedGoal: true };
     const next = nextFlowFieldNode(snapshot, metrics, index);
+    jumped = next < 0;
     if (next >= 0) { index = next; continue; }
     index = portalExit(snapshot.portalLinks, index);
   }

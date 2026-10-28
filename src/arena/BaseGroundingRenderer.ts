@@ -43,6 +43,9 @@ function readApronMaterials(scene: Phaser.Scene): BaseApronMaterials | null {
  */
 export class BaseGroundingRenderer {
   private readonly imagesByCell = new Map<number, Phaser.GameObjects.Image[]>();
+  /** Each stone's own alpha, which a planning fade scales. */
+  private readonly stoneAlpha = new Map<Phaser.GameObjects.Image, number>();
+  private presence = 1;
   private apron: Phaser.GameObjects.Image | null = null;
   private apronKey: string | null = null;
   private readonly footprint: BaseGroundingFootprint;
@@ -71,6 +74,7 @@ export class BaseGroundingRenderer {
         .setAlpha(placement.alpha)
         .setDepth(DEPTH.BASE_GROUNDING - (placement.kind === 'gravel' ? 0.06 : 0));
       image.setTint(placement.tint === undefined ? groundTint : multiplyColours(placement.tint, groundTint));
+      this.stoneAlpha.set(image, placement.alpha);
       let images = this.imagesByCell.get(placement.cellIndex);
       if (!images) this.imagesByCell.set(placement.cellIndex, images = []);
       images.push(image);
@@ -105,6 +109,14 @@ export class BaseGroundingRenderer {
     this.apron = this.scene.add.image(raster.worldX, raster.worldY, key)
       .setOrigin(0, 0)
       .setDepth(DEPTH.BASE_GROUNDING - 0.2);
+    if (this.presence < 1) this.apron.setAlpha(this.presence).setVisible(this.presence > 0);
+  }
+
+  /** Planning view only: the ground of a fallen base fades with it (Bauhof what-if); 1 stands. */
+  setPresence(presence: number): void {
+    this.presence = presence;
+    this.apron?.setAlpha(presence).setVisible(presence > 0);
+    for (const [image, alpha] of this.stoneAlpha) image.setAlpha(alpha * presence).setVisible(presence > 0);
   }
 
   private destroyApron(): void {
@@ -117,7 +129,7 @@ export class BaseGroundingRenderer {
   destroyCell(cellIndex: number): void {
     const images = this.imagesByCell.get(cellIndex);
     if (!images) return;
-    for (const image of images) image.destroy();
+    for (const image of images) { image.destroy(); this.stoneAlpha.delete(image); }
     this.imagesByCell.delete(cellIndex);
   }
 

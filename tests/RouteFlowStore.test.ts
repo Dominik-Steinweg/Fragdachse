@@ -88,6 +88,25 @@ describe('route flow geometry', () => {
     expect(geometry.marks).toHaveLength(0);
   });
 
+  it('splits a route at a portal: the stream ends in the entry, rises out of the exit, the jump is its own arc', () => {
+    // From the west into an entry at (20, 10); out of the exit at (60, 30) on to the east, breaking through there.
+    const walk = route(repeat([1, 0], 20), [0, 10]), beyond = route(repeat([1, 0], 15), [60, 30]);
+    const portal: RouteFlowRoute = { points: [...walk.points, { ...beyond.points[0]!, portal: true }, ...beyond.points.slice(1)],
+      breach: true, strength: .8, sourceReach: 40 };
+    const geometry = buildRouteFlowGeometry([portal], { tolerance: .75 });
+    // Nothing flows over the ground between the portals: past the entry the stream only dissolves.
+    for (const segment of geometry.segments) {
+      expect(Math.max(segment.ax, segment.bx) <= 20 * 16 + 32 || Math.min(segment.ax, segment.bx) >= 60 * 16).toBe(true);
+    }
+    expect(geometry.jumps).toEqual([{ key: expect.any(String), ax: 20 * 16, ay: 10 * 16, bx: 60 * 16, by: 30 * 16, strength: .8 }]);
+    // The breach belongs to the route's end beyond the exit.
+    expect(geometry.marks.map((mark) => [mark.kind, mark.x])).toEqual([[RouteFlowKind.Breach, 75 * 16]]);
+    const store = new RouteFlowStore();
+    store.setGeometry(geometry, 0);
+    const kinds = Array.from({ length: store.count }, (_, slot) => store.data[slot * ROUTE_FLOW_INSTANCE_FLOATS + 15]);
+    expect(kinds.filter((kind) => kind === RouteFlowKind.Jump)).toHaveLength(1);
+  });
+
   it('keeps a stream that still flows at its age and fades a new one in', () => {
     const store = new RouteFlowStore();
     store.setGeometry(buildRouteFlowGeometry([north], { tolerance: .75 }), 1000);

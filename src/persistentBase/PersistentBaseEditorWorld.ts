@@ -28,6 +28,12 @@ import { resolveCoopDefenseMapConfig } from '../world/WorldDefinitionResolution'
 import { DEPLOYMENT_ROUTE_START, DeploymentRoutePlanner, type DeploymentRoutePlan, type DeploymentRouteScenario,
   type DeploymentRouteScenarioOptions } from '../activity/DeploymentRoutes';
 import { RouteFlowPresentation } from '../effects/routeFlow/RouteFlowPresentation';
+import { PortalPresentation } from '../effects/portal/PortalPresentation';
+import { VoidPortalRenderer, type VoidPortalGeneratorView, type VoidPortalScenario } from '../effects/voidPortal/VoidPortalRenderer';
+import { resolveCoopDefensePortalLink } from '../config/coopDefensePortalLinks';
+import { resolveCoopMissionPortalEndpoints } from '../activity/CoopMissionPortalComposition';
+import type { PortalLinkStateEntry } from '../systems/portal/PortalLinkSystem';
+import { getBaseWorldBounds } from '../arena/BaseRegistry';
 import { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
 import type { FogSurfaceStamp } from '../effects/groundFog/FogSurfaceMask';
 import { DEFAULT_FOG_STRENGTH } from '../config/groundFog';
@@ -44,6 +50,9 @@ import type { PersistentBaseAnchor } from './PersistentBaseTypes';
 export { getPersistentBaseEditorSize } from './PersistentBaseExpansionPreview';
 /** Terrain built beyond the view, so rock autotiling and canopies do not end at its edge. */
 const CROP_MARGIN_CELLS = 3;
+/** Closed, a generator portal stands as it forms in the round: this far charged, breathing. */
+const PORTAL_FORMING = .4;
+const NO_BASES: ReadonlySet<string> = new Set();
 
 /** Terrain of the next round around the base (Lagekarte): the host's map at its deployment seed. */
 export interface PersistentBaseEditorTerrain {
@@ -110,6 +119,10 @@ export class PersistentBaseEditorWorld {
   private constructionCells: readonly { gridX: number; gridY: number }[] = [];
   private routePlanner: DeploymentRoutePlanner | null = null;
   private routes: RouteFlowPresentation | null = null;
+  /** The map's generator portals with their generators, as the round starts or opened by the what-if. */
+  private portals: { readonly presentation: PortalPresentation; readonly renderer: VoidPortalRenderer;
+    readonly scenario: VoidPortalScenario; readonly generators: ReadonlyMap<string, VoidPortalGeneratorView>;
+    clockMs: number; openedAtMs: number } | null = null;
   /** The round's ground fog with the void haze in its air; it stays off the build area. Map terrain only. */
   private fog: GroundFogSystem | null = null;
   private fogClearing: Phaser.GameObjects.Image | null = null;
@@ -253,6 +266,19 @@ export class PersistentBaseEditorWorld {
       spawnFocusCell: this.terrain.definition.spawnFocusCell, detail: this.view }) : null;
     this.routes = this.routePlanner ? new RouteFlowPresentation(scene, this.lighting) : null;
     if (this.routes) this.sunlight.setActivityVoidDanger(this.routes.voidDanger);
+    // Generator portals look as in a round: forming at its start, open in the what-if.
+    const links = (mapConfig?.portalLinks ?? []).map(resolveCoopDefensePortalLink);
+    if (mapConfig && links.length) {
+      const generators = new Map<string, VoidPortalGeneratorView>();
+      for (const base of this.world.bases) {
+        if (!links.some((link) => link.generatorBaseId === base.id)) continue;
+        const bounds = getBaseWorldBounds(base.region, this.world.metrics);
+        generators.set(base.id, { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2, hp: base.hpMax, maxHp: base.hpMax, destroyed: false });
+      }
+      const presentation = new PortalPresentation(scene, this.lighting);
+      this.portals = { presentation, renderer: new VoidPortalRenderer(scene, this.gpu, this.lighting, presentation),
+        scenario: { links, endpoints: resolveCoopMissionPortalEndpoints(mapConfig, this.world.metrics) }, generators, clockMs: 0, openedAtMs: 0 };
+    }
     section('routes');
     yield 'heavy';
     this.sunlight.update(this.timeOfDay,0);
@@ -328,11 +354,34 @@ export class PersistentBaseEditorWorld {
     });
     return plan;
   }
+  /** Own bases the what-if has fallen; empty in the round as it starts. */
+  get fallenBaseIds(): ReadonlySet<string> {
+    return this.scenario.outpostsDestroyed ? this.routePlanner?.outpostIds ?? NO_BASES : NO_BASES;
+  }
+  /** Bridges the what-if has blown: all of the map's; empty in the round as it starts. */
+  get blownBridgeIds(): ReadonlySet<string> {
+    return this.scenario.bridgesDestroyed ? new Set((this.terrain?.layout.bridges ?? []).map((bridge) => bridge.id)) : NO_BASES;
+  }
+  /** Generator portals for the situation map: their ends in cells (fractional) and their generators. */
+  get situationPortals(): { readonly ends: readonly { readonly x: number; readonly y: number }[]; readonly generatorIds: ReadonlySet<string> } | null {
+    const portals = this.portals;
+    if (!portals) return null;
+    const { offsetX, offsetY } = this.world.metrics;
+    return { generatorIds: new Set(portals.generators.keys()),
+      ends: [...portals.scenario.endpoints.values()].flatMap(({ a, b }) => [a, b])
+        .map((point) => ({ x: (point.x - offsetX) / CELL_SIZE, y: (point.y - offsetY) / CELL_SIZE })) };
+  }
   /** What-if switches this map offers; `null` without routes. */
   get scenarioOptions(): DeploymentRouteScenarioOptions | null { return this.routePlanner?.scenarioOptions ?? null; }
-  /** Replans the routes for a what-if; the round itself always starts with all switches off. */
-  setScenario(scenario: DeploymentRouteScenario): DeploymentRoutePlan | null {
+  /**
+   * Replans the routes for a what-if; the round itself always starts with all switches off. Fallen
+   * outposts and blown bridges fade out, or vanish at once with `immediate` (a new session).
+   */
+  setScenario(scenario: DeploymentRouteScenario, immediate = false): DeploymentRoutePlan | null {
+    if (scenario.teleportersOpen && !this.scenario.teleportersOpen && this.portals) this.portals.openedAtMs = this.portals.clockMs;
     this.scenario = scenario;
+    for (const id of this.routePlanner?.outpostIds ?? []) this.bases.setFallen(id, scenario.outpostsDestroyed, immediate);
+    this.bridges?.setFallen(scenario.bridgesDestroyed, immediate);
     return this.planRoutes();
   }
   /** The routes also flow over the situation map's minimap, in its panel space. */
@@ -458,6 +507,7 @@ export class PersistentBaseEditorWorld {
     this.presentationTimeMs+=Math.max(0,delta);
     this.powerUps.updatePresentation(this.presentationTimeMs);
     this.routes?.update(delta);
+    this.syncPortals(delta);
     this.sunlight.update(this.timeOfDay,this.presentationTimeMs);
     if (this.fog) {
       // As in a round's frame: the fog steps after the sun, then lends its air and shape to the void motes.
@@ -478,6 +528,7 @@ export class PersistentBaseEditorWorld {
     for (const visual of this.watchtowers.values()) visual.destroy();
     this.watchtowers.clear();
     this.routes?.destroy(); this.routePlanner?.destroy();
+    this.portals?.renderer.destroy(); this.portals?.presentation.destroy(); this.portals = null;
     this.sunlight?.destroy();
     this.fog?.destroy(); this.fogClearing?.destroy();
     this.fx?.destroy(); this.powerUps?.destroy(); this.gpu?.destroy();
@@ -487,6 +538,18 @@ export class PersistentBaseEditorWorld {
     this.bases?.destroy(); this.shadows?.destroy(); this.lighting?.destroy();
     if (this.arena) ArenaBuilder.destroyDynamic(this.arena);
     this.background?.ground.destroy(); this.background?.macro.destroy();
+  }
+
+  /** The portals' lifecycle as the what-if sets it; the renderer reads it like a replicated one. */
+  private syncPortals(delta: number): void {
+    const portals = this.portals;
+    if (!portals) return;
+    const now = portals.clockMs += Math.max(0, delta);
+    const open = this.scenario.teleportersOpen;
+    const entries = portals.scenario.links.map((link): PortalLinkStateEntry => open
+      ? { id: link.id, phase: 'open', openedAtMs: portals.openedAtMs }
+      : { id: link.id, phase: 'charging', chargeStartedAtMs: now - link.chargeDurationMs * PORTAL_FORMING });
+    portals.renderer.sync(portals.scenario, entries, now, (baseId) => portals.generators.get(baseId) ?? null);
   }
 
   /** The player's fog setting, the base plates and the cleared build area, as a round's frame feeds them. */

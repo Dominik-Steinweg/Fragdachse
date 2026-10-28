@@ -59,6 +59,9 @@ const TELEGRAPH_DEPTH = 19.7;
 const FINAL_WARNING_MS = 1600;
 const HAZARD_MARGIN_PX = 6;
 const LAND_BOUNCE_MS = 200;
+/** A blown bridge fades out of a planning view over this long, and back in (Bauhof what-if). */
+const FALLEN_FADE_MS = 600;
+const SHADOW_ALPHA = .55;
 let nextTextureOwner = 0;
 
 function ensureSharedTextures(textures: Phaser.Textures.TextureManager): void {
@@ -135,6 +138,10 @@ export class BridgeRenderer {
   private readonly fx: BridgeDestructionFx;
   /** Shared strike telegraph (mortar/airstrike family): blast radius and countdown track. */
   private readonly strike: MortarGpuLayer;
+  /** Planning only: blown bridges fade out of view (see `setFallen`); 1 stands. */
+  private presence = 1;
+  private fallen = false;
+  private fallenFade: Phaser.Tweens.Tween | null = null;
   private destroyed = false;
 
   constructor(private readonly scene: Phaser.Scene, bridges: readonly ArenaBridge[], private readonly origin: BridgeWorldOrigin,
@@ -160,7 +167,7 @@ export class BridgeRenderer {
       const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
       const rotation = bridge.axis === 'horizontal' ? 0 : Math.PI / 2;
       // The deck stands a little above the river; its contact shadow darkens the water around it.
-      const shadow = scene.add.image(cx + 2, cy + 3, shadowKey).setRotation(rotation).setDepth(DEPTH.WATER + .38).setAlpha(.55);
+      const shadow = scene.add.image(cx + 2, cy + 3, shadowKey).setRotation(rotation).setDepth(DEPTH.WATER + .38).setAlpha(SHADOW_ALPHA);
       // Kit textures are assembled at the master's resolution and shown at display size.
       const size = bridgeTextureSize(bridge.spanCells, bridge.deckWidthCells);
       const deck = scene.add.image(cx, cy, deckKey).setDisplaySize(size.width, size.height).setRotation(rotation)
@@ -201,8 +208,8 @@ export class BridgeRenderer {
         }
         if (phase === 'charged') this.beginCharge(view, state, now);
         if (collapsed !== (view.phase === 'collapsed')) collapseChanged = true;
-        view.deck.setVisible(!collapsed);
-        view.shadow.setVisible(!collapsed);
+        view.deck.setVisible(!collapsed && this.presence > 0);
+        view.shadow.setVisible(!collapsed && this.presence > 0);
         view.ruin.setVisible(collapsed);
         if (phase !== 'charged') this.hideCharge(view);
         view.phase = phase;
@@ -211,6 +218,32 @@ export class BridgeRenderer {
     }
     this.strike.flush();
     return collapseChanged;
+  }
+
+  /**
+   * Planning view only (the Bauhof's what-if): blown bridges fade out with their contact shadow, and
+   * back in. No ruin and no burst; collision and navigation are untouched. `immediate` skips the fade.
+   */
+  setFallen(fallen: boolean, immediate = false): void {
+    if (this.destroyed || (this.fallen === fallen && !immediate)) return;
+    this.fallen = fallen;
+    this.fallenFade?.remove();
+    this.fallenFade = null;
+    const target = fallen ? 0 : 1;
+    if (immediate || this.presence === target) { this.applyPresence(target); return; }
+    this.fallenFade = this.scene.tweens.addCounter({ from: this.presence, to: target, ease: 'Sine.easeInOut',
+      duration: FALLEN_FADE_MS * Math.abs(target - this.presence),
+      onUpdate: (tween) => this.applyPresence(tween.getValue() ?? target),
+      onComplete: () => { this.fallenFade = null; this.applyPresence(target); } });
+  }
+
+  private applyPresence(presence: number): void {
+    this.presence = presence;
+    for (const view of this.views) {
+      const standing = view.phase !== 'collapsed' && presence > 0;
+      view.deck.setAlpha(presence).setVisible(standing);
+      view.shadow.setAlpha(SHADOW_ALPHA * presence).setVisible(standing);
+    }
   }
 
   private beginCharge(view: BridgeView, state: BridgeRuntimeState | null, now: number): void {
@@ -300,6 +333,8 @@ export class BridgeRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.fallenFade?.remove();
+    this.fallenFade = null;
     this.fx.destroy();
     this.strike.destroy();
     for (const view of this.views) {

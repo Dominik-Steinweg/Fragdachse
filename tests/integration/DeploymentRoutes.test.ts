@@ -113,6 +113,18 @@ describe('situation map routes', () => {
     planner.destroy();
   });
 
+  it('marks where a route jumps through an open portal and nowhere else', () => {
+    const { planner } = planFor('8');
+    const steps = (plan: ReturnType<typeof planner.plan>) => plan.routes.flatMap((route) => route.points.slice(1)
+      .map((point, i) => ({ portal: point.portal === true, length: Math.hypot(point.x - route.points[i]!.x, point.y - route.points[i]!.y) })));
+    expect(steps(planner.plan([])).some((step) => step.portal)).toBe(false);
+    const open = steps(planner.plan([], { ...DEPLOYMENT_ROUTE_START, teleportersOpen: true }));
+    expect(open.some((step) => step.portal)).toBe(true);
+    // A walk moves one node (16 px, diagonal at most); only a portal jumps farther.
+    for (const step of open) expect(step.length > 16 * Math.SQRT2 + 1e-6).toBe(step.portal);
+    planner.destroy();
+  });
+
   // On map 12 the routes reach the river only once the forward base has fallen.
   it.each([['12', { outpostsDestroyed: true }, 'bridgesDestroyed'], ['8', {}, 'teleportersOpen']] as const)('replans the routes on map %s for %s', (mapId, base, flag) => {
     const { planner } = planFor(mapId);

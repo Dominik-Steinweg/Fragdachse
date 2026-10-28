@@ -134,6 +134,8 @@ function streamLights(routes: readonly RouteFlowRoute[], clip: Rect): GroundGlow
     let travelled = STREAM_LIGHT.spacingPx / 2;
     for (let i = 1; i < route.points.length && lights.length < STREAM_LIGHT.max; i++) {
       const a = route.points[i - 1]!, b = route.points[i]!;
+      // Nothing walks through a portal jump; the lights start over at its exit.
+      if (b.portal) { travelled = 0; continue; }
       travelled += Math.hypot(b.x - a.x, b.y - a.y);
       if (travelled < STREAM_LIGHT.spacingPx) continue;
       travelled = 0;

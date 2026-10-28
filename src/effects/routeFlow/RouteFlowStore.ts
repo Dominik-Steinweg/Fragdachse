@@ -13,8 +13,11 @@
  * parts into arms that lie along the target, as enemies spread around a base to attack it, and fade.
  * Quality over cell accuracy: the stream follows the routes, not their grid.
  *
- * One instance is one quad (six non-indexed vertices): a stream segment or a breach. The CPU
- * writes only when the plan changes.
+ * A portal jump is no walk: the stream ends in the entry and rises again out of the exit, and the
+ * jump between them is drawn as its own arc.
+ *
+ * One instance is one quad (six non-indexed vertices): a stream segment, a portal jump or a breach.
+ * The CPU writes only when the plan changes.
  */
 
 export const ROUTE_FLOW_FLOATS_PER_VERTEX = 20;
@@ -22,7 +25,7 @@ export const ROUTE_FLOW_VERTICES = 6;
 export const ROUTE_FLOW_INSTANCE_FLOATS = ROUTE_FLOW_FLOATS_PER_VERTEX * ROUTE_FLOW_VERTICES;
 export const ROUTE_FLOW_CAPACITY = 2048;
 
-export const RouteFlowKind = { Segment: 0, Breach: 3 } as const;
+export const RouteFlowKind = { Segment: 0, Jump: 1, Breach: 3 } as const;
 export type RouteFlowKind = (typeof RouteFlowKind)[keyof typeof RouteFlowKind];
 
 /** Shared with the shader: the stream's look in World pixels. */
@@ -35,6 +38,8 @@ export const ROUTE_FLOW_SHAPE = {
   /** Breach routes heat up over this arc length before the wall. */
   heatRange: 192,
   breachRadius: 52,
+  /** A portal jump arcs `jumpLift` of its length (at most `jumpLiftMax`) off the straight line. */
+  jumpHalfWidth: 2.5, jumpLift: .14, jumpLiftMax: 180,
 } as const;
 
 /** How strokes begin, join, part and end (World px unless noted). */
@@ -56,7 +61,11 @@ const STREAM_EASE = {
   rampStep: 12,
 } as const;
 
-export interface RouteFlowPoint { readonly x: number; readonly y: number }
+export interface RouteFlowPoint {
+  readonly x: number; readonly y: number;
+  /** Reached from the previous point through a portal: a jump, not a walk. */
+  readonly portal?: boolean;
+}
 
 export interface RouteFlowRoute {
   /** From the source to the goal or the breach, World pixels. */
@@ -100,8 +109,17 @@ export interface RouteFlowMark {
   readonly strength: number;
 }
 
+/** A portal jump from its entry to its exit, World pixels. */
+export interface RouteFlowJump {
+  readonly key: string;
+  readonly ax: number; readonly ay: number;
+  readonly bx: number; readonly by: number;
+  readonly strength: number;
+}
+
 export interface RouteFlowGeometry {
   readonly segments: readonly RouteFlowSegment[];
+  readonly jumps: readonly RouteFlowJump[];
   readonly marks: readonly RouteFlowMark[];
 }
 
@@ -133,7 +151,10 @@ const ARM_STRENGTH = .85;
  * Smoothed, simplified stream tree of a set of routes. Deterministic for the same input; shared
  * route sections become one segment with their route count.
  */
-export function buildRouteFlowGeometry(routes: readonly RouteFlowRoute[], options: RouteFlowGeometryOptions): RouteFlowGeometry {
+export function buildRouteFlowGeometry(input: readonly RouteFlowRoute[], options: RouteFlowGeometryOptions): RouteFlowGeometry {
+  const jumpsByKey = new Map<string, RouteFlowJump>();
+  const routes = input.flatMap((route) => splitAtPortals(route, jumpsByKey));
+  const jumps = [...jumpsByKey.values()];
   const nodes = new Map<string, FlowNode>();
   const edges = new Map<string, FlowEdge>();
   const routeNodes: FlowNode[][] = [];
@@ -255,14 +276,45 @@ export function buildRouteFlowGeometry(routes: readonly RouteFlowRoute[], option
   });
 
   const clip = options.clip;
-  if (!clip) return { segments, marks };
+  if (!clip) return { segments, jumps, marks };
   const margin = 64;
   const inClip = (x: number, y: number) => x >= clip.x - margin && y >= clip.y - margin
     && x <= clip.x + clip.width + margin && y <= clip.y + clip.height + margin;
+  // A jump arcs over the view even when both its portals lie outside it.
+  const crosses = (jump: RouteFlowJump) => {
+    const lift = Math.min(ROUTE_FLOW_SHAPE.jumpLift * Math.hypot(jump.bx - jump.ax, jump.by - jump.ay), ROUTE_FLOW_SHAPE.jumpLiftMax);
+    return Math.max(jump.ax, jump.bx) + lift >= clip.x - margin && Math.min(jump.ax, jump.bx) - lift <= clip.x + clip.width + margin
+      && Math.max(jump.ay, jump.by) + lift >= clip.y - margin && Math.min(jump.ay, jump.by) - lift <= clip.y + clip.height + margin;
+  };
   return {
     segments: segments.filter((segment) => inClip(segment.ax, segment.ay) || inClip(segment.bx, segment.by)),
+    jumps: jumps.filter(crosses),
     marks: marks.filter((mark) => inClip(mark.x, mark.y)),
   };
+}
+
+/**
+ * The walked parts of a route between its portal jumps; each jump is recorded once, with the
+ * strongest route through it. The source gathers into the first part, breach and arms belong to the last.
+ */
+function splitAtPortals(route: RouteFlowRoute, jumps: Map<string, RouteFlowJump>): RouteFlowRoute[] {
+  const cuts = route.points.flatMap((point, i) => i > 0 && point.portal ? [i] : []);
+  if (!cuts.length) return [route];
+  const parts: RouteFlowRoute[] = [];
+  let start = 0;
+  for (const cut of [...cuts, route.points.length]) {
+    const last = cut === route.points.length;
+    parts.push({ points: route.points.slice(start, cut), strength: route.strength, breach: last && route.breach,
+      ...(start === 0 && route.sourceReach !== undefined ? { sourceReach: route.sourceReach } : {}),
+      ...(last && route.arms ? { arms: route.arms } : {}) });
+    if (!last) {
+      const a = route.points[cut - 1]!, b = route.points[cut]!;
+      const key = `jump:${Math.round(a.x * 2)}:${Math.round(a.y * 2)}>${Math.round(b.x * 2)}:${Math.round(b.y * 2)}`;
+      if ((jumps.get(key)?.strength ?? -1) < route.strength) jumps.set(key, { key, ax: a.x, ay: a.y, bx: b.x, by: b.y, strength: route.strength });
+    }
+    start = cut;
+  }
+  return parts;
 }
 
 /** Stream half width (World px) of a segment shared by `usage` routes. */
@@ -300,6 +352,10 @@ export class RouteFlowStore {
       if (this.count >= ROUTE_FLOW_CAPACITY) break;
       this.writeSegment(this.count++, segment, bornAt(segment.key));
     }
+    for (const jump of geometry.jumps) {
+      if (this.count >= ROUTE_FLOW_CAPACITY) break;
+      if (Math.hypot(jump.bx - jump.ax, jump.by - jump.ay) >= 1) this.writeJump(this.count++, jump, bornAt(jump.key));
+    }
     for (const mark of geometry.marks) {
       if (this.count >= ROUTE_FLOW_CAPACITY) break;
       this.writeMark(this.count++, mark, bornAt(mark.key));
@@ -332,6 +388,20 @@ export class RouteFlowStore {
       [length * unit, halfWidthA, halfWidthB, segment.presenceA], [nax, nay, nbx, nby],
       [segment.distA, segment.distB, segment.presenceB, RouteFlowKind.Segment],
       [bornAt, segment.strength, segment.heatA, segment.heatB]);
+  }
+
+  /** The jump's quad spans the straight line and the side it arcs to; the shader draws the arc. */
+  private writeJump(slot: number, jump: RouteFlowJump, bornAt: number): void {
+    const { unit, originX, originY, minHalfWidth } = this.placement;
+    const dx = jump.bx - jump.ax, dy = jump.by - jump.ay;
+    const length = Math.hypot(dx, dy);
+    const cos = dx / length, sin = dy / length;
+    const lift = Math.min(ROUTE_FLOW_SHAPE.jumpLift * length, ROUTE_FLOW_SHAPE.jumpLiftMax) * unit;
+    const halfWidth = Math.max(minHalfWidth, ROUTE_FLOW_SHAPE.jumpHalfWidth * unit);
+    const pad = halfWidth * 4 + 2;
+    this.writeQuad(slot, originX + jump.ax * unit, originY + jump.ay * unit, cos, sin,
+      -pad, length * unit + pad, -lift - pad, pad,
+      [length * unit, halfWidth, lift, 1], [0, 0, 0, 0], [0, 0, 1, RouteFlowKind.Jump], [bornAt, jump.strength, 0, 0]);
   }
 
   private writeMark(slot: number, mark: RouteFlowMark, bornAt: number): void {

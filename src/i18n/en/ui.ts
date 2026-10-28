@@ -193,6 +193,7 @@ export const enUi = {
   "ui.base.legend.routes": "Enemy routes",
   "ui.base.legend.spawn": "Spawn zone",
   "ui.base.legend.hostile": "Enemy base",
+  "ui.base.legend.portal": "Teleporter",
   "ui.base.legend.base": "Your base",
   "ui.base.legend.view": "View",
   "ui.base.hints": "Click or drag: place · Right-click: put back · Del: remove · Ctrl+Z: undo · Wheel: zoom · Right-drag: pan",

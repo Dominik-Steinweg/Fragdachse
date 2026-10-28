@@ -543,6 +543,11 @@ export class BaseManager {
   }
 
   /** Same HP source for host mutations and applied client snapshots. */
+  /** Planning view only: fades a fallen base out or back in (see `BaseEntity.setFallen`). */
+  setFallen(baseId: string, fallen: boolean, immediate = false): void {
+    this.byId.get(baseId)?.setFallen(fallen, immediate);
+  }
+
   getStructureHp(baseId: string): number | null {
     return this.byId.get(baseId)?.getHp() ?? null;
   }

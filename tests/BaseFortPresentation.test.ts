@@ -17,6 +17,7 @@ vi.mock('../src/arena/baseStructures/BaseFortRenderer', () => ({
     add(...args: unknown[]) { fort.calls.push(['add', ...args]); }
     addOutpost(...args: unknown[]) { fort.calls.push(['addOutpost', ...args]); return true; }
     destroyCell(...args: unknown[]) { fort.calls.push(['destroyCell', ...args]); }
+    setPresence(...args: unknown[]) { fort.calls.push(['setPresence', ...args]); }
     remove(...args: unknown[]) { fort.calls.push(['remove', ...args]); }
     setLighting() {} setShadows() {} setParticles() {} setSunlight() {} releaseLights() {} update() {} destroy() {}
     *getFogSurfaces() {}
@@ -32,6 +33,8 @@ import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { CELL_SIZE } from '../src/config';
 import { baseFortCoreAsset, baseFortKitAsset, type BaseFortPass } from '../src/arena/baseStructures/BaseFortAssets';
 import { AutoTiler } from '../src/arena/AutoTiler';
+import { resolveWorldDefinition } from '../src/world/WorldDefinitionResolution';
+import { toWorldDefinitionId } from '../src/world/arenaDescriptorAdapter';
 
 const METRICS = resolveActiveArenaWorldMetrics();
 
@@ -49,7 +52,8 @@ function makeScene(): any {
     add: { image: fakeObject, sprite: fakeObject, rectangle: fakeObject, graphics: fakeObject },
     physics: { add: { existing: (o: any) => { o.body = { setSize() {}, updateFromGameObject() {} }; },
       staticGroup: () => ({ add() {}, destroy() {} }) } },
-    tweens: { add: () => ({ remove() {} }) },
+    // Counters finish at once: the fade's end state is what the presentation keeps.
+    tweens: { add: () => ({ remove() {} }), addCounter: (config: any) => { config.onComplete?.(); return { remove() {} }; } },
     time: { delayedCall: () => ({ remove() {} }) },
   };
 }
@@ -109,6 +113,27 @@ describe('persistent base fort presentation', () => {
     expect(raised.map(cell => cell.active)).toEqual(core.cells.map((_, index) => index !== 0));
     manager.destroy();
     expect(fort.calls.at(-1)).toEqual(['remove', core.id]);
+  });
+
+  it('fades a fallen outpost out of the planning view and back in: fort and turrets, bodies kept', () => {
+    fort.calls.length = 0;
+    const definition = resolveWorldDefinition({ definitionId: toWorldDefinitionId('8') }, null)!;
+    const specs = resolveWorldBases(definition, METRICS, { includePersistentBaseCore: true, parameters: { persistentBaseUnlocked: true } });
+    const outpost = specs.find(spec => spec.role === 'outpost' && spec.faction === 'friendly' && spec.turrets.length > 0)!;
+    const manager = new BaseManager(makeScene(), specs, METRICS, {}, true, false);
+    const entity = manager.getBase(outpost.id)!;
+    const casters = () => { let count = 0; entity.forEachTurretSprite(() => { count++; }); return count; };
+    expect(casters()).toBe(outpost.turrets.length);
+    manager.setFallen(outpost.id, true);
+    expect(fort.calls.at(-1)).toEqual(['setPresence', outpost.id, 0]);
+    expect(casters()).toBe(0);
+    // Presentation only: collision and HP stay with the round.
+    expect(entity.getCellBodies()).toHaveLength(outpost.cells.length);
+    expect(entity.getHp()).toBe(entity.getMaxHp());
+    manager.setFallen(outpost.id, false);
+    expect(fort.calls.at(-1)).toEqual(['setPresence', outpost.id, 1]);
+    expect(casters()).toBe(outpost.turrets.length);
+    manager.destroy();
   });
 
   it('publishes every runtime pass of the core with fire bowls on the posts and torches outside the palisade', () => {

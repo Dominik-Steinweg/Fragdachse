@@ -37,6 +37,8 @@ precision highp float;
 varying vec2 outTexCoord;
 uniform vec3 uSun;
 uniform vec4 uOptions;
+// 1 by default; a fort fading out of a planning view (Bauhof) lowers it.
+uniform float uFade;
 ${ELEVATION_GLSL}
 ${FORMATION_RESPONSE_GLSL}
 ${CLOUD_SHADOW_GLSL}
@@ -65,7 +67,7 @@ void main(){
   factor*=surfaceNightResponse(normal,world);
   // Subpixel coverage never lights the ground beside the contour.
   factor=1.0+min(factor-1.0,vec3(0.0))*smoothstep(0.0,.35,d.a)+max(factor-1.0,vec3(0.0))*smoothstep(.7,1.0,d.a);
-  gl_FragColor=formationMultiply(factor);
+  gl_FragColor=formationMultiply(mix(vec3(1.0),factor,uFade));
 }
 `;
 

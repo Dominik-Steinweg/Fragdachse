@@ -193,6 +193,7 @@ export const deUi = {
   "ui.base.legend.routes": "Gegnerwege",
   "ui.base.legend.spawn": "Spawnzone",
   "ui.base.legend.hostile": "Gegnerbasis",
+  "ui.base.legend.portal": "Teleporter",
   "ui.base.legend.base": "Eure Basis",
   "ui.base.legend.view": "Ausschnitt",
   "ui.base.hints": "Klicken oder ziehen: platzieren · Rechtsklick: zurücklegen · Entf: entfernen · Strg+Z: rückgängig · Mausrad: zoomen · rechte Maustaste ziehen: verschieben",

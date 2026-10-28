@@ -211,6 +211,9 @@ export class DeploymentRoutePlanner {
 
   get routeCount(): number { return this.requests.length; }
 
+  /** Own bases the "outposts destroyed" what-if takes down: all but the persistent one. */
+  get outpostIds(): ReadonlySet<string> { return this.outposts; }
+
   /** The what-if switches that change anything on this map. */
   get scenarioOptions(): DeploymentRouteScenarioOptions {
     return { outposts: this.outposts.size > 0, bridges: (this.input.layout.bridges?.length ?? 0) > 0, teleporters: this.portalLinks.length > 0 };
