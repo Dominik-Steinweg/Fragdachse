@@ -50,8 +50,8 @@
           "attackMovementSpeedFactor": 0.35,
           "muzzleForwardPx": 13,
           "salvo": {
-            "count": 5,
-            "intervalMs": 45,
+            "count": 4,
+            "intervalMs": 50,
             "cooldownMs": 1700
           }
         },
@@ -61,8 +61,8 @@
           "attackMovementSpeedFactor": 0.35,
           "muzzleForwardPx": 13,
           "salvo": {
-            "count": 5,
-            "intervalMs": 45,
+            "count": 4,
+            "intervalMs": 50,
             "cooldownMs": 1700
           }
         },

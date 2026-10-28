@@ -170,7 +170,7 @@
       "do": [
         {
           "op": "until",
-          "expr": "window.__spits >= 6",
+          "expr": "window.__spits >= 5",
           "maxFrames": 600
         },
         {
