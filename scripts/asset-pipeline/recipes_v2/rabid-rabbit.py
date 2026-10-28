@@ -92,7 +92,16 @@ PALETTES = {
 # ear and how far the held-out ear may sag below its root. `back` lies on the neck (form default),
 # `wide` spreads a V past the shoulders, `side` holds the ears out sideways ("airplane" ears), so
 # they break the body outline from above.
-EAR_POSES = {'wide': dict(earYaw=30, earBend=10, droop=.24), 'side': dict(earYaw=66, earBend=4, droop=.30)}
+EAR_POSES = {'wide': dict(earYaw=30, earBend=10, droop=.24), 'mid': dict(earYaw=46, earBend=6, droop=.27),
+             'side': dict(earYaw=66, earBend=4, droop=.30)}
+# Void marking on any form (`draft.void`): `eyes` turns the irises violet, `veins` also lights the ears.
+VOID_EYES = dict(eye=('#f6e2ff', '#c070ff', '#5d1aa6', '#14041f'), eyeGlow=2.2)
+# Hind paw carriage (`draft.feet`): `visible` lets the long feet reach out beside the chest,
+# `splayed` plants them wide with the toes turned out, `flank` shows the paws further back beside
+# the haunches, clear of the ears; all get pale paw tops and fuller toes.
+FEET = {'visible': dict(footOut=.22, footLength=1.18, footWidth=1.25, footSplay=0, pawLight=.60, toeScale=1.35, hockIn=.48),
+        'splayed': dict(footOut=.24, footLength=1.04, footWidth=1.25, footSplay=.16, pawLight=.60, toeScale=1.35, hockIn=.46),
+        'flank': dict(footOut=.26, footLength=.92, footWidth=1.25, footSplay=.10, pawLight=.60, toeScale=1.35, hockIn=.50)}
 BLOOD = linear('#4f0a0e')
 IVORY = linear('#ddd5c6')
 
@@ -105,13 +114,27 @@ def form_settings(spec):
         raise ValueError('rabid-rabbit formVariant must be a, b, c or d')
     if palette not in PALETTES:
         raise ValueError('rabid-rabbit palette must be wild, white, charcoal or ash')
-    form = dict(FORMS[variant])
-    pose = draft.get('earPose', model.get('earPose'))
+    form, colours = dict(FORMS[variant]), dict(PALETTES[palette])
+    option = lambda name: draft.get(name, model.get(name))
+    pose = option('earPose')
     if pose:
         if pose not in EAR_POSES:
-            raise ValueError('rabid-rabbit earPose must be wide or side')
+            raise ValueError('rabid-rabbit earPose must be wide, mid or side')
         form.update(EAR_POSES[pose], ear=pose)
-    return variant, form, palette, PALETTES[palette], draft
+    if option('earYaw') is not None:
+        form['earYaw'] = float(option('earYaw'))
+    void = option('void')
+    if void:
+        if void not in ('eyes', 'veins'):
+            raise ValueError('rabid-rabbit void must be eyes or veins')
+        colours.update(VOID_EYES)
+        form['veins'] = form.get('veins') or void == 'veins'
+    feet = option('feet')
+    if feet:
+        if feet not in FEET:
+            raise ValueError('rabid-rabbit feet must be visible, splayed or flank')
+        form.update(FEET[feet])
+    return variant, form, palette, colours, draft
 
 
 def torso_rows(form):
@@ -473,7 +496,7 @@ def join(parts, name):
     return out
 
 
-def paw(c, leg, ankle, end, width, material, claw, toes=4, hind=False):
+def paw(c, leg, ankle, end, width, material, claw, toes=4, hind=False, toe_scale=1):
     """Furred paw from ankle to toe tips with short dark claws, one authored contact mesh."""
     d = (end - ankle)
     heading = math.atan2(d.y, d.x)
@@ -481,12 +504,16 @@ def paw(c, leg, ankle, end, width, material, claw, toes=4, hind=False):
     mid = (ankle + end) / 2
     parts = [ell(c, f'{leg} furred sole', (mid.x, mid.y, .06 if hind else .05), (width, length / 2 + .04, .06 if hind else .05),
                  material, angle=heading - math.pi / 2, taper=-.25 if hind else 0)]
+    if hind and toe_scale > 1:  # a full, rounded paw at the end of the long foot
+        ball = end - (end - ankle).normalized() * .16
+        parts.append(ell(c, f'{leg} furred paw ball', (ball.x, ball.y, .07), (width * 1.15, .20, .075), material, angle=heading - math.pi / 2))
     u = Vector((math.cos(heading), math.sin(heading), 0))
     lat = Vector((-u.y, u.x, 0))
     for k in range(toes):
         offset = (k - (toes - 1) / 2) / max(1, toes - 1)
         base = end - u * .05 + lat * offset * width * 1.5
-        parts.append(ell(c, f'{leg} toe', (base.x, base.y, .045), (width * .36, .085, .045), material, angle=heading - math.pi / 2))
+        parts.append(ell(c, f'{leg} toe', (base.x, base.y, .045 * toe_scale), (width * .36 * toe_scale, .085 * toe_scale, .045 * toe_scale),
+                         material, angle=heading - math.pi / 2))
         tip = base + u * .10 + lat * offset * .02
         parts.append(horn(c, f'{leg} claw', [tuple(base + u * .05 + Vector((0, 0, .04))), tuple(tip + Vector((0, 0, .018)))],
                           [.013, .003], claw, sides=8))
@@ -494,9 +521,11 @@ def paw(c, leg, ankle, end, width, material, claw, toes=4, hind=False):
     return out
 
 
-def paint_limb(ob, palette, top_light=.62):
+def paint_limb(ob, palette, top_light=.62, paw=0):
+    """Banded leg fur with pale undersides; `paw` lightens the top of a foot so it reads from above."""
     def sampler(p, n):
-        return top_light - .18 * smoothstep(.15, .0, p.z), .80 * smoothstep(.35, -.25, n.z), .2
+        rim = max(.80 * smoothstep(.35, -.25, n.z), paw * smoothstep(-.1, .6, n.z))
+        return top_light - .18 * smoothstep(.15, .0, p.z), rim, .2
     paint_pattern(ob, sampler)
 
 
@@ -520,20 +549,28 @@ def build_leg(c, leg, form, rows, materials, palette):
         w_hock = section(-1.10 * L)[0]
         hip = (.40 * W, -.80 * L, .55)
         knee = (.58 * W, -.50 * L, .30)
-        hock = (max(.56 * W, w_hock + .02), -1.12 * L, .12)
+        # The hock sits at the rear flank, or tucked under the haunch when the paws are to show.
+        hock = ((form['hockIn'] * W) if 'hockIn' in form else max(.56 * W, w_hock + .02), -1.12 * L, .12)
         joints = leg_points([hip, knee, hock], side)
         toe_y = hock[1] + form['footLength']
         w_toe = section(toe_y)[0]
         tip = Vector((side * (w_toe + form['footOut']), toe_y, .03))
+        splay = form.get('footSplay', 0)
+        if splay:  # turn the toes outwards about the hock
+            hock_v = joints[2]
+            d = (tip - hock_v).to_2d()
+            a = -side * splay
+            d = Vector((d.x * math.cos(a) - d.y * math.sin(a), d.x * math.sin(a) + d.y * math.cos(a)))
+            tip = Vector((hock_v.x + d.x, hock_v.y + d.y, .03))
         thigh = horn(c, f'{leg} thigh', joints[:2], [.19 * th, .11 * th], fur_mat, sides=16)
         knee_ball = ell(c, f'{leg} knee', tuple(joints[1]), (.10 * th,) * 3, fur_mat)
         shin = horn(c, f'{leg} shin', joints[1:], [.09 * th, .065 * th], fur_mat, sides=14)
-        foot = paw(c, leg, joints[2], tip, .095 * form['footWidth'], fur_mat, claw, toes=4, hind=True)
+        foot = paw(c, leg, joints[2], tip, .095 * form['footWidth'], fur_mat, claw, toes=4, hind=True, toe_scale=form.get('toeScale', 1))
         segments = dict(thigh=[thigh], shin=[knee_ball, shin], foot=[foot])
         names = REAR_SEGMENTS
-    for objects in segments.values():
+    for segment, objects in segments.items():
         for ob in objects:
-            paint_limb(ob, palette)
+            paint_limb(ob, palette, paw=form.get('pawLight', 0) if segment == 'foot' and leg.startswith('rear') else 0)
             write_rest(ob)
             c.paint_form_mask(ob, lambda p: .62 + .38 * max(0, min(1, p.z / .4)))
     return dict(joints=joints, tip=tip, segments=segments, names=names, side=side)
@@ -711,7 +748,8 @@ def build(c, spec):
     ears, ear_paths = {}, {}
     for side in (-1, 1):
         ears[side], ear_paths[side] = ear(c, form, side, hull, ear_fur, palette, torn=bool(form.get('tornEar')) and side < 0)
-    ear_glow = vein_glow(ear_fur, linear(palette['glow']), 2.4) if form.get('veins') else None
+    vein_strength = form.get('veinStrength', 2.4)
+    ear_glow = vein_glow(ear_fur, linear(palette['glow']), vein_strength) if form.get('veins') else None
 
     tail_y = rows[-1][0] + .04
     tail = ell(c, 'Rabid Rabbit tail tuft', (0, tail_y, .58), (.14, .13, .14), tail_fur)
@@ -824,7 +862,7 @@ def build(c, spec):
     sockets['mouth'] = mouth_socket
     parts = {'carriage': carriage, 'rabbit_legs': list(LEGS)}
     if ear_glow is not None:
-        parts.update(ear_glow=ear_glow, ear_glow_rest=2.4)
+        parts.update(ear_glow=ear_glow, ear_glow_rest=vein_strength)
     root['formVariant'] = variant
     root['palette'] = palette_name
     return {'root': root, 'parts': parts, 'rig': rig, 'sockets': sockets}
