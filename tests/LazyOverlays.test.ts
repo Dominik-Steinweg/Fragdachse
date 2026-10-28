@@ -85,6 +85,18 @@ describe('lazy opening lifecycle', () => {
     pressed = false; h.events.emit('update'); pressed = true; h.events.emit('update');
     expect(close).toHaveBeenCalledOnce(); expect(gate.isPending()).toBe(false);
   });
+  it('gates any preparation with its own text and spins at once when the work blocks right away', async () => {
+    vi.useFakeTimers();
+    const h = setup(); let resolve!: () => void;
+    const ensure = vi.fn(() => new Promise<void>((yes) => { resolve = yes; })), show = vi.fn();
+    const gate = new LazyOverlayGate(h.scene, { ready: () => false, ensure, label: 'Preparing', immediate: true }, () => true);
+    gate.open(show, () => gate.cancel());
+    const [spinner, label] = h.root.children.at(-1)!.children;
+    expect(label.textContent).toBe('Preparing'); expect(spinner.style.visibility).toBe('visible');
+    expect(ensure).toHaveBeenCalledOnce(); expect(assets.ensure).not.toHaveBeenCalled();
+    resolve(); await vi.runAllTimersAsync();
+    expect(show).toHaveBeenCalledOnce(); expect(gate.isPending()).toBe(false);
+  });
   function upgrades(scene: any) {
     return new CoopDefenseUpgradesOverlay(scene, vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(),
       vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn());

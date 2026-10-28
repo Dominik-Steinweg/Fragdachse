@@ -34,6 +34,7 @@ import { preloadBomberSquadronAssets } from '../effects/bomberSquadron/BomberSqu
 import { preloadRepairDroneAssets } from '../effects/repairDroneVisuals';
 import * as Phaser from 'phaser';
 import { AfterRoundTransition, type AfterRoundView } from '../ui/AfterRoundTransition';
+import { LazyOverlayGate } from '../ui/LazyOverlayGate';
 import { composeArenaVoice } from './arena/ArenaVoiceComposition';
 import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
@@ -93,7 +94,7 @@ import { WeaponBalanceLabOverlay, type WeaponBalanceLabStartResult } from '../ui
 import { CaptureTheBeerPresentationBinding } from '../activity/CaptureTheBeerPresentationBinding';
 import { TimeOfDayDebugOverlay } from '../ui/TimeOfDayDebugOverlay';
 import { DEFAULT_TIME_OF_DAY_MINUTES, resolveSkyState } from '../effects/TimeOfDay';
-import type { WorldGradeInputs } from '../effects/postfx/worldGrade';
+import { resolveMapWorldGrade, type WorldGradeInputs } from '../effects/postfx/worldGrade';
 import { CoopDefenseUpgradesOverlay } from '../ui/CoopDefenseUpgradesOverlay';
 import { MatchResultsOverlay } from '../ui/MatchResultsOverlay';
 import { RoomStatisticsOverlay } from '../ui/RoomStatisticsOverlay';
@@ -349,8 +350,10 @@ export class ArenaScene extends Phaser.Scene {
   /** Map, seed and draft of the open base editor; a host map change reopens it with the same draft. */
   private baseEditorSession: { readonly terrainKey: string | null; readonly model: PersistentBaseEditorModel;
     readonly newRewardIds: readonly PersistentBaseRewardId[] } | null = null;
-  /** The editor waits for the next round's terrain, which the lobby generates in the background. */
+  /** An opening behind the loading panel; it may wait for the next round's terrain, which the lobby generates in the background. */
   private pendingBaseEditor: { readonly newRewardIds: readonly PersistentBaseRewardId[]; readonly model?: PersistentBaseEditorModel } | null = null;
+  /** Loading panel from the Bauhof click until the editor shows its World; recreated after a shutdown. */
+  private baseEditorGate: LazyOverlayGate | null = null;
   private readonly deploymentTerrain = new ArenaDeploymentTerrain(bridge);
   private matchResultsOverlay: MatchResultsOverlay | null = null;
   private roomStatisticsOverlay: RoomStatisticsOverlay | null = null;
@@ -2428,34 +2431,52 @@ export class ArenaScene extends Phaser.Scene {
       } };
   }
 
+  /** Terrain, World and its first bakes take a moment: the loading panel shows from the click on. */
   private openBaseEditor(newRewardIds: readonly PersistentBaseRewardId[], keepModel?: PersistentBaseEditorModel): void {
-    if (this.baseEditor || bridge.getGamePhase() !== 'LOBBY') return;
-    const terrain = this.resolveBaseEditorTerrain();
-    if (terrain === undefined) {
-      // Usually ready: the lobby generates the terrain as soon as the host picks the map.
-      const deployment = this.deploymentTerrain.current()!;
-      const waiting = this.pendingBaseEditor === null;
-      this.pendingBaseEditor = { newRewardIds, model: keepModel };
-      if (waiting) {
-        const resume = () => {
-          const pending = this.pendingBaseEditor;
-          this.pendingBaseEditor = null;
-          if (pending) this.openBaseEditor(pending.newRewardIds, pending.model);
-        };
-        this.deploymentTerrain.request(deployment).then(resume, () => {
-          // Without terrain the editor still opens on the base alone.
-          this.pendingBaseEditor = null;
-          this.openBaseEditorOn(null, newRewardIds, keepModel);
-        });
-      }
-      return;
-    }
-    this.openBaseEditorOn(terrain, newRewardIds, keepModel);
+    if (this.baseEditor || this.pendingBaseEditor || bridge.getGamePhase() !== 'LOBBY') return;
+    this.pendingBaseEditor = { newRewardIds, model: keepModel };
+    this.ensureBaseEditorGate().open(() => {}, () => this.cancelBaseEditorOpening(), () => this.closeBaseEditor(false));
   }
 
+  private ensureBaseEditorGate(): LazyOverlayGate {
+    if (!this.baseEditorGate) {
+      this.baseEditorGate = new LazyOverlayGate(this, {
+        ready: () => false, ensure: () => this.prepareBaseEditor(), immediate: true,
+        get label() { return t('ui.base.loading'); },
+      }, () => bridge.getGamePhase() === 'LOBBY');
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.baseEditorGate = null; });
+    }
+    return this.baseEditorGate;
+  }
+
+  /** Behind the loading panel: the terrain, then the editor; resolves once the editor shows its World. */
+  private async prepareBaseEditor(): Promise<void> {
+    // One painted frame with the panel first (a click arrives between frames); building the World
+    // then blocks this thread for a moment while the panel's spinner keeps turning.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    let terrain = this.resolveBaseEditorTerrain();
+    while (terrain === undefined && this.pendingBaseEditor) {
+      // Usually ready: the lobby generates the terrain as soon as the host picks the map.
+      const generated = await this.deploymentTerrain.request(this.deploymentTerrain.current()!).then(() => true, () => false);
+      // Without terrain the editor still opens on the base alone.
+      terrain = generated ? this.resolveBaseEditorTerrain() : null;
+    }
+    const pending = this.pendingBaseEditor;
+    if (!pending) return;
+    this.pendingBaseEditor = null;
+    await this.openBaseEditorOn(terrain ?? null, pending.newRewardIds, pending.model);
+  }
+
+  /** Cancelling the loading panel: the hidden editor goes, an after-round flow moves on from its previous menu. */
+  private cancelBaseEditorOpening(): void {
+    this.closeBaseEditor(false);
+    this.advanceAfterRound('base', null);
+  }
+
+  /** `null` when the editor cannot open; otherwise settles once it shows its World. */
   private openBaseEditorOn(terrain: PersistentBaseEditorTerrain | null, newRewardIds: readonly PersistentBaseRewardId[],
-    keepModel?: PersistentBaseEditorModel): void {
-    if (this.baseEditor || bridge.getGamePhase() !== 'LOBBY') return;
+    keepModel?: PersistentBaseEditorModel): Promise<void> | null {
+    if (this.baseEditor || bridge.getGamePhase() !== 'LOBBY') return null;
     const host = bridge.isHost();
     const personalAreaStage = getStoredPersonalPersistentBaseAreaStage();
     // Rewards and the orientation belong to the room host's base; a guest sees the replicated one.
@@ -2469,7 +2490,7 @@ export class ArenaScene extends Phaser.Scene {
     const revision = bridge.getCurrentWorldRevision();
     if (revision === null) {
       if (this.afterRoundTransition?.active) this.meta?.finishAfterRoundStep('base');
-      return;
+      return null;
     }
     bridge.setLocalReady(false); this.arenaRuntime.setIsLocalReady(false);
     this.lobbyOverlay.setReadyButtonState(false);
@@ -2477,10 +2498,13 @@ export class ArenaScene extends Phaser.Scene {
     bridge.offerPersonalBaseAreaStage(personalAreaStage);
     const opening = this.afterRoundOpening();
     const reload = () => model.reload(confirmedBaseline(), roomBase());
+    let revealed!: () => void;
+    const shown = new Promise<void>((resolve) => { revealed = resolve; });
     const editor = new PersistentBaseEditorScene({ model, newRewardIds, color: bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? 0xffffff,
       terrain, room: this.resolveBaseEditorRoom(terrain?.areaStage ?? null),
       resolveTurretRange: (constructionId) => this.clientUpdate.getLocalTurretRange(constructionId),
       presented: opening?.ready,
+      revealed: () => revealed(),
       retire: () => { if (this.baseEditor === editor) this.closeBaseEditor(false); },
       close: () => {
         if (!this.advanceAfterRound('base', editor.getTransitionView())) this.closeBaseEditor(false);
@@ -2519,6 +2543,7 @@ export class ArenaScene extends Phaser.Scene {
     this.input.enabled = false;
     if (this.input.keyboard) { this.input.keyboard.resetKeys(); this.input.keyboard.enabled = false; }
     this.scene.add(PersistentBaseEditorScene.KEY, editor, true);
+    return shown;
   }
 
   private beginAfterRoundTransition(view: AfterRoundView | null): void {
@@ -2542,6 +2567,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private closeBaseEditor(advance: boolean): void {
+    // An opening still behind the loading panel ends with it.
+    if (this.baseEditorGate?.isPending()) this.baseEditorGate.cancel();
+    this.pendingBaseEditor = null;
     if (!this.baseEditor) return;
     this.baseEditorSession = null;
     this.baseEditor.dispose();
@@ -3081,9 +3109,8 @@ export class ArenaScene extends Phaser.Scene {
 
     return {
       skyState: resolveSkyState(minutes),
-      isVoidMap: mapConfig !== null && (mapConfig.mapId === '15' || mapConfig.trackMode === 'void-fire'),
-      bossVisualProfile: inArena && mapConfig?.mapId === '15' ? 'void-hunter'
-        : inArena && mapConfig?.boss?.enemyKind === 'abyssal-kraken' ? 'abyssal-kraken' : undefined,
+      // Without a running coop round there is no map: the lobby look.
+      ...resolveMapWorldGrade(mapConfig),
       bossVisualStage: inArena ? (this.arenaRuntime?.getBossVisualStage() ?? 0) : 0,
       bossPhase: inArena ? (this.arenaRuntime?.getMaxBossPhase() ?? 0) : 0,
       localHpFraction: localWounded ? (localPlayer?.getHpFraction() ?? 1) : 1,

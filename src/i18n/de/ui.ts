@@ -190,6 +190,8 @@ export const deUi = {
   "ui.base.routes.frontBase": "Die Front liegt an der vorgelagerten Basis – die Übersicht zeigt die Wege der Gegner.",
   "ui.base.routes.playersAway": "Die Gegner jagen die Spieler unterwegs – die Übersicht zeigt ihre Wege.",
   "ui.base.routes.breach": "Kein freier Weg – Gegner brechen durch",
+  "ui.base.missionTime": "Einsatzbeginn {time}",
+  "ui.base.loading": "Bauhof wird vorbereitet …",
   "ui.base.conflict.unknown-tool": "Entfällt: unbekannter Bau",
   "ui.base.conflict.locked": "Entfällt: noch gesperrt",
   "ui.base.conflict.not-in-loadout": "Entfällt: nicht im Loadout",

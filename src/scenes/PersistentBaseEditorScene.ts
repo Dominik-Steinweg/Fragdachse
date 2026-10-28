@@ -41,6 +41,7 @@ import { createDawnExpansionRewardNote } from '../ui/DawnMerchantExpansionPrevie
 import { createDawnMerchantExpansionPreview, createPersistentBaseEditorBoundary } from '../ui/DawnMerchantExpansionPreview';
 import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
+import { formatTimeOfDay } from '../effects/TimeOfDay';
 
 const WORLD_PANEL = { x: 88, y: 236, width: 1000, height: 680 };
 /** Overview of the whole map (Lagekarte); empty without map terrain. */
@@ -69,6 +70,8 @@ export interface PersistentBaseEditorOptions {
   readonly resolveTurretRange?: (constructionId: string) => number | null;
   readonly close: () => void;
   readonly presented?: (view: AfterRoundView) => void;
+  /** Once, when the World is ready and the editor shows (the loading panel can go). */
+  readonly revealed?: () => void;
   readonly retire?: () => void;
 }
 
@@ -138,6 +141,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       .setOrigin(0).setStrokeStyle(1, 0x718160, .5));
     const title = terrain ? `${t('ui.base.situationMap')} · ${getMapName(terrain.mapId, getLocale())}` : t('ui.base.situationMap');
     this.label(panel.x + 16, 216, title.toLocaleUpperCase(), 'section');
+    // The World shows the map at the time the round starts.
+    if (terrain) this.label(panel.x + panel.width - 16, 216, t('ui.base.missionTime', { time: formatTimeOfDay(this.world.timeOfDay) }),
+      'caption', 1).setColor('#d9cfa8');
     if (!terrain) {
       this.label(panel.x + panel.width / 2, panel.y + panel.height / 2, t('ui.base.noSituationMap'), 'body', .5, panel.width - 40)
         .setColor('#d9cfa8');
@@ -616,9 +622,10 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   update(now: number, delta: number): void {
     if (!this.world || this.closed) return;
     const view = this.world.view;
-    this.world.update(now, delta, view);
+    this.world.update(now, delta, view, !this.presentationReady);
     if (!this.presentationReady && this.world.isReadyForView(view)) {
       this.presentationReady = true;
+      this.options.revealed?.();
       const transition = this.getTransitionView();
       if (this.options.presented) this.options.presented(transition);
       else {

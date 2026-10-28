@@ -4,6 +4,7 @@ import {
   isNeutralGrade,
   resolveBaseGrade,
   resolveDarkness,
+  resolveMapWorldGrade,
   buildTintMatrix,
   smoothstep01,
   type WorldGrade,
@@ -329,4 +330,15 @@ it('preserves boss and hurt semantics when the solar writer updates and pulses e
  pulses.request({id:'hit',priority:5,durationMs:100,grade:{brightness:1,saturation:-1}},0);
  const active=composePostFx(grade,pulses.prune(20),20);expect(active.brightness).toBeLessThanOrEqual(1.3);expect(active.saturation).toBeGreaterThanOrEqual(.45);
  const settled=composePostFx(grade,pulses.prune(101),101);for(const key of Object.keys(grade) as (keyof WorldGrade)[])expect(settled[key]).toBe(grade[key]);
+});
+
+describe('resolveMapWorldGrade', () => {
+  it('liest Void-Look und Boss-Profil allein aus der Map, ohne Map bleibt es neutral', () => {
+    expect(resolveMapWorldGrade(null)).toEqual({ isVoidMap: false, bossVisualProfile: undefined });
+    expect(resolveMapWorldGrade({ mapId: '18' })).toEqual({ isVoidMap: false, bossVisualProfile: undefined });
+    expect(resolveMapWorldGrade({ mapId: '15' })).toEqual({ isVoidMap: true, bossVisualProfile: 'void-hunter' });
+    expect(resolveMapWorldGrade({ mapId: '00', trackMode: 'void-fire' }).isVoidMap).toBe(true);
+    expect(resolveMapWorldGrade({ mapId: '20', boss: { enemyKind: 'abyssal-kraken' } }))
+      .toEqual({ isVoidMap: false, bossVisualProfile: 'abyssal-kraken' });
+  });
 });

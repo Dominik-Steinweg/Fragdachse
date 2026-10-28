@@ -18,8 +18,8 @@ import { LightOccluderIndex } from '../effects/LightOccluderIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
 import { BridgeRenderer } from '../effects/bridge/BridgeRenderer';
 import { CameraPostFxController } from '../effects/postfx/CameraPostFxController';
-import { resolveBaseGrade } from '../effects/postfx/worldGrade';
-import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, resolveSkyState } from '../effects/TimeOfDay';
+import { resolveBaseGrade, resolveMapWorldGrade, type WorldGradeInputs } from '../effects/postfx/worldGrade';
+import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../effects/TimeOfDay';
 import { GpuVfxSystem } from '../effects/gpu/GpuVfxSystem';
 import { PowerUpRenderer } from '../powerups/PowerUpRenderer';
 import { bindBaseFortPresentation } from '../world/BaseFortPresentationBinding';
@@ -38,6 +38,8 @@ import type { PersistentBaseAnchor } from './PersistentBaseTypes';
 export { getPersistentBaseEditorSize, PERSISTENT_BASE_EDITOR_DETAIL_RADIUS } from './PersistentBaseExpansionPreview';
 /** Terrain built beyond the view, so rock autotiling and canopies do not end at its edge. */
 const CROP_MARGIN_CELLS = 3;
+/** Bake budget per frame while the hidden World warms up behind the loading panel. */
+const WARMUP_BAKE_BUDGET_MS = 24;
 
 /** Terrain of the next round around the base (Lagekarte): the host's map at its deployment seed. */
 export interface PersistentBaseEditorTerrain {
@@ -102,12 +104,14 @@ export class PersistentBaseEditorWorld {
   private readonly routePlanner: DeploymentRoutePlanner | null;
   private readonly routes: RouteFlowPresentation | null;
   private shadowsInitialized = false;
-  private readonly timeOfDay = DEFAULT_LOBBY_TIME_OF_DAY_MINUTES;
+  /** Minutes: the map's time when the round starts; the personal draft keeps the lobby's. */
+  readonly timeOfDay: number;
 
   constructor(private readonly scene: Phaser.Scene, private readonly model: PersistentBaseEditorModel, private readonly color: number,
     options: { readonly previewArea?: PersistentBaseBuildArea; readonly terrain?: PersistentBaseEditorTerrain | null } = {}) {
     ensureWatchtowerTexture(scene);
     this.terrain = options.terrain ?? null;
+    this.timeOfDay = (this.terrain && parseTimeOfDay(this.terrain.definition.initialTimeOfDay)) ?? DEFAULT_LOBBY_TIME_OF_DAY_MINUTES;
     const healthRewards = model.baseline.persistentBaseHealthRewards;
     let window: ArenaGridWindow;
     if (this.terrain) {
@@ -183,7 +187,11 @@ export class PersistentBaseEditorWorld {
     this.shadows.syncBaseShadows(surfaces);
     // Editing needs an unobscured build surface, regardless of the gameplay fog preference.
     this.fx = new CameraPostFxController(scene, scene.cameras.main);
-    this.fx.setBaseGrade(resolveBaseGrade({ skyState: resolveSkyState(this.timeOfDay), isVoidMap: false, bossPhase: 0, localHpFraction: 1, gamePhase: 'ARENA' }));
+    const mapConfig = this.terrain ? resolveCoopDefenseMapConfig({ definitionId: this.terrain.definition.id }, null) : null;
+    // The round's look as it starts: its time of day and the map's own grade.
+    const grade: WorldGradeInputs = { skyState: resolveSkyState(this.timeOfDay), ...resolveMapWorldGrade(mapConfig),
+      bossPhase: 0, localHpFraction: 1, gamePhase: 'ARENA' };
+    this.fx.setBaseGrade(resolveBaseGrade(grade), grade);
     this.sunlight=new WorldSunlightPresentation(scene,{
       ground:this.arena.groundSurface,rocks:this.arena.rockVisualSystem,rockOverlays:this.arena.rockOverlaySurface,
       canopies:this.arena.canopyObjects,water:this.arena.waterSurface,wildlife:this.arena.wildlife,
@@ -191,7 +199,6 @@ export class PersistentBaseEditorWorld {
       structures:{setSunlight:(light)=>this.bases.setFortSunlight(light)},
     });
     // Enemy routes of the next round over the real terrain (Lagekarte); only maps with a mission.
-    const mapConfig = this.terrain ? resolveCoopDefenseMapConfig({ definitionId: this.terrain.definition.id }, null) : null;
     this.routePlanner = this.terrain && mapConfig ? new DeploymentRoutePlanner({ mapConfig, worldMetrics: this.world.metrics,
       layout: this.terrain.layout, bases: this.world.bases.filter((base) => !base.dormant),
       spawnFocusCell: this.terrain.definition.spawnFocusCell, detail: this.view }) : null;
@@ -338,7 +345,8 @@ export class PersistentBaseEditorWorld {
     return ArenaBuilder.isSurfaceWorkingSetReady(this.arena, view)
       && this.shadows.isStaticReadyForView(view);
   }
-  update(now: number, delta: number, view: WorldRect): void {
+  /** `warming`: still hidden behind the loading panel, so bakes may take most of the frame. */
+  update(now: number, delta: number, view: WorldRect, warming = false): void {
     // Water masks are prepared over several frames, as in a round's presentation frame.
     this.arena.waterSurface?.prepareMasks();
     ArenaBuilder.updateSurfaceResidency(this.arena, view);
@@ -358,7 +366,7 @@ export class PersistentBaseEditorWorld {
     this.fx.update(delta);
     // Residency enqueues the same grass, gravel, detail and shadow bakes used by a map.
     // This standalone scene owns its own queue, so ArenaScene cannot service it.
-    ChunkedRenderSurface.flushBakeBudget(this.scene);
+    ChunkedRenderSurface.flushBakeBudget(this.scene, warming ? WARMUP_BAKE_BUDGET_MS : undefined);
   }
   destroy(): void {
     for (const visual of this.watchtowers.values()) visual.destroy();

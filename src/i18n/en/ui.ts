@@ -190,6 +190,8 @@ export const enUi = {
   "ui.base.routes.frontBase": "The front is at the forward base – the overview shows the enemies' routes.",
   "ui.base.routes.playersAway": "Enemies hunt the players on the way – the overview shows their routes.",
   "ui.base.routes.breach": "No free path – enemies break through",
+  "ui.base.missionTime": "Mission start {time}",
+  "ui.base.loading": "Preparing the building yard …",
   "ui.base.conflict.unknown-tool": "Dropped: unknown build",
   "ui.base.conflict.locked": "Dropped: still locked",
   "ui.base.conflict.not-in-loadout": "Dropped: not in loadout",

@@ -1,10 +1,10 @@
 # Lagekarte im Bauhof (V2)
 
 Status: Konzept vom 2026-10-27, umgesetzt (P0–P8) am 2026-10-27, Sichtprüfung als Host im Browser;
-Spieltest mit Gästen offen. Ersetzt
+Überarbeitung (Tageszeit, Ladeanzeige) am 2026-10-28; Spieltest mit Gästen offen. Ersetzt
 [V1](Fragdachse_GDD_Lagekarte_Bauhof_V1.md). Grundlage ist die
 [Gameplay-Analyse vom 22.10.2026](../reports/gameplay-review-2026-10-22-inspector-td.md), Vorschlag V1.
-Die Entscheidungen hat der Projektinhaber am 22. und 27.10.2026 getroffen.
+Die Entscheidungen hat der Projektinhaber am 22., 27. und 28.10.2026 getroffen.
 
 ## 1. Anlass
 
@@ -63,6 +63,7 @@ Drei weitere Lücken:
 
 1. Der Host wählt eine Map, zum Beispiel Map 19.
 2. Ein Spieler, Host oder Gast, öffnet den Bauhof. Sein Bereit-Status wird wie heute zurückgesetzt.
+   Bis das Gelände aufgebaut ist, zeigt ein Ladefenster „Bauhof wird vorbereitet …“ mit Abbrechen.
 3. Die Lagekarte zeigt das Fort mit Fackeln und Feuerschalen, rundherum Felsen, Bäume, Wasser und
    Gleise von Map 19. Aus den Spawnzonen strömt die Void-Strömung zur Basis; wo sie in den Baubereich
    eintritt, glüht der Rand. Die Bauwerke der Mitspieler stehen in ihrer Farbe.
@@ -82,8 +83,9 @@ Die Darstellung folgt [`visual-guidelines.md`](../ai/visual-guidelines.md) und d
   Mission: Fort, Fackeln und Feuerschalen mit GPU-Partikeln, Sonnen- und Fortschatten und
   Turm-Mesh-Schatten. Die Fort-Grafik wird nie gedreht; der Kern ist unter Vierteldrehungen
   deckungsgleich.
-- **Detailbereich:** Gelände der Map in echten Weltkoordinaten, ohne Simulation und mit fester,
-  gut lesbarer Tageszeit. Spawnzonen im Bild tragen ihren Void-Dunst wie in der Mission.
+- **Detailbereich:** Gelände der Map in echten Weltkoordinaten, ohne Simulation, zur Startzeit der
+  Mission und mit dem Farbgrading ihres Starts. Die Übersicht nennt die Uhrzeit („Einsatzbeginn“).
+  Spawnzonen im Bild tragen ihren Void-Dunst wie in der Mission.
 - **Void-Strömung (Routen):**
   - **Bodenspur:** eine dunkle, feuchte Void-Verfärbung unter der Route. Wo sich Routen
     überlagern, wird sie breiter und kräftiger.
@@ -234,3 +236,7 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
 - 2026-10-27: Routenstil Void-Strömung (E17). Darstellung des Forts wie in der Mission, inklusive
   Fackeln, Feuerschalen und Turmschatten.
 - 2026-10-27 (Sichtprüfung): Statt weißer Funken bewegt sich violetter Void-Dunst.
+- 2026-10-28: Die Lagekarte zeigt die Tageszeit der Map statt einer festen Tageszeit. Ein Ladefenster
+  überbrückt den Aufbau. Ein verdeckt vorgeladener Bauhof in der Lobby wurde zurückgestellt: Er würde
+  beim Herumlaufen in der Lobby ruckeln, hielte eine zweite World im Speicher und müsste bei jeder
+  Änderung von Grundriss, Mitspielern oder Map neu aufgebaut werden.

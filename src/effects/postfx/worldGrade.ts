@@ -41,6 +41,21 @@ export interface WorldGradeInputs {
   readonly gamePhase: 'LOBBY' | 'ARENA';
 }
 
+/** Was das Grading von einer Coop-Map liest; eine Coop-Map-Konfiguration erfüllt es. */
+export interface WorldGradeMap {
+  readonly mapId: string;
+  readonly trackMode?: string;
+  readonly boss?: { readonly enemyKind: string };
+}
+
+/** Der Map-Anteil des Gradings. Runde und Bauhof-Vorschau ihres Geländes teilen ihn. */
+export function resolveMapWorldGrade(map: WorldGradeMap | null): Pick<WorldGradeInputs, 'isVoidMap' | 'bossVisualProfile'> {
+  return {
+    isVoidMap: map !== null && (map.mapId === '15' || map.trackMode === 'void-fire'),
+    bossVisualProfile: map?.mapId === '15' ? 'void-hunter' : map?.boss?.enemyKind === 'abyssal-kraken' ? 'abyssal-kraken' : undefined,
+  };
+}
+
 /** Dauer des visuellen Übergangs in den dauerhaften Boss-Look. */
 export const BOSS_VISUAL_BLEND_DURATION_MS = 1800;
 

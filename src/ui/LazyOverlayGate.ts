@@ -3,6 +3,17 @@ import { t } from '../i18n';
 import { getOverlayRoot } from './fullscreen';
 import { getOverlayAssets, type OverlayAssetGroup } from './OverlayAssets';
 
+/** What a gated view waits for: its deferred images, or other preparation such as a World. */
+export interface LazyOverlaySource {
+  ready(): boolean;
+  ensure(): Promise<void>;
+  /** Waiting text; the deferred-content text by default. */
+  readonly label?: string;
+  /** Spinner and text at once, for preparation that blocks the main thread right away. The
+   * spinner is a compositor animation, so it keeps turning while that work runs. */
+  readonly immediate?: boolean;
+}
+
 /** A pending request is already modal. Cancellation invalidates only the opening,
  * not shared downloads; a later opening may reuse their completed textures.
  */
@@ -20,7 +31,7 @@ export class LazyOverlayGate {
   private close: (() => void) | null = null;
   private padPressed = false;
 
-  constructor(private readonly scene: Phaser.Scene, private readonly group: OverlayAssetGroup,
+  constructor(private readonly scene: Phaser.Scene, private readonly source: OverlayAssetGroup | LazyOverlaySource,
     private readonly canOpen: () => boolean) {}
 
   isPending(): boolean { return this.pending; }
@@ -32,8 +43,9 @@ export class LazyOverlayGate {
       this.scene.events.once('shutdown', () => { this.disposed = true; this.cancel(); });
     }
     this.cancel();
-    const assets = getOverlayAssets(this.scene);
-    if (assets.ready(this.group)) { show(); return; }
+    const source = this.resolveSource();
+    if (source.ready()) { show(); return; }
+    const waiting = source.label ?? t('ui.lobby.deferredLoading');
     const generation = this.generation;
     this.pending = true;
     this.close = close;
@@ -47,7 +59,7 @@ export class LazyOverlayGate {
     this.panel = document.createElement('div');
     this.panel.setAttribute('role', 'dialog');
     this.panel.setAttribute('aria-modal', 'true');
-    this.panel.setAttribute('aria-label', t('ui.lobby.deferredLoading'));
+    this.panel.setAttribute('aria-label', waiting);
     this.panel.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;'
       + 'align-items:center;justify-content:center;gap:16px;background:#101610aa;color:#fff;font:16px sans-serif';
     this.label = document.createElement('p');
@@ -65,14 +77,15 @@ export class LazyOverlayGate {
     this.panel.append(spinner, this.label, this.button);
     getOverlayRoot().appendChild(this.panel);
     this.button.focus({ preventScroll: true });
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      if (this.label) this.label.textContent = t('ui.lobby.deferredLoading');
+    const reveal = () => {
+      if (this.label) this.label.textContent = waiting;
       spinner.style.visibility = 'visible';
       this.spinner = spinner.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
         { duration: 900, iterations: Infinity });
-    }, 150);
-    void assets.ensure(this.group).then(() => {
+    };
+    if (source.immediate) reveal();
+    else this.timer = setTimeout(() => { this.timer = null; reveal(); }, 150);
+    void source.ensure().then(() => {
       if (!this.pending || this.generation !== generation) return;
       const allowed = this.canOpen(); this.cancel();
       if (allowed && !this.disposed) show();
@@ -120,6 +133,12 @@ export class LazyOverlayGate {
   }
 
   private unavailable: (() => void) | null = null;
+
+  private resolveSource(): LazyOverlaySource {
+    if (typeof this.source !== 'string') return this.source;
+    const assets = getOverlayAssets(this.scene), group = this.source;
+    return { ready: () => assets.ready(group), ensure: () => assets.ensure(group) };
+  }
 
   private checkContext(): void {
     if (!this.canOpen()) { const unavailable = this.unavailable; this.cancel(); unavailable?.(); return; }

@@ -55,11 +55,12 @@ describe('base menu drag interaction', () => {
     const { scene, world } = harness(1, 11);
     let ready = false;
     const camera = { setAlpha: vi.fn() };
-    const presented = vi.fn();
+    const presented = vi.fn(), revealed = vi.fn();
     Object.assign(world, { update: vi.fn(), isReadyForView: vi.fn(() => ready) });
     Object.assign(scene, { cameras: { cameras: [camera] },
       input: { enabled: false, keyboard: { enabled: false, resetKeys: vi.fn() } } });
     if (transitioning) scene.options.presented = presented;
+    scene.options.revealed = revealed;
     scene.getTransitionView().setAlpha(0);
     scene.setTransitionInputBlocked(false);
     scene.update(0, 16);
@@ -67,10 +68,15 @@ describe('base menu drag interaction', () => {
     expect(scene.input.keyboard.enabled).toBe(false);
     expect(camera.setAlpha).toHaveBeenLastCalledWith(0);
     expect(presented).not.toHaveBeenCalled();
-    expect(world.update).toHaveBeenCalledWith(0, 16, { x: 0, y: 0, width: world.size, height: world.size });
+    expect(revealed).not.toHaveBeenCalled();
+    // Hidden behind the loading panel, the World warms up with the larger bake budget.
+    const view = { x: 0, y: 0, width: world.size, height: world.size };
+    expect(world.update).toHaveBeenLastCalledWith(0, 16, view, true);
     ready = true;
     scene.update(16, 16);
     scene.update(32, 16);
+    expect(revealed).toHaveBeenCalledTimes(1);
+    expect(world.update).toHaveBeenLastCalledWith(32, 16, view, false);
     if (transitioning) {
       expect(presented).toHaveBeenCalledTimes(1);
       expect(scene.input.enabled).toBe(false);
