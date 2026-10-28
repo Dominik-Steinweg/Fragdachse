@@ -808,6 +808,8 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     overlay.cardContent = new DisplayObject();
     const frame = new DisplayObject();
     container.add([overlay.cardContent, frame]);
+    overlay.rosterLayer = new DisplayObject();
+    overlay.cardContent.add(overlay.rosterLayer);
     // Texturen, Loadout-Controls und dekoratives Ready-Glow sind nicht Teil des Eintritts.
     overlay.updateReadyGlow = vi.fn();
     overlay.rowTexture = () => 'row';
@@ -1412,7 +1414,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(overlay.isRevealComplete()).toBe(true);
     expect(tweens.add).not.toHaveBeenCalled();
     overlay.addPlayerRow({ id: 'guest', name: 'Guest', colorHex: 0xffffff });
-    expect(overlay.cardContent.children).toHaveLength(2);
+    expect(overlay.rosterLayer.children).toHaveLength(2);
     expect(container.children).toEqual([overlay.cardContent, frame]);
     expect(tweens.add).toHaveBeenCalled();
     tweens.add.mockClear();

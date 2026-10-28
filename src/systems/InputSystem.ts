@@ -131,8 +131,9 @@ function turretName(turret: AutomatedTurret): string {
   return constructionId ? getConstructionName(constructionId, getLocale()) : t('ui.turretControl.fallbackName');
 }
 /** The carrier contour when known; otherwise the single build cell the turret stands on. */
+/** The turret's own cell; `turret.footprint` is its carrier's exit contour and would frame the whole base. */
 function turretFootprint(turret: AutomatedTurret): WorldInteractionFootprint {
-  return turret.footprint ?? cellFootprint(turret.x, turret.y, CELL_SIZE);
+  return cellFootprint(turret.x, turret.y, CELL_SIZE);
 }
 function sameFootprint(a: WorldInteractionFootprint, b: WorldInteractionFootprint): boolean {
   return a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;

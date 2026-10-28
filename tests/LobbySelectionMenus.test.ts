@@ -84,6 +84,7 @@ class Display extends EventEmitter {
   setText() { return this; }
   setX(x: number) { this.x = x; return this; }
   setDepth() { return this; }
+  setAngle() { return this; }
   setVisible(visible: boolean) { this.visible = visible; return this; }
   setY(y: number) { this.y = y; return this; }
   setDisplaySize(width: number, height: number) { this.displayWidth = width; this.displayHeight = height; return this; }
@@ -114,7 +115,7 @@ function fixture(standalone = false, skin: 'default' | 'forest' = 'default') {
   const keyboard = new EventEmitter();
   const input = Object.assign(new EventEmitter(), { keyboard });
   const scene = {
-    input, scale: { width: 1920 }, textures: { exists: () => false },
+    input, scale: { width: 1920 }, textures: { exists: () => false, createCanvas: () => null },
     add: {
       rectangle: (x: number, y: number, w: number, h: number) => add('rectangle', x, y, w, h),
       image: (x: number, y: number, key: string) => {
@@ -373,8 +374,12 @@ describe('Lobby roster scrolling', () => {
   it('scrolls only inside the roster, blocks modal input and clamps after players leave', () => {
     const { scene, input, parent } = fixture();
     const changed = vi.fn();
-    const scroller = new LobbyRosterScroller(scene as any, parent as any, () => true, changed);
+    const content = new Display('content');
+    const scroller = new LobbyRosterScroller(scene as any, parent as any, content as any, () => true, changed);
     scroller.setContentHeight(900);
+    scroller.setHiddenBelow(3);
+    const hint = parent.children.find(child => child.kind === 'container');
+    expect(hint?.visible).toBe(true);
     const pointer = { x: LOBBY_CARD.left + LOBBY_CARD.padding + 20, y: LOBBY_CARD.rosterTop + 20 };
     input.emit('wheel', { ...pointer, y: LOBBY_CARD.readyY }, [], 0, 120);
     expect(scroller.scrollOffset).toBe(0);

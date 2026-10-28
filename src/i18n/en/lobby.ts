@@ -33,6 +33,7 @@ export const enLobby = {
   "ui.lobby.pingPreparing": "Measuring ping …",
   "ui.lobby.newRoom": "NEW ROOM",
   "ui.lobby.players": "PLAYERS",
+  "ui.lobby.morePlayers": "+{count} MORE",
   "ui.lobby.team": "Team",
   "ui.lobby.teamBlue": "BLUE",
   "ui.lobby.teamRed": "RED",
