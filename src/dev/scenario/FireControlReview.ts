@@ -20,6 +20,8 @@ const portalAim = { gridX: 62, gridY: 33 };
 const portalPlayer = { gridX: 42, gridY: 33 };
 const portalLocalTarget = { gridX: 36, gridY: 22 };
 const portalTool = { kind: 'utility', id: 'FIRE_CONTROL_PORTAL' } as const;
+/** Pinned dummy targets of the review: a plain chaser (a demon badger would burst at the turrets). */
+const REVIEW_TARGET_KIND = 'zombie-badger';
 const fixtures = new WeakMap<DevScenarioController, FireControlReview>();
 
 /** Real host actions only. Rendering is owned by the normal World presentation binding. */
@@ -67,7 +69,7 @@ class FireControlReview {
     this.result = structuredClone(controller.lastAction);
     this.phase = 'activated';
     // Targets appear only after activation so no pre-existing original salvo obscures the pause.
-    if (this.step !== 'rejected') controller.spawn('demon-badger', true, 1000000, { gridX: 47, gridY: 28 }, false);
+    if (this.step !== 'rejected') controller.spawn(REVIEW_TARGET_KIND, true, 1000000, { gridX: 47, gridY: 28 }, false);
   }
   /** portalCombined: copies on activate; the portal is thrown on resolve, once the copy is materialized. */
   private activatePortal(controller: DevScenarioController): void {
@@ -82,13 +84,13 @@ class FireControlReview {
     } else this.result = this.throwPortal(controller);
     this.phase = 'activated';
     // portalLocal: only a target next to the turret (local fire); resolve adds one at the exit.
-    if (this.step === 'portalLocal') controller.spawn('demon-badger', true, 1000000, portalLocalTarget, false);
-    else if (this.step !== 'portalRejected') controller.spawn('demon-badger', true, 1000000, { gridX: portalAim.gridX + 2, gridY: portalAim.gridY }, false);
+    if (this.step === 'portalLocal') controller.spawn(REVIEW_TARGET_KIND, true, 1000000, portalLocalTarget, false);
+    else if (this.step !== 'portalRejected') controller.spawn(REVIEW_TARGET_KIND, true, 1000000, { gridX: portalAim.gridX + 2, gridY: portalAim.gridY }, false);
   }
   resolve(controller: DevScenarioController): void {
     if (this.phase !== 'activated') throw Error('Activate this review step first');
     if (this.step === 'portalLocal' || this.step === 'portalCombined') {
-      if (this.step === 'portalLocal') controller.spawn('demon-badger', true, 1000000, { gridX: portalAim.gridX + 2, gridY: portalAim.gridY }, false);
+      if (this.step === 'portalLocal') controller.spawn(REVIEW_TARGET_KIND, true, 1000000, { gridX: portalAim.gridX + 2, gridY: portalAim.gridY }, false);
       else this.result = this.throwPortal(controller);
       this.phase = 'resolved';
       return;

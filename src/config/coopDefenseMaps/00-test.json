@@ -486,6 +486,12 @@
         "spawnZoneId": "alien-cone-gate-1" }]
     },
     {
+      "id": "demon-badger-gate-1",
+      "start": { "type": "time", "atMs": 18000 },
+      "groups": [{ "enemyKind": "demon-badger", "count": 8, "spawnStaggerMs": 2400,
+        "spawnZoneId": "alien-cone-gate-1" }]
+    },
+    {
       "id": "mortar-gate-1",
       "start": { "type": "time", "atMs": 3000 },
       "groups": [{ "enemyKind": "mortar-badger", "count": 2, "spawnStaggerMs": 1500,

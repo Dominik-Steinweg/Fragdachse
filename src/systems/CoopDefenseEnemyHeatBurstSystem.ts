@@ -48,6 +48,10 @@ interface HeatState {
   /** Some player can see the body (hysteresis over the view bands). */
   seen: boolean;
   positionRevision: number;
+  lastX: number;
+  lastY: number;
+  /** The warning of this cycle was already restarted once (a teleported body). */
+  restarted: boolean;
   nextBookingCheckAt: number;
   /** Heading of the warning run; null outside it. */
   heading: number | null;
@@ -64,6 +68,8 @@ const BOOKING_RECHECK_MS = 150;
 const MAX_SLOT_SEARCH = 64;
 /** The warning run steers at a point this far ahead along its heading. */
 const RUN_PROBE_PX = 48;
+/** A discontinuous move farther than this (portal, translocator) restarts a running warning once. */
+const TELEPORT_PX = 48;
 
 /**
  * Host decisions of heat-burst enemies (the Demon Badger): charge while running (the speed rises),
@@ -160,7 +166,8 @@ export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSour
     const state: HeatState = { enemy, chargeMs, revision: enemy.getHeatBurstState().revision, cycle: 0,
       ventFromAt: 0, chargeStartAt: fullAt - chargeMs, fullAt, telegraphAt: 0, burstAt: 0, slot: null,
       seen: views ? views.viewGap(enemy.sprite.x, enemy.sprite.y) < views.farMarginPx : true,
-      positionRevision: enemy.positionRevision, nextBookingCheckAt: 0, heading: null, headingAt: now };
+      positionRevision: enemy.positionRevision, lastX: enemy.sprite.x, lastY: enemy.sprite.y, restarted: false,
+      nextBookingCheckAt: 0, heading: null, headingAt: now };
     this.states.set(enemy.id, state);
     this.publish(state);
     return state;
@@ -168,18 +175,21 @@ export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSour
 
   private step(state: HeatState, config: CoopDefenseEnemyHeatBurstConfig, now: number, views: EnemyViewProximity | null): void {
     const enemy = state.enemy, moved = state.positionRevision !== enemy.positionRevision;
+    const jumped = moved && Math.hypot(enemy.sprite.x - state.lastX, enemy.sprite.y - state.lastY) > TELEPORT_PX;
     state.positionRevision = enemy.positionRevision;
+    state.lastX = enemy.sprite.x; state.lastY = enemy.sprite.y;
     if (views) {
       const gap = views.viewGap(enemy.sprite.x, enemy.sprite.y);
-      if (moved) state.seen = gap < views.farMarginPx;
+      if (jumped) state.seen = gap < views.farMarginPx;
       else if (state.seen && gap >= views.farMarginPx) state.seen = false;
       else if (!state.seen && gap <= views.nearMarginPx) state.seen = true;
     } else state.seen = true;
 
     if (state.burstAt > 0) {
       const warning = now >= state.telegraphAt;
-      // A teleported or long-delayed warning restarts in full at the body's current place.
-      if ((warning && moved && now < state.burstAt) || now > state.burstAt + LATE_BURST_MS) {
+      // A teleported or long-delayed warning restarts once in full at the body's current place.
+      if (!state.restarted && ((warning && jumped && now < state.burstAt) || now > state.burstAt + LATE_BURST_MS)) {
+        state.restarted = true;
         this.book(state, config, now, now);
         return;
       }
@@ -241,6 +251,7 @@ export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSour
     if (this.states.get(enemy.id) !== state) return;
     state.cycle += 1;
     state.slot = null;
+    state.restarted = false;
     state.ventFromAt = Math.round(now);
     state.chargeStartAt = state.ventFromAt + config.ventMs;
     state.fullAt = state.chargeStartAt + state.chargeMs;

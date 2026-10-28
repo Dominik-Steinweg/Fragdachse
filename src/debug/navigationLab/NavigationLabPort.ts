@@ -27,6 +27,9 @@ export interface NavigationLabEnemy {
   readonly kaboomtulaPhase?: string;
   /** Replicated pounce phase (aim, lock, air, recover, idle); absent for bodies that never pounced. */
   readonly pouncePhase?: string;
+  /** Replicated heat phase (charge, hold, telegraph, vent) and heat 0..1; absent for bodies without a heat cycle. */
+  readonly heatPhase?: string;
+  readonly heat?: number;
 }
 
 /** Explicit scenario inputs and read models; no runtime owner escapes to the lab. */
