@@ -99,9 +99,11 @@ Die Darstellung folgt [`visual-guidelines.md`](../ai/visual-guidelines.md) und d
     violetter Nebel, der langsam atmet. Der Strom sammelt sich darin, breit und blass im Zentrum, und tritt
     am Zonenrand als Strom heraus. Kein eigenes Zeichen an der Quelle.
   - **Nebel:** Der Bodennebel der Runde liegt auch über der Lagekarte, mit ihrer Startzeit; um den
-    Baubereich bleibt die Luft klar. Die Ströme tragen Void-Dunst: Der Nebel färbt sich entlang der Wege
-    violett und verdichtet sich leicht, Sporen treiben mit, und dicke Bänke verschleiern das Leuchten des
-    Stroms, statt dass es darüber liegt.
+    Baubereich bleibt die Luft klar. Phantom-Marschierer laufen die Wege im Gegnertempo ab und verseuchen
+    den Nebel wie die Gegner der Runde (Void-Gefahrenzonen E12–E14): Er färbt sich entlang der Wege violett,
+    verdichtet sich, leuchtet frisch auf und nachts, Sporen treiben mit. Eine neue Route bricht mit einem
+    Stoß aus ihrer Zone hervor, eine weggefallene klingt schnell ab. Dicke Bänke verschleiern das Leuchten
+    des Stroms, statt dass es darüber liegt.
   - **Ziele:** Am Ende teilt sich der Strom und legt sich als Arme an die Mauern der Basis, die er
     erreicht, bis zu ihren Ecken, und blendet dort aus: So verteilen sich die Gegner in der Mission um die
     Basis, um sie anzugreifen. Am Rand des Baubereichs gibt es keine Marke.
@@ -313,3 +315,6 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
 - 2026-10-28 (Vorposten und Teleporter): Gefallene Vorposten blenden aus statt stehen zu bleiben; eine
   verkohlte Ruine wurde verworfen. Portale und Generator sind sichtbar, Portalsprünge sind eigene Bögen
   statt Strom über den Boden; die Übersicht zeigt Portale als Ringe mit Legendeneintrag „Teleporter“.
+- 2026-10-28 (Verseuchung): Der Dunst der Ströme ist kein statisches Raster mehr, sondern dieselbe
+  Verseuchung wie in der Runde: Phantom-Marschierer legen Spuren (Stoß bei neuer Route, Pulse, schnelles
+  Abklingen weggefallener Routen, Nachtleuchten), damit Lagekarte und Runde gleich lesbar sind.
