@@ -400,6 +400,12 @@ Turmzellen bleiben zellbasiert; das Fort präsentiert sie nur.
   ([turret-emission.json](../../src/assets/manifests/turret-emission.json), an die Live-Revision gebunden). Der
   `TurretAnimationController` zeigt ihn additiv über der Lichtkarte im aktuellen Frame des Sprites; ein Schuss setzt
   zusätzlich einen kurzen `turretGlow`-Lichtimpuls in der Leuchtfarbe.
+- Gegner-Leuchtzonen nutzen denselben Pass (`sheet-emission.mjs --channel <name> --neutral`): eine neutrale
+  Abdeckungsmaske im Raster des Beauty-Sheets, Augen ausgenommen (die zeichnet der Augenglüh-Renderer).
+  [enemy-emission.json](../../src/assets/manifests/enemy-emission.json) bindet sie an Revision und Hash des
+  Live-Sheets; nur dann lädt [BadgerAnimations](../../src/animations/BadgerAnimations.ts) sie als
+  `${sheetTextureKey}_emission`. Farbe und Stärke setzt zur Laufzeit die Präsentation des Verhaltens (z. B.
+  [EnemyHeatBurstPresentation](../../src/effects/EnemyHeatBurstPresentation.ts)), additiv über der Lichtkarte.
 - Jede World-Darstellung mit Basen verdrahtet Fort, Licht, Fortschatten und GPU-Partikel über
   [bindBaseFortPresentation](../../src/world/BaseFortPresentationBinding.ts), die Runde wie der Bauhof. Ein eigener
   Aufbau verliert Fackeln, Feuerschalen oder den Schatten des Forts.
