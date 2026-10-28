@@ -17,7 +17,7 @@ Palettes: wild (agouti brown-grey), white (dirty white, bloodied muzzle), charco
 violet glow) and ash (grey-greenish). Red stays rare (telegraphs own it); no yellow.
 
 z = 0 is the ground. Parts for rabid_rabbit_motion_v2: `carriage` (whole animal, real leap
-height), optional `ear_glow` emission socket (rest strength `ear_glow_rest`) and the rig: `body`
+height), optional `ear_glow`/`body_glow` emission sockets (rest strengths `*_rest`) and the rig: `body`
 (chest), `hips` (loin and rump, pivot mid-back), `head`, `jaw`, `ear_l`/`ear_r`, `tail`, per front
 leg `<leg>_upper/_lower/_foot` and per rear leg `<leg>_thigh/_shin/_foot`. Every bone rolls its Z
 axis up, so Euler Z is a yaw seen from the camera and Euler X lifts the bone's tip.
@@ -84,6 +84,15 @@ PALETTES = {
     'charcoal': dict(dark='#0d0b0f', light='#37323e', rim='#a093b8', saddle=.30, ticking=.20, earTip='#08070a', earBack='#4a4452',
                      earRim='#a493bd', tail='#4a4352', skin='#5d4f5c', scab='#1f1420', claw='#0b090c', nose='#2a2030',
                      eye=('#f6e2ff', '#c070ff', '#5d1aa6', '#14041f'), eyeGlow=2.2, glow='#b347ff', blood=False),
+    'nightshade': dict(dark='#07080f', light='#252a3e', rim='#8a84c0', saddle=.30, ticking=.18, earTip='#040409', earBack='#343852',
+                       earRim='#9a93cf', tail='#3a3e5a', skin='#4d4a5e', scab='#18121f', claw='#08080c', nose='#221e30',
+                       eye=('#f6e2ff', '#c070ff', '#5d1aa6', '#14041f'), eyeGlow=2.2, glow='#b347ff', blood=False),
+    'slate': dict(dark='#14161a', light='#4a4e57', rim='#9b9ead', saddle=.45, ticking=.30, earTip='#09090c', earBack='#5c606c',
+                  earRim='#a8abb8', tail='#5a5e6a', skin='#5e5a5e', scab='#1e1a1e', claw='#0c0c0e', nose='#2a282c',
+                  eye=('#f6e2ff', '#c070ff', '#5d1aa6', '#14041f'), eyeGlow=2.2, glow='#b347ff', blood=False),
+    'umber': dict(dark='#110b08', light='#3f2f24', rim='#a08b78', saddle=.40, ticking=.30, earTip='#080504', earBack='#504034',
+                  earRim='#ad9886', tail='#3a2c22', skin='#5a4840', scab='#201410', claw='#0d0a08', nose='#2a1e1a',
+                  eye=('#f6e2ff', '#c070ff', '#5d1aa6', '#14041f'), eyeGlow=2.2, glow='#b347ff', blood=False),
     'ash': dict(dark='#2c302a', light='#7c8372', rim='#bcc2ad', saddle=.30, ticking=.26, earTip='#141612', earBack='#959b8b',
                 earRim='#c7ccb8', tail='#c3c7b6', skin='#7a7466', scab='#2c2a22', claw='#141512', nose='#38362f',
                 eye=('#d6f2dc', '#8cc49c', '#334d3b', '#080e0a'), eyeGlow=1.2, glow='#b347ff', blood=False),
@@ -94,8 +103,13 @@ PALETTES = {
 # they break the body outline from above.
 EAR_POSES = {'wide': dict(earYaw=30, earBend=10, droop=.24), 'mid': dict(earYaw=46, earBend=6, droop=.27),
              'side': dict(earYaw=66, earBend=4, droop=.30)}
-# Void marking on any form (`draft.void`): `eyes` turns the irises violet, `veins` also lights the ears.
+# Void marking on any form (`draft.void`, tokens joined by '+'); every token turns the irises violet.
+# ears: veins in the ears; body: veins over head and body; face: veins spreading from the eyes;
+# tips: glowing ear tips; spine: a glowing seam along the back; spots: glowing void blotches;
+# rims: violet pale fur edges. `veins` is the older spelling of eyes+ears.
 VOID_EYES = dict(eye=('#f6e2ff', '#c070ff', '#5d1aa6', '#14041f'), eyeGlow=2.2)
+VOID_TOKENS = ('eyes', 'ears', 'body', 'face', 'tips', 'spine', 'spots', 'rims')
+VOID_HOT = linear('#e2a8ff')
 # Hind paw carriage (`draft.feet`): `visible` lets the long feet reach out beside the chest,
 # `splayed` plants them wide with the toes turned out, `flank` shows the paws further back beside
 # the haunches, clear of the ears; all get pale paw tops and fuller toes.
@@ -125,10 +139,15 @@ def form_settings(spec):
         form['earYaw'] = float(option('earYaw'))
     void = option('void')
     if void:
-        if void not in ('eyes', 'veins'):
-            raise ValueError('rabid-rabbit void must be eyes or veins')
+        tokens = set(void.replace('veins', 'eyes+ears').split('+'))
+        if not tokens <= set(VOID_TOKENS):
+            raise ValueError('rabid-rabbit void tokens: ' + '+'.join(VOID_TOKENS))
         colours.update(VOID_EYES)
-        form['veins'] = form.get('veins') or void == 'veins'
+        form['veins'] = form.get('veins') or 'ears' in tokens
+        form.update(voidTips='tips' in tokens, voidSpine='spine' in tokens, voidSpots='spots' in tokens,
+                    voidBody='body' if 'body' in tokens else 'face' if 'face' in tokens else None)
+        if 'rims' in tokens:
+            colours.update(rim='#a48ed0', earRim='#b39be0')
     feet = option('feet')
     if feet:
         if feet not in FEET:
@@ -245,8 +264,9 @@ def fur(c, name, palette, density, softness=.8, roughness=(.74, .90), dark=None,
     return material
 
 
-def vein_glow(material, colour, strength):
-    """Void veins inside the ears: meandering noise isolines masked by FD_Glow; strength is a socket."""
+def vein_glow(material, colour, strength, stretch_by=(2.6, 1.0, 2.6), scale=3.4, width=.045, coverage=None):
+    """Void glow from the FD_Glow mask: R = meandering vein isolines, G = solid glow with a flickering
+    breakup (ear tips, the spine seam), B = soft glowing blotches. Strength is a socket."""
     nodes, links = material.node_tree.nodes, material.node_tree.links
     bs = nodes['Principled BSDF']
     rest = nodes['Rest-pose skin coordinates'].outputs['Vector']
@@ -255,12 +275,31 @@ def vein_glow(material, colour, strength):
         out = nodes.new(kind)
         out.name = out.label = label
         return out
-    stretch = node('ShaderNodeVectorMath', 'Veins run along the ear')
+
+    def math_node(op, a, b, label):
+        out = node('ShaderNodeMath', label)
+        out.operation = op
+        for socket, value in zip(out.inputs, (a, b)):
+            if isinstance(value, (int, float)):
+                socket.default_value = value
+            else:
+                links.new(value, socket)
+        return out.outputs[0]
+
+    def remap(value, lo, hi, a, b, label):
+        out = node('ShaderNodeMapRange', label)
+        out.interpolation_type = 'SMOOTHSTEP'
+        out.clamp = True
+        for name, v in (('From Min', lo), ('From Max', hi), ('To Min', a), ('To Max', b)):
+            out.inputs[name].default_value = v
+        links.new(value, out.inputs['Value'])
+        return out.outputs[0]
+    stretch = node('ShaderNodeVectorMath', 'Veins follow the part')
     stretch.operation = 'MULTIPLY'
-    stretch.inputs[1].default_value = (2.6, 1.0, 2.6)
+    stretch.inputs[1].default_value = stretch_by
     links.new(rest, stretch.inputs[0])
-    field = node('ShaderNodeTexNoise', 'Ear vein field')
-    field.inputs['Scale'].default_value = 3.4
+    field = node('ShaderNodeTexNoise', 'Void vein field')
+    field.inputs['Scale'].default_value = scale
     field.inputs['Detail'].default_value = 2.5
     field.inputs['Distortion'].default_value = .35
     links.new(stretch.outputs[0], field.inputs['Vector'])
@@ -275,34 +314,51 @@ def vein_glow(material, colour, strength):
     line.interpolation_type = 'SMOOTHSTEP'
     line.clamp = True
     line.inputs['From Min'].default_value = 0
-    line.inputs['From Max'].default_value = .045
+    line.inputs['From Max'].default_value = width
     line.inputs['To Min'].default_value = 1
     line.inputs['To Max'].default_value = 0
     links.new(distance.outputs[0], line.inputs['Value'])
-    mask = node('ShaderNodeVertexColor', 'Ear vein mask')
+    mask = node('ShaderNodeVertexColor', 'Void glow mask')
     mask.layer_name = 'FD_Glow'
-    split = node('ShaderNodeSeparateColor', 'Ear vein mask channels')
+    split = node('ShaderNodeSeparateColor', 'Void glow mask channels')
     links.new(mask.outputs['Color'], split.inputs[0])
-    glow = node('ShaderNodeMath', 'Masked ear veins')
-    glow.operation = 'MULTIPLY'
-    links.new(line.outputs[0], glow.inputs[0])
-    links.new(split.outputs[0], glow.inputs[1])
-    emission = node('ShaderNodeMix', 'Ear vein emission colour')
+    veins = math_node('MULTIPLY', line.outputs[0], split.outputs[0], 'Masked void veins')
+    if coverage:  # veins gather in a few branching patches instead of netting the whole coat
+        islands = node('ShaderNodeTexNoise', 'Vein patch islands')
+        islands.inputs['Scale'].default_value = coverage
+        islands.inputs['Detail'].default_value = 1
+        links.new(rest, islands.inputs['Vector'])
+        veins = math_node('MULTIPLY', veins, remap(islands.outputs['Fac'], .43, .60, 0, 1, 'Vein patch mask'), 'Patchy void veins')
+    flicker = node('ShaderNodeTexNoise', 'Void seam breakup')
+    flicker.inputs['Scale'].default_value = 7
+    flicker.inputs['Detail'].default_value = 2
+    links.new(rest, flicker.inputs['Vector'])
+    seam = math_node('MULTIPLY', split.outputs[1], remap(flicker.outputs['Fac'], .30, .70, .45, 1.1, 'Seam breakup value'), 'Void seam')
+    patches = node('ShaderNodeTexNoise', 'Void blotch breakup')
+    patches.inputs['Scale'].default_value = 4.5
+    patches.inputs['Detail'].default_value = 2
+    links.new(rest, patches.inputs['Vector'])
+    blotch = math_node('MULTIPLY', split.outputs[2], remap(patches.outputs['Fac'], .40, .62, .30, 1, 'Blotch breakup value'),
+                       'Void blotches')
+    glow = math_node('MINIMUM', math_node('MAXIMUM', math_node('MAXIMUM', veins, seam, 'Veins or seam'), blotch, 'Void glow'), 1,
+                     'Clamped void glow')
+    hot = node('ShaderNodeMix', 'Void glow colour')
+    hot.data_type = 'RGBA'
+    hot.inputs[6].default_value = (*colour, 1)
+    hot.inputs[7].default_value = (*VOID_HOT, 1)
+    links.new(math_node('MULTIPLY', glow, glow, 'Hot glow cores'), hot.inputs[0])
+    emission = node('ShaderNodeMix', 'Void emission colour')
     emission.data_type = 'RGBA'
     emission.inputs[6].default_value = (0, 0, 0, 1)
-    emission.inputs[7].default_value = (*colour, 1)
-    links.new(glow.outputs[0], emission.inputs[0])
+    links.new(glow, emission.inputs[0])
+    links.new(hot.outputs[2], emission.inputs[7])
     links.new(emission.outputs[2], bs.inputs['Emission Color'])
     bs.inputs['Emission Strength'].default_value = strength
-    # The skin around the veins takes on the void colour even where it does not glow.
+    # The fur around the glow takes on the void colour even where it does not glow.
     base = bs.inputs['Base Color'].links[0].from_socket
-    tinted = node('ShaderNodeMix', 'Vein-tinted ear skin')
+    tinted = node('ShaderNodeMix', 'Void-tinted fur')
     tinted.data_type = 'RGBA'
-    factor = node('ShaderNodeMath', 'Vein tint')
-    factor.operation = 'MULTIPLY'
-    links.new(glow.outputs[0], factor.inputs[0])
-    factor.inputs[1].default_value = .45
-    links.new(factor.outputs[0], tinted.inputs[0])
+    links.new(math_node('MULTIPLY', glow, .45, 'Void tint'), tinted.inputs[0])
     links.new(base, tinted.inputs[6])
     tinted.inputs[7].default_value = (*linear('#3c1660'), 1)
     links.new(tinted.outputs[2], bs.inputs['Base Color'])
@@ -467,8 +523,10 @@ def ear(c, form, side, hull, material, palette, torn=False):
         dark_tip = smoothstep(1 - tip * 1.25, 1 - tip * .35, t) if tip else 0
         root_shade = .80 + .20 * smoothstep(0, .25, t)
         value.color = (root_shade * (1 - dark_tip), .85 * smoothstep(.55, .98, edge) * (1 - dark_tip), .15, 1)
-    for value, g in zip(mask.data, glow):
-        value.color = (g, g, g, 1)
+    tip_len = max(form['earTip'], .2)
+    for value, g, (t, edge, top) in zip(mask.data, glow, plan):
+        lit_tip = smoothstep(1 - tip_len * 1.4, 1 - tip_len * .3, t) if form.get('voidTips') and not torn else 0
+        value.color = (g if form.get('veins') else 0, lit_tip, 0, 1)
     write_rest(ob)
     c.paint_form_mask(ob, lambda p: .72)
     return ob, path
@@ -601,6 +659,38 @@ def paint_body(ob, form, rows, palette, eyes):
     paint_pattern(ob, sampler)
 
 
+def paint_void(ob, form, eyes):
+    """FD_Glow on the fur body: R = vein field (whole upper body, or spreading from the eyes),
+    G = the glowing seam along the spine, B = void blotches. Returns whether anything glows."""
+    if not (form.get('voidBody') or form.get('voidSpine') or form.get('voidSpots')):
+        return False
+    _, neck, *_ = head_frame(form)
+    L, W = form['length'], form['width']
+    spots = [(.34 * W, -.30 * L, .17), (-.40 * W, -.62 * L, .20), (.24 * W, -1.00 * L, .15), (-.16 * W, .12 * L, .12),
+             (.46 * W, -.78 * L, .12), (-.30 * W, -1.12 * L, .13), (.20 * W, .45 * L, .10)]
+    mesh = ob.data
+    matrix, rotation = ob.matrix_world, ob.matrix_world.to_3x3()
+    points = [(matrix @ v.co, (rotation @ v.normal).normalized()) for v in mesh.vertices]
+    attr = mesh.color_attributes.new(name='FD_Glow', type='FLOAT_COLOR', domain='POINT')
+    colours = []
+    for p, n in points:
+        up = smoothstep(-.35, .45, n.z)
+        r = g = b = 0
+        if form.get('voidBody') == 'body':
+            r = up * (.60 + .40 * smoothstep(neck - .40, neck + .30, p.y))
+        elif form.get('voidBody') == 'face':
+            near = max(math.exp(-(math.hypot(p.x - e.x, p.y - e.y) / .45) ** 2) for e in eyes)
+            r = up * max(near, .8 * smoothstep(neck - .10, neck + .35, p.y) * smoothstep(.25, 0, abs(p.x)))
+        if form.get('voidSpine'):
+            g = (math.exp(-(p.x / .055) ** 2) * smoothstep(.25, .65, n.z) * smoothstep(neck + .05, neck - .30, p.y)
+                 * smoothstep(-1.42 * L, -1.12 * L, p.y))
+        if form.get('voidSpots'):
+            b = up * max(math.exp(-((p.x - x) ** 2 + (p.y - y) ** 2) / (s * s)) for x, y, s in spots)
+        colours.extend((r, g, b, 1))
+    attr.data.foreach_set('color', colours)
+    return True
+
+
 def crest(c, form, rows, hull, material, palette):
     """Raised hackles: stiff spiky fur tufts along the nape and spine, leaning back."""
     rng = random.Random(7)
@@ -716,6 +806,7 @@ def build(c, spec):
     body.name = 'Rabid Rabbit continuous fur body'
     eyes = {side: rabbit_eye(c, form, side, mats, palette) for side in (-1, 1)}
     paint_body(body, form, rows, palette, [e['centre'] for e in eyes.values()])
+    body_void = paint_void(body, form, [e['centre'] for e in eyes.values()])
     write_rest(body)
     c.paint_form_mask(body, lambda p: .55 + .45 * max(0, min(1, p.z / .78)))
     hull = Surface([body])
@@ -749,7 +840,8 @@ def build(c, spec):
     for side in (-1, 1):
         ears[side], ear_paths[side] = ear(c, form, side, hull, ear_fur, palette, torn=bool(form.get('tornEar')) and side < 0)
     vein_strength = form.get('veinStrength', 2.4)
-    ear_glow = vein_glow(ear_fur, linear(palette['glow']), vein_strength) if form.get('veins') else None
+    ear_glow = vein_glow(ear_fur, linear(palette['glow']), vein_strength) if form.get('veins') or form.get('voidTips') else None
+    body_glow = vein_glow(hide, linear(palette['glow']), 1.5, stretch_by=(1.2, .8, 1.2), scale=2.2, width=.026, coverage=1.4) if body_void else None
 
     tail_y = rows[-1][0] + .04
     tail = ell(c, 'Rabid Rabbit tail tuft', (0, tail_y, .58), (.14, .13, .14), tail_fur)
@@ -863,6 +955,8 @@ def build(c, spec):
     parts = {'carriage': carriage, 'rabbit_legs': list(LEGS)}
     if ear_glow is not None:
         parts.update(ear_glow=ear_glow, ear_glow_rest=vein_strength)
+    if body_glow is not None:
+        parts.update(body_glow=body_glow, body_glow_rest=1.5)
     root['formVariant'] = variant
     root['palette'] = palette_name
     return {'root': root, 'parts': parts, 'rig': rig, 'sockets': sockets}
