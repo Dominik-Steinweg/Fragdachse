@@ -55,7 +55,8 @@
 // several campaign maps moved their zones (and map 2 its lake shore), so layouts differ between builds.
 // Rabid Rabbit: the rabid badger's registry slot (wire kind 2) became `rabid-rabbit`, and enemy
 // snapshots gained the pounce field (aim target, locked landing, flight timeline).
-export const PEER_PROTOCOL_VERSION = 54;
+// Rabid Rabbit tuning: the pounce landing travels as the new explosion style `pounce_impact`.
+export const PEER_PROTOCOL_VERSION = 55;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

@@ -8,7 +8,7 @@ import { pounceClipFrame } from '../src/animations/EnemyPounceAnimation';
 import { healthBarTestScene } from './healthBarTestScene';
 import { CoopDefenseEnemyPounceSystem } from '../src/systems/CoopDefenseEnemyPounceSystem';
 import { EMPTY_ENEMY_POUNCE_STATE, enemyPouncePhaseAt, isEnemyPounceState, type EnemyPounceState } from '../src/systems/EnemyPounceState';
-import { boundingGaitFactor, predictPounceLanding } from '../src/systems/enemyPounceRules';
+import { boundingGaitFactor, createPounceReticle, predictPounceLanding, stepPounceReticle } from '../src/systems/enemyPounceRules';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 
 const rabbit = enemyConfig.getCoopDefenseEnemyConfig('rabid-rabbit');
@@ -24,6 +24,7 @@ function fixture(starts: readonly Point[] = [{ x: 0, y: 0 }], player: Point = { 
   const immune = new Map<string, boolean>();
   const stunned = { value: false };
   const biting = { value: false };
+  const blind = { value: false };
   const route = { point: { x: 2000, y: 0 } as Point | null };
   const target = { ...player, vx: 0, vy: 0, active: true };
   const bodies = starts.map((start, index) => {
@@ -48,7 +49,7 @@ function fixture(starts: readonly Point[] = [{ x: 0, y: 0 }], player: Point = { 
     isStunned: () => stunned.value,
     readTarget: () => target.active ? { ref: { kind: 'player', id: 'p1' }, x: target.x, y: target.y, radius: PLAYER_SIZE / 2 } : null,
     resolveTarget: () => target.active ? { ref: { kind: 'player', id: 'p1' }, x: target.x, y: target.y, radius: PLAYER_SIZE / 2 } : null,
-    canSee: (enemy, seen, range) => Math.hypot(seen.x - enemy.sprite.x, seen.y - enemy.sprite.y) <= range,
+    canSee: (enemy, seen, range) => !blind.value && Math.hypot(seen.x - enemy.sprite.x, seen.y - enemy.sprite.y) <= range,
     laneClearance: (_x, _y, _angle, length) => length,
     isFree: () => true,
     isBiting: () => biting.value,
@@ -78,7 +79,7 @@ function fixture(starts: readonly Point[] = [{ x: 0, y: 0 }], player: Point = { 
     }
     throw new Error('no aim');
   };
-  return { bodies, system, run, runUntilAim, target, impact, atImpact, stunned, biting, route, immune,
+  return { bodies, system, run, runUntilAim, target, impact, atImpact, stunned, biting, blind, route, immune,
     state: (id = 'r0') => states.get(id)! };
 }
 
@@ -215,6 +216,44 @@ describe('pounce host decisions', () => {
     expect(Math.min(...degrees)).toBeGreaterThanOrEqual(cuts.angleMinDeg - 0.5);
     expect(Math.max(...degrees)).toBeLessThanOrEqual(cuts.angleMaxDeg + 0.5);
     expect(headings.some(angle => angle > 0) && headings.some(angle => angle < 0)).toBe(true);
+  });
+});
+
+describe('pounce aim resilience', () => {
+  it('keeps an aim through a short push and a brief loss of sight, and takes off where the body stands', () => {
+    const f = fixture();
+    const aimAt = f.runUntilAim();
+    const body = f.bodies[0]!;
+    body.sprite.x += config.cancelDisplacementPx * 0.6;
+    f.blind.value = true;
+    f.run(aimAt + FRAME, aimAt + FRAME + Math.min(config.lostSightGraceMs, config.aimMs) - 2 * FRAME);
+    expect(f.state().pounce).not.toBeNull();
+    f.blind.value = false;
+    const lockAt = f.state().pounce!.lockAt;
+    f.run(aimAt + Math.min(config.lostSightGraceMs, config.aimMs), lockAt + FRAME);
+    const locked = f.state().pounce!;
+    expect(locked.landing?.armed).toBe(true);
+    expect([locked.originX, locked.originY]).toEqual([Math.round(body.sprite.x), Math.round(body.sprite.y)]);
+  });
+
+  it('drops an aim whose target stays out of sight longer than the grace', () => {
+    const f = fixture();
+    const aimAt = f.runUntilAim();
+    f.blind.value = true;
+    f.run(aimAt + FRAME, aimAt + config.lostSightGraceMs + 3 * FRAME);
+    expect(f.state().pounce).toBeNull();
+  });
+
+  it('turns the lead of the aim point at a limited rate while the target part follows at once', () => {
+    const origin = { x: 0, y: 0 }, target = { x: 220, y: 0 };
+    const reticle = createPounceReticle(target.x, target.y, 0, origin.x, origin.y, config);
+    // The predicted landing flips 160 px to the other side of the target: the lead swings over.
+    stepPounceReticle(reticle, target.x, target.y, target.x, target.y + 160, 1000, origin.x, origin.y, config);
+    stepPounceReticle(reticle, target.x, target.y, target.x, target.y - 160, 1100, origin.x, origin.y, config);
+    expect(Math.abs(reticle.offsetY - 160)).toBeCloseTo(config.aimTrackSpeedPx * 0.1, 6);
+    // A target moving on keeps its lead: the aim point moves with it in the same step.
+    stepPounceReticle(reticle, target.x + 30, target.y, target.x + 30, target.y + reticle.offsetY, 1116, origin.x, origin.y, config);
+    expect(reticle.x).toBeCloseTo(Math.min(target.x + 30, config.maxRangePx), 6);
   });
 });
 

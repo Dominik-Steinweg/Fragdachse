@@ -27,25 +27,27 @@ Richtung wechselt, stoppt oder dasht, bleibt heil. Zwischen den Sprüngen läuft
 
 | Phase | Verhalten (Startwerte, alle in `src/config/coopDefenseEnemies.json`) |
 |---|---|
-| Start | Spieler 110–300 px entfernt, Sicht, freie Bahn, kein laufender Biss, Abklingzeit vorbei; erster Sprung frühestens 0,9 s nach dem Erscheinen |
-| Zielen (0,45 s) | steht, schaut zum Spieler; die Zone folgt dem vorhergesagten Landepunkt |
-| Einrasten (0,25 s) | Zone blitzt und bleibt fest; Fluchtfenster beginnt |
-| Flug (0,35–0,48 s, längenabhängig) | fester Flug zur Zone, nicht wegstoßbar, Treffer-Stagger wirkungslos |
-| Landung | Flächenschaden r 60 px, 28 in der Mitte bis 14 am Rand, Rückstoß nur für Spieler; Köder nehmen Schaden, Bauwerke nicht |
+| Start | Spieler 110–480 px entfernt, Sicht, freie Bahn, kein laufender Biss, Abklingzeit vorbei; erster Sprung frühestens 0,9 s nach dem Erscheinen |
+| Zielen (0,45 s) | steht, schaut zum Zielpunkt; die Zone folgt dem vorhergesagten Landepunkt, ihr Vorhalt schwenkt aber höchstens 400 px/s um (kein Hin- und Herspringen bei Richtungswechseln) |
+| Einrasten (0,25 s) | Zone blitzt und bleibt fest; der Flug startet dort, wo der Hase jetzt steht; Fluchtfenster beginnt |
+| Flug (0,35–0,62 s, längenabhängig) | fester Flug zur Zone, nicht wegstoßbar, Treffer-Stagger wirkungslos |
+| Landung | Flächenschaden r 80 px, 28 in der Mitte bis 14 am Rand, Rückstoß nur für Spieler; Köder nehmen Schaden, Bauwerke nicht |
 | Erholung (0,45 s) | steht, kein Biss |
 | Abklingzeit (2,4–3,2 s) | läuft und beißt normal |
 
-Abbrüche: Stun, Eingraben, Teleport oder deutliches Wegstoßen beim Zielen brechen den Sprung mit kurzer
-Sperre ab; ist der Spieler beim Zielen näher als 70 px, beißt der Hase stattdessen. Stun oder Teleport
+Abbrüche: Stun, Eingraben, Teleport oder Wegstoßen um mehr als 72 px beim Zielen brechen den Sprung mit
+kurzer Sperre ab; verliert der Hase den Spieler länger als 0,35 s aus der Sicht oder kommt er näher als 45 px,
+beißt er stattdessen. Ist der Landepunkt blockiert, rückt er entlang der Bahn bis zur Mindestreichweite zurück. Stun oder Teleport
 im Flug lassen ihn ohne Schaden dort landen, wo er ist. Verbündete Hasen (Nekromantie) springen nicht.
 
 Fairness: Ab dem Einrasten bleiben mindestens 0,6 s bis zur Landung. Ein Spieler (280 px/s) braucht für
-76 px Flucht aus der Zonenmitte ca. 0,27 s; eine 90°-Wendung bringt ihn rund 170 px vom Landepunkt weg.
+96 px Flucht aus der Zonenmitte ca. 0,34 s; eine 90°-Wendung bringt ihn rund 170 px vom Landepunkt weg.
 Der Vertragstest prüft `lockMs + airMinMs ≥ Reaktion + (Radius + 16) / 280` für jede authored Konfiguration.
 
 ## 4. Bewegung
 
-- **Sprunglauf:** Tempo pulsiert pro Satz um ±18 % um das Grundtempo (190 px/s), der Mittelwert bleibt.
+- **Größe:** Kollisions- und Darstellungsgröße 20 px (nach den ersten Spieltests von 22 px verkleinert; 20 ist die nächste ganze Größe zu −10 %).
+- **Sprunglauf:** Tempo pulsiert pro Satz um ±18 % um das Grundtempo (209 px/s), der Mittelwert bleibt.
 - **Haken:** Beim Anrennen auf einen Spieler (weiter als 140 px) alle 1,4–2,6 s ein scharfer Haken von
   30–45° für ca. 0,23 s, abwechselnd zur Seite; endet sofort, wenn die Seite blockiert ist.
 
@@ -55,6 +57,9 @@ Der Vertragstest prüft `lockMs + airMinMs ≥ Reaktion + (Radius + 16) / 280` f
   (`EnemyClawRenderer`); Rot ist Telegraph, Void-Violett allgemeine Gefahr, kein Gelb.
 - Flug mit Anhebung zur Kamera; Clients setzen den Körper auf die replizierte Fluglinie; Absprung- und
   Landespuren über den Bewegungsmodus `airborne`.
+- Landung als GPU-Partikel (`PounceImpactGpuRenderer`, Explosionsstil `pounce_impact`): rund 120 feine Körner
+  über die Trefferfläche, weicher Staub, der sich am Trefferrand absetzt, und feine Void-Funken in der Augenfarbe,
+  die den Treffer auch nachts lesbar halten.
 - Modell (GA1, Wahl des Users): schlanker Feldhase geduckt, lange Ohren 46° seitlich nach hinten
   (Pfeilsilhouette von oben), blau-schwarzes Fell mit violettem Fellrand, große violette Ringaugen und
   void-violett leuchtende Ohrspitzen; das Leuchten kriecht in Bewegung fast bis zur Ohrwurzel.
@@ -64,7 +69,7 @@ Der Vertragstest prüft `lockMs + airMinMs ≥ Reaktion + (Radius + 16) / 280` f
 ## 6. Technik
 
 - Host-System `CoopDefenseEnemyPounceSystem` mit Configblock `pounce`; replizierter `EnemyPounceState`
-  (Snapshot-Feld `FIELD_POUNCE`, Protokoll 54). Flugkern geteilt mit dem Quacksalber (`enemyFlight.ts`).
+  (Snapshot-Feld `FIELD_POUNCE`, seit Protokoll 54; Landeeffekt `pounce_impact` seit 55). Flugkern geteilt mit dem Quacksalber (`enemyFlight.ts`).
 - Schaden über den Gegner-Flächenport (`pounceImpact`), Quelle `enemy.rabid-rabbit.pounce` („Tollwut-Sprung“).
 - Präsentation `EnemyPouncePresentation`; Animation `EnemyPounceAnimation`.
 

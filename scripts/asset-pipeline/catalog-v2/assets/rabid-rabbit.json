@@ -4,7 +4,7 @@
   "category": "enemy",
   "gameIds": ["rabid-rabbit"],
   "reference": "public/assets/sprites/enemies/enemy_rabid_rabbit.png",
-  "targetSize": 22,
+  "targetSize": 20,
   "sourceSizes": [
     64,
     128

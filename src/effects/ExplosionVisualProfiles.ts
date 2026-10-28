@@ -1,6 +1,6 @@
 import type { ExplosionVisualStyle } from '../types';
 
-export type CombatExplosionVisualStyle = Exclude<ExplosionVisualStyle, 'brood_hatch' | 'regeneration'>;
+export type CombatExplosionVisualStyle = Exclude<ExplosionVisualStyle, 'brood_hatch' | 'pounce_impact' | 'regeneration'>;
 export type ExplosionSpecialFamily = 'standard' | 'cascade' | 'energy' | 'shock' | 'holy' | 'lightning' | 'train' | 'nuke' | 'pop';
 
 export interface ExplosionVisualProfile {
@@ -111,6 +111,7 @@ export const EXPLOSION_VISUAL_PROFILES = {
     smokeScale: 0, chunkScale: 0, upwardEmbers: false,
   },
   brood_hatch: null,
+  pounce_impact: null,
   regeneration: null,
 } as const satisfies Readonly<Record<ExplosionVisualStyle, ExplosionVisualProfile | null>>;
 

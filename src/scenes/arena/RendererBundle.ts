@@ -22,6 +22,7 @@ import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer
 import { createCombatShaderWarmupProbes } from '../../effects/CombatShaderWarmup';
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
+import { PounceImpactGpuRenderer } from '../../effects/PounceImpactGpuRenderer';
 import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
 import { BossPresenceRenderer } from '../../effects/BossPresenceRenderer';
 import { VoidMeteorIntroRenderer } from '../../effects/VoidMeteorIntroRenderer';
@@ -150,6 +151,7 @@ export interface RendererBundle {
   constructionOwnershipMotes: ConstructionOwnershipMoteRenderer;
   movement:            MovementEffectsRenderer;
   burrowGpu:           BurrowGpuRenderer;
+  pounceImpact:        PounceImpactGpuRenderer;
   bossIntro:           BossIntroGraveyardRenderer;
   bossPresence:        BossPresenceRenderer;
   voidHunterSparks:    VoidHunterSparksRenderer;
@@ -219,6 +221,8 @@ export function* createRendererBundleSteps(
   yield 'renderers/gpu-atlas-and-lanes';
   const burrowGpu = new BurrowGpuRenderer(gpuVfx);
   cleanup.push(() => burrowGpu.destroy());
+  const pounceImpact = new PounceImpactGpuRenderer(gpuVfx);
+  cleanup.push(() => pounceImpact.destroy());
   const earthbreakFissures = createEarthbreakFissureLayers(scene, burrowGpu.earthbreakFissures, () => gpuVfx.now());
   cleanup.push(() => earthbreakFissures.destroy());
   // Ein gemeinsamer Emissions-Tick fuer alle brennenden Entities. Die per-Entity-Renderer
@@ -538,6 +542,7 @@ export function* createRendererBundleSteps(
     constructionOwnershipMotes,
     movement,
     burrowGpu,
+    pounceImpact,
     bossIntro,
     bossPresence,
     voidHunterSparks,
@@ -617,6 +622,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
     effectSystem.playExplosionEffect(x, y, radius, undefined, 'void_nuke', undefined, 'void', { meteorCrater: false });
   });
   effectSystem.setBurrowGpuRenderer(bundle.burrowGpu);
+  effectSystem.setPounceImpactRenderer(bundle.pounceImpact);
   effectSystem.setCombatGoreGpuRenderer(bundle.combatGoreGpu);
   effectSystem.setBloodField(bundle.bloodField);
   bundle.mortarStrike.setImpactSystems(bundle.explosionGpu, bundle.lighting);

@@ -2,7 +2,8 @@ import * as Phaser from 'phaser';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
 import { enemyPouncePhaseAt, type EnemyPounceTargetRef } from '../systems/EnemyPounceState';
-import { createPounceTargetTrack, predictPounceLanding, trackPounceTarget, type PounceTargetTrack } from '../systems/enemyPounceRules';
+import { createPounceReticle, createPounceTargetTrack, predictPounceLanding, stepPounceReticle, trackPounceTarget,
+  type PounceReticle, type PounceTargetTrack } from '../systems/enemyPounceRules';
 import type { EnemyLaneAttack, EnemyZoneAttack } from './EnemyClawRenderer';
 
 export type EnemyPounceLaneSink = (id: string, attack: EnemyLaneAttack | null, now: number, visible: boolean) => void;
@@ -30,8 +31,8 @@ export class EnemyPouncePresentation {
   private laneSink: EnemyPounceLaneSink | null = null;
   private zoneSink: EnemyPounceZoneSink | null = null;
   private readonly sunk = new Set<string>();
-  /** Target velocity per aiming body, estimated from the displayed target positions. */
-  private readonly tracks = new Map<string, { aimAt: number; track: PounceTargetTrack }>();
+  /** Target velocity and speed-limited aim point per aiming body, from the displayed target positions. */
+  private readonly tracks = new Map<string, { aimAt: number; track: PounceTargetTrack; reticle: PounceReticle }>();
 
   constructor(private readonly scene: Phaser.Scene) {
     scene.events.on(Phaser.Scenes.Events.PRE_RENDER, this.render, this);
@@ -87,12 +88,15 @@ export class EnemyPouncePresentation {
         if (!target) { this.release(enemy.id, now); continue; }
         let entry = this.tracks.get(enemy.id);
         if (!entry || entry.aimAt !== pounce.aimAt) {
-          entry = { aimAt: pounce.aimAt, track: createPounceTargetTrack(target.x, target.y, now) };
+          entry = { aimAt: pounce.aimAt, track: createPounceTargetTrack(target.x, target.y, now),
+            reticle: createPounceReticle(target.x, target.y, now, pounce.originX, pounce.originY, config) };
           this.tracks.set(enemy.id, entry);
         } else trackPounceTarget(entry.track, target.x, target.y, now);
         const predicted = predictPounceLanding(pounce.originX, pounce.originY, target.x, target.y, entry.track.vx, entry.track.vy,
           Math.max(0, pounce.lockAt - now) + config.lockMs, config);
-        endX = predicted.x; endY = predicted.y;
+        // The same speed-limited aim point as the host: the zone swings over instead of flipping with every turn.
+        stepPounceReticle(entry.reticle, target.x, target.y, predicted.x, predicted.y, now, pounce.originX, pounce.originY, config);
+        endX = entry.reticle.x; endY = entry.reticle.y;
         zone = { attackId: `${identity}:aim`, x: endX, y: endY, radius: config.impact.radiusPx, startedAt: pounce.aimAt,
           strikeAt: Math.max(pounce.aimAt, pounce.lockAt - STRIKE_LEAD_MS), hitAt: pounce.lockAt, endsAt: pounce.lockAt + IMPACT_LINGER_MS };
       }

@@ -1,4 +1,5 @@
 import { ENEMY_BURST_PRESETS } from '../../config/enemyBurstPresets';
+import { getCoopDefenseEnemyConfig, hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import type { StructureRect } from '../../arena/StructureOutline';
 import { CELL_SIZE, VOID_PALETTE } from '../../config';
 import { warmupKrakenShaders } from '../../effects/kraken/KrakenShaderWarmup';
@@ -1032,8 +1033,9 @@ export class ArenaLifecycleCoordinator {
         },
         pounceImpact: (enemyId, kind, x, y, impact, nowMs) => {
           this.hostUpdate.applyEnemyLandingShock(enemyId, x, y, impact, nowMs, `enemy.${kind}.pounce`);
-          const splash = ENEMY_BURST_PRESETS.mud;
-          bridge.broadcastExplosionEffect(x, y, impact.radiusPx, splash.color, splash.style, undefined, 'brood_hatch');
+          // Fine GPU grit, a dust ring at the hit edge and void glints in the body's eye colour.
+          const glint = (hasCoopDefenseEnemyKind(kind) ? getCoopDefenseEnemyConfig(kind).eyeGlow?.color : undefined) ?? 0xb45cff;
+          bridge.broadcastExplosionEffect(x, y, impact.radiusPx, glint, 'pounce_impact', undefined, 'brood_hatch');
         },
         sweepBases: (enemyId, ax, ay, bx, by, radius, damage, nowMs) => this.hostUpdate.applyEnemySweepBaseDamage(enemyId, ax, ay, bx, by, radius, damage, nowMs),
       },
@@ -3784,6 +3786,7 @@ export class ArenaLifecycleCoordinator {
       this.renderers.leafBlower.setTerrainColorSnapshot(snapshot);
       this.renderers.movement.setTerrainColorSnapshot(snapshot);
       this.renderers.burrowGpu.setTerrainColorSnapshot(snapshot);
+      this.renderers.pounceImpact.setTerrainColorSnapshot(snapshot);
       this.renderers.portals.setTerrainColorSnapshot(snapshot);
       this.terrainSnapshotReady = true;
     }).catch((error: unknown) => {

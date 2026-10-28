@@ -94,6 +94,7 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"gpu:FlightPressure","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"gpu:BurrowClod","deviation":"material-outside-sun","finding":"D06"},
   {"id":"gpu:BurrowGrain","deviation":"material-outside-sun","finding":"D06"},
+  {"id":"gpu:PounceGrit","deviation":"material-outside-sun","finding":"D06"},
   {"id":"gpu:BurrowShockwave","deviation":"ground-over-actors","finding":"D03"},
   {"id":"gpu:ElectricGroundCore","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"gpu:ElectricGroundGlow","deviation":"emission-under-lightmap","finding":"D10"},

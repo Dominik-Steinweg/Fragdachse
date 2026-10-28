@@ -15,6 +15,7 @@ export function resetRenderersForWorldGameplayTeardown(bundle: RendererBundle): 
   bundle.interactions.clear();
   bundle.burrowGpu.clearAllUnderground();
   bundle.burrowGpu.clear();
+  bundle.pounceImpact.clear();
   bundle.timeBubble.destroyAll();
   bundle.blackHole.destroyAll();
   bundle.reinforcementMatrix.destroyAll();
@@ -71,6 +72,7 @@ export function resetRenderersForWorldPresentationTeardown(
   if (!preserveAuthoredPresentation) bundle.leafBlower.setTerrainColorSnapshot(null);
   if (!preserveAuthoredPresentation) bundle.movement.setTerrainColorSnapshot(null);
   if (!preserveAuthoredPresentation) bundle.burrowGpu.setTerrainColorSnapshot(null);
+  if (!preserveAuthoredPresentation) bundle.pounceImpact.setTerrainColorSnapshot(null);
   if (!preserveAuthoredPresentation) bundle.portals.setTerrainColorSnapshot(null);
   bundle.beer.clear();
   if (preserveAuthoredPresentation) bundle.shadow.clearDynamicShadows();

@@ -123,6 +123,9 @@ export const GpuVfxEffectId = {
   BaseFortFlame: 109,
   BaseFortEmber: 110,
   BaseFortSmoke: 111,
+  PounceGrit: 112,
+  PounceDust: 113,
+  PounceGlint: 114,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -771,6 +774,13 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.DeathGlow, importance: 'decorative', release: 'kill-with-source' },
   { id: GpuVfxEffectId.BaseFortSmoke, label: 'base-fort.smoke', lane: GpuVfxLaneId.TrainSmoke,
     frame: GpuVfxFrameId.ExplosionSmoke, importance: 'decorative', release: 'kill-with-source' },
+  // Rabid Rabbit pounce landing: fine grit across the hit area, a dust ring at its edge, void glints above the light map.
+  { id: GpuVfxEffectId.PounceGrit, label: 'enemy.pounce-grit', lane: GpuVfxLaneId.WorldDebris,
+    frame: GpuVfxFrameId.DeathFragment, importance: 'standard', release: 'linger' },
+  { id: GpuVfxEffectId.PounceDust, label: 'enemy.pounce-dust', lane: GpuVfxLaneId.MovementGround,
+    frame: GpuVfxFrameId.DeathDustMoteB, importance: 'standard', release: 'linger' },
+  { id: GpuVfxEffectId.PounceGlint, label: 'enemy.pounce-glint', lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.DeathGlow, importance: 'decorative', release: 'linger' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

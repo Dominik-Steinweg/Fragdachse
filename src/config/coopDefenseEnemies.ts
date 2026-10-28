@@ -628,8 +628,12 @@ export interface CoopDefenseEnemyPounceConfig {
   /** Share of the target's predicted travel until the landing added to the landing point (1 = full lead). */
   readonly leadFactor: number;
   readonly maxLeadPx: number;
+  /** The lead of the aim point turns at most this fast (px/s), so the zone does not flip with every change of direction. */
+  readonly aimTrackSpeedPx: number;
   /** An aiming body yields to the bite when its target comes this close. */
   readonly closeCancelPx: number;
+  /** An aim survives a target out of sight this long (a pillar, smoke) before it is dropped. */
+  readonly lostSightGraceMs: number;
   readonly cancelDisplacementPx: number;
   readonly cancelLockoutMs: number;
   readonly impact: CoopDefenseEnemyLandingImpactConfig;
@@ -1606,9 +1610,10 @@ export function normalizePounceConfig(config: CoopDefenseEnemyPounceConfig | und
     positive.some(v => !Number.isFinite(v) || v <= 0) || nonNegative.some(v => !Number.isFinite(v) || v < 0);
   const impact = config.impact, pack = config.pack;
   if (!impact || !pack || invalid([config.minRangePx, config.maxRangePx, config.aimMs, config.lockMs, config.airSpeedPx,
-    config.airMinMs, config.airMaxMs, config.recoverMs, config.cooldownMinMs, config.cancelDisplacementPx, impact.radiusPx],
+    config.airMinMs, config.airMaxMs, config.recoverMs, config.cooldownMinMs, config.cancelDisplacementPx, impact.radiusPx,
+    config.aimTrackSpeedPx],
   [config.cooldownMaxMs, config.initialDelayMs, config.leadFactor, config.maxLeadPx, config.closeCancelPx, config.cancelLockoutMs,
-    impact.damage, impact.knockbackSpeed, impact.knockbackMs, pack.staggerMs])) {
+    config.lostSightGraceMs, impact.damage, impact.knockbackSpeed, impact.knockbackMs, pack.staggerMs])) {
     throw new Error('Invalid pounce value');
   }
   // The zone never covers the take-off point, and an aim that yields to the bite starts outside bite reach.

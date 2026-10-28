@@ -225,6 +225,7 @@ export class EffectSystem implements EnemyVisualSink {
   private audioSystem: GameAudioSystem | null = null;
   private explosionGpuRenderer: ExplosionGpuRenderer | null = null;
   private burrowGpuRenderer: BurrowGpuRenderer | null = null;
+  private pounceImpactRenderer: import('./PounceImpactGpuRenderer').PounceImpactGpuRenderer | null = null;
   private combatGoreGpuRenderer: CombatGoreGpuRenderer | null = null;
   private playerDeathResolver: ((targetId: string) => boolean) | null = null;
   private bloodField: BloodFieldSystem | null = null;
@@ -323,6 +324,10 @@ export class EffectSystem implements EnemyVisualSink {
 
   setExplosionGpuRenderer(renderer: ExplosionGpuRenderer | null): void {
     this.explosionGpuRenderer = renderer;
+  }
+
+  setPounceImpactRenderer(renderer: import('./PounceImpactGpuRenderer').PounceImpactGpuRenderer | null): void {
+    this.pounceImpactRenderer = renderer;
   }
 
   setBurrowGpuRenderer(renderer: BurrowGpuRenderer | null): void {
@@ -1018,6 +1023,11 @@ export class EffectSystem implements EnemyVisualSink {
 
     if (visualStyle === 'brood_hatch') {
       this.playBroodHatchEffect(x, y, radius, color ?? 0x94c95b);
+      return;
+    }
+
+    if (visualStyle === 'pounce_impact') {
+      this.pounceImpactRenderer?.play(x, y, radius, color ?? 0xb45cff);
       return;
     }
 

@@ -4,8 +4,8 @@ import type { EnemyMovementOverride, EnemySpecialMovementSource } from '../entit
 import type { EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 import { beginEnemyFlightTracking, enemyFlightVelocity, stepEnemyFlight, type EnemyFlightLine } from './enemyFlight';
 import { enemyPouncePhaseAt, type EnemyPounce, type EnemyPouncePhase, type EnemyPounceTargetRef } from './EnemyPounceState';
-import { boundingGaitFactor, createPounceTargetTrack, pounceAirMs, pounceUnitHash, predictPounceLanding,
-  trackPounceTarget, type PounceTargetTrack } from './enemyPounceRules';
+import { boundingGaitFactor, clampToRange, createPounceReticle, createPounceTargetTrack, pounceAirMs, pounceUnitHash, predictPounceLanding,
+  stepPounceReticle, trackPounceTarget, type PounceReticle, type PounceTargetTrack } from './enemyPounceRules';
 
 interface Point { readonly x: number; readonly y: number }
 
@@ -57,6 +57,10 @@ interface PouncerState {
   pounces: number;
   positionRevision: number;
   track: PounceTargetTrack | null;
+  /** Speed-limited aim point while aiming; the lock fixes the landing here. */
+  reticle: PounceReticle | null;
+  /** Host time the aimed target went out of sight; 0 while it is seen. */
+  lostSightAt: number;
   // Flight tracker (stall detection, re-time cadence).
   lastX: number;
   lastY: number;
@@ -73,9 +77,8 @@ interface PouncerState {
 const MAX_DECISIONS_PER_FRAME = 4;
 /** Sight on an aimed target is kept up to this multiple of the pounce range. */
 const AIM_SIGHT_FACTOR = 1.2;
-/** A landing point on blocked ground steps back towards the body this far per try. */
-const LANDING_STEP_BACK_PX = 14;
-const LANDING_STEP_BACK_TRIES = 4;
+/** A landing point on blocked ground steps back towards the body this far per try, down to the minimum range. */
+const LANDING_STEP_BACK_PX = 16;
 /** Side-cuts probe this far ahead along the cut direction. */
 const CUT_PROBE_PX = 48;
 /** Retry delay when a side-cut was due but not possible. */
@@ -173,6 +176,7 @@ export class CoopDefenseEnemyPounceSystem implements EnemySpecialMovementSource 
     const previous = enemy.getPounceState();
     return { enemy, revision: previous.revision, pounce: null, airMs: config.airMinMs, flying: false, phase: 'idle',
       readyAt: now + config.initialDelayMs, nextScanAt: now, pounces: 0, positionRevision: enemy.positionRevision, track: null,
+      reticle: null, lostSightAt: 0,
       lastX: enemy.sprite.x, lastY: enemy.sprite.y, lastMovedAt: now, retimedAt: now,
       nextCutAt: now + cutInterval(enemy.id, 0, config), cutUntil: 0, cutOffset: 0, cuts: 0 };
   }
@@ -206,16 +210,7 @@ export class CoopDefenseEnemyPounceSystem implements EnemySpecialMovementSource 
       if (stunned || hidden || teleported || displaced || !enemy.isOrdinaryMovementEnabled()) {
         this.cancel(state, config, now);
       } else if (phase === 'aim') {
-        const target = this.ports.resolveTarget(enemy, pounce.target);
-        const distance = target ? Math.hypot(target.x - enemy.sprite.x, target.y - enemy.sprite.y) : Infinity;
-        if (!target || distance < config.closeCancelPx
-          || !this.ports.canSee(enemy, target, config.maxRangePx * AIM_SIGHT_FACTOR)) {
-          this.cancel(state, config, now);
-        } else {
-          if (state.track) trackPounceTarget(state.track, target.x, target.y, now);
-          enemy.faceAngle(Math.atan2(target.y - enemy.sprite.y, target.x - enemy.sprite.x));
-          if (now >= pounce.lockAt) this.lock(state, config, target, now);
-        }
+        this.aimStep(state, config, now);
       } else {
         enemy.faceAngle(this.aimAngle(state));
       }
@@ -250,6 +245,8 @@ export class CoopDefenseEnemyPounceSystem implements EnemySpecialMovementSource 
     engaged.set(key, (engaged.get(key) ?? 0) + 1);
     this.lastAimAt.set(key, now);
     state.track = createPounceTargetTrack(target.x, target.y, now);
+    state.reticle = createPounceReticle(target.x, target.y, now, x, y, config);
+    state.lostSightAt = 0;
     state.pounce = { target: target.ref, originX: Math.round(x), originY: Math.round(y), aimAt: now,
       lockAt: now + config.aimMs, landing: null };
     state.cutUntil = 0;
@@ -259,25 +256,50 @@ export class CoopDefenseEnemyPounceSystem implements EnemySpecialMovementSource 
     this.publish(state);
   }
 
-  /** Fix the landing point: the predicted path of the target, kept within range, reachable and on free ground. */
-  private lock(state: PouncerState, config: CoopDefenseEnemyPounceConfig, target: EnemyPounceTarget, now: number): void {
-    const enemy = state.enemy, pounce = state.pounce!, radius = enemy.getCollisionRadius();
-    const x = pounce.originX, y = pounce.originY;
-    const track = state.track;
-    const predicted = predictPounceLanding(x, y, target.x, target.y, track?.vx ?? 0, track?.vy ?? 0, config.lockMs, config);
-    const angle = Math.atan2(predicted.y - y, predicted.x - x);
-    let length = Math.min(predicted.length, this.ports.laneClearance(x, y, angle, predicted.length, radius));
-    for (let tries = 0; length >= config.minRangePx
-      && !this.ports.isFree(x + Math.cos(angle) * length, y + Math.sin(angle) * length, radius); tries++) {
-      if (tries >= LANDING_STEP_BACK_TRIES) { length = 0; break; }
+  /** Aim stance: the aim point follows the target's predicted path at a limited speed; sight may lapse briefly. */
+  private aimStep(state: PouncerState, config: CoopDefenseEnemyPounceConfig, now: number): void {
+    const enemy = state.enemy, pounce = state.pounce!;
+    const target = this.ports.resolveTarget(enemy, pounce.target);
+    if (!target || Math.hypot(target.x - enemy.sprite.x, target.y - enemy.sprite.y) < config.closeCancelPx) {
+      this.cancel(state, config, now);
+      return;
+    }
+    if (this.ports.canSee(enemy, target, config.maxRangePx * AIM_SIGHT_FACTOR)) {
+      state.lostSightAt = 0;
+      if (state.track) trackPounceTarget(state.track, target.x, target.y, now);
+      const predicted = predictPounceLanding(pounce.originX, pounce.originY, target.x, target.y, state.track?.vx ?? 0,
+        state.track?.vy ?? 0, Math.max(0, pounce.lockAt - now) + config.lockMs, config);
+      if (state.reticle) stepPounceReticle(state.reticle, target.x, target.y, predicted.x, predicted.y, now,
+        pounce.originX, pounce.originY, config);
+    } else {
+      state.lostSightAt ||= now;
+      if (now - state.lostSightAt > config.lostSightGraceMs) { this.cancel(state, config, now); return; }
+      // Unseen, the aim point holds where the target was last expected.
+      if (state.reticle) state.reticle.at = now;
+    }
+    enemy.faceAngle(this.aimAngle(state));
+    if (now >= pounce.lockAt) this.lock(state, config, now);
+  }
+
+  /** Fix the landing point at the aim point, kept within range, reachable and on free ground. */
+  private lock(state: PouncerState, config: CoopDefenseEnemyPounceConfig, now: number): void {
+    const enemy = state.enemy, pounce = state.pounce!, radius = enemy.getCollisionRadius(), reticle = state.reticle;
+    if (!reticle) { this.cancel(state, config, now); return; }
+    // The flight starts where the body stands now; a small push while aiming does not cancel the pounce.
+    const x = Math.round(enemy.sprite.x), y = Math.round(enemy.sprite.y);
+    const aim = clampToRange(x, y, reticle.x, reticle.y, config.minRangePx, config.maxRangePx);
+    const angle = Math.atan2(aim.y - y, aim.x - x), wanted = Math.hypot(aim.x - x, aim.y - y);
+    let length = Math.min(wanted, this.ports.laneClearance(x, y, angle, wanted, radius));
+    while (length >= config.minRangePx && !this.ports.isFree(x + Math.cos(angle) * length, y + Math.sin(angle) * length, radius)) {
       length -= LANDING_STEP_BACK_PX;
     }
     if (length < config.minRangePx) { this.cancel(state, config, now); return; }
     const airMs = pounceAirMs(length, config);
     const takeoffAt = Math.round(now + config.lockMs), landAt = takeoffAt + airMs;
     state.airMs = airMs;
-    state.pounce = { ...pounce, landing: { x: Math.round(x + Math.cos(angle) * length), y: Math.round(y + Math.sin(angle) * length),
-      takeoffAt, landAt, recoverUntil: landAt + config.recoverMs, armed: true } };
+    state.pounce = { ...pounce, originX: x, originY: y,
+      landing: { x: Math.round(x + Math.cos(angle) * length), y: Math.round(y + Math.sin(angle) * length),
+        takeoffAt, landAt, recoverUntil: landAt + config.recoverMs, armed: true } };
     this.publish(state);
   }
 
@@ -323,6 +345,7 @@ export class CoopDefenseEnemyPounceSystem implements EnemySpecialMovementSource 
   private cancel(state: PouncerState, config: CoopDefenseEnemyPounceConfig, now: number): void {
     state.pounce = null;
     state.track = null;
+    state.reticle = null;
     state.readyAt = Math.max(state.readyAt, now + config.cancelLockoutMs);
     this.publish(state);
   }
@@ -332,8 +355,8 @@ export class CoopDefenseEnemyPounceSystem implements EnemySpecialMovementSource 
     if (!pounce) return enemy.sprite.rotation;
     const landing = pounce.landing;
     if (landing) return Math.atan2(landing.y - pounce.originY, landing.x - pounce.originX);
-    const track = state.track;
-    return track ? Math.atan2(track.y - enemy.sprite.y, track.x - enemy.sprite.x) : enemy.sprite.rotation;
+    const reticle = state.reticle;
+    return reticle ? Math.atan2(reticle.y - enemy.sprite.y, reticle.x - enemy.sprite.x) : enemy.sprite.rotation;
   }
 
   /** Starts a side-cut when one is due and the body runs at a target that is still far enough away. */

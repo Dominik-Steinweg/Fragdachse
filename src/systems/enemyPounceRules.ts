@@ -71,7 +71,40 @@ export function predictPounceLanding(originX: number, originY: number, targetX: 
   return { x, y, length: Math.hypot(x - originX, y - originY), airMs };
 }
 
-function clampToRange(originX: number, originY: number, x: number, y: number, min: number, max: number): { x: number; y: number } {
+/**
+ * Aim point of an aiming body: the target's position plus a lead offset. The target part follows
+ * at once (a straight runner stays met); only the lead offset turns with a speed limit, so a
+ * target that changes direction makes the zone swing over instead of flipping across.
+ */
+export interface PounceReticle {
+  x: number;
+  y: number;
+  offsetX: number;
+  offsetY: number;
+  at: number;
+}
+
+type ReticleConfig = Pick<CoopDefenseEnemyPounceConfig, 'aimTrackSpeedPx' | 'minRangePx' | 'maxRangePx'>;
+
+export function createPounceReticle(targetX: number, targetY: number, at: number, originX: number, originY: number,
+  config: ReticleConfig): PounceReticle {
+  const start = clampToRange(originX, originY, targetX, targetY, config.minRangePx, config.maxRangePx);
+  return { x: start.x, y: start.y, offsetX: 0, offsetY: 0, at };
+}
+
+/** One aim step towards the predicted landing; the lead offset moves at most `aimTrackSpeedPx` per second. */
+export function stepPounceReticle(reticle: PounceReticle, targetX: number, targetY: number, predictedX: number, predictedY: number,
+  at: number, originX: number, originY: number, config: ReticleConfig): void {
+  const step = config.aimTrackSpeedPx * Math.max(0, at - reticle.at) / 1000;
+  reticle.at = Math.max(reticle.at, at);
+  const dx = predictedX - targetX - reticle.offsetX, dy = predictedY - targetY - reticle.offsetY, distance = Math.hypot(dx, dy);
+  if (distance <= step) { reticle.offsetX += dx; reticle.offsetY += dy; }
+  else { reticle.offsetX += dx / distance * step; reticle.offsetY += dy / distance * step; }
+  const aim = clampToRange(originX, originY, targetX + reticle.offsetX, targetY + reticle.offsetY, config.minRangePx, config.maxRangePx);
+  reticle.x = aim.x; reticle.y = aim.y;
+}
+
+export function clampToRange(originX: number, originY: number, x: number, y: number, min: number, max: number): { x: number; y: number } {
   const dx = x - originX, dy = y - originY, distance = Math.hypot(dx, dy);
   if (distance < 1e-6) return { x: originX + min, y: originY };
   const clamped = Math.max(min, Math.min(max, distance));

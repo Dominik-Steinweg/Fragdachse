@@ -10,7 +10,7 @@ describe('explosion visual profiles', () => {
   it('classifies every wire-compatible style exhaustively', () => {
     const styles: ExplosionVisualStyle[] = [
       'default', 'meteor', 'holy', 'energy', 'lightning', 'nuke', 'void_nuke', 'rocket',
-      'mini_rocket', 'mini_rocket_cascade', 'train', 'brood_hatch', 'regeneration',
+      'mini_rocket', 'mini_rocket_cascade', 'train', 'brood_hatch', 'pounce_impact', 'regeneration',
       'timebomb', 'timebomb_pop', 'he_cluster_shard', 'he_demolition_shard',
       'time_bubble_release', 'asmd_combo', 'mortar', 'firestarter_combo', 'barrel',
     ];
@@ -23,6 +23,7 @@ describe('explosion visual profiles', () => {
   it('keeps healing and hatching outside destructive combat profiles', () => {
     expect(isCombatExplosionStyle('regeneration')).toBe(false);
     expect(isCombatExplosionStyle('brood_hatch')).toBe(false);
+    expect(isCombatExplosionStyle('pounce_impact')).toBe(false);
     expect(isCombatExplosionStyle('default')).toBe(true);
   });
 
