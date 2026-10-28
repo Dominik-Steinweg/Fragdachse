@@ -81,6 +81,8 @@ export class UiButton {
   private readonly effectLayer: Phaser.GameObjects.Container;
   private readonly labelText: Phaser.GameObjects.Text | null = null;
   private readonly iconImage: Phaser.GameObjects.Image | null = null;
+  private busyTween: Phaser.Tweens.Tween | null = null;
+  private iconBeforeBusy: UiIconName | null = null;
   private badge: Phaser.GameObjects.Container | null = null;
   private badgeCount: Phaser.GameObjects.Text | null = null;
 
@@ -266,7 +268,27 @@ export class UiButton {
     return this;
   }
 
+  /**
+   * A turning ring in the icon slot while the button's action prepares in the background. The
+   * button stays usable; the icon it had returns afterwards. Needs a button created with an icon.
+   */
+  setBusy(busy: boolean): this {
+    if (!this.iconImage || busy === (this.busyTween !== null)) return this;
+    if (busy) {
+      this.iconBeforeBusy = this.currentIcon;
+      this.setIcon('spinner');
+      this.busyTween = this.scene.tweens.add({ targets: this.iconImage, angle: 360, duration: 1100, repeat: -1 });
+    } else {
+      this.busyTween!.remove(); this.busyTween = null;
+      this.iconImage.setAngle(0);
+      this.setIcon(this.iconBeforeBusy);
+    }
+    return this;
+  }
+
   destroy(): void {
+    this.busyTween?.remove();
+    this.busyTween = null;
     if (this.globalPointerUp) {
       this.scene.input.off('pointerup', this.globalPointerUp);
       this.scene.input.off('pointerupoutside', this.globalPointerUp);

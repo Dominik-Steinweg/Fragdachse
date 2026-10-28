@@ -16,7 +16,8 @@ export type LobbyMenuDenialCode = 'coop' | 'ready' | 'locked';
  */
 export function lobbyBuildingCandidates(metrics: WorldMetrics, worldRevision: number, player: { x: number; y: number },
   blockedFor: (menu: LobbyMenu) => string | undefined = () => undefined,
-  buildings: readonly LobbyBuilding[] = LOBBY_BUILDINGS): WorldInteractionCandidate[] {
+  buildings: readonly LobbyBuilding[] = LOBBY_BUILDINGS,
+  busyFor: (menu: LobbyMenu) => boolean = () => false): WorldInteractionCandidate[] {
   return buildings.map(building => {
     const rects = lobbyBuildingWorldRects(metrics, building);
     const point = nearestStructurePoint(rects, player.x, player.y);
@@ -24,6 +25,7 @@ export function lobbyBuildingCandidates(metrics: WorldMetrics, worldRevision: nu
       kind: 'lobby-menu', key: `lobby-menu:${building.menu}`, menu: building.menu,
       x: point.x, y: point.y, worldRevision, radius: LOBBY_BUILDING_INTERACTION_RANGE_PX,
       label: t('ui.lobbyBuilding.open'), subject: t(building.nameKey), blocked: blockedFor(building.menu),
+      busy: busyFor(building.menu) || undefined,
       footprint: structureBounds(rects),
     };
   });

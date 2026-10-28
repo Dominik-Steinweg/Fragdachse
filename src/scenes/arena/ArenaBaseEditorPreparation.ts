@@ -63,6 +63,11 @@ export class ArenaBaseEditorPreparation {
     if (frame.near || frame.now - this.seen.since >= BASE_EDITOR_PREPARE_SETTLE_MS) this.acquire(frame.key, frame.options, false);
   }
 
+  /** The stage a session would open on, ready or not. */
+  currentStage(): PersistentBaseEditorScene | null {
+    return this.current?.stage ?? null;
+  }
+
   /** A stage for the next round's terrain is being built ahead (for the lobby's hint). */
   isPreparing(): boolean {
     return this.current !== null && this.current.key !== null && !this.current.stage.isReady();

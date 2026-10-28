@@ -49,7 +49,7 @@ export class WorldInteractionRenderer {
 
     const plaque = this.plaque!.setContent(focus.blocked
       ? { primary: focus.subject ?? focus.label, secondary: focus.blocked, blocked: true }
-      : { primary: focus.label, secondary: focus.subject });
+      : { primary: focus.label, secondary: focus.subject, busy: focus.busy });
     const layout = layoutInteractionPlaque(focus.footprint, player ?? null, plaque, this.viewRect());
     const rise = (1 - enter) * MOTION.plaqueRisePx * (layout.side === 'above' ? 1 : -1);
     plaque.setPointer(layout.side, layout.pointerX - layout.x).setPosition(layout.x, layout.y + rise).setAlpha(enter);

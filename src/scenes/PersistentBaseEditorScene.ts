@@ -43,6 +43,7 @@ import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
 import { formatTimeOfDay } from '../effects/TimeOfDay';
 import type { ArenaBuildPause } from '../arena/ArenaBuilder';
+import { getChunkBakeScheduler } from '../arena/chunks/ChunkBakeScheduler';
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 
 const WORLD_PANEL = { x: 88, y: 236, width: 1000, height: 680 };
@@ -162,6 +163,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private heavyNext = false;
   private calm = false;
   private warmFrames = 0;
+  /** Most bake jobs seen pending: the base of `progress`, which never moves back. */
+  private mostPendingBakes = 0;
+  private shownProgress = 0;
   constructor(private readonly stage: PersistentBaseEditorStageOptions) {
     super(PersistentBaseEditorScene.KEY);
     this.expansion = expansionFor(stage.model);
@@ -381,6 +385,21 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     view.setAlpha(0);
     this.ready = true;
     for (const waiter of this.readyWaiters.splice(0)) waiter.resolve();
+  }
+
+  /**
+   * Share of the preparation done, counted in bake jobs; the build itself runs in one go once a
+   * player waits. It never moves back.
+   */
+  progress(): number {
+    if (this.ready) return 1;
+    if (this.building || !this.world) return this.shownProgress;
+    const pending = getChunkBakeScheduler(this).pendingJobs;
+    this.mostPendingBakes = Math.max(this.mostPendingBakes, pending);
+    const baked = this.mostPendingBakes > 0 ? 1 - pending / this.mostPendingBakes : 1;
+    // The invisible warm frames finish the last few percent.
+    this.shownProgress = Math.max(this.shownProgress, .95 * baked);
+    return this.shownProgress;
   }
 
   /** The stage's World is ready: a session opens at once. */

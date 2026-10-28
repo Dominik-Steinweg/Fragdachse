@@ -14,12 +14,14 @@ export interface WorldInteractionFootprint {
 /**
  * `x`/`y`/`radius` drive selection (nearest approach point), `footprint` drives presentation.
  * `label` is the action verb without any key hint; `subject` names the object; `blocked` is a
- * personal denial shown before pressing (Shift still runs the action path, which reports it).
+ * personal denial shown before pressing (Shift still runs the action path, which reports it);
+ * `busy` says the action prepares in the background, without blocking it.
  */
 export type WorldInteractionCandidate = InteractionCandidate & {
   readonly label: string;
   readonly subject?: string;
   readonly blocked?: string;
+  readonly busy?: boolean;
   readonly footprint: WorldInteractionFootprint;
   readonly worldRevision: number;
 } & (
@@ -36,6 +38,7 @@ export interface WorldInteractionFocus {
   readonly label: string;
   readonly subject?: string;
   readonly blocked?: string;
+  readonly busy?: boolean;
   readonly footprint: WorldInteractionFootprint;
 }
 

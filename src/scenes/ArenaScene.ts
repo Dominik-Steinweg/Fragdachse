@@ -1459,7 +1459,7 @@ export class ArenaScene extends Phaser.Scene {
           || bridge.getLocalWorldParticipation() !== 'interactive') return [];
         const access = this.lobbyMenuAccessState();
         return lobbyBuildingCandidates(metrics, world.worldRevision, player, menu => lobbyMenuBlockedLabel(menu, access),
-          lobbyBuildingsOfWorld(world.parameters));
+          lobbyBuildingsOfWorld(world.parameters), menu => menu === 'base' && this.baseEditorPreparation.isPreparing());
       },
       open: menu => this.openLobbyMenu(menu),
     });
@@ -2105,6 +2105,7 @@ export class ArenaScene extends Phaser.Scene {
       const baseRewardState = getStoredPersistentBaseRewardState();
       this.lobbyOverlay.setBaseState(getStoredPersistentBaseUnlocked(),
         getStoredPersistentBaseRewardUnlocks().filter(id => !baseRewardState.placements.some(p => p.rewardId === id)).length);
+      this.lobbyOverlay.setBasePreparing(this.baseEditorPreparation.isPreparing());
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
       const localId = bridge.getLocalPlayerId();
       const sidebarSignature = [
@@ -2492,10 +2493,18 @@ export class ArenaScene extends Phaser.Scene {
       this.baseEditorGate = new LazyOverlayGate(this, {
         ready: () => this.readyBaseEditorStage() !== null, ensure: () => this.prepareBaseEditor(), immediate: true,
         get label() { return t('ui.base.loading'); },
+        status: () => this.baseEditorLoadingStatus(),
       }, () => bridge.getGamePhase() === 'LOBBY');
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.baseEditorGate = null; });
     }
     return this.baseEditorGate;
+  }
+
+  /** The loading panel's words: the terrain is explored (layout worker), then the map is drawn (stage). */
+  private baseEditorLoadingStatus() {
+    if (this.resolveBaseEditorTerrainIdentity() === undefined) return { label: t('ui.base.loadingTerrain'), progress: 0 };
+    const stage = this.baseEditorPreparation.currentStage();
+    return stage ? { label: t('ui.base.loadingMap'), progress: stage.progress() } : null;
   }
 
   /** Key of the stage a terrain needs; `null` for the personal draft without map terrain. */

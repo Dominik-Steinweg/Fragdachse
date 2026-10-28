@@ -192,6 +192,8 @@ export const enUi = {
   "ui.base.routes.breach": "No free path – enemies break through",
   "ui.base.missionTime": "Mission start {time}",
   "ui.base.loading": "Preparing the building yard …",
+  "ui.base.loadingTerrain": "Exploring the terrain …",
+  "ui.base.loadingMap": "Drawing the situation map …",
   "ui.base.conflict.unknown-tool": "Dropped: unknown build",
   "ui.base.conflict.locked": "Dropped: still locked",
   "ui.base.conflict.not-in-loadout": "Dropped: not in loadout",

@@ -1,7 +1,7 @@
 # Lagekarte im Bauhof (V2)
 
 Status: Konzept vom 2026-10-27, umgesetzt (P0–P8) am 2026-10-27, Sichtprüfung als Host im Browser;
-Überarbeitung (Tageszeit, Ladeanzeige) am 2026-10-28; Spieltest mit Gästen offen. Ersetzt
+Überarbeitung (Tageszeit, Ladeanzeige, vorbereiteter Bauhof) am 2026-10-28; Spieltest mit Gästen offen. Ersetzt
 [V1](Fragdachse_GDD_Lagekarte_Bauhof_V1.md). Grundlage ist die
 [Gameplay-Analyse vom 22.10.2026](../reports/gameplay-review-2026-10-22-inspector-td.md), Vorschlag V1.
 Die Entscheidungen hat der Projektinhaber am 22., 27. und 28.10.2026 getroffen.
@@ -63,7 +63,8 @@ Drei weitere Lücken:
 
 1. Der Host wählt eine Map, zum Beispiel Map 19.
 2. Ein Spieler, Host oder Gast, öffnet den Bauhof. Sein Bereit-Status wird wie heute zurückgesetzt.
-   Bis das Gelände aufgebaut ist, zeigt ein Ladefenster „Bauhof wird vorbereitet …“ mit Abbrechen.
+   Der Bauhof ist meist schon in der Lobby vorbereitet und öffnet sofort. Sonst zeigt ein Ladefenster
+   „Gelände wird erkundet …“ bzw. „Lagekarte wird gezeichnet …“ mit Fortschritt und Abbrechen.
 3. Die Lagekarte zeigt das Fort mit Fackeln und Feuerschalen, rundherum Felsen, Bäume, Wasser und
    Gleise von Map 19. Aus den Spawnzonen strömt die Void-Strömung zur Basis; wo sie in den Baubereich
    eintritt, glüht der Rand. Die Bauwerke der Mitspieler stehen in ihrer Farbe.
@@ -237,6 +238,10 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
   Fackeln, Feuerschalen und Turmschatten.
 - 2026-10-27 (Sichtprüfung): Statt weißer Funken bewegt sich violetter Void-Dunst.
 - 2026-10-28: Die Lagekarte zeigt die Tageszeit der Map statt einer festen Tageszeit. Ein Ladefenster
-  überbrückt den Aufbau. Ein verdeckt vorgeladener Bauhof in der Lobby wurde zurückgestellt: Er würde
-  beim Herumlaufen in der Lobby ruckeln, hielte eine zweite World im Speicher und müsste bei jeder
-  Änderung von Grundriss, Mitspielern oder Map neu aufgebaut werden.
+  überbrückt den Aufbau.
+- 2026-10-28 (zweite Runde): Der Bauhof wird in der Lobby vorbereitet. Eine langlebige Bühne hält World,
+  Rahmen und Übersicht für das Gelände der nächsten Runde; jede Sitzung legt nur Entwurf, Liste und Werkzeuge
+  darüber. Aufgebaut wird in kleinen Schritten; schwere Schritte warten, bis der Spieler steht oder ein Menü
+  offen ist. Nach einem Mapwechsel wartet der Aufbau drei Sekunden, in Bauhof-Nähe nicht. Vor dem Rundenstart
+  wird die Bühne abgebaut. Auf allen Qualitätsstufen; ein dezenter Spinner an Button und Shift-Schild zeigt die
+  Vorbereitung. Messbericht: [Bauhof-Vorbereitung](../reports/bauhof-vorbereitung-2026-10-28.md).

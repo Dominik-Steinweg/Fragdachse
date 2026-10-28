@@ -237,7 +237,8 @@ export type UiIconName =
   | 'copy'
   | 'trophy'
   | 'fullscreen-enter'
-  | 'fullscreen-exit';
+  | 'fullscreen-exit'
+  | 'spinner';
 
 export function ensureIconTexture(
   scene: Phaser.Scene, name: UiIconName, size: number, color: number,
@@ -369,6 +370,15 @@ export function ensureIconTexture(
         );
         ctx.fill();
       }
+      break;
+    }
+
+    case 'spinner': {
+      // An open ring; the button turns it while its action prepares in the background.
+      line(0.12);
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.5, s * 0.3, -Math.PI * 0.5, Math.PI);
+      ctx.stroke();
       break;
     }
 

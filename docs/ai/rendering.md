@@ -404,6 +404,18 @@ Turmzellen bleiben zellbasiert; das Fort präsentiert sie nur.
   [bindBaseFortPresentation](../../src/world/BaseFortPresentationBinding.ts), die Runde wie der Bauhof. Ein eigener
   Aufbau verliert Fackeln, Feuerschalen oder den Schatten des Forts.
 
+## Verdeckt vorbereitete Worlds
+
+Die Bauhof-Bühne ([PersistentBaseEditorScene](../../src/scenes/PersistentBaseEditorScene.ts), Owner
+[ArenaBaseEditorPreparation](../../src/scenes/arena/ArenaBaseEditorPreparation.ts)) entsteht verdeckt in der Lobby.
+- Phaser überspringt Kameras mit Alpha 0. Shader-Programme, Filter-Framebuffer und das Sonnen-Komposit einer
+  verdeckten World entstehen deshalb erst im ersten gezeichneten Frame; sie gilt erst nach unsichtbaren
+  Warm-up-Frames (Alpha nahe 0) als bereit, wie eine Runde nach ihren Reveal-Renders.
+- Der Aufbau läuft in Schritten über `ArenaBuilder.buildDynamicStages`. `buildDynamic` ist der vollständige
+  Durchlauf derselben Schritte, die Runde baut also unverändert. Schritte mit `'heavy'` warten im Hintergrund auf
+  eine ruhige Lobby.
+- Eine verdeckte World wird spätestens beim Arena-Einstieg freigegeben, vor dem Bau der Runden-World.
+
 ## Große World-Flächen
 
 Statische World-Flächen werden über Chunking und Streaming resident gehalten. [ChunkedRenderSurface.ts](../../src/arena/chunks/ChunkedRenderSurface.ts), [GroundSurfaceStreamer.ts](../../src/arena/chunks/GroundSurfaceStreamer.ts) und [RockOverlayStreamer.ts](../../src/arena/chunks/RockOverlayStreamer.ts) begrenzen sichtbare Arbeit, recyceln Ressourcen und veröffentlichen neu gebackene Flächen atomar.

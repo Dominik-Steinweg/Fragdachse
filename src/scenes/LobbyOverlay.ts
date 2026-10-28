@@ -244,6 +244,7 @@ export class LobbyOverlay {
   }
   setDawnUnlocked(unlocked: boolean): void { this.progress?.setDawnUnlocked(unlocked); }
   setBaseState(unlocked: boolean, pending: number): void { this.progress?.setBaseState(unlocked, pending, this.bridge.isHost()); }
+  setBasePreparing(preparing: boolean): void { this.progress?.setBasePreparing(preparing); }
   setResultsReplayHandler(handler: () => void): void { this.replayResultsHandler = handler; }
   setRoomStatisticsDetailHandler(handler: () => void): void { this.roomStatsDetailHandler = handler; }
   setResultsReplayAvailable(available: boolean): void {

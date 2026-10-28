@@ -369,6 +369,11 @@ export class LobbyPlayerProgress {
     this.updateCoopDefenseMenuButtons();
   }
 
+  /** The Bauhof is being prepared in the background: the button shows it, but stays usable. */
+  setBasePreparing(preparing: boolean): void {
+    this.coopBaseBtn?.setBusy(preparing && this.coopBaseUnlocked);
+  }
+
   setDawnUnlocked(unlocked: boolean): void {
     if (unlocked === this.dawnUnlocked) return;
     this.dawnUnlocked = unlocked;

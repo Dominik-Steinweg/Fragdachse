@@ -97,6 +97,22 @@ describe('lazy opening lifecycle', () => {
     resolve(); await vi.runAllTimersAsync();
     expect(show).toHaveBeenCalledOnce(); expect(gate.isPending()).toBe(false);
   });
+  it('shows what the preparation does now and how much of its counted work is done', () => {
+    const h = setup(); let status = { label: 'Exploring', progress: 0 };
+    const gate = new LazyOverlayGate(h.scene, { ready: () => false, ensure: () => new Promise<void>(() => {}), immediate: true,
+      label: 'Preparing', status: () => status }, () => true);
+    gate.open(vi.fn(), () => gate.cancel());
+    const [, label, button, bar] = h.root.children.at(-1)!.children;
+    expect(label.textContent).toBe('Exploring');
+    expect(bar.style.visibility).toBe('visible');
+    status = { label: 'Drawing', progress: .4 };
+    h.events.emit('update');
+    expect(label.textContent).toBe('Drawing');
+    expect(bar.children[0].style.width).toBe('40%');
+    // The bar sits above Cancel although it follows it in the DOM.
+    expect(Number((button.style as any).order)).toBeGreaterThan(Number((bar.style as any).order ?? 0) || 0);
+    gate.cancel();
+  });
   function upgrades(scene: any) {
     return new CoopDefenseUpgradesOverlay(scene, vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(),
       vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn());

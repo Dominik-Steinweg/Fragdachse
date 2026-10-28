@@ -10,11 +10,14 @@ export interface WorldPlaqueContent {
   /** Quieter trailing text: the object name or a denial reason. */
   readonly secondary?: string;
   readonly blocked?: boolean;
+  /** The action prepares in the background: a small turning ring after the text. */
+  readonly busy?: boolean;
 }
 
 const PAD_X = 12;
 const KEYCAP = { width: 42, height: 20, gap: 9 } as const;
 const SECONDARY_GAP = 7;
+const SPINNER = { gap: 8, radius: 5, width: 2 } as const;
 const POINTER = { halfWidth: 6, height: 5 } as const;
 const PALETTE = {
   primary: '#f4ead5', secondary: '#cdb78b', blockedPrimary: '#d9cdb5', blockedSecondary: '#d39470',
@@ -30,13 +33,15 @@ export class WorldPlaque {
   private readonly primary: Phaser.GameObjects.Text;
   private readonly secondary: Phaser.GameObjects.Text;
   private readonly keycap: Phaser.GameObjects.Text | null;
+  private readonly spinner: Phaser.GameObjects.Graphics;
+  private spinnerTween: Phaser.Tweens.Tween | null = null;
   private content: WorldPlaqueContent = { primary: '' };
   private pointer: { side: 'above' | 'below'; offsetX: number } | null = null;
   private plaqueWidth = 0;
   private alphaValue = 0;
   readonly height: number;
 
-  constructor(scene: Phaser.Scene, keycap = false) {
+  constructor(private readonly scene: Phaser.Scene, keycap = false) {
     this.height = keycap ? 30 : 26;
     this.frame = scene.add.graphics().setDepth(DEPTH.LOCAL_UI);
     registerGraphicsObject(scene, 'weaponTelegraphs', this.frame);
@@ -47,6 +52,10 @@ export class WorldPlaque {
       .setOrigin(0, 0.5).setDepth(DEPTH.LOCAL_UI + 1);
     this.keycap = keycap ? scene.add.text(0, 0, 'Shift', { ...style, fontSize: 13, fontStyle: 'bold' })
       .setOrigin(0.5).setDepth(DEPTH.LOCAL_UI + 1) : null;
+    // Drawn around its own origin, so turning it turns the ring in place.
+    this.spinner = scene.add.graphics().setDepth(DEPTH.LOCAL_UI + 1).setVisible(false)
+      .lineStyle(SPINNER.width, HUD_TONES.gold.accent, .9).beginPath()
+      .arc(0, 0, SPINNER.radius, -Math.PI / 2, Math.PI).strokePath();
     this.setAlpha(0);
   }
 
@@ -57,14 +66,21 @@ export class WorldPlaque {
   setContent(content: WorldPlaqueContent): this {
     const previous = this.content;
     if (this.plaqueWidth > 0 && previous.primary === content.primary && previous.secondary === content.secondary
-      && !!previous.blocked === !!content.blocked) return this;
+      && !!previous.blocked === !!content.blocked && !!previous.busy === !!content.busy) return this;
     this.content = content;
     this.primary.setText(content.primary).setColor(content.blocked ? PALETTE.blockedPrimary : PALETTE.primary);
     this.secondary.setText(content.secondary ? `· ${content.secondary}` : '')
       .setColor(content.blocked ? PALETTE.blockedSecondary : PALETTE.secondary);
     const keyWidth = this.keycap ? KEYCAP.width + KEYCAP.gap : 0;
     const secondaryWidth = content.secondary ? SECONDARY_GAP + Math.ceil(this.secondary.width) : 0;
-    this.plaqueWidth = PAD_X * 2 + keyWidth + Math.ceil(this.primary.width) + secondaryWidth;
+    const spinnerWidth = content.busy ? SPINNER.gap + SPINNER.radius * 2 : 0;
+    this.plaqueWidth = PAD_X * 2 + keyWidth + Math.ceil(this.primary.width) + secondaryWidth + spinnerWidth;
+    this.spinner.setVisible(!!content.busy);
+    if (content.busy && !this.spinnerTween) {
+      this.spinnerTween = this.scene.tweens.add({ targets: this.spinner, angle: 360, duration: 1100, repeat: -1 });
+    } else if (!content.busy && this.spinnerTween) {
+      this.spinnerTween.remove(); this.spinnerTween = null; this.spinner.setAngle(0);
+    }
     this.setAlpha(this.alphaValue);
     return this.redraw();
   }
@@ -86,17 +102,21 @@ export class WorldPlaque {
     this.primary.setPosition(textX + primaryWidth / 2, midY);
     this.secondary.setPosition(textX + primaryWidth + SECONDARY_GAP, midY);
     this.keycap?.setPosition(left + PAD_X + KEYCAP.width / 2, midY - 1);
+    this.spinner.setPosition(left + this.plaqueWidth - PAD_X - SPINNER.radius, midY);
     return this;
   }
 
   setAlpha(alpha: number): this {
     this.alphaValue = alpha;
-    this.frame.setAlpha(alpha); this.primary.setAlpha(alpha); this.secondary.setAlpha(alpha);
+    this.frame.setAlpha(alpha); this.primary.setAlpha(alpha); this.secondary.setAlpha(alpha); this.spinner.setAlpha(alpha);
     this.keycap?.setAlpha(alpha * (this.content.blocked ? 0.55 : 1));
     return this;
   }
 
-  destroy(): void { this.frame.destroy(); this.primary.destroy(); this.secondary.destroy(); this.keycap?.destroy(); }
+  destroy(): void {
+    this.spinnerTween?.remove(); this.spinnerTween = null;
+    this.frame.destroy(); this.primary.destroy(); this.secondary.destroy(); this.keycap?.destroy(); this.spinner.destroy();
+  }
 
   private redraw(): this {
     const width = this.plaqueWidth, h = this.height, left = -width / 2;

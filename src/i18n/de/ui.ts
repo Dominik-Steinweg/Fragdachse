@@ -192,6 +192,8 @@ export const deUi = {
   "ui.base.routes.breach": "Kein freier Weg – Gegner brechen durch",
   "ui.base.missionTime": "Einsatzbeginn {time}",
   "ui.base.loading": "Bauhof wird vorbereitet …",
+  "ui.base.loadingTerrain": "Gelände wird erkundet …",
+  "ui.base.loadingMap": "Lagekarte wird gezeichnet …",
   "ui.base.conflict.unknown-tool": "Entfällt: unbekannter Bau",
   "ui.base.conflict.locked": "Entfällt: noch gesperrt",
   "ui.base.conflict.not-in-loadout": "Entfällt: nicht im Loadout",
