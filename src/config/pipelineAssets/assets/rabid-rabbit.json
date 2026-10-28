@@ -1,0 +1,152 @@
+{
+  "id": "rabid-rabbit",
+  "category": "enemy",
+  "gameIds": [
+    "rabid-rabbit"
+  ],
+  "revision": "draft-c",
+  "variant": "standard",
+  "sourceSize": 53,
+  "textureKey": "enemy_rabid_rabbit",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "displayScale": 2.4,
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "move",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "frameRate": 24,
+      "loop": true
+    },
+    {
+      "name": "claw",
+      "frames": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 5,
+        "impact": 7
+      }
+    },
+    {
+      "name": "windup",
+      "frames": [
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34
+      ],
+      "frameRate": 18,
+      "loop": true
+    },
+    {
+      "name": "leap",
+      "frames": [
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "launch": 5,
+        "land": 13
+      }
+    },
+    {
+      "name": "idle",
+      "frames": [
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70
+      ],
+      "frameRate": 12,
+      "loop": true
+    }
+  ],
+  "sheetTextureKey": "enemy_rabid_rabbit_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/rabid-rabbit/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/rabid-rabbit/sheet.png",
+  "layout": {
+    "frameWidth": 53,
+    "frameHeight": 53,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 9,
+    "frameCount": 71,
+    "width": 456,
+    "height": 513
+  },
+  "hashes": {
+    "idle": "a5b15c6a408f17c3e31680d718668839332145ef3e567bbef9e043449163c9c4",
+    "sheet": "45632df59601430c6ac1791b16dd2414a7b2b8e0f9e9a43c634dc9a19ed25cce"
+  }
+}

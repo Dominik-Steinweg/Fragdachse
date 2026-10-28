@@ -88,7 +88,7 @@
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 100,
       "obstacleAttackDelayMs": 500,
-      "imageKey": "enemy_rabid_badger",
+      "imageKey": "enemy_rabid_rabbit",
       "pounce": {
         "minRangePx": 110,
         "maxRangePx": 300,
