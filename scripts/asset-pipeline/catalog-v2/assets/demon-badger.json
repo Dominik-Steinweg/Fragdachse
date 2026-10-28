@@ -17,14 +17,18 @@
     0.5
   ],
   "description": {
-    "silhouette": "Schmaler spitz zulaufender Rücken, kräftige Vorderpfoten und hornartige Kopfkontur.",
-    "colors": "Schwarzbraun und kräftiges Dunkelrot mit wenigen orangefarbenen Rissen.",
-    "anatomy": "Vierbeiner mit klauenartigen Pfoten und aggressiv gebeugter Haltung; bewegte Gliedmaßen statt skalierter Zombieform.",
-    "materials": "Kurzes gerichtetes rostrotes Fell, gewachsene Keratinkerben auf karminroten Hautplatten, geriefte schwarze Hörner und schmale Glutadern."
+    "silhouette": "Schmaler spitz zulaufender Rücken mit Wirbelschild, breit ausgestellte Schulterplatten mit vorwärts geschwungenen Hörnern, hakige Schädelhörner, kräftige Vorderpfoten und ein gepanzerter Schwanz mit kleiner Dornspitze.",
+    "colors": "Oxidrotes Fell, karminrote Hautplatten, obsidianschwarze Hörner und Wirbelplatten. Hitzerillen kalt als dunkle Glutkruste mit schwachem tiefrotem Kern; das Aufladen (dunkelrot → hellrot → Void-Violett) liegt im getrennten, zur Laufzeit eingefärbten Emissions-Sheet. Kein Gelb, keine weißen Kerne.",
+    "anatomy": "Vierbeiner mit klauenartigen Pfoten und aggressiv gebeugter Haltung. Steuerungen: body, head (Nacken-Drehpunkt), tail (Schwanzwurzel), flare_l/flare_r (Schulterplatte mit Horn und Nähten), spine_flare (Wirbelschild), jaw (Unterkiefer mit Kehlnaht) und throat_glow; Sockets eyeLeft/eyeRight und mouth (Flammenmündung).",
+    "materials": "Kurzes gerichtetes rostrotes Fell, gewachsene Keratinkerben auf karminroten Hautplatten, geriefte schwarze Hörner. Eigenes Hitze-Material mit FD_EmissionChannel heat: Grat jedes Schulter- und Schädelhorns ab der Mitte, Schulternähte und Schulterplattenrand, fünf Wirbelnähte, Hinterkante jeder Flankenschuppe, Schwanzgrat und Dornspitze, Stirnriss und eine Kehlnaht, die nur beim Spucken sichtbar wird und aufflammt. Dünne Nähte sind meshShadowDetail. Augen behalten ihr eigenes Material ohne Kanal.",
+    "stage": "Produktion: V2-Quelle db-v2-r2 (standard, 128 px ausgewählt, archiviert; ersetzt db-v2-r1 wegen des Schatten-Gates), Gates durch die Asset-Lane entschieden (User-Entscheidung 2026-10-28); 61 Posen mit Augenankern und Socket mouth, neutrales Hitze-Emissions-Sheet emission-heat (Augen transparent); Schatten-Mesh enemy-mesh-db-v2-r2 versiegelt (IoU min. 0,957). Cutover: scripts/asset-pipeline/notes/demon-badger-cutover.md."
   },
   "requiredClips": [
     "move",
-    "claw"
+    "claw",
+    "idle",
+    "burst",
+    "spit"
   ],
   "production": "reference",
   "recipe": "demon-badger",
@@ -80,6 +84,51 @@
       "parameters": {
         "strength": 1,
         "leapDistance": 1.192
+      }
+    },
+    {
+      "name": "idle",
+      "motion": "demon_idle",
+      "frameCount": 12,
+      "frameRate": 12,
+      "loop": true,
+      "parameters": {
+        "breath": 1,
+        "headSway": 1,
+        "tailFlick": 1
+      }
+    },
+    {
+      "name": "burst",
+      "motion": "demon_burst",
+      "frameCount": 8,
+      "frameRate": 24,
+      "loop": false,
+      "start": "rest",
+      "markers": {
+        "blast": 3
+      },
+      "parameters": {
+        "crouch": 1,
+        "flare": 1,
+        "recoil": 1
+      }
+    },
+    {
+      "name": "spit",
+      "motion": "demon_spit",
+      "frameCount": 10,
+      "frameRate": 24,
+      "loop": false,
+      "start": "rest",
+      "markers": {
+        "release": 4
+      },
+      "parameters": {
+        "heave": 1,
+        "thrust": 1,
+        "jawOpen": 1,
+        "throatFlare": 1
       }
     }
   ],

@@ -89,6 +89,12 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
     pose('claw_weapon')
     pose('attack_motion')
     pose('shield')
+    # Demon badger flare, jaw and throat glow stay at rest outside its own clips.
+    for name in ('flare_l', 'flare_r', 'spine_flare', 'jaw'):
+        pose(name)
+    if 'throat_glow' in parts:
+        parts['throat_glow'].default_value = parts['throat_glow_rest']
+        parts['throat_glow'].keyframe_insert(data_path='default_value', frame=frame)
     if motion == 'relay_deploy':
         # Deployed rest is also the final one-shot pose. Hinges retain their
         # nonzero pivots; lens rise follows the initial leg clearance phase.
@@ -149,6 +155,8 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         importlib.import_module('kaboomtula_motion_v2').apply_kaboomtula(asset, motion, phase, frame, idle, p, pose, key)
     elif motion.startswith('rabbit_'):
         importlib.import_module('rabid_rabbit_motion_v2').apply_rabid_rabbit(asset, motion, phase, frame, idle, p, pose, key)
+    elif motion.startswith('demon_'):
+        importlib.import_module('demon_badger_motion_v2').apply_demon_badger(asset, motion, phase, frame, idle, p, pose, key)
     elif motion.startswith('shield_'):
         pose('left_arm')
         pose('right_arm')

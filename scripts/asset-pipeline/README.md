@@ -123,7 +123,8 @@ Der Dispatch prüft zuerst `kraken_land_` → `kraken_motion_land_v2.apply_krake
 `kraken_brood_` → `kraken_brood_motion_v2.apply_kraken_brood` (normaler Gegner Mini-Kraken),
 danach `kraken_`. `toad_` → `plague_toad_motion_v2.apply_plague_toad` (Quacksalber),
 `kaboomtula_` → `kaboomtula_motion_v2.apply_kaboomtula` (Kabummtula),
-`rabbit_` → `rabid_rabbit_motion_v2.apply_rabid_rabbit` (Rabid Rabbit).
+`rabbit_` → `rabid_rabbit_motion_v2.apply_rabid_rabbit` (Rabid Rabbit),
+`demon_` → `demon_badger_motion_v2.apply_demon_badger` (Dämonen-Dachs).
 Alle Module werden erst beim jeweiligen Aufruf importiert; neue Präfixe brauchen
 zusätzlich ihren Eintrag in `motionModule` (`draft-v2.mjs`), sonst invalidieren
 Motion-Änderungen den Entwurfs-Cache nicht. Land und Ei enthalten
@@ -612,6 +613,42 @@ letzten Vollimports und gilt für ältere Einträge ohne eigene Revision.
 Runtime und Build benötigen nur diese versionierten Dateien; Blender, Quellenarchive und
 `art/poc/` bleiben lokale Authoring-Werkzeuge. Die Runtime-Bindung beschreibt
 [rendering.md](../../docs/ai/rendering.md#figuren--und-turmassets).
+
+## Emissions-Sheets für Türme und Gegner
+
+[sheet-emission.mjs](sheet-emission.mjs) rendert das ausgewählte `asset.blend` noch einmal mit
+ausgeblendeten Lichtern und schwarzer Welt ([sheet-emission-passes.py](sheet-emission-passes.py)),
+verkleinert wie die Beauty-Master und packt in dasselbe Layout. Kodierung `srgb-hue-alpha-intensity`:
+RGB ist der normierte Farbton, Alpha die Intensität (Spitzenstrahldichte / `range`). Die Kategorie
+wählt das Manifest: `turret` → `src/assets/manifests/turret-emission.json`, `enemy` →
+`src/assets/manifests/enemy-emission.json`. `turret-emission.mjs` bleibt als gleichwertiger Aufruf des
+Turmablaufs erhalten.
+
+- `--channel <name>` lässt nur Materialien mit der Eigenschaft `FD_EmissionChannel = <name>` leuchten;
+  alle anderen werden schwarze Verdecker (Augen und andere Leuchtteile fehlen also).
+- `--neutral` (nur mit Kanal) ersetzt diese Strahler durch Weiß der Stärke 1 bei `range` 1: eine
+  einfärbbare Abdeckungsmaske, die die Runtime ausblendet und färbt (ADD). Datei
+  `emission-<channel>.png` (der Name enthält „emission“, `assets:runtime` behält sie als PNG).
+- Gegner-Sheets prüfen, dass die Augenanker jedes Frames transparent bleiben (Alpha ≤ 0,08 auf den
+  1024er-Mastern); das Ergebnis steht als `eyeCheck` im Manifest.
+
+```powershell
+# Turm (Live-Eintrag rendern und sofort veröffentlichen, unverändert):
+node scripts/asset-pipeline/sheet-emission.mjs flame
+# Gegner: ausgewählten, noch nicht importierten Build vorbereiten (schreibt nur in den Build) ...
+node scripts/asset-pipeline/sheet-emission.mjs demon-badger --revision db-v2-r1 --channel heat --neutral
+# ... und nach import-runtime derselben Revision ohne Render veröffentlichen:
+node scripts/asset-pipeline/sheet-emission.mjs demon-badger --publish --channel heat
+# Authoring-Prüfung einer Vorschau (assets:preview), nur Master unter <Vorschau>/emission-heat/:
+node scripts/asset-pipeline/sheet-emission.mjs demon-badger --preview art/poc/pipeline-v2/previews/<Label>/demon-badger --channel heat --neutral
+```
+
+Die Vorbereitung legt `<Variante>/emission[-<channel>]/sheet-<Größe>.png` und `record.json` (Revision,
+Variante, Größe, Sheet- und Beauty-Sheet-SHA-256, Layout, Kanal, Farbton, Augenprüfung) in den Build.
+`--publish` vergleicht diesen Datensatz mit dem Live-Registereintrag (Revision, Variante, Größe,
+Beauty-Hash, Layout) und kopiert erst dann nach `public/assets/sprites/pipeline-v2/<id>/`. Animiertes
+Aufflackern einzelner Materialien gehört in die Emissionsfarbe (die Stärke bleibt konstant, wie es die
+Gegner-Materialpässe verlangen); die neutrale Maske zeigt nur die Abdeckung.
 
 ## Separate Figurenpässe (21a–21c)
 
