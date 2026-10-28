@@ -120,6 +120,8 @@ interface FortView {
   readonly mounted: FortMounted;
   readonly cellCount: number;
   destroyedCells: number;
+  /** Planning-only fade (a fallen outpost in the Bauhof): 1 stands, 0 is gone; relief and shadow read it. */
+  readonly fade: { value: number };
   /** Per cell: the caster heights around it (the core's grid or an outpost's kit frame), read once; null if unreadable. */
   heightWindows: (FortHeightWindow | null)[] | null;
   /** Plinth textures cut to this fort's cells, owned by the view. */
@@ -217,9 +219,10 @@ export class BaseFortRenderer {
       scaleX: size / art.sourceSize, scaleY: size / art.sourceSize, originX: 0, originY: 0, rotation: 0,
       texture: { key: key('solid') }, frame: { name: '__BASE' } };
     const mounted: FortMounted = { left, top, target: null, uniform: new Float32Array([art.deckPx, 0, MOUNTED_FLIP]) };
+    const fade = { value: 1 };
     this.views.set(baseId, { art, ground, body, emission, lights, stamp, emitters, cells, mounted, cellCount: cells.length,
-      destroyedCells: 0, fx: this.particles?.(emitters) ?? null, heightWindows: null, plinths: new Map(), plinthKeys: [],
-      relief: lit ? this.makeRelief(left, top, art) : null, shadow: lit ? this.makeShadow(left, top, mounted, art) : null });
+      destroyedCells: 0, fade, fx: this.particles?.(emitters) ?? null, heightWindows: null, plinths: new Map(), plinthKeys: [],
+      relief: lit ? this.makeRelief(left, top, art, fade) : null, shadow: lit ? this.makeShadow(left, top, mounted, art, fade) : null });
   }
 
   /** One base cell exploded: the fort fades with the staggered destruction and is gone with the last. */
@@ -235,6 +238,23 @@ export class BaseFortRenderer {
       view.stamp.visible = false;
       for (const light of view.lights) this.lighting?.releaseLight(light.key, { immediate: true });
     }
+  }
+
+  /**
+   * Planning only (the Bauhof's "outposts destroyed"): the whole fort fades, its relief, shadow,
+   * glow and lights with it; 1 stands, 0 is gone. A fort whose cells were destroyed keeps that fade.
+   */
+  setPresence(baseId: string, presence: number): void {
+    const view = this.views.get(baseId);
+    if (!view || view.destroyedCells > 0) return;
+    const value = Math.max(0, Math.min(1, presence));
+    view.fade.value = value;
+    view.body.setAlpha(value).setVisible(value > 0);
+    view.ground?.setAlpha(value).setVisible(value > 0);
+    view.relief?.setVisible(value > 0);
+    view.stamp.alpha = value;
+    view.stamp.visible = value > 0;
+    if (value === 0) for (const light of view.lights) this.lighting?.releaseLight(light.key, { immediate: true });
   }
 
   remove(baseId: string): void {
@@ -294,23 +314,26 @@ export class BaseFortRenderer {
     casters.length = 0;
     this.shadows?.turretCasters.collect(casters);
     for (const view of this.views.values()) {
-      view.shadow?.setVisible(this.castFrame.visible && view.destroyedCells < view.cellCount);
-      const standing = view.destroyedCells < view.cellCount;
+      const fade = view.fade.value;
+      const standing = view.destroyedCells < view.cellCount && fade > 0;
+      view.shadow?.setVisible(this.castFrame.visible && standing);
       this.syncPlinths(view, standing ? casters : EMPTY_CASTERS);
+      for (const plinth of view.plinths.values()) plinth.setAlpha(fade);
       if (view.shadow && standing) this.drawMounted(view, this.castFrame.visible ? casters : EMPTY_CASTERS);
-      view.fx?.setActive(standing && lighting !== null);
+      // The fires stop once a fading fort is half gone; their particles burn out on their own.
+      view.fx?.setActive(standing && fade > .5 && lighting !== null);
       view.fx?.setNight(night);
       for (const glow of view.emission) {
         const look = LAYER_LOOK[glow.layer];
         const level = look.day + (look.night - look.day) * night;
-        glow.image.setAlpha(standing && lighting ? emissiveAlpha(Math.min(1, level * flicker(seconds, look.hz, look.flicker, glow.phase))) : 0);
+        glow.image.setAlpha(standing && lighting ? fade * emissiveAlpha(Math.min(1, level * flicker(seconds, look.hz, look.flicker, glow.phase))) : 0);
       }
       if (!lighting || !standing) continue;
       for (const light of view.lights) {
         const level = light.day + (1 - light.day) * night;
         const preset = LIGHT_PRESETS[light.preset];
         lighting.setLight(light.key, light.preset, light.x, light.y,
-          { intensity: preset.intensity * level, radiusPx: preset.radiusPx * light.scale });
+          { intensity: preset.intensity * level * fade, radiusPx: preset.radiusPx * light.scale });
       }
     }
   }
@@ -414,7 +437,7 @@ export class BaseFortRenderer {
     state.uniform[1] = any ? MOUNTED_HEIGHT_RANGE_PX : 0;
   }
 
-  private makeRelief(left: number, top: number, art: FortArt): Phaser.GameObjects.Shader {
+  private makeRelief(left: number, top: number, art: FortArt, fade: { readonly value: number }): Phaser.GameObjects.Shader {
     const asset = art, size = art.size;
     const quad = new Phaser.GameObjects.Shader(this.scene, {
       name: 'LobbyStructureRelief', shaderName: 'LobbyStructureRelief', fragmentSource: LOBBY_STRUCTURE_RELIEF_FRAGMENT,
@@ -429,6 +452,7 @@ export class BaseFortRenderer {
         set('uSun', sunlight?.state.sun ?? [0, 0, 1]);
         this.optionsUniform[0] = sunlight?.state.enabled ? sunlight.clouds.strength : 0;
         set('uOptions', this.optionsUniform);
+        set('uFade', fade.value);
         const lights = sunlight ? sunlight.surfaceLights(left, top, size, size, this.surfaceLights) : null;
         setSurfaceLightUniforms(set, lights, sunlight?.moon ?? null, sunlight?.clouds.quality?.surfaceLights);
       },
@@ -436,7 +460,7 @@ export class BaseFortRenderer {
     return this.scene.add.existing(quad).setOrigin(0).setDepth(RELIEF_DEPTH).setBlendMode(Phaser.BlendModes.MULTIPLY);
   }
 
-  private makeShadow(left: number, top: number, mounted: FortMounted, art: FortArt): Phaser.GameObjects.Shader {
+  private makeShadow(left: number, top: number, mounted: FortMounted, art: FortArt, fade: { readonly value: number }): Phaser.GameObjects.Shader {
     const asset = art, size = art.size, reach = STRUCTURE_SHADOW.maxReachPx;
     const quadLeft = left - reach, quadTop = top - reach, quadSize = size + reach * 2;
     const caster = this.scene.textures.get(art.keys['caster-height']!);
@@ -457,7 +481,7 @@ export class BaseFortRenderer {
         this.castUniform[0] = frame.x; this.castUniform[1] = frame.y; this.castUniform[2] = frame.lengthMult;
         this.castUniform[3] = Math.min(reach, asset.heightPx.max * frame.lengthMult);
         set('uCast', this.castUniform);
-        this.shadeUniform[0] = FORT_SHADOW.opacity * frame.opacityMult;
+        this.shadeUniform[0] = FORT_SHADOW.opacity * frame.opacityMult * fade.value;
         this.shadeUniform[1] = STRUCTURE_SHADOW.softnessPx * FORT_SHADOW.softness * frame.softnessMult;
         set('uShade', this.shadeUniform);
       },

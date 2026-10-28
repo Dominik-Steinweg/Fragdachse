@@ -36,6 +36,8 @@ import {
 
 const EMPTY_LIGHT_SPOTS: readonly { x: number; y: number; radius: number }[] = [];
 const VULNERABLE_MARKER_COLOR = 0xc86bff;
+/** A fallen base fades out of a planning view over this long, and back in (Bauhof what-if). */
+const FALLEN_FADE_MS = 600;
 // Base turrets use the shared automated-turret acquisition range, independently of projectile range.
 const BASE_TURRET_TARGET_RANGE = (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange;
 
@@ -89,6 +91,10 @@ export class BaseEntity {
   private presentationCreated = false;
   /** The fort renderer presents this base (persistent core or kit outpost) instead of cell tiles. */
   private fortPresented = false;
+  /** Planning only: a fallen base fades out of view (see `setFallen`); 1 stands. */
+  private presence = 1;
+  private fallen = false;
+  private fallenFade: Phaser.Tweens.Tween | null = null;
   /** The fort's cells as raised shadow receivers while they stand; the fort casts its own shadow. */
   private readonly fortShadowCells: { x: number; y: number; active: boolean; visible: boolean; footprint: false }[] = [];
   private grounding: BaseGroundingRenderer | null = null;
@@ -281,7 +287,34 @@ export class BaseEntity {
 
   /** Mounted turret sprites, for their mesh shadows in the shadow system. */
   forEachTurretSprite(visit: (sprite: Phaser.GameObjects.Sprite) => void): void {
+    // A fading turret drops its mesh shadow once it is half gone.
+    if (this.presence < .5) return;
     for (const image of this.turretImages.values()) visit(image);
+  }
+
+  /**
+   * Planning view only (the Bauhof's what-if): a fallen base fades out with its turrets, and back in.
+   * Presentation only: HP, bodies and navigation are untouched. `immediate` skips the fade.
+   */
+  setFallen(fallen: boolean, immediate = false): void {
+    if (this.fallen === fallen && !immediate) return;
+    this.fallen = fallen;
+    this.fallenFade?.remove();
+    this.fallenFade = null;
+    const target = fallen ? 0 : 1;
+    if (immediate || this.presence === target) { this.applyPresence(target); return; }
+    this.fallenFade = this.scene.tweens.addCounter({ from: this.presence, to: target, ease: 'Sine.easeInOut',
+      duration: FALLEN_FADE_MS * Math.abs(target - this.presence),
+      onUpdate: (tween) => this.applyPresence(tween.getValue() ?? target),
+      onComplete: () => { this.fallenFade = null; this.applyPresence(target); } });
+  }
+
+  private applyPresence(presence: number): void {
+    this.presence = presence;
+    if (this.fortPresented) this.fort!.setPresence(this.id, presence);
+    this.grounding?.setPresence(presence);
+    for (const image of this.cellImages) image.setAlpha(presence).setVisible(presence > 0);
+    for (const image of this.turretImages.values()) image.setAlpha(presence).setVisible(presence > 0);
   }
 
   /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist; das Fort bringt eigene Lichter. */
@@ -616,6 +649,8 @@ export class BaseEntity {
   }
 
   destroy(): void {
+    this.fallenFade?.remove();
+    this.fallenFade = null;
     this.vulnerableMarker?.destroy();
     this.vulnerableMarker = null;
     this.unpresentFort();

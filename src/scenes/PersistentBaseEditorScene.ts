@@ -249,6 +249,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       layout: terrain.layout, widthCells: terrain.definition.metrics.widthCells, heightCells: terrain.definition.metrics.heightCells,
       bases: this.world.world.bases, persistentBaseId: this.world.world.persistentBaseSite?.baseId ?? null,
       spawnZones: terrain.definition.spawnZones ?? [],
+      portals: this.world.situationPortals ?? undefined,
       detail: { minX: view.x / CELL_SIZE, minY: view.y / CELL_SIZE,
         maxX: (view.x + view.width) / CELL_SIZE - 1, maxY: (view.y + view.height) / CELL_SIZE - 1 },
     }, { x: panel.x + 8, y: panel.y + 8, width: panel.width - 16, height: panel.height - 16 - legendHeight - hintHeight - switchHeight });
@@ -260,7 +261,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     // The strip exists only where the prepared plan needed it; a session's plans update its text.
     this.createLegend(panel.y + panel.height - switchHeight - hintHeight - legendHeight / 2 - 6, {
       routes: (plan?.routes.length ?? 0) > 0, spawn: (terrain.definition.spawnZones ?? []).length > 0,
-      hostile: this.world.world.bases.some((base) => base.faction === 'hostile' && base.surface !== 'none') });
+      hostile: this.world.world.bases.some((base) => base.faction === 'hostile' && base.surface !== 'none')
+        || (this.world.situationPortals?.generatorIds.size ?? 0) > 0,
+      portals: this.world.situationPortals !== null });
     if (hint !== null) this.routeHint = this.label(panel.x + panel.width / 2, panel.y + panel.height - switchHeight - hintHeight / 2 - 6, hint, 'caption', .5,
       panel.width - 40, chrome).setColor('#e3d2ff');
     // The what-if switches replan the routes on the spot: a fallen outpost, a blown bridge, an open teleporter.
@@ -461,7 +464,8 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.rangesButton.setIcon('box');
     const model = options.model;
     this.scenario = DEPLOYMENT_ROUTE_START;
-    this.world.setScenario(this.scenario);
+    this.world.setScenario(this.scenario, true);
+    this.minimap?.setFallen(this.world.fallenBaseIds);
     this.syncScenarioButtons();
     this.world.setModel(model, options.color);
     this.rotate.getRoot().setVisible(model.rewardsEditable);
@@ -887,13 +891,15 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.refreshRoutes();
   }
   /** What the overview's colours mean, for what this map has: routes, spawn zones, enemy bases, the own base, the view. */
-  private createLegend(y: number, has: { readonly routes: boolean; readonly spawn: boolean; readonly hostile: boolean }): void {
+  private createLegend(y: number, has: { readonly routes: boolean; readonly spawn: boolean; readonly hostile: boolean; readonly portals: boolean }): void {
     const panel = PERSISTENT_BASE_EDITOR_MINIMAP_PANEL, colors = PERSISTENT_BASE_EDITOR_MINIMAP_COLORS;
     const color = (css: string) => Number.parseInt(css.slice(1), 16);
     const all: { show: boolean; label: string; draw: (g: Phaser.GameObjects.Graphics, x: number) => void }[] = [
       { show: has.routes, label: t('ui.base.legend.routes'), draw: (g, x) => g.lineStyle(3, 0xb347ff, 1).lineBetween(x, y + 2, x + 14, y - 2) },
       { show: has.spawn, label: t('ui.base.legend.spawn'), draw: (g, x) => g.fillStyle(color(colors.spawnZone), .7).fillEllipse(x + 7, y, 14, 11) },
       { show: has.hostile, label: t('ui.base.legend.hostile'), draw: (g, x) => g.fillStyle(color(colors.hostileBase), 1).fillRect(x + 1, y - 6, 12, 12) },
+      { show: has.portals, label: t('ui.base.legend.portal'), draw: (g, x) => g.fillStyle(color(colors.portalThroat), 1).fillCircle(x + 7, y, 6)
+        .lineStyle(2, color(colors.portal), 1).strokeCircle(x + 7, y, 6) },
       { show: true, label: t('ui.base.legend.base'), draw: (g, x) => g.fillStyle(color(colors.persistentBase), 1).fillRect(x + 1, y - 6, 12, 12) },
       { show: true, label: t('ui.base.legend.view'), draw: (g, x) => g.lineStyle(2, color(colors.frame), 1).strokeRect(x + 1, y - 6, 12, 12) },
     ];
@@ -901,7 +907,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const graphics = this.add.graphics();
     this.chrome.add(graphics);
     const texts = entries.map((entry) => this.label(0, y, entry.label, 'caption', 0, undefined, this.chrome).setColor('#d9cfa8'));
-    const gap = 22, swatch = 20;
+    const gap = entries.length > 5 ? 16 : 22, swatch = 20;
     const total = texts.reduce((sum, text) => sum + swatch + text.width, 0) + gap * (texts.length - 1);
     let x = panel.x + (panel.width - total) / 2;
     entries.forEach((entry, index) => {
@@ -915,6 +921,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.scenario = { ...this.scenario, [key]: !this.scenario[key] };
     this.syncScenarioButtons();
     this.world.setScenario(this.scenario);
+    this.minimap?.setFallen(this.world.fallenBaseIds);
     this.refreshRoutes();
   }
   private syncScenarioButtons(): void {
