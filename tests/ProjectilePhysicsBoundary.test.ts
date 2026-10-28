@@ -488,6 +488,24 @@ describe('technical Phaser boundary with the authoritative runtime', () => {
     runtime.destroy();
   });
 
+  it('ends a ricocheting shot at a reactive prop instead of bouncing off it', () => {
+    const { runtime, binding, doubles } = fixture();
+    binding.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup,
+      [{ active: true, getBounds: () => new Phaser.Geom.Rectangle(0, 0, 10, 10) } as RockPhysicsProxy], null);
+    runtime.setObstacleKindResolver(() => 'reactive_prop');
+    const hit = vi.fn();
+    runtime.setRockHitCallback(hit);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, origin: { x: 20, y: 20, angle: Math.atan2(-21, -20) } });
+    const { sprite } = doubles.handles.get(0)!;
+    sprite.x = 0; sprite.y = -1;
+    runtime.runHostProjectileStage(16, 16);
+    expect(hit).toHaveBeenCalledOnce();
+    expect(hit.mock.calls[0][0]).toBe(0);
+    expect(runtime.activeCount).toBe(0);
+    runtime.destroy();
+  });
+
   it('does not let the combat target circle move a Glock-sized shot inside a persistent-base cell before its wall sweep', () => {
     const { runtime, binding, doubles } = fixture();
     const target = { active: true, getBounds: () => new Phaser.Geom.Rectangle(128, 128, 32, 32) } as RockPhysicsProxy;

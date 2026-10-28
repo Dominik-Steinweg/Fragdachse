@@ -861,10 +861,21 @@ export class WorldProjectileRuntime implements
       || (projectile.spec.flight.collisionMode === 'overlap' && projectile.spec.flight.piercesTargets === true)
       || projectile.spec.flight.isFlame || hasLeafBlowerCapability(projectile.spec.interaction.impulse)) return false;
     if (target.kind === 'rock' && projectile.spec.flight.penetration.penetratesRocks === true) return false;
+    if (target.kind === 'rock' && this.stopsAtReactiveProp(projectile, target.id)) return false;
     if (projectile.spec.flight.isGrenade && projectile.maxBounces === 0) return false;
     if (projectile.spec.interaction.impactCloud && projectile.maxBounces === 0) return false;
     if (projectile.interaction.explosion && projectile.maxBounces === 0) return false;
     return target.kind !== 'world-boundary' || !projectile.spec.flight.isBfg;
+  }
+
+  /** Barrels, puffballs and hives absorb shots; only thrown bodies still rebound from them. */
+  private stopsAtReactiveProp(projectile: ProjectileRuntimeRecord, rockId: number): boolean {
+    const flight = projectile.spec.flight;
+    return !flight.isGrenade && !flight.isTranslocatorPuck && !flight.isFlame && !flight.isBfg
+      && flight.penetration.penetratesRocks !== true
+      && !hasGaussDischarge(projectile.spec.interaction.directHit)
+      && !(flight.collisionMode === 'overlap' && flight.piercesTargets === true)
+      && this.obstacleKindResolver?.(rockId) === 'reactive_prop';
   }
 
   private playAuthoritativeBouncePresentation(
@@ -1247,12 +1258,22 @@ export class WorldProjectileRuntime implements
     }
     if (projectile.spec.flight.isGrenade && projectile.maxBounces === 0) return false;
 
+    const stopsAtProp = this.stopsAtReactiveProp(projectile, rockId);
+    if (stopsAtProp && projectile.interaction.explosion) {
+      this.triggerProjectileExplosion(projectile.id);
+      return true;
+    }
     if (!projectile.spec.flight.isGrenade) {
       const obstacleKind = this.obstacleKindResolver?.(rockId);
       const multiplier = obstacleKind !== undefined && obstacleKind !== 'rock'
         ? 1
         : projectile.spec.interaction.directHit.rockDamageMult ?? 1;
       if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.provenance.attributionId, impact);
+    }
+    if (stopsAtProp) {
+      if (projectile.spec.interaction.impactCloud) this.projectileImpactEventCallback?.(impact);
+      this.queueProjectileDestroy(projectile.id);
+      return true;
     }
     return false;
   }
