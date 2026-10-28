@@ -10,7 +10,7 @@ Z axis up, so ear and head yaws are Euler Z seen from the camera and ear lifts a
 From straight above the ears are the clearest cue: each ear has a root and a tip bone, the tip
 lags the root as follow-through (it streams back, flops and whips forwards), `sweep` turns an ear
 back towards the spine (negative: forwards) and `lift` raises it. The void glow in the ear tips is
-keyed with every pose: strength (a factor of its rest value), reach (how far it creeps back from
+keyed with every pose: strength (a gain on the emission colour), reach (how far it creeps back from
 the tips) and flow (the phase of its flicker); it smoulders at rest and floods the ears in motion.
 
 Real height lives on `carriage` (leap Z); no clip travels in XY or bakes a display scale, the

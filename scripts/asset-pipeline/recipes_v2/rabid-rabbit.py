@@ -10,7 +10,7 @@ saddle, lit flanks and a pale violet fur edge that keeps the outline readable on
 softened by fur locks along the outline. Red stays with the telegraphs; no yellow.
 
 z = 0 is the ground. Parts for rabid_rabbit_motion_v2: `carriage` (whole animal, real leap
-height), the void glow sockets `ear_glow` (strength), `ear_glow_reach` (how far the glow creeps
+height), the void glow sockets `ear_glow` (gain on the emission colour), `ear_glow_reach` (how far the glow creeps
 back from the tips) and `ear_glow_flow` (flicker phase) with their rest values, and the rig:
 `body` (chest), `hips` (loin and rump, pivot mid-back), `head`, `jaw`, two-segment ears
 `ear_l`/`ear_l_tip` and `ear_r`/`ear_r_tip`, `tail`, per front leg `<leg>_upper/_lower/_foot` and
@@ -154,14 +154,16 @@ def fur(c, name, density, softness=.8, roughness=(.74, .90), dark=None, light=No
     # Dark fur shows its locks through light, not value: a stronger lock relief than the skin default.
     nodes['Fleshy fold relief'].inputs['Strength'].default_value = .55 * softness
     nodes['Fleshy fold relief'].inputs['Distance'].default_value = .03
-    material['FD_SurfaceKind'] = 'rabbit-fur'
+    # FD_SurfaceKind stays 'kraken-dermis-v8': the enemy material passes unlight this graph by that name.
     return material
 
 
 def tip_glow(material, strength, reach):
     """Void glow creeping from the ear tips: FD_Glow G is the position along the ear (0 root .. 1 tip);
     everything beyond 1 - reach glows, hottest at the tip, broken up by a 4D flicker so it reads as
-    living light. Returns the strength, reach and flicker-phase (noise W) sockets the clips key."""
+    living light. The BSDF emission strength stays constant; the animated gain scales the emission
+    colour instead, so the separate enemy emission pass carries the flare as well as Beauty.
+    Returns the gain, reach and flicker-phase (noise W) sockets the clips key."""
     nodes, links = material.node_tree.nodes, material.node_tree.links
     bs = nodes['Principled BSDF']
     rest = nodes['Rest-pose skin coordinates'].outputs['Vector']
@@ -218,7 +220,13 @@ def tip_glow(material, strength, reach):
     emission.inputs[6].default_value = (0, 0, 0, 1)
     links.new(glow, emission.inputs[0])
     links.new(hot.outputs[2], emission.inputs[7])
-    links.new(emission.outputs[2], bs.inputs['Emission Color'])
+    gain_value = node('ShaderNodeValue', 'Void glow gain')
+    gain_value.outputs[0].default_value = 1
+    gained = node('ShaderNodeVectorMath', 'Void emission gain')
+    gained.operation = 'SCALE'
+    links.new(emission.outputs[2], gained.inputs[0])
+    links.new(gain_value.outputs[0], gained.inputs['Scale'])
+    links.new(gained.outputs[0], bs.inputs['Emission Color'])
     bs.inputs['Emission Strength'].default_value = strength
     # The fur around the glow takes on the void colour even where it does not glow.
     base = bs.inputs['Base Color'].links[0].from_socket
@@ -228,7 +236,7 @@ def tip_glow(material, strength, reach):
     links.new(base, tinted.inputs[6])
     tinted.inputs[7].default_value = (*linear('#3c1660'), 1)
     links.new(tinted.outputs[2], bs.inputs['Base Color'])
-    return bs.inputs['Emission Strength'], reach_value.outputs[0], flicker.inputs['W']
+    return gain_value.outputs[0], reach_value.outputs[0], flicker.inputs['W']
 
 
 def ring_iris(c, name, tones, strength):
@@ -716,6 +724,6 @@ def build(c, spec):
     mouth_socket.parent, mouth_socket.parent_type, mouth_socket.parent_bone = rig, 'BONE', 'jaw'
     mouth_socket.matrix_parent_inverse = (rest.matrix_local @ Matrix.Translation((0, rest.length, 0))).inverted()
     mouth_socket.location = tuple(nose + Vector((0, .08, -.06)))
-    parts = {'carriage': carriage, 'rabbit_legs': list(LEGS), 'ear_glow': ear_glow, 'ear_glow_rest': TIP_GLOW,
+    parts = {'carriage': carriage, 'rabbit_legs': list(LEGS), 'ear_glow': ear_glow, 'ear_glow_rest': 1,
              'ear_glow_reach': ear_reach, 'ear_glow_reach_rest': TIP_REACH, 'ear_glow_flow': ear_flow}
     return {'root': root, 'parts': parts, 'rig': rig, 'sockets': {'mouth': mouth_socket}}
