@@ -25,6 +25,8 @@ export interface NavigationLabEnemy {
   readonly movement?: MovementFeedback | null;
   /** Replicated Kabummtula phase (alert, rush, pounce, leap, ...); absent for other kinds. */
   readonly kaboomtulaPhase?: string;
+  /** Replicated pounce phase (aim, lock, air, recover, idle); absent for bodies that never pounced. */
+  readonly pouncePhase?: string;
 }
 
 /** Explicit scenario inputs and read models; no runtime owner escapes to the lab. */

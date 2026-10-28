@@ -18,6 +18,7 @@ import { WEAPON_CONFIGS, type UtilityConfig } from '../../loadout/LoadoutConfig'
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import type { WeaponBalanceLabWorldPort } from '../../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import type { ArenaInputPersistentBasePorts, ArenaInputPlacementPorts } from './ArenaInputBindings';
+import { enemyPouncePhaseAt } from '../../systems/EnemyPounceState';
 import type { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import type { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 import type {
@@ -395,7 +396,8 @@ export function createNavigationLabWorldPort(
           bodyFree: !geometry()?.isCircleBlocked(enemy.sprite.x, enemy.sprite.y, enemy.getCollisionRadius()),
           special: enemy.isBurrowed() || enemy.getDashPhase() > 0,
           intent: navigation?.getNavigationIntent?.(enemy.id), movement: navigation?.getMovementFeedback?.(enemy.id),
-          ...(enemy.getKaboomtulaState().revision > 0 ? { kaboomtulaPhase: enemy.getKaboomtulaState().phase } : {}) };
+          ...(enemy.getKaboomtulaState().revision > 0 ? { kaboomtulaPhase: enemy.getKaboomtulaState().phase } : {}),
+          ...(enemy.getPounceState().revision > 0 ? { pouncePhase: enemyPouncePhaseAt(enemy.getPounceState(), now) } : {}) };
       });
     },
     getPlayerPosition: () => {
