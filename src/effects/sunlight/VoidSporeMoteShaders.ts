@@ -1,6 +1,11 @@
 import { FOG_AIR_GLSL } from '../groundFog/FogAirBinding';
 import { VOID_CREEP_GLSL } from './VoidCreepShaders';
 
+/** Lifting waves the motes follow at once (VoidCreepPresentation keeps as many slots). */
+export const VOID_MOTE_LIFTS = 8;
+/** How much brighter motes glow in fresh contamination (E12). */
+const MOTE_FLARE = 1.4;
+
 /** Fixed program key: one linked program per renderer, warmed while loading. */
 export const VOID_SPORE_MOTES_SHADER_NAME = 'VoidSporeMotes';
 
@@ -31,7 +36,7 @@ uniform float uGradient;
 uniform float uHasAir;
 uniform vec3 uMoteDeep,uMoteBright;
 // Lifting waves over deactivated places: centre x, y, front radius, strength.
-uniform vec4 uVoidLift[4];
+uniform vec4 uVoidLift[${VOID_MOTE_LIFTS}];
 ${VOID_CREEP_GLSL}
 ${FOG_AIR_GLSL}
 // The wave that lifts the haze of a deactivated place: a soft band at its front, and the outward
@@ -39,7 +44,7 @@ ${FOG_AIR_GLSL}
 float liftWave(vec2 world, out vec2 push) {
   float wave=0.0;
   push=vec2(0.0);
-  for(int i=0;i<4;i++) {
+  for(int i=0;i<${VOID_MOTE_LIFTS};i++) {
     vec4 lift=uVoidLift[i];
     if(lift.w<=0.0) continue;
     vec2 away=world-lift.xy;
@@ -74,7 +79,8 @@ void main() {
   vec2 world=uView.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uView.zw;
   vec2 push;
   float wave=liftWave(world,push);
-  float here=creepTexel(world).b;
+  float flare;
+  float here=creepTexel(world,flare).b;
   if(here<.02&&wave<.01) discard;
   // A mote swept outward by a lifting wave is drawn ahead of where it hovered.
   vec2 p=world-push;
@@ -94,7 +100,8 @@ void main() {
   vec3 light=moteLayer(p,28.0,1.15,0.0,.48*thick);
   if(uLayers>1.5) light+=moteLayer(p,19.0,.8,17.0,.32*thick)*.7;
   // Motes caught by the wave flare briefly as they are carried off.
-  light*=thick*calm*uGlow*(1.0+1.8*wave);
+  // Fresh contamination makes its motes glow up before they settle.
+  light*=thick*calm*uGlow*(1.0+1.8*wave+${MOTE_FLARE.toFixed(2)}*flare);
   // The wave itself: a faint, wispy shimmer where haze is being lifted, never a hard ring.
   float wisp=.55+.45*creepNoise(world*.011+vec2(uCreepTime*.35,-uCreepTime*.2));
   light+=mix(uMoteDeep,uMoteBright,.6)*wave*wisp*smoothstep(.0,.35,here)*uGlow*.38;

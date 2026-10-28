@@ -317,7 +317,7 @@ export function resolveVoidDangerSources(world: VoidDangerWorldSources): VoidDan
       rim: kind.rimCells * CELL_SIZE * reach, plants: kind.plants, haze: kind.haze });
   }
   for (const zone of world.spawnZones ?? []) {
-    out.push({ id: `zone:${zone.id}`, shapes: [{ kind: 'ellipse', x: world.offsetX + zone.gridX * CELL_SIZE, y: world.offsetY + zone.gridY * CELL_SIZE,
+    out.push({ id: `${VOID_ZONE_SOURCE}${zone.id}`, shapes: [{ kind: 'ellipse', x: world.offsetX + zone.gridX * CELL_SIZE, y: world.offsetY + zone.gridY * CELL_SIZE,
       width: zone.widthCells * CELL_SIZE, height: zone.heightCells * CELL_SIZE, rimPhase: spawnZoneRimPhase(zone) }],
     rim: DANGER.zone.rimCells * CELL_SIZE * reach, plants: DANGER.zone.plants, haze: DANGER.zone.haze });
   }
@@ -368,6 +368,9 @@ export interface ActivityVoidDanger {
   /** Bodies that taint the fog where they walk (E12): the mission's enemies, the situation map's marchers. */
   readonly marchers?: VoidMarchers | null;
 }
+
+/** Danger source id of a World spawn zone: this prefix and the zone id. */
+export const VOID_ZONE_SOURCE = 'zone:';
 
 /** Thickness of a resting spawn zone's haze; a fresh trail carries the same (E12). */
 export const ZONE_HAZE = DANGER.zone.haze;

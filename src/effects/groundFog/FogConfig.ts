@@ -38,6 +38,8 @@ export const FOG = {
   // The shape pass runs at this fraction of the material's resolution; the field is far softer.
   shapeDownscale: 4,
   shapedExtraAlpha: .20, voidCover: .72, voidGain: 1.35, voidOpacity: 1.15, voidHue: 1, voidLuma: .74,
+  // Fresh void trails flare up as a paler, brighter fog body up to this structure (E12).
+  voidFlareBody: .9,
   // Shaped fog's coverage thins to obstacleFloor at an obstacle and is whole obstacleReach px away; the band's
   // contour is eroded by up to obstacleErode px.
   obstacleFloor: .3, obstacleReach: 64, obstacleErode: 44,

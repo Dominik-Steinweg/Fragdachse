@@ -13,6 +13,7 @@ import {
   VOID_CREEP_ROCK_FRAGMENT, VOID_CREEP_ROCK_SHADER_NAME,
 } from '../effects/sunlight/VoidCreepShaders';
 import { VOID_SPORE_MOTES_FRAGMENT, VOID_SPORE_MOTES_SHADER_NAME } from '../effects/sunlight/VoidSporeMoteShaders';
+import { VOID_TAINT_FRAGMENT, VOID_TAINT_SHADER_NAME, VOID_TAINT_VERTEX } from '../effects/sunlight/VoidTaintShaders';
 import { addCharacterMaterialAddition } from '../effects/CharacterMaterialLighting';
 import { STATUS_RING_FILL_FRAGMENT_SOURCE, STATUS_RING_FILL_SHADER_NAME, STATUS_RING_FRAGMENT_SOURCE,
   STATUS_RING_SHADER_NAME } from '../effects/living/statusRingShader';
@@ -44,12 +45,15 @@ export function warmupWorldMaterials(scene: Phaser.Scene): () => void {
     batches.push(character);addCharacterMaterialAddition(character.programManager);character.finalizeTextureCount(1);
     const name=WATER_SHADER_NAME+'Sunlight';
     // Night programs first link at dusk or at the first lamp on a rock; link them while loading.
-    for(const [shaderName,fragmentSource] of [[name,WATER_SUN_FRAGMENT],[STATUS_RING_SHADER_NAME,STATUS_RING_FRAGMENT_SOURCE],
+    // The void trails (E12) bring their own vertex stage; the others use Phaser's quad.
+    const programs:[string,string,string?][]=[[name,WATER_SUN_FRAGMENT],[STATUS_RING_SHADER_NAME,STATUS_RING_FRAGMENT_SOURCE],
       [STATUS_RING_FILL_SHADER_NAME,STATUS_RING_FILL_FRAGMENT_SOURCE],[MOON_SKY_SHADER_NAME,MOON_SKY_FRAGMENT],
       [ROCK_PENETRATION_SHADER_NAME,ROCK_PENETRATION_FRAGMENT],[ROCK_SHADOW_POLAR_SHADER_NAME,ROCK_SHADOW_POLAR_FRAGMENT],
       [VOID_CREEP_GROUND_SHADER_NAME,VOID_CREEP_GROUND_FRAGMENT],[VOID_CREEP_ROCK_SHADER_NAME,VOID_CREEP_ROCK_FRAGMENT],
-      [VOID_CREEP_GLOW_SHADER_NAME,VOID_CREEP_GLOW_FRAGMENT],[VOID_SPORE_MOTES_SHADER_NAME,VOID_SPORE_MOTES_FRAGMENT]])
-      quads.push(new Phaser.GameObjects.Shader(scene,{name:shaderName,shaderName,fragmentSource},0,0,1,1));
+      [VOID_CREEP_GLOW_SHADER_NAME,VOID_CREEP_GLOW_FRAGMENT],[VOID_SPORE_MOTES_SHADER_NAME,VOID_SPORE_MOTES_FRAGMENT],
+      [VOID_TAINT_SHADER_NAME,VOID_TAINT_FRAGMENT,VOID_TAINT_VERTEX]];
+    for(const [shaderName,fragmentSource,vertexSource] of programs)
+      quads.push(new Phaser.GameObjects.Shader(scene,{name:shaderName,shaderName,fragmentSource,vertexSource},0,0,1,1));
     // Renderer-lifetime batch handler: only its program is linked here, it stays for its owners.
     let bars:Phaser.Renderer.WebGL.ProgramManager|null=null;
     try{bars=getBarSdfProgramManager(scene);}catch(error){console.warn('[WorldMaterials] Bar program unavailable.',error);}

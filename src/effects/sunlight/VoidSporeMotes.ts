@@ -25,11 +25,13 @@ export class VoidSporeMotes {
   private readonly deep = rgb(VOID_PALETTE.primary);
   private readonly bright = rgb(VOID_PALETTE.bright);
   private air: FogAirBinding | null = null;
+  private taint: Phaser.Textures.Texture | null = null;
   private glow = DAY_GLOW;
   private quality: VoidMoteQuality = { layers: 2, gradient: true };
 
   constructor(scene: Phaser.Scene, private readonly creepKey: string,
-    creep: { frame: Float32Array; time: number; alerts: Float32Array; alertLevels: Float32Array; lifts: Float32Array },
+    creep: { frame: Float32Array; time: number; alerts: Float32Array; alertLevels: Float32Array; lifts: Float32Array;
+      taintView: Float32Array; taintOn: number },
     view: Float32Array, pixelWorld: () => number) {
     this.quad = new Phaser.GameObjects.Shader(scene, {
       name: VOID_SPORE_MOTES_SHADER_NAME, shaderName: VOID_SPORE_MOTES_SHADER_NAME, fragmentSource: VOID_SPORE_MOTES_FRAGMENT,
@@ -42,8 +44,9 @@ export class VoidSporeMotes {
         const air = this.air;
         set('uHasAir', air ? 1 : 0); set('uFogVelocity', 1); set('uFogLookup', 2); set('uFogState', 3);
         if (air) { set('uFogOrigin', air.origin); set('uFogWorldSize', air.worldSize); set('uFogLookupSize', air.lookupSize); }
+        set('uVoidTaint', 4); set('uVoidTaintView', creep.taintView); set('uVoidTaintOn', creep.taintOn);
       },
-    }, 0, 0, 1, 1, [creepKey, FALLBACK, FALLBACK, FALLBACK]);
+    }, 0, 0, 1, 1, [creepKey, FALLBACK, FALLBACK, FALLBACK, FALLBACK]);
     const node = this.quad.renderNode;
     if (node) this.quad.once('destroy', () => disposeShaderWarmupNode(node));
     this.quad.setOrigin(0).setDepth(MOTES_DEPTH).setBlendMode(Phaser.BlendModes.ADD);
@@ -53,8 +56,16 @@ export class VoidSporeMotes {
   /** The fog's air after its step this frame; null without simulating fog (motes still draw). */
   setAir(air: FogAirBinding | null): void {
     this.air = air;
-    const textures = this.quad.scene.textures;
-    this.quad.setTextures(air ? [textures.get(this.creepKey), air.velocity, air.lookup, air.state] : [this.creepKey, FALLBACK, FALLBACK, FALLBACK]);
+    const textures = this.quad.scene.textures, taint = this.taint ?? textures.get(FALLBACK);
+    this.quad.setTextures(air ? [textures.get(this.creepKey), air.velocity, air.lookup, air.state, taint]
+      : [textures.get(this.creepKey), textures.get(FALLBACK), textures.get(FALLBACK), textures.get(FALLBACK), taint]);
+  }
+
+  /** This frame's void trails on unit four; null when there are none. */
+  setTaint(texture: Phaser.Textures.Texture | null): void {
+    this.taint = texture;
+    const next = texture ?? this.quad.scene.textures.get(FALLBACK);
+    if (this.quad.textures[4] !== next) this.quad.textures[4] = next;
   }
 
   /** Covers the view; `night` 0..1 follows the lamps' dusk curve. */
@@ -63,6 +74,8 @@ export class VoidSporeMotes {
     this.quality = quality;
     this.quad.setPosition(x, y).setDisplaySize(width, height);
   }
+
+  setVisible(visible: boolean): void { this.quad.setVisible(visible); }
 
   destroy(): void { this.air = null; this.quad.destroy(); }
 }

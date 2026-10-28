@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CoopMissionVoidDanger, resolvePermanentVoidHazardSources } from '../src/activity/CoopMissionVoidDanger';
+import { createVoidMarcherSample } from '../src/arena/VoidDangerField';
 import { COOP_DEFENSE_MAP_CONFIGS, isPermanentVoidGroundHazard, type CoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
 import type { ArenaLayout, CoopDefenseSecondaryObjectivePresentationState } from '../src/types';
 
@@ -48,6 +49,18 @@ describe('Coop mission void danger (GDD Void-Gefahrenzonen V1)', () => {
     // A Dawn site closed at dusk fails its objective; its base still stands.
     objectives = entry('failed');
     expect(danger.presenceOf('base:site-a')).toBe(0);
+  });
+
+  it('lays void trails only from the enemies its port reports, through one stable object (E12)', () => {
+    const visited: string[] = [];
+    const danger = new CoopMissionVoidDanger({
+      getMapConfig: () => null, getLayout: () => null, getOffset: () => null, getBase: () => undefined, getObjectives: () => null, getSpawnPlaces: () => null,
+      forEachVoidMarcher: visit => { const sample = createVoidMarcherSample(); sample.id = 'e1'; sample.zone = 'north-gate'; visit(sample); },
+    } as never);
+    const marchers = danger.marchers;
+    marchers.forEach(sample => visited.push(`${sample.id}@${sample.zone}`));
+    expect(visited).toEqual(['e1@north-gate']);
+    expect(danger.marchers).toBe(marchers);
   });
 
   it('answers nothing while no mission World is laid out', () => {

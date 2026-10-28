@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from 'vitest';
 const resources=vi.hoisted(()=>({canopies:new Set<object>(),fields:new Set<object>(),flora:new Set<object>(),moons:new Set<object>(),creeps:new Set<object>(),
- creepFields:[] as unknown[],fades:[] as {to:Uint8Array;lift:unknown}[]}));
+ creepFields:[] as unknown[],fades:[] as {to:Uint8Array;lift:unknown}[],lifts:[] as {zone:string|null;wave:unknown}[],fed:[] as unknown[]}));
 vi.mock('phaser',async()=>{const {createFakePhaserModule}=await import('../fakeArenaRenderScene');return {...createFakePhaserModule(),Filters:{ParallelFilters:class {},Displacement:class {}}};});
 vi.mock('../../src/arena/trees/CanopyLighting',()=>({CanopyLighting:class {
  constructor(){resources.canopies.add(this);}setClouds(){}setLighting(){}update(){}destroy(){resources.canopies.delete(this);}
@@ -13,6 +13,8 @@ vi.mock('../../src/effects/sunlight/MoonSkyLight',()=>({MoonSkyLight:class {
 }}));
 vi.mock('../../src/effects/sunlight/VoidCreepPresentation',()=>({VoidCreepPresentation:class {
  constructor(){resources.creeps.add(this);}setCreep(creep:unknown){resources.creepFields.push(creep);}fadeHaze(_rect:unknown,to:Uint8Array,lift:unknown){resources.fades.push({to,lift});}
+ startLift(extent:object,zone:string|null){const wave={...extent,durationSec:3.2};resources.lifts.push({zone,wave});return wave;}
+ feedMarchers(marchers:unknown){resources.fed.push(marchers);}get hasTrails(){return false;}setTaintResolution(){}
  setAlerts(){}setAir(){}setFogShape(){}setFogShapeBinding(){}update(){return null;}destroy(){resources.creeps.delete(this);}
 }}));
 vi.mock('../../src/arena/WoodlandEcologyRenderer',()=>({WoodlandEcologyRenderer:class {
@@ -141,6 +143,32 @@ it('carries void only around danger; a destroyed base loses its haze, not its pl
  expect(resources.creepFields).toHaveLength(2);
  const rebuilt=resources.creepFields[1] as {haze:Uint8Array};
  expect(rebuilt.haze.some(v=>v>0)).toBe(true);
+ owner.destroy();expectEmpty();f.quality.destroy();
+});
+
+it('lets marching enemies taint the fog and lifts the trails of a defeated zone with its wave (E12/E13)',()=>{
+ resources.creepFields.length=0;resources.fades.length=0;resources.lifts.length=0;resources.fed.length=0;
+ const marchers={forEach:()=>{}};
+ // A World without void of its own keeps a land-only creep while its Activity lays trails.
+ const bare=fixture(),plain=new WorldSunlightPresentation(bare.scene as never,bare.targets as never);
+ plain.setActivityVoidDanger({sources:[],presenceOf:()=>1,marchers});plain.update(480,0);plain.update(480,16);
+ expect(resources.creepFields).toHaveLength(1);expect(resources.creepFields[0]).toMatchObject({landOnly:true});
+ expect(resources.fed).toEqual([marchers,marchers]);
+ plain.destroy();bare.quality.destroy();
+ resources.creepFields.length=0;
+ const f=fixture();Object.assign(f.targets.worldContext,{definition:{spawnZones:[{id:'north-gate',gridX:6,gridY:6,widthCells:6,heightCells:6}]}});
+ const owner=new WorldSunlightPresentation(f.scene as never,f.targets as never);
+ let present=1;owner.setActivityVoidDanger({sources:[],presenceOf:(id:string)=>id==='zone:north-gate'?present:1,marchers});
+ owner.update(480,0);
+ expect(resources.creepFields.at(-1)).not.toMatchObject({landOnly:true});
+ // Wave defeated, zone used again later: its trails dissolve, its haze only thins.
+ present=.45;owner.update(480,16);
+ expect(resources.lifts).toEqual([{zone:'north-gate',wave:expect.anything()}]);
+ expect(resources.fades.at(-1)!.lift).toBeNull();
+ // Spent: one wave takes the zone's haze and its trails together.
+ present=1;owner.update(480,32);present=0;owner.update(480,48);
+ expect(resources.lifts).toHaveLength(2);
+ expect(resources.fades.at(-1)!.lift).toBe(resources.lifts[1]!.wave);
  owner.destroy();expectEmpty();f.quality.destroy();
 });
 

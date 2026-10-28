@@ -12,9 +12,9 @@ import type { CameraPostFxController } from '../postfx/CameraPostFxController';
 import { CanopyLighting } from '../../arena/trees/CanopyLighting';
 import { buildWoodlandEcology, EcologyWaterField, markVoidPondColonies } from '../../arena/WoodlandEcologyField';
 import { buildVoidWaterStain } from '../../arena/VoidWaterStain';
-import { buildVoidCreepField, buildVoidCreepHaze, voidCreepTexelRect, type VoidCreepField, type VoidCreepSource } from '../../arena/VoidCreepField';
+import { buildVoidCreepField, buildVoidCreepHaze, buildVoidCreepLand, voidCreepTexelRect, type VoidCreepField, type VoidCreepSource } from '../../arena/VoidCreepField';
 import { VoidCreepPresentation } from './VoidCreepPresentation';
-import { VoidDangerField, resolveVoidDangerSources, type ActivityVoidDanger, type VoidDangerBounds, type VoidDangerSource } from '../../arena/VoidDangerField';
+import { VoidDangerField, resolveVoidDangerSources, VOID_ZONE_SOURCE as ZONE_SOURCE, type ActivityVoidDanger, type VoidDangerBounds, type VoidDangerSource } from '../../arena/VoidDangerField';
 import { VoidHazeResidue } from '../../arena/VoidHazeResidue';
 import { WATER_SHORE_DISTANCE } from '../../arena/WaterSurfaceModel';
 import { VoidFloraGlow } from './VoidFloraGlow';
@@ -217,7 +217,20 @@ export class WorldSunlightPresentation {
   this.moonWeight=this.moonTarget>this.moonWeight?Math.min(this.moonTarget,this.moonWeight+step):Math.max(this.moonTarget,this.moonWeight-step);
   this.lastSceneTime=time;
   this.lastMinute=this.atmosphereClock.resolve(minutes,this.lastSceneTime);
+  this.feedTrails();
   this.sync();
+ }
+ /** World frame of the void trails, reused every frame. */
+ private readonly taintFrame={offsetX:0,offsetY:0,width:1,height:1};
+ /**
+  * The Activity's trail-laying bodies of this frame (E12), on the same clock as the creep. Only here,
+  * once per frame: sync() also runs for tuning and must not lay trails twice.
+  */
+ private feedTrails():void {
+  const m=this.targets.worldContext?.metrics;
+  if(!m||!this.voidCreep)return;
+  const f=this.taintFrame;f.offsetX=m.offsetX;f.offsetY=m.offsetY;f.width=m.widthPx;f.height=m.heightPx;
+  this.voidCreep.feedMarchers(this.activityDanger?.marchers??null,this.targets.water?.getPresentationTime()??this.lastSceneTime/1000,f);
  }
  /** Water masks precede ecology; canopy/cloud fields and the composite must also be published. */
  isPrepared():boolean {
@@ -271,6 +284,7 @@ export class WorldSunlightPresentation {
   targets.water?.setSunlight(this.clouds);targets.wildlife?.setSunlight(this.clouds);
   this.syncVoidField(targets);
   this.syncWoodland(targets);
+  this.syncTaintCreep(targets);
   this.syncVoidPresence();
   this.syncHazeLines();
   this.voidCreep?.setAlerts(this.activityDanger?.alerts??[]);
@@ -286,6 +300,7 @@ export class WorldSunlightPresentation {
     // Shaped fog: without the fog's lent shape the haze layers evaluate it at the same clock.
     const shape=resolveFogShapeClock(this.sunTuning,this.clouds.timeSec,(targets.fog?.strength??1)-1,this.fogShapeClock);
     this.voidCreep?.setFogShape(this.sunTuning.fogStyle>.5,shape[0],shape[1],shape[2]);
+    this.voidCreep?.setTaintResolution(quality.voidTaintTexels);
     targets.lighting.setGlowLayer(this.voidCreep?.update(this.scene.cameras.main,targets.water?.getPresentationTime()??this.lastSceneTime/1000,
       Math.max(0,Math.min(1,(artificial-.1)/.6)),{rocks:quality.voidCreepRocks,glow:quality.voidCreepGlow,airborne:!!targets.fog?.carriesVoidHaze,
        motes:{layers:quality.voidMoteLayers,gradient:quality.voidMoteGradient}},
@@ -344,7 +359,11 @@ export class WorldSunlightPresentation {
   private readPresence(id:string):number {
     return Math.max(0,Math.min(1,this.activityDanger?.presenceOf(id)??1));
   }
-  /** A place that lost or regained presence crossfades its haze; its plants stay (E7). */
+  /**
+   * A place that lost or regained presence crossfades its haze; its plants stay (E7). A spawn zone
+   * losing presence had its wave defeated: one wave from the zone dissolves the trails its enemies
+   * laid (E13), and a spent place's haze with them down to small patches (E11).
+   */
   private syncVoidPresence():void {
     const field=this.voidField,creep=this.voidCreepField;
     if(!field||!creep||!this.voidCreep)return;
@@ -353,12 +372,27 @@ export class WorldSunlightPresentation {
       const present=this.readPresence(source.id),was=this.voidPresence.get(source.id)??1;
       if(Math.abs(present-was)<.01)continue;
       this.voidPresence.set(source.id,present);
-      // A deactivated place is a success: its haze is lifted by a wave down to small patches.
-      const lifted=present<=0&&was>0;
+      const lifted=present<=0&&was>0,zone=source.id.startsWith(ZONE_SOURCE)?source.id.slice(ZONE_SOURCE.length):null;
+      const extent=present<was&&(lifted||zone)?field.extentOf(source.id):null;
+      const wave=extent?this.voidCreep.startLift(extent,zone):null;
       if(lifted)this.refreshResidue();
       const reach=field.reachOf(source.id),rect=reach?voidCreepTexelRect(creep,reach):null;
-      if(rect)this.voidCreep.fadeHaze(rect,buildVoidCreepHaze(creep,this.voidHazeSource,rect),lifted?field.extentOf(source.id):null);
+      if(rect)this.voidCreep.fadeHaze(rect,buildVoidCreepHaze(creep,this.voidHazeSource,rect),lifted?wave:null);
     }
+  }
+  /** Land and water of the World as the trails need them where its places carry no void. */
+  private creepLand:{frame:{offsetX:number;offsetY:number;width:number;height:number};landAt:(x:number,y:number)=>number}|null=null;
+  /**
+   * A World without void of its own still shows the trails an Activity lays: a land-only creep
+   * binds them to fog and ground while bodies march or trails fade, and goes again afterwards.
+   */
+  private syncTaintCreep(targets:Targets):void {
+    const creep=this.voidCreepField,needed=!!this.activityDanger?.marchers||!!this.voidCreep?.hasTrails;
+    if(!this.voidCreep||!this.creepLand||(creep&&!creep.landOnly)||needed===!!creep)return;
+    const next=needed?buildVoidCreepLand(this.creepLand.frame,this.creepLand.landAt):null;
+    targets.fog?.setVoidHaze(null);
+    this.voidCreep.setCreep(next);this.voidCreepField=next;
+    targets.fog?.setVoidHaze(this.voidCreep.airHaze);
   }
   /** Changed haze lines crossfade over where the old and the new lines reach; the flora stays. */
   private syncHazeLines():void {
@@ -400,12 +434,16 @@ export class WorldSunlightPresentation {
       this.voidPresence.clear();
       for(const source of danger?.sources??[])if(source.haze>0)this.voidPresence.set(source.id,this.readPresence(source.id));
       // The haze clings to land and banks; over open water the ink carries the void (G channel).
-      const creep=danger?buildVoidCreepField(this.voidHazeSource,frame,this.voidPondPoints,(x,y)=>{
+      const landAt=(x:number,y:number):number=>{
         const depth=water.distance(x-frame.offsetX,y-frame.offsetY);
         if(depth<0)return 1;
         const t=Math.min(1,depth/WATER_SHORE_DISTANCE);
         return 1-t*t*(3-2*t);
-      }):null;
+      };
+      this.creepLand={frame,landAt};
+      // Without void of its own the World keeps a land-only creep while an Activity lays trails (E12).
+      const creep=(danger?buildVoidCreepField(this.voidHazeSource,frame,this.voidPondPoints,landAt):null)
+        ??(this.activityDanger?.marchers?buildVoidCreepLand(frame,landAt):null);
       this.voidCreepField=creep;
       // The creep was built with the lines as they are now.
       const lines=this.activityDanger?.hazeLines??null;
@@ -415,7 +453,7 @@ export class WorldSunlightPresentation {
       targets.fog?.setVoidHaze(null);
       this.voidCreep?.setCreep(creep);
       targets.fog?.setVoidHaze(this.voidCreep?.airHaze??null);
-      targets.water?.setVoidStain(buildVoidWaterStain(placements,frame,creep));
+      targets.water?.setVoidStain(creep?.landOnly?null:buildVoidWaterStain(placements,frame,creep));
       this.voidEmission?.setPondPlacements(placements);
       this.woodland=new WoodlandEcologyRenderer(this.scene,placements);this.woodlandLayout=layout;
       loadingTimeline.end('ecology/woodland',measuredAt);

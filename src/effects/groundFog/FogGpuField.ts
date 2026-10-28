@@ -395,6 +395,17 @@ export class FogGpuField {
     set('uShapeView',this.shapeView);set('uShapeClock',this.shapeClock);set('uCreep',0);
     set('uCreepFrame',haze?.frame??this.view4);set('uCreepTime',haze?.time??0);
     if(haze){set('uVoidAlert[0]',haze.alerts);set('uVoidAlertLevel[0]',haze.alertLevels);}
+    this.setTaintUniforms(set,haze,1);
+  }
+  /** The void trails lent with the haze (VoidTaintLayer) on `unit`; off without them. */
+  private setTaintUniforms(set:(name:string,value:unknown)=>void,haze:FogVoidHaze|null,unit:number):void {
+    const taint=haze?.taint;
+    set('uVoidTaint',unit);set('uVoidTaintView',taint?.view??this.view4);set('uVoidTaintOn',taint?.on&&taint.texture?1:0);
+  }
+  /** The trails' texture to bind, or the neutral one. */
+  private taintTexture():Phaser.Textures.Texture {
+    const taint=this.debug==='normal'?this.voidHaze?.taint:null;
+    return taint?.on&&taint.texture?taint.texture:this.scene.textures.get('__DEFAULT');
   }
   /** Screen-space composite of the soft material and the finer wake mask. */
   private setLightingUniforms(set:(name:string,value:unknown)=>void):void {
@@ -430,6 +441,8 @@ export class FogGpuField {
         set('uVoidHaze',this.voidHazeUniform);set('uCreep',3);set('uFogVelocity',4);set('uFogLookup',5);set('uFogState',6);
         set('uCreepFrame',haze?.frame??this.view4);set('uCreepTime',haze?.time??0);
         if(haze){set('uVoidAlert[0]',haze.alerts);set('uVoidAlertLevel[0]',haze.alertLevels);}
+        // Unit seven: the void trails (VoidTaintLayer); the cloud cache keeps unit eight.
+        this.setTaintUniforms(set,haze,7);
         this.fogOrigin[0]=this.terrain.frame.offsetX;this.fogOrigin[1]=this.terrain.frame.offsetY;
         set('uFogOrigin',this.fogOrigin);set('uFogWorldSize',[this.terrain.frame.width,this.terrain.frame.height]);
         set('uFogLookupSize',[this.lookup.width,this.lookup.height]);
@@ -537,9 +550,9 @@ export class FogGpuField {
     const displayTextures=[this.material.texture!, this.trailMask?.texture ?? fallback];
     if(this.rockCoverage)displayTextures.push(this.packedSurface!.texture!);
     else if(this.voidHaze)displayTextures.push(fallback);
-    // Void spore haze on units 3-6: creep field, current air velocity, chunk lookup, density state.
+    // Void spore haze on units 3-7: creep field, current air velocity, chunk lookup, density state, trails.
     if(this.voidHaze)displayTextures.push(this.voidHaze.texture,this.velocities[this.current].texture!,this.lookup.texture,
-      this.states[this.current].texture!);
+      this.states[this.current].texture!,this.taintTexture());
     this.display!.setTextures(displayTextures);
     this.display!.setPosition(view.x, view.y).setDisplaySize(view.width, view.height).setVisible(true);
     const showAerial=this.rockAerialStrength>0&&!!this.rockCoverage&&debug==='normal';
@@ -552,7 +565,7 @@ export class FogGpuField {
   }
   private renderShapePass():void {
     const shader=this.shapePass!;
-    shader.setTextures([this.voidHaze&&this.debug==='normal'?this.voidHaze.texture:this.scene.textures.get('__DEFAULT')]);
+    shader.setTextures([this.voidHaze&&this.debug==='normal'?this.voidHaze.texture:this.scene.textures.get('__DEFAULT'),this.taintTexture()]);
     const renderer=this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
     renderer.gl.disable(renderer.gl.DITHER);
     shader.renderWebGLStep(renderer,shader,shader.drawingContext!);
@@ -589,7 +602,7 @@ export class FogGpuField {
     if (!haze) {
       for (const display of [this.display, this.rockAerial])
         if (display && display.textures.length > 3) display.setTextures(display.textures.slice(0, 3));
-      if (this.shapePass) this.shapePass.textures[0] = this.scene.textures.get('__DEFAULT');
+      if (this.shapePass) this.shapePass.textures.fill(this.scene.textures.get('__DEFAULT'));
     }
   }
   private readonly view4 = new Float32Array(4);

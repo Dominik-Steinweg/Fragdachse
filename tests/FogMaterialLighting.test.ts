@@ -2,7 +2,10 @@ import {expect,it} from 'vitest';
 import {WATER_SUN_FRAGMENT} from '../src/arena/WaterSunlight';
 import {canPrelightFog} from '../src/effects/groundFog/FogMaterialLighting';
 import {createSunTuning,resolveSunAtmosphere} from '../src/effects/sunlight/SunAtmosphere';
-import {FOG_K_MATERIAL_FRAGMENT,FOG_MATERIAL_FRAGMENT,FOG_DISPLAY_FRAGMENT} from '../src/effects/groundFog/fogShaders';
+import {FOG_K_MATERIAL_FRAGMENT,FOG_MATERIAL_FRAGMENT,FOG_DISPLAY_FRAGMENT,FOG_SHAPE_FRAGMENT} from '../src/effects/groundFog/fogShaders';
+import {VOID_CREEP_GLOW_FRAGMENT,VOID_CREEP_GROUND_FRAGMENT,VOID_CREEP_ROCK_FRAGMENT} from '../src/effects/sunlight/VoidCreepShaders';
+import {VOID_SPORE_MOTES_FRAGMENT} from '../src/effects/sunlight/VoidSporeMoteShaders';
+import {VOID_TAINT_FRAGMENT} from '../src/effects/sunlight/VoidTaintShaders';
 it('uses reduced material lighting for woodland fog and retains safe unlit/debug/HDR fallbacks',()=>{
  const t=createSunTuning();
  for(let minute=0;minute<1440;minute+=15){resolveSunAtmosphere(minute,t);expect(canPrelightFog(t,16,true)).toBe(true);}
@@ -16,8 +19,9 @@ it('keeps the ordinary material sampler contract and applies lighting before the
  // No extra offscreen pass or change to the final alpha/patch field is needed.
  expect(FOG_K_MATERIAL_FRAGMENT).toContain('fogPatchEdgeAlpha(alpha,patchDistance,patchActivity)');
 });
-it('declares every uniform and sampler that a fog or water fragment reads',()=>{
- for(const source of [FOG_K_MATERIAL_FRAGMENT,FOG_MATERIAL_FRAGMENT,FOG_DISPLAY_FRAGMENT,WATER_SUN_FRAGMENT]){
+it('declares every uniform and sampler that a fog, water or void fragment reads',()=>{
+ for(const source of [FOG_K_MATERIAL_FRAGMENT,FOG_MATERIAL_FRAGMENT,FOG_DISPLAY_FRAGMENT,FOG_SHAPE_FRAGMENT,WATER_SUN_FRAGMENT,
+  VOID_CREEP_GROUND_FRAGMENT,VOID_CREEP_ROCK_FRAGMENT,VOID_CREEP_GLOW_FRAGMENT,VOID_SPORE_MOTES_FRAGMENT,VOID_TAINT_FRAGMENT]){
   const declared=new Set([...source.matchAll(/uniform\s+\w+\s+([^;]+);/g)].flatMap(m=>m[1].split(',').map(s=>s.trim().replace(/\[\w+\]$/,''))));
   const read=new Set([...source.replace(/\/\/[^\n]*/g,'').matchAll(/\bu[A-Z]\w*/g)].map(m=>m[0]));
   for(const sampler of read)expect(declared,`missing sampler ${sampler}`).toContain(sampler);
