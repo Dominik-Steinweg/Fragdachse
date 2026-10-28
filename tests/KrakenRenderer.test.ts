@@ -77,7 +77,7 @@ function state(): KrakenState {
 }
 function egg(): KrakenEggState {
   return { eggId: 'egg', entityGeneration: 1, bossId: boss.id, bossGeneration: 4, castId: 'cast', originId: 'encounter',
-    broodTableId: 'brood', enemyKind: 'rabid-badger', landedAt: 100, hatchStartedAt: 600, spawnAt: 800, endsAt: 1200, status: 'hatching' };
+    broodTableId: 'brood', enemyKind: 'rabid-rabbit', landedAt: 100, hatchStartedAt: 600, spawnAt: 800, endsAt: 1200, status: 'hatching' };
 }
 
 function sceneFixture() {

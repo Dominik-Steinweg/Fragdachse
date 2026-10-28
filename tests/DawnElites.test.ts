@@ -11,7 +11,7 @@ import { encodeEnemyUpsert, decodeEnemyUpserts } from '../src/network/enemySnaps
 
 function setup(affix?: DawnEliteAffixId) {
   const configs = resolveCoopDefenseEnemyConfigs(1);
-  configs['rabid-badger'] = { ...configs['rabid-badger'], glow: undefined, imageKey: 'test-enemy', deathSpawns: [] };
+  configs['rabid-rabbit'] = { ...configs['rabid-rabbit'], glow: undefined, imageKey: 'test-enemy', deathSpawns: [] };
   const manager = new EnemyManager(healthBarTestScene().scene, configs), explosion = vi.fn();
   let seed = 0;
   if (affix) {
@@ -20,7 +20,7 @@ function setup(affix?: DawnEliteAffixId) {
     }
     manager.bindDawnElites({ roundSeed: seed, threat: 10 }, explosion);
   }
-  const enemy = manager.hostSpawnAtWorld(100, 100, 'rabid-badger', { originId: 'wave' });
+  const enemy = manager.hostSpawnAtWorld(100, 100, 'rabid-rabbit', { originId: 'wave' });
   return { manager, enemy, configs, explosion, seed };
 }
 
@@ -74,7 +74,7 @@ describe('Dawn elites at the authoritative enemy boundary', () => {
   it('leaves campaign enemies and summoned player allies ordinary', () => {
     const campaign = setup(), dawn = setup('swift');
     expect(campaign.enemy.eliteAffixId).toBeUndefined();
-    const ally = dawn.manager.hostSpawnAllyAtWorld(200, 200, 'rabid-badger', 'p0', 0xffffff);
+    const ally = dawn.manager.hostSpawnAllyAtWorld(200, 200, 'rabid-rabbit', 'p0', 0xffffff);
     expect(ally.eliteAffixId).toBeUndefined();
     campaign.manager.destroy(); dawn.manager.destroy();
   });
@@ -114,7 +114,7 @@ describe('Dawn elites at the authoritative enemy boundary', () => {
     const targets = [];
     // Spawn until an ordinary recipient exists; use the actual host assignment.
     for (let i = 0; i < 40; i++) {
-      const e = manager.hostSpawnAtWorld(100, 100, 'rabid-badger', { originId: 'wave' });
+      const e = manager.hostSpawnAtWorld(100, 100, 'rabid-rabbit', { originId: 'wave' });
       if (!e.eliteAffixId) { targets.push(e); break; }
     }
     const target = targets[0]!; target.setHp(200, 200);

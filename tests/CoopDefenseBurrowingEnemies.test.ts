@@ -132,7 +132,7 @@ describe('Wurf-Dachs', () => {
 
   it('throws delayed brood bombs that hatch rabid badgers hunting the players', () => {
     const spawnThrow = thrower.spawnThrow;
-    expect(spawnThrow?.enemyKind).toBe('rabid-badger');
+    expect(spawnThrow?.enemyKind).toBe('rabid-rabbit');
     expect(spawnThrow!.count).toBeGreaterThan(0);
     expect(spawnThrow!.fuseTimeMs).toBeGreaterThan(0);
     expect(spawnThrow!.maxRange).toBeGreaterThan(spawnThrow!.minRange);

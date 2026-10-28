@@ -27,13 +27,13 @@ export interface NavigationLabScenario {
 
 export const NAVIGATION_LAB_SCENARIOS: readonly NavigationLabScenario[] = [
   { id: 'rock-field', mapId: '0', description: 'Felsfeld / bestehende Bewegung', combat: false,
-    allyFraction: 0, kinds: ['rabid-badger', 'pyro-badger', 'void-stalker', 'alien-badger'] },
+    allyFraction: 0, kinds: ['rabid-rabbit', 'pyro-badger', 'void-stalker', 'alien-badger'] },
   { id: 'siege', mapId: '6', description: 'Basen / Belagerung', combat: true,
     allyFraction: 0, kinds: ['zombie-badger', 'demon-badger', 'spore-warden', 'plague-medic'] },
   { id: 'combat', mapId: '10', description: 'Gemischtes Kampfgeschehen', combat: true,
-    allyFraction: 0, kinds: ['rabid-badger', 'pyro-badger', 'alien-badger', 'void-stalker', 'thrower-badger'] },
+    allyFraction: 0, kinds: ['rabid-rabbit', 'pyro-badger', 'alien-badger', 'void-stalker', 'thrower-badger'] },
   { id: 'allies', mapId: '6', description: 'Feinde und Verbuendete', combat: true,
-    allyFraction: 0.2, kinds: ['rabid-badger', 'zombie-badger', 'pyro-badger'] },
+    allyFraction: 0.2, kinds: ['rabid-rabbit', 'zombie-badger', 'pyro-badger'] },
   // Map 08 west waves: a link around the bastion line (x = 63) to the far side of the rear base (79,26).
   { id: 'portal-flank', mapId: '8', description: 'Portal-Flanke um die Bastionslinie', combat: false,
     allyFraction: 0, kinds: ['void-stalker', 'spore-warden', 'zombie-badger', 'demon-badger'],

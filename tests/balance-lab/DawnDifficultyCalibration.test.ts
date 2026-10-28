@@ -4,7 +4,7 @@ import { getDawnEnemyThreatCost, getDawnSchedule, getDawnWaveBlock } from '../..
 import { composeDawnRoundPlans } from '../../src/dawn/composition/DawnRoundComposition';
 import { getDawnPhaseStartMs, resolveDawnPhase } from '../../src/dawn/rules/DawnPhase';
 
-const isSpecial = (kind: string) => !['zombie-badger', 'demon-badger', 'rabid-badger'].includes(kind);
+const isSpecial = (kind: string) => !['zombie-badger', 'demon-badger', 'rabid-rabbit'].includes(kind);
 
 it('anchors entry pressure and specialists to campaign endgame and escalates actual composed pressure', () => {
   const campaign = ['18', '19'].map(id => {

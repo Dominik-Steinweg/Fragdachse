@@ -8,7 +8,7 @@ import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { CoopDefenseEnemyKind as EnemyKind } from '../src/config/coopDefenseEnemies';
 import { applyEnemyTargetingToBaseDescriptors } from '../src/systems/flowfield/FlowFieldSources';
 
-function enemy(kind: EnemyKind = 'rabid-badger', id = 'enemy', x = 32, y = 128): EnemyEntity {
+function enemy(kind: EnemyKind = 'rabid-rabbit', id = 'enemy', x = 32, y = 128): EnemyEntity {
   const config = getCoopDefenseEnemyConfig(kind);
   return { id, kind, faction: 'hostile', sprite: { active: true, x, y }, positionRevision: 0,
     getSize: () => config.size, getMoveSpeed: () => config.moveSpeed,
@@ -28,7 +28,7 @@ describe('Shared strategic intent and demolition permission', () => {
       rect('rock:left', 128, 114, 178, 142), rect('rock:right', 206, 114, 240, 142),
       rect('rock:outer', 96, 0, 128, 256),
     ]);
-    const unit = enemy('rabid-badger', 'sealed', 48, 128);
+    const unit = enemy('rabid-rabbit', 'sealed', 48, 128);
     unit.getSize = () => size;
     world.intents.setObstacleIntegrityResolver(() => 1);
     world.catalog.updateTargets([{ kind: 'player', id: 'inside', x: 192, y: 128 }]);
@@ -166,7 +166,7 @@ describe('Shared strategic intent and demolition permission', () => {
   });
 
   it('withdraws a shared breach order immediately when geometry changes', () => {
-    const world = navigationTestWorld([rect('rock:0', 112, 0, 144, 256)]), enemies = [enemy(), enemy('rabid-badger', 'second', 48, 128)];
+    const world = navigationTestWorld([rect('rock:0', 112, 0, 144, 256)]), enemies = [enemy(), enemy('rabid-rabbit', 'second', 48, 128)];
     world.intents.setObstacleIntegrityResolver(() => 10);
     world.catalog.updateTargets([{ kind: 'player', id: 'player', x: 224, y: 128 }]); settle(world, enemies);
     for (let i = 0; i < 30 && world.intents.getBreach(enemies[0].id)?.status !== 'ready'; i++) settle(world, enemies, i * 100);
@@ -202,7 +202,7 @@ describe('Shared strategic intent and demolition permission', () => {
 
   it('replans toward the current disconnected goal region before replacement costs arrive', () => {
     const world = navigationTestWorld([rect('rock:left', 64, 0, 96, 256), rect('rock:right', 160, 0, 192, 256)]);
-    const unit = enemy('rabid-badger', 'middle', 128, 128);
+    const unit = enemy('rabid-rabbit', 'middle', 128, 128);
     world.intents.setObstacleIntegrityResolver(() => 10);
     world.catalog.updateTargets([{ kind: 'player', id: 'moving', x: 224, y: 128 }]);
     for (let step = 0; step < 40; step++) settle(world, [unit], step * 100);
@@ -219,7 +219,7 @@ describe('Shared strategic intent and demolition permission', () => {
 });
 
 describe('Navigation authority across lifetime and faction changes', () => {
-  it.each(['rabid-badger', COOP_DEFENSE_ENEMY_KINDS.find(kind => getCoopDefenseEnemyConfig(kind).movementTarget === 'bases')!] as const)(
+  it.each(['rabid-rabbit', COOP_DEFENSE_ENEMY_KINDS.find(kind => getCoopDefenseEnemyConfig(kind).movementTarget === 'bases')!] as const)(
     '%s remembers the last observation before burrowing, waits on arrival and reacquires on emergence', kind => {
       const world = navigationTestWorld(), unit = enemy(kind);
       let burrowed = false;
@@ -292,7 +292,7 @@ describe('Navigation authority across lifetime and faction changes', () => {
     world.destroy();
   });
   it('drops a missing player immediately, including inside the decision interval', () => {
-    const world = navigationTestWorld(), enemies = Array.from({ length: 30 }, (_, index) => enemy('rabid-badger', `e${index}`));
+    const world = navigationTestWorld(), enemies = Array.from({ length: 30 }, (_, index) => enemy('rabid-rabbit', `e${index}`));
     world.catalog.updateTargets([{ kind: 'player', id: 'player', x: 224, y: 128 }]);
     settle(world, enemies);
     world.catalog.updateTargets([]); world.intents.update(enemies, 2);
@@ -305,7 +305,7 @@ describe('Navigation authority across lifetime and faction changes', () => {
 
   it('lets a far enemy refresh its bound route on schedule but compare targets only on its far search', () => {
     const run = (far: (now: number) => boolean) => {
-      const world = navigationTestWorld([], [], 15, { width: 512, height: 256 }), unit = enemy('rabid-badger', 'far', 32, 128);
+      const world = navigationTestWorld([], [], 15, { width: 512, height: 256 }), unit = enemy('rabid-rabbit', 'far', 32, 128);
       let now = 0;
       const detail = { isFar: () => far(now) };
       const step = (at: number) => { now = at; world.intents.update([unit], at, detail); world.flush(); };
@@ -363,7 +363,7 @@ describe('Navigation authority across lifetime and faction changes', () => {
 
   it('does not share destruction rights between allied units of different owners', () => {
     const world = navigationTestWorld([rect('rock:0', 112, 0, 144, 256)]);
-    const allies = [enemy(), enemy('rabid-badger', 'second', 48, 128)];
+    const allies = [enemy(), enemy('rabid-rabbit', 'second', 48, 128)];
     allies.forEach((ally, index) => { ally.faction = 'allied'; Object.defineProperty(ally, 'ownerId', { value: `owner-${index}` }); });
     world.intents.setObstacleIntegrityResolver(ally => ally.ownerId === 'owner-0' ? 10 : null);
     for (let step = 0; step < 60; step++) {
@@ -380,7 +380,7 @@ describe('Navigation authority across lifetime and faction changes', () => {
 
   it('shares an allied opening and revokes it when the destruction right changes', () => {
     const world = navigationTestWorld([rect('rock:0', 112, 0, 144, 256)]);
-    const allies = [enemy(), enemy('rabid-badger', 'second', 48, 128)];
+    const allies = [enemy(), enemy('rabid-rabbit', 'second', 48, 128)];
     for (const ally of allies) ally.faction = 'allied';
     let permitted = true;
     world.intents.setObstacleIntegrityResolver(() => permitted ? 10 : null);
@@ -516,7 +516,7 @@ describe('Authored portal links in strategic intent', () => {
   }
 
   it('takes the portal when it is shorter and continues from the exit at once', () => {
-    const world = portalWorld(), unit = enemy('rabid-badger', 'flanker', 48, 48);
+    const world = portalWorld(), unit = enemy('rabid-rabbit', 'flanker', 48, 48);
     world.catalog.updateTargets([PLAYER]);
     world.coordinator.setPortalLinks([flank]);
     settle(world, [unit]);
@@ -534,7 +534,7 @@ describe('Authored portal links in strategic intent', () => {
   });
 
   it('rescans after a discontinuous move inside the decision interval', () => {
-    const world = portalWorld(), unit = enemy('rabid-badger', 'jumper', 48, 48);
+    const world = portalWorld(), unit = enemy('rabid-rabbit', 'jumper', 48, 48);
     world.catalog.updateTargets([PLAYER]);
     world.coordinator.setPortalLinks([flank]);
     settle(world, [unit]);
@@ -551,7 +551,7 @@ describe('Authored portal links in strategic intent', () => {
   });
 
   it('keeps a boss on the land route while smaller bodies use the portal', () => {
-    const world = portalWorld(), boss = enemy('inferno-colossus', 'boss', 64, 64), unit = enemy('rabid-badger', 'flanker', 48, 48);
+    const world = portalWorld(), boss = enemy('inferno-colossus', 'boss', 64, 64), unit = enemy('rabid-rabbit', 'flanker', 48, 48);
     world.catalog.updateTargets([PLAYER]);
     world.coordinator.setPortalLinks([flank]);
     settle(world, [boss, unit]);
@@ -565,7 +565,7 @@ describe('Authored portal links in strategic intent', () => {
   });
 
   it('returns to the land route as soon as the links are removed', () => {
-    const world = portalWorld(), unit = enemy('rabid-badger', 'flanker', 48, 48);
+    const world = portalWorld(), unit = enemy('rabid-rabbit', 'flanker', 48, 48);
     world.catalog.updateTargets([PLAYER]);
     world.coordinator.setPortalLinks([flank]); settle(world, [unit]);
     const linked = world.intents.get(unit.id)!.navigation;
@@ -586,7 +586,7 @@ describe('Authored portal links in strategic intent', () => {
   });
 
   it('routes through the portal instead of demolishing a sealed land route', () => {
-    const world = portalWorld('rock', 384), unit = enemy('rabid-badger', 'sealed', 48, 48);
+    const world = portalWorld('rock', 384), unit = enemy('rabid-rabbit', 'sealed', 48, 48);
     world.intents.setObstacleIntegrityResolver(() => 10);
     world.catalog.updateTargets([PLAYER]);
     world.coordinator.setPortalLinks([flank]);

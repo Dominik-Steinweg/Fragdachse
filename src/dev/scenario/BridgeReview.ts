@@ -61,10 +61,10 @@ export async function runBridgeReview(controller: DevScenarioController, command
     switch (step) {
       case 'cross':
         // Hunters spawn on the west bank and chase the player on the east bank.
-        for (const gridY of [9, 12, 15, 18]) controller.spawn('rabid-badger', false, null, { gridX: 6, gridY }, false);
+        for (const gridY of [9, 12, 15, 18]) controller.spawn('rabid-rabbit', false, null, { gridX: 6, gridY }, false);
         break;
       case 'crowd':
-        for (const gridX of [20.6, 21.8, 23.2]) controller.spawn('rabid-badger', true, null, { gridX, gridY: 13.5 }, false);
+        for (const gridX of [20.6, 21.8, 23.2]) controller.spawn('rabid-rabbit', true, null, { gridX, gridY: 13.5 }, false);
         break;
       case 'plant':
         // The real Shift path: request, host rule check, explosive consumed, fuse lit.

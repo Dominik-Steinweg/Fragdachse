@@ -81,7 +81,7 @@
           "spawnZoneId": "south-mid"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 10,
           "delayMs": 3000,
           "spawnZoneId": "south-mid"
@@ -176,7 +176,7 @@
           "spawnZoneId": "north-mid"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 24,
           "delayMs": 0,
           "spawnStaggerMs": 20000,
@@ -194,7 +194,7 @@
   "persistentSpawns": [
     {
       "id": "map-9-player-pressure-rabid",
-      "enemyKind": "rabid-badger",
+      "enemyKind": "rabid-rabbit",
       "intervalMs": 2500,
       "countPerTick": 1,
       "startAtMs": 0,

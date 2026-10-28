@@ -107,7 +107,7 @@ Ohne Schalter gilt das normale Verhalten.
 
 Die optische Einzelprüfung ist im vorhandenen Navigation-Lab möglich:
 `/navigation-lab.html?kinds=all&count=14&autorun=1` oder eine kommaseparierte
-Gegnerauswahl, etwa `kinds=zombie-badger,rabid-badger`. Diese Auswahl benutzt die normale
+Gegnerauswahl, etwa `kinds=zombie-badger,rabid-rabbit`. Diese Auswahl benutzt die normale
 Spielkamera und einen engeren Spawn-Bereich; die Referenzszenarien bleiben unverändert.
 `M` öffnet den lokalen Tageszeitregler. Pausieren und Einzelschritte helfen bei der
 Positionsprüfung; solche Sichtprüfungen sind keine Performance-Aufnahmen.

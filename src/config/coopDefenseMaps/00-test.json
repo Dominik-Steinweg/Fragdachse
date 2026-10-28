@@ -480,6 +480,12 @@
         "spawnZoneId": "firestarter-gate-1" }]
     },
     {
+      "id": "rabid-rabbit-gate-1",
+      "start": { "type": "time", "atMs": 10000 },
+      "groups": [{ "enemyKind": "rabid-rabbit", "count": 5, "spawnStaggerMs": 600,
+        "spawnZoneId": "alien-cone-gate-1" }]
+    },
+    {
       "id": "mortar-gate-1",
       "start": { "type": "time", "atMs": 3000 },
       "groups": [{ "enemyKind": "mortar-badger", "count": 2, "spawnStaggerMs": 1500,

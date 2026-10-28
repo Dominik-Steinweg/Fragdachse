@@ -21,7 +21,7 @@
       "cost": 10,
       "roles": ["secondary","flank"],
       "groups": [
-        {"enemyKind":"rabid-badger","count":5,"spawnStaggerMs":2000}
+        {"enemyKind":"rabid-rabbit","count":5,"spawnStaggerMs":2000}
       ]
     },
     {
@@ -67,7 +67,7 @@
       "groups": [
         {"enemyKind":"alien-badger","count":1},
         {"enemyKind":"void-stalker","count":1,"delayMs":1000},
-        {"enemyKind":"rabid-badger","count":3,"spawnStaggerMs":1500}
+        {"enemyKind":"rabid-rabbit","count":3,"spawnStaggerMs":1500}
       ]
     },
     {
@@ -76,7 +76,7 @@
       "roles": ["secondary","flank"],
       "groups": [
         {"enemyKind":"kaboomtula","count":3,"spawnStaggerMs":2500},
-        {"enemyKind":"rabid-badger","count":2,"spawnStaggerMs":1500}
+        {"enemyKind":"rabid-rabbit","count":2,"spawnStaggerMs":1500}
       ]
     },
     {

@@ -321,7 +321,7 @@ describe('CoopDefenseSpawnExecutor fronts', () => {
       playerFlowField,
     );
 
-    expect(executor.hostSpawnEncounterGroup('rabid-badger', 1, 'map-9-opening', 'west').enemyIds).toHaveLength(1);
+    expect(executor.hostSpawnEncounterGroup('rabid-rabbit', 1, 'map-9-opening', 'west').enemyIds).toHaveLength(1);
     expect(records[0].options).toMatchObject({ originId: 'map-9-opening', spawnFront: 'west' });
   });
 

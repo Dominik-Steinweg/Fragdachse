@@ -73,7 +73,7 @@ describe('Generator portal links in navigation', () => {
   }
 
   it('plans through the open portal and lets the transport carry the enemy to the exit', () => {
-    const s = scene(), unit = enemy('rabid-badger', 'flanker', 48, 48);
+    const s = scene(), unit = enemy('rabid-rabbit', 'flanker', 48, 48);
     s.units.push(unit);
     s.world.catalog.updateTargets([PLAYER]);
     s.links.hostUpdate(s.config.chargeDurationMs, false, 0);
@@ -86,7 +86,7 @@ describe('Generator portal links in navigation', () => {
   });
 
   it('returns to the land route once the generator has fallen', () => {
-    const s = scene(), unit = enemy('rabid-badger', 'late', 48, 48);
+    const s = scene(), unit = enemy('rabid-rabbit', 'late', 48, 48);
     s.units.push(unit);
     s.world.catalog.updateTargets([PLAYER]);
     s.links.hostUpdate(s.config.chargeDurationMs, false, 0);

@@ -819,7 +819,7 @@ await devScenario.run({ action: 'krakenAssets', source: 'production' });
 // Form-Modus: vorher npm run assets:shape -- <asset> --export-draft.
 // Kraken: dieselbe Entwurfsquelle, alle Clips zeigen die Ruhepose.
 // Normale Gegner: statische Form am Zielpunkt, optional gridX/gridY.
-await devScenario.run({ action: 'shapeSpawn', asset: 'rabid-badger' });
+await devScenario.run({ action: 'shapeSpawn', asset: 'rabid-rabbit' });
 // Erneuter shapeSpawn-Aufruf lädt die neueste Form; clearEnemies räumt sie auf.
 // Intro ueberspringen und aktuelle HP setzen; Max-HP bleiben erhalten (Phase 2 bei <= 50 %).
 await devScenario.run({ action: 'krakenMission', skipIntro: true, hp: 4000 });
@@ -1038,6 +1038,30 @@ ca. 130, Leerenfeuer). Abgeschossen verpufft sie nur klein. Ohne Spieler in Sich
 
 Headless-Nachweise: `tests/CoopDefenseKaboomtula.test.ts`, `tests/EnemyIntentAndBreach.test.ts`
 (Basis-Präferenz), `tests/TurretFireSources.test.ts` (deaktivierte Türme).
+
+### Rabid Rabbit: Gate GC1 (Feel)
+
+Map `0` (`00-test`) enthält den Encounter `rabid-rabbit-gate-1` (fünf Hasen ab 10 s, je 0,6 s versetzt).
+Für einen isolierten Versuch dasselbe Szenario mit `suppressWaves: true` starten und die Hasen gezielt
+spawnen. Feste Grid-Koordinaten sind auf Map 0 nicht garantiert frei; ein blockiertes Ziel lehnt der Spawn ab.
+
+```js
+const dev = window.devScenario;
+dev.run({ action: 'start', scenario: { version: 1, mapId: '0', seed: 12345, classId: 'inspector_gadachs',
+  suppressWaves: true, freezeMission: true, hideTutorial: true, player: { gridX: 12, gridY: 50 } } });
+await dev.whenReady();
+// Ziel auf eine freie Zelle etwa 350 px vom Spieler entfernt setzen, dann mehrmals:
+await dev.run({ action: 'spawn', kind: 'rabid-rabbit', pinned: false });
+```
+
+Erwartung: Die Hasen laufen im pulsierenden Sprunglauf heran und schlagen beim Anrennen Haken. Zwischen
+110 und 300 px bleibt einer stehen; eine rote Zone erscheint dort, wo er landen wird, wenn der Spieler
+seinen Kurs hält, und folgt ihm. Nach ca. 0,45 s blitzt sie auf und bleibt fest; ca. 0,6 s später landet
+der Hase dort (28 Schaden in der Mitte, Rückstoß). Wer nach dem Blitz die Richtung wechselt, stoppt oder
+dasht, weicht aus. Höchstens zwei Hasen zielen gleichzeitig auf denselben Spieler, gestaffelt; die
+anderen laufen und beißen. Im Spiel: Karte 3 (Rastlos) und alle früheren Rabid-Badger-Plätze.
+
+Headless-Nachweise: `tests/CoopDefenseEnemyPounce.test.ts`, `tests/EnemyPouncePresentation.test.ts`.
 
 ### Alien-Energie-Fächer: Gate 1
 

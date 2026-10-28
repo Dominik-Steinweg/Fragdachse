@@ -11,7 +11,7 @@ export function requirePawCount(value: unknown, figureId: string): PawCount {
   return value;
 }
 
-const CLAWED = new Set(['demon-badger', 'rabid-badger', 'alien-badger', 'void-stalker', 'void-hunter']);
+const CLAWED = new Set(['demon-badger', 'alien-badger', 'void-stalker', 'void-hunter']);
 const BROAD = new Set(['grave-titan', 'inferno-colossus', 'stink-broodmother']);
 
 export function getEnemyFootprintVariant(kind: string): FootprintVariant {

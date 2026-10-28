@@ -299,9 +299,9 @@ try {
       if(!(events.tentacleShot?.result?.hpAfter<events.tentacleShot?.hpBefore)||events.tentacleShot.result.phase!=='submerged')throw Error('Tentacle damage transfer not demonstrated');
       const hatch=events.hatchingEgg;
       const evidence=report.samples.find(s=>s.krakenResidency?.hostNow>=hatch.spawnAt&&s.krakenResidency.hostNow<hatch.endsAt+500
-        &&s.enemies.some(e=>e.kind==='rabid-badger'&&Math.hypot(e.x-hatch.position.x,e.y-hatch.position.y)<64));
-      if(!evidence)throw Error('Hatch into nearby rabid-badger not observed');
-      report.hatchEvidence={simulationMs:evidence.simulationMs,enemies:evidence.enemies.filter(e=>e.kind==='rabid-badger')};
+        &&s.enemies.some(e=>e.kind==='rabid-rabbit'&&Math.hypot(e.x-hatch.position.x,e.y-hatch.position.y)<64));
+      if(!evidence)throw Error('Hatch into nearby rabid-rabbit not observed');
+      report.hatchEvidence={simulationMs:evidence.simulationMs,enemies:evidence.enemies.filter(e=>e.kind==='rabid-rabbit')};
       if(!events.prefetch?.residency?.options?.prefetchLand)throw Error('65% prefetch missing');
       if(report.bossRequests.some(r=>/\/(idle|sheet)\.png/.test(r.url)))throw Error('Duplicate generic boss image loaded');
       if(report.quality==='low'&&report.bossRequests.some(r=>r.url.includes('.bin')))throw Error('Low downloaded mesh geometry');

@@ -66,7 +66,7 @@ describe('Kraken state boundary', () => {
     s.inkClouds = [{ attackId: 'ink', spitAt: 10, cloudEndsAt: 25,
       pose: { originX: 1, originY: 2, angle: 0, geometry: { kind: 'sector', range: 120, arcDegrees: 45 } } }];
     s.eggs = [{ eggId: 'egg', entityGeneration: 2, bossId: boss.id, bossGeneration: boss.instance.entityGeneration,
-      castId: 'cast', originId: 'encounter', broodTableId: 'brood', enemyKind: 'rabid-badger',
+      castId: 'cast', originId: 'encounter', broodTableId: 'brood', enemyKind: 'rabid-rabbit',
       landedAt: 5, hatchStartedAt: 10, spawnAt: 12, endsAt: 15, status: 'incubating' }];
     expect(readKrakenState(s)).toEqual(s);
     s.eggs[0].spawnAt = 9;

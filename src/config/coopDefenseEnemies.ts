@@ -535,12 +535,16 @@ export interface CoopDefenseEnemyHopHealConfig {
   readonly tickIntervalMs: number;
 }
 
-/** Splash at a landing point that a player stood near when the hop was decided. */
-export interface CoopDefenseEnemyLandingShockConfig {
+/** Area hit of an announced landing: full damage at the centre, half at the edge; the push moves players only. */
+export interface CoopDefenseEnemyLandingImpactConfig {
   readonly radiusPx: number;
   readonly damage: number;
   readonly knockbackSpeed: number;
   readonly knockbackMs: number;
+}
+
+/** Splash at a landing point that a player stood near when the hop was decided. */
+export interface CoopDefenseEnemyLandingShockConfig extends CoopDefenseEnemyLandingImpactConfig {
   /** A player this close to the landing point at take-off arms (and telegraphs) the shock. */
   readonly armRadiusPx: number;
 }
@@ -582,9 +586,63 @@ export interface CoopDefenseEnemyHopConfig {
   readonly landingShock?: CoopDefenseEnemyLandingShockConfig;
 }
 
+/** Bounding run: the speed pulses once per bound around the authored speed; the mean stays. */
+export interface CoopDefenseEnemyBoundingGaitConfig {
+  readonly periodMinMs: number;
+  readonly periodMaxMs: number;
+  /** Pulse amplitude as a share of the speed, in [0, 0.9). */
+  readonly surge: number;
+}
+
+/** Sharp side-cuts of a body running at its target while no attack holds it. */
+export interface CoopDefenseEnemySideCutConfig {
+  readonly intervalMinMs: number;
+  readonly intervalMaxMs: number;
+  readonly angleMinDeg: number;
+  readonly angleMaxDeg: number;
+  readonly durationMs: number;
+  /** Cuts stop once the target is this close, so the bite is not delayed. */
+  readonly minTargetDistancePx: number;
+}
+
+/**
+ * Targeted attack jump: the body stands and aims (the landing zone follows the target's predicted
+ * path), locks the landing point, flies on a fixed line and hits the announced zone on arrival.
+ * Between pounces the body runs and bites normally.
+ */
+export interface CoopDefenseEnemyPounceConfig {
+  readonly minRangePx: number;
+  readonly maxRangePx: number;
+  readonly aimMs: number;
+  /** Fixed zone before the take-off: the dodge window starts here. */
+  readonly lockMs: number;
+  /** Nominal flight speed; the air time is the lane length at this speed within [airMinMs, airMaxMs]. */
+  readonly airSpeedPx: number;
+  readonly airMinMs: number;
+  readonly airMaxMs: number;
+  readonly recoverMs: number;
+  readonly cooldownMinMs: number;
+  readonly cooldownMaxMs: number;
+  /** Grace after the first sighting of a body before its first pounce. */
+  readonly initialDelayMs: number;
+  /** Share of the target's predicted travel until the landing added to the landing point (1 = full lead). */
+  readonly leadFactor: number;
+  readonly maxLeadPx: number;
+  /** An aiming body yields to the bite when its target comes this close. */
+  readonly closeCancelPx: number;
+  readonly cancelDisplacementPx: number;
+  readonly cancelLockoutMs: number;
+  readonly impact: CoopDefenseEnemyLandingImpactConfig;
+  /** At most `maxPerTarget` bodies aim at or fly to one target; their aims start `staggerMs` apart. */
+  readonly pack: { readonly maxPerTarget: number; readonly staggerMs: number };
+  readonly gait?: CoopDefenseEnemyBoundingGaitConfig;
+  readonly sideCuts?: CoopDefenseEnemySideCutConfig;
+}
+
 export interface CoopDefenseEnemyConfig {
   readonly flee?: CoopDefenseEnemyFleeConfig;
   readonly hop?: CoopDefenseEnemyHopConfig;
+  readonly pounce?: CoopDefenseEnemyPounceConfig;
   readonly amphibious?: CoopDefenseEnemyAmphibiousConfig;
   readonly engage?: CoopDefenseEnemyEngageConfig;
   readonly deathBurst?: CoopDefenseEnemyDeathBurstConfig;
@@ -784,6 +842,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         hop: config.hop ? { ...config.hop, weights: { ...config.hop.weights },
           heal: config.hop.heal ? { ...config.hop.heal } : undefined,
           landingShock: config.hop.landingShock ? { ...config.hop.landingShock } : undefined } : undefined,
+        pounce: config.pounce ? clonePounceConfig(config.pounce) : undefined,
         turnRateDegPerSec: config.turnRateDegPerSec,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
@@ -880,13 +939,19 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
   }
   // Hopping is exclusive locomotion: no second owner may move or hold the same body.
   if (enemy.hop && (flee || krakenBoss || krakenEgg || enemy.shieldCharger || enemy.energyCone || enemy.firestarter
-    || enemy.mortar || enemy.kaboomtula || enemy.burrow || enemy.dodge || enemy.amphibious || enemy.combatPositioning)) {
+    || enemy.mortar || enemy.kaboomtula || enemy.pounce || enemy.burrow || enemy.dodge || enemy.amphibious || enemy.combatPositioning)) {
     throw new Error(`[coopDefenseEnemies] Hopping enemy has a second locomotion owner: ${enemy.id}`);
   }
   // The spider owns its whole body (alert, rush, leap, spit): no second movement or attack owner.
   if (enemy.kaboomtula && (flee || krakenBoss || krakenEgg || enemy.shieldCharger || enemy.energyCone || enemy.firestarter
-    || enemy.mortar || enemy.burrow || enemy.dodge || enemy.amphibious || enemy.combatPositioning || enemy.engage)) {
+    || enemy.mortar || enemy.pounce || enemy.burrow || enemy.dodge || enemy.amphibious || enemy.combatPositioning || enemy.engage)) {
     throw new Error(`[coopDefenseEnemies] Kabummtula has a second movement owner: ${enemy.id}`);
+  }
+  // The pounce owns aim stance, flight and side-cuts of a player hunter: no second movement owner.
+  if (enemy.pounce && (flee || krakenBoss || krakenEgg || enemy.shieldCharger || enemy.energyCone || enemy.firestarter
+    || enemy.mortar || enemy.burrow || enemy.dodge || enemy.amphibious || enemy.combatPositioning || enemy.voidHunterBoss
+    || enemy.engage || enemy.movementTarget !== 'players')) {
+    throw new Error(`[coopDefenseEnemies] Pouncing enemy has a second movement owner or no player target: ${enemy.id}`);
   }
   if (enemy.basePreference && enemy.movementTarget !== 'players') {
     throw new Error(`[coopDefenseEnemies] basePreference needs movementTarget players: ${enemy.id}`);
@@ -940,6 +1005,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     engage: normalizeEngageConfig(enemy.engage),
     deathBurst: normalizeDeathBurstConfig(enemy.deathBurst),
     hop: normalizeHopConfig(enemy.hop),
+    pounce: normalizePounceConfig(enemy.pounce),
     turnRateDegPerSec: normalizeTurnRate(enemy.turnRateDegPerSec),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
@@ -1526,6 +1592,41 @@ export function normalizeHopConfig(config: CoopDefenseEnemyHopConfig | undefined
   }
   return { ...config, weights: { ...weights }, heal: heal ? { ...heal } : undefined,
     landingShock: shock ? { ...shock } : undefined };
+}
+
+function clonePounceConfig(config: CoopDefenseEnemyPounceConfig): CoopDefenseEnemyPounceConfig {
+  return { ...config, impact: { ...config.impact }, pack: { ...config.pack },
+    gait: config.gait ? { ...config.gait } : undefined, sideCuts: config.sideCuts ? { ...config.sideCuts } : undefined };
+}
+
+/** Reject malformed pounce timing, ranges and inconsistent relations at the authored boundary. */
+export function normalizePounceConfig(config: CoopDefenseEnemyPounceConfig | undefined): CoopDefenseEnemyPounceConfig | undefined {
+  if (!config) return undefined;
+  const invalid = (positive: readonly number[], nonNegative: readonly number[]) =>
+    positive.some(v => !Number.isFinite(v) || v <= 0) || nonNegative.some(v => !Number.isFinite(v) || v < 0);
+  const impact = config.impact, pack = config.pack;
+  if (!impact || !pack || invalid([config.minRangePx, config.maxRangePx, config.aimMs, config.lockMs, config.airSpeedPx,
+    config.airMinMs, config.airMaxMs, config.recoverMs, config.cooldownMinMs, config.cancelDisplacementPx, impact.radiusPx],
+  [config.cooldownMaxMs, config.initialDelayMs, config.leadFactor, config.maxLeadPx, config.closeCancelPx, config.cancelLockoutMs,
+    impact.damage, impact.knockbackSpeed, impact.knockbackMs, pack.staggerMs])) {
+    throw new Error('Invalid pounce value');
+  }
+  // The zone never covers the take-off point, and an aim that yields to the bite starts outside bite reach.
+  if (config.minRangePx >= config.maxRangePx || config.minRangePx <= impact.radiusPx || config.closeCancelPx >= config.minRangePx
+    || config.airMinMs > config.airMaxMs || config.cooldownMinMs > config.cooldownMaxMs || config.leadFactor > 1.5
+    || !Number.isInteger(pack.maxPerTarget) || pack.maxPerTarget < 1) {
+    throw new Error('Invalid pounce relation');
+  }
+  const gait = config.gait, cuts = config.sideCuts;
+  if (gait && (invalid([gait.periodMinMs, gait.periodMaxMs], [gait.surge]) || gait.periodMinMs > gait.periodMaxMs || gait.surge >= 0.9)) {
+    throw new Error('Invalid pounce gait');
+  }
+  if (cuts && (invalid([cuts.intervalMinMs, cuts.intervalMaxMs, cuts.angleMinDeg, cuts.angleMaxDeg, cuts.durationMs],
+    [cuts.minTargetDistancePx]) || cuts.intervalMinMs > cuts.intervalMaxMs || cuts.angleMinDeg > cuts.angleMaxDeg
+    || cuts.angleMaxDeg >= 90 || cuts.durationMs >= cuts.intervalMinMs)) {
+    throw new Error('Invalid pounce side-cuts');
+  }
+  return clonePounceConfig(config);
 }
 
 export function normalizeDeathBurstConfig(config: CoopDefenseEnemyDeathBurstConfig | undefined): CoopDefenseEnemyDeathBurstConfig | undefined {

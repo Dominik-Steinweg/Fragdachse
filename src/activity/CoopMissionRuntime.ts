@@ -2,6 +2,7 @@ import type { CoopDefenseFirestarterSystem } from '../systems/CoopDefenseFiresta
 import type { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShieldChargerSystem';
 import type { CoopDefenseEnergyConeSystem } from '../systems/CoopDefenseEnergyConeSystem';
 import type { CoopDefenseEnemyHopSystem } from '../systems/CoopDefenseEnemyHopSystem';
+import type { CoopDefenseEnemyPounceSystem } from '../systems/CoopDefenseEnemyPounceSystem';
 import type { SyncedMortarStrike, SyncedTurretWebSnapshot } from '../types';
 import type { CoopDefenseMortarSystem } from '../systems/CoopDefenseMortarSystem';
 import type { CoopDefenseMortarStrikeSystem } from '../systems/CoopDefenseMortarStrikeSystem';
@@ -266,10 +267,18 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.refreshSpecialMovementSource();
     this.publishBindings();
   }
+  private pounceOwner: CoopDefenseEnemyPounceSystem | null = null;
+  get coopDefenseEnemyPounceSystem() { return this.pounceOwner; }
+  setPounce(system: CoopDefenseEnemyPounceSystem): void {
+    this.claimEmptySlot('pounce runtime', this.pounceOwner);
+    this.pounceOwner = system;
+    this.refreshSpecialMovementSource();
+    this.publishBindings();
+  }
   private refreshSpecialMovementSource(): void {
     this.specialMovementOwner = new CompositeEnemySpecialMovementSource([
       this.coopDefenseKaboomtulaSystem, this.coopDefenseMortarSystem, this.firestarterOwner, this.shieldChargerOwner,
-      this.energyConeOwner, this.hopOwner,
+      this.energyConeOwner, this.hopOwner, this.pounceOwner,
     ]);
   }
   private mortarOwner: { behavior: CoopDefenseMortarSystem; strikes: CoopDefenseMortarStrikeSystem } | null = null;
@@ -625,6 +634,8 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.energyConeOwner = null;
     this.hopOwner?.clear();
     this.hopOwner = null;
+    this.pounceOwner?.clear();
+    this.pounceOwner = null;
     this.mortarOwner?.behavior.clear();
     this.mortarOwner?.strikes.clear();
     this.mortarOwner = null;

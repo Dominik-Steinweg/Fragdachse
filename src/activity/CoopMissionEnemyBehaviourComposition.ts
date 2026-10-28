@@ -14,6 +14,7 @@ import { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnem
 import { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShieldChargerSystem';
 import { CoopDefenseEnergyConeSystem } from '../systems/CoopDefenseEnergyConeSystem';
 import { CoopDefenseEnemyHopSystem } from '../systems/CoopDefenseEnemyHopSystem';
+import { CoopDefenseEnemyPounceSystem, type EnemyPounceTarget } from '../systems/CoopDefenseEnemyPounceSystem';
 import { PLAYER_SIZE } from '../config';
 import { getFirestarterFactionTargets } from '../systems/firestarterAlliedTargeting';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
@@ -37,6 +38,8 @@ export interface EnemyAreaEffectsPort {
   deathBurst(enemyId: string, x: number, y: number, burst: import('../config/coopDefenseEnemies').CoopDefenseEnemyDeathBurstConfig, nowMs: number): void;
   /** Damage, player push and splash of an armed hop landing. */
   landingShock(enemyId: string, x: number, y: number, shock: import('../config/coopDefenseEnemies').CoopDefenseEnemyLandingShockConfig, nowMs: number): void;
+  /** Damage, player push and dust of a pounce arriving at its announced point. */
+  pounceImpact(enemyId: string, kind: string, x: number, y: number, impact: import('../config/coopDefenseEnemies').CoopDefenseEnemyLandingImpactConfig, nowMs: number): void;
   sweepBases(enemyId: string, ax: number, ay: number, bx: number, by: number, radius: number, damage: number, nowMs: number): void;
 }
 
@@ -166,6 +169,7 @@ export class CoopMissionEnemyBehaviourComposition {
       }),
       getAttackTarget: enemyId => runtime.coopDefenseVoidHunterSystem?.getCurrentTarget(enemyId)
         ?? runtime.coopDefenseKaboomtulaSystem?.getCurrentTarget(enemyId)
+        ?? runtime.coopDefenseEnemyPounceSystem?.getCurrentTarget(enemyId)
         ?? ability.getCurrentTarget(enemyId)
         ?? attack.getCurrentTarget(enemyId),
       isEnemyOfOwner: (enemyId, ownerId) => this.options.combatSystem.canDamageTarget(enemyId, ownerId),
@@ -239,6 +243,49 @@ export class CoopMissionEnemyBehaviourComposition {
         shockTargets: () => this.options.playerManager.getAllPlayers().filter(player => player.active)
           .map(player => ({ x: player.x, y: player.y })),
         landingShock: (enemy, x, y, shock, now) => this.options.enemyAreaEffects?.landingShock(enemy.id, x, y, shock, now),
+      }));
+      const pounceTarget = (ref: { readonly kind: string; readonly id: string }): EnemyPounceTarget | null => {
+        if (ref.kind === 'decoy') {
+          const decoy = this.options.decoySystem?.getHostTarget(Number(ref.id));
+          return decoy && decoy.hp > 0 ? { ref: { kind: 'decoy', id: String(decoy.id) }, x: decoy.x, y: decoy.y, radius: decoy.radius } : null;
+        }
+        if (ref.kind !== 'player') return null;
+        const player = this.options.playerManager.getPlayer(ref.id);
+        // Players inside structures are not pounced; the bite and the structure rules handle them.
+        if (!player?.active || !combat.isAlive(ref.id) || combat.isBurrowed(ref.id) || combat.getStructureOccupancyId?.(ref.id) !== undefined) return null;
+        return { ref: { kind: 'player', id: ref.id }, x: player.x, y: player.y, radius: PLAYER_SIZE / 2 };
+      };
+      runtime.setPounce(new CoopDefenseEnemyPounceSystem({
+        enemies: enemyManager,
+        isStunned: (enemyId, now) => combat.isStunned?.(enemyId, now) ?? false,
+        readTarget: enemy => {
+          const decoy = decoyTargets?.getTarget(enemy.id);
+          if (decoy) return decoy.kind === 'decoy' ? pounceTarget(decoy) : null;
+          const target = intents.get(enemy.id)?.target;
+          return target?.kind === 'player' ? pounceTarget(target) : null;
+        },
+        resolveTarget: (_enemy, ref) => pounceTarget(ref),
+        canSee: (enemy, target, range) => {
+          const x = enemy.sprite.x, y = enemy.sprite.y;
+          return Math.hypot(target.x - x, target.y - y) <= range && enemyManager.canSeeThroughSmoke(enemy.id, target.x, target.y, range)
+            && combat.hasLineOfSight(x, y, target.x, target.y);
+        },
+        laneClearance: createEnemyLaneClearance(combat, this.options.hasWalkableEnemyCircleLine),
+        isFree: this.options.isFreeEnemyGroundAt,
+        isBiting: (enemy, now) => !!attack.getCombatMovement(enemy, now)?.committed || enemy.isAttackMovementPaused(now),
+        steeringPoint: enemy => {
+          const navigation = intents.get(enemy.id)?.navigation;
+          return navigation?.status === 'ready' ? navigation.waypoint
+            : navigation?.status === 'pending' ? navigation.continuation ?? null : null;
+        },
+        moveNormally: (enemy, point, speed, aimAngle) => {
+          const result = enemyManager.moveNormally(enemy, point, speed, aimAngle);
+          return { vx: result.vx, vy: result.vy, blocked: result.waitReason !== 'none' };
+        },
+        impact: (enemy, x, y, impact, now) => this.options.enemyAreaEffects?.pounceImpact(enemy.id, enemy.kind, x, y, impact, now),
+        onCommit: (enemy, ref) => {
+          if (ref.kind === 'decoy') decoyTargets?.usedTarget(enemy.id, { kind: 'decoy', id: ref.id });
+        },
       }));
       runtime.setEnergyCone(new CoopDefenseEnergyConeSystem({
         enemies: enemyManager,

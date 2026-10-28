@@ -3,7 +3,7 @@ export const PERFORMANCE_FIXTURE = {
   targetHp: 100_000,
   weaponEnemyCount: 16,
   // Summoners would grow the population during a fixed-load enemy case.
-  enemyKinds: ['rabid-badger', 'alien-badger', 'pyro-badger'],
+  enemyKinds: ['rabid-rabbit', 'alien-badger', 'pyro-badger'],
   enemySpawnRadius: { min: 230, max: 650 },
   // Far start: outside the player's 1920 x 1080 px view at the default fixture position and still
   // inside the 5120 x 3072 px reference map around point (67, 72).

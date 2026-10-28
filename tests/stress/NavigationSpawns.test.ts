@@ -92,7 +92,7 @@ describe('Authored spawns with body navigation', () => {
         catalog.updateTargets([{ kind: 'player', id: 'runner', radius: targetRadius, ...target }]);
         for (let sample = 0; sample < 16; sample++) {
           const start = free[Math.floor((sample + .5) * free.length / 16)];
-          const unit = world.manager.hostSpawnAtWorld(start.x, start.y, 'rabid-badger');
+          const unit = world.manager.hostSpawnAtWorld(start.x, start.y, 'rabid-rabbit');
           intents.update([unit], 0); world.coordinator.prepareNow(); intents.update([unit], 120);
           const route = intents.get(unit.id)?.navigation;
           if (route?.status !== 'ready') { skipped.push({ seed, start, target, route }); world.clear(); continue; }

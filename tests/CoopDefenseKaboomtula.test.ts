@@ -211,7 +211,7 @@ describe('Kabummtula', () => {
     expect(w.system.handleKilled(death, w.now())).toBe(true);
     expect(w.killedPop).toHaveBeenCalledTimes(1);
     expect(w.detonate).not.toHaveBeenCalled();
-    expect(w.system.handleKilled({ ...death, kind: 'rabid-badger' }, w.now())).toBe(false);
+    expect(w.system.handleKilled({ ...death, kind: 'rabid-rabbit' }, w.now())).toBe(false);
   });
 
   it('rams a hunted base without a leap and explodes on its surface', () => {

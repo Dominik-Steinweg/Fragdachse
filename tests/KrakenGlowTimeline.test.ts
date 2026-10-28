@@ -91,7 +91,7 @@ describe('kraken glow timeline', () => {
 
   it('keeps the established brood heartbeat while incubating and flashes once while the shell splits', () => {
     const egg: KrakenEggState = { eggId: 'e', entityGeneration: 1, bossId: 'boss', bossGeneration: 1, castId: 'c', originId: 'o',
-      broodTableId: 'b', enemyKind: 'rabid-badger', landedAt: 1000, hatchStartedAt: 4500, spawnAt: 4900, endsAt: 5167, status: 'incubating' };
+      broodTableId: 'b', enemyKind: 'rabid-rabbit', landedAt: 1000, hatchStartedAt: 4500, spawnAt: 4900, endsAt: 5167, status: 'incubating' };
     const now = 3000, age = (now - egg.landedAt) / 1000, incubation = (now - egg.landedAt) / (egg.hatchStartedAt - egg.landedAt);
     const beat = Math.sin(age * (5 + incubation * 7)), glow = krakenEggGlowState(egg, now);
     expect(glow.glow).toBeCloseTo(krakenBroodGlow(beat, incubation));

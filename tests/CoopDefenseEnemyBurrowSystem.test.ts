@@ -94,7 +94,7 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
   });
 
   it('leaves enemies without a burrow config alone', () => {
-    const enemy = createEnemy('rabid-badger');
+    const enemy = createEnemy('rabid-rabbit');
     const { system } = createSystem(enemy, () => true);
 
     system.notifyEnemySpawned(enemy as unknown as EnemyEntity, 0);
@@ -104,7 +104,7 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
   });
 
   it('keeps spawn-point enemies stationary while the center is dug out', () => {
-    const enemy = createEnemy('rabid-badger');
+    const enemy = createEnemy('rabid-rabbit');
     const { system } = createSystem(enemy, () => true);
 
     system.notifyEnemySpawned(enemy as unknown as EnemyEntity, { spawnBurrowed: true }, 0);
@@ -118,7 +118,7 @@ describe('CoopDefenseEnemyBurrowSystem', () => {
   });
 
   it('lets later bodies of one spawn-structure tick rise after the first', () => {
-    const enemy = createEnemy('rabid-badger');
+    const enemy = createEnemy('rabid-rabbit');
     const { system } = createSystem(enemy, () => true);
 
     system.notifyEnemySpawned(enemy as unknown as EnemyEntity, { spawnBurrowed: true, burrowExtraMs: 300 }, 0);

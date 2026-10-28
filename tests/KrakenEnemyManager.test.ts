@@ -8,7 +8,7 @@ import { WaterGeometry } from '../src/arena/WaterGeometry';
 import { resolveCoopDefenseWorldMetrics, worldCellCenter } from '../src/world/WorldMetrics';
 
 function setup() {
-  const configs = resolveCoopDefenseEnemyConfigs(1), base = { ...configs['rabid-badger'], glow: undefined, imageKey: 'test-enemy', deathSpawns: [] };
+  const configs = resolveCoopDefenseEnemyConfigs(1), base = { ...configs['rabid-rabbit'], glow: undefined, imageKey: 'test-enemy', deathSpawns: [] };
   configs.kraken = { ...base, krakenBoss: KRAKEN_BOSS_DEFAULTS, size: 128, maxHp: 1000 };
   configs.egg = { ...base, size: 20, maxHp: 20, krakenEgg: { assetId: 'egg', stationary: true, drops: false, necromancy: false, countsForEncounter: false, navigation: false } };
   const { scene } = healthBarTestScene(), existing = scene.physics.add.existing;

@@ -32,7 +32,7 @@ export function kraken(phase: KrakenPhase = phases[4]): KrakenState {
     movement: 'water-anchored', bodyAction: null, spines: [],
     tentacles: phase.kind === 'submerged' ? [part('left'), part('right')] : [],
     eggs: phase.kind === 'removed' ? [] : [{ eggId: 'e2', entityGeneration: 2, bossId: boss.id,
-      bossGeneration: 4, castId: 'cast', originId: 'encounter', broodTableId: 'brood', enemyKind: 'rabid-badger',
+      bossGeneration: 4, castId: 'cast', originId: 'encounter', broodTableId: 'brood', enemyKind: 'rabid-rabbit',
       landedAt: 5, hatchStartedAt: 10, spawnAt: 12, endsAt: 15, status: 'incubating' }],
     inkClouds: phase.kind === 'removed' ? [] : [{ attackId: 'ink', spitAt: 10, cloudEndsAt: 25,
       pose: { originX: 1, originY: 2, angle: .37, geometry: { kind: 'sector', range: 120, arcDegrees: 45 } } }],

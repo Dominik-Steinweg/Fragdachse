@@ -19,10 +19,10 @@ import { summarizeNavigationSamples } from '../../src/debug/navigationLab/scenar
 describe.skipIf(!process.env.NAVIGATION_REVIEW)('Navigation review measurements', () => {
   it('records intent, opening search and field-transfer work', () => {
     const reports: unknown[] = [];
-    const config = getCoopDefenseEnemyConfig('rabid-badger');
+    const config = getCoopDefenseEnemyConfig('rabid-rabbit');
     for (const blocked of [false, true]) {
       const world = navigationTestWorld(blocked ? [{ id: 'rock:0', kind: 'rock', shape: 'rect', left: 112, top: 0, right: 144, bottom: 256 }] : []);
-      const units = Array.from({ length: 100 }, (_, i) => ({ id: `e${i}`, kind: 'rabid-badger', faction: 'hostile',
+      const units = Array.from({ length: 100 }, (_, i) => ({ id: `e${i}`, kind: 'rabid-rabbit', faction: 'hostile',
         sprite: { active: true, x: 32, y: 128 }, getSize: () => config.size, getMoveSpeed: () => config.moveSpeed,
         getAttackWeapons: () => config.weapons.map(w => ({ ...w, weapon: { config: WEAPON_CONFIGS[w.weaponId] } })) } as unknown as EnemyEntity));
       let perceptionChecks = 0;

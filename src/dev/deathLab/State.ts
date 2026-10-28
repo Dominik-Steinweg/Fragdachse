@@ -13,7 +13,7 @@ const enemy = (id: string, kind: string, label: string) => {
 export const FIXTURES = [
   { id: 'player', label: 'Spieler', player: true, texture: 'badger', size: PLAYER_VISUAL_SIZE,
     tint: 0xffffff, targetColor: COLORS.BLUE_2 },
-  enemy('small', 'rabid-badger', 'Klein · Rabid Badger'),
+  enemy('small', 'rabid-rabbit', 'Klein · Rabid Rabbit'),
   enemy('medium', 'zombie-badger', 'Mittel · Zombie Badger'),
   enemy('large', 'inferno-colossus', 'Groß · Inferno Colossus'),
 ] as const;

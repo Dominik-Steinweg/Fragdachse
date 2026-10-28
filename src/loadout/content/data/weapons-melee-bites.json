@@ -64,8 +64,14 @@
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
-    "RABID_BADGER_BITE": {
-      "id": "RABID_BADGER_BITE",
+    "RABID_RABBIT_BITE": {
+      "id": "RABID_RABBIT_BITE",
+      "damage": 10,
+      "baseId": "ZOMBIE_BADGER_BITE",
+      "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
+    },
+    "SHIELD_CHARGER_BADGER_BITE": {
+      "id": "SHIELD_CHARGER_BADGER_BITE",
       "damage": 10,
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."

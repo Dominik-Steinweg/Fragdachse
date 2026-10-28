@@ -61,7 +61,7 @@
           "spawnZoneId": "east-upper"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 3,
           "delayMs": 800,
           "spawnZoneId": "west-upper"
@@ -113,7 +113,7 @@
           "spawnZoneId": "east-upper"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 4,
           "delayMs": 900,
           "spawnStaggerMs": 400,
@@ -175,7 +175,7 @@
           "spawnZoneId": "east-upper"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 6,
           "delayMs": 900,
           "spawnStaggerMs": 300,

@@ -1030,6 +1030,11 @@ export class ArenaLifecycleCoordinator {
           const splash = ENEMY_BURST_PRESETS.mud;
           bridge.broadcastExplosionEffect(x, y, shock.radiusPx, splash.color, splash.style, undefined, 'brood_hatch');
         },
+        pounceImpact: (enemyId, kind, x, y, impact, nowMs) => {
+          this.hostUpdate.applyEnemyLandingShock(enemyId, x, y, impact, nowMs, `enemy.${kind}.pounce`);
+          const splash = ENEMY_BURST_PRESETS.mud;
+          bridge.broadcastExplosionEffect(x, y, impact.radiusPx, splash.color, splash.style, undefined, 'brood_hatch');
+        },
         sweepBases: (enemyId, ax, ay, bx, by, radius, damage, nowMs) => this.hostUpdate.applyEnemySweepBaseDamage(enemyId, ax, ay, bx, by, radius, damage, nowMs),
       },
       broadcastExplosion: (x, y, radius, style, color) => bridge.broadcastExplosionEffect(x, y, radius, color ?? (style === 'mortar' ? VOID_PALETTE.primary : 0xb82fff), style, undefined, style === 'timebomb_pop' ? 'silent' : style === 'mortar' ? 'generic' : style === 'brood_hatch' ? 'brood_hatch' : 'enemy.kaboomtula'),

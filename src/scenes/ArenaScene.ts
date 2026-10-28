@@ -1149,6 +1149,13 @@ export class ArenaScene extends Phaser.Scene {
       const player = this.ctx.playerManager.getPlayer(target.id);
       return player ? { x: player.x, y: player.y } : null;
     });
+    this.renderers.enemyPounces.setEnemySource(() => this.arenaRuntime?.getCombatEnemyVisuals() ?? []);
+    this.renderers.enemyPounces.setClock(() => bridge.getSynchronizedNow());
+    this.renderers.enemyPounces.setTargetResolver(target => {
+      if (target.kind !== 'player') return null;
+      const player = this.ctx.playerManager.getPlayer(target.id);
+      return player ? { x: player.x, y: player.y } : null;
+    });
 
     this.aimPresentation = new ArenaAimPresentationController(
       {

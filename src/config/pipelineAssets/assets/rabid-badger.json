@@ -1,9 +1,7 @@
 {
   "id": "rabid-badger",
   "category": "enemy",
-  "gameIds": [
-    "rabid-badger"
-  ],
+  "gameIds": ["rabid-rabbit"],
   "revision": "enemy-mesh-r1-010",
   "variant": "standard",
   "sourceSize": 128,

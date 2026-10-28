@@ -235,7 +235,7 @@
       "restAfterMs": 9000,
       "groups": [
         { "enemyKind": "demon-badger", "count": 3, "delayMs": 500, "spawnZoneId": "west-upper" },
-        { "enemyKind": "rabid-badger", "count": 4, "delayMs": 2000, "spawnZoneId": "west-lower" }
+        { "enemyKind": "rabid-rabbit", "count": 4, "delayMs": 2000, "spawnZoneId": "west-lower" }
       ]
     },
     {

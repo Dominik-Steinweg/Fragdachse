@@ -14,7 +14,7 @@ export class EnemyMeshReview {
   measurement: unknown = null;
   get count(): number { return this.enemies.length; }
   constructor(private readonly scene: Phaser.Scene, private readonly runtime: ArenaRuntime) {}
-  arrange(count: number, pose = -1, kinds: readonly CoopDefenseEnemyKind[] = ['zombie-badger', 'rabid-badger']): void {
+  arrange(count: number, pose = -1, kinds: readonly CoopDefenseEnemyKind[] = ['zombie-badger', 'rabid-rabbit']): void {
     if (!kinds.length) throw Error('Enemy fixture requires at least one kind');
     this.destroy(); this.pose = pose;
     const targets = this.runtime.getScenarioLightingTargets(), player = this.runtime.navigationLabPort.getPlayerPosition();

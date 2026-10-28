@@ -15,6 +15,7 @@ import { EliteMarkerRenderer } from '../../effects/dawn/EliteMarkerRenderer';
 import { EnemyVulnerabilityRenderer } from '../../effects/EnemyVulnerabilityRenderer';
 import { EnemyHopPresentation } from '../../effects/EnemyHopPresentation';
 import { KaboomtulaPresentation } from '../../effects/KaboomtulaPresentation';
+import { EnemyPouncePresentation } from '../../effects/EnemyPouncePresentation';
 import { TurretWebRenderer } from '../../effects/TurretWebRenderer';
 import { AmphibiousEnemyPresentation } from '../../effects/AmphibiousEnemyPresentation';
 import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer';
@@ -107,6 +108,7 @@ export interface RendererBundle {
   amphibiousEnemies: AmphibiousEnemyPresentation;
   enemyHops: EnemyHopPresentation;
   kaboomtula: KaboomtulaPresentation;
+  enemyPounces: EnemyPouncePresentation;
   turretWeb: TurretWebRenderer;
   eliteMarkers: EliteMarkerRenderer;
   enemyReadability: EnemyReadabilityRenderer;
@@ -467,6 +469,8 @@ export function* createRendererBundleSteps(
   enemyHops.setGpuVfx(gpuVfx);
   const kaboomtula = new KaboomtulaPresentation(scene);
   cleanup.push(() => kaboomtula.destroy());
+  const enemyPounces = new EnemyPouncePresentation(scene);
+  cleanup.push(() => enemyPounces.destroy());
   const turretWeb = new TurretWebRenderer(scene);
   cleanup.push(() => turretWeb.destroy());
   const enemyReadability = new EnemyReadabilityRenderer(scene);
@@ -526,6 +530,7 @@ export function* createRendererBundleSteps(
     amphibiousEnemies,
     enemyHops,
     kaboomtula,
+    enemyPounces,
     turretWeb,
     eliteMarkers,
     enemyReadability,
@@ -623,6 +628,9 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.kaboomtula.setSinks(
     (id, attack, now, visible) => effectSystem.syncEnemyLane(`kaboomtula-lane:${id}`, attack, now, visible, undefined, true),
     (id, attack, now, visible) => effectSystem.syncEnemyZone(`kaboomtula-ring:${id}`, attack, now, visible, undefined, true));
+  bundle.enemyPounces.setSinks(
+    (id, attack, now, visible) => effectSystem.syncEnemyLane(`pounce-lane:${id}`, attack, now, visible, undefined, true),
+    (id, attack, now, visible) => effectSystem.syncEnemyZone(`pounce-zone:${id}`, attack, now, visible, undefined, true));
 }
 
 /**

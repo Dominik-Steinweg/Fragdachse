@@ -2195,6 +2195,8 @@ export interface SyncedEnemyState {
   hop?: import('./systems/EnemyHopState').EnemyHopState;
   /** Host-decided Kabummtula phase timeline (target ref, locked leap); absent until its first transition. */
   kaboomtula?: import('./systems/KaboomtulaState').KaboomtulaState;
+  /** Host-decided pounce (aim, locked landing, flight); omitted while the enemy never pounced. */
+  pounce?: import('./systems/EnemyPounceState').EnemyPounceState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;
@@ -2238,6 +2240,8 @@ export interface SyncedEnemyDeltaState {
   hop?: import('./systems/EnemyHopState').EnemyHopState;
   /** Host-decided Kabummtula phase timeline (target ref, locked leap); absent until its first transition. */
   kaboomtula?: import('./systems/KaboomtulaState').KaboomtulaState;
+  /** Host-decided pounce (aim, locked landing, flight); omitted while the enemy never pounced. */
+  pounce?: import('./systems/EnemyPounceState').EnemyPounceState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;

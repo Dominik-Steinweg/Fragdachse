@@ -32,7 +32,7 @@ describe('moving enemy snapshot recovery', () => {
     const configs = resolveCoopDefenseEnemyConfigs(1);
     const host = new EnemyManager(healthBarTestScene().scene, configs);
     const client = new EnemyManager(healthBarTestScene().scene, configs);
-    const enemy = host.hostSpawnAtWorld(64, 128, 'rabid-badger');
+    const enemy = host.hostSpawnAtWorld(64, 128, 'rabid-rabbit');
     try {
       enemy.updatePlasmaChargeStacks(7);
       client.applySnapshot(host.getNetSnapshot());
@@ -51,7 +51,7 @@ describe('moving enemy snapshot recovery', () => {
     const configs = resolveCoopDefenseEnemyConfigs(1);
     const host = new EnemyManager(healthBarTestScene().scene, configs);
     const client = new EnemyManager(healthBarTestScene().scene, configs);
-    const enemy = host.hostSpawnAtWorld(64, 128, 'rabid-badger');
+    const enemy = host.hostSpawnAtWorld(64, 128, 'rabid-rabbit');
     try {
       client.applySnapshot(host.getNetSnapshot());
       const remote = client.getEnemy(enemy.id)!;
@@ -73,7 +73,7 @@ describe('moving enemy snapshot recovery', () => {
     const configs = resolveCoopDefenseEnemyConfigs(1);
     const host = new EnemyManager(healthBarTestScene().scene, configs);
     const client = new EnemyManager(healthBarTestScene().scene, configs);
-    const enemy = host.hostSpawnAtWorld(64, 128, 'rabid-badger');
+    const enemy = host.hostSpawnAtWorld(64, 128, 'rabid-rabbit');
     try {
       const spawn = host.getNetSnapshot();
       if (dropped === 'health') {
@@ -92,7 +92,7 @@ describe('moving enemy snapshot recovery', () => {
 });
 
 describe('Combat movement and hidden-player pursuit', () => {
-  function combatWorld(kind: CoopDefenseEnemyKind = 'rabid-badger',
+  function combatWorld(kind: CoopDefenseEnemyKind = 'rabid-rabbit',
     world: Pick<ReturnType<typeof navigationTestWorld>, 'catalog' | 'intents' | 'field' | 'flush' | 'destroy'> = navigationTestWorld()) {
     const scene = healthBarTestScene().scene;
     const manager = new EnemyManager(scene, resolveCoopDefenseEnemyConfigs(1));
@@ -360,7 +360,7 @@ describe('Combat movement and hidden-player pursuit', () => {
 
 describe('Enemy locomotion facing presentation', () => {
   const wrap = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
-  function fixture(kind: CoopDefenseEnemyKind = 'rabid-badger') {
+  function fixture(kind: CoopDefenseEnemyKind = 'rabid-rabbit') {
     const manager = new EnemyManager(healthBarTestScene().scene, resolveCoopDefenseEnemyConfigs(1));
     const unit = manager.hostSpawnAtWorld(64, 128, kind);
     const offset = unit.sprite.rotation;
@@ -368,7 +368,7 @@ describe('Enemy locomotion facing presentation', () => {
       walk: (angle: number) => unit.setDesiredVelocity(Math.cos(angle) * 100, Math.sin(angle) * 100, 0, undefined, 'locomotion') };
   }
 
-  it.each(['rabid-badger', 'kaboomtula'] as const)('smooths only the displayed angle and shares that pose with movement effects (%s)', kind => {
+  it.each(['rabid-rabbit', 'kaboomtula'] as const)('smooths only the displayed angle and shares that pose with movement effects (%s)', kind => {
     const f = fixture(kind);
     try {
       f.walk(.4);
@@ -456,8 +456,8 @@ describe('Physical neighbor snapshot', () => {
     const world = navigationTestWorld();
     const manager = new EnemyManager(healthBarTestScene().scene, resolveCoopDefenseEnemyConfigs(1));
     manager.setNavigationIntents(world.intents);
-    const unit = manager.hostSpawnAtWorld(64, 128, 'rabid-badger');
-    const blocker = manager.hostSpawnAtWorld(94, 128, 'rabid-badger');
+    const unit = manager.hostSpawnAtWorld(64, 128, 'rabid-rabbit');
+    const blocker = manager.hostSpawnAtWorld(94, 128, 'rabid-rabbit');
     blocker.faction = 'allied'; blocker.setDesiredVelocity(desired, 0);
     (blocker.sprite.body as any).setVelocity(applied, 0);
     if (absent === 'burrowed') blocker.setBurrowed(true);
@@ -491,7 +491,7 @@ describe('Continuous pursuit across field updates', () => {
     const catalog = new EnemyAiTargetCatalog(), intents = new EnemyIntentSystem(coordinator, catalog);
     const manager = new EnemyManager(healthBarTestScene().scene, resolveCoopDefenseEnemyConfigs(1));
     manager.setNavigationIntents(intents);
-    const unit = manager.hostSpawnAtWorld(80, 192, 'rabid-badger');
+    const unit = manager.hostSpawnAtWorld(80, 192, 'rabid-rabbit');
     catalog.updateTargets([{ kind: 'player', id: 'runner', x: 320, y: 192 }]);
     intents.update([unit], 0); runner.setAutoFlush(true); coordinator.prepareNow(); intents.update([unit], 120);
     runner.setAutoFlush(false);
@@ -525,7 +525,7 @@ describe('Continuous pursuit across field updates', () => {
     const manager = new EnemyManager(healthBarTestScene().scene, resolveCoopDefenseEnemyConfigs(1));
     manager.setNavigationIntents(intents);
     intents.setObstacleIntegrityResolver(() => 10);
-    const unit = manager.hostSpawnAtWorld(64, 192, 'rabid-badger');
+    const unit = manager.hostSpawnAtWorld(64, 192, 'rabid-rabbit');
     const dt = 1000 / 60;
     let started = false, interruptions = 0, arrived = false;
     for (let step = 0; step < 360; step++) {

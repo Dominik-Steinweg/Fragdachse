@@ -115,7 +115,7 @@
       "start": { "type": "after-boss-spawn", "delayMs": 7500 },
       "groups": [
         { "enemyKind": "demon-badger", "count": 4, "spawnZoneId": "west-lower" },
-        { "enemyKind": "rabid-badger", "count": 2, "delayMs": 1200, "spawnZoneId": "west-upper" }
+        { "enemyKind": "rabid-rabbit", "count": 2, "delayMs": 1200, "spawnZoneId": "west-upper" }
       ]
     },    
     {
@@ -123,7 +123,7 @@
       "start": { "type": "after-boss-spawn", "delayMs": 17500 },
       "groups": [
         { "enemyKind": "demon-badger", "count": 4, "spawnZoneId": "west-upper" },
-        { "enemyKind": "rabid-badger", "count": 1, "delayMs": 1200, "spawnZoneId": "west-lower" }
+        { "enemyKind": "rabid-rabbit", "count": 1, "delayMs": 1200, "spawnZoneId": "west-lower" }
       ]
     },
     {
@@ -131,7 +131,7 @@
       "start": { "type": "after-boss-spawn", "delayMs": 27500 },
       "groups": [
         { "enemyKind": "demon-badger", "count": 4, "spawnZoneId": "west-lower" },
-        { "enemyKind": "rabid-badger", "count": 2, "delayMs": 1200, "spawnZoneId": "west-upper" }
+        { "enemyKind": "rabid-rabbit", "count": 2, "delayMs": 1200, "spawnZoneId": "west-upper" }
       ]
     },
     {
@@ -139,7 +139,7 @@
       "start": { "type": "after-boss-spawn", "delayMs": 37500 },
       "groups": [
         { "enemyKind": "demon-badger", "count": 4, "spawnZoneId": "south-mid" },
-        { "enemyKind": "rabid-badger", "count": 1, "delayMs": 1200, "spawnZoneId": "south-mid" }
+        { "enemyKind": "rabid-rabbit", "count": 1, "delayMs": 1200, "spawnZoneId": "south-mid" }
       ]
     }
   ],

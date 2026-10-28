@@ -53,7 +53,9 @@
 // author a base orientation, and lsy carries the host-owned deployment seed of the next round.
 // Round spawn zones: generator 17; a zone's organic outline (not its box) feeds route sources, and
 // several campaign maps moved their zones (and map 2 its lake shore), so layouts differ between builds.
-export const PEER_PROTOCOL_VERSION = 53;
+// Rabid Rabbit: the rabid badger's registry slot (wire kind 2) became `rabid-rabbit`, and enemy
+// snapshots gained the pounce field (aim target, locked landing, flight timeline).
+export const PEER_PROTOCOL_VERSION = 54;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

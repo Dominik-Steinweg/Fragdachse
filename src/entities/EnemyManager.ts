@@ -46,6 +46,7 @@ import type {
   TargetSupportMutationRequest,
 } from '../combat/CombatMutation';
 import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
+import { boundingGaitFactor } from '../systems/enemyPounceRules';
 import type { CombatScope, CombatTargetRef } from '../combat/CombatScope';
 import { isSameCombatScope, isSameCombatTargetInstance } from '../combat/CombatScope';
 
@@ -834,7 +835,10 @@ export class EnemyManager {
       // Embedded starts use overlap-reducing local recovery, never an arbitrary reachable-cell jump.
       if (route.status === 'invalid-start') waypoint = { x: enemy.sprite.x + 1, y: enemy.sprite.y };
       const swimFactor = enemy.isSubmerged() ? config.amphibious?.swimSpeedFactor ?? 1 : 1;
-      const feedback = this.moveNormally(enemy, waypoint, enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor * swimFactor,
+      // Bounding runners pulse once per bound around their speed; the mean stays the authored one.
+      const gaitFactor = config.pounce?.gait ? boundingGaitFactor(enemy.id, now, config.pounce.gait) : 1;
+      const feedback = this.moveNormally(enemy, waypoint,
+        enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor * swimFactor * gaitFactor,
         combatMovement?.aimAngle, 'ordinary', aiDetail?.isFar(enemy.id) ? 'far' : 'full');
       const train = activeTrainAwareness?.resolveMovement(enemy, feedback.vx, feedback.vy, now);
       if (train?.override) enemy.setDesiredVelocity(train.vx, train.vy, now);
@@ -1446,6 +1450,7 @@ export class EnemyManager {
     enemy.syncEnergyConeAnimation(now);
     enemy.syncHopPresentation(now);
     enemy.syncKaboomtulaPresentation(now);
+    enemy.syncPouncePresentation(now);
     enemy.syncCastAnimation();
     this.visualSink?.syncEnemyClaw?.(enemy.id, enemy.getClawAttackState(), enemy.sprite.x, enemy.sprite.y, now,
       enemy.sprite.visible && !enemy.isBurrowed() && enemy.getHp() > 0,
@@ -1570,6 +1575,7 @@ export class EnemyManager {
     if (current.shieldCharge?.revision !== previous.shieldCharge?.revision) delta.shieldCharge = current.shieldCharge;
     if (current.hop?.revision !== previous.hop?.revision) delta.hop = current.hop;
     if (current.kaboomtula?.revision !== previous.kaboomtula?.revision) delta.kaboomtula = current.kaboomtula;
+    if (current.pounce?.revision !== previous.pounce?.revision) delta.pounce = current.pounce;
     if (current.energyCone?.revision !== previous.energyCone?.revision) delta.energyCone = current.energyCone;
     if (current.claw?.revision !== previous.claw?.revision) {
       delta.claw = current.claw;
@@ -1690,6 +1696,7 @@ export class EnemyManager {
       if (remote.energyCone) enemy.applyEnergyConeState(remote.energyCone);
       if (remote.hop) enemy.applyHopState(remote.hop);
       if (remote.kaboomtula) enemy.applyKaboomtulaState(remote.kaboomtula);
+      if (remote.pounce) enemy.applyPounceState(remote.pounce);
       if (remote.areaClaw) enemy.applyAreaClawState(remote.areaClaw);
       const pendingArea = this.pendingAreaClawEvents.get(remote.id);
       if (pendingArea) { this.pendingAreaClawEvents.delete(remote.id); this.applyAreaClawEvent(pendingArea); }
@@ -1711,11 +1718,12 @@ export class EnemyManager {
     if (remote.claw) enemy.applyClawAttackState(remote.claw);
     if (remote.burrowed !== undefined) this.setEnemyBurrowed(remote.id, remote.burrowed);
     if (remote.submerged !== undefined) enemy.setSubmerged(remote.submerged);
-    // Charge, cone, hop and spider states change on living enemies, not only at creation.
+    // Charge, cone, hop, spider and pounce states change on living enemies, not only at creation.
     if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
     if (remote.energyCone) enemy.applyEnergyConeState(remote.energyCone);
     if (remote.hop) enemy.applyHopState(remote.hop);
     if (remote.kaboomtula) enemy.applyKaboomtulaState(remote.kaboomtula);
+    if (remote.pounce) enemy.applyPounceState(remote.pounce);
 
     if (remote.hp !== undefined || remote.maxHp !== undefined) {
       enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp(), wasBurrowed);

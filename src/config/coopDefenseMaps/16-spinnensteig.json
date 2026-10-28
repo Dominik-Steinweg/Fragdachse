@@ -1390,7 +1390,7 @@
           "spawnZoneId": "cliff-pincer-a"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 14,
           "delayMs": 2500,
           "spawnStaggerMs": 220,
@@ -1639,7 +1639,7 @@
           "spawnZoneId": "brood-pit-1-b"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 8,
           "delayMs": 2500,
           "spawnStaggerMs": 250,

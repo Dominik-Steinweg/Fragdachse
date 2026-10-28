@@ -155,7 +155,7 @@
           "spawnZoneId": "north-east"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 12,
           "spawnStaggerMs": 7000,
           "spawnZoneId": "west-mid"
@@ -276,7 +276,7 @@
           "spawnZoneId": "south-mid"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 24,
           "spawnStaggerMs": 8000,
           "spawnZoneId": "west-mid"

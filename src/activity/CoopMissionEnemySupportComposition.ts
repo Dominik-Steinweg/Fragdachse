@@ -157,6 +157,7 @@ export class CoopMissionEnemySupportComposition {
           || (runtime.coopDefenseShieldChargerSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseEnergyConeSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseEnemyHopSystem?.blocksRegularAttacks(enemyId) ?? false)
+          || (runtime.coopDefenseEnemyPounceSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseEnemyAbilitySystem?.blocksRegularAttacks(enemyId) ?? false)
         ));
         runtime.coopDefenseEnemyDodgeSystem?.setBlockedChecker(enemyId =>

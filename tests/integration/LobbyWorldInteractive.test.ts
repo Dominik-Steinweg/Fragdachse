@@ -222,8 +222,8 @@ describe('Client full snapshots at the Scene frame boundary', () => {
       clientEnemies.applySnapshot(bridge.getLatestGameState()!.enemies);
       bridge.flushNetwork();
       use(hostRoom);
-      const firstEnemy = hostEnemies.hostSpawnAtWorld(64, 128, 'rabid-badger');
-      const secondEnemy = hostEnemies.hostSpawnAtWorld(96, 128, 'rabid-badger');
+      const firstEnemy = hostEnemies.hostSpawnAtWorld(64, 128, 'rabid-rabbit');
+      const secondEnemy = hostEnemies.hostSpawnAtWorld(96, 128, 'rabid-rabbit');
       hostEnemies.requestFullNetSnapshot();
       host.publishGameState({ ...state, enemies: hostEnemies.getNetSnapshot() }, true);
       hostRoom.room.update();

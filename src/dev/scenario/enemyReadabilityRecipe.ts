@@ -7,7 +7,7 @@ export const ENEMY_READABILITY_PLACEMENTS: readonly {
 }[] = [
   { kind: 'zombie-badger', gridX: 20, gridY: 24, background: 'open meadow' },
   { kind: 'demon-badger', gridX: 31, gridY: 23, background: 'soil path' },
-  { kind: 'rabid-badger', gridX: 20, gridY: 27, background: 'ground foliage' },
+  { kind: 'rabid-rabbit', gridX: 20, gridY: 27, background: 'ground foliage' },
   { kind: 'grave-titan', gridX: 23, gridY: 14, background: 'rock' },
   { kind: 'spore-warden', gridX: 17, gridY: 27, background: 'canopy' },
   { kind: 'plague-medic', gridX: 28, gridY: 17, background: 'rock edge / shade' },

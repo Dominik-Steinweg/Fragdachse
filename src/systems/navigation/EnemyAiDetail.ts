@@ -56,6 +56,7 @@ export function resolveEnemyEngagementReachPx(configs: Iterable<CoopDefenseEnemy
       config.mortar?.maxRangePx ?? 0,
       config.firestarter?.lance.rangePx ?? 0,
       config.kaboomtula?.activationRadiusPx ?? 0,
+      config.pounce?.maxRangePx ?? 0,
       config.engage?.exitPx ?? 0,
       config.basePreference?.playerOverridePx ?? 0,
       config.shieldCharger?.triggerMaxDistancePx ?? 0,

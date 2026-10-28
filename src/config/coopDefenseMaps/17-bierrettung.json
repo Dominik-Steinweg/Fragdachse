@@ -157,7 +157,7 @@
       "id": "beer-flank",
       "start": { "type": "after-previous" },
       "groups": [
-        { "enemyKind": "rabid-badger", "count": 8, "spawnZoneId": "south-mid" },
+        { "enemyKind": "rabid-rabbit", "count": 8, "spawnZoneId": "south-mid" },
         { "enemyKind": "pyro-badger", "count": 4, "delayMs": 1100, "spawnZoneId": "east-mid" }
       ]
     },
@@ -174,7 +174,7 @@
       "start": { "type": "after-previous" },
       "groups": [
         { "enemyKind": "stink-broodmother", "count": 3, "spawnZoneId": "west-upper" },
-        { "enemyKind": "rabid-badger", "count": 12, "delayMs": 900, "spawnZoneId": "east-mid" }
+        { "enemyKind": "rabid-rabbit", "count": 12, "delayMs": 900, "spawnZoneId": "east-mid" }
       ]
     }
   ],
@@ -197,7 +197,7 @@
     },
     {
       "id": "base-17-enemy-beer-outpost-south-pressure",
-      "enemyKind": "rabid-badger",
+      "enemyKind": "rabid-rabbit",
       "intervalMs": 9000,
       "countPerTick": 1,
       "startAtMs": 8000,

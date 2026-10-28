@@ -80,7 +80,7 @@ it('round-trips elite IDs through fast snapshots and the reliable late-join base
     const client = bridgeFor(clientRoom);
     const u: (number | string)[] = [];
     DAWN_ELITE_AFFIX_IDS.forEach((eliteAffixId, i) => encodeEnemyUpsert(u, {
-      id: 'e' + (i + 1), kind: 'rabid-badger', x: 100 + i * 20, y: 100, hp: 30, maxHp: 30, eliteAffixId,
+      id: 'e' + (i + 1), kind: 'rabid-rabbit', x: 100 + i * 20, y: 100, hp: 30, maxHp: 30, eliteAffixId,
     }));
     use(hostRoom); host.publishGameState({ ...snapshot(0), enemies: { c: 5, u, r: [], a: [1, 2, 3, 4, 5] } }, true);
     hostRoom.room.update();
@@ -90,10 +90,10 @@ it('round-trips elite IDs through fast snapshots and the reliable late-join base
     const late = bridgeFor(lateRoom);
     expect(decodeEnemyUpserts(late.getLatestGameState()!.enemies!.u).map(e => e.eliteAffixId)).toEqual(DAWN_ELITE_AFFIX_IDS);
     use(hostRoom);
-    const delta: (number | string)[] = []; encodeEnemyUpsert(delta, { id: 'e6', eliteAffixId: 'armored', x: 300, y: 100, kind: 'rabid-badger' });
+    const delta: (number | string)[] = []; encodeEnemyUpsert(delta, { id: 'e6', eliteAffixId: 'armored', x: 300, y: 100, kind: 'rabid-rabbit' });
     host.publishGameState({ ...snapshot(1), enemies: { c: 6, u: delta, r: [] } }); hostRoom.room.update();
     use(clientRoom);
-    expect(decodeEnemyUpserts(client.getLatestGameState()!.enemies!.u)).toEqual([{ id: 'e6', eliteAffixId: 'armored', x: 300, y: 100, kind: 'rabid-badger' }]);
+    expect(decodeEnemyUpserts(client.getLatestGameState()!.enemies!.u)).toEqual([{ id: 'e6', eliteAffixId: 'armored', x: 300, y: 100, kind: 'rabid-rabbit' }]);
   } finally { clearActiveSession(); lateRoom?.room.destroy(); clientRoom?.room.destroy(); hostRoom.room.destroy(); }
 });
 

@@ -301,6 +301,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getShieldChargerSystem?: () => import('../systems/CoopDefenseShieldChargerSystem').CoopDefenseShieldChargerSystem | null;
   readonly getEnergyConeSystem?: () => import('../systems/CoopDefenseEnergyConeSystem').CoopDefenseEnergyConeSystem | null;
   readonly getHopSystem?: () => import('../systems/CoopDefenseEnemyHopSystem').CoopDefenseEnemyHopSystem | null;
+  readonly getPounceSystem?: () => import('../systems/CoopDefenseEnemyPounceSystem').CoopDefenseEnemyPounceSystem | null;
   readonly getMortarSystem: () => import('../systems/CoopDefenseMortarSystem').CoopDefenseMortarSystem | null;
   readonly getKaboomtulaSystem: () => CoopDefenseKaboomtulaSystem | null;
   /** Activity-owned turret webs; a webbed turret neither aims nor fires. */
@@ -813,10 +814,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.getPlayerCombatIntegration()?.slimeTrail?.getEnemyMovementFactor(enemyId, now) ?? 1,
       combat.getEnemyMovementFactor(enemyId, now),
     ));
-    // A committed shield charge, a hop or a spider leap in flight is not halted by ordinary hit stagger.
+    // A committed shield charge, a hop, a pounce or a spider leap in flight is not halted by ordinary hit stagger.
     hostPhysics.setEnemyHitStaggerResolver((enemyId, now) => combat.isEnemyHitStaggered(enemyId, now)
       && !(o.getShieldChargerSystem?.()?.isRunning(enemyId) ?? false)
       && !(o.getHopSystem?.()?.isAirborne(enemyId, now) ?? false)
+      && !(o.getPounceSystem?.()?.isAirborne(enemyId, now) ?? false)
       && !(o.getKaboomtulaSystem()?.isAirborne(enemyId) ?? false));
     combat.setEnemyDeathCallback((enemyId, x, y, burnSources, death, _target, wildfire) => {
       const generation = this.activityGeneration;
@@ -831,6 +833,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       if (death) o.getShieldChargerSystem?.()?.handleKilled(death);
       if (death) o.getEnergyConeSystem?.()?.handleKilled(death);
       if (death) o.getHopSystem?.()?.handleKilled(death);
+      if (death) o.getPounceSystem?.()?.handleKilled(death);
       // A killed spider only pops: no generic death body, no slime bloom, never raised by necromancy.
       const wasKaboomtula = death ? (o.getKaboomtulaSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
       if (!current()) return true;

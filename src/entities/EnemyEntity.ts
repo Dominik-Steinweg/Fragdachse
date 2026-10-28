@@ -10,6 +10,9 @@ import { EMPTY_ENERGY_CONE_STATE, isEnergyConeState, type EnergyConeState } from
 import { EMPTY_ENEMY_HOP_STATE, enemyHopAirProgress, enemyHopPhaseAt, isEnemyHopState, type EnemyHopState } from '../systems/EnemyHopState';
 import { syncEnemyHopAnimation } from '../animations/EnemyHopAnimation';
 import { syncEnemyKaboomtulaAnimation } from '../animations/EnemyKaboomtulaAnimation';
+import { syncEnemyPounceAnimation } from '../animations/EnemyPounceAnimation';
+import { EMPTY_ENEMY_POUNCE_STATE, enemyPounceAirProgress, enemyPouncePhaseAt, isEnemyPounceState,
+  type EnemyPounceState } from '../systems/EnemyPounceState';
 import { EMPTY_KABOOMTULA_STATE, isKaboomtulaState, kaboomtulaLeapProgress, kaboomtulaPhaseProgress,
   type KaboomtulaState } from '../systems/KaboomtulaState';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
@@ -79,6 +82,8 @@ const WALKING_INTERPOLATION_EPSILON_PX = 0.5;
 const LEAP_LIFT_AMPLITUDE = 0.32;
 /** Apex growth of a toad hop: short, low hops read lighter than the brood's pounce. */
 const HOP_LIFT_AMPLITUDE = 0.24;
+/** Apex growth of a pounce: the long attack jump rises highest. */
+const POUNCE_LIFT_AMPLITUDE = 0.36;
 
 export type EnemyFaction = 'hostile' | 'allied';
 
@@ -242,16 +247,50 @@ export class EnemyEntity {
     const state = this.hopState, jump = state.jump;
     const airborne = !!jump && enemyHopPhaseAt(state, now) === 'air';
     const progress = airborne ? enemyHopAirProgress(jump, now) : 0;
-    if (airborne && !this.authoritative) {
-      this.sprite.x = Phaser.Math.Linear(jump.originX, jump.targetX, progress);
-      this.sprite.y = Phaser.Math.Linear(jump.originY, jump.targetY, progress);
-    }
+    if (airborne) this.placeOnFlightLine(jump.originX, jump.originY, jump.targetX, jump.targetY, progress);
     this.hopAirborne = airborne;
     this.setAirLiftScale(1 + HOP_LIFT_AMPLITUDE * airborneLift(progress), false);
     const wasAnimating = this.hopAnimating;
     this.hopAnimating = syncEnemyHopAnimation(this.sprite, this.config.imageKey, state, now,
       this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
     if (wasAnimating && !this.hopAnimating) this.syncWalkingAnimation();
+  }
+
+  /** Clients place an airborne body on its replicated flight line; the network lerp would smear a fast flight. */
+  private placeOnFlightLine(originX: number, originY: number, targetX: number, targetY: number, progress: number): void {
+    if (this.authoritative) return;
+    this.sprite.x = Phaser.Math.Linear(originX, targetX, progress);
+    this.sprite.y = Phaser.Math.Linear(originY, targetY, progress);
+  }
+
+  private pounceState: EnemyPounceState = EMPTY_ENEMY_POUNCE_STATE;
+  private pounceAnimating = false;
+  private pounceAirborne = false;
+
+  getPounceState(): EnemyPounceState { return this.pounceState; }
+
+  /** Host: publish a new pounce state (revision must grow). Clients: apply a newer replicated state. */
+  applyPounceState(state: EnemyPounceState): void {
+    if (!isEnemyPounceState(state) || state.revision <= this.pounceState.revision) return;
+    this.pounceState = state;
+  }
+
+  /**
+   * Pounce presentation from the replicated timeline: clients place a flying body on its locked
+   * flight line, host and clients lift it and play the windup and leap clips.
+   */
+  syncPouncePresentation(now: number): void {
+    if (!this.config.pounce) return;
+    const state = this.pounceState, pounce = state.pounce, landing = pounce?.landing;
+    const airborne = !!landing && enemyPouncePhaseAt(state, now) === 'air';
+    const progress = airborne ? enemyPounceAirProgress(landing, now) : 0;
+    if (airborne) this.placeOnFlightLine(pounce!.originX, pounce!.originY, landing.x, landing.y, progress);
+    this.pounceAirborne = airborne;
+    this.setAirLiftScale(1 + POUNCE_LIFT_AMPLITUDE * airborneLift(progress), false);
+    const wasAnimating = this.pounceAnimating;
+    this.pounceAnimating = syncEnemyPounceAnimation(this.sprite, this.config.imageKey, state, now,
+      this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
+    if (wasAnimating && !this.pounceAnimating) this.syncWalkingAnimation();
   }
 
   private kaboomtulaState: KaboomtulaState = EMPTY_KABOOMTULA_STATE;
@@ -643,7 +682,7 @@ export class EnemyEntity {
     out.player = false;
     out.visible = this.sprite.visible && this.currentHp > 0 && !this.burrowed
       && this.movementCorrectionRemaining < this.config.size * 0.3;
-    out.mode = this.hopAirborne || this.kaboomtulaAirborne ? 'airborne' : this.dashPhase === 1 ? 'dash' : this.dashPhase === 2 ? 'recovery'
+    out.mode = this.hopAirborne || this.kaboomtulaAirborne || this.pounceAirborne ? 'airborne' : this.dashPhase === 1 ? 'dash' : this.dashPhase === 2 ? 'recovery'
       : this.walkingRequested ? 'walk' : 'idle';
     out.isBurrowDash = false;
     out.revision = this.movementRevision;
@@ -661,7 +700,8 @@ export class EnemyEntity {
   }
 
   private syncWalkingAnimation(): void {
-    if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating || this.energyConeAnimating || this.hopAnimating) return;
+    if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating || this.energyConeAnimating || this.hopAnimating
+      || this.pounceAnimating) return;
     if (!this.walkingSheet) return;
     syncBadgerWalkingAnimation(
       this.sprite,
@@ -1095,6 +1135,7 @@ export class EnemyEntity {
     if (this.shieldCharge.revision > 0) snapshot.shieldCharge = this.shieldCharge;
     if (this.hopState.revision > 0) snapshot.hop = this.hopState;
     if (this.kaboomtulaState.revision > 0) snapshot.kaboomtula = this.kaboomtulaState;
+    if (this.pounceState.revision > 0) snapshot.pounce = this.pounceState;
     if (this.energyCone.revision > 0) snapshot.energyCone = this.energyCone;
     if (this.eliteAffixId) snapshot.eliteAffixId = this.eliteAffixId;
     if (this.areaClaw.revision > 0) snapshot.areaClaw = this.areaClaw;

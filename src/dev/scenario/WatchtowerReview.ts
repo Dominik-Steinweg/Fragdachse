@@ -61,7 +61,7 @@ export async function runWatchtowerReview(controller: DevScenarioController, com
         if (state.occupancy) bridge.sendStructureOccupancyRequest({ action: 'exit', ...state.occupancy });
         break;
       case 'hunters':
-        for (const gridX of [15, 18, 21]) controller.spawn('rabid-badger', false, null, { gridX, gridY: 10 }, false);
+        for (const gridX of [15, 18, 21]) controller.spawn('rabid-rabbit', false, null, { gridX, gridY: 10 }, false);
         break;
       case 'damage':
       case 'collapse':

@@ -332,6 +332,7 @@ export function composeWorldCombatGameplay(
     getShieldChargerSystem: () => flow.getCoopMissionRuntime()?.coopDefenseShieldChargerSystem ?? null,
     getEnergyConeSystem: () => flow.getCoopMissionRuntime()?.coopDefenseEnergyConeSystem ?? null,
     getHopSystem: () => flow.getCoopMissionRuntime()?.coopDefenseEnemyHopSystem ?? null,
+    getPounceSystem: () => flow.getCoopMissionRuntime()?.coopDefenseEnemyPounceSystem ?? null,
     getMortarSystem: () => flow.getCoopMissionRuntime()?.coopDefenseMortarSystem ?? null,
     getKaboomtulaSystem: () => flow.getCoopMissionRuntime()?.coopDefenseKaboomtulaSystem ?? null,
     getTurretWebSystem: () => flow.getCoopMissionRuntime()?.coopDefenseTurretWebSystem ?? null,

@@ -214,7 +214,7 @@
           "spawnZoneId": "medic-2"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 2,
           "delayMs": 1200,
           "spawnStaggerMs": 60,
@@ -249,7 +249,7 @@
           "spawnZoneId": "medic-2"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 8,
           "delayMs": 1200,
           "spawnStaggerMs": 60,
@@ -335,7 +335,7 @@
           "spawnZoneId": "medic-4"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 4,
           "delayMs": 1200,
           "spawnStaggerMs": 60,
@@ -405,7 +405,7 @@
           "spawnZoneId": "medic-4"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 4,
           "delayMs": 1200,
           "spawnStaggerMs": 60,

@@ -1817,16 +1817,17 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   }
 
   /** Heavy landing next to players: the same hostile area burst without structure damage, plus a push for players only. */
-  applyEnemyLandingShock(enemyId: string, x: number, y: number, shock: import('../../config/coopDefenseEnemies').CoopDefenseEnemyLandingShockConfig, nowMs: number): void {
+  applyEnemyLandingShock(enemyId: string, x: number, y: number, shock: import('../../config/coopDefenseEnemies').CoopDefenseEnemyLandingImpactConfig,
+    nowMs: number, sourceId = 'enemy.landing-shock'): void {
     this.applyEnemyAbilityBurst(enemyId, x, y, { radiusPx: shock.radiusPx, damage: shock.damage, structureDamageMult: 0 },
-      'enemy.landing-shock', nowMs);
+      sourceId, nowMs);
     if (shock.knockbackSpeed > 0) this.ctx.hostPhysics.applyRadialImpulse(x, y, shock.radiusPx, shock.knockbackSpeed, enemyId, 0,
       shock.knockbackMs, targetId => !!this.ctx.playerManager.getPlayer(targetId));
   }
 
   private applyEnemyAbilityBurst(enemyId: string, x: number, y: number,
     burst: { readonly radiusPx: number; readonly damage: number; readonly structureDamageMult: number },
-    sourceId: 'enemy.death-burst' | 'enemy.landing-shock', nowMs: number): void {
+    sourceId: string, nowMs: number): void {
     const combat = this.ctx.getWorldCombatCore();
     if (!combat) return;
     const source = this.enemyAbilitySource(enemyId, sourceId), mult = burst.structureDamageMult;

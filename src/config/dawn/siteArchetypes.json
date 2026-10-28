@@ -185,7 +185,7 @@
           "scrapReward": 75,
           "visualKey": "dawn-site-brood-nest-t3",
           "nestSpawn": {
-            "enemyKind": "rabid-badger",
+            "enemyKind": "rabid-rabbit",
             "intervalMs": 8000,
             "countPerTick": 2
           }

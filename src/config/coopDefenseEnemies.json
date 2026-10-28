@@ -63,7 +63,7 @@
       }
     },
     {
-      "id": "rabid-badger",
+      "id": "rabid-rabbit",
       "eyeGlow": {
         "color": 11550975
       },
@@ -71,12 +71,12 @@
       "maxHp": 20,
       "xp": 3,
       "size": 22,
-      "moveSpeed": 180,
+      "moveSpeed": 190,
       "knockbackFactor": 1.5,
       "movementTarget": "players",
       "weapons": [
         {
-          "weaponId": "RABID_BADGER_BITE",
+          "weaponId": "RABID_RABBIT_BITE",
           "targetMode": "all",
           "meleeTiming": {
             "hitDelayMs": 250,
@@ -89,6 +89,47 @@
       "attackStopDurationMs": 100,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_rabid_badger",
+      "pounce": {
+        "minRangePx": 110,
+        "maxRangePx": 300,
+        "aimMs": 450,
+        "lockMs": 250,
+        "airSpeedPx": 700,
+        "airMinMs": 350,
+        "airMaxMs": 480,
+        "recoverMs": 450,
+        "cooldownMinMs": 2400,
+        "cooldownMaxMs": 3200,
+        "initialDelayMs": 900,
+        "leadFactor": 0.9,
+        "maxLeadPx": 160,
+        "closeCancelPx": 70,
+        "cancelDisplacementPx": 24,
+        "cancelLockoutMs": 600,
+        "impact": {
+          "radiusPx": 60,
+          "damage": 28,
+          "knockbackSpeed": 520,
+          "knockbackMs": 220
+        },
+        "pack": {
+          "maxPerTarget": 2,
+          "staggerMs": 350
+        },
+        "gait": {
+          "periodMinMs": 380,
+          "periodMaxMs": 460,
+          "surge": 0.18
+        },
+        "sideCuts": {
+          "intervalMinMs": 1400,
+          "intervalMaxMs": 2600,
+          "angleMinDeg": 30,
+          "angleMaxDeg": 45,
+          "durationMs": 230,
+          "minTargetDistancePx": 140
+        }
+      },
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
       }
@@ -343,7 +384,7 @@
       },
       "deathSpawns": [
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "rabid-rabbit",
           "count": 4,
           "offsetPx": 9
         }
@@ -448,7 +489,7 @@
       "imageKey": "enemy_thrower_badger",
       "color": 11566322,
       "spawnThrow": {
-        "enemyKind": "rabid-badger",
+        "enemyKind": "rabid-rabbit",
         "count": 1,
         "spawnOffsetPx": 12,
         "cooldownMs": 3000,
@@ -1042,7 +1083,7 @@
       "movementTarget": "players",
       "weapons": [
         {
-          "weaponId": "RABID_BADGER_BITE",
+          "weaponId": "SHIELD_CHARGER_BADGER_BITE",
           "targetMode": "all",
           "meleeTiming": {
             "hitDelayMs": 300,

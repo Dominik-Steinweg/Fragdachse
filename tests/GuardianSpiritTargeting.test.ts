@@ -18,7 +18,7 @@ import { healthBarTestScene } from './healthBarTestScene';
 
 function fixture() {
   const configs = resolveCoopDefenseEnemyConfigs(1);
-  const kind = 'rabid-badger';
+  const kind = 'rabid-rabbit';
   configs[kind] = { ...configs[kind], glow: undefined, deathSpawns: [], imageKey: 'test-enemy' };
   const enemies = new EnemyManager(healthBarTestScene().scene, configs);
   const players = new Map([
