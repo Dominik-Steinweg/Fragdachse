@@ -9,12 +9,12 @@
  * The tree's chains are drawn as strokes: at a junction the best aligned arm runs on into the
  * trunk around a rounded bend, the other arms flow into the trunk and fade out there (or fade in
  * from it where routes part). A stroke widens and narrows smoothly, gathers out of its spawn
- * zone's void haze (wide and faint at the source, a stream where it leaves the zone) and
- * dissolves a little past its goal. Quality over cell accuracy: the stream follows the routes,
- * not their grid.
+ * zone's void haze (wide and faint at the source, a stream where it leaves the zone). At its goal it
+ * parts into arms that lie along the target, as enemies spread around a base to attack it, and fade.
+ * Quality over cell accuracy: the stream follows the routes, not their grid.
  *
- * One instance is one quad (six non-indexed vertices): a stream segment, an entry glow at the
- * build area or a breach. The CPU writes only when the plan changes.
+ * One instance is one quad (six non-indexed vertices): a stream segment or a breach. The CPU
+ * writes only when the plan changes.
  */
 
 export const ROUTE_FLOW_FLOATS_PER_VERTEX = 20;
@@ -22,7 +22,7 @@ export const ROUTE_FLOW_VERTICES = 6;
 export const ROUTE_FLOW_INSTANCE_FLOATS = ROUTE_FLOW_FLOATS_PER_VERTEX * ROUTE_FLOW_VERTICES;
 export const ROUTE_FLOW_CAPACITY = 2048;
 
-export const RouteFlowKind = { Segment: 0, Entry: 2, Breach: 3 } as const;
+export const RouteFlowKind = { Segment: 0, Breach: 3 } as const;
 export type RouteFlowKind = (typeof RouteFlowKind)[keyof typeof RouteFlowKind];
 
 /** Shared with the shader: the stream's look in World pixels. */
@@ -34,7 +34,6 @@ export const ROUTE_FLOW_SHAPE = {
   stainReach: 2.3,
   /** Breach routes heat up over this arc length before the wall. */
   heatRange: 192,
-  entryRadius: 30,
   breachRadius: 52,
 } as const;
 
@@ -68,6 +67,8 @@ export interface RouteFlowRoute {
   readonly strength: number;
   /** Arc length (World px) from the source to where the route leaves its spawn zone. */
   readonly sourceReach?: number;
+  /** From the route's end along its target: where enemies spread to attack it. */
+  readonly arms?: readonly (readonly RouteFlowPoint[])[];
 }
 
 export interface RouteFlowSegment {
@@ -93,7 +94,7 @@ export interface RouteFlowSegment {
 
 export interface RouteFlowMark {
   readonly key: string;
-  readonly kind: typeof RouteFlowKind.Entry | typeof RouteFlowKind.Breach;
+  readonly kind: typeof RouteFlowKind.Breach;
   readonly x: number; readonly y: number;
   readonly radius: number;
   readonly strength: number;
@@ -109,8 +110,6 @@ export interface RouteFlowGeometryOptions {
   readonly tolerance: number;
   /** Segments and marks entirely outside this rectangle are dropped. */
   readonly clip?: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
-  /** True inside the build area: the first such point of a route glows as its entry. */
-  readonly isInsideBuildArea?: (x: number, y: number) => boolean;
 }
 
 interface FlowNode {
@@ -127,7 +126,8 @@ interface FlowNode {
 interface FlowEdge { usage: number; strength: number }
 
 const SMOOTHING_PASSES = 4;
-const MERGE_ENTRY_PX = 40;
+/** Arms carry a little less than the stream they part from. */
+const ARM_STRENGTH = .85;
 
 /**
  * Smoothed, simplified stream tree of a set of routes. Deterministic for the same input; shared
@@ -137,6 +137,7 @@ export function buildRouteFlowGeometry(routes: readonly RouteFlowRoute[], option
   const nodes = new Map<string, FlowNode>();
   const edges = new Map<string, FlowEdge>();
   const routeNodes: FlowNode[][] = [];
+  const armNodes: FlowNode[][] = [];
   const nodeAt = (point: RouteFlowPoint): FlowNode => {
     const key = `${Math.round(point.x * 2)}:${Math.round(point.y * 2)}`;
     let node = nodes.get(key);
@@ -153,13 +154,26 @@ export function buildRouteFlowGeometry(routes: readonly RouteFlowRoute[], option
       if (path[path.length - 1] !== node && !path.includes(node)) path.push(node);
     }
     routeNodes.push(path);
-    for (let i = 1; i < path.length; i++) {
-      const a = path[i - 1]!, b = path[i]!;
+    // Routes on an edge widen it; arms only lie along the target, however many reach it.
+    const link = (a: FlowNode, b: FlowNode, strength: number, widen = true) => {
       a.succs.add(b); b.preds.add(a);
       const key = edgeKey(a, b);
       const edge = edges.get(key) ?? { usage: 0, strength: 0 };
-      edge.usage++; edge.strength = Math.max(edge.strength, route.strength);
+      edge.usage = widen ? edge.usage + 1 : Math.max(edge.usage, 1); edge.strength = Math.max(edge.strength, strength);
       edges.set(key, edge);
+    };
+    for (let i = 1; i < path.length; i++) link(path[i - 1]!, path[i]!, route.strength);
+    // At the goal the stream parts and lies along the target.
+    const end = path[path.length - 1];
+    if (end) for (const arm of route.arms ?? []) {
+      const nodes = [end];
+      for (const point of arm) {
+        const node = nodeAt(point);
+        if (nodes.includes(node) || path.includes(node)) continue;
+        link(nodes[nodes.length - 1]!, node, route.strength * ARM_STRENGTH, false);
+        nodes.push(node);
+      }
+      if (nodes.length > 1) armNodes.push(nodes);
     }
   }
   const passThrough = (node: FlowNode) => node.preds.size === 1 && node.succs.size === 1;
@@ -211,6 +225,15 @@ export function buildRouteFlowGeometry(routes: readonly RouteFlowRoute[], option
       if (route.breach) node.heat = Math.max(node.heat, clamp01(1 - fromEnd / ROUTE_FLOW_SHAPE.heatRange));
     }
   });
+  // Arms run on past the goal: their distance keeps falling, so the pattern flows into them.
+  for (const nodes of armNodes) {
+    let acc = 0;
+    for (let i = 1; i < nodes.length; i++) {
+      const a = nodes[i - 1]!, b = nodes[i]!;
+      acc += Math.hypot(b.sx - a.sx, b.sy - a.sy);
+      if (Number.isNaN(b.dist)) b.dist = nodes[0]!.dist - acc;
+    }
+  }
 
   // A source gathers its current over the longest way out of its zone.
   const gather = new Map<FlowNode, number>();
@@ -224,22 +247,12 @@ export function buildRouteFlowGeometry(routes: readonly RouteFlowRoute[], option
   }), gather);
 
   const marks: RouteFlowMark[] = [];
-  const entries: { x: number; y: number; strength: number; routes: number }[] = [];
   routes.forEach((route, index) => {
     const path = routeNodes[index]!;
-    const inside = options.isInsideBuildArea;
-    const entry = inside && !inside(path[0]?.x ?? NaN, path[0]?.y ?? NaN) ? path.find((node) => inside(node.x, node.y)) : undefined;
-    if (entry) {
-      const near = entries.find((other) => Math.hypot(other.x - entry.x, other.y - entry.y) < MERGE_ENTRY_PX);
-      if (near) { near.routes++; near.strength = Math.max(near.strength, route.strength); }
-      else entries.push({ x: entry.x, y: entry.y, strength: route.strength, routes: 1 });
-    }
     const end = path[path.length - 1];
     if (route.breach && end) marks.push({ key: `breach:${end.key}`, kind: RouteFlowKind.Breach, x: end.x, y: end.y,
       radius: ROUTE_FLOW_SHAPE.breachRadius, strength: route.strength });
   });
-  for (const entry of entries) marks.push({ key: `entry:${Math.round(entry.x)}:${Math.round(entry.y)}`, kind: RouteFlowKind.Entry,
-    x: entry.x, y: entry.y, radius: ROUTE_FLOW_SHAPE.entryRadius * Math.min(1.6, Math.sqrt(entry.routes)), strength: entry.strength });
 
   const clip = options.clip;
   if (!clip) return { segments, marks };
@@ -516,6 +529,8 @@ function strokeSegments(stroke: Stroke): RouteFlowSegment[] {
       width: after.halfWidth - before.halfWidth, strength: after.strength - before.strength });
   }
   const goalFrom = total - STREAM_EASE.goalFade - STREAM_EASE.goalReach;
+  // The goal's dissolve is measured from where the stroke ends: past a goal, or at an arm's tip.
+  const endDist = points[points.length - 1]!.dist;
   const busy: [number, number][] = [...ramps.map((ramp) => [ramp.from, ramp.to] as [number, number])];
   if (stroke.gather) busy.push([0, stroke.gather]);
   if (stroke.head) busy.push([0, stroke.head * 1.25]);
@@ -544,7 +559,7 @@ function strokeSegments(stroke: Stroke): RouteFlowSegment[] {
       width *= 1 - .4 * smoothstep(total - stroke.tail, total, s);
     }
     if (stroke.toGoal) {
-      const fade = smoothstep(-STREAM_EASE.goalReach, STREAM_EASE.goalFade, dist);
+      const fade = smoothstep(endDist, endDist + STREAM_EASE.goalReach + STREAM_EASE.goalFade, dist);
       // A breach keeps boiling against the wall.
       presence *= Math.max(fade, heat * .85);
       width *= 1 + STREAM_EASE.goalFan * (1 - fade) * (1 - heat);

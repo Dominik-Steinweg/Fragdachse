@@ -45,6 +45,24 @@ describe('situation map routes', () => {
     expect(plan.hint).toBe(hint);
   });
 
+  it.each(['10', '18'])('lets routes that reach the base part into arms along its walls on map %s', (mapId) => {
+    const { planner, world, site } = planFor(mapId);
+    const plan = planner.plan([]);
+    planner.destroy();
+    const base = world.bases.find((candidate) => candidate.id === site.baseId)!;
+    const reached = plan.routes.filter((route) => route.relevant && route.reachedGoal);
+    expect(reached.length).toBeGreaterThan(0);
+    for (const route of reached) {
+      expect(route.arms.length).toBeGreaterThan(0);
+      // Every arm cell lies on the ring just outside the base's walls.
+      for (const arm of route.arms) for (const point of arm) {
+        const x = Math.floor(point.x / CELL_SIZE), y = Math.floor(point.y / CELL_SIZE);
+        const ring = Math.max(base.region.minGridX - x, x - base.region.maxGridX, base.region.minGridY - y, y - base.region.maxGridY);
+        expect(ring).toBe(1);
+      }
+    }
+  });
+
   it('turns a sealed base into a breach on its wall', () => {
     const { planner, site } = planFor('18');
     // A ring of walls around the core closes every way in.

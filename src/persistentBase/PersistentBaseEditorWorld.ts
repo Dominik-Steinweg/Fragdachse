@@ -34,7 +34,7 @@ import { DEFAULT_FOG_STRENGTH } from '../config/groundFog';
 import { getGraphicsQualityController } from '../graphics/GraphicsQuality';
 import type { RouteFlowRoute } from '../effects/routeFlow/RouteFlowStore';
 import type { ArenaLayout, SyncedPlaceableRock, SyncedPowerUpPedestal, TurretWeaponId } from '../types';
-import { buildPersistentBaseCoreBaseConfig, getPersistentBaseBuildAreaExtentCells, isCellInsidePersistentBaseBuildArea,
+import { buildPersistentBaseCoreBaseConfig, getPersistentBaseBuildAreaExtentCells,
   type PersistentBaseAreaStage, type PersistentBaseBuildArea } from './PersistentBaseCore';
 import type { BaseEditorObject, PersistentBaseEditorModel } from './PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from './PersistentBaseEditorAppearance';
@@ -318,16 +318,13 @@ export class PersistentBaseEditorWorld {
     this.lastPlan = { cells, plan };
     const toFlow = (dim: number) => plan.routes.filter((route) => route.points.length > 1)
       .map((route): RouteFlowRoute => ({ points: route.points, breach: route.breach !== null, strength: route.relevant ? 1 : dim,
-        ...(route.zone ? { sourceReach: zoneExit(route.points, route.zone) } : {}) }));
+        ...(route.zone ? { sourceReach: zoneExit(route.points, route.zone) } : {}), arms: route.arms }));
     const zones = new Map<string, { x: number; y: number; width: number; height: number }>();
     for (const route of [...plan.routes].sort((a, b) => +b.relevant - +a.relevant)) {
       if (route.zone) zones.set(`${route.zone.x}:${route.zone.y}`, route.zone);
     }
-    const { anchor, siteArea } = this;
     this.routes.setPlan({
       view: plan.mode === 'routes' ? toFlow(.4) : [], overview: toFlow(.75), zones: [...zones.values()], clip: this.view,
-      isInsideBuildArea: (x, y) => isCellInsidePersistentBaseBuildArea(Math.floor(x / CELL_SIZE) - anchor.gridX,
-        Math.floor(y / CELL_SIZE) - anchor.gridY, siteArea),
     });
     return plan;
   }

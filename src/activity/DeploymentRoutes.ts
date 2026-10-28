@@ -119,7 +119,16 @@ export interface DeploymentRouteLine {
   readonly zone: Rect | null;
   /** The route matters for the base: it ends (or breaks through) inside the detail view. */
   readonly relevant: boolean;
+  /**
+   * Where enemies spread around the base they reach to attack it: from the route's end along the
+   * ring of cells around the base, both ways, as far as they can walk. Empty for a breach or a route
+   * that ends elsewhere.
+   */
+  readonly arms: readonly (readonly { readonly x: number; readonly y: number }[])[];
 }
+
+/** Cells an arm follows the ring around a reached base: about to its corners. */
+const ARM_CELLS = 5;
 
 export interface DeploymentRoutePlan {
   /** `routes` shows the routes around the base; `terrain` explains why there are none. */
@@ -218,6 +227,7 @@ export class DeploymentRoutePlanner {
       const centre = sourceCentre(request.source, this.input.worldMetrics, this.input.bases);
       return { request, centre, route: this.endAtBase(this.trace(request.target, centre)) };
     });
+    const arms = new Map(traced.map(({ request, route }) => [request.key, route.base ? this.armsAround(request.target, route.base, route.points) : []]));
     const breaches = new Map<string, { points: readonly FlowFieldRoutePoint[]; breach: { x: number; y: number } }>();
     if (traced.some(({ route }) => !route.reachedGoal) && this.constructionCells.length > 0) {
       // Without a free path enemies break through the persistent base: where the open route meets it.
@@ -234,8 +244,8 @@ export class DeploymentRoutePlanner {
     }
     const routes = traced.map(({ request, centre, route }) => {
       const breach = breaches.get(request.key);
-      return breach ? this.line(request, breach.points, false, breach.breach, centre)
-        : this.line(request, route.points, route.reachedGoal, null, centre);
+      return breach ? this.line(request, breach.points, false, breach.breach, centre, [])
+        : this.line(request, route.points, route.reachedGoal, null, centre, arms.get(request.key) ?? []);
     });
     const relevant = routes.some((route) => route.relevant);
     const hint = relevant || routes.length === 0 ? null
@@ -287,7 +297,8 @@ export class DeploymentRoutePlanner {
    * A route ends where it reaches the own base it heads for, at the base's outer edge: enemies attack
    * the first wall in reach. Without this, routes through a wide gate would run on to the hearth.
    */
-  private endAtBase(route: { points: readonly FlowFieldRoutePoint[]; reachedGoal: boolean }) {
+  private endAtBase(route: { points: readonly FlowFieldRoutePoint[]; reachedGoal: boolean }):
+    { points: readonly FlowFieldRoutePoint[]; reachedGoal: boolean; base?: BaseSpec } {
     const last = route.points[route.points.length - 1];
     if (!last) return route;
     const { offsetX, offsetY } = this.input.worldMetrics;
@@ -298,11 +309,49 @@ export class DeploymentRoutePlanner {
     };
     const base = this.standingBases().find((candidate) => candidate.faction !== 'hostile' && reaches(candidate, last));
     if (!base) return route;
-    return { points: route.points.slice(0, route.points.findIndex((point) => reaches(base, point)) + 1), reachedGoal: route.reachedGoal };
+    return { points: route.points.slice(0, route.points.findIndex((point) => reaches(base, point)) + 1), reachedGoal: route.reachedGoal, base };
+  }
+
+  /**
+   * Arms from a route's end along the ring of cells just outside a base's walls, clockwise and
+   * counter-clockwise, each until it meets ground the enemies cannot walk or after `ARM_CELLS`.
+   */
+  private armsAround(target: DeploymentRouteTarget, base: BaseSpec, points: readonly FlowFieldRoutePoint[]): { x: number; y: number }[][] {
+    const end = points[points.length - 1], snapshot = this.fieldFor(target).snapshot();
+    if (!end || !snapshot) return [];
+    const { minGridX, maxGridX, minGridY, maxGridY } = base.region, { offsetX, offsetY } = this.input.worldMetrics;
+    const ring: { gridX: number; gridY: number }[] = [];
+    for (let x = minGridX - 1; x <= maxGridX + 1; x++) ring.push({ gridX: x, gridY: minGridY - 1 });
+    for (let y = minGridY; y <= maxGridY + 1; y++) ring.push({ gridX: maxGridX + 1, gridY: y });
+    for (let x = maxGridX; x >= minGridX - 1; x--) ring.push({ gridX: x, gridY: maxGridY + 1 });
+    for (let y = maxGridY; y >= minGridY; y--) ring.push({ gridX: minGridX - 1, gridY: y });
+    const centre = (cell: { gridX: number; gridY: number }) => ({ x: offsetX + (cell.gridX + .5) * CELL_SIZE, y: offsetY + (cell.gridY + .5) * CELL_SIZE });
+    // The node grid has a node on every cell centre: walkable where the field reaches it.
+    const walkable = (cell: { gridX: number; gridY: number }) => {
+      const x = cell.gridX * 2 + 1, y = cell.gridY * 2 + 1;
+      return x >= 0 && y >= 0 && x < this.metrics.cols && y < this.metrics.rows && Number.isFinite(snapshot.integrationField[y * this.metrics.cols + x]);
+    };
+    let start = 0, best = Infinity;
+    ring.forEach((cell, index) => {
+      const point = centre(cell), distance = Math.hypot(point.x - end.x, point.y - end.y);
+      if (distance < best) { best = distance; start = index; }
+    });
+    const arms: { x: number; y: number }[][] = [];
+    for (const step of [1, -1]) {
+      const arm: { x: number; y: number }[] = [];
+      for (let k = best > CELL_SIZE * .75 ? 0 : 1; k <= ARM_CELLS; k++) {
+        const cell = ring[(start + step * k + ring.length * 2) % ring.length]!;
+        if (!walkable(cell)) break;
+        arm.push(centre(cell));
+      }
+      if (arm.length >= 2) arms.push(arm);
+    }
+    return arms;
   }
 
   private line(request: DeploymentRouteRequest, points: readonly FlowFieldRoutePoint[], reachedGoal: boolean,
-    breach: { x: number; y: number } | null, source: { x: number; y: number }): DeploymentRouteLine {
+    breach: { x: number; y: number } | null, source: { x: number; y: number },
+    arms: readonly (readonly { x: number; y: number }[])[]): DeploymentRouteLine {
     const end = breach ?? points[points.length - 1] ?? null;
     const detail = this.input.detail;
     const relevant = end !== null && end.x >= detail.x && end.x <= detail.x + detail.width
@@ -310,7 +359,7 @@ export class DeploymentRoutePlanner {
     const place = request.source.place, { offsetX, offsetY } = this.input.worldMetrics;
     const zone = place.kind === 'area' ? { x: offsetX + place.area.gridX * CELL_SIZE, y: offsetY + place.area.gridY * CELL_SIZE,
       width: place.area.widthCells * CELL_SIZE, height: place.area.heightCells * CELL_SIZE } : null;
-    return { key: request.key, target: request.target, points, reachedGoal, breach, source, zone, relevant };
+    return { key: request.key, target: request.target, points, reachedGoal, breach, source, zone, relevant, arms };
   }
 
   private compute(constructionCells: readonly { gridX: number; gridY: number }[]): void {

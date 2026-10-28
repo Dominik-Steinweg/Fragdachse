@@ -3,8 +3,8 @@ import { ROUTE_FLOW_SHAPE } from './RouteFlowStore';
 
 /**
  * Void-Strömung: the enemy routes of the next round as a living void current, one quad per
- * stream segment plus glows where routes enter the build area and the pressure wave of a breach.
- * Sources have no mark of their own: the current gathers out of its spawn zone's void haze. No
+ * stream segment plus the pressure wave of a breach. Sources and goals have no mark of their own:
+ * the current gathers out of its spawn zone's void haze and parts around the base it attacks. No
  * lines, no arrows: direction is the motion of the current.
  *
  * Pass 0 (ground, NORMAL, decal band) soaks the soil with dark void ink.
@@ -228,18 +228,7 @@ void main() {
     float r = length(p);
     float a = atan(p.y, p.x);
     if (r > radius * 1.25) discard;
-    if (kind < 2.5) {
-      // Entry into the build area: the haze pools here and swells outward in soft waves.
-      float phase = fract(uTime / 1800.0);
-      float billow = fbm(w * 0.06 + vec2(uTime * 0.0004, 0.0));
-      float ring = exp(-sq((r - radius * (0.25 + 0.75 * phase)) / (radius * 0.16 + px))) * (1.0 - phase) * (0.5 + 0.5 * billow);
-      float core = exp(-sq(r / (radius * (0.35 + 0.15 * billow))));
-      if (uPass < 0.5) over(acc, INK, core * 0.25 * strength);
-      else {
-        if (uPass < 1.5) over(acc, VOID_MID, core * 0.4 * strength);
-        glow += mix(VOID_MID, VOID_LIGHT, billow) * (ring * 0.6 + core * 0.5) * (1.0 + 0.6 * fresh);
-      }
-    } else {
+    {
       // Breach: no free path. Hot core and a segmented pressure wave against the wall.
       float core = exp(-sq(r / (radius * 0.28)));
       float waves = 0.0;

@@ -61,15 +61,31 @@ describe('route flow geometry', () => {
     expect(Math.hypot(gathered.ax, gathered.ay)).toBeGreaterThan(120);
   });
 
-  it('heats a breach route towards the wall and marks its entry and the breach', () => {
+  it('heats a breach route towards the wall and marks only the breach', () => {
     const breach = route(repeat([1, 0], 30), [0, 40], { breach: true });
-    const geometry = buildRouteFlowGeometry([breach], { tolerance: .75, isInsideBuildArea: (x) => x >= 24 * 16 });
+    const geometry = buildRouteFlowGeometry([breach], { tolerance: .75 });
     const last = geometry.segments.reduce((best, segment) => segment.bx > best.bx ? segment : best);
     const first = geometry.segments.reduce((best, segment) => segment.ax < best.ax ? segment : best);
     expect(last.heatB).toBeCloseTo(1, 6);
     expect(first.heatA).toBe(0);
-    expect(geometry.marks.map((mark) => mark.kind).sort()).toEqual([RouteFlowKind.Entry, RouteFlowKind.Breach].sort());
-    expect(geometry.marks.find((mark) => mark.kind === RouteFlowKind.Entry)!.x).toBe(24 * 16);
+    expect(geometry.marks.map((mark) => mark.kind)).toEqual([RouteFlowKind.Breach]);
+  });
+
+  it('parts at the goal into arms along the target that flow on and fade at their tips', () => {
+    // The stream arrives from the west at (20, 10) and lies along a wall running north and south.
+    const arms = [[{ x: 20 * 16, y: 8 * 16 }, { x: 20 * 16, y: 6 * 16 }, { x: 20 * 16, y: 4 * 16 }],
+      [{ x: 20 * 16, y: 12 * 16 }, { x: 20 * 16, y: 14 * 16 }, { x: 20 * 16, y: 16 * 16 }]];
+    const geometry = buildRouteFlowGeometry([route(repeat([1, 0], 20), [0, 10], { arms })], { tolerance: .75 });
+    for (const segment of geometry.segments) expect(segment.distB).toBeLessThan(segment.distA);
+    const ends = geometry.segments.filter((segment) => segment.joinB === null);
+    expect(ends).toHaveLength(2);
+    for (const end of ends) {
+      expect(Math.abs(end.bx - 20 * 16)).toBeLessThan(24);
+      expect(Math.abs(end.by - 10 * 16)).toBeGreaterThan(5 * 16);
+      expect(end.presenceB).toBeLessThan(.02);
+    }
+    // No mark at the goal: the arms are its whole picture.
+    expect(geometry.marks).toHaveLength(0);
   });
 
   it('keeps a stream that still flows at its age and fades a new one in', () => {

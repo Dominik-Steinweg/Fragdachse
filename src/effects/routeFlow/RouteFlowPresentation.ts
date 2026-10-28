@@ -15,10 +15,9 @@ export interface RouteFlowPlan {
   /** Spawn zones the shown routes leave from, those that matter first; they stand active and breathe. */
   readonly zones: readonly Rect[];
   readonly clip: Rect;
-  readonly isInsideBuildArea: (x: number, y: number) => boolean;
 }
 
-const ENTRY_LIGHT_COLOR = 0xb27cff;
+const STREAM_LIGHT_COLOR = 0xb27cff;
 const BREACH_LIGHT_COLOR = 0xff4f86;
 /** The current's own light: subtle by day over its bed, the whole stream at night. */
 const STREAM_GLOW = { day: .75, night: 1.5 } as const;
@@ -66,13 +65,10 @@ export class RouteFlowPresentation {
   /** Shows a plan; streams that keep flowing keep their age, rerouted ones surge in. */
   setPlan(plan: RouteFlowPlan): void {
     this.plan = plan;
-    const geometry = buildRouteFlowGeometry(plan.view, { tolerance: .75, clip: plan.clip, isInsideBuildArea: plan.isInsideBuildArea });
+    const geometry = buildRouteFlowGeometry(plan.view, { tolerance: .75, clip: plan.clip });
     this.store.setGeometry(geometry, this.clockMs);
     this.hazeLines = streamHaze(geometry, plan.clip, ++this.hazeRevision);
-    const entries = geometry.marks.filter((mark) => mark.kind === RouteFlowKind.Entry);
-    this.lights.lights = [...entries.map((mark) => ({
-      x: mark.x, y: mark.y, radiusPx: mark.radius * 2.6, intensity: .55 * mark.strength, color: ENTRY_LIGHT_COLOR })),
-    ...streamLights(plan.view, plan.clip)];
+    this.lights.lights = streamLights(plan.view, plan.clip);
     this.lights.lightCount = this.lights.lights.length;
     this.lighting.setGroundGlowLights(this, this.lights.lightCount ? this.lights : null, { decorative: true });
     const breaches = new Set<string>();
@@ -143,7 +139,7 @@ function streamLights(routes: readonly RouteFlowRoute[], clip: Rect): GroundGlow
       travelled = 0;
       if (b.x < clip.x || b.y < clip.y || b.x > clip.x + clip.width || b.y > clip.y + clip.height) continue;
       lights.push({ x: b.x, y: b.y, radiusPx: STREAM_LIGHT.radiusPx, intensity: STREAM_LIGHT.intensity * route.strength,
-        color: ENTRY_LIGHT_COLOR });
+        color: STREAM_LIGHT_COLOR });
     }
   }
   return lights;

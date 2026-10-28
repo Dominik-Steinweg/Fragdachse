@@ -57,7 +57,7 @@ Drei weitere Lücken:
 | E14 | **Ansicht wie in der Mission:** Norden oben. Das Gelände wird nie gedreht; nur die Basisobjekte erscheinen mit der Drehung des Hosts. |
 | E15 | **Wege zum Spieler zählen.** Das Ziel einer Route ergibt sich wie in der Mission aus der Gegnerart: Basisstürmer laufen zu den Zielbasen, Jäger zur erwarteten Spielerposition. |
 | E16 | **Die Vorschau erscheint nur, wo sie Sinn ergibt.** Der Anzeigemodus folgt aus den Routen (Abschnitt 6.3). Maps mit vorgelagerter Basis zeigen Gelände, Hinweis und die Routen in der Miniübersicht. |
-| E17 | **Routenstil „Void-Strömung“.** Violetter Void-Dunst wabert im Shader zur Basis, darunter eine Bodenspur; keine weißen Funken. Spawnzonen atmen mit dem Void-Dunst, Eintrittspunkte glühen, „Kein freier Weg“ erscheint als Druckwelle. Keine geraden Linien und keine Pfeile. |
+| E17 | **Routenstil „Void-Strömung“.** Violetter Void-Dunst wabert im Shader zur Basis, darunter eine Bodenspur; keine weißen Funken. Spawnzonen atmen mit dem Void-Dunst, am Ziel legt sich der Strom um die Basis (seit 2026-10-28 statt glühender Eintrittspunkte), „Kein freier Weg“ erscheint als Druckwelle. Keine geraden Linien und keine Pfeile. |
 
 ## 4. Ablauf für den Spieler
 
@@ -102,7 +102,9 @@ Die Darstellung folgt [`visual-guidelines.md`](../ai/visual-guidelines.md) und d
     Baubereich bleibt die Luft klar. Die Ströme tragen Void-Dunst: Der Nebel färbt sich entlang der Wege
     violett und verdichtet sich leicht, Sporen treiben mit, und dicke Bänke verschleiern das Leuchten des
     Stroms, statt dass es darüber liegt.
-  - **Eintrittspunkte:** Wo eine Route in den Baubereich eintritt, glüht der Rand.
+  - **Ziele:** Am Ende teilt sich der Strom und legt sich als Arme an die Mauern der Basis, die er
+    erreicht, bis zu ihren Ecken, und blendet dort aus: So verteilen sich die Gegner in der Mission um die
+    Basis, um sie anzugreifen. Am Rand des Baubereichs gibt es keine Marke.
   - **Kein freier Weg:** Der Strom läuft heiß gegen die Mauer und erzeugt einen Druckring. Dazu
     erscheint die Warnung „Kein freier Weg – Gegner brechen durch“.
   - **Lage:** Das Leuchten des Stroms liegt über den Baumkronen; Dunst und Bodenspur bleiben am Boden.
@@ -297,3 +299,6 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
   Verschieben, echte Vorschau beim Halten, weiche Baugrenze und weiche GPU-Reichweiten, Kopfzeile mit
   Badges und „Alles zurück“. Abgelehnt: Ungespeichert-Schutz, Wegabdeckung als Kennzahl,
   kontextabhängige Hinweise.
+- 2026-10-28 (Routenenden): Statt pulsierender Eintrittsmarken am Rand des Baubereichs teilen sich die
+  Ströme am Ziel in Arme entlang des Rings um die erreichte Basis (bis 5 Felder je Richtung, nur begehbare
+  Zellen); Arme verbreitern sich nicht gegenseitig.
