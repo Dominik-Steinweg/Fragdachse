@@ -200,6 +200,7 @@ describe('asset pipeline catalog contracts', () => {
       'kraken_brood_idle', 'kraken_brood_crawl', 'kraken_brood_spit', 'kraken_brood_leap',
       'toad_idle', 'toad_shuffle', 'toad_hop', 'toad_channel', 'toad_tongue',
       'kaboomtula_idle', 'kaboomtula_skitter', 'kaboomtula_spit', 'kaboomtula_alert', 'kaboomtula_leap',
+      'rabbit_idle', 'rabbit_bound', 'rabbit_bite', 'rabbit_windup', 'rabbit_leap',
       'puffball_swell', 'puffball_burst', 'puffball_refill', 'hive_shake', 'hive_release',
       'staff_work_hammer', 'staff_work_plan', 'staff_work_ledger', 'staff_work_weigh', 'staff_greet']) motions.add(motion);
     for (const asset of assets) {

@@ -122,7 +122,8 @@ Der Dispatch prüft zuerst `kraken_land_` → `kraken_motion_land_v2.apply_krake
 `kraken_egg_` → `kraken_egg_motion_v2.apply_kraken_egg` und
 `kraken_brood_` → `kraken_brood_motion_v2.apply_kraken_brood` (normaler Gegner Mini-Kraken),
 danach `kraken_`. `toad_` → `plague_toad_motion_v2.apply_plague_toad` (Quacksalber),
-`kaboomtula_` → `kaboomtula_motion_v2.apply_kaboomtula` (Kabummtula).
+`kaboomtula_` → `kaboomtula_motion_v2.apply_kaboomtula` (Kabummtula),
+`rabbit_` → `rabid_rabbit_motion_v2.apply_rabid_rabbit` (Rabid Rabbit).
 Alle Module werden erst beim jeweiligen Aufruf importiert; neue Präfixe brauchen
 zusätzlich ihren Eintrag in `motionModule` (`draft-v2.mjs`), sonst invalidieren
 Motion-Änderungen den Entwurfs-Cache nicht. Land und Ei enthalten

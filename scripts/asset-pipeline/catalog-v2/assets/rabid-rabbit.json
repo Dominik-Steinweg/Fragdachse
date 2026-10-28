@@ -1,0 +1,95 @@
+{
+  "id": "rabid-rabbit",
+  "label": "Rabid Rabbit",
+  "category": "enemy",
+  "gameIds": [],
+  "reference": "public/assets/sprites/enemies/enemy_rabid_rabbit.png",
+  "targetSize": 22,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "displayScale": 2.4,
+  "collisionDiameter": 22,
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Kleiner geduckter Hase in Draufsicht: eiförmiger Rumpf, an den Keulen am breitesten, schmaler Kopf mit Schnauze nach Norden; die zwei langen Ohren liegen flach nach hinten über Nacken und Schultern und sind das Erkennungsmerkmal von oben; die langen Hinterpfoten liegen an den Flanken, die Vorderpfoten unter der Brust.",
+    "colors": "Formvarianten-Prototypen (GA1): Wildfarben braungrau mit Agouti-Sprenkelung, schmutziges Weiß mit blutiger Schnauze, Kohleschwarz mit violettem Leuchten, aschgrau-grünlich; dunkler Rückensattel, helle Bauchfellkante als Kontur auf dunklem Boden, heller Augenring; Rot nur sparsam (bleibt den Telegraphen), kein Gelb.",
+    "anatomy": "Geschlossener Fellkörper mit Kopf (Bone head) und zweiteiligem Rücken (Bones body/hips) für das Strecken und Beugen im Galopp, Unterkiefer mit Nagezähnen (Bone jaw), zwei Ohr-Bones ear_l/ear_r, Stummelschwanz (Bone tail), Vorderbeine je upper/lower/foot und Hinterbeine je thigh/shin/foot mit den Kontaktmeshes `<leg> broad paw`, carriage-Control für echte Sprunghöhe; Sockets eyeLeft/eyeRight und mouth.",
+    "materials": "Mattes kurzes Fell auf Basis der Kraken-Hautschicht mit gemalter Fell-Locken-Textur (Wertplan, Agouti-Sprenkel), glänzende dunkle Augäpfel mit leuchtenden Iris-Ringen, elfenbeinfarbene Nagezähne, dunkle Krallen; je Form kahle Räudestellen, gerissenes Ohr, Nackenkamm oder leerenviolette Ohradern; keine Kameraneigung, kein Comic-Look.",
+    "stage": "GA1: Formprototypen a–d mit Paletten (draft.formVariant, draft.palette) zur Auswahl durch den User. gameIds bleiben bis zum Cutover leer."
+  },
+  "requiredClips": [
+    "move",
+    "claw",
+    "windup",
+    "leap",
+    "idle"
+  ],
+  "production": "reference",
+  "recipe": "rabid-rabbit",
+  "model": {
+    "formVariant": "a",
+    "palette": "wild"
+  },
+  "orthoScale": 6.2,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-body-fur-v2-q.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Mattes Hasenfell mit Agouti-Sprenkeln und leuchtenden Ringaugen",
+      "textureStrength": 0.7,
+      "formShadowStrength": 0.85
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "rabbit_bound",
+      "frameCount": 10,
+      "frameRate": 24,
+      "loop": true
+    },
+    {
+      "name": "claw",
+      "motion": "rabbit_bite",
+      "frameCount": 12,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 5,
+        "impact": 7
+      }
+    },
+    {
+      "name": "windup",
+      "motion": "rabbit_windup",
+      "frameCount": 12,
+      "frameRate": 18,
+      "loop": true
+    },
+    {
+      "name": "leap",
+      "motion": "rabbit_leap",
+      "frameCount": 20,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "launch": 5,
+        "land": 13
+      }
+    },
+    {
+      "name": "idle",
+      "motion": "rabbit_idle",
+      "frameCount": 16,
+      "frameRate": 12,
+      "loop": true
+    }
+  ]
+}
