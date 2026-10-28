@@ -4,29 +4,16 @@
   "gameIds": [
     "demon-badger"
   ],
-  "revision": "enemy-mesh-r4-010",
+  "revision": "db-v2-r2",
   "variant": "standard",
   "sourceSize": 128,
   "textureKey": "enemy_demon_badger",
-  "sheetTextureKey": "enemy_demon_badger_walking",
-  "idlePath": "./assets/sprites/pipeline-v2/demon-badger/idle.png",
-  "sheetPath": "./assets/sprites/pipeline-v2/demon-badger/sheet.png",
+  "runtimeContract": "sheet",
   "forward": "north",
   "pivot": [
     0.5,
     0.5
   ],
-  "layout": {
-    "frameWidth": 128,
-    "frameHeight": 128,
-    "margin": 2,
-    "spacing": 4,
-    "columns": 8,
-    "rows": 4,
-    "frameCount": 31,
-    "width": 1056,
-    "height": 528
-  },
   "displayScale": 2.4,
   "idleFrame": 0,
   "clips": [
@@ -47,7 +34,8 @@
         12
       ],
       "frameRate": 16,
-      "loop": true
+      "loop": true,
+      "end": "rest"
     },
     {
       "name": "claw",
@@ -76,12 +64,89 @@
       "markers": {
         "strike": 8,
         "impact": 11
-      }
+      },
+      "end": "rest"
+    },
+    {
+      "name": "idle",
+      "frames": [
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42
+      ],
+      "frameRate": 12,
+      "loop": true,
+      "end": "rest"
+    },
+    {
+      "name": "burst",
+      "frames": [
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "blast": 3
+      },
+      "start": "rest",
+      "end": "rest"
+    },
+    {
+      "name": "spit",
+      "frames": [
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "release": 4
+      },
+      "start": "rest",
+      "end": "rest"
     }
   ],
+  "sheetTextureKey": "enemy_demon_badger_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/demon-badger/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/demon-badger/sheet.png",
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 8,
+    "frameCount": 61,
+    "width": 1056,
+    "height": 1056
+  },
   "hashes": {
-    "idle": "ec9880bbe8996cd2e09ef8c6eaab830ba21f42f84bf8978f9f58f2d3b0a713d2",
-    "sheet": "c1393e9ab3d3c839072e42af492c96ebcba3879c2c8902aa1b616c7213e23da3"
+    "idle": "f21595f8c4159ea7990c26b4ce076feb1df9bd5ee26e70d0f13050cf3d4e7420",
+    "sheet": "b755107922da4372b8329967fb3e483ee627494c6ab9d0d445ceab75ac091578"
   },
   "eyeAnchors": {
     "version": 1,
@@ -581,14 +646,494 @@
           "height": 0.00572048,
           "rotation": 0.24000029
         }
+      },
+      {
+        "left": {
+          "x": 0.47843624,
+          "y": 0.39588926,
+          "width": 0.00895382,
+          "height": 0.00572049,
+          "rotation": -0.24000013
+        },
+        "right": {
+          "x": 0.52156376,
+          "y": 0.39588926,
+          "width": 0.00895379,
+          "height": 0.00572048,
+          "rotation": 0.24000029
+        }
+      },
+      {
+        "left": {
+          "x": 0.47424995,
+          "y": 0.39815006,
+          "width": 0.00897368,
+          "height": 0.00572692,
+          "rotation": -0.3170751
+        },
+        "right": {
+          "x": 0.51734718,
+          "y": 0.39478572,
+          "width": 0.00897449,
+          "height": 0.00572642,
+          "rotation": 0.16146886
+        }
+      },
+      {
+        "left": {
+          "x": 0.47118418,
+          "y": 0.40086732,
+          "width": 0.00902652,
+          "height": 0.00574495,
+          "rotation": -0.37119352
+        },
+        "right": {
+          "x": 0.514293,
+          "y": 0.39503391,
+          "width": 0.0090315,
+          "height": 0.00574186,
+          "rotation": 0.10349941
+        }
+      },
+      {
+        "left": {
+          "x": 0.46995314,
+          "y": 0.40312477,
+          "width": 0.00909792,
+          "height": 0.00576905,
+          "rotation": -0.38791583
+        },
+        "right": {
+          "x": 0.5133035,
+          "y": 0.39636753,
+          "width": 0.00910952,
+          "height": 0.00576197,
+          "rotation": 0.08161732
+        }
+      },
+      {
+        "left": {
+          "x": 0.47082085,
+          "y": 0.4042198,
+          "width": 0.00917145,
+          "height": 0.00579058,
+          "rotation": -0.36353982
+        },
+        "right": {
+          "x": 0.51467829,
+          "y": 0.39833758,
+          "width": 0.00918666,
+          "height": 0.00578151,
+          "rotation": 0.10068642
+        }
+      },
+      {
+        "left": {
+          "x": 0.47360907,
+          "y": 0.40394124,
+          "width": 0.0092298,
+          "height": 0.00580293,
+          "rotation": -0.30541629
+        },
+        "right": {
+          "x": 0.51801,
+          "y": 0.40052812,
+          "width": 0.00924089,
+          "height": 0.00579651,
+          "rotation": 0.15468131
+        }
+      },
+      {
+        "left": {
+          "x": 0.47768151,
+          "y": 0.4025493,
+          "width": 0.0092563,
+          "height": 0.00580434,
+          "rotation": -0.22925731
+        },
+        "right": {
+          "x": 0.52231849,
+          "y": 0.40254978,
+          "width": 0.00925633,
+          "height": 0.00580434,
+          "rotation": 0.22925777
+        }
+      },
+      {
+        "left": {
+          "x": 0.48199002,
+          "y": 0.40052767,
+          "width": 0.00924088,
+          "height": 0.00579651,
+          "rotation": -0.15468141
+        },
+        "right": {
+          "x": 0.52639091,
+          "y": 0.40394169,
+          "width": 0.00922978,
+          "height": 0.00580299,
+          "rotation": 0.30541709
+        }
+      },
+      {
+        "left": {
+          "x": 0.48532174,
+          "y": 0.39833721,
+          "width": 0.00918669,
+          "height": 0.00578151,
+          "rotation": -0.10068537
+        },
+        "right": {
+          "x": 0.52917911,
+          "y": 0.40422017,
+          "width": 0.00917148,
+          "height": 0.0057906,
+          "rotation": 0.36353993
+        }
+      },
+      {
+        "left": {
+          "x": 0.48669652,
+          "y": 0.39636729,
+          "width": 0.00910949,
+          "height": 0.00576197,
+          "rotation": -0.08161735
+        },
+        "right": {
+          "x": 0.53004684,
+          "y": 0.40312501,
+          "width": 0.00909789,
+          "height": 0.00576903,
+          "rotation": 0.38791654
+        }
+      },
+      {
+        "left": {
+          "x": 0.48570701,
+          "y": 0.39503379,
+          "width": 0.0090315,
+          "height": 0.00574186,
+          "rotation": -0.1034987
+        },
+        "right": {
+          "x": 0.52881581,
+          "y": 0.40086743,
+          "width": 0.00902649,
+          "height": 0.00574494,
+          "rotation": 0.37119377
+        }
+      },
+      {
+        "left": {
+          "x": 0.48265282,
+          "y": 0.39478568,
+          "width": 0.00897446,
+          "height": 0.00572642,
+          "rotation": -0.16146933
+        },
+        "right": {
+          "x": 0.52575005,
+          "y": 0.3981501,
+          "width": 0.00897373,
+          "height": 0.00572694,
+          "rotation": 0.31707678
+        }
+      },
+      {
+        "left": {
+          "x": 0.47843624,
+          "y": 0.39588926,
+          "width": 0.00895382,
+          "height": 0.00572049,
+          "rotation": -0.24000013
+        },
+        "right": {
+          "x": 0.52156376,
+          "y": 0.39588926,
+          "width": 0.00895379,
+          "height": 0.00572048,
+          "rotation": 0.24000029
+        }
+      },
+      {
+        "left": {
+          "x": 0.47768151,
+          "y": 0.39981204,
+          "width": 0.00922932,
+          "height": 0.00551794,
+          "rotation": -0.20498073
+        },
+        "right": {
+          "x": 0.52231849,
+          "y": 0.39981122,
+          "width": 0.00922934,
+          "height": 0.005518,
+          "rotation": 0.20498129
+        }
+      },
+      {
+        "left": {
+          "x": 0.47692678,
+          "y": 0.40461357,
+          "width": 0.00950253,
+          "height": 0.00528754,
+          "rotation": -0.17566346
+        },
+        "right": {
+          "x": 0.52307322,
+          "y": 0.40461199,
+          "width": 0.00950256,
+          "height": 0.00528755,
+          "rotation": 0.17566417
+        }
+      },
+      {
+        "left": {
+          "x": 0.47735806,
+          "y": 0.429783,
+          "width": 0.00936388,
+          "height": 0.00571602,
+          "rotation": -0.21419174
+        },
+        "right": {
+          "x": 0.52264194,
+          "y": 0.42978604,
+          "width": 0.00936385,
+          "height": 0.00571602,
+          "rotation": 0.21419185
+        }
+      },
+      {
+        "left": {
+          "x": 0.47784324,
+          "y": 0.41361543,
+          "width": 0.00918609,
+          "height": 0.00576334,
+          "rotation": -0.22930244
+        },
+        "right": {
+          "x": 0.52215676,
+          "y": 0.41361709,
+          "width": 0.00918605,
+          "height": 0.00576335,
+          "rotation": 0.22930227
+        }
+      },
+      {
+        "left": {
+          "x": 0.47813974,
+          "y": 0.40446341,
+          "width": 0.00907203,
+          "height": 0.0057509,
+          "rotation": -0.23579404
+        },
+        "right": {
+          "x": 0.52186026,
+          "y": 0.40446425,
+          "width": 0.00907206,
+          "height": 0.0057509,
+          "rotation": 0.23579434
+        }
+      },
+      {
+        "left": {
+          "x": 0.47843624,
+          "y": 0.39588926,
+          "width": 0.00895382,
+          "height": 0.00572049,
+          "rotation": -0.24000013
+        },
+        "right": {
+          "x": 0.52156376,
+          "y": 0.39588926,
+          "width": 0.00895379,
+          "height": 0.00572048,
+          "rotation": 0.24000029
+        }
+      },
+      {
+        "left": {
+          "x": 0.47843624,
+          "y": 0.39588926,
+          "width": 0.00895382,
+          "height": 0.00572049,
+          "rotation": -0.24000013
+        },
+        "right": {
+          "x": 0.52156376,
+          "y": 0.39588926,
+          "width": 0.00895379,
+          "height": 0.00572048,
+          "rotation": 0.24000029
+        }
+      },
+      {
+        "left": {
+          "x": 0.47843624,
+          "y": 0.39588926,
+          "width": 0.00895382,
+          "height": 0.00572049,
+          "rotation": -0.24000013
+        },
+        "right": {
+          "x": 0.52156376,
+          "y": 0.39588926,
+          "width": 0.00895379,
+          "height": 0.00572048,
+          "rotation": 0.24000029
+        }
+      },
+      {
+        "left": {
+          "x": 0.47746587,
+          "y": 0.40977109,
+          "width": 0.00934117,
+          "height": 0.0058206,
+          "rotation": -0.22569967
+        },
+        "right": {
+          "x": 0.52253412,
+          "y": 0.40977207,
+          "width": 0.00934113,
+          "height": 0.0058206,
+          "rotation": 0.22569965
+        }
+      },
+      {
+        "left": {
+          "x": 0.4764955,
+          "y": 0.42494865,
+          "width": 0.00972287,
+          "height": 0.00588316,
+          "rotation": -0.21037209
+        },
+        "right": {
+          "x": 0.5235045,
+          "y": 0.42495063,
+          "width": 0.00972281,
+          "height": 0.00588309,
+          "rotation": 0.210373
+        }
+      },
+      {
+        "left": {
+          "x": 0.47709929,
+          "y": 0.39851831,
+          "width": 0.0094837,
+          "height": 0.00584428,
+          "rotation": -0.21954467
+        },
+        "right": {
+          "x": 0.52290071,
+          "y": 0.39852015,
+          "width": 0.00948368,
+          "height": 0.00584428,
+          "rotation": 0.21954465
+        }
+      },
+      {
+        "left": {
+          "x": 0.47886752,
+          "y": 0.35679099,
+          "width": 0.00878379,
+          "height": 0.00570312,
+          "rotation": -0.25090923
+        },
+        "right": {
+          "x": 0.52113248,
+          "y": 0.35679154,
+          "width": 0.00878376,
+          "height": 0.00570306,
+          "rotation": 0.2509096
+        }
+      },
+      {
+        "left": {
+          "x": 0.47878126,
+          "y": 0.36454991,
+          "width": 0.00881798,
+          "height": 0.00570838,
+          "rotation": -0.24874685
+        },
+        "right": {
+          "x": 0.52121874,
+          "y": 0.36455035,
+          "width": 0.00881797,
+          "height": 0.00570838,
+          "rotation": 0.24874847
+        }
+      },
+      {
+        "left": {
+          "x": 0.47843624,
+          "y": 0.41992834,
+          "width": 0.00895177,
+          "height": 0.00570225,
+          "rotation": -0.23875623
+        },
+        "right": {
+          "x": 0.52156376,
+          "y": 0.41992916,
+          "width": 0.00895174,
+          "height": 0.00570232,
+          "rotation": 0.23875697
+        }
+      },
+      {
+        "left": {
+          "x": 0.47843624,
+          "y": 0.41026345,
+          "width": 0.00895307,
+          "height": 0.00571261,
+          "rotation": -0.23955135
+        },
+        "right": {
+          "x": 0.52156376,
+          "y": 0.41026393,
+          "width": 0.00895304,
+          "height": 0.00571261,
+          "rotation": 0.2395517
+        }
+      },
+      {
+        "left": {
+          "x": 0.47843624,
+          "y": 0.40066363,
+          "width": 0.00895374,
+          "height": 0.00571962,
+          "rotation": -0.23995004
+        },
+        "right": {
+          "x": 0.52156376,
+          "y": 0.40066379,
+          "width": 0.00895371,
+          "height": 0.00571961,
+          "rotation": 0.23995
+        }
+      },
+      {
+        "left": {
+          "x": 0.47843624,
+          "y": 0.39588926,
+          "width": 0.00895382,
+          "height": 0.00572049,
+          "rotation": -0.24000013
+        },
+        "right": {
+          "x": 0.52156376,
+          "y": 0.39588926,
+          "width": 0.00895379,
+          "height": 0.00572048,
+          "rotation": 0.24000029
+        }
       }
     ],
     "source": {
-      "revision": "enemy-mesh-r4-010",
+      "revision": "db-v2-r2",
       "variant": "standard",
-      "blendSha256": "6481cb9d9e09fb2cb6ad618529f2b8d1372ee604756d1383e9b6aa2035ee9861",
-      "sheetSha256": "c1393e9ab3d3c839072e42af492c96ebcba3879c2c8902aa1b616c7213e23da3",
-      "idleSha256": "ec9880bbe8996cd2e09ef8c6eaab830ba21f42f84bf8978f9f58f2d3b0a713d2"
+      "blendSha256": "32e8501940e166b9c721f9986df61288e3fc27be8f078df92147811588ac3d6a",
+      "sheetSha256": "b755107922da4372b8329967fb3e483ee627494c6ab9d0d445ceab75ac091578",
+      "idleSha256": "f21595f8c4159ea7990c26b4ce076feb1df9bd5ee26e70d0f13050cf3d4e7420"
     }
   }
 }

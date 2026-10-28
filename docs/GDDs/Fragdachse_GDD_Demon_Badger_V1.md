@@ -2,8 +2,8 @@
 
 - Version: 1.0
 - Datum: 2026-10-28
-- Status: in Umsetzung auf Branch `demon-badger` (Verhalten, Netz, Effekte fertig; Modellüberarbeitung mit
-  Hitzezonen, Clips `idle`/`burst`/`spit` und Emissions-Sheet in der Asset-Lane); Endabnahme durch den User offen
+- Status: umgesetzt auf Branch `demon-badger` (Verhalten, Netz, Effekte; Produktionsmodell `db-v2-r2` mit
+  Hitzezonen, Clips `idle`/`burst`/`spit`, Emissions-Sheet und Schattenmesh `enemy-mesh-db-v2-r2`); Endabnahme durch den User offen
 - Spielmodus: Coop Defense (Kampagne, From Dachs Till Dawn)
 - Name: Dämonen-Dachs / Demon Badger
 - Gegner-ID: `demon-badger` (Registry-Position und Wire-Kind-Index 1 unverändert)

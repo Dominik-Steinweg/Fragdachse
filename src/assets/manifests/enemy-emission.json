@@ -1,4 +1,36 @@
 {
   "version": 1,
-  "assets": {}
+  "assets": {
+    "demon-badger": {
+      "revision": "db-v2-r2",
+      "sheet": "./assets/sprites/pipeline-v2/demon-badger/emission-heat.png",
+      "sha256": "52cd3740f6734b4df894ace84eb7184c3dba1050c9d07ee48031350cea9944f3",
+      "beautySheetSha256": "b755107922da4372b8329967fb3e483ee627494c6ab9d0d445ceab75ac091578",
+      "channel": "heat",
+      "hue": "neutral",
+      "variant": "standard",
+      "sourceSize": 128,
+      "encoding": "srgb-hue-alpha-intensity",
+      "range": 1,
+      "peak": 1,
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 8,
+        "frameCount": 61,
+        "width": 1056,
+        "height": 1056
+      },
+      "eyeCheck": {
+        "frames": 61,
+        "samples": 5212,
+        "maxAlpha": 0,
+        "meanAlpha": 0,
+        "limit": 0.08
+      }
+    }
+  }
 }
