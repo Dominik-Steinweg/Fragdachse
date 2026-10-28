@@ -6,7 +6,7 @@ vi.mock('../../src/ui/PersistentBaseDragPreview', () => ({ createPersistentBaseD
   setPosition: vi.fn().mockReturnThis(), setScale: vi.fn().mockReturnThis(), destroy: vi.fn(),
 })) }));
 
-import { PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS, PersistentBaseEditorScene } from '../../src/scenes/PersistentBaseEditorScene';
+import { PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS, PERSISTENT_BASE_EDITOR_WARM_FRAMES, PersistentBaseEditorScene } from '../../src/scenes/PersistentBaseEditorScene';
 import { PersistentBaseEditorModel } from '../../src/persistentBase/PersistentBaseEditorModel';
 import { getStoredCoopDefenseProgress } from '../../src/utils/localPreferences';
 import { CELL_SIZE, GAME_WIDTH } from '../../src/config';
@@ -64,13 +64,43 @@ describe('base menu drag interaction', () => {
     expect(world.update).toHaveBeenLastCalledWith(16, 16, view, PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.urgent);
     expect(scene.isReady()).toBe(false);
     const whenReady = scene.whenReady();
+    const camera = { setAlpha: vi.fn() };
+    Object.assign(scene, { cameras: { cameras: [camera] } });
     ready = true;
-    scene.update(32, 16);
+    // Hidden cameras never draw: the stage first draws a few frames at an invisible alpha.
+    for (let frame = 0; frame < PERSISTENT_BASE_EDITOR_WARM_FRAMES; frame++) {
+      scene.update(32 + frame * 16, 16);
+      expect(scene.isReady()).toBe(false);
+      expect(camera.setAlpha).toHaveBeenLastCalledWith(expect.closeTo(0, 2));
+      expect(camera.setAlpha.mock.lastCall[0]).toBeGreaterThan(0);
+    }
+    scene.update(64, 16);
     await expect(whenReady).resolves.toBeUndefined();
     expect(scene.isReady()).toBe(true);
+    expect(camera.setAlpha).toHaveBeenLastCalledWith(0);
     // Ready and without a session, the stage rests until the next one.
+    const calls = world.update.mock.calls.length;
+    scene.update(80, 16);
+    expect(world.update).toHaveBeenCalledTimes(calls);
+  });
+  it('builds in slices, and a heavy step waits for a calm lobby unless a player waits', () => {
+    const { scene } = harness();
+    Object.assign(scene, { ready: false, closed: true, options: null });
+    const ran: string[] = [];
+    scene.building = (function* () { ran.push('a'); yield; ran.push('b'); yield 'heavy'; ran.push('heavy'); yield; ran.push('c'); })();
+    scene.setCalm(false);
+    scene.update(0, 16);
+    scene.update(16, 16);
+    expect(ran).toEqual(['a', 'b']);
+    scene.setCalm(true);
+    scene.update(32, 16);
+    expect(ran).toEqual(['a', 'b', 'heavy', 'c']);
+    expect(scene.building).toBeNull();
+    const urgent: string[] = [];
+    scene.building = (function* () { yield 'heavy'; urgent.push('heavy'); yield 'heavy'; urgent.push('heavier'); })();
+    scene.setCalm(false); scene.setUrgent(true);
     scene.update(48, 16);
-    expect(world.update).toHaveBeenCalledTimes(3);
+    expect(urgent).toEqual(['heavy', 'heavier']);
   });
   it.each([false, true])('shows a session on the ready stage at once (transition: %s)', transitioning => {
     const { scene } = harness(1, 11);

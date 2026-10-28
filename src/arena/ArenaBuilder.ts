@@ -164,6 +164,9 @@ export interface ArenaBuilderDynamicOptions {
   readonly vegetationClearings?: readonly VegetationClearing[];
 }
 
+/** A pause in a stepwise build; `'heavy'`: the next step takes tens of milliseconds at once. */
+export type ArenaBuildPause = void | 'heavy';
+
 export class ArenaBuilder {
   private scene: Phaser.Scene;
   private leftSidebar: Phaser.GameObjects.Rectangle | null = null;
@@ -241,6 +244,19 @@ export class ArenaBuilder {
    * gespeichert werden; `destroy()` räumt alles wieder auf.
    */
   buildDynamic(layout: ArenaLayout, options: ArenaBuilderDynamicOptions): ArenaBuilderResult {
+    const stages = this.buildDynamicStages(layout, options);
+    for (;;) {
+      const step = stages.next();
+      if (step.done) return step.value;
+    }
+  }
+
+  /**
+   * `buildDynamic` in steps: it pauses between the expensive ones, so a World built ahead of time
+   * (the Bauhof's stage in the lobby) can spread them over frames. Order and result are the same.
+   * A pause yielding `'heavy'` announces a step too long for a frame in motion.
+   */
+  *buildDynamicStages(layout: ArenaLayout, options: ArenaBuilderDynamicOptions): Generator<ArenaBuildPause, ArenaBuilderResult> {
     const worldMetrics = options.worldMetrics;
     if (!worldMetrics) {
       throw new Error('[ArenaBuilder] Dynamic world build requires WorldMetrics');
@@ -284,6 +300,7 @@ export class ArenaBuilder {
       // water surface above covers them.
       p.sizePx * (p.anchor === 'bank' ? .3 : p.sizePx > 3 * CELL_SIZE ? .1 : Math.SQRT2 / 2)))
       .filter(p => !isInVegetationClearing(options.vegetationClearings, p.worldX, p.worldY, p.sizePx * .5));
+    yield;
 
     // Felsen mit Autotiling
     for (let i = 0; i < layout.rocks.length; i++) {
@@ -318,6 +335,7 @@ export class ArenaBuilder {
       rockGrid.setBlobParticipation(id, false);
       rockGrid.set(cell.gridX, cell.gridY, id);
     }
+    yield;
 
     // Bäume (Trunk + Canopy)
     for (const { gridX, gridY } of layout.trees) {
@@ -338,6 +356,7 @@ export class ArenaBuilder {
         canopyObjects.push({ gfx: this.createCanopyVisual(worldX, worldY), worldX, worldY });
       }
     }
+    yield 'heavy';
 
     const rockVisualSystem = presentation
       ? new RockVisualSystem(
@@ -349,6 +368,7 @@ export class ArenaBuilder {
         true,
       )
       : null;
+    yield;
     const result: ArenaBuilderResult = {
       baseZoneObjects,
       rockGroup,
@@ -379,6 +399,7 @@ export class ArenaBuilder {
     // Die Materialquelle muss den vollstaendigen Bestand kennen, bevor der erste Chunk gebacken
     // wird: Sie entscheidet, welche Flecken ueberhaupt entstehen (siehe `RockOverlayRegions`).
     syncRockOverlaySource(result.rockOverlaySource, layout.rocks);
+    yield;
 
     if (presentation) {
       result.groundSurface = new GroundSurfaceStreamer({
@@ -390,6 +411,7 @@ export class ArenaBuilder {
         persistentBaseGravel: options.persistentBaseGravel,
         vegetationClearings: options.vegetationClearings,
       });
+      yield;
       // Erst nach dem Erzeugen der Live-Felsen, damit der Streamer beim ersten Bake exakt die
       // aktiven Fels-IDs sieht.
       result.rockOverlaySurface = new RockOverlayStreamer({

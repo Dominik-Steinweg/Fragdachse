@@ -37,6 +37,8 @@ import { AfterRoundTransition, type AfterRoundView } from '../ui/AfterRoundTrans
 import { LazyOverlayGate } from '../ui/LazyOverlayGate';
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { ArenaBaseEditorPreparation, baseEditorStageKey } from './arena/ArenaBaseEditorPreparation';
+/** Standing still this long makes the lobby calm enough for a heavy build step of the Bauhof's stage. */
+const BASE_EDITOR_CALM_MS = 400;
 import { composeArenaVoice } from './arena/ArenaVoiceComposition';
 import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
@@ -360,6 +362,8 @@ export class ArenaScene extends Phaser.Scene {
   private baseEditorGate: LazyOverlayGate | null = null;
   /** Real frame gaps while the Bauhof's loading run is open (Phaser's delta is smoothed). */
   private lastBaseEditorFrameAt = 0;
+  /** Where the local player last moved, and since when it stands there (see `isLobbyCalm`). */
+  private lobbyCalm = { x: NaN, y: NaN, since: 0 };
   private readonly deploymentTerrain = new ArenaDeploymentTerrain(bridge);
   /** The Bauhof's stage between sessions: kept while its terrain is the next round's. */
   private readonly baseEditorPreparation = new ArenaBaseEditorPreparation({
@@ -2523,8 +2527,21 @@ export class ArenaScene extends Phaser.Scene {
     const identity = eligible ? this.resolveBaseEditorTerrainIdentity() : null;
     this.baseEditorPreparation.tick({ now: performance.now(), eligible, busy: this.baseEditor !== null || this.pendingBaseEditor !== null,
       key: identity === undefined ? undefined : this.baseEditorStageKey(identity),
-      near: eligible && this.isNearBaseEditorYard(),
+      near: eligible && this.isNearBaseEditorYard(), calm: this.isLobbyCalm(),
       options: () => this.baseEditorStageOptions(this.resolveBaseEditorTerrain() ?? null) });
+  }
+
+  /**
+   * Calm enough for a heavy build step of the Bauhof's stage: a menu covers the lobby, or the local
+   * player has stood still for a moment, so a long frame does not stutter a movement.
+   */
+  private isLobbyCalm(): boolean {
+    const now = performance.now();
+    const sprite = this.ctx?.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
+    if (sprite && (Math.abs(sprite.x - this.lobbyCalm.x) > .5 || Math.abs(sprite.y - this.lobbyCalm.y) > .5)) {
+      this.lobbyCalm = { x: sprite.x, y: sprite.y, since: now };
+    }
+    return now - this.lobbyCalm.since >= BASE_EDITOR_CALM_MS || this.isWorldMenuBlocking();
   }
 
   /** The local player is about where the Bauhof's name plate shows. */

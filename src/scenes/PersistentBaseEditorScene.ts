@@ -42,6 +42,7 @@ import { createDawnMerchantExpansionPreview, createPersistentBaseEditorBoundary 
 import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
 import { formatTimeOfDay } from '../effects/TimeOfDay';
+import type { ArenaBuildPause } from '../arena/ArenaBuilder';
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 
 const WORLD_PANEL = { x: 88, y: 236, width: 1000, height: 680 };
@@ -84,6 +85,14 @@ export interface PersistentBaseEditorOptions {
 }
 /** Bake budget per frame while the hidden stage prepares in the lobby, and while a player waits for it. */
 export const PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS = { background: 1.5, urgent: 24 } as const;
+/** Build steps per lobby frame while the stage prepares in the background (at least one step). */
+export const PERSISTENT_BASE_EDITOR_BUILD_SLICE_MS = 4;
+/**
+ * Hidden cameras never draw, so a stage's first visible frame would link its shaders and allocate
+ * its buffers. Before it counts as ready it draws this many frames at an invisible alpha.
+ */
+export const PERSISTENT_BASE_EDITOR_WARM_FRAMES = 2;
+const WARM_ALPHA = .001;
 
 /**
  * Menu-only input over a small regular World. No avatar or movement bindings. The draft is
@@ -147,6 +156,12 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private routeHint: Phaser.GameObjects.Text | null = null;
   private breachWarning: Phaser.GameObjects.Container | null = null;
   private options: PersistentBaseEditorOptions | null = null;
+  /** The stage's remaining build steps; `null` once built. */
+  private building: Generator<ArenaBuildPause, void> | null = null;
+  /** The next build step is heavy; in the background it waits for a calm lobby. */
+  private heavyNext = false;
+  private calm = false;
+  private warmFrames = 0;
   constructor(private readonly stage: PersistentBaseEditorStageOptions) {
     super(PersistentBaseEditorScene.KEY);
     this.expansion = expansionFor(stage.model);
@@ -164,7 +179,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   get terrain(): PersistentBaseEditorTerrain | null { return this.stage.terrain; }
   private get view() { return this.framing.view; }
   /** Overview of the whole map beside the table; without map terrain a short note. */
-  private createSituationMap(): void {
+  private *createSituationMap(): Generator<ArenaBuildPause, void> {
     const panel = PERSISTENT_BASE_EDITOR_MINIMAP_PANEL, terrain = this.stage.terrain, chrome = this.chrome;
     chrome.add(this.add.rectangle(panel.x, panel.y, panel.width, panel.height, 0x101b14, .55)
       .setOrigin(0).setStrokeStyle(1, 0x718160, .5));
@@ -182,6 +197,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     // Where routes cannot be shown on the base, the reason gets its own strip below the overview.
     const hint = this.routeHintText(this.world.planRoutes());
     const hintHeight = hint ? 40 : 0;
+    yield;
     this.minimap = createPersistentBaseEditorMinimap(this, {
       layout: terrain.layout, widthCells: terrain.definition.metrics.widthCells, heightCells: terrain.definition.metrics.heightCells,
       bases: this.world.world.bases, persistentBaseId: this.world.world.persistentBaseSite?.baseId ?? null,
@@ -190,6 +206,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
         maxX: (view.x + view.width) / CELL_SIZE - 1, maxY: (view.y + view.height) / CELL_SIZE - 1 },
     }, { x: panel.x + 8, y: panel.y + 8, width: panel.width - 16, height: panel.height - 16 - hintHeight });
     chrome.add(this.minimap.image);
+    yield;
     const origin = this.minimap.cellToScreen(0, 0);
     this.world.attachRouteMinimap(chrome, { originX: origin.x - this.minimap.scale / 2, originY: origin.y - this.minimap.scale / 2,
       unit: this.minimap.scale / CELL_SIZE });
@@ -207,7 +224,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   }
   private get worldZoom(): number { return this.framing.zoom; }
 
-  /** Builds the stage: hidden, without a session, until `open`. */
+  /** Starts the stage: hidden, without a session; `update` builds it in steps until `open` can show it. */
   create(): void {
     this.quality = new GraphicsQualityController(getStoredGraphicsQuality());
     this.quality.attach(this);
@@ -216,8 +233,16 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.getTransitionView().setAlpha(0);
     this.cameraRegistry = new ClarityCameraRegistry(this, this.cameras.main, this.clarity);
     this.cameraRegistry.install();
-    const chrome = this.chrome = this.add.container(0, 0);
-    this.cameraRegistry.promote(chrome);
+    this.chrome = this.add.container(0, 0);
+    this.cameraRegistry.promote(this.chrome);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.dispose());
+    this.setTransitionInputBlocked(true);
+    this.building = this.buildStage();
+  }
+
+  /** Chrome, World, overview and handlers, in steps short enough for a lobby frame. */
+  private *buildStage(): Generator<ArenaBuildPause, void> {
+    const chrome = this.chrome;
     const menu = UPGRADE_MENU;
     // Match Upgrades: the existing lobby remains visible outside the timber frame.
     for (const crop of this.outsideWorld(0, 0, GAME_WIDTH, GAME_HEIGHT)) {
@@ -245,6 +270,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.label(menu.centerX, menu.headerY + 4, t('ui.base.title').toLocaleUpperCase(), 'display', .5, undefined, chrome)
       .setFontSize(44).setColor('#efe4bd').setStroke('#1e160f', 3);
     this.label(menu.centerX, 170, t('ui.base.subtitle'), 'body', .5, 1700, chrome);
+    yield;
     this.stats = this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 216, '', 'section', .5, WORLD_PANEL.width, chrome);
     const frameWidth = Math.round(this.view.width + 40), frameHeight = Math.round(this.view.height + 40);
     chrome.add(this.add.image(this.view.x + this.view.width / 2, this.view.y + this.view.height / 2,
@@ -275,10 +301,13 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       this.showRanges = !this.showRanges;
       this.refreshRanges();
     });
+    yield;
     this.world = new PersistentBaseEditorWorld(this, this.stage.model, this.stage.color,
       { previewArea: this.expansion?.area, terrain: this.stage.terrain });
+    yield* this.world.build();
+    yield;
     const situationMap = loadingTimeline.start();
-    this.createSituationMap();
+    yield* this.createSituationMap();
     loadingTimeline.end('editor/situation-map', situationMap);
     this.grid = this.add.graphics().setDepth(10000).setVisible(false);
     this.selection = this.add.graphics().setDepth(10001);
@@ -322,8 +351,36 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
         model.remove(this.selected); this.endDrag(); this.syncDraft();
       }
     });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.dispose());
-    this.setTransitionInputBlocked(true);
+  }
+
+  /**
+   * Runs build steps: a slice of the lobby frame in the background, all of them while a player waits.
+   * A heavy step gets a frame of its own and, in the background, waits for a calm lobby.
+   */
+  private stepBuild(): void {
+    const building = this.building!;
+    const deadline = this.urgent ? Infinity : performance.now() + PERSISTENT_BASE_EDITOR_BUILD_SLICE_MS;
+    do {
+      if (this.heavyNext && !this.urgent && !this.calm) return;
+      const step = building.next();
+      if (step.done) { this.building = null; return; }
+      this.heavyNext = step.value === 'heavy';
+      if (this.heavyNext && !this.urgent) return;
+    } while (!this.disposed && performance.now() < deadline);
+  }
+
+  /** Invisible frames before the stage counts as ready; the first one is heavy and waits for calm. */
+  private warm(): void {
+    const view = this.getTransitionView();
+    if (this.warmFrames < PERSISTENT_BASE_EDITOR_WARM_FRAMES) {
+      if (this.warmFrames === 0 && !this.urgent && !this.calm) return;
+      this.warmFrames++;
+      view.setAlpha(WARM_ALPHA);
+      return;
+    }
+    view.setAlpha(0);
+    this.ready = true;
+    for (const waiter of this.readyWaiters.splice(0)) waiter.resolve();
   }
 
   /** The stage's World is ready: a session opens at once. */
@@ -336,6 +393,8 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   }
   /** A player waits for this stage: its bakes may take most of the frame. */
   setUrgent(urgent: boolean): void { this.urgent = urgent; }
+  /** The lobby is calm (the player stands still or a menu is open): a heavy build step may run now. */
+  setCalm(calm: boolean): void { this.calm = calm; }
 
   /** Lays a session over the ready stage and shows it. */
   open(options: PersistentBaseEditorOptions): void {
@@ -415,6 +474,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.input.enabled = false;
     this.scale.off('resize', this.resize, this);
     this.revealTween?.remove(); this.revealTween = null;
+    this.building = null;
     this.dragPreview?.destroy(true);
     this.expansionPreview?.destroy(true); this.expansionPreview = null;
     for (const ring of this.rangeRings.values()) ring.destroy();
@@ -735,7 +795,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     if (this.presentationReady && ++this.framesShown >= 3) run.finish('ready');
   }
   update(now: number, delta: number): void {
-    if (!this.world || this.disposed) return;
+    if (this.disposed) return;
+    if (this.building) { this.stepBuild(); return; }
+    if (!this.world) return;
     // A ready stage without a session rests until the next one.
     if (this.ready && this.closed) return;
     const view = this.world.view;
@@ -743,10 +805,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       : this.urgent ? PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.urgent : PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.background;
     this.world.update(now, delta, view, budget);
     this.measureLoading(view);
-    if (!this.ready && this.world.isReadyForView(view)) {
-      this.ready = true;
-      for (const waiter of this.readyWaiters.splice(0)) waiter.resolve();
-    }
+    if (!this.ready && this.world.isReadyForView(view)) this.warm();
   }
 }
 

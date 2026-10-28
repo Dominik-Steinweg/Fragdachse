@@ -7,7 +7,7 @@ import {
 
 function fakeStage() {
   let ready = false;
-  return { isReady: () => ready, setUrgent: vi.fn(), closeSession: vi.fn(), finish: () => { ready = true; } };
+  return { isReady: () => ready, setUrgent: vi.fn(), setCalm: vi.fn(), closeSession: vi.fn(), finish: () => { ready = true; } };
 }
 
 function harness() {
@@ -18,7 +18,7 @@ function harness() {
     remove: (stage) => { removed.push(stage); },
   });
   const tick = (now: number, key: string | null | undefined, frame: Partial<BaseEditorPreparationFrame> = {}) =>
-    preparation.tick({ now, key, eligible: true, busy: false, near: false, options: () => ({}) as never, ...frame });
+    preparation.tick({ now, key, eligible: true, busy: false, near: false, calm: true, options: () => ({}) as never, ...frame });
   return { preparation, added, removed, tick };
 }
 

@@ -21,6 +21,8 @@ export interface BaseEditorPreparationFrame {
   readonly busy: boolean;
   /** The player is near the Bauhof: no quiet time. */
   readonly near: boolean;
+  /** The lobby is calm (player standing, or a menu open): heavy build steps may run. */
+  readonly calm: boolean;
   readonly options: () => PersistentBaseEditorStageOptions;
 }
 
@@ -48,6 +50,7 @@ export class ArenaBaseEditorPreparation {
    * changed one waits for quiet unless the player is near the Bauhof.
    */
   tick(frame: BaseEditorPreparationFrame): void {
+    this.current?.stage.setCalm(frame.calm);
     if (frame.busy) return;
     if (!frame.eligible || frame.key === null) {
       this.release();

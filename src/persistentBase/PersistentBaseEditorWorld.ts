@@ -4,7 +4,7 @@ import * as Phaser from 'phaser';
 import { CELL_SIZE, getAuthoredWorldMetricsProfile, type ArenaMetricsProfile } from '../config';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import { createWorldRuntimeContext, type WorldRuntimeContext } from '../world/WorldRuntimeContext';
-import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
+import { ArenaBuilder, type ArenaBuilderResult, type ArenaBuildPause } from '../arena/ArenaBuilder';
 import { ARENA_GENERATOR_VERSION } from '../arena/ArenaGenerator';
 import { cropArenaLayout, type ArenaGridWindow } from '../arena/ArenaLayoutWindow';
 import { resolveSpawnStructureVegetationClearings } from '../arena/BaseRegistry';
@@ -78,30 +78,33 @@ export class PersistentBaseEditorWorld {
   readonly siteArea: PersistentBaseBuildArea;
   readonly terrain: PersistentBaseEditorTerrain | null;
   private readonly bounds: WorldRect;
-  private readonly arena: ArenaBuilderResult;
-  private readonly bases: BaseManager;
-  private readonly bridges: BridgeRenderer | null;
-  private readonly background: ReturnType<typeof createArenaBackground>;
-  private readonly lighting: LightingSystem;
-  private readonly shadows: ShadowSystem;
+  /** The window of the round's terrain this World builds: the view plus a margin. */
+  private readonly window: ArenaGridWindow;
+  // Presentation, built in steps by `build`.
+  private arena!: ArenaBuilderResult;
+  private bases!: BaseManager;
+  private bridges: BridgeRenderer | null = null;
+  private background!: ReturnType<typeof createArenaBackground>;
+  private lighting!: LightingSystem;
+  private shadows!: ShadowSystem;
   private presentationTimeMs=0;
-  private readonly sunlight: WorldSunlightPresentation;
-  private readonly fx: CameraPostFxController;
-  private readonly powerUps: PowerUpRenderer;
-  private readonly gpu: GpuVfxSystem;
+  private sunlight!: WorldSunlightPresentation;
+  private fx!: CameraPostFxController;
+  private powerUps!: PowerUpRenderer;
+  private gpu!: GpuVfxSystem;
   private readonly animations = new TurretAnimationController();
   private readonly watchtowers = new Map<string, WatchtowerVisual>();
   private readonly turrets = new Map<string, { visual: WorldTurretVisual; raised: boolean }>();
   private readonly pedestalIds = new Map<string, number>();
   private readonly wallIds = new Map<string, number>();
   private readonly layout: ArenaLayout;
-  private readonly occluders: LightOccluderIndex;
+  private occluders!: LightOccluderIndex;
   private readonly blocked = new Set<string>();
   private mates: readonly PersistentBaseEditorMateObject[] = [];
   /** Cells the draft, the rewards and the teammates block in the round, as the routes see them. */
   private constructionCells: readonly { gridX: number; gridY: number }[] = [];
-  private readonly routePlanner: DeploymentRoutePlanner | null;
-  private readonly routes: RouteFlowPresentation | null;
+  private routePlanner: DeploymentRoutePlanner | null = null;
+  private routes: RouteFlowPresentation | null = null;
   private shadowsInitialized = false;
   /** The last plan and the cells it was planned with; an unchanged draft reuses it. */
   private lastPlan: { readonly cells: string; readonly plan: DeploymentRoutePlan } | null = null;
@@ -110,9 +113,6 @@ export class PersistentBaseEditorWorld {
 
   constructor(private readonly scene: Phaser.Scene, private model: PersistentBaseEditorModel, private color: number,
     options: { readonly previewArea?: PersistentBaseBuildArea; readonly terrain?: PersistentBaseEditorTerrain | null } = {}) {
-    // Measured sections of the Bauhof's loading run ('editor'); free without an open run.
-    let mark = loadingTimeline.start();
-    const section = (name: string): void => { loadingTimeline.end(`editor/${name}`, mark); mark = loadingTimeline.start(); };
     ensureWatchtowerTexture(scene);
     this.terrain = options.terrain ?? null;
     this.timeOfDay = (this.terrain && parseTimeOfDay(this.terrain.definition.initialTimeOfDay)) ?? DEFAULT_LOBBY_TIME_OF_DAY_MINUTES;
@@ -155,20 +155,32 @@ export class PersistentBaseEditorWorld {
       this.view = cellRect(window);
       this.layout = { seed: this.world.descriptor.seed, rocks: [], trees: [], tracks: [], dirt: [], water: [], decals: [], powerUpPedestals: [] };
     }
-    section('context');
+    this.window = window;
     this.bounds = cellRect(window);
+  }
+  /**
+   * Builds the presentation in steps: a stage prepared in the lobby spreads them over frames, a
+   * player waiting for it runs them at once. Nothing but `destroy` may be used before it finishes.
+   */
+  *build(): Generator<ArenaBuildPause, void> {
+    // Measured sections of the Bauhof's loading run ('editor'); free without an open run.
+    let mark = loadingTimeline.start();
+    const section = (name: string): void => { loadingTimeline.end(`editor/${name}`, mark); mark = loadingTimeline.start(); };
+    const scene = this.scene, window = this.window;
     const viewport = { width: this.bounds.width, height: this.bounds.height };
     this.background = createArenaBackground(scene, this.bounds.x + this.bounds.width / 2, this.bounds.y + this.bounds.height / 2,
       viewport.width, viewport.height);
     section('background');
+    yield;
     // Only bases that stand when the round starts; dormant objectives appear later in a mission.
     const bases = this.world.bases.filter((base) => !base.dormant
       && base.cells.some((cell) => cell.gridX >= window.minX && cell.gridX <= window.maxX && cell.gridY >= window.minY && cell.gridY <= window.maxY));
     const gravel = { anchor: this.anchor, buildArea: this.siteArea, seed: this.world.descriptor.seed };
     // Terrain is built once. Personal buildings enter through the normal runtime wall path.
-    this.arena = new ArenaBuilder(scene).buildDynamic(this.layout, { worldMetrics: this.world.metrics, presentation: true,
+    this.arena = yield* new ArenaBuilder(scene).buildDynamicStages(this.layout, { worldMetrics: this.world.metrics, presentation: true,
       enablePersistentBaseGravel: true, persistentBaseGravel: gravel, vegetationClearings: resolveSpawnStructureVegetationClearings(bases) });
     section('arena');
+    yield;
     this.bridges = this.layout.bridges?.length ? new BridgeRenderer(scene, this.layout.bridges, this.world.metrics) : null;
     section('bridges');
     this.lighting = new LightingSystem(scene, viewport);
@@ -180,11 +192,15 @@ export class PersistentBaseEditorWorld {
     this.occluders = new LightOccluderIndex({ rocks: () => this.arena.rockPhysicsProxies,
       trunks: () => [], baseCells: () => this.bases.getObstacleRectangles(), baseGeneration: () => this.bases.getObstacleGeneration() });
     this.lighting.setOccluderIndex(this.occluders);
+    yield 'heavy';
     this.gpu = new GpuVfxSystem(scene);
+    section('gpu');
+    yield;
     this.powerUps = new PowerUpRenderer(scene);
     this.powerUps.setLightingSystem(this.lighting);
     this.powerUps.registerGpuVfx(this.gpu);
-    section('gpu+powerups');
+    section('powerups');
+    yield;
     this.shadows = new ShadowSystem(scene);
     this.shadows.setWorldBoundsOverride({ minX: this.bounds.x, minY: this.bounds.y,
       maxX: this.bounds.x + this.bounds.width, maxY: this.bounds.y + this.bounds.height });
@@ -204,6 +220,7 @@ export class PersistentBaseEditorWorld {
       bossPhase: 0, localHpFraction: 1, gamePhase: 'ARENA' };
     this.fx.setBaseGrade(resolveBaseGrade(grade), grade);
     section('postfx');
+    yield 'heavy';
     this.sunlight=new WorldSunlightPresentation(scene,{
       ground:this.arena.groundSurface,rocks:this.arena.rockVisualSystem,rockOverlays:this.arena.rockOverlaySurface,
       canopies:this.arena.canopyObjects,water:this.arena.waterSurface,wildlife:this.arena.wildlife,
@@ -211,6 +228,7 @@ export class PersistentBaseEditorWorld {
       structures:{setSunlight:(light)=>this.bases.setFortSunlight(light)},
     });
     section('sunlight');
+    yield;
     // Enemy routes of the next round over the real terrain (Lagekarte); only maps with a mission.
     this.routePlanner = this.terrain && mapConfig ? new DeploymentRoutePlanner({ mapConfig, worldMetrics: this.world.metrics,
       layout: this.terrain.layout, bases: this.world.bases.filter((base) => !base.dormant),
@@ -218,8 +236,10 @@ export class PersistentBaseEditorWorld {
     this.routes = this.routePlanner ? new RouteFlowPresentation(scene, this.lighting) : null;
     if (this.routes) this.sunlight.setActivityVoidDanger(this.routes.voidDanger);
     section('routes');
+    yield 'heavy';
     this.sunlight.update(this.timeOfDay,0);
     section('sunlight-first-update');
+    yield;
     this.syncObjects();
     section('sync-objects');
   }
@@ -414,15 +434,16 @@ export class PersistentBaseEditorWorld {
     for (const visual of this.watchtowers.values()) visual.destroy();
     this.watchtowers.clear();
     this.routes?.destroy(); this.routePlanner?.destroy();
-    this.sunlight.destroy();
-    this.fx.destroy(); this.powerUps.destroy(); this.gpu.destroy();
+    this.sunlight?.destroy();
+    this.fx?.destroy(); this.powerUps?.destroy(); this.gpu?.destroy();
     this.animations.clear();
     for (const { visual } of this.turrets.values()) destroyWorldTurretVisual(visual);
     this.bridges?.destroy();
-    this.bases.destroy(); this.shadows.destroy(); this.lighting.destroy();
-    ArenaBuilder.destroyDynamic(this.arena);
-    this.background.ground.destroy(); this.background.macro.destroy();
+    this.bases?.destroy(); this.shadows?.destroy(); this.lighting?.destroy();
+    if (this.arena) ArenaBuilder.destroyDynamic(this.arena);
+    this.background?.ground.destroy(); this.background?.macro.destroy();
   }
+
   /** Cells of the round's terrain that a construction cannot use: rocks, trunks, water, other bases. */
   private collectBlockedCells(): void {
     const layout = this.terrain!.layout;
