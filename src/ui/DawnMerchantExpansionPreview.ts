@@ -7,17 +7,6 @@ import { textStyle } from './ForestModal';
 type EditorFrame = ReturnType<typeof getPersistentBaseEditorFraming>;
 
 /** Editor annotations belong to the UI container, above grading and at a stable screen size. */
-export function createPersistentBaseEditorBoundary(scene: Phaser.Scene, area: PersistentBaseBuildArea,
-  frame: EditorFrame): Phaser.GameObjects.Graphics {
-  const outline = scene.add.graphics();
-  const edges = projectPersistentBaseBoundary(buildPersistentBaseAreaBoundary(area), frame);
-  for (const [width, color, alpha] of [[5, 0x101c19, .9], [2, 0xbbe2d6, 1]] as const) {
-    outline.lineStyle(width, color, alpha);
-    for (const e of edges) outline.lineBetween(e.x1, e.y1, e.x2, e.y2);
-  }
-  return outline;
-}
-
 /** Reward text for expansions after the radius track (no ring to draw), top-left in the world panel. */
 export function createDawnExpansionRewardNote(scene: Phaser.Scene, frame: EditorFrame, labelText: string): Phaser.GameObjects.Container {
   const root = scene.add.container(0, 0);

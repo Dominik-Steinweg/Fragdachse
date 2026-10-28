@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', async () => ({ ...(await import('../fakeArenaRenderScene')).createFakePhaserModule(), Scene: class {} }));
 vi.mock('../../src/effects/postfx/CameraPostFxController', () => ({ CameraPostFxController: class {} }));
 vi.mock('../../src/ui/PersistentBaseDragPreview', () => ({ createPersistentBaseDragPreview: vi.fn(() => ({
-  setPosition: vi.fn().mockReturnThis(), setScale: vi.fn().mockReturnThis(), destroy: vi.fn(),
+  setPosition: vi.fn().mockReturnThis(), setScale: vi.fn().mockReturnThis(), setVisible: vi.fn().mockReturnThis(),
+  setAlpha: vi.fn().mockReturnThis(), setDepth: vi.fn().mockReturnThis(), destroy: vi.fn(),
 })) }));
 
 import { PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS, PERSISTENT_BASE_EDITOR_WARM_FRAMES, PersistentBaseEditorScene } from '../../src/scenes/PersistentBaseEditorScene';
@@ -16,7 +17,8 @@ import type { PersistentBaseEditorRoomBase } from '../../src/persistentBase/Pers
 
 function graphics() {
   const result: any = {};
-  for (const method of ['clear', 'setVisible', 'setStrokeStyle', 'fillStyle', 'lineStyle', 'fillRect', 'strokeRect'])
+  for (const method of ['clear', 'setVisible', 'setStrokeStyle', 'fillStyle', 'lineStyle', 'fillRect', 'strokeRect',
+    'fillRoundedRect', 'strokeRoundedRect', 'setText', 'setPosition'])
     result[method] = vi.fn(() => result);
   return result;
 }
@@ -38,9 +40,12 @@ function harness(scale = 1, stage: PersistentBaseAreaStage = 0, room?: Persisten
   const world = { size, anchor: (size / CELL_SIZE - 1) / 2, syncObjects: vi.fn(), setMates: vi.fn(), planRoutes: () => null,
     view: { x: 0, y: 0, width: size, height: size }, siteArea: model.area, isCellBlocked: () => false,
     get frame() { return { anchor: { gridX: this.anchor, gridY: this.anchor }, quarterTurns: model.quarterTurns }; } };
+  // The inventory's cards fill the area right of the World below the overview.
+  const inventory = { setCards: vi.fn(), setSelected: vi.fn(), setDropTarget: vi.fn(), hideInfo: vi.fn(), scroll: vi.fn(),
+    contains: (x: number, y: number) => x >= 1130 && x < 1838 && y >= 584 && y < 918 };
   Object.assign(scene, { world, scale: { width: GAME_WIDTH * scale }, preview: graphics(),
-    selection: graphics(), grid: graphics(), conflictHalo: graphics(), tableOutline: graphics(), error: graphics(), ui: { add() {} },
-    refreshList: vi.fn(() => scene.refreshSelection()), ready: true, closed: false,
+    selection: graphics(), grid: graphics(), conflictHalo: graphics(), error: graphics(), reasonTip: graphics(), ui: { add() {} },
+    inventory, refreshList: vi.fn(() => scene.refreshSelection()), refreshBadges: vi.fn(), ready: true, closed: false,
     options: { model, color: 0xffffff, newRewardIds: [], close() {}, save: async () => ({ ok: true }) },
   });
   const point = (x: number, y: number) => ({ x: x * scale, y: y * scale, id: 1, button: 0 });
@@ -135,7 +140,7 @@ describe('base menu drag interaction', () => {
     expect(scene.view.width).toBe(world.size);
   });
   it.each([.5, 1, 2])('fits the largest base and places objects at its edge at render scale %s', scale => {
-    const { scene, model, cell, point } = harness(scale, 11);
+    const { scene, model, world, cell, point } = harness(scale, 11);
     expect(scene.worldZoom).toBeLessThan(1);
     expect(scene.view.x).toBeGreaterThanOrEqual(88);
     expect(scene.view.x + scene.view.width).toBeLessThanOrEqual(1088);
@@ -144,31 +149,60 @@ describe('base menu drag interaction', () => {
     }
     const wall = { kind: 'construction', id: 'wall' } as const;
     scene.beginDrag(wall, cell(1, 1)); scene.updateDrag(cell(15, 0));
-    expect(scene.dragPreview.setScale).toHaveBeenLastCalledWith(scene.worldZoom);
-    expect(scene.dragPreview.setPosition).toHaveBeenLastCalledWith(cell(15, 0).x / scale, cell(15, 0).y / scale);
+    // Over the World the held item stands at full size on its cell.
+    expect(scene.worldGhost.setPosition).toHaveBeenLastCalledWith((world.anchor + 15.5) * CELL_SIZE, (world.anchor + .5) * CELL_SIZE);
     scene.drop(cell(15, 0));
     expect(model.getPosition(wall)).toMatchObject({ relativeGridX: 15, relativeGridY: 0 });
     expect(model.validate(wall, 16, 0)).toBe('outside');
     expect(scene.cellAt(point(scene.view.x - 1, scene.view.y))).toBeNull();
   });
-  it('marks a single click without moving or removing a placed list item', () => {
-    const { scene, model, world, point } = harness();
-    const pointer = point(1300, 520);
+  it('takes an item into hand with a click, keeps it on a bad spot and puts it down with the next click', () => {
+    const { scene, model, world, point, cell } = harness();
+    const pointer = point(1300, 650);
     scene.beginDrag(object, pointer);
     scene.updateDrag({ ...pointer, x: pointer.x + 1 });
     scene.drop(pointer);
     expect(scene.selected).toEqual(object);
+    expect(scene.drag.mode).toBe('carry');
     expect(model.getPosition(object)).toMatchObject({ relativeGridX: 0, relativeGridY: 0 });
     expect(world.syncObjects).not.toHaveBeenCalled();
-    expect(scene.dragPreview).toBeNull();
+    // The wall's cell is taken: the item stays in hand.
+    scene.updateDrag(cell(1, 1)); scene.pointerDown(cell(1, 1));
+    expect(scene.drag?.mode).toBe('carry');
+    scene.pointerDown(cell(-1, 1));
+    expect(scene.drag).toBeNull();
+    expect(model.getPosition(object)).toMatchObject({ relativeGridX: -1, relativeGridY: 1 });
+    expect(world.syncObjects).toHaveBeenCalledTimes(1);
+  });
+  it('undoes and redoes moves, a right click that puts back and putting everything back', () => {
+    const { scene, model, cell } = harness();
+    const keys = (key: string, shiftKey = false) => scene.keyDown({ key, ctrlKey: true, shiftKey, preventDefault() {} });
+    scene.beginDrag(object, cell(0, 0)); scene.updateDrag(cell(-1, 1)); scene.drop(cell(-1, 1));
+    expect(model.getPosition(object)).toMatchObject({ relativeGridX: -1, relativeGridY: 1 });
+    keys('z');
+    expect(model.getPosition(object)).toMatchObject({ relativeGridX: 0, relativeGridY: 0 });
+    keys('z', true);
+    expect(model.getPosition(object)).toMatchObject({ relativeGridX: -1, relativeGridY: 1 });
+    const right = { ...cell(-1, 1), button: 2 };
+    scene.pointerDown(right); scene.endPan(right);
+    expect(model.getPosition(object)).toBeUndefined();
+    scene.clearAll();
+    expect(model.constructions).toHaveLength(0);
+    keys('z');
+    expect(model.constructions).toHaveLength(1);
+    keys('z');
+    expect(model.getPosition(object)).toMatchObject({ relativeGridX: -1, relativeGridY: 1 });
   });
   it.each([.5, 1, 2])('moves the preview, drops into the list and places again at render scale %s', scale => {
     const { scene, model, world, point, cell } = harness(scale);
     scene.beginDrag(object, cell(0, 0)); scene.updateDrag(cell(-1, 1));
-    const preview = scene.dragPreview;
-    expect(preview.setPosition).toHaveBeenLastCalledWith(cell(-1, 1).x / scale, cell(-1, 1).y / scale);
+    expect(scene.worldGhost.setPosition).toHaveBeenLastCalledWith((world.anchor - .5) * CELL_SIZE, (world.anchor + 1.5) * CELL_SIZE);
     const listPoint = point(1300, 680);
-    scene.updateDrag(listPoint); scene.drop(listPoint);
+    scene.updateDrag(listPoint);
+    // Off the World it follows the pointer at the World's scale.
+    const preview = scene.dragPreview;
+    expect(preview.setPosition).toHaveBeenLastCalledWith(1300, 680);
+    scene.drop(listPoint);
     expect(model.getPosition(object)).toBeUndefined();
     expect(model.unplaced).toContain(object.id);
     expect(preview.destroy).toHaveBeenCalled();

@@ -11,7 +11,7 @@ import type { BaseEditorAppearance } from '../persistentBase/PersistentBaseEdito
 
 /** A pointer-bound copy of the actual World artwork, visible across both menu panes. */
 export function createPersistentBaseDragPreview(scene: Phaser.Scene, appearance: BaseEditorAppearance,
-  color: number): Phaser.GameObjects.Container {
+  color: number, options: { readonly aura?: boolean } = {}): Phaser.GameObjects.Container {
   const root = scene.add.container(0, 0).setAlpha(.85);
   if (appearance.watchtower) {
     const visual = new WatchtowerVisual(scene);
@@ -30,7 +30,9 @@ export function createPersistentBaseDragPreview(scene: Phaser.Scene, appearance:
     const animation = new TurretAnimationController();
     const turret = createWorldTurretVisual(scene, appearance.weapon, 0, 0, color);
     syncWorldTurretVisualPose(turret, 'drag-preview', appearance.weapon, 0, 0, appearance.angle, color, animation);
-    root.add([turret.aura, turret.image]);
+    // An inventory card shows the turret alone; its wide aura would shrink it to a dot.
+    if (options.aura === false) turret.aura.destroy(); else root.add(turret.aura);
+    root.add(turret.image);
     root.once('destroy', () => animation.clear());
   }
   if (appearance.powerUpDefId) {

@@ -153,6 +153,31 @@ export class PersistentBaseEditorModel {
       if (index >= 0) this.constructions.splice(index, 1);
     }
   }
+  /** Takes back everything this player may move off the base; true when anything moved. */
+  clear(): boolean {
+    const before = this.rewards.length + this.constructions.length;
+    if (this.rewardsEditable) this.rewards.splice(0);
+    this.constructions.splice(0);
+    return this.rewards.length + this.constructions.length !== before;
+  }
+  /** The draft as it stands, for undo. */
+  snapshot(): PersistentBaseEditorDraftState {
+    return { turns: this.turns, rewards: this.rewards.map(p => ({ ...p })),
+      constructions: this.constructions.map(p => ({ ...p, tool: { ...p.tool } })) };
+  }
+  /** Returns to a snapshot of this draft. */
+  restore(state: PersistentBaseEditorDraftState): void {
+    this.turns = state.turns;
+    this.rewards.splice(0, this.rewards.length, ...state.rewards.map(p => ({ ...p })));
+    this.constructions.splice(0, this.constructions.length, ...state.constructions.map(p => ({ ...p, tool: { ...p.tool } })));
+  }
+}
+
+/** The editable part of a draft at one moment. */
+export interface PersistentBaseEditorDraftState {
+  readonly turns: PersistentBaseQuarterTurns;
+  readonly rewards: readonly PersistentBaseRewardPlacement[];
+  readonly constructions: readonly PersistentConstruction[];
 }
 
 export interface MissedBaseReward { readonly rewardId: PersistentBaseRewardId; readonly mapId: string; readonly objectiveId: string | null }

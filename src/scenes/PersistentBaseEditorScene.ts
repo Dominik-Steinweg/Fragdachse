@@ -3,7 +3,7 @@ import { createPersistentBaseEditorMinimap, PERSISTENT_BASE_EDITOR_MINIMAP_COLOR
 import { getMapName } from '../i18n/contentPresentation';
 import { getCoopDefenseConstructionDefinition, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import type { AfterRoundView } from '../ui/AfterRoundTransition';
-import { CELL_SIZE, GAME_WIDTH, GAME_HEIGHT } from '../config';
+import { CELL_SIZE, DEPTH, GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { getStoredGraphicsQuality } from '../utils/localPreferences';
 import { getRenderScale } from '../graphics/RenderResolution';
@@ -12,8 +12,8 @@ import { PersistentBaseEditorWorld, type PersistentBaseEditorTerrain } from '../
 import { resolvePersistentBaseEditorPreview, type PersistentBaseEditorRoom } from '../persistentBase/PersistentBaseEditorPreview';
 import type { DeploymentRoutePlan } from '../activity/DeploymentRoutes';
 import type { PersistentCompositeConflictReason } from '../persistentBase/PersistentBaseComposite';
-import { TurretRangePreviewVisual } from './arena/TurretRangePreviewVisual';
-import { getMissedBaseRewards, type BaseEditorObject, type PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
+import { getMissedBaseRewards, type BaseEditorObject, type BaseEditorPlacementFailure, type PersistentBaseEditorDraftState,
+  type PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from '../persistentBase/PersistentBaseEditorAppearance';
 import { getPersistentBaseRewardCells, getPersistentConstructionFootprint } from '../persistentBase/PersistentBasePlacementRules';
 import { rotatePersistentBaseOffset, toCanonicalCell, toWorldFootprint } from '../persistentBase/PersistentBaseFrame';
@@ -27,7 +27,6 @@ import { UPGRADE_MENU } from '../ui/UpgradeMenuLayout';
 import { ensureModalFrame, ensureModalPanelTexture, ensureGlossyButtonTexture, textStyle, TEXT } from '../ui/ForestModal';
 import { ensureUpgradeFrame, ensureUpgradeApply } from '../ui/upgradeForestTextures';
 import { createPersistentBaseDragPreview } from '../ui/PersistentBaseDragPreview';
-import { createPowerUpSymbolPreview } from '../powerups/PowerUpItemArt';
 import { UiButton } from '../ui/UiButton';
 import { INTENT } from '../ui/uiTheme';
 import { BUTTON_CURSOR } from '../ui/gameCursor';
@@ -38,7 +37,10 @@ import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
 import { buildPersistentBaseExpansionPreview, getPersistentBaseEditorDetailRect, getPersistentBaseEditorFraming,
   getPersistentBaseEditorWorldFraming, PERSISTENT_BASE_EDITOR_VIEW_SIZE, type PersistentBaseEditorFraming } from '../persistentBase/PersistentBaseExpansionPreview';
 import { createDawnExpansionRewardNote } from '../ui/DawnMerchantExpansionPreview';
-import { createDawnMerchantExpansionPreview, createPersistentBaseEditorBoundary } from '../ui/DawnMerchantExpansionPreview';
+import { createDawnMerchantExpansionPreview } from '../ui/DawnMerchantExpansionPreview';
+import { PersistentBaseInventory, type PersistentBaseInventoryCard } from '../ui/PersistentBaseInventory';
+import { PersistentBaseRangeField, type PersistentBaseRangeRing } from '../ui/PersistentBaseRangeField';
+import { createPersistentBaseAreaHalo } from '../ui/PersistentBaseAreaHalo';
 import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
 import { formatTimeOfDay } from '../effects/TimeOfDay';
@@ -53,20 +55,32 @@ const WORLD_PANEL = { x: 88, y: 262, ...PERSISTENT_BASE_EDITOR_VIEW_SIZE };
 const HEADER_Y = 222;
 /** Overview of the whole map (Lagekarte); empty without map terrain. */
 export const PERSISTENT_BASE_EDITOR_MINIMAP_PANEL = { x: 1130, y: 242, width: 708, height: 300 };
-const TABLE = { x: 1130, y: 582, width: 708, height: 266 };
+/** The inventory's cards below the overview: four columns; rows scroll. */
+const INVENTORY = { x: 1130, y: 584, width: 708, height: 334 };
+/** How far the World view zooms in beyond filling its panel, and the step per wheel notch. */
+const ZOOM = { max: 2.2, step: 1.18 } as const;
+/** Pointer travel (UI px) before a press becomes a drag or a pan. */
+const DRAG_START_PX = 4;
+/** Undo steps a session keeps. */
+const HISTORY = 60;
+/** The base's warm light for its own marks; pale green and red for whether a place fits. */
+const MARK = { base: 0xf0d48a, valid: 0xb1ed94, invalid: 0xff8a7a, reward: 0xdcebf2 } as const;
 /** What-if switches below the overview; each appears only where it changes the routes. */
 const SCENARIO_SWITCHES = [
   { key: 'outpostsDestroyed', option: 'outposts', label: 'ui.base.scenario.outposts' },
   { key: 'bridgesDestroyed', option: 'bridges', label: 'ui.base.scenario.bridges' },
   { key: 'teleportersOpen', option: 'teleporters', label: 'ui.base.scenario.teleporters' },
 ] as const satisfies readonly { key: keyof DeploymentRouteScenario; option: keyof DeploymentRouteScenarioOptions; label: string }[];
-const ROW_HEIGHT = 38;
-const ROWS = TABLE.height / ROW_HEIGHT;
-const NAME_X = TABLE.x + 48, STATUS_X = TABLE.x + 460, PERSONAL_X = TABLE.x + 618;
 type RowStatus = 'unplaced' | 'placed' | 'missed';
-interface EditorRow { label: string; status: RowStatus; personal: boolean; icon?: string; object?: BaseEditorObject;
-  conflict?: PersistentCompositeConflictReason }
-interface DragState { pointerId: number; x: number; y: number; offsetX: number; offsetY: number; started: boolean }
+interface EditorRow { label: string; status: RowStatus; personal: boolean; object?: BaseEditorObject; rewardId?: PersistentBaseRewardId;
+  conflict?: PersistentCompositeConflictReason; missed?: { readonly mapId: string; readonly objectiveId: string | null } }
+/**
+ * An item in hand. `pending` until the press moves (a drag) or is released in place (then it is
+ * carried until a click puts it down). The offset keeps the grabbed cell under the pointer.
+ */
+interface DragState { pointerId: number; x: number; y: number; offsetX: number; offsetY: number; mode: 'pending' | 'drag' | 'carry' }
+/** A right or middle press over the World: a pan once it moves; a right click otherwise puts back. */
+interface PanState { pointerId: number; x: number; y: number; scrollX: number; scrollY: number; moved: boolean; button: number }
 /** Why Apply did not save. `stale` means the draft was reloaded from the newer confirmed state. */
 export type PersistentBaseEditorSaveResult = { readonly ok: true }
   | { readonly ok: false; readonly reason: 'stale' | 'blocked' | 'placement' | 'invalid' };
@@ -125,25 +139,36 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private chrome!: Phaser.GameObjects.Container;
   /** The open session's own objects (boundary, expansion ring); rebuilt for every session. */
   private ui: Phaser.GameObjects.Container | null = null;
-  private list!: Phaser.GameObjects.Container;
+  private inventory!: PersistentBaseInventory;
   private grid!: Phaser.GameObjects.Graphics;
   private preview!: Phaser.GameObjects.Graphics;
   private selection!: Phaser.GameObjects.Graphics;
   private expansionPreview: Phaser.GameObjects.Container | null = null;
+  /** The held item beside the pointer while it is off the World view. */
   private dragPreview: Phaser.GameObjects.Container | null = null;
-  private tableOutline!: Phaser.GameObjects.Rectangle;
-  private stats!: Phaser.GameObjects.Text;
+  /** The held item at full World size where it would stand. */
+  private worldGhost: Phaser.GameObjects.Container | null = null;
+  /** Why the held item cannot stand where the pointer is. */
+  private reasonTip!: Phaser.GameObjects.Text;
+  private badges!: Phaser.GameObjects.Container;
+  private hints!: Phaser.GameObjects.Text;
   private error!: Phaser.GameObjects.Text;
-  private pageText!: Phaser.GameObjects.Text;
-  private previous!: UiButton;
-  private next!: UiButton;
   private rotate!: UiButton;
   private rangesButton!: UiButton;
-  private hostRoomBase!: Phaser.GameObjects.Text;
   private buttons: UiButton[] = [];
-  private rowBackgrounds = new Map<string, Phaser.GameObjects.Rectangle>();
   private selected: BaseEditorObject | null = null;
   private drag: DragState | null = null;
+  private pan: PanState | null = null;
+  /** The build area's edge on the ground, in World space. */
+  private halo: Phaser.GameObjects.Image | null = null;
+  private rangeField: PersistentBaseRangeField | null = null;
+  /** Zoom beyond filling the panel (1) and the World point at the view's top-left corner. */
+  private zoomFactor = 1;
+  private scrollX: number;
+  private scrollY: number;
+  private readonly undoStack: PersistentBaseEditorDraftState[] = [];
+  private readonly redoStack: PersistentBaseEditorDraftState[] = [];
+  private lastEmptyClickAt = -Infinity;
   private saving = false;
   /** No session is open. A stage starts closed and returns to it after every session. */
   private closed = true;
@@ -156,12 +181,10 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private presentationReady = false;
   private revealTween: Phaser.Tweens.Tween | null = null;
   private framesShown = 0;
-  private page = 0;
   private readonly framing: PersistentBaseEditorFraming;
   private readonly expansion: ReturnType<typeof buildPersistentBaseExpansionPreview>;
   private conflicts: ReadonlyMap<string, PersistentCompositeConflictReason> = new Map();
   private conflictHalo!: Phaser.GameObjects.Graphics;
-  private readonly rangeRings = new Map<string, TurretRangePreviewVisual>();
   private showRanges = false;
   private minimap: PersistentBaseEditorMinimap | null = null;
   /** Why the World view shows no routes (forward base, players hunted away); below the minimap. */
@@ -192,6 +215,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     } else {
       this.framing = getPersistentBaseEditorFraming(WORLD_PANEL, stage.model.area, this.expansion?.area);
     }
+    this.scrollX = this.framing.world.x; this.scrollY = this.framing.world.y;
   }
   /** The terrain this stage shows; `null` for the personal draft alone. */
   get terrain(): PersistentBaseEditorTerrain | null { return this.stage.terrain; }
@@ -261,7 +285,8 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     chrome.add(warning);
     this.breachWarning = warning;
   }
-  private get worldZoom(): number { return this.framing.zoom; }
+  /** Zoom of the World view: filling the panel times the player's zoom. */
+  private get worldZoom(): number { return this.framing.zoom * this.zoomFactor; }
 
   /** Starts the stage: hidden, without a session; `update` builds it in steps until `open` can show it. */
   create(): void {
@@ -308,9 +333,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     }
     this.label(menu.centerX, menu.headerY + 4, t('ui.base.title').toLocaleUpperCase(), 'display', .5, undefined, chrome)
       .setFontSize(44).setColor('#efe4bd').setStroke('#1e160f', 3);
-    this.label(menu.centerX, 170, t('ui.base.subtitle'), 'body', .5, 1700, chrome);
+    this.hints = this.label(menu.centerX, 170, t('ui.base.hints'), 'body', .5, 1700, chrome).setColor('#d9cfa8');
     yield;
-    this.stats = this.label(WORLD_PANEL.x + 4, HEADER_Y, '', 'section', 0, undefined, chrome);
+    this.badges = this.add.container(0, 0); chrome.add(this.badges);
     // One frame for every map: the World sits in its middle, the rest of the panel is a dark mat.
     for (const mat of this.outsideWorld(WORLD_PANEL.x, WORLD_PANEL.y, WORLD_PANEL.width, WORLD_PANEL.height)) {
       if (mat.width > 0 && mat.height > 0) chrome.add(this.add.rectangle(mat.x, mat.y, mat.width, mat.height, 0x0b120d, .94).setOrigin(0));
@@ -320,34 +345,27 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const frameWidth = WORLD_PANEL.width + 40, frameHeight = WORLD_PANEL.height + 40;
     chrome.add(this.add.image(WORLD_PANEL.x + WORLD_PANEL.width / 2, WORLD_PANEL.y + WORLD_PANEL.height / 2,
       ensureUpgradeFrame(this, frameWidth, frameHeight)).setDisplaySize(frameWidth, frameHeight));
-    const columnsY = TABLE.y - 20;
-    this.label(TABLE.x + 16, columnsY, t('ui.base.rewards'), 'section', 0, undefined, chrome);
-    this.label(STATUS_X, columnsY, t('ui.base.status'), 'section', .5, undefined, chrome);
-    this.label(PERSONAL_X, columnsY, t('ui.base.personal'), 'section', .5, undefined, chrome);
-    this.tableOutline = this.add.rectangle(TABLE.x, TABLE.y, TABLE.width, TABLE.height, 0x101b14, .25)
-      .setOrigin(0).setStrokeStyle(1, 0x718160, .5);
-    chrome.add(this.tableOutline);
-    this.list = this.add.container(0, 0); chrome.add(this.list);
-    const pagerY = TABLE.y + TABLE.height + 28;
-    this.previous = this.button(TABLE.x + 58, pagerY, 108, 36, '‹', () => this.changePage(-1));
-    this.next = this.button(TABLE.x + TABLE.width - 58, pagerY, 108, 36, '›', () => this.changePage(1));
-    this.pageText = this.label(TABLE.x + TABLE.width / 2, pagerY, '', 'body', .5, undefined, chrome);
+    // The items as cards below the overview; their details show on hover.
+    this.label(INVENTORY.x + 4, INVENTORY.y - 22, t('ui.base.inventory').toLocaleUpperCase(), 'section', 0, undefined, chrome);
+    this.inventory = new PersistentBaseInventory(this, chrome, INVENTORY, {
+      press: (key, pointer) => this.pressCard(key, pointer),
+      canShowInfo: () => !this.drag,
+    }, t('ui.base.empty.all'));
     this.error = this.label(menu.centerX, 192, '', 'caption', .5, 1600, chrome).setColor('#ffc2a9').setVisible(false);
+    this.reasonTip = this.label(0, 0, '', 'caption', 0, 320, chrome).setColor('#ffd9cf').setBackgroundColor('#2a1410')
+      .setPadding(8, 5, 8, 5).setVisible(false);
     this.actionButton('cancel', menu.centerX - (menu.buttonGap + menu.buttonWidth) / 2, () => this.finish());
     this.actionButton('apply', menu.centerX + (menu.buttonGap + menu.buttonWidth) / 2, () => { void this.save(); });
     // Tools sit in the header row, right of the stage; the bottom keeps only Cancel and Apply.
     const right = WORLD_PANEL.x + WORLD_PANEL.width;
-    this.rangesButton = this.button(right - 95, HEADER_Y, 190, 32, t('ui.base.ranges'), () => {
+    this.button(right - 90, HEADER_Y, 180, 32, t('ui.base.clearAll'), () => this.clearAll(), 'tray');
+    this.rangesButton = this.button(right - 190 - 80, HEADER_Y, 160, 32, t('ui.base.ranges'), () => {
       this.showRanges = !this.showRanges;
       this.rangesButton.setIcon(this.showRanges ? 'box-checked' : 'box');
       this.refreshRanges();
     }, 'box');
-    // Rewards and the orientation belong to the room host: a session shows either the tool or the note.
-    this.rotate = this.button(right - 190 - 10 - 85, HEADER_Y, 170, 32, t('ui.base.rotate'), () => {
-      if (this.drag || this.saving || !this.options?.model.rotate()) return;
-      this.syncDraft();
-    });
-    this.hostRoomBase = this.label(right - 200 - 8, HEADER_Y, t('ui.base.hostRoomBase'), 'caption', 1, 420, chrome).setColor('#d9cfa8');
+    // The orientation belongs to the room host: a guest's session hides the tool and says so in the hints.
+    this.rotate = this.button(right - 190 - 170 - 80, HEADER_Y, 160, 32, t('ui.base.rotate'), () => this.rotateBase(), 'rotate');
     yield;
     this.world = new PersistentBaseEditorWorld(this, this.stage.model, this.stage.color,
       { previewArea: this.expansion?.area, terrain: this.stage.terrain });
@@ -356,6 +374,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const situationMap = loadingTimeline.start();
     yield* this.createSituationMap();
     loadingTimeline.end('editor/situation-map', situationMap);
+    this.rangeField = new PersistentBaseRangeField(this, this.framing.world, DEPTH.DECALS + .25);
     this.grid = this.add.graphics().setDepth(10000).setVisible(false);
     this.selection = this.add.graphics().setDepth(10001);
     this.preview = this.add.graphics().setDepth(10002);
@@ -364,40 +383,13 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.resize();
     this.scale.on('resize', this.resize, this);
     // Handlers stay for the stage's lifetime and act on the session that is open.
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      const model = this.options?.model;
-      if (!model || this.saving || this.closed || pointer.button !== 0) return;
-      const cell = this.cellAt(pointer);
-      if (!cell) return;
-      const reward = model.rewardsEditable ? model.rewards.find(p => getPersistentBaseRewardCells(p).some(c =>
-        c.gridX === cell.x && c.gridY === cell.y)) : undefined;
-      const construction = model.constructions.find(p => (getPersistentConstructionFootprint(p) ?? []).some(c =>
-        p.relativeGridX + c.dx === cell.x && p.relativeGridY + c.dy === cell.y));
-      const object: BaseEditorObject | null = reward ? { kind: 'reward', id: reward.rewardId }
-        : construction ? { kind: 'construction', id: construction.persistentId } : null;
-      if (object) {
-        const position = model.getPosition(object)!;
-        this.beginDrag(object, pointer, cell.x - position.relativeGridX, cell.y - position.relativeGridY);
-        const index = this.rows().findIndex(row => row.object && baseEditorObjectKey(row.object) === baseEditorObjectKey(object));
-        if (index >= 0 && Math.floor(index / ROWS) !== this.page) { this.page = Math.floor(index / ROWS); this.refreshList(); }
-      } else { this.selected = null; this.endDrag(); this.refreshSelection(); }
-    });
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => this.updateDrag(pointer));
-    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.drop(pointer));
-    this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => this.drop(pointer));
-    this.input.on('wheel', (pointer: Phaser.Input.Pointer, _objects: unknown, _dx: number, dy: number) => {
-      if (!this.closed && !this.drag && this.isOverTable(pointer) && dy !== 0) this.changePage(Math.sign(dy));
-    });
-    this.input.keyboard?.on('keydown-ESC', () => {
-      if (this.saving || this.closed) return;
-      if (this.drag) this.endDrag(); else this.finish();
-    });
-    this.input.keyboard?.on('keydown-DELETE', () => {
-      const model = this.options?.model;
-      if (model && !this.saving && !this.closed && this.selected && model.getPosition(this.selected)) {
-        model.remove(this.selected); this.endDrag(); this.syncDraft();
-      }
-    });
+    this.input.mouse?.disableContextMenu();
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.pointerDown(pointer));
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => { this.updatePan(pointer); this.updateDrag(pointer); });
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => { if (!this.endPan(pointer)) this.drop(pointer); });
+    this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => { if (!this.endPan(pointer)) this.drop(pointer); });
+    this.input.on('wheel', (pointer: Phaser.Input.Pointer, _objects: unknown, _dx: number, dy: number) => this.wheel(pointer, dy));
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => this.keyDown(event));
   }
 
   /**
@@ -462,43 +454,73 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   open(options: PersistentBaseEditorOptions): void {
     if (this.disposed || !this.ready || !this.closed) throw new Error('[PersistentBaseEditorScene] The stage cannot open a session now');
     this.options = options;
-    this.closed = false; this.saving = false; this.selected = null; this.drag = null; this.page = 0;
+    this.closed = false; this.saving = false; this.selected = null; this.drag = null; this.pan = null;
     this.showRanges = false; this.conflicts = new Map(); this.framesShown = 0;
+    this.undoStack.length = 0; this.redoStack.length = 0;
+    this.zoomFactor = 1; this.scrollX = this.framing.world.x; this.scrollY = this.framing.world.y;
     this.rangesButton.setIcon('box');
     const model = options.model;
     this.scenario = DEPLOYMENT_ROUTE_START;
     this.world.setScenario(this.scenario);
     this.syncScenarioButtons();
     this.world.setModel(model, options.color);
-    this.stats.setText(t(model.area.kind === 'radius' ? 'ui.base.statsRadius' : 'ui.base.stats', {
-      stage: model.areaStage, hp: resolvePersistentBaseMaxHp(model.baseline.persistentBaseHealthRewards),
-      radius: model.area.kind === 'radius' ? model.area.radiusCells : 0,
-    }));
     this.rotate.getRoot().setVisible(model.rewardsEditable);
-    this.hostRoomBase.setVisible(!model.rewardsEditable);
+    this.hints.setText(model.rewardsEditable ? t('ui.base.hints') : `${t('ui.base.hostRoomBase')} · ${t('ui.base.hints')}`);
     const ui = this.ui = this.add.container(0, 0);
     this.cameraRegistry.promote(ui);
-    ui.add(createPersistentBaseEditorBoundary(this, model.area, this.framing));
-    const expansion = expansionFor(model);
-    if (expansion?.edges.length) {
-      this.expansionPreview = createDawnMerchantExpansionPreview(this, this.framing, expansion.edges,
-        t(expansion.dawnOnly ? 'ui.base.expansionRingLabelDawnOnly' : 'ui.base.expansionRingLabel',
-          { radius: expansion.radius, cost: expansion.cost }));
-      ui.add(this.expansionPreview);
-    } else if (expansion?.reward?.kind === 'core') {
-      this.expansionPreview = createDawnExpansionRewardNote(this, this.framing,
-        t('ui.base.expansionCoreReward', { hp: expansion.reward.coreHpBonus, cost: expansion.cost }));
-      ui.add(this.expansionPreview);
-    }
+    this.halo = createPersistentBaseAreaHalo(this, model.area, this.world.anchor).setDepth(DEPTH.DECALS + .2);
+    this.applyCamera(); this.refreshFramedOverlays();
     const extent = getPersistentBaseBuildAreaExtentCells(model.area);
     const anchor = this.world.anchor;
-    this.grid.clear().lineStyle(1, 0xbdc99c, .18);
+    // The cells show only while an item is in hand: faint, in the base's warm light.
+    this.grid.clear().lineStyle(1, 0xf0dca8, .12);
     for (let y = -extent; y <= extent; y++) for (let x = -extent; x <= extent; x++) {
       if (isCellInsidePersistentBaseBuildArea(x, y, model.area))
         this.grid.strokeRect((anchor.gridX + x) * CELL_SIZE, (anchor.gridY + y) * CELL_SIZE, CELL_SIZE, CELL_SIZE);
     }
-    this.refreshPreview(); this.refreshList();
+    this.refreshPreview(); this.refreshList(); this.refreshBadges();
     this.present();
+  }
+
+  /** The Dawn merchant's next ring or reward note, framed by the view as it is zoomed now. */
+  private refreshFramedOverlays(): void {
+    if (!this.ui || !this.options) return;
+    this.expansionPreview?.destroy(true); this.expansionPreview = null;
+    const expansion = expansionFor(this.options.model), framing = this.currentFraming();
+    if (expansion?.edges.length) {
+      this.expansionPreview = createDawnMerchantExpansionPreview(this, framing, expansion.edges,
+        t(expansion.dawnOnly ? 'ui.base.expansionRingLabelDawnOnly' : 'ui.base.expansionRingLabel',
+          { radius: expansion.radius, cost: expansion.cost }));
+    } else if (expansion?.reward?.kind === 'core') {
+      this.expansionPreview = createDawnExpansionRewardNote(this, framing,
+        t('ui.base.expansionCoreReward', { hp: expansion.reward.coreHpBonus, cost: expansion.cost }));
+    }
+    if (this.expansionPreview) this.ui.add(this.expansionPreview);
+  }
+  private currentFraming(): PersistentBaseEditorFraming {
+    const zoom = this.worldZoom, anchor = this.world.anchor;
+    return { zoom, view: this.view,
+      world: { x: this.scrollX, y: this.scrollY, width: this.view.width / zoom, height: this.view.height / zoom },
+      anchor: { x: this.view.x + ((anchor.gridX + .5) * CELL_SIZE - this.scrollX) * zoom,
+        y: this.view.y + ((anchor.gridY + .5) * CELL_SIZE - this.scrollY) * zoom } };
+  }
+  /** Values of the base as small badges in the header row. */
+  private refreshBadges(): void {
+    const model = this.session.model, rows = this.rows().filter((row) => row.object);
+    const values = [t('ui.base.badge.stage', { stage: model.areaStage }),
+      ...(model.area.kind === 'radius' ? [t('ui.base.badge.radius', { radius: model.area.radiusCells })] : []),
+      t('ui.base.badge.hp', { hp: resolvePersistentBaseMaxHp(model.baseline.persistentBaseHealthRewards) }),
+      t('ui.base.badge.placed', { placed: rows.filter((row) => row.status === 'placed').length, total: rows.length })];
+    this.badges.removeAll(true);
+    let x = WORLD_PANEL.x;
+    for (const value of values) {
+      const text = this.add.text(x + 11, HEADER_Y, value, textStyle('caption', { color: 0xe6dcb4 })).setOrigin(0, .5);
+      const width = text.width + 22;
+      const background = this.add.graphics().fillStyle(0x16261b, .92).fillRoundedRect(x, HEADER_Y - 13, width, 26, 13)
+        .lineStyle(1, 0x6f8158, .8).strokeRoundedRect(x, HEADER_Y - 13, width, 26, 13);
+      this.badges.add([background, text]);
+      x += width + 8;
+    }
   }
 
   /** Ends the session; the stage stays, hidden and resting, for the next one. */
@@ -508,11 +530,12 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.revealTween?.remove(); this.revealTween = null;
     this.getTransitionView().setAlpha(0);
     this.setTransitionInputBlocked(true);
-    this.endDrag(); this.selected = null;
+    this.endDrag(); this.selected = null; this.pan = null;
     this.ui?.destroy(true); this.ui = null; this.expansionPreview = null;
-    for (const ring of this.rangeRings.values()) ring.destroy();
-    this.rangeRings.clear();
-    this.list.removeAll(true); this.rowBackgrounds.clear();
+    this.halo?.destroy(); this.halo = null;
+    this.rangeField?.set([]);
+    this.inventory.setCards([]);
+    this.undoStack.length = 0; this.redoStack.length = 0;
     this.grid.clear().setVisible(false); this.selection.clear(); this.conflictHalo.clear();
     this.error.setVisible(false); this.breachWarning?.setVisible(false);
     this.options = null;
@@ -541,10 +564,11 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.scale.off('resize', this.resize, this);
     this.revealTween?.remove(); this.revealTween = null;
     this.building = null;
-    this.dragPreview?.destroy(true);
+    this.dragPreview?.destroy(true); this.worldGhost?.destroy(true);
     this.expansionPreview?.destroy(true); this.expansionPreview = null;
-    for (const ring of this.rangeRings.values()) ring.destroy();
-    this.rangeRings.clear();
+    this.halo?.destroy(); this.halo = null;
+    this.rangeField?.destroy(); this.rangeField = null;
+    this.inventory?.destroy();
     this.minimap?.destroy(); this.minimap = null;
     const run = loadingTimeline.get('editor');
     if (run?.endedAt === null) run.finish('cancelled');
@@ -595,16 +619,46 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private resize(): void {
     const scale = getRenderScale(this.scale);
     this.clarity.setViewport(0, 0, this.scale.width, this.scale.height).setOrigin(0, 0).setZoom(scale);
+    this.applyCamera();
+  }
+  /** The World view at the player's zoom, kept inside the prepared terrain. */
+  private applyCamera(): void {
+    const scale = getRenderScale(this.scale), zoom = this.worldZoom, world = this.framing.world;
+    const clamp = (value: number, min: number, span: number, shown: number) => shown >= span ? min + (span - shown) / 2
+      : Math.max(min, Math.min(min + span - shown, value));
+    this.scrollX = clamp(this.scrollX, world.x, world.width, this.view.width / zoom);
+    this.scrollY = clamp(this.scrollY, world.y, world.height, this.view.height / zoom);
     this.cameras.main.setViewport(this.view.x * scale, this.view.y * scale, this.view.width * scale, this.view.height * scale)
-      .setOrigin(0, 0).setZoom(scale * this.worldZoom).setScroll(this.framing.world.x, this.framing.world.y);
+      .setOrigin(0, 0).setZoom(scale * zoom).setScroll(this.scrollX, this.scrollY);
+  }
+  /** Zooms the World view by `factor` around a UI point. */
+  private zoomAt(x: number, y: number, factor: number): void {
+    const next = Math.max(1, Math.min(ZOOM.max, this.zoomFactor * factor));
+    if (next === this.zoomFactor) return;
+    const before = this.worldZoom, worldX = this.scrollX + (x - this.view.x) / before, worldY = this.scrollY + (y - this.view.y) / before;
+    this.zoomFactor = next;
+    this.scrollX = worldX - (x - this.view.x) / this.worldZoom; this.scrollY = worldY - (y - this.view.y) / this.worldZoom;
+    this.applyCamera(); this.refreshFramedOverlays();
+  }
+  private resetView(): void {
+    this.zoomFactor = 1; this.scrollX = this.framing.world.x; this.scrollY = this.framing.world.y;
+    this.applyCamera(); this.refreshFramedOverlays();
+  }
+  /** UI point of a pointer. */
+  private uiPoint(pointer: Phaser.Input.Pointer): { x: number; y: number } {
+    const scale = getRenderScale(this.scale);
+    return { x: pointer.x / scale, y: pointer.y / scale };
+  }
+  private isOverView(x: number, y: number): boolean {
+    return x >= this.view.x && y >= this.view.y && x < this.view.x + this.view.width && y < this.view.y + this.view.height;
   }
   /** Canonical draft cell under the pointer: the World cell turned back by the base orientation. */
   private cellAt(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
-    const scale = getRenderScale(this.scale), x = pointer.x / scale, y = pointer.y / scale;
-    if (x < this.view.x || y < this.view.y || x >= this.view.x + this.view.width || y >= this.view.y + this.view.height) return null;
+    const { x, y } = this.uiPoint(pointer);
+    if (!this.isOverView(x, y)) return null;
     const canonical = toCanonicalCell(this.world.frame,
-      Math.floor((this.framing.world.x + (x - this.view.x) / this.worldZoom) / CELL_SIZE),
-      Math.floor((this.framing.world.y + (y - this.view.y) / this.worldZoom) / CELL_SIZE));
+      Math.floor((this.scrollX + (x - this.view.x) / this.worldZoom) / CELL_SIZE),
+      Math.floor((this.scrollY + (y - this.view.y) / this.worldZoom) / CELL_SIZE));
     return { x: canonical.relativeGridX, y: canonical.relativeGridY };
   }
   /** World top-left cell of the selected object at a canonical origin. */
@@ -613,61 +667,205 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     return toWorldFootprint(this.world.frame, x, y, cells);
   }
   private isOverTable(pointer: Phaser.Input.Pointer): boolean {
-    const scale = getRenderScale(this.scale), x = pointer.x / scale, y = pointer.y / scale;
-    return x >= TABLE.x && y >= TABLE.y && x < TABLE.x + TABLE.width && y < TABLE.y + TABLE.height;
+    const { x, y } = this.uiPoint(pointer);
+    return this.inventory.contains(x, y);
+  }
+  /** A draft object under a canonical cell, if this player may take it. */
+  private objectAt(cell: { x: number; y: number }): BaseEditorObject | null {
+    const model = this.session.model;
+    const reward = model.rewardsEditable ? model.rewards.find(p => getPersistentBaseRewardCells(p).some(c =>
+      c.gridX === cell.x && c.gridY === cell.y)) : undefined;
+    const construction = model.constructions.find(p => (getPersistentConstructionFootprint(p) ?? []).some(c =>
+      p.relativeGridX + c.dx === cell.x && p.relativeGridY + c.dy === cell.y));
+    return reward ? { kind: 'reward', id: reward.rewardId } : construction ? { kind: 'construction', id: construction.persistentId } : null;
+  }
+  private pointerDown(pointer: Phaser.Input.Pointer): void {
+    const model = this.options?.model;
+    if (!model || this.saving || this.closed) return;
+    const point = this.uiPoint(pointer);
+    // Right and middle presses over the World pan it; a right click without moving puts back.
+    if ((pointer.button === 1 || pointer.button === 2) && (this.isOverView(point.x, point.y) || this.drag)) {
+      this.pan = { pointerId: pointer.id, x: pointer.x, y: pointer.y, scrollX: this.scrollX, scrollY: this.scrollY, moved: false, button: pointer.button };
+      return;
+    }
+    if (pointer.button !== 0) return;
+    // An item in hand goes down where the click is (or back, over the inventory).
+    if (this.drag?.mode === 'carry') { this.placeHeld(pointer); return; }
+    const cell = this.cellAt(pointer);
+    if (!cell) return;
+    const object = this.objectAt(cell);
+    if (object) {
+      const position = model.getPosition(object)!;
+      this.beginDrag(object, pointer, cell.x - position.relativeGridX, cell.y - position.relativeGridY);
+      return;
+    }
+    this.selected = null; this.endDrag(); this.refreshSelection();
+    // A double click on open ground returns to the whole view.
+    const now = performance.now();
+    if (now - this.lastEmptyClickAt < 320) { this.resetView(); this.lastEmptyClickAt = -Infinity; } else this.lastEmptyClickAt = now;
+  }
+  private pressCard(key: string, pointer: Phaser.Input.Pointer): void {
+    if (this.saving || this.closed) return;
+    if (this.drag?.mode === 'carry') { this.placeHeld(pointer); return; }
+    const row = this.rows().find((entry) => entry.object && baseEditorObjectKey(entry.object) === key);
+    if (row?.object) this.beginDrag(row.object, pointer);
   }
   private beginDrag(object: BaseEditorObject, pointer: Phaser.Input.Pointer, offsetX = 0, offsetY = 0): void {
     if (this.saving || this.closed || pointer.button !== 0) return;
     this.endDrag(); this.selected = object;
-    this.drag = { pointerId: pointer.id, x: pointer.x, y: pointer.y, offsetX, offsetY, started: false };
-    this.error.setVisible(false); this.refreshSelection();
+    this.drag = { pointerId: pointer.id, x: pointer.x, y: pointer.y, offsetX, offsetY, mode: 'pending' };
+    this.error.setVisible(false); this.inventory?.hideInfo(); this.refreshSelection();
   }
   private updateDrag(pointer: Phaser.Input.Pointer): void {
     const drag = this.drag;
-    if (!drag || drag.pointerId !== pointer.id || !this.selected || this.saving) return;
-    const scale = getRenderScale(this.scale);
-    if (!drag.started && Math.hypot(pointer.x - drag.x, pointer.y - drag.y) / scale < 4) return;
-    if (!drag.started) {
-      drag.started = true;
-      const appearance = getBaseEditorAppearance(this.session.model, this.selected);
-      if (appearance) { this.dragPreview = createPersistentBaseDragPreview(this, appearance, this.session.color); this.ui?.add(this.dragPreview); }
+    if (!drag || !this.selected || this.saving) return;
+    if (drag.mode === 'pending') {
+      if (drag.pointerId !== pointer.id) return;
+      if (Math.hypot(pointer.x - drag.x, pointer.y - drag.y) / getRenderScale(this.scale) < DRAG_START_PX) return;
+      drag.mode = 'drag';
     }
-    const cell = this.cellAt(pointer);
+    this.showHeld(pointer);
+  }
+  /** The held item where it would go: full size on the World, beside the pointer elsewhere. */
+  private showHeld(pointer: Phaser.Input.Pointer): void {
+    const drag = this.drag!, object = this.selected!, model = this.session.model;
+    const appearance = getBaseEditorAppearance(model, object);
+    const point = this.uiPoint(pointer), cell = this.cellAt(pointer);
     this.preview.clear();
+    let failure: BaseEditorPlacementFailure | null = null;
     if (cell) {
       cell.x -= drag.offsetX; cell.y -= drag.offsetY;
-      const valid = !this.session.model.validate(this.selected, cell.x, cell.y);
-      this.drawFootprint(this.preview, cell.x, cell.y, valid ? 0xb1ed94 : 0xff9991, .2);
+      failure = model.validate(object, cell.x, cell.y);
+      this.drawFootprint(this.preview, cell.x, cell.y, failure ? MARK.invalid : MARK.valid, 1);
+      if (!this.worldGhost && appearance) this.worldGhost = createPersistentBaseDragPreview(this, appearance, this.session.color).setDepth(9995);
       const origin = this.worldOrigin(cell.x, cell.y);
-      this.dragPreview?.setScale(this.worldZoom).setPosition(
-        this.view.x + ((origin.gridX + .5) * CELL_SIZE - this.framing.world.x) * this.worldZoom,
-        this.view.y + ((origin.gridY + .5) * CELL_SIZE - this.framing.world.y) * this.worldZoom);
+      this.worldGhost?.setVisible(true).setAlpha(failure ? .4 : .82).setPosition((origin.gridX + .5) * CELL_SIZE, (origin.gridY + .5) * CELL_SIZE);
+      this.dragPreview?.setVisible(false);
+      this.held = { x: cell.x, y: cell.y };
     } else {
+      this.worldGhost?.setVisible(false);
+      if (!this.dragPreview && appearance) { this.dragPreview = createPersistentBaseDragPreview(this, appearance, this.session.color); this.ui?.add(this.dragPreview); }
       const offset = rotatePersistentBaseOffset(drag.offsetX, drag.offsetY, this.world.frame.quarterTurns);
-      this.dragPreview?.setScale(1).setPosition(pointer.x / scale - offset.dx * CELL_SIZE, pointer.y / scale - offset.dy * CELL_SIZE);
+      this.dragPreview?.setVisible(true).setScale(this.worldZoom)
+        .setPosition(point.x - offset.dx * CELL_SIZE * this.worldZoom, point.y - offset.dy * CELL_SIZE * this.worldZoom);
+      this.held = null;
     }
-    const removing = this.isOverTable(pointer) && !!this.session.model.getPosition(this.selected);
-    this.tableOutline.setStrokeStyle(removing ? 2 : 1, removing ? 0xb1ed94 : 0x718160, removing ? 1 : .5);
+    this.reasonTip.setText(failure ? t(`ui.base.invalid.${failure}`) : '').setVisible(failure !== null)
+      .setPosition(point.x + 20, point.y + 18);
+    this.inventory.setDropTarget(this.inventory.contains(point.x, point.y) && !!model.getPosition(object));
+    this.refreshRanges();
   }
+  /** Where the held item would stand, canonical; null while it is off the World view. */
+  private held: { x: number; y: number } | null = null;
   private drop(pointer: Phaser.Input.Pointer): void {
     const drag = this.drag;
     if (!drag || drag.pointerId !== pointer.id) return;
-    let changed = false;
-    if (drag.started && this.selected && !this.saving) {
-      const model = this.session.model;
-      const cell = this.cellAt(pointer);
-      if (cell) changed = model.move(this.selected, cell.x - drag.offsetX, cell.y - drag.offsetY);
-      else if (this.isOverTable(pointer) && model.getPosition(this.selected)) { model.remove(this.selected); changed = true; }
+    // A click without moving takes the item into hand; the next click puts it down.
+    if (drag.mode === 'pending') { drag.mode = 'carry'; this.showHeld(pointer); return; }
+    if (drag.mode === 'drag') this.placeHeld(pointer);
+  }
+  /** Puts the held item down at the pointer, or back over the inventory. A carried item stays in hand on a bad spot. */
+  private placeHeld(pointer: Phaser.Input.Pointer): void {
+    const drag = this.drag, object = this.selected;
+    if (!drag || !object || this.saving) return;
+    const model = this.session.model, cell = this.cellAt(pointer), point = this.uiPoint(pointer);
+    if (cell) {
+      const x = cell.x - drag.offsetX, y = cell.y - drag.offsetY, before = model.getPosition(object);
+      if (model.validate(object, x, y)) { if (drag.mode !== 'carry') { this.endDrag(); this.refreshSelection(); } return; }
+      this.endDrag();
+      if (before?.relativeGridX === x && before.relativeGridY === y) this.refreshSelection();
+      else this.commit(() => model.move(object, x, y));
+      return;
     }
-    this.endDrag();
-    if (changed) this.syncDraft();
-    else this.refreshSelection();
+    if (this.inventory.contains(point.x, point.y)) {
+      this.endDrag();
+      if (model.getPosition(object)) this.commit(() => { model.remove(object); return true; }); else this.refreshSelection();
+      return;
+    }
+    if (drag.mode !== 'carry') { this.endDrag(); this.refreshSelection(); }
   }
   private endDrag(): void {
-    this.drag = null; this.dragPreview?.destroy(true); this.dragPreview = null;
-    this.preview?.clear(); this.tableOutline?.setStrokeStyle(1, 0x718160, .5);
+    this.drag = null; this.held = null;
+    this.dragPreview?.destroy(true); this.dragPreview = null;
+    this.worldGhost?.destroy(true); this.worldGhost = null;
+    this.preview?.clear(); this.reasonTip?.setVisible(false); this.inventory?.setDropTarget(false);
   }
-  private syncDraft(): void { this.world.syncObjects(); this.refreshPreview(); this.refreshList(); }
+  private updatePan(pointer: Phaser.Input.Pointer): void {
+    const pan = this.pan;
+    if (!pan || pan.pointerId !== pointer.id) return;
+    const scale = getRenderScale(this.scale), dx = (pointer.x - pan.x) / scale, dy = (pointer.y - pan.y) / scale;
+    if (!pan.moved && Math.hypot(dx, dy) < DRAG_START_PX) return;
+    pan.moved = true;
+    this.scrollX = pan.scrollX - dx / this.worldZoom; this.scrollY = pan.scrollY - dy / this.worldZoom;
+    this.applyCamera(); this.refreshFramedOverlays();
+  }
+  /** Ends a pan; a right click without moving puts the held or clicked item back. */
+  private endPan(pointer: Phaser.Input.Pointer): boolean {
+    const pan = this.pan;
+    if (!pan || pan.pointerId !== pointer.id) return false;
+    this.pan = null;
+    if (!pan.moved && pan.button === 2) this.putBack(pointer);
+    return true;
+  }
+  private putBack(pointer: Phaser.Input.Pointer): void {
+    if (this.saving || this.closed) return;
+    const model = this.session.model;
+    const object = this.drag ? this.selected : (() => { const cell = this.cellAt(pointer); return cell ? this.objectAt(cell) : null; })();
+    this.endDrag();
+    if (!object || !model.getPosition(object)) { this.refreshSelection(); return; }
+    this.commit(() => { model.remove(object); return true; });
+  }
+  private wheel(pointer: Phaser.Input.Pointer, dy: number): void {
+    if (this.closed || dy === 0) return;
+    const point = this.uiPoint(pointer);
+    if (this.inventory.contains(point.x, point.y)) { if (!this.drag) this.inventory.scroll(Math.sign(dy)); return; }
+    if (!this.isOverView(point.x, point.y)) return;
+    this.zoomAt(point.x, point.y, dy < 0 ? ZOOM.step : 1 / ZOOM.step);
+    if (this.drag && this.drag.mode !== 'pending') this.showHeld(pointer);
+  }
+  private keyDown(event: KeyboardEvent): void {
+    if (this.saving || this.closed) return;
+    const key = event.key.toLowerCase(), command = event.ctrlKey || event.metaKey;
+    if (key === 'escape') { if (this.drag) { this.endDrag(); this.refreshSelection(); } else this.finish(); return; }
+    if (command && key === 'z') { if (event.shiftKey) this.redo(); else this.undo(); event.preventDefault(); return; }
+    if (command && key === 'y') { this.redo(); event.preventDefault(); return; }
+    if (key === 'delete' || key === 'backspace') {
+      const model = this.session.model, object = this.selected;
+      if (object && model.getPosition(object)) { this.endDrag(); this.commit(() => { model.remove(object); return true; }); }
+    }
+  }
+  /** One undoable change of the draft; false when nothing changed. */
+  private commit(change: () => boolean): boolean {
+    const model = this.session.model, before = model.snapshot();
+    if (!change()) { this.refreshSelection(); return false; }
+    this.undoStack.push(before);
+    if (this.undoStack.length > HISTORY) this.undoStack.shift();
+    this.redoStack.length = 0;
+    this.syncDraft();
+    return true;
+  }
+  private undo(): void { this.travel(this.undoStack, this.redoStack); }
+  private redo(): void { this.travel(this.redoStack, this.undoStack); }
+  private travel(from: PersistentBaseEditorDraftState[], to: PersistentBaseEditorDraftState[]): void {
+    const state = from.pop();
+    if (!state) return;
+    const model = this.session.model;
+    to.push(model.snapshot());
+    this.endDrag(); model.restore(state);
+    this.syncDraft();
+  }
+  private rotateBase(): void {
+    if (this.drag || this.saving || !this.options) return;
+    const model = this.options.model;
+    this.commit(() => model.rotate());
+  }
+  private clearAll(): void {
+    if (this.drag || this.saving || !this.options) return;
+    const model = this.options.model;
+    this.selected = null;
+    this.commit(() => model.clear());
+  }
+  private syncDraft(): void { this.world.syncObjects(); this.refreshPreview(); this.refreshList(); this.refreshBadges(); }
   /** Teammates' buildings and own conflicts as the host would merge them on the shown map. */
   private refreshPreview(): void {
     const room = this.session.room;
@@ -736,44 +934,60 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     return plan?.hint === 'front-base' ? t('ui.base.routes.frontBase')
       : plan?.hint === 'players-away' ? t('ui.base.routes.playersAway') : null;
   }
-  /** Rings of every own turret while toggled on; the selected turret always shows its ring. */
+  /**
+   * Reaches as a soft light on the ground: every turret's while toggled on, the selected one always
+   * and brighter, and the held turret's where it would stand.
+   */
   private refreshRanges(): void {
+    if (!this.options || !this.rangeField) return;
     const model = this.session.model, frame = this.world.frame;
-    const wanted = new Map<string, { x: number; y: number; radius: number }>();
-    const consider = (object: BaseEditorObject, position: { relativeGridX: number; relativeGridY: number } | undefined, constructionId: string | undefined) => {
-      const key = baseEditorObjectKey(object);
-      const selected = this.selected !== null && baseEditorObjectKey(this.selected) === key;
-      if (!position || !constructionId || (!this.showRanges && !selected)) return;
+    const selectedKey = this.selected ? baseEditorObjectKey(this.selected) : null;
+    const rings: PersistentBaseRangeRing[] = [];
+    const reach = (object: BaseEditorObject, constructionId: string | undefined): number | null => {
+      if (!constructionId) return null;
       // Personal turrets carry the builder's upgrades; base-owned reward turrets their authored range.
       const id = normalizeConstructionId(constructionId);
       const definition = id ? getCoopDefenseConstructionDefinition(id) : null;
-      const radius = object.kind === 'construction' ? this.session.resolveTurretRange?.(constructionId) ?? null
+      return object.kind === 'construction' ? this.session.resolveTurretRange?.(constructionId) ?? null
         : definition?.kind === 'turret' ? definition.targetRange : null;
-      const appearance = getBaseEditorAppearance(model, object);
+    };
+    const constructionOf = (object: BaseEditorObject): string | undefined => {
+      if (object.kind === 'construction') return model.getConstruction(object.id)?.tool.id;
+      const source = getPersistentBaseRewardDefinition(object.id).gameplaySource;
+      return source.kind === 'construction-definition' ? source.constructionId : undefined;
+    };
+    const consider = (object: BaseEditorObject, position: { relativeGridX: number; relativeGridY: number } | null | undefined, held = false) => {
+      const key = baseEditorObjectKey(object), selected = key === selectedKey;
+      if (!position || (!held && !this.showRanges && !selected)) return;
+      const radius = reach(object, constructionOf(object)), appearance = getBaseEditorAppearance(model, object);
       if (!radius || !appearance) return;
       const placed = toWorldFootprint(frame, position.relativeGridX, position.relativeGridY, appearance.footprint);
-      wanted.set(key, { x: (placed.gridX + .5) * CELL_SIZE, y: (placed.gridY + .5) * CELL_SIZE, radius });
+      rings.push({ x: (placed.gridX + .5) * CELL_SIZE, y: (placed.gridY + .5) * CELL_SIZE, radius,
+        color: object.kind === 'construction' ? this.session.color : MARK.reward, emphasis: selected ? 1 : 0 });
     };
-    for (const entry of model.constructions) consider({ kind: 'construction', id: entry.persistentId }, entry, entry.tool.id);
+    const holding = this.drag && this.drag.mode !== 'pending' && this.selected ? this.selected : null;
+    for (const entry of model.constructions) {
+      const object = { kind: 'construction' as const, id: entry.persistentId };
+      if (!holding || baseEditorObjectKey(holding) !== baseEditorObjectKey(object)) consider(object, entry);
+    }
     for (const reward of model.rewards) {
-      const source = getPersistentBaseRewardDefinition(reward.rewardId).gameplaySource;
-      consider({ kind: 'reward', id: reward.rewardId }, reward, source.kind === 'construction-definition' ? source.constructionId : undefined);
+      const object = { kind: 'reward' as const, id: reward.rewardId };
+      if (!holding || baseEditorObjectKey(holding) !== baseEditorObjectKey(object)) consider(object, reward);
     }
-    for (const [key, ring] of this.rangeRings) if (!wanted.has(key)) { ring.destroy(); this.rangeRings.delete(key); }
-    for (const [key, ring] of wanted) {
-      let visual = this.rangeRings.get(key);
-      if (!visual) { visual = new TurretRangePreviewVisual(this, 9990); this.rangeRings.set(key, visual); }
-      visual.show(ring.x, ring.y, ring.radius, this.session.color, true, 0);
-    }
+    if (holding && this.held) consider(holding, { relativeGridX: this.held.x, relativeGridY: this.held.y }, true);
+    this.rangeField.set(rings);
   }
-  private drawFootprint(graphics: Phaser.GameObjects.Graphics, x: number, y: number, color: number, alpha: number): void {
+  /** A soft glow over the cells an object takes: layered, rounded, no hard frame. */
+  private drawFootprint(graphics: Phaser.GameObjects.Graphics, x: number, y: number, color: number, strength: number): void {
     if (!this.selected) return;
     const cells = getBaseEditorAppearance(this.session.model, this.selected)?.footprint ?? [{ dx: 0, dy: 0 }];
     const placed = toWorldFootprint(this.world.frame, x, y, cells);
-    graphics.fillStyle(color, alpha).lineStyle(2, color, 1);
     for (const offset of placed.footprint) {
       const wx = (placed.gridX + offset.dx) * CELL_SIZE, wy = (placed.gridY + offset.dy) * CELL_SIZE;
-      graphics.fillRect(wx, wy, CELL_SIZE, CELL_SIZE).strokeRect(wx + 1, wy + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+      for (const [inset, alpha] of [[-5, .07], [-2, .1], [2, .16]] as const) {
+        graphics.fillStyle(color, alpha * strength).fillRoundedRect(wx + inset, wy + inset, CELL_SIZE - inset * 2, CELL_SIZE - inset * 2, 8);
+      }
+      graphics.lineStyle(1.5, color, .6 * strength).strokeRoundedRect(wx + 3, wy + 3, CELL_SIZE - 6, CELL_SIZE - 6, 6);
     }
   }
   private objectLabel(object: BaseEditorObject): string {
@@ -792,64 +1006,76 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       // The room's rewards belong to the host: a guest sees them, but cannot drag them.
       object: object.kind === 'reward' && !model.rewardsEditable ? undefined : object,
       conflict: object.kind === 'construction' && model.getPosition(object) ? this.conflicts.get(object.id) : undefined,
-      label: this.objectLabel(object),
-      icon: object.kind === 'reward' ? getPersistentBaseRewardDefinition(object.id).presentation.iconKey : undefined,
+      label: this.objectLabel(object), ...(object.kind === 'reward' ? { rewardId: object.id } : {}),
       personal: object.kind === 'construction', status: model.getPosition(object) ? 'placed' : 'unplaced' }));
     if (!model.rewardsEditable) return rows;
     const missed = new Set<PersistentBaseRewardId>();
     for (const entry of getMissedBaseRewards(model.baseline)) if (!missed.has(entry.rewardId)) {
       missed.add(entry.rewardId);
       const definition = getPersistentBaseRewardDefinition(entry.rewardId);
-      rows.push({ label: t(definition.presentation.labelKey), icon: definition.presentation.iconKey, personal: false, status: 'missed' });
+      rows.push({ label: t(definition.presentation.labelKey), rewardId: entry.rewardId, personal: false, status: 'missed',
+        missed: { mapId: entry.mapId, objectiveId: entry.objectiveId } });
     }
     return rows;
   }
-  private changePage(delta: number): void {
-    if (this.drag || this.saving) return;
-    const pages = Math.max(1, Math.ceil(this.rows().length / ROWS));
-    this.page = Math.max(0, Math.min(pages - 1, this.page + delta)); this.refreshList();
-  }
+  /** The inventory's cards: the rows with their artwork, numbered where names repeat, and their details. */
   private refreshList(): void {
-    this.list.removeAll(true); this.rowBackgrounds.clear();
-    const rows = this.rows(), pages = Math.max(1, Math.ceil(rows.length / ROWS));
-    this.page = Math.min(this.page, pages - 1);
-    rows.slice(this.page * ROWS, (this.page + 1) * ROWS).forEach((row, index) => {
-      const y = TABLE.y + ROW_HEIGHT * (index + .5);
-      const background = this.add.rectangle(TABLE.x + TABLE.width / 2, y, TABLE.width - 2, ROW_HEIGHT - 2, 0x18291f, .6);
-      this.list.add(background);
-      if (row.object) {
-        this.rowBackgrounds.set(baseEditorObjectKey(row.object), background);
-        background.setInteractive({ useHandCursor: true }).on('pointerdown', (pointer: Phaser.Input.Pointer) => this.beginDrag(row.object!, pointer));
-      }
-      const powerUpIcon = row.icon ? createPowerUpSymbolPreview(this, row.icon, 24, true) : null;
-      if (powerUpIcon) this.list.add(powerUpIcon.setPosition(TABLE.x + 23, y));
-      else if (row.icon && this.textures.exists(row.icon)) this.list.add(this.add.image(TABLE.x + 23, y, row.icon).setDisplaySize(24, 24));
-      const name = this.add.text(NAME_X, y, row.label, textStyle('label', { color: TEXT.primary })).setOrigin(0, .5);
-      if (name.width > STATUS_X - NAME_X - 90) name.setScale((STATUS_X - NAME_X - 90) / name.width);
-      this.list.add(name);
-      const status = this.add.text(STATUS_X, y, row.conflict ? t(`ui.base.conflict.${row.conflict}`) : t(`ui.base.${row.status}`),
-        textStyle('body', { color: row.conflict ? 0xff9a8a : row.status === 'placed' ? 0xb8d59f : row.status === 'missed' ? 0xc9a485 : 0xe8d9a5 }))
-        .setOrigin(.5);
-      if (status.width > PERSONAL_X - NAME_X - 160) status.setScale((PERSONAL_X - NAME_X - 160) / status.width);
-      this.list.add(status);
-      if (row.personal) this.list.add(this.add.text(PERSONAL_X, y, '✓', textStyle('body', { color: 0xc2dda3 })).setOrigin(.5));
+    const rows = this.rows(), model = this.session.model;
+    const counts = new Map<string, number>(), seen = new Map<string, number>();
+    for (const row of rows) counts.set(row.label, (counts.get(row.label) ?? 0) + 1);
+    const numerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+    const cards = rows.map((row): PersistentBaseInventoryCard => {
+      const index = (seen.get(row.label) ?? 0) + 1;
+      seen.set(row.label, index);
+      const label = (counts.get(row.label) ?? 0) > 1 ? `${row.label} ${numerals[index - 1] ?? index}` : row.label;
+      const object: BaseEditorObject | null = row.object ?? (row.rewardId ? { kind: 'reward', id: row.rewardId } : null);
+      const appearance = object ? getBaseEditorAppearance(model, object) : null;
+      return {
+        key: row.object ? baseEditorObjectKey(row.object) : `${row.status}:${row.rewardId ?? row.label}:${index}`,
+        label, state: row.status, takeable: !!row.object, ownerColor: row.personal ? this.session.color : null,
+        fresh: !!row.rewardId && this.session.newRewardIds.includes(row.rewardId), conflict: !!row.conflict,
+        art: () => appearance ? createPersistentBaseDragPreview(this, appearance, row.personal ? this.session.color : 0xd8c69a, { aura: false }) : null,
+        info: this.cardInfo(row, label, object),
+      };
     });
-    if (!rows.length) this.list.add(this.add.text(TABLE.x + TABLE.width / 2, TABLE.y + TABLE.height / 2, t('ui.base.empty.all'),
-      textStyle('body', { color: TEXT.muted })).setOrigin(.5).setWordWrapWidth(TABLE.width - 80).setAlign('center'));
-    this.previous.getRoot().setVisible(pages > 1); this.previous.setEnabled(this.page > 0);
-    this.next.getRoot().setVisible(pages > 1); this.next.setEnabled(this.page < pages - 1);
-    this.pageText.setText(`${this.page + 1} / ${pages}`).setVisible(pages > 1);
+    this.inventory.setCards(cards);
     this.refreshSelection();
   }
+  /** Hover details: what it is, its size and reach, where it may stand, how it stands now. */
+  private cardInfo(row: EditorRow, title: string, object: BaseEditorObject | null): PersistentBaseInventoryCard['info'] {
+    const model = this.session.model, lines: string[] = [];
+    lines.push(t(row.personal ? 'ui.base.info.personal' : 'ui.base.info.reward'));
+    const appearance = object ? getBaseEditorAppearance(model, object) : null;
+    if (appearance) {
+      const xs = appearance.footprint.map((cell) => cell.dx), ys = appearance.footprint.map((cell) => cell.dy);
+      const width = Math.max(...xs) - Math.min(...xs) + 1, height = Math.max(...ys) - Math.min(...ys) + 1;
+      lines.push(width * height === 1 ? t('ui.base.info.sizeOne') : t('ui.base.info.size', { width, height }));
+    }
+    if (object) {
+      const source = object.kind === 'reward' ? getPersistentBaseRewardDefinition(object.id).gameplaySource : null;
+      const constructionId = object.kind === 'construction' ? model.getConstruction(object.id)?.tool.id
+        : source?.kind === 'construction-definition' ? source.constructionId : undefined;
+      const id = constructionId ? normalizeConstructionId(constructionId) : null;
+      const definition = id ? getCoopDefenseConstructionDefinition(id) : null;
+      const radius = object.kind === 'construction' && constructionId ? this.session.resolveTurretRange?.(constructionId) ?? null
+        : definition?.kind === 'turret' ? definition.targetRange : null;
+      if (radius) lines.push(t('ui.base.info.range', { cells: (Math.round(radius / CELL_SIZE * 10) / 10).toLocaleString(getLocale()) }));
+      lines.push(t(object.kind === 'reward' && getPersistentBaseRewardDefinition(object.id).placementRule === 'base-surface'
+        ? 'ui.base.surface' : 'ui.base.courtyard'));
+    }
+    if (row.conflict) lines.push(t(`ui.base.conflict.${row.conflict}`));
+    else if (row.missed) lines.push(`${t(row.missed.objectiveId ? 'ui.base.optionalObjective' : 'ui.base.victoryReward')} · ${getMapName(row.missed.mapId, getLocale())}`);
+    else lines.push(t(row.status === 'placed' ? 'ui.base.placed' : 'ui.base.unplaced'));
+    const note = row.status === 'missed' ? undefined : !row.object ? t('ui.base.hostRoomBase')
+      : t(row.status === 'placed' ? 'ui.base.info.placedHint' : 'ui.base.info.take');
+    return { title, lines, ...(note ? { note } : {}) };
+  }
   private refreshSelection(): void {
-    const selectedKey = this.selected ? baseEditorObjectKey(this.selected) : null;
-    for (const [key, background] of this.rowBackgrounds) background
-      .setFillStyle(key === selectedKey ? 0x435735 : 0x18291f, key === selectedKey ? .92 : .6)
-      .setStrokeStyle(key === selectedKey ? 2 : 0, 0xd6e9a2, 1);
+    this.inventory?.setSelected(this.selected ? baseEditorObjectKey(this.selected) : null);
     this.selection.clear();
     const position = this.selected && this.session.model.getPosition(this.selected);
-    if (position) this.drawFootprint(this.selection, position.relativeGridX, position.relativeGridY, 0xe4d499, .1);
-    this.grid.setVisible(this.selected !== null);
+    if (position) this.drawFootprint(this.selection, position.relativeGridX, position.relativeGridY, MARK.base, 1);
+    this.grid.setVisible(this.drag !== null);
     if (this.world) this.refreshRanges();
   }
   private async save(): Promise<void> {

@@ -1,0 +1,44 @@
+{
+  "owner": "ui/PersistentBaseRangeField.ts",
+  "notes": [
+    "Bauhof turret reaches as soft light on the ground; the editor scene chooses the depth (DEPTH.DECALS + 0.25)."
+  ],
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/scene.add/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        5.25
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/PersistentBaseRangeField.ts:module/scene.add/setDepth/0",
+      "owner": "ui/PersistentBaseRangeField.ts",
+      "component": "module/scene.add/setDepth/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "module/scene.add/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

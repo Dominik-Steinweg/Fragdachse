@@ -240,7 +240,9 @@ export type UiIconName =
   | 'fullscreen-exit'
   | 'spinner'
   | 'box'
-  | 'box-checked';
+  | 'box-checked'
+  | 'rotate'
+  | 'tray';
 
 export function ensureIconTexture(
   scene: Phaser.Scene, name: UiIconName, size: number, color: number,
@@ -285,6 +287,24 @@ export function ensureIconTexture(
         line(0.12);
         path([[0.3, 0.52], [0.45, 0.67], [0.72, 0.36]]);
       }
+      break;
+
+    case 'rotate': {
+      // Three quarters of a turn clockwise, its arrowhead at the open end.
+      line(0.1);
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.52, s * 0.28, -Math.PI * 0.95, Math.PI * 0.55);
+      ctx.stroke();
+      path([[0.12, 0.30], [0.21, 0.47], [0.37, 0.36]]);
+      break;
+    }
+
+    case 'tray':
+      // Putting things back: an arrow down into an open tray.
+      line(0.1);
+      path([[0.5, 0.14], [0.5, 0.56]]);
+      path([[0.33, 0.41], [0.5, 0.58], [0.67, 0.41]]);
+      path([[0.16, 0.6], [0.16, 0.82], [0.84, 0.82], [0.84, 0.6]]);
       break;
 
     case 'cross':

@@ -3,7 +3,7 @@ import type * as Phaser from 'phaser';
 import { CELL_SIZE } from '../src/config';
 import { PERSISTENT_BASE_AREA_STAGES, resolvePersistentBaseBuildAreaForStage } from '../src/persistentBase/PersistentBaseCore';
 import { buildPersistentBaseAreaBoundary, getPersistentBaseEditorFraming } from '../src/persistentBase/PersistentBaseExpansionPreview';
-import { createPersistentBaseEditorBoundary, createDawnMerchantExpansionPreview } from '../src/ui/DawnMerchantExpansionPreview';
+import { createDawnMerchantExpansionPreview } from '../src/ui/DawnMerchantExpansionPreview';
 
 vi.mock('../src/ui/ForestModal', () => ({ textStyle: (_role: string, style: object) => style }));
 
@@ -22,26 +22,6 @@ function presentation() {
 }
 
 describe('editor annotations', () => {
-  it('draws the full current boundary at every stage with an opaque, zoom-independent contrast stroke', () => {
-    let firstWidths: number[] | undefined;
-    for (const stage of PERSISTENT_BASE_AREA_STAGES) {
-      const area = resolvePersistentBaseBuildAreaForStage(stage);
-      const frame = getPersistentBaseEditorFraming({ x: 88, y: 236, width: 648, height: 680 }, area);
-      const p = presentation();
-      createPersistentBaseEditorBoundary(p.scene, area, frame);
-      const [under, foreground] = p.strokes;
-      expect(under.width).toBeGreaterThan(foreground.width);
-      expect(under.color).not.toBe(foreground.color);
-      expect(foreground.width).toBeGreaterThanOrEqual(2);
-      expect(foreground.alpha).toBe(1);
-      const widths = p.strokes.map(s => s.width);
-      firstWidths ??= widths;
-      expect(widths).toEqual(firstWidths);
-      expect(p.lines).toHaveLength(buildPersistentBaseAreaBoundary(area).length * p.strokes.length);
-      for (const [x1, y1, x2, y2] of p.lines) expect(Math.hypot(x2 - x1, y2 - y1)).toBeGreaterThan(0);
-    }
-  });
-
   it('renders a dashed expansion with a backed label in the same owner container', () => {
     const area = resolvePersistentBaseBuildAreaForStage(4);
     const frame = getPersistentBaseEditorFraming({ x: 88, y: 236, width: 648, height: 680 }, area);

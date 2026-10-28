@@ -107,15 +107,28 @@ Die Darstellung folgt [`visual-guidelines.md`](../ai/visual-guidelines.md) und d
     erscheint die Warnung „Kein freier Weg – Gegner brechen durch“.
   - **Lage:** Das Leuchten des Stroms liegt über den Baumkronen; Dunst und Bodenspur bleiben am Boden.
 - **Mitspieler:** in Spielerfarbe wie in der Mission, nicht anwählbar.
-- **Konflikte:** pulsierender roter Halo am Objekt und ein kurzer Grund in der Liste rechts.
-- **Reichweitenringe:** ein Schalter für alle eigenen Türme. Das ausgewählte Objekt zeigt seinen Ring
-  immer.
+- **Konflikte:** pulsierender roter Halo am Objekt; die Kachel trägt einen roten Rand und nennt den
+  Grund beim Überfahren.
+- **Reichweiten:** nur angedeutet, als weiches Licht am Boden (GPU, keine Linien). Ein Schalter zeigt
+  alle Türme; der ausgewählte und der gerade gehaltene Turm zeigen ihre Reichweite immer, etwas klarer.
+- **Baugrenze:** eine weiche, warme Lichtkante mit runden Ecken statt einer Linie; die Zellen erscheinen
+  nur, während ein Objekt in der Hand ist.
 - **Miniübersicht:** die ganze Map, Norden oben, mit Basis, Spawnzonen, dem Rahmen des Detailbereichs
   und der Strömung in einer zweiten, feineren Instanz. Eine Legende darunter nennt nur, was die Map zeigt.
-- **Aufteilung:** Links steht die World in einem festen Rahmen; was die Map nicht füllt, ist dunkles
-  Passepartout. Eine Kopfzeile trägt links Stufe und Basis-HP, rechts „Drehen 90°“ und „Reichweiten“ und
-  über der rechten Spalte Titel und Einsatzbeginn der Lagekarte. Rechts folgen Übersicht, Legende,
-  Hinweis und die Simulationsschalter, darunter die Liste. Unten stehen nur „Abbruch“ und „Übernehmen“.
+- **Aufteilung:** Links steht die World in einem festen Rahmen. Unter dem Titel stehen die
+  Bedienhinweise. Die Kopfzeile trägt links Badges (Stufe, Radius, Basis-HP, platziert x/y), rechts
+  „Basis drehen“, „Reichweiten“ und „Alles zurück“, über der rechten Spalte Titel und Einsatzbeginn der
+  Lagekarte. Rechts folgen Übersicht, Legende, Hinweis und Simulationsschalter, darunter die Kacheln der
+  Belohnungen und Bauten. Unten stehen nur „Abbruch“ und „Übernehmen“.
+- **Kacheln:** großes Bild des Objekts, Name (gleiche Namen nummeriert) und Zustand (Haken = platziert,
+  Schloss = verpasst oder Host, NEU, Besitzerfarbe bei persönlichen Bauten). Reihen scrollen statt zu
+  blättern. Größe, Reichweite, erlaubter Platz und Status zeigt das Überfahren; während ein Objekt in der
+  Hand ist, nicht.
+- **Bedienung:** Klicken oder Ziehen nimmt ein Objekt; ein Klick setzt es, auf einem schlechten Platz
+  bleibt es in der Hand und der Grund steht am Cursor. Rechtsklick legt zurück, Entf entfernt, Esc
+  bricht ab, Strg+Z/Strg+Y machen rückgängig und wiederholen. Das Objekt erscheint beim Halten in voller
+  Größe an seinem Platz. Das Mausrad zoomt die Spielansicht um den Cursor (bis 2,2-fach), die rechte
+  oder mittlere Maustaste verschiebt sie, ein Doppelklick auf freien Boden zeigt wieder alles.
 
 ## 6. Regeln
 
@@ -279,3 +292,8 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
   Baubereich bleibt über einen weichen Nebelstempel frei. Gemessen: etwa 0,2 ms CPU je Frame, rund 18 ms im
   ruhegebundenen Aufbauschritt, 30 MB GPU-Speicher; Öffnen und Lobby unverändert. Die Ströme legen Void-Dunst
   entlang ihrer Wege (Nebelfarbe, Bodenschleier, Sporen), dicker Nebel verschleiert ihr Leuchten.
+- 2026-10-28 (Bedienung und Optik, Produktionsstand): Kacheln mit Mouse-over statt Tabelle, Klicken und
+  Setzen neben dem Ziehen, Rechtsklick legt zurück, Rückgängig/Wiederholen, Grund am Cursor, Zoom und
+  Verschieben, echte Vorschau beim Halten, weiche Baugrenze und weiche GPU-Reichweiten, Kopfzeile mit
+  Badges und „Alles zurück“. Abgelehnt: Ungespeichert-Schutz, Wegabdeckung als Kennzahl,
+  kontextabhängige Hinweise.
