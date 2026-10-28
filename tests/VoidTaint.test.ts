@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createVoidMarcherSample, type VoidMarchers, type VoidMarcherSample } from '../src/arena/VoidDangerField';
 import { createVoidLiftWave, liftArrivalSec, liftFront, LIFT_SEC } from '../src/arena/VoidLiftWave';
 import {
-  VOID_TAINT, VOID_TAINT_LIFTED, VOID_TAINT_QUICK, VoidTaintTrails, voidTaintAge,
+  VOID_TAINT, VOID_TAINT_LIFTED, VOID_TAINT_OCCUPIED, VOID_TAINT_QUICK, VoidTaintTrails, voidTaintAge,
 } from '../src/arena/VoidTaint';
 
 const frame = { offsetX: 0, offsetY: 0, width: 4000, height: 4000 };
@@ -38,6 +38,16 @@ describe('Void taint trails (E12)', () => {
     trails.feed(300, marchers([{ id: 'e1', x: 180, y: 160 }]));
     const [first, second] = stamps(trails);
     expect(second).toMatchObject({ ax: 180, ay: 100, bx: 180, by: 160, birthA: first!.birthB, retireA: first!.retireB });
+  });
+
+  it('keeps the haze open only where a body still stands at its stamp', () => {
+    const trails = new VoidTaintTrails(frame);
+    trails.feed(0, marchers([{ id: 'e1', x: 100, y: 100 }]));
+    trails.feed(100, marchers([{ id: 'e1', x: 140, y: 100 }]));
+    trails.feed(200, marchers([{ id: 'e1', x: 140, y: 160 }]));
+    expect(stamps(trails).map(s => s.flags)).toEqual([0, VOID_TAINT_OCCUPIED]);
+    trails.feed(300, marchers([{ id: 'e1', x: 140, y: 160, active: false }]));
+    expect(stamps(trails).map(s => s.flags)).toEqual([0, 0]);
   });
 
   it('breaks the trail on a new revision instead of bridging the jump', () => {
@@ -79,14 +89,15 @@ describe('Void taint trails (E12)', () => {
     expect(wave.durationSec).toBeLessThanOrEqual(LIFT_SEC * 2);
     trails.lift('north', 1000, wave);
     const byX = new Map(stamps(trails).map(s => [s.ax, s]));
+    // The bodies of the lifted zone are gone from their stamps; the others still stand on theirs.
     expect(byX.get(100)!.flags).toBe(VOID_TAINT_LIFTED);
     expect(byX.get(900)!.flags).toBe(VOID_TAINT_LIFTED);
     expect(byX.get(900)!.retireA).toBeGreaterThan(byX.get(100)!.retireA);
     expect(byX.get(900)!.retireA).toBeLessThanOrEqual(1000 + wave.durationSec * 1000);
-    expect(byX.get(500)!.flags).toBe(0);
-    expect(byX.get(300)!.flags).toBe(0);
+    expect(byX.get(500)!.flags).toBe(VOID_TAINT_OCCUPIED);
+    expect(byX.get(300)!.flags).toBe(VOID_TAINT_OCCUPIED);
     trails.feed(1100, marchers([{ id: 'near', x: 100, y: 40, zone: 'north', revision: 2 }]));
-    expect(stamps(trails).find(s => s.ay === 40)!.flags).toBe(0);
+    expect(stamps(trails).find(s => s.ay === 40)!.flags).toBe(VOID_TAINT_OCCUPIED);
     trails.feed(1000 + wave.durationSec * 1000 + VOID_TAINT.quickFadeMs + 1, marchers([]));
     expect(stamps(trails).some(s => s.zone === 'north' && s.ay === 0)).toBe(false);
   });
@@ -107,7 +118,7 @@ describe('Void taint trails (E12)', () => {
     const trails = new VoidTaintTrails(frame);
     trails.feed(0, marchers([{ id: 'r1', x: 100, y: 100, group: 3 }, { id: 'r2', x: 400, y: 100, group: 4 }]));
     trails.feed(100, marchers([{ id: 'r2', x: 400, y: 100, group: 4 }], { revision: 1, groups: [3] }));
-    expect(stamps(trails).map(s => [s.group, s.flags])).toEqual([[3, VOID_TAINT_QUICK], [4, 0]]);
+    expect(stamps(trails).map(s => [s.group, s.flags])).toEqual([[3, VOID_TAINT_QUICK], [4, VOID_TAINT_OCCUPIED]]);
     trails.feed(100 + VOID_TAINT.quickFadeMs + 1, marchers([{ id: 'r2', x: 400, y: 100, group: 4 }], { revision: 1, groups: [3] }));
     expect(stamps(trails).map(s => s.group)).toEqual([4]);
   });

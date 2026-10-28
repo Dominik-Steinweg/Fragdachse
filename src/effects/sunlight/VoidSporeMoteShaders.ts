@@ -3,8 +3,8 @@ import { VOID_CREEP_GLSL } from './VoidCreepShaders';
 
 /** Lifting waves the motes follow at once (VoidCreepPresentation keeps as many slots). */
 export const VOID_MOTE_LIFTS = 8;
-/** How much brighter motes glow in fresh contamination (E12). */
-const MOTE_FLARE = 1.4;
+/** How much brighter motes glow in fresh contamination (E12); violet, never towards white. */
+const MOTE_FLARE = .6;
 
 /** Fixed program key: one linked program per renderer, warmed while loading. */
 export const VOID_SPORE_MOTES_SHADER_NAME = 'VoidSporeMotes';
@@ -101,7 +101,8 @@ void main() {
   if(uLayers>1.5) light+=moteLayer(p,19.0,.8,17.0,.32*thick)*.7;
   // Motes caught by the wave flare briefly as they are carried off.
   // Fresh contamination makes its motes glow up before they settle.
-  light*=thick*calm*uGlow*(1.0+1.8*wave+${MOTE_FLARE.toFixed(2)}*flare);
+  light*=thick*calm*uGlow*(1.0+1.8*wave);
+  light+=uMoteDeep*max(light.r,max(light.g,light.b))*${MOTE_FLARE.toFixed(2)}*flare;
   // The wave itself: a faint, wispy shimmer where haze is being lifted, never a hard ring.
   float wisp=.55+.45*creepNoise(world*.011+vec2(uCreepTime*.35,-uCreepTime*.2));
   light+=mix(uMoteDeep,uMoteBright,.6)*wave*wisp*smoothstep(.0,.35,here)*uGlow*.38;

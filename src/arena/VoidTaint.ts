@@ -12,8 +12,12 @@ import { liftArrivalSec, type VoidLiftWave } from './VoidLiftWave';
  * and retire times; the GPU evaluates the envelope (VoidTaintShaders), so a frame only appends.
  */
 export const VOID_TAINT = {
-  /** A trail rises to full haze this fast after the body passed (ms). */
-  riseMs: 250,
+  /**
+   * A trail starts to rise this long after the body passed and is full after riseMs more (ms): the
+   * haze gathers behind the body, so enemies never walk inside their own densest, freshest haze.
+   */
+  riseDelayMs: 350,
+  riseMs: 700,
   /** Fresh contamination flares up; the flare decays with this time constant (ms). */
   flareMs: 1600,
   /** A trail holds this long after the body passed (ms), then fades back to fog. */
@@ -23,10 +27,13 @@ export const VOID_TAINT = {
   quickFadeMs: 900,
   liftFlareMs: 450,
   /** Trail radius: at least this, else this share of the body size (world px). */
-  minRadius: 44,
-  sizeRadius: .9,
-  /** The capsule's Gaussian reaches this many radii. */
-  extent: 1.8,
+  minRadius: 60,
+  sizeRadius: 1.5,
+  /** The capsule's Gaussian reaches this many radii; its rim is frayed by up to this share. */
+  extent: 2,
+  fray: .45,
+  /** Around the body still laying a trail the haze stays open over this share of the trail radius. */
+  bodyClear: .8,
   /** An open capsule grows until it is this long (px) or old (ms), then a connected one starts. */
   maxSegmentPx: 180,
   maxSegmentMs: 1500,
@@ -46,7 +53,7 @@ export const VOID_TAINT = {
   /** At most this many new stamps per frame; further ones wait for the next. */
   maxInsertsPerFrame: 256,
   /** Share of a zone's coverage a trail raises outside fog: the light veil of its own (E12). */
-  coverShare: .55,
+  coverShare: .45,
 } as const;
 
 /** Times travel modulo this clock in 16 bits. */
@@ -58,6 +65,9 @@ export const VOID_TAINT_TEXEL_ROWS = VOID_TAINT_CAPACITY / VOID_TAINT_TEXTURE_WI
 /** Flags of a stamp: lifted by its zone's wave (flare, then a quick fade), or dropped quickly. */
 export const VOID_TAINT_LIFTED = 1;
 export const VOID_TAINT_QUICK = 2;
+/** The stamp's end is where a body still stands or walks: the haze stays open around it. */
+export const VOID_TAINT_OCCUPIED = 4;
+const RETIRING = VOID_TAINT_LIFTED | VOID_TAINT_QUICK;
 /** Floats per vertex (position, slot, unused) and vertices per stamp. */
 const VERTEX_FLOATS = 4, STAMP_VERTICES = 6;
 const CORNERS = [0, 1, 2, 2, 1, 3] as const;
@@ -81,7 +91,7 @@ const clock = (ms: number): number => Math.floor(((ms % VOID_TAINT_CLOCK_MS) + V
 export function voidTaintAge(nowClock: number, atClock: number): number {
   return ((nowClock - atClock + VOID_TAINT_CLOCK_MS * 1.5) % VOID_TAINT_CLOCK_MS) - VOID_TAINT_CLOCK_MS / 2;
 }
-const fadeMsOf = (flags: number): number => flags ? VOID_TAINT.quickFadeMs : VOID_TAINT.fadeMs;
+const fadeMsOf = (flags: number): number => flags & RETIRING ? VOID_TAINT.quickFadeMs : VOID_TAINT.fadeMs;
 
 /**
  * Stamps of the void trails of one World presentation. Owned by the void creep presentation; it
@@ -132,7 +142,7 @@ export class VoidTaintTrails {
       this.retireGroups(retired.groups, nowMs);
     }
     marchers?.forEach(sample => this.visit(sample, nowMs));
-    for (const [id, track] of this.tracks) if (track.seen !== this.frame) this.tracks.delete(id);
+    for (const [id, track] of this.tracks) if (track.seen !== this.frame) { this.release(track); this.tracks.delete(id); }
   }
 
   /** Farthest reach of a zone's trails from a point, radius included; 0 without trails. */
@@ -150,15 +160,15 @@ export class VoidTaintTrails {
    * it, unless it fades sooner anyway. Trails its enemies lay afterwards start fresh.
    */
   lift(zone: string, nowMs: number, wave: VoidLiftWave): void {
-    for (const track of this.tracks.values()) if (track.zone === zone) track.slot = -1;
+    for (const track of this.tracks.values()) if (track.zone === zone) this.release(track);
     for (let i = 0; i < this.capacity; i++) {
       const stamp = this.slots[i];
-      if (!stamp || stamp.zone !== zone || stamp.flags) continue;
+      if (!stamp || stamp.zone !== zone || stamp.flags & RETIRING) continue;
       const arriveA = nowMs + liftArrivalSec(wave, Math.hypot(stamp.ax - wave.x, stamp.ay - wave.y)) * 1000;
       const arriveB = nowMs + liftArrivalSec(wave, Math.hypot(stamp.bx - wave.x, stamp.by - wave.y)) * 1000;
       if (arriveA >= stamp.retireA && arriveB >= stamp.retireB) continue;
       stamp.retireA = Math.min(stamp.retireA, arriveA); stamp.retireB = Math.min(stamp.retireB, arriveB);
-      stamp.flags = VOID_TAINT_LIFTED;
+      stamp.flags = stamp.flags & ~RETIRING | VOID_TAINT_LIFTED;
       this.encode(i);
     }
   }
@@ -167,12 +177,12 @@ export class VoidTaintTrails {
   retireGroups(groups: readonly number[], nowMs: number): void {
     if (!groups.length) return;
     const set = new Set(groups);
-    for (const track of this.tracks.values()) if (set.has(track.group)) track.slot = -1;
+    for (const track of this.tracks.values()) if (set.has(track.group)) this.release(track);
     for (let i = 0; i < this.capacity; i++) {
       const stamp = this.slots[i];
-      if (!stamp || !set.has(stamp.group) || stamp.flags || Math.max(stamp.retireA, stamp.retireB) <= nowMs) continue;
+      if (!stamp || !set.has(stamp.group) || stamp.flags & RETIRING || Math.max(stamp.retireA, stamp.retireB) <= nowMs) continue;
       stamp.retireA = Math.min(stamp.retireA, nowMs); stamp.retireB = Math.min(stamp.retireB, nowMs);
-      stamp.flags = VOID_TAINT_QUICK;
+      stamp.flags = stamp.flags & ~RETIRING | VOID_TAINT_QUICK;
       this.encode(i);
     }
   }
@@ -211,7 +221,7 @@ export class VoidTaintTrails {
     const radius = Math.max(VOID_TAINT.minRadius, VOID_TAINT.sizeRadius * sample.size);
     const strength = Math.max(0, Math.min(1, sample.strength));
     if (!sample.active || !Number.isFinite(sample.x + sample.y + radius) || strength <= 0) {
-      track.slot = -1; track.x = sample.x; track.y = sample.y; track.at = nowMs; return;
+      this.release(track); track.x = sample.x; track.y = sample.y; track.at = nowMs; return;
     }
     const step = Math.hypot(sample.x - track.x, sample.y - track.y), dt = Math.max(0, nowMs - track.at) / 1000;
     const broken = track.revision !== sample.revision || track.zone !== sample.zone || track.group !== sample.group
@@ -219,7 +229,8 @@ export class VoidTaintTrails {
       || step > radius * VOID_TAINT.jumpRadii + VOID_TAINT.jumpSpeedPxPerSec * dt;
     track.revision = sample.revision; track.zone = sample.zone; track.group = sample.group; track.strength = strength;
     track.x = sample.x; track.y = sample.y; track.at = nowMs;
-    const open = broken || track.slot < 0 ? undefined : this.slots[track.slot];
+    if (broken) this.release(track);
+    const open = track.slot < 0 ? undefined : this.slots[track.slot];
     if (!open) { track.slot = this.insertPoint(sample, radius, strength, nowMs); track.refreshedAt = nowMs; return; }
     const ex = open.bx - open.ax, ey = open.by - open.ay, length = Math.hypot(ex, ey);
     const mx = sample.x - open.bx, my = sample.y - open.by, move = Math.hypot(mx, my);
@@ -241,14 +252,22 @@ export class VoidTaintTrails {
       return;
     }
     // A connected piece starts where the last one ended, with that end's times.
-    const slot = this.insert({ ax: open.bx, ay: open.by, bx: sample.x, by: sample.y, radius, birthA: open.birthB, birthB: nowMs,
-      retireA: open.retireB, retireB: nowMs + VOID_TAINT.holdMs, strength, flags: 0, zone: sample.zone, group: sample.group }, nowMs);
-    track.slot = slot;
+    const last = { birthB: open.birthB, retireB: open.retireB, bx: open.bx, by: open.by };
+    this.release(track);
+    track.slot = this.insert({ ax: last.bx, ay: last.by, bx: sample.x, by: sample.y, radius, birthA: last.birthB, birthB: nowMs,
+      retireA: last.retireB, retireB: nowMs + VOID_TAINT.holdMs, strength, flags: VOID_TAINT_OCCUPIED, zone: sample.zone, group: sample.group }, nowMs);
   }
 
   private insertPoint(sample: Readonly<VoidMarcherSample>, radius: number, strength: number, nowMs: number): number {
     return this.insert({ ax: sample.x, ay: sample.y, bx: sample.x, by: sample.y, radius, birthA: nowMs, birthB: nowMs,
-      retireA: nowMs + VOID_TAINT.holdMs, retireB: nowMs + VOID_TAINT.holdMs, strength, flags: 0, zone: sample.zone, group: sample.group }, nowMs);
+      retireA: nowMs + VOID_TAINT.holdMs, retireB: nowMs + VOID_TAINT.holdMs, strength, flags: VOID_TAINT_OCCUPIED, zone: sample.zone, group: sample.group }, nowMs);
+  }
+
+  /** The body no longer stands at its stamp's end: that end takes the haze like the rest. */
+  private release(track: Track): void {
+    const stamp = track.slot >= 0 ? this.slots[track.slot] : undefined;
+    if (stamp && stamp.flags & VOID_TAINT_OCCUPIED) { stamp.flags &= ~VOID_TAINT_OCCUPIED; this.encode(track.slot); }
+    track.slot = -1;
   }
 
   private insert(stamp: Stamp, nowMs: number): number {
@@ -299,7 +318,7 @@ export class VoidTaintTrails {
     pack(data, base + stride * 4, stamp.radius * 16);
     data[base + stride * 4 + 2] = Math.round(stamp.strength * 255); data[base + stride * 4 + 3] = stamp.flags;
     // The quad covers the capsule's Gaussian, aligned to its direction.
-    const reach = stamp.radius * VOID_TAINT.extent + 1, dx0 = stamp.bx - stamp.ax, dy0 = stamp.by - stamp.ay;
+    const reach = stamp.radius * VOID_TAINT.extent * (1 + VOID_TAINT.fray) + 1, dx0 = stamp.bx - stamp.ax, dy0 = stamp.by - stamp.ay;
     const length = Math.hypot(dx0, dy0), dx = length > .001 ? dx0 / length : 1, dy = length > .001 ? dy0 / length : 0;
     let offset = index * STAMP_VERTICES * VERTEX_FLOATS;
     for (const corner of CORNERS) {

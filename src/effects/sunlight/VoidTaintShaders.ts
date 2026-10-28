@@ -34,6 +34,12 @@ uniform vec2 uWorldSize;
 // The trails' clock (ms modulo ${VOID_TAINT_CLOCK_MS}).
 uniform float uNow;
 float decode(vec2 v) {return dot(v,vec2(65280.,255.));}
+float taintHash(vec2 p) {return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+// Smooth value noise for the trail's frayed rim; world anchored, so it stands while bodies walk on.
+float taintNoise(vec2 p) {
+ vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+ return mix(mix(taintHash(i),taintHash(i+vec2(1.,0.)),f.x),mix(taintHash(i+vec2(0.,1.)),taintHash(i+vec2(1.,1.)),f.x),f.y);
+}
 // Signed age of a clock reading, within half the clock either way.
 float since(float at) {return mod(uNow-at+${f(VOID_TAINT_CLOCK_MS * 1.5)},${f(VOID_TAINT_CLOCK_MS)})-${f(VOID_TAINT_CLOCK_MS / 2)};}
 void main() {
@@ -46,14 +52,18 @@ void main() {
  vec2 line=end-start;
  float t=clamp(dot(outWorld-start,line)/max(dot(line,line),.000001),0.,1.);
  float radius=max(1.,decode(profile.rg)/16.);
- float q=length(outWorld-start-line*t)/radius;
+ // A frayed rim: two octaves of slow noise widen and narrow the trail, so it never reads as a tube.
+ float fray=(taintNoise(outWorld/110.)*.65+taintNoise(outWorld/47.+3.7)*.35-.5)*${f(VOID_TAINT.fray * 2)};
+ float q=length(outWorld-start-line*t)/(radius*(1.+fray));
  if(q>=${f(VOID_TAINT.extent)})discard;
  // Ages are taken per end, then interpolated: clock readings themselves may wrap between the ends.
  float born=mix(since(decode(births.rg)),since(decode(births.ba)),t);
  float retired=mix(since(decode(retires.rg)),since(decode(retires.ba)),t);
- float flags=floor(profile.a*255.+.5);
- float rise=smoothstep(0.,${f(VOID_TAINT.riseMs)},born);
- float flare=rise*exp(-max(0.,born)/${f(VOID_TAINT.flareMs)});
+ float bits=floor(profile.a*255.+.5),flags=mod(bits,4.),occupied=step(4.,bits);
+ // The haze gathers behind the body; where the body still stands it stays open.
+ float rise=smoothstep(${f(VOID_TAINT.riseDelayMs)},${f(VOID_TAINT.riseDelayMs + VOID_TAINT.riseMs)},born);
+ float clearing=mix(1.,smoothstep(radius*${f(VOID_TAINT.bodyClear * .35)},radius*${f(VOID_TAINT.bodyClear)},length(outWorld-end)),occupied);
+ float flare=rise*exp(-max(0.,born-${f(VOID_TAINT.riseDelayMs)})/${f(VOID_TAINT.flareMs)});
  float fade;
  if(flags>.5) {
    fade=1.-smoothstep(0.,${f(VOID_TAINT.quickFadeMs)},retired);
@@ -61,7 +71,7 @@ void main() {
    if(flags<1.5)flare=max(flare,smoothstep(-${f(VOID_TAINT.liftFlareMs)},0.,retired)*fade);
  } else fade=1.-smoothstep(0.,${f(VOID_TAINT.fadeMs)},retired);
  float edge=exp(-1.6*q*q)*(1.-smoothstep(${f(VOID_TAINT.extent * .75)},${f(VOID_TAINT.extent)},q));
- float amount=edge*profile.b*fade;
+ float amount=edge*profile.b*fade*clearing;
  gl_FragColor=vec4(${f(ZONE_HAZE)}*amount*rise,flare*amount,0.,1.);
 }
 `;
