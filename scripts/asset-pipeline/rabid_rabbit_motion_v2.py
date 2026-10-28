@@ -7,7 +7,7 @@ the authored world angles whatever the parent does. Every bone rolls its Z axis 
 head yaws are Euler Z seen from the camera and ear lifts are Euler X. Real height lives on
 `carriage` (leap Z); no clip travels in XY or bakes a display scale, the runtime owns travel and
 lift. Every call keys every control, so no clip inherits a pose, and one-shots reach the exact rest
-pose on their last frame. The optional void ear and body glows are keyed as factors of their rest strengths.
+pose on their last frame. The glowing void ear tips are keyed as a factor of their rest strength.
 """
 import math
 from mathutils import Quaternion, Vector
@@ -99,11 +99,9 @@ def key_pose(asset, frame, pose, key, body=0, hips=0, head=0, front=None, rear=N
         key(bone, 'location', location, frame)
         key(bone, 'scale', scale, frame)
     pose('carriage', location=carriage[0], rotation=carriage[1])
-    for name in ('ear_glow', 'body_glow'):
-        socket = asset['parts'].get(name)
-        if socket is not None:
-            socket.default_value = asset['parts'][name + '_rest'] * glow
-            socket.keyframe_insert(data_path='default_value', frame=frame)
+    socket = asset['parts']['ear_glow']
+    socket.default_value = asset['parts']['ear_glow_rest'] * glow
+    socket.keyframe_insert(data_path='default_value', frame=frame)
 
 
 def ears(lift=0, spread=0, flick=(0, 0)):
