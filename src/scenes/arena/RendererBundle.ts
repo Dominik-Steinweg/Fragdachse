@@ -595,6 +595,7 @@ export function wireProjectileRenderers(
     rocket: bundle.rocket,
     fireball: bundle.fireball,
     firestarterOrb: bundle.firestarter,
+    flameShots: bundle.enemyHeatBursts,
     spore: bundle.spore,
     grenade: bundle.grenade,
     translocatorPuck: bundle.translocatorPuck,

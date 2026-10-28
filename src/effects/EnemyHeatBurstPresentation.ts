@@ -66,6 +66,12 @@ export class EnemyHeatBurstPresentation {
     this.lighting = lighting;
   }
 
+  /** A new flame visual appeared: a heat-burst owner plays its spit gesture (host-synchronised time). */
+  onFlameShot(ownerId: string): void {
+    const enemy = this.enemies().find(candidate => candidate.id === ownerId);
+    if (enemy && getCoopDefenseEnemyConfig(enemy.kind).heatBurst) enemy.playSpit?.(this.clock());
+  }
+
   clear(): void {
     const now = this.clock();
     for (const id of this.sunk) this.zoneSink?.(id, null, now, false);

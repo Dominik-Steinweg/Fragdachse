@@ -21,4 +21,6 @@ export interface EnemyVisualSource {
   readonly isVulnerable: () => boolean;
   /** Optional local gesture; placeholders and other enemy views need no cast clip. */
   readonly playFirestarterCast?: (now: number) => void;
+  /** Optional local spit gesture of a heat-burst body, started by its new flames. */
+  readonly playSpit?: (now: number) => void;
 }

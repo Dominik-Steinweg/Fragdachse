@@ -17,6 +17,7 @@ import { EMPTY_KABOOMTULA_STATE, isKaboomtulaState, kaboomtulaLeapProgress, kabo
   type KaboomtulaState } from '../systems/KaboomtulaState';
 import { EMPTY_ENEMY_HEAT_BURST_STATE, isEnemyHeatBurstState, type EnemyHeatBurstState } from '../systems/EnemyHeatBurstState';
 import { heatSpeedFactorAt } from '../systems/enemyHeatBurstRules';
+import { EnemySpitPlayback, syncEnemyHeatBurstAnimation } from '../animations/EnemyHeatBurstAnimation';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
@@ -308,13 +309,29 @@ export class EnemyEntity {
     this.heatBurstState = state;
   }
 
+  private readonly spitPlayback = new EnemySpitPlayback();
+  private heatBurstAnimating = false;
+
+  /** A new flame of this body (host spawn or replicated): the spit gesture of its burst. */
+  playSpit(now: number): void {
+    if (!this.config.heatBurst) return;
+    this.spitPlayback.flame(now);
+    this.syncHeatBurstPresentation(now);
+  }
+
   /**
-   * Host and clients: the gait keeps pace with the heat ramp, so faster bodies also step faster. Only
-   * this sprite's move-loop frame duration changes; no clock is scaled.
+   * Host and clients: the burst recoil and spit gesture from the replicated timeline and local flames,
+   * otherwise the gait keeps pace with the heat ramp (only this sprite's move-loop frame duration
+   * changes; no clock is scaled).
    */
   syncHeatBurstPresentation(now: number): void {
     const config = this.config.heatBurst, sheet = this.walkingSheet;
-    if (!config || !sheet || this.sprite.anims.currentAnim?.key !== sheet.animationKey) return;
+    if (!config) return;
+    const wasAnimating = this.heatBurstAnimating;
+    this.heatBurstAnimating = syncEnemyHeatBurstAnimation(this.sprite, this.config.imageKey, this.heatBurstState, this.spitPlayback,
+      now, this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
+    if (wasAnimating && !this.heatBurstAnimating) this.syncWalkingAnimation();
+    if (this.heatBurstAnimating || !sheet || this.sprite.anims.currentAnim?.key !== sheet.animationKey) return;
     this.sprite.anims.msPerFrame = 1000 / (sheet.frameRate * heatSpeedFactorAt(this.heatBurstState, config, now));
   }
 
@@ -726,7 +743,7 @@ export class EnemyEntity {
 
   private syncWalkingAnimation(): void {
     if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating || this.energyConeAnimating || this.hopAnimating
-      || this.pounceAnimating) return;
+      || this.pounceAnimating || this.heatBurstAnimating) return;
     if (!this.walkingSheet) return;
     syncBadgerWalkingAnimation(
       this.sprite,

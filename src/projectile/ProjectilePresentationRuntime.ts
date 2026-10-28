@@ -94,6 +94,8 @@ export interface ProjectilePresentationRenderers {
   readonly rocket: RocketRenderer;
   readonly fireball: FireballRenderer;
   readonly firestarterOrb?: FirestarterRenderer;
+  /** Told about every new flame visual by owner (an enemy's spit gesture starts with its first flame). */
+  readonly flameShots?: { onFlameShot(ownerId: string): void };
   readonly spore: SporeRenderer;
   readonly grenade: GrenadeRenderer;
   readonly translocatorPuck: TranslocatorPuckRenderer;
@@ -164,6 +166,7 @@ export class ProjectilePresentationRuntime {
   }
   private fireballRenderer: FireballRenderer | null = null;
   private firestarterOrbRenderer: FirestarterRenderer | null = null;
+  private flameShots: { onFlameShot(ownerId: string): void } | null = null;
   private sporeRenderer: SporeRenderer | null = null;
   private grenadeRenderer: GrenadeRenderer | null = null;
   private visualOverrides: ProjectileVisualOverrides | null = null;
@@ -200,6 +203,7 @@ export class ProjectilePresentationRuntime {
     this.rocketRenderer = renderers.rocket;
     this.fireballRenderer = renderers.fireball;
     this.firestarterOrbRenderer = renderers.firestarterOrb ?? null;
+    this.flameShots = renderers.flameShots ?? null;
     this.sporeRenderer = renderers.spore;
     this.grenadeRenderer = renderers.grenade;
     this.translocatorPuckRenderer = renderers.translocatorPuck;
@@ -474,7 +478,10 @@ export class ProjectilePresentationRuntime {
       switch (style) {
         case 'flame':
           if (this.flameRenderer) {
-            if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, x, y, size, projectile.color, projectile.flameStreamKey ?? projectile.turretVisualId ?? projectile.sourceTurretId ?? projectile.ownerId);
+            if (!this.flameRenderer.has(id)) {
+              this.flameRenderer.createVisual(id, x, y, size, projectile.color, projectile.flameStreamKey ?? projectile.turretVisualId ?? projectile.sourceTurretId ?? projectile.ownerId);
+              this.flameShots?.onFlameShot(projectile.ownerId);
+            }
             this.flameRenderer.updateVisual(id, x, y, size, vx, vy);
           }
           break;
@@ -775,7 +782,10 @@ export class ProjectilePresentationRuntime {
         if (!this.leafBlowerRenderer.has(id)) this.leafBlowerRenderer.createVisual(id, proj.x, proj.y, proj.size);
         this.leafBlowerRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (proj.style === 'flame' && this.flameRenderer) {
-        if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, proj.flameStreamKey ?? proj.turretVisualId ?? proj.sourceTurretId ?? proj.ownerId);
+        if (!this.flameRenderer.has(id)) {
+          this.flameRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, proj.flameStreamKey ?? proj.turretVisualId ?? proj.sourceTurretId ?? proj.ownerId);
+          this.flameShots?.onFlameShot(proj.ownerId);
+        }
         this.flameRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if ((proj.style === 'awp' || proj.style === 'gauss') && this.bulletRenderer) {
         if (!this.bulletRenderer.has(id)) this.bulletRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, bulletPreset, proj.ownerColor ?? proj.color);
