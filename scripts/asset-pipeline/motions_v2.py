@@ -147,6 +147,8 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         importlib.import_module('lobby_staff_motion_v2').apply_staff(asset, motion, phase, frame, idle, p, pose, key)
     elif motion.startswith('kaboomtula_'):
         importlib.import_module('kaboomtula_motion_v2').apply_kaboomtula(asset, motion, phase, frame, idle, p, pose, key)
+    elif motion.startswith('rabbit_'):
+        importlib.import_module('rabid_rabbit_motion_v2').apply_rabid_rabbit(asset, motion, phase, frame, idle, p, pose, key)
     elif motion.startswith('shield_'):
         pose('left_arm')
         pose('right_arm')

@@ -1,0 +1,95 @@
+{
+  "id": "rabid-rabbit",
+  "label": "Rabid Rabbit",
+  "category": "enemy",
+  "gameIds": [],
+  "reference": "public/assets/sprites/enemies/enemy_rabid_rabbit.png",
+  "targetSize": 22,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "displayScale": 2.4,
+  "collisionDiameter": 22,
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Geduckter Feldhase in Draufsicht: eiförmiger Rumpf, an den Keulen am breitesten, schmaler Kopf mit Schnauze nach Norden; die langen Ohren stehen 46° seitlich-rückwärts ab und ergeben von oben eine Pfeilsilhouette (Erkennungsmerkmal); helle Hinterpfoten liegen neben den Keulen, die Vorderpfoten unter der Brust; Fell-Locken lockern die Kontur auf.",
+    "colors": "Nightshade: blauschwarzes Fell mit dunklem Rückensattel, violett-heller Fellkante als Kontur auf dunklem Boden, Ohren mit glühend violetten Void-Spitzen, große violett leuchtende Ringaugen unter schweren Lidern; Rot bleibt den Telegraphen, kein Gelb.",
+    "anatomy": "Geschlossener Fellkörper mit Kopf (Bone head) und zweiteiligem Rücken (Bones body/hips) für Strecken und Beugen im Galopp, Unterkiefer mit Nagezähnen (Bone jaw), zwei Ohr-Bones ear_l/ear_r, Stummelschwanz (Bone tail), Vorderbeine je upper/lower/foot und Hinterbeine je thigh/shin/foot mit den Kontaktmeshes `<leg> broad paw`, carriage-Control für echte Sprunghöhe; Sockets eyeLeft/eyeRight und mouth; Emissionssocket ear_glow.",
+    "materials": "Mattes kurzes Fell auf Basis der Kraken-Hautschicht mit gemalter Fell-Locken-Textur (Wertplan, Sprenkel), Fell-Locken entlang der Kontur nur in Beauty (meshShadowDetail), glänzende dunkle Augäpfel mit violetten Iris-Ringen, elfenbeinfarbene Nagezähne, dunkle Krallen, eingebrannte Void-Emission in den Ohrspitzen; keine Kameraneigung, kein Comic-Look.",
+    "stage": "Produktion: V2-Quelle rr-v1-r2 (standard, 128 px ausgewählt, archiviert), abgenommen an GA1 (User) als R3-5 nightshade tips und an GA2 (Lead, im Spiel geprüft) als Entwurf draft-c; 71 Posen mit Augenankern und Socket mouth, zweigliedrige Ohren, animiertes Void-Leuchten (Gain auf der Emissionsfarbe, Reichweite, Flimmern) auch im getrennten Emissionspass; Schatten-Mesh enemy-mesh-rr-v1-r2 versiegelt (IoU min. 0,984). gameIds bleiben bis zum Cutover leer."
+  },
+  "requiredClips": [
+    "move",
+    "claw",
+    "windup",
+    "leap",
+    "idle"
+  ],
+  "production": "reference",
+  "recipe": "rabid-rabbit",
+  "model": {
+    "earYaw": 46,
+    "eyeScale": 1
+  },
+  "orthoScale": 6.2,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-body-fur-v2-q.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Blauschwarzes Nightshade-Fell, violette Ringaugen und glühende Void-Ohrspitzen",
+      "textureStrength": 0.7,
+      "formShadowStrength": 0.85
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "rabbit_bound",
+      "frameCount": 10,
+      "frameRate": 24,
+      "loop": true
+    },
+    {
+      "name": "claw",
+      "motion": "rabbit_bite",
+      "frameCount": 12,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 5,
+        "impact": 7
+      }
+    },
+    {
+      "name": "windup",
+      "motion": "rabbit_windup",
+      "frameCount": 12,
+      "frameRate": 18,
+      "loop": true
+    },
+    {
+      "name": "leap",
+      "motion": "rabbit_leap",
+      "frameCount": 20,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "launch": 5,
+        "land": 13
+      }
+    },
+    {
+      "name": "idle",
+      "motion": "rabbit_idle",
+      "frameCount": 16,
+      "frameRate": 12,
+      "loop": true
+    }
+  ]
+}
