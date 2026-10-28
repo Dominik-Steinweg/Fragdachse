@@ -7,8 +7,9 @@ export function baseEditorStageKey(terrain: Pick<PersistentBaseEditorTerrain, 'm
   return [terrain.mapId, terrain.seed, terrain.fingerprint, terrain.areaStage, quality].join('|');
 }
 
-/** Quiet time after the next round's terrain changed before its stage is built: the host may still be choosing. */
-export const BASE_EDITOR_PREPARE_SETTLE_MS = 3000;
+/** Quiet time after the next round's terrain changed before its stage is built: only enough to let a host
+ * click through several maps without a build for each. */
+export const BASE_EDITOR_PREPARE_SETTLE_MS = 500;
 
 /** What the lobby frame tells the preparation. */
 export interface BaseEditorPreparationFrame {

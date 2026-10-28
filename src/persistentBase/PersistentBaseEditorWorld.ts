@@ -25,7 +25,8 @@ import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { PowerUpRenderer } from '../powerups/PowerUpRenderer';
 import { bindBaseFortPresentation } from '../world/BaseFortPresentationBinding';
 import { resolveCoopDefenseMapConfig } from '../world/WorldDefinitionResolution';
-import { DeploymentRoutePlanner, type DeploymentRoutePlan } from '../activity/DeploymentRoutes';
+import { DEPLOYMENT_ROUTE_START, DeploymentRoutePlanner, type DeploymentRoutePlan, type DeploymentRouteScenario,
+  type DeploymentRouteScenarioOptions } from '../activity/DeploymentRoutes';
 import { RouteFlowPresentation } from '../effects/routeFlow/RouteFlowPresentation';
 import type { RouteFlowRoute } from '../effects/routeFlow/RouteFlowStore';
 import type { ArenaLayout, SyncedPlaceableRock, SyncedPowerUpPedestal, TurretWeaponId } from '../types';
@@ -106,8 +107,10 @@ export class PersistentBaseEditorWorld {
   private routePlanner: DeploymentRoutePlanner | null = null;
   private routes: RouteFlowPresentation | null = null;
   private shadowsInitialized = false;
-  /** The last plan and the cells it was planned with; an unchanged draft reuses it. */
+  /** The last plan and the cells and what-if it was planned with; an unchanged draft reuses it. */
   private lastPlan: { readonly cells: string; readonly plan: DeploymentRoutePlan } | null = null;
+  /** The situation map's what-if: fallen outposts, blown bridges, open teleporters. */
+  private scenario: DeploymentRouteScenario = DEPLOYMENT_ROUTE_START;
   /** Minutes: the map's time when the round starts; the personal draft keeps the lobby's. */
   readonly timeOfDay: number;
 
@@ -232,6 +235,7 @@ export class PersistentBaseEditorWorld {
     // Enemy routes of the next round over the real terrain (Lagekarte); only maps with a mission.
     this.routePlanner = this.terrain && mapConfig ? new DeploymentRoutePlanner({ mapConfig, worldMetrics: this.world.metrics,
       layout: this.terrain.layout, bases: this.world.bases.filter((base) => !base.dormant),
+      persistentBaseId: this.world.persistentBaseSite?.baseId ?? null,
       spawnFocusCell: this.terrain.definition.spawnFocusCell, detail: this.view }) : null;
     this.routes = this.routePlanner ? new RouteFlowPresentation(scene, this.lighting) : null;
     if (this.routes) this.sunlight.setActivityVoidDanger(this.routes.voidDanger);
@@ -284,9 +288,11 @@ export class PersistentBaseEditorWorld {
    */
   planRoutes(): DeploymentRoutePlan | null {
     if (!this.routePlanner || !this.routes) return null;
-    const cells = this.constructionCells.map(({ gridX, gridY }) => `${gridX}:${gridY}`).sort().join(',');
+    const { outpostsDestroyed, bridgesDestroyed, teleportersOpen } = this.scenario;
+    const cells = `${+outpostsDestroyed}${+bridgesDestroyed}${+teleportersOpen}|`
+      + this.constructionCells.map(({ gridX, gridY }) => `${gridX}:${gridY}`).sort().join(',');
     if (this.lastPlan?.cells === cells) return this.lastPlan.plan;
-    const plan = this.routePlanner.plan(this.constructionCells);
+    const plan = this.routePlanner.plan(this.constructionCells, this.scenario);
     this.lastPlan = { cells, plan };
     const toFlow = (dim: number) => plan.routes.filter((route) => route.points.length > 1)
       .map((route): RouteFlowRoute => ({ points: route.points, breach: route.breach !== null, strength: route.relevant ? 1 : dim }));
@@ -299,6 +305,13 @@ export class PersistentBaseEditorWorld {
         Math.floor(y / CELL_SIZE) - anchor.gridY, siteArea),
     });
     return plan;
+  }
+  /** What-if switches this map offers; `null` without routes. */
+  get scenarioOptions(): DeploymentRouteScenarioOptions | null { return this.routePlanner?.scenarioOptions ?? null; }
+  /** Replans the routes for a what-if; the round itself always starts with all switches off. */
+  setScenario(scenario: DeploymentRouteScenario): DeploymentRoutePlan | null {
+    this.scenario = scenario;
+    return this.planRoutes();
   }
   /** The routes also flow over the situation map's minimap, in its panel space. */
   attachRouteMinimap(container: Phaser.GameObjects.Container, placement: { readonly originX: number; readonly originY: number; readonly unit: number }): void {

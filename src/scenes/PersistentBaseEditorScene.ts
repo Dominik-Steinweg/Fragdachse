@@ -43,13 +43,21 @@ import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
 import { formatTimeOfDay } from '../effects/TimeOfDay';
 import type { ArenaBuildPause } from '../arena/ArenaBuilder';
+import { DEPLOYMENT_ROUTE_START, type DeploymentRouteScenario, type DeploymentRouteScenarioOptions } from '../activity/DeploymentRoutes';
+import type { UiIconName } from '../ui/uiTextures';
 import { getChunkBakeScheduler } from '../arena/chunks/ChunkBakeScheduler';
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 
 const WORLD_PANEL = { x: 88, y: 236, width: 1000, height: 680 };
 /** Overview of the whole map (Lagekarte); empty without map terrain. */
-export const PERSISTENT_BASE_EDITOR_MINIMAP_PANEL = { x: 1130, y: 236, width: 708, height: 200 };
-const TABLE = { x: 1130, y: 486, width: 708, height: 380 };
+export const PERSISTENT_BASE_EDITOR_MINIMAP_PANEL = { x: 1130, y: 236, width: 708, height: 236 };
+const TABLE = { x: 1130, y: 522, width: 708, height: 342 };
+/** What-if switches below the overview; each appears only where it changes the routes. */
+const SCENARIO_SWITCHES = [
+  { key: 'outpostsDestroyed', option: 'outposts', label: 'ui.base.scenario.outposts' },
+  { key: 'bridgesDestroyed', option: 'bridges', label: 'ui.base.scenario.bridges' },
+  { key: 'teleportersOpen', option: 'teleporters', label: 'ui.base.scenario.teleporters' },
+] as const satisfies readonly { key: keyof DeploymentRouteScenario; option: keyof DeploymentRouteScenarioOptions; label: string }[];
 const ROW_HEIGHT = 38;
 const ROWS = TABLE.height / ROW_HEIGHT;
 const NAME_X = TABLE.x + 48, STATUS_X = TABLE.x + 470, PERSONAL_X = TABLE.x + 640;
@@ -156,6 +164,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   /** Why the World view shows no routes (forward base, players hunted away); below the minimap. */
   private routeHint: Phaser.GameObjects.Text | null = null;
   private breachWarning: Phaser.GameObjects.Container | null = null;
+  /** The routes' what-if; every session starts with the round as it starts. */
+  private scenario: DeploymentRouteScenario = DEPLOYMENT_ROUTE_START;
+  private readonly scenarioButtons = new Map<keyof DeploymentRouteScenario, UiButton>();
   private options: PersistentBaseEditorOptions | null = null;
   /** The stage's remaining build steps; `null` once built. */
   private building: Generator<ArenaBuildPause, void> | null = null;
@@ -200,7 +211,10 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const view = this.world.view;
     // Where routes cannot be shown on the base, the reason gets its own strip below the overview.
     const hint = this.routeHintText(this.world.planRoutes());
-    const hintHeight = hint ? 40 : 0;
+    const hintHeight = hint ? 36 : 0;
+    const options = this.world.scenarioOptions;
+    const switches = SCENARIO_SWITCHES.filter((entry) => options?.[entry.option]);
+    const switchHeight = switches.length ? 40 : 0;
     yield;
     this.minimap = createPersistentBaseEditorMinimap(this, {
       layout: terrain.layout, widthCells: terrain.definition.metrics.widthCells, heightCells: terrain.definition.metrics.heightCells,
@@ -208,15 +222,23 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       spawnZones: terrain.definition.spawnZones ?? [],
       detail: { minX: view.x / CELL_SIZE, minY: view.y / CELL_SIZE,
         maxX: (view.x + view.width) / CELL_SIZE - 1, maxY: (view.y + view.height) / CELL_SIZE - 1 },
-    }, { x: panel.x + 8, y: panel.y + 8, width: panel.width - 16, height: panel.height - 16 - hintHeight });
+    }, { x: panel.x + 8, y: panel.y + 8, width: panel.width - 16, height: panel.height - 16 - hintHeight - switchHeight });
     chrome.add(this.minimap.image);
     yield;
     const origin = this.minimap.cellToScreen(0, 0);
     this.world.attachRouteMinimap(chrome, { originX: origin.x - this.minimap.scale / 2, originY: origin.y - this.minimap.scale / 2,
       unit: this.minimap.scale / CELL_SIZE });
     // The strip exists only where the prepared plan needed it; a session's plans update its text.
-    if (hint !== null) this.routeHint = this.label(panel.x + panel.width / 2, panel.y + panel.height - 26, hint, 'caption', .5,
+    if (hint !== null) this.routeHint = this.label(panel.x + panel.width / 2, panel.y + panel.height - switchHeight - 24, hint, 'caption', .5,
       panel.width - 40, chrome).setColor('#e3d2ff');
+    // The what-if switches replan the routes on the spot: a fallen outpost, a blown bridge, an open teleporter.
+    const gap = 10, width = Math.min(220, (panel.width - 16 - gap * (switches.length - 1)) / Math.max(1, switches.length));
+    switches.forEach((entry, index) => {
+      const x = panel.x + panel.width / 2 + (index - (switches.length - 1) / 2) * (width + gap);
+      const button = this.button(x, panel.y + panel.height - 24, width, 30, t(entry.label), () => this.toggleScenario(entry.key), 'check');
+      this.scenarioButtons.set(entry.key, button);
+    });
+    this.syncScenarioButtons();
     // No free path: the warning sits on the World view, where the breach glows.
     const warning = this.add.container(WORLD_PANEL.x + WORLD_PANEL.width / 2, this.view.y + this.view.height - 30).setVisible(false);
     const text = this.add.text(0, 0, t('ui.base.routes.breach').toLocaleUpperCase(), textStyle('label', { color: 0xffd0da }))
@@ -422,6 +444,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.closed = false; this.saving = false; this.selected = null; this.drag = null; this.page = 0;
     this.showRanges = false; this.conflicts = new Map(); this.framesShown = 0;
     const model = options.model;
+    this.scenario = DEPLOYMENT_ROUTE_START;
+    this.world.setScenario(this.scenario);
+    this.syncScenarioButtons();
     this.world.setModel(model, options.color);
     this.stats.setText(t(model.area.kind === 'radius' ? 'ui.base.statsRadius' : 'ui.base.stats', {
       stage: model.areaStage, hp: resolvePersistentBaseMaxHp(model.baseline.persistentBaseHealthRewards),
@@ -530,8 +555,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       this.chrome.add(image);
     }
   }
-  private button(x: number, y: number, w: number, h: number, label: string, onClick: () => void) {
-    const button = new UiButton(this, { x, y, w, h, label, skin: 'forest', onClick, isEnabled: () => !this.saving });
+  private button(x: number, y: number, w: number, h: number, label: string, onClick: () => void, icon?: UiIconName) {
+    const button = new UiButton(this, { x, y, w, h, label, skin: 'forest', onClick, isEnabled: () => !this.saving,
+      ...(icon ? { icon, iconSize: 14 } : {}) });
     this.buttons.push(button); this.chrome.add(button.getRoot()); return button;
   }
   private actionButton(kind: 'cancel' | 'apply', x: number, onClick: () => void): void {
@@ -639,6 +665,19 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     }
     this.refreshRanges();
     this.refreshRoutes();
+  }
+  private toggleScenario(key: keyof DeploymentRouteScenario): void {
+    if (this.closed || this.saving || this.drag) return;
+    this.scenario = { ...this.scenario, [key]: !this.scenario[key] };
+    this.syncScenarioButtons();
+    this.world.setScenario(this.scenario);
+    this.refreshRoutes();
+  }
+  private syncScenarioButtons(): void {
+    for (const [key, button] of this.scenarioButtons) {
+      const on = this.scenario[key];
+      button.setIcon(on ? 'check' : null).setIntent(on ? 'accent' : 'neutral');
+    }
   }
   /** The next round's enemy routes with the draft as it stands, and what the view cannot show. */
   private refreshRoutes(): void {

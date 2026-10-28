@@ -16,6 +16,8 @@ export interface MissionStartNavigationInput {
   readonly barrierCells: readonly { readonly gridX: number; readonly gridY: number }[];
   /** Cells blocked by placed constructions (persistent base and its rewards). */
   readonly constructionCells: readonly { readonly gridX: number; readonly gridY: number }[];
+  /** Bridges already blown: their decks are water again. None at mission start. */
+  readonly collapsedBridgeIds?: ReadonlySet<string>;
 }
 
 interface Rect { left: number; top: number; right: number; bottom: number; x: number; y: number; width: number; height: number }
@@ -55,6 +57,6 @@ export function buildMissionStartNavigationGeometry(input: MissionStartNavigatio
     bases: () => bases,
     barriers: () => barriers,
   });
-  index.setWaterGeometry(new WaterGeometry(resolveCollisionWater(layout.water ?? [], layout.bridges), metrics));
+  index.setWaterGeometry(new WaterGeometry(resolveCollisionWater(layout.water ?? [], layout.bridges, input.collapsedBridgeIds), metrics));
   return index.snapshotMovementGeometry();
 }

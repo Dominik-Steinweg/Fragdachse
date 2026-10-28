@@ -2,12 +2,14 @@ import * as Phaser from 'phaser';
 import type { BaseSpec } from '../arena/BaseRegistry';
 import type { WorldSpawnZone } from '../config/spawnZones';
 import type { ArenaLayout } from '../types';
+import { getBridgeDeckRect } from '../arena/BridgeGeometry';
 
 /** Texture pixels per map cell; the image is scaled to its panel. */
 const PX_PER_CELL = 3;
 const COLORS = {
   ground: '#33402b', dirt: '#4a4433', water: '#24434d', rock: '#6d6a62', tree: '#1f3320', track: '#5e4a35',
-  base: '#8a6a43', persistentBase: '#d8b25a', spawnZone: '#7d4bb0', frame: '#efe4bd',
+  base: '#8a6a43', persistentBase: '#d8b25a', hostileBase: '#a45ee6', spawnZone: '#7d4bb0', frame: '#efe4bd',
+  bridgeDeck: '#a8834f', bridgeRail: '#4a3624',
 } as const;
 
 let nextMinimapTexture = 0;
@@ -32,8 +34,9 @@ export interface PersistentBaseEditorMinimap {
 }
 
 /**
- * Overview of the whole map for the base editor (Lagekarte), north up like the round: terrain,
- * bases, the spawn zones in the danger colour and the frame of the detail view. Drawn once per map
+ * Overview of the whole map for the base editor (Lagekarte), north up like the round: terrain with
+ * its bridges, bases (the enemies' in the danger colour), the spawn zones and the frame of the
+ * detail view. Drawn once per map
  * and seed; it never animates by itself.
  */
 export function createPersistentBaseEditorMinimap(scene: Phaser.Scene, input: PersistentBaseEditorMinimapInput,
@@ -51,12 +54,24 @@ export function createPersistentBaseEditorMinimap(scene: Phaser.Scene, input: Pe
   ctx.fillRect(0, 0, width, height);
   fill(COLORS.dirt, input.layout.dirt);
   fill(COLORS.water, input.layout.water ?? []);
+  // Bridges cross the water as decks with rails along their span.
+  for (const bridge of input.layout.bridges ?? []) {
+    const deck = getBridgeDeckRect(bridge);
+    const x = deck.gridX * PX_PER_CELL, y = deck.gridY * PX_PER_CELL;
+    const w = deck.widthCells * PX_PER_CELL, h = deck.heightCells * PX_PER_CELL;
+    ctx.fillStyle = COLORS.bridgeDeck;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = COLORS.bridgeRail;
+    if (bridge.axis === 'horizontal') { ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1); }
+    else { ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h); }
+  }
   fill(COLORS.track, input.layout.tracks);
   fill(COLORS.tree, input.layout.trees);
   fill(COLORS.rock, input.layout.rocks);
   for (const base of input.bases) {
     if (base.dormant || base.surface === 'none') continue;
-    fill(base.id === input.persistentBaseId ? COLORS.persistentBase : COLORS.base, base.cells);
+    // The enemies' own bases, outposts and spawn structures carry the danger colour.
+    fill(base.id === input.persistentBaseId ? COLORS.persistentBase : base.faction === 'hostile' ? COLORS.hostileBase : COLORS.base, base.cells);
   }
   ctx.globalAlpha = .55;
   ctx.fillStyle = COLORS.spawnZone;

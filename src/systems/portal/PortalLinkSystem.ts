@@ -17,6 +17,12 @@ export interface PortalLinkStateEntry {
 
 export interface PortalLinkEndpoints { readonly a: PortalPoint; readonly b: PortalPoint }
 
+/** An open link as enemies plan it: a jump between its endpoints for bodies that fit through. */
+export function navigationPortalLink(config: ResolvedCoopDefensePortalLinkConfig, endpoints: PortalLinkEndpoints): FlowFieldPortalLink {
+  return { id: config.id, ax: endpoints.a.x, ay: endpoints.a.y, bx: endpoints.b.x, by: endpoints.b.y, radiusPx: config.radiusPx,
+    maxBodyRadiusPx: config.maxBodyRadiusPx, costPx: config.linkCostPx };
+}
+
 export interface PortalLinkSystemOptions {
   readonly links: readonly ResolvedCoopDefensePortalLinkConfig[];
   readonly endpoints: ReadonlyMap<string, PortalLinkEndpoints>;
@@ -132,9 +138,6 @@ export class PortalLinkSystem implements PortalPairSource {
   private refreshPairs(): void {
     const open = this.links.filter((link) => link.state.phase === 'open');
     this.pairView = open.map((link) => link.pair);
-    this.options.setNavigationLinks?.(open.map(({ config, pair }) => ({
-      id: config.id, ax: pair.a.x, ay: pair.a.y, bx: pair.b.x, by: pair.b.y, radiusPx: config.radiusPx,
-      maxBodyRadiusPx: config.maxBodyRadiusPx, costPx: config.linkCostPx,
-    })));
+    this.options.setNavigationLinks?.(open.map(({ config, pair }) => navigationPortalLink(config, pair)));
   }
 }

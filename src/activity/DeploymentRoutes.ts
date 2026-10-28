@@ -12,6 +12,10 @@ import { traceFlowFieldRoute, type FlowFieldRoutePoint } from '../systems/flowfi
 import { createFlowFieldTuning, resolveCoopMissionFlowFieldInputs } from '../systems/flowfield/FlowFieldSources';
 import { buildMissionStartNavigationGeometry } from '../systems/navigation/MissionStartNavigationGeometry';
 import type { NavigationGeometrySnapshot } from '../systems/navigation/NavigationGeometry';
+import type { FlowFieldPortalLink } from '../systems/flowfield/FlowFieldProtocol';
+import { navigationPortalLink } from '../systems/portal/PortalLinkSystem';
+import { resolveCoopDefensePortalLink } from '../config/coopDefensePortalLinks';
+import { resolveCoopMissionPortalEndpoints } from './CoopMissionPortalComposition';
 import type { ArenaLayout, SpawnFront } from '../types';
 import type { WorldMetrics } from '../world/WorldMetrics';
 
@@ -41,9 +45,11 @@ export function resolveDeploymentRouteRequests(input: {
   readonly bases: readonly BaseSpec[];
   readonly goalBaseIds: readonly string[];
   readonly spawnFocusCell?: WorldSpawnFocusCell;
+  /** Where the players are, when not where the round starts them (their base ahead has fallen). */
+  readonly focus?: { readonly gridX: number; readonly gridY: number };
 }): DeploymentRouteRequest[] {
   const { mapConfig } = input;
-  const focus = resolveDeploymentSpawnFocus(mapConfig, input.bases, input.spawnFocusCell);
+  const focus = input.focus ?? resolveDeploymentSpawnFocus(mapConfig, input.bases, input.spawnFocusCell);
   const checkpoints = new Map((mapConfig.missionProgress?.checkpoints ?? []).map((checkpoint) => [checkpoint.id, checkpoint]));
   const encounters = mapConfig.encounters ?? [];
   const expectedPlayers = (encounterId: string, seen = new Set<string>()): { gridX: number; gridY: number } => {
@@ -124,6 +130,25 @@ export interface DeploymentRoutePlan {
 
 interface Rect { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
 
+/** What-if switches of the situation map; all off is the round as it starts. */
+export interface DeploymentRouteScenario {
+  /** The own bases ahead of the persistent base have fallen: enemies and players fall back to it. */
+  readonly outpostsDestroyed: boolean;
+  /** The bridges are blown: their decks are water again. */
+  readonly bridgesDestroyed: boolean;
+  /** The enemies' teleporters are open; in the round they open after a while. */
+  readonly teleportersOpen: boolean;
+}
+
+export const DEPLOYMENT_ROUTE_START: DeploymentRouteScenario = { outpostsDestroyed: false, bridgesDestroyed: false, teleportersOpen: false };
+
+/** Which switches change anything on this map. */
+export interface DeploymentRouteScenarioOptions {
+  readonly outposts: boolean;
+  readonly bridges: boolean;
+  readonly teleporters: boolean;
+}
+
 /**
  * Main routes of the next round for the base editor, from the mission's own flow-field inputs.
  *
@@ -133,10 +158,16 @@ interface Rect { readonly x: number; readonly y: number; readonly width: number;
 export class DeploymentRoutePlanner {
   private readonly coordinator: FlowFieldCoordinator;
   private readonly metrics: FlowFieldMetrics;
-  private readonly requests: readonly DeploymentRouteRequest[];
+  private requests: readonly DeploymentRouteRequest[];
   private readonly fields = new Map<string, FlowFieldFieldView>();
   private geometry: NavigationGeometrySnapshot;
   private constructionCells: readonly { gridX: number; gridY: number }[] = [];
+  private scenario = DEPLOYMENT_ROUTE_START;
+  /** Bases the mission's enemies attack, of all standing ones. */
+  private readonly goalSourceIds: ReadonlySet<string>;
+  /** Own bases besides the persistent one: forward bases and outposts. */
+  private readonly outposts: ReadonlySet<string>;
+  private readonly portalLinks: readonly FlowFieldPortalLink[];
 
   constructor(private readonly input: {
     readonly mapConfig: CoopDefenseMapConfig;
@@ -144,6 +175,8 @@ export class DeploymentRoutePlanner {
     readonly layout: ArenaLayout;
     /** Bases standing at mission start. */
     readonly bases: readonly BaseSpec[];
+    /** The persistent base, which stands when every own base ahead of it has fallen. */
+    readonly persistentBaseId: string | null;
     readonly spawnFocusCell?: WorldSpawnFocusCell;
     /** World-pixel rectangle of the situation map's detail view. */
     readonly detail: Rect;
@@ -151,9 +184,13 @@ export class DeploymentRoutePlanner {
     const navigation = resolveCoopMissionFlowFieldInputs({ worldMetrics: input.worldMetrics, layout: input.layout,
       baseSpecs: input.bases, enemyTargeting: input.mapConfig.enemyTargeting, exact: true });
     this.metrics = navigation.metrics;
-    const goalBaseIds = navigation.bases.filter((base) => base.isGoalSource).map((base) => base.id);
-    this.requests = resolveDeploymentRouteRequests({ mapConfig: input.mapConfig, bases: input.bases, goalBaseIds,
-      spawnFocusCell: input.spawnFocusCell });
+    this.goalSourceIds = new Set(navigation.bases.filter((base) => base.isGoalSource).map((base) => base.id));
+    this.outposts = new Set(input.persistentBaseId === null ? [] : input.bases.filter((base) => base.id !== input.persistentBaseId
+      && base.faction !== 'hostile' && base.role !== 'spawn-point').map((base) => base.id));
+    const endpoints = resolveCoopMissionPortalEndpoints(input.mapConfig, input.worldMetrics);
+    this.portalLinks = (input.mapConfig.portalLinks ?? []).map(resolveCoopDefensePortalLink)
+      .flatMap((link) => { const ends = endpoints.get(link.id); return ends ? [navigationPortalLink(link, ends)] : []; });
+    this.requests = this.resolveRequests();
     this.geometry = this.buildGeometry([]);
     this.coordinator = new FlowFieldCoordinator({
       metrics: navigation.metrics, tuning: createFlowFieldTuning(), staticKind: navigation.staticKind, bases: navigation.bases,
@@ -165,14 +202,21 @@ export class DeploymentRoutePlanner {
 
   get routeCount(): number { return this.requests.length; }
 
-  /** Routes with the persistent base standing on these cells. */
-  plan(constructionCells: readonly { readonly gridX: number; readonly gridY: number }[]): DeploymentRoutePlan {
+  /** The what-if switches that change anything on this map. */
+  get scenarioOptions(): DeploymentRouteScenarioOptions {
+    return { outposts: this.outposts.size > 0, bridges: (this.input.layout.bridges?.length ?? 0) > 0, teleporters: this.portalLinks.length > 0 };
+  }
+
+  /** Routes with the persistent base standing on these cells, in the round as it starts or a what-if. */
+  plan(constructionCells: readonly { readonly gridX: number; readonly gridY: number }[],
+    scenario: DeploymentRouteScenario = DEPLOYMENT_ROUTE_START): DeploymentRoutePlan {
+    this.applyScenario(scenario);
     this.constructionCells = constructionCells.map((cell) => ({ gridX: cell.gridX, gridY: cell.gridY }));
     this.compute(this.constructionCells);
     // First every route on the real geometry; field buffers are reused by the next computation.
     const traced = this.requests.map((request) => {
       const centre = sourceCentre(request.source, this.input.worldMetrics, this.input.bases);
-      return { request, centre, route: this.trace(request.target, centre) };
+      return { request, centre, route: this.endAtBase(this.trace(request.target, centre)) };
     });
     const breaches = new Map<string, { points: readonly FlowFieldRoutePoint[]; breach: { x: number; y: number } }>();
     if (traced.some(({ route }) => !route.reachedGoal) && this.constructionCells.length > 0) {
@@ -182,7 +226,7 @@ export class DeploymentRoutePlanner {
       const { offsetX, offsetY } = this.input.worldMetrics;
       for (const { request, centre, route } of traced) {
         if (route.reachedGoal) continue;
-        const open = this.trace(request.target, centre);
+        const open = this.endAtBase(this.trace(request.target, centre));
         const hit = open.points.find((point) => blocked.has(`${Math.floor((point.x - offsetX) / CELL_SIZE)}:${Math.floor((point.y - offsetY) / CELL_SIZE)}`));
         if (open.reachedGoal && hit) breaches.set(request.key, { points: open.points.slice(0, open.points.indexOf(hit) + 1), breach: { x: hit.x, y: hit.y } });
       }
@@ -201,6 +245,60 @@ export class DeploymentRoutePlanner {
 
   destroy(): void {
     this.coordinator.destroy();
+  }
+
+  private applyScenario(scenario: DeploymentRouteScenario): void {
+    const previous = this.scenario;
+    if (scenario.outpostsDestroyed === previous.outpostsDestroyed && scenario.bridgesDestroyed === previous.bridgesDestroyed
+      && scenario.teleportersOpen === previous.teleportersOpen) return;
+    this.scenario = scenario;
+    if (scenario.teleportersOpen !== previous.teleportersOpen) this.coordinator.setPortalLinks(scenario.teleportersOpen ? this.portalLinks : []);
+    if (scenario.outpostsDestroyed === previous.outpostsDestroyed) return;
+    // A fallen base is neither goal nor obstacle any more, as in the round.
+    this.coordinator.setActiveBaseIds(new Set(this.standingBases().map((base) => base.id)));
+    this.requests = this.resolveRequests();
+    // Fields exist before the next computation, as for the first plan.
+    for (const request of this.requests) this.fieldFor(request.target);
+    // Fields of targets no route has any more would still be computed on every run.
+    const wanted = new Set(this.requests.map((request) => targetKey(request.target)));
+    for (const key of [...this.fields.keys()]) {
+      if (wanted.has(key)) continue;
+      this.coordinator.unregisterField(`deployment:${key}`);
+      this.fields.delete(key);
+    }
+  }
+
+  private standingBases(): readonly BaseSpec[] {
+    return this.scenario.outpostsDestroyed ? this.input.bases.filter((base) => !this.outposts.has(base.id)) : this.input.bases;
+  }
+
+  private resolveRequests(): DeploymentRouteRequest[] {
+    const bases = this.standingBases();
+    // Players respawn at the own bases that still stand, the persistent one when all ahead have fallen.
+    const calm = this.scenario.outpostsDestroyed ? resolveCalmCoopSpawnBase(bases) : null;
+    return resolveDeploymentRouteRequests({ mapConfig: this.input.mapConfig, bases,
+      goalBaseIds: bases.filter((base) => this.goalSourceIds.has(base.id)).map((base) => base.id),
+      spawnFocusCell: this.input.spawnFocusCell,
+      ...(calm ? { focus: { gridX: Math.round((calm.region.minGridX + calm.region.maxGridX) / 2),
+        gridY: Math.round((calm.region.minGridY + calm.region.maxGridY) / 2) } } : {}) });
+  }
+
+  /**
+   * A route ends where it reaches the own base it heads for, at the base's outer edge: enemies attack
+   * the first wall in reach. Without this, routes through a wide gate would run on to the hearth.
+   */
+  private endAtBase(route: { points: readonly FlowFieldRoutePoint[]; reachedGoal: boolean }) {
+    const last = route.points[route.points.length - 1];
+    if (!last) return route;
+    const { offsetX, offsetY } = this.input.worldMetrics;
+    // The base's cells plus the one ring around them in which base attackers stop.
+    const reaches = (base: BaseSpec, point: FlowFieldRoutePoint) => {
+      const x = (point.x - offsetX) / CELL_SIZE, y = (point.y - offsetY) / CELL_SIZE;
+      return x >= base.region.minGridX - 1 && x < base.region.maxGridX + 2 && y >= base.region.minGridY - 1 && y < base.region.maxGridY + 2;
+    };
+    const base = this.standingBases().find((candidate) => candidate.faction !== 'hostile' && reaches(candidate, last));
+    if (!base) return route;
+    return { points: route.points.slice(0, route.points.findIndex((point) => reaches(base, point)) + 1), reachedGoal: route.reachedGoal };
   }
 
   private line(request: DeploymentRouteRequest, points: readonly FlowFieldRoutePoint[], reachedGoal: boolean,
@@ -267,7 +365,8 @@ export class DeploymentRoutePlanner {
 
   private buildGeometry(constructionCells: readonly { gridX: number; gridY: number }[]): NavigationGeometrySnapshot {
     return buildMissionStartNavigationGeometry({ metrics: this.input.worldMetrics, layout: this.input.layout,
-      bases: this.input.bases, constructionCells,
+      bases: this.standingBases(), constructionCells,
+      ...(this.scenario.bridgesDestroyed ? { collapsedBridgeIds: new Set((this.input.layout.bridges ?? []).map((bridge) => bridge.id)) } : {}),
       barrierCells: resolveCoopDefenseMapMissionProgress(this.input.mapConfig)?.barriers.flatMap((barrier) => barrier.cells) ?? [] });
   }
 }

@@ -245,3 +245,10 @@ Alle Eingaben kommen aus denselben Funktionen, die auch die Mission benutzt.
   offen ist. Nach einem Mapwechsel wartet der Aufbau drei Sekunden, in Bauhof-Nähe nicht. Vor dem Rundenstart
   wird die Bühne abgebaut. Auf allen Qualitätsstufen; ein dezenter Spinner an Button und Shift-Schild zeigt die
   Vorbereitung. Messbericht: [Bauhof-Vorbereitung](../reports/bauhof-vorbereitung-2026-10-28.md).
+- 2026-10-28 (Playtest-Feedback): Nach einem Mapwechsel wartet die Vorbereitung nur 0,5 s. Die Übersicht färbt
+  gegnerische Basen, Vorposten und Spawnbauwerke violett und zeigt Brücken. Schalter unter der Übersicht
+  simulieren „Vorposten zerstört“ (eigene Basen vor der persistenten Basis fallen, Gegner und Spieler weichen
+  zu ihr zurück), „Brücke gesprengt“ und „Teleporter aktiv“; jede Sitzung beginnt im Zustand des
+  Missionsstarts. Jede Route endet am Außenrand der Basis, die sie erreicht, statt bei manchen erst an der
+  Feuerstelle. Die Strömung leuchtet nachts stärker, trägt violette Void-Partikel wie der Void-Nebel und
+  lässt den Boden entlang der Wege violett schimmern.

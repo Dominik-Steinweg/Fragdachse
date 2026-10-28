@@ -1,7 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
 import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
-import { getEmissiveScale } from '../EmissiveScale';
 import { ROUTE_FLOW_FRAGMENT_SHADER, ROUTE_FLOW_VERTEX_SHADER } from './routeFlowShader';
 import { ROUTE_FLOW_CAPACITY, ROUTE_FLOW_INSTANCE_FLOATS, ROUTE_FLOW_VERTICES, type RouteFlowStore } from './RouteFlowStore';
 
@@ -117,13 +116,14 @@ export interface RouteFlowLayers { destroy(): void }
 
 /**
  * Ink in the decal band, the stream bed above water and below rocks, and the current's light
- * above the canopies, where trees would otherwise hide a route.
+ * above the canopies and the light map, where trees and the night would otherwise hide a route.
+ * `glow` scales that light; it grows towards the night.
  */
-export function createRouteFlowLayers(scene: Phaser.Scene, store: RouteFlowStore, time: () => number): RouteFlowLayers {
+export function createRouteFlowLayers(scene: Phaser.Scene, store: RouteFlowStore, time: () => number, glow: () => number): RouteFlowLayers {
   const layers = [
     createRouteFlowGpuLayer(scene, store, RouteFlowPass.Ground, DEPTH.DECALS + 0.06, time),
     createRouteFlowGpuLayer(scene, store, RouteFlowPass.Bed, DEPTH.GROUND_FOG + 0.05, time),
-    createRouteFlowGpuLayer(scene, store, RouteFlowPass.Emissive, DEPTH.CANOPY + 0.3, time, { glow: canopyGlow }),
+    createRouteFlowGpuLayer(scene, store, RouteFlowPass.Emissive, DEPTH.CANOPY + 0.3, time, { glow }),
   ];
   return { destroy: () => { for (const layer of layers) layer?.destroy(); layers.length = 0; } };
 }
@@ -135,9 +135,4 @@ export function createRouteFlowLayers(scene: Phaser.Scene, store: RouteFlowStore
 export function createRouteFlowMinimapLayer(scene: Phaser.Scene, store: RouteFlowStore, time: () => number,
   unit: number): Phaser.GameObjects.Image | null {
   return createRouteFlowGpuLayer(scene, store, RouteFlowPass.Emissive, 0, time, { unit, glow: () => 1.4 });
-}
-
-/** By day the bed carries the stream and the light above the canopies stays subtle; at night it is the stream. */
-function canopyGlow(): number {
-  return 0.5 + 0.5 * Math.max(0, Math.min(1, (getEmissiveScale() - 0.55) / 0.45));
 }

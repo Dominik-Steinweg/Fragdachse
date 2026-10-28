@@ -20,6 +20,10 @@ export interface RouteFlowPlan {
 
 const ENTRY_LIGHT_COLOR = 0xb27cff;
 const BREACH_LIGHT_COLOR = 0xff4f86;
+/** The current's own light: subtle by day over its bed, the whole stream at night. */
+const STREAM_GLOW = { day: .75, night: 1.5 } as const;
+/** Small violet ground lights along the streams, so the current lights its soil at night. */
+const STREAM_LIGHT = { spacingPx: 150, radiusPx: 72, intensity: .32, max: 40 } as const;
 
 /**
  * Owner of the situation map's Void-Strömung: GPU streams in the World and on the minimap, the
@@ -39,7 +43,11 @@ export class RouteFlowPresentation {
   readonly voidDanger: ActivityVoidDanger;
 
   constructor(private readonly scene: Phaser.Scene, private readonly lighting: LightingSystem) {
-    this.layers = createRouteFlowLayers(scene, this.store, () => this.clockMs);
+    this.layers = createRouteFlowLayers(scene, this.store, () => this.clockMs, () => {
+      // The same night curve as the void fog's spores: the lamps' own dusk.
+      const night = Math.max(0, Math.min(1, (lighting.getArtificialLightFactor() - .1) / .6));
+      return STREAM_GLOW.day + (STREAM_GLOW.night - STREAM_GLOW.day) * night;
+    });
     const alerts = this.alertList;
     this.voidDanger = { sources: [], presenceOf: () => 1, get alerts() { return alerts; } };
   }
@@ -50,10 +58,11 @@ export class RouteFlowPresentation {
     const geometry = buildRouteFlowGeometry(plan.view, { tolerance: .75, clip: plan.clip, isInsideBuildArea: plan.isInsideBuildArea });
     this.store.setGeometry(geometry, this.clockMs);
     const entries = geometry.marks.filter((mark) => mark.kind === RouteFlowKind.Entry);
-    this.lights.lights = entries.map((mark) => ({
-      x: mark.x, y: mark.y, radiusPx: mark.radius * 2.6, intensity: .55 * mark.strength, color: ENTRY_LIGHT_COLOR }));
-    this.lights.lightCount = entries.length;
-    this.lighting.setGroundGlowLights(this, entries.length ? this.lights : null, { decorative: true });
+    this.lights.lights = [...entries.map((mark) => ({
+      x: mark.x, y: mark.y, radiusPx: mark.radius * 2.6, intensity: .55 * mark.strength, color: ENTRY_LIGHT_COLOR })),
+    ...streamLights(plan.view, plan.clip)];
+    this.lights.lightCount = this.lights.lights.length;
+    this.lighting.setGroundGlowLights(this, this.lights.lightCount ? this.lights : null, { decorative: true });
     const breaches = new Set<string>();
     for (const mark of geometry.marks) if (mark.kind === RouteFlowKind.Breach) {
       breaches.add(mark.key);
@@ -99,4 +108,24 @@ export class RouteFlowPresentation {
     this.minimap?.image?.destroy();
     this.minimap = null;
   }
+}
+
+/** Lights every few steps along the visible streams, dimmer where a route matters less. */
+type GroundGlowLight = GroundGlowLightFrame['lights'][number];
+
+function streamLights(routes: readonly RouteFlowRoute[], clip: Rect): GroundGlowLight[] {
+  const lights: GroundGlowLight[] = [];
+  for (const route of routes) {
+    let travelled = STREAM_LIGHT.spacingPx / 2;
+    for (let i = 1; i < route.points.length && lights.length < STREAM_LIGHT.max; i++) {
+      const a = route.points[i - 1]!, b = route.points[i]!;
+      travelled += Math.hypot(b.x - a.x, b.y - a.y);
+      if (travelled < STREAM_LIGHT.spacingPx) continue;
+      travelled = 0;
+      if (b.x < clip.x || b.y < clip.y || b.x > clip.x + clip.width || b.y > clip.y + clip.height) continue;
+      lights.push({ x: b.x, y: b.y, radiusPx: STREAM_LIGHT.radiusPx, intensity: STREAM_LIGHT.intensity * route.strength,
+        color: ENTRY_LIGHT_COLOR });
+    }
+  }
+  return lights;
 }
