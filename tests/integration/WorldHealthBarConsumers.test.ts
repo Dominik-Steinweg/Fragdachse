@@ -467,6 +467,7 @@ describe('World HP consumer boundaries', () => {
       getWorldGeometryBinding: () => null, getMissionBarrierObstacles: () => null,
       syncActiveBaseIds: () => {}, reconcilePersistentBaseWorld: baseCleanup,
       reportTargetContribution: contributions, reportTargetDestroyed: targetDestroyed,
+      getSecondaryObjectiveState: (objectiveId: string) => objectives.getObjectiveState(objectiveId),
       isCoopMission: () => false, isActivityActive: () => damageable, getSpawnContext: () => undefined,
       hostPhysics: inert, decoySystem: inert, fireSystem: inert, gameAudioSystem: inert, placementSystem: inert,
       projectileEvents: inert, projectileTimeField: inert, projectileHoming: inert, projectileWorldImpact: inert,
