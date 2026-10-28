@@ -52,8 +52,8 @@
       "parameters": {
         "rotorSwing": 0.34,
         "corePulse": 0.1,
-        "idleEmission": 0.15,
-        "activeEmission": 0.65
+        "idleEmission": 0.12,
+        "activeEmission": 2.6
       }
     }
   ]

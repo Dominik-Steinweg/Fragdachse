@@ -3,49 +3,63 @@ import { GpuVfxEase } from '../../effects/gpu/GpuVfxEase';
 import { GpuVfxEffectId } from '../../effects/gpu/GpuVfxEffects';
 import type { GpuVfxSpawnSpec } from '../../effects/gpu/GpuVfxSpawnSpec';
 import type { GpuVfxSystem } from '../../effects/gpu/GpuVfxSystem';
+import { createVisibleWorldView, getVisibleWorldView, type CameraWorldViewSource } from '../../graphics/CameraWorldView';
 
 /** Socket kinds of the fort asset that carry particles; positions are world pixels. */
 export type BaseFortEmitterKind = 'torch' | 'bowl' | 'hearth';
 export interface BaseFortEmitter { readonly kind: BaseFortEmitterKind; readonly x: number; readonly y: number }
 
-/** The breeze the asset's pennants show: towards world +X, a little north. */
-const WIND = { x: 1, y: -.2 };
-const WIND_ANGLE = Math.atan2(WIND.y, WIND.x);
+/**
+ * A light breeze towards world +X, the way the asset's pennants hang. Seen from straight above a flame
+ * rises towards the camera, so the breeze barely moves it; only the smoke drifts off with it.
+ */
+const BREEZE = { x: 1, y: -.2 };
 /**
  * Three fires of one fort. Torches burn pitch: a yellow-orange flame with a pale core. The fire bowls
  * burn wood on coal: a wider, redder flame with more smoke and sparks. The hearth in the courtyard is
- * a log fire: the largest, a hot yellow heart in a ring of orange tongues, with a steady smoke column.
- * All are seen from above, where a flame rises towards the camera and leans downwind; daylight washes
+ * a log fire: the largest, a bed of glowing coals under a ring of orange tongues round a tall hot
+ * heart, with a steady smoke column. All are seen from above, where a flame rises towards the camera:
+ * its tongues lick out a little on every side round a steady glow and sway slowly. Daylight washes
  * them out a little.
  */
 const FIRE = {
   torch: { core: 0xffd8a0, flame: 0xffe0b8, dayAlpha: .75 },
   bowl: { core: 0xff7a34, flame: 0xff8a48, dayAlpha: .9 },
-  hearth: { core: 0xffb050, flame: 0xff9a4c, dayAlpha: .95 },
+  hearth: { bed: 0xd8481c, core: 0xffc060, flame: 0xff9a4c, heart: 0xffe6b0, dayAlpha: .95 },
 } as const;
 const SPARKS = [0xffc070, 0xff8a40] as const;
-const SMOKE = 0x4c4540;
+const COALS = [0xff5a1e, 0xff8a34, 0xd83a14] as const;
+const SMOKE = 0x9c958c;
 /** The flame motif's head sits this far behind the frame centre (px of the 32 px frame). */
 const FLAME_HEAD_OFFSET = 8;
+/**
+ * Fires outside the camera view (plus this margin, so smoke drifting in and fires at the edge are
+ * already burning) do not emit: the forts of a whole map share the fire lanes, and off-screen fires
+ * would take the slots of the ones in view.
+ */
+const VIEW_MARGIN_PX = 160;
+
+/** An emitter with its own slow sway, so neighbouring fires never move in step. */
+interface Fire extends BaseFortEmitter { readonly phase: number }
 
 /**
  * One particle stream at an emitter: mean interval by day and at night, scaled by the shared GPU
  * quality. Night is the World's artificial-light factor (0 noon … 1 night).
  */
 interface Channel {
-  readonly emitter: BaseFortEmitter;
+  readonly emitter: Fire;
   readonly dayMs: number;
   readonly nightMs: number;
   readonly effect: GpuVfxEffectId;
-  readonly spawn: (emitter: BaseFortEmitter, night: number, nowMs: number) => void;
+  readonly spawn: (emitter: Fire, night: number, nowMs: number) => void;
   carry: number;
 }
 
 /**
- * GPU particles of the persistent base fort on the scene's shared VFX backend: large torches and
- * fire bowls, each a slowly breathing flame over a steady glow, with sparks and smoke. The night's
- * atmosphere comes from these fires and their light. Allocation-free per frame; release kills the
- * live members with their sources.
+ * GPU particles of the persistent base fort on the scene's shared VFX backend: large torches, fire
+ * bowls and the hearth, each a calm, slowly swaying flame over a steady glow, with sparks and smoke.
+ * The night's atmosphere comes from these fires and their light. Allocation-free per frame; release
+ * kills the live members with their sources.
  */
 export class BaseFortFx {
   private readonly flame: GpuVfxSpawnSpec;
@@ -58,8 +72,10 @@ export class BaseFortFx {
   private readonly unregister: () => void;
   private active = true;
   private night = 0;
+  private readonly view = createVisibleWorldView();
 
-  constructor(private readonly system: GpuVfxSystem, emitters: readonly BaseFortEmitter[]) {
+  constructor(private readonly system: GpuVfxSystem, emitters: readonly BaseFortEmitter[],
+    private readonly camera: CameraWorldViewSource | null = null) {
     this.flame = system.createSpec(GpuVfxEffectId.BaseFortFlame);
     this.ember = system.createSpec(GpuVfxEffectId.BaseFortEmber);
     this.smoke = system.createSpec(GpuVfxEffectId.BaseFortSmoke);
@@ -67,24 +83,29 @@ export class BaseFortFx {
     this.emberSource = system.createSource(GpuVfxEffectId.BaseFortEmber);
     this.smokeSource = system.createSource(GpuVfxEffectId.BaseFortSmoke);
     const flame = GpuVfxEffectId.BaseFortFlame, ember = GpuVfxEffectId.BaseFortEmber, smoke = GpuVfxEffectId.BaseFortSmoke;
-    for (const emitter of emitters) {
+    for (const source of emitters) {
+      const emitter: Fire = { ...source, phase: Math.random() * Math.PI * 2 };
       const add = (dayMs: number, nightMs: number, effect: GpuVfxEffectId, spawn: Channel['spawn']) =>
         this.channels.push({ emitter, dayMs, nightMs, effect, spawn, carry: Math.random() });
       if (emitter.kind === 'torch') {
-        add(170, 170, flame, (e, n, t) => this.emitTorchCore(e, n, t));
-        add(130, 130, flame, (e, n, t) => this.emitTorchFlame(e, n, t));
-        add(1500, 900, ember, (e, n, t) => this.emitSpark(e, .8, SPARKS[0], t));
-        add(800, 1000, smoke, (e, n, t) => this.emitSmoke(e, n, .8, t));
+        add(160, 160, flame, (e, n, t) => this.glow(e, .24, .5 * BaseFortFx.dayFade(FIRE.torch.dayAlpha, n), FIRE.torch.core, t));
+        add(85, 85, flame, (e, n, t) => this.emitTorchFlame(e, n, t));
+        add(900, 520, ember, (e, n, t) => this.emitSpark(e, .8, 1.5, SPARKS[0], t));
+        add(420, 480, smoke, (e, n, t) => this.emitSmoke(e, n, .8, 1, t));
       } else if (emitter.kind === 'hearth') {
-        add(150, 150, flame, (e, n, t) => this.emitHearthCore(e, n, t));
-        add(70, 70, flame, (e, n, t) => this.emitHearthFlame(e, n, t));
-        add(170, 130, ember, (e, n, t) => this.emitSpark(e, 1.2, SPARKS[Math.random() < .5 ? 0 : 1], t));
-        add(240, 300, smoke, (e, n, t) => this.emitSmoke(e, n, 2, t));
+        add(160, 160, flame, (e, n, t) => this.glow(e, .7, .48 * BaseFortFx.dayFade(FIRE.hearth.dayAlpha, n), FIRE.hearth.bed, t));
+        add(120, 120, flame, (e, n, t) => this.glow(e, .36, .5 * BaseFortFx.dayFade(FIRE.hearth.dayAlpha, n), FIRE.hearth.core, t));
+        add(30, 30, flame, (e, n, t) => this.emitHearthFlame(e, n, t));
+        add(95, 95, flame, (e, n, t) => this.emitHearthHeart(e, n, t));
+        add(130, 110, ember, (e, n, t) => this.emitCoal(e, 5.5, t));
+        add(110, 80, ember, (e, n, t) => this.emitSpark(e, 1.2, 4, SPARKS[Math.random() < .5 ? 0 : 1], t));
+        add(120, 140, smoke, (e, n, t) => this.emitSmoke(e, n, 2.1, 4, t));
       } else {
-        add(190, 190, flame, (e, n, t) => this.emitBowlCore(e, n, t));
-        add(130, 130, flame, (e, n, t) => this.emitBowlFlame(e, n, t));
-        add(380, 280, ember, (e, n, t) => this.emitSpark(e, 1, SPARKS[Math.random() < .4 ? 0 : 1], t));
-        add(420, 520, smoke, (e, n, t) => this.emitSmoke(e, n, 1.3, t));
+        add(150, 150, flame, (e, n, t) => this.glow(e, .32, .5 * BaseFortFx.dayFade(FIRE.bowl.dayAlpha, n), FIRE.bowl.core, t));
+        add(75, 75, flame, (e, n, t) => this.emitBowlFlame(e, n, t));
+        add(420, 420, ember, (e, n, t) => this.emitCoal(e, 2.4, t));
+        add(300, 220, ember, (e, n, t) => this.emitSpark(e, 1, 2, SPARKS[Math.random() < .4 ? 0 : 1], t));
+        add(260, 300, smoke, (e, n, t) => this.emitSmoke(e, n, 1.3, 2, t));
       }
     }
     this.unregister = system.registerEmission((deltaMs, nowMs) => this.emit(deltaMs, nowMs));
@@ -97,8 +118,10 @@ export class BaseFortFx {
 
   private emit(deltaMs: number, nowMs: number): void {
     if (!this.active) return;
-    const night = this.night;
+    const night = this.night, view = this.camera ? getVisibleWorldView(this.camera, this.view, VIEW_MARGIN_PX) : null;
     for (const channel of this.channels) {
+      const { x, y } = channel.emitter;
+      if (view && (x < view.x || x > view.right || y < view.y || y > view.bottom)) continue;
       const base = channel.dayMs + (channel.nightMs - channel.dayMs) * night;
       const interval = this.system.quality.scaleFrequency(base, channel.effect);
       if (interval <= 0) continue;
@@ -115,106 +138,136 @@ export class BaseFortFx {
     return dayAlpha + (1 - dayAlpha) * night;
   }
 
+  /**
+   * The direction a fire's tongues favour just now: it wanders slowly round, two incommensurate
+   * sways per fire, so the flame breathes instead of streaming one way.
+   */
+  private static sway(emitter: Fire, nowMs: number): number {
+    const s = nowMs / 1000;
+    return emitter.phase + 1.5 * Math.sin(s * .29 + emitter.phase) + .9 * Math.sin(s * .71 + emitter.phase * 2.3);
+  }
+
+  /** A tongue's direction: most lick out on every side, some lean the way the flame sways just now. */
+  private static tongue(emitter: Fire, nowMs: number, spread: number): number {
+    return Math.random() < .6 ? Math.random() * Math.PI * 2 : BaseFortFx.sway(emitter, nowMs) + (Math.random() - .5) * spread;
+  }
+
   /** A steady glow under a flame: long, overlapping lives and next to no motion keep it from strobing. */
-  private glow(emitter: BaseFortEmitter, scale: number, alpha: number, tint: number, nowMs: number): void {
+  private glow(emitter: Fire, scale: number, alpha: number, tint: number, nowMs: number): void {
     const spec = this.flame;
     spec.frame = GpuVfxFrameId.FlameCore;
-    spec.lifeMs = 700 + Math.random() * 160;
+    spec.lifeMs = 760 + Math.random() * 180;
     spec.x = emitter.x + (Math.random() - .5); spec.y = emitter.y + (Math.random() - .5);
-    spec.vx = WIND.x * 1.5; spec.vy = WIND.y * 1.5;
+    spec.vx = (Math.random() - .5) * .8; spec.vy = (Math.random() - .5) * .8;
     spec.positionEase = GpuVfxEase.Linear;
-    spec.scaleStart = scale; spec.scaleEnd = scale * .9; spec.scaleEase = GpuVfxEase.Linear;
-    spec.stretchStart = 1; spec.stretchEnd = 1.1;
+    spec.scaleStart = scale * .94; spec.scaleEnd = scale; spec.scaleEase = GpuVfxEase.Linear;
+    spec.stretchStart = 1; spec.stretchEnd = 1;
     spec.alphaStart = alpha; spec.alphaEnd = alpha * .25;
     spec.alphaEase = GpuVfxEase.Linear;
-    spec.rotation = WIND_ANGLE; spec.angularVelocity = 0;
+    spec.rotation = Math.random() * Math.PI * 2; spec.angularVelocity = 0;
     spec.tint = tint; spec.tintBlendStart = 1; spec.tintBlendEnd = 1;
     this.system.spawn(spec, this.flameSource, nowMs);
   }
 
   /**
-   * One soft flame motif with its head over the fire, leaning `lean`. It rises towards the camera, so
-   * it grows a little, stretches downwind and fades; many overlapping members make one flame whose
-   * outline changes slowly.
+   * One soft tongue with its head over the fire, pointing `angle`. Rising towards the camera it grows
+   * and lengthens a little and fades; it drifts out only slowly. Many overlapping tongues on every side
+   * make one round flame whose outline changes slowly.
    */
-  private lick(x: number, y: number, lean: number, scale: number, lifeMs: number, alpha: number,
+  private lick(x: number, y: number, angle: number, scale: number, lifeMs: number, alpha: number,
     tint: number, cooling: number, nowMs: number): void {
     const spec = this.flame;
     spec.frame = GpuVfxFrameId.TorchFlame;
     spec.lifeMs = lifeMs;
-    spec.x = x + Math.cos(lean) * FLAME_HEAD_OFFSET * scale; spec.y = y + Math.sin(lean) * FLAME_HEAD_OFFSET * scale;
-    const speed = 2 + Math.random() * 2;
-    spec.vx = WIND.x * speed; spec.vy = WIND.y * speed;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    spec.x = x + cos * FLAME_HEAD_OFFSET * scale * .6; spec.y = y + sin * FLAME_HEAD_OFFSET * scale * .6;
+    const speed = .8 + Math.random() * 1.6;
+    spec.vx = cos * speed + BREEZE.x * .6; spec.vy = sin * speed + BREEZE.y * .6;
     spec.positionEase = GpuVfxEase.Linear;
-    spec.scaleStart = scale * .85; spec.scaleEnd = scale * 1.05; spec.scaleEase = GpuVfxEase.Linear;
-    spec.stretchStart = .8; spec.stretchEnd = 1.05;
+    spec.scaleStart = scale * .7; spec.scaleEnd = scale * 1.05; spec.scaleEase = GpuVfxEase.QuadOut;
+    spec.stretchStart = .55; spec.stretchEnd = .85;
     spec.alphaStart = alpha; spec.alphaEnd = 0;
     spec.alphaEase = GpuVfxEase.Linear;
-    spec.rotation = lean; spec.angularVelocity = (Math.random() - .5) * .25;
+    spec.rotation = angle; spec.angularVelocity = (Math.random() - .5) * .3;
     spec.tint = tint; spec.tintBlendStart = cooling; spec.tintBlendEnd = 1;
     this.system.spawn(spec, this.flameSource, nowMs);
   }
 
-  private emitTorchCore(emitter: BaseFortEmitter, night: number, nowMs: number): void {
-    this.glow(emitter, .24, .5 * BaseFortFx.dayFade(FIRE.torch.dayAlpha, night), FIRE.torch.core, nowMs);
+  /** The torch flame: short tongues round the pitch head, slow and long-lived. */
+  private emitTorchFlame(emitter: Fire, night: number, nowMs: number): void {
+    this.lick(emitter.x + (Math.random() - .5) * 1.4, emitter.y + (Math.random() - .5) * 1.4,
+      BaseFortFx.tongue(emitter, nowMs, 1.4), .36 + Math.random() * .1, 760 + Math.random() * 240,
+      (.24 + .06 * night) * BaseFortFx.dayFade(FIRE.torch.dayAlpha, night), FIRE.torch.flame, 1, nowMs);
   }
 
-  /** The torch flame: a narrow fan of soft licks downwind, each slow and long-lived. */
-  private emitTorchFlame(emitter: BaseFortEmitter, night: number, nowMs: number): void {
-    this.lick(emitter.x + (Math.random() - .5) * 1.2, emitter.y + (Math.random() - .5) * 1.2,
-      WIND_ANGLE + (Math.random() - .5) * .5, .44 + Math.random() * .08, 820 + Math.random() * 220,
-      (.3 + .06 * night) * BaseFortFx.dayFade(FIRE.torch.dayAlpha, night), FIRE.torch.flame, 1, nowMs);
-  }
-
-  private emitBowlCore(emitter: BaseFortEmitter, night: number, nowMs: number): void {
-    this.glow(emitter, .32, .5 * BaseFortFx.dayFade(FIRE.bowl.dayAlpha, night), FIRE.bowl.core, nowMs);
-  }
-
-  /** The bowl fire: licks rise from all over the coal bed, spread wider and redder than a torch's. */
-  private emitBowlFlame(emitter: BaseFortEmitter, night: number, nowMs: number): void {
+  /** The bowl fire: tongues rise from all over the coal bed, wider and redder than a torch's. */
+  private emitBowlFlame(emitter: Fire, night: number, nowMs: number): void {
     const a = Math.random() * Math.PI * 2, d = 2.6 * Math.sqrt(Math.random());
     this.lick(emitter.x + Math.cos(a) * d, emitter.y + Math.sin(a) * d,
-      WIND_ANGLE + (Math.random() - .5) * 1.4, .36 + Math.random() * .1, 900 + Math.random() * 260,
-      (.26 + .06 * night) * BaseFortFx.dayFade(FIRE.bowl.dayAlpha, night), FIRE.bowl.flame, .45, nowMs);
+      BaseFortFx.tongue(emitter, nowMs, 1.6), .34 + Math.random() * .1, 820 + Math.random() * 280,
+      (.22 + .06 * night) * BaseFortFx.dayFade(FIRE.bowl.dayAlpha, night), FIRE.bowl.flame, .45, nowMs);
   }
 
-  private emitHearthCore(emitter: BaseFortEmitter, night: number, nowMs: number): void {
-    this.glow(emitter, .5, .55 * BaseFortFx.dayFade(FIRE.hearth.dayAlpha, night), FIRE.hearth.core, nowMs);
-  }
-
-  /** The log fire: tongues rise from the whole bed between the logs and lean downwind, larger than a bowl's. */
-  private emitHearthFlame(emitter: BaseFortEmitter, night: number, nowMs: number): void {
-    const a = Math.random() * Math.PI * 2, d = 5 * Math.sqrt(Math.random());
+  /** The log fire: orange tongues rise from the whole bed between the logs and lick outwards. */
+  private emitHearthFlame(emitter: Fire, night: number, nowMs: number): void {
+    const a = Math.random() * Math.PI * 2, d = 5.5 * Math.sqrt(Math.random());
+    const angle = Math.random() < .5 ? a + (Math.random() - .5) * 1.2 : BaseFortFx.tongue(emitter, nowMs, 1.6);
     this.lick(emitter.x + Math.cos(a) * d, emitter.y + Math.sin(a) * d,
-      WIND_ANGLE + (Math.random() - .5) * 1.2, .5 + Math.random() * .16, 1000 + Math.random() * 300,
-      (.28 + .06 * night) * BaseFortFx.dayFade(FIRE.hearth.dayAlpha, night), FIRE.hearth.flame, .5, nowMs);
+      angle, .52 + Math.random() * .2, 840 + Math.random() * 360,
+      (.25 + .08 * night) * BaseFortFx.dayFade(FIRE.hearth.dayAlpha, night), FIRE.hearth.flame, .5, nowMs);
   }
 
-  /** Sparks break off, drift with the breeze and burn out. */
-  private emitSpark(emitter: BaseFortEmitter, size: number, tint: number, nowMs: number): void {
+  /** The hearth's heart: larger, pale-yellow tongues from the middle of the logs, swaying together. */
+  private emitHearthHeart(emitter: Fire, night: number, nowMs: number): void {
+    this.lick(emitter.x + (Math.random() - .5) * 3, emitter.y + (Math.random() - .5) * 3,
+      BaseFortFx.sway(emitter, nowMs) + (Math.random() - .5) * 2.4, .74 + Math.random() * .18, 900 + Math.random() * 300,
+      (.22 + .08 * night) * BaseFortFx.dayFade(FIRE.hearth.dayAlpha, night), FIRE.hearth.heart, .2, nowMs);
+  }
+
+  /** A coal glowing up on the bed and dying down again; many of them make the bed shimmer. */
+  private emitCoal(emitter: Fire, radius: number, nowMs: number): void {
+    const spec = this.ember;
+    const a = Math.random() * Math.PI * 2, d = radius * Math.sqrt(Math.random());
+    spec.frame = GpuVfxFrameId.DeathGlow;
+    spec.lifeMs = 1300 + Math.random() * 900;
+    spec.x = emitter.x + Math.cos(a) * d; spec.y = emitter.y + Math.sin(a) * d;
+    spec.vx = 0; spec.vy = 0;
+    spec.scaleStart = .05 + Math.random() * .04; spec.scaleEnd = .035;
+    spec.alphaStart = .85; spec.alphaEnd = 0;
+    spec.rotation = 0; spec.angularVelocity = 0;
+    spec.tint = COALS[Math.floor(Math.random() * COALS.length)];
+    this.system.spawn(spec, this.emberSource, nowMs);
+  }
+
+  /** Sparks rise towards the camera: they drift out a little on every side, grow slightly and burn out. */
+  private emitSpark(emitter: Fire, size: number, spread: number, tint: number, nowMs: number): void {
     const spec = this.ember;
     spec.frame = GpuVfxFrameId.DeathGlow;
-    spec.lifeMs = 650 + Math.random() * 400;
-    spec.x = emitter.x + (Math.random() - .5) * 3; spec.y = emitter.y + (Math.random() - .5) * 3;
-    const lean = WIND_ANGLE + (Math.random() - .5) * 1.6, speed = 8 + Math.random() * 14;
-    spec.vx = Math.cos(lean) * speed; spec.vy = Math.sin(lean) * speed;
-    spec.scaleStart = (.045 + Math.random() * .025) * size; spec.scaleEnd = .015;
+    spec.lifeMs = 900 + Math.random() * 700;
+    spec.x = emitter.x + (Math.random() - .5) * spread; spec.y = emitter.y + (Math.random() - .5) * spread;
+    const a = Math.random() * Math.PI * 2, speed = 3 + Math.random() * 7;
+    spec.vx = Math.cos(a) * speed + BREEZE.x * 2; spec.vy = Math.sin(a) * speed + BREEZE.y * 2;
+    const scale = (.04 + Math.random() * .025) * size;
+    spec.scaleStart = scale; spec.scaleEnd = scale * 1.25;
     spec.alphaStart = 1; spec.alphaEnd = 0;
     spec.rotation = 0; spec.angularVelocity = 0;
     spec.tint = tint;
     this.system.spawn(spec, this.emberSource, nowMs);
   }
 
-  /** Smoke drifting off downwind, visible by day; at night it is lit by the light map and thinner. */
-  private emitSmoke(emitter: BaseFortEmitter, night: number, size: number, nowMs: number): void {
+  /**
+   * Smoke rising towards the camera: born small over the flame, it swells, wanders and drifts off
+   * slowly with the breeze. Visible by day; at night it is lit by the light map and thinner.
+   */
+  private emitSmoke(emitter: Fire, night: number, size: number, spread: number, nowMs: number): void {
     const spec = this.smoke;
-    spec.lifeMs = 2200 + Math.random() * 900;
-    spec.x = emitter.x + WIND.x * 4; spec.y = emitter.y + WIND.y * 4;
-    const speed = 6 + Math.random() * 5;
-    spec.vx = WIND.x * speed + (Math.random() - .5) * 3; spec.vy = WIND.y * speed + (Math.random() - .5) * 3;
-    spec.scaleStart = (.12 + Math.random() * .04) * size; spec.scaleEnd = (.48 + Math.random() * .16) * size;
-    spec.alphaStart = .28 - .1 * night; spec.alphaEnd = 0;
-    spec.rotation = Math.random() * Math.PI * 2; spec.angularVelocity = (Math.random() - .5) * .4;
+    spec.lifeMs = 2400 + Math.random() * 750;
+    spec.x = emitter.x + (Math.random() - .5) * spread; spec.y = emitter.y + (Math.random() - .5) * spread;
+    const a = Math.random() * Math.PI * 2, wander = 1 + Math.random() * 2.5, drift = 2.5 + Math.random() * 2.5;
+    spec.vx = BREEZE.x * drift + Math.cos(a) * wander; spec.vy = BREEZE.y * drift + Math.sin(a) * wander;
+    spec.scaleStart = (.16 + Math.random() * .05) * size; spec.scaleEnd = (.7 + Math.random() * .2) * size;
+    spec.alphaStart = .38 - .14 * night; spec.alphaEnd = 0;
+    spec.rotation = Math.random() * Math.PI * 2; spec.angularVelocity = (Math.random() - .5) * .25;
     spec.tint = SMOKE;
     this.system.spawn(spec, this.smokeSource, nowMs);
   }

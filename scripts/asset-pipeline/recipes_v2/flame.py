@@ -19,8 +19,11 @@ def build(c,spec):
         c.box('Tank feed coupling',(.28,side*.36,.64),(.20,.15,.14),p['copper'],.028)
         c.box('Visible copper fuel line',(.385,side*.23,.66),(.11,.29,.10),p['copper'],.035)
     c.box('Central armored pump hood',(-.17,0,.72),(.68,.38,.25),p['armor'],.08)
-    grille(c,'Pump pressure cooling',(-.40,0,.869),.20,.24,p['dark'],p['steel'],3)
+    # The burner heat shows from above while firing: the cooling well glows between its dark fins and
+    # the nozzle sleeve glows in the gaps between the copper baffles.
+    grille(c,'Pump pressure cooling',(-.40,0,.869),.20,.24,p['dark'],p['charge'],3)
     tube(c,'Open broad flamethrower nozzle',(.82,0,.69),.165,.034,.80,p['steel'])
+    cylinder_x(c,'Glowing nozzle heat sleeve',(.80,0,.69),.178,.70,p['charge'])
     for xx in (.51,.68,.85,1.02):
         cylinder_x(c,'Copper nozzle heat baffle',(xx,0,.69),.197,.055,p['copper'])
     tube(c,'Heavy orange nozzle lip',(1.20,0,.69),.19,.045,.10,p['accent'])

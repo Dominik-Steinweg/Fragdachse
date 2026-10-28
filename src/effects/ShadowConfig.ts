@@ -226,18 +226,23 @@ export const SHADOW_CASTERS = {
     footprintWidthPx: 24,
     footprintHeightPx: 24,
   },
+  /**
+   * The wall block a turret built on open ground stands on. Its post lifts the head above a fort
+   * palisade, so the block is as tall as that post: its ground shadow runs out to the head's mesh
+   * shadow instead of leaving the head's shadow floating away from a flat tile. Below the block.
+   */
   turret: {
     enabled: true,
-    layerDepth: DEPTH.ROCKS + 0.12,
-    castHeightPx: 4,
-    opacity: 0.26,
-    softnessPx: 6,
-    blurLayers: 1,
+    layerDepth: DEPTH.ROCKS - 0.35,
+    castHeightPx: 22,
+    opacity: 0.42,
+    softnessPx: 3,
+    blurLayers: 4,
     stretch: 1,
     inflatePx: 0,
-    shape: 'circle',
-    footprintWidthPx: CELL_SIZE * 0.8,
-    footprintHeightPx: CELL_SIZE * 0.8,
+    shape: 'cell',
+    footprintWidthPx: CELL_SIZE * 0.9,
+    footprintHeightPx: CELL_SIZE * 0.9,
   },
   trainLoco: {
     enabled: true,

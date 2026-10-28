@@ -179,11 +179,17 @@ describe('turret animation lifecycle', () => {
 
   it('keeps the emission glow of a turret on its frame and pose, flares its light with a shot and ends with the binding', () => {
     const asset = getTurretVisualSpec('SPORE_TURRET_PLASMA').asset;
-    const glow: any = { frame: { name: 0 as string | number }, visible: true, destroy: vi.fn() };
-    for (const method of ['setOrigin', 'setBlendMode', 'setDepth', 'setPosition', 'setRotation', 'setScale', 'setFlip', 'setAlpha']) glow[method] = vi.fn(() => glow);
-    glow.setVisible = (visible: boolean) => { glow.visible = visible; return glow; };
-    glow.setFrame = (frame: number) => { glow.frame.name = frame; return glow; };
-    const scene = { textures: { exists: () => true }, add: { sprite: vi.fn(() => glow) } };
+    const view = () => {
+      const object: any = { frame: { name: 0 as string | number }, visible: true, destroy: vi.fn() };
+      for (const method of ['setOrigin', 'setBlendMode', 'setDepth', 'setPosition', 'setRotation', 'setScale', 'setFlip', 'setAlpha',
+        'setTint', 'setDisplaySize']) object[method] = vi.fn(() => object);
+      object.setVisible = (visible: boolean) => { object.visible = visible; return object; };
+      object.setFrame = (frame: number) => { object.frame.name = frame; return object; };
+      return object;
+    };
+    const glow = view(), core = view(), bloom = view();
+    const scene = { textures: { exists: () => true },
+      add: { sprite: vi.fn((_x: number, _y: number, key: string) => key.endsWith('_emission') ? glow : core), image: vi.fn(() => bloom) } };
     const turret = sprite(); Object.assign(turret.view, { scene, visible: true, alpha: 1, scaleX: .25, scaleY: .25, flipX: false, flipY: false });
     const pulse = vi.fn();
     const controller = new TurretAnimationController();
@@ -196,7 +202,13 @@ describe('turret animation lifecycle', () => {
     controller.update(16);
     expect(glow.frame.name).toBe(turret.view.frame.name);
     expect(glow.setPosition).toHaveBeenLastCalledWith(80, 40);
+    // The animated plasma charge rides on the core, a little behind the pivot along the turret's facing.
+    const [coreX, coreY] = core.setPosition.mock.lastCall;
+    expect(Math.hypot(coreX - 80, coreY - 40)).toBeGreaterThan(1);
+    expect(Math.atan2(40 - coreY, 80 - coreX)).toBeCloseTo(.5);
     controller.unbind('3');
     expect(glow.destroy).toHaveBeenCalledTimes(1);
+    expect(core.destroy).toHaveBeenCalledTimes(1);
+    expect(bloom.destroy).toHaveBeenCalledTimes(1);
   });
 });

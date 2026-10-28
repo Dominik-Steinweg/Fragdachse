@@ -19,6 +19,13 @@
         "blends": [
           "ADD"
         ]
+      },
+      {
+        "key": "syncWorldTurretFoundation/visual.foundation/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.087",
+        "blends": [
+          "NORMAL"
+        ]
       }
     ],
     "bindings": {}
@@ -66,6 +73,28 @@
       "source": {
         "selector": "createWorldTurretVisual/scene.add/setDepth/1",
         "expression": "DEPTH.ROCKS + 0.2"
+      }
+    },
+    {
+      "id": "cpu:entities/WorldTurretVisual.ts:syncWorldTurretFoundation/visual.foundation/setDepth/0",
+      "owner": "entities/WorldTurretVisual.ts",
+      "component": "syncWorldTurretFoundation/visual.foundation/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.087
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncWorldTurretFoundation/visual.foundation/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.087"
       }
     }
   ]

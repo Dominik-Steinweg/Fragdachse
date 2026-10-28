@@ -4,7 +4,7 @@
   "gameIds": [
     "TURRET_FLAME"
   ],
-  "revision": "towers-r07",
+  "revision": "towers-r09",
   "variant": "standard",
   "sourceSize": 160,
   "textureKey": "turret_weapon_flame",
@@ -52,7 +52,7 @@
     "height": 328
   },
   "hashes": {
-    "idle": "dad3678f4530eb75c911d199c8fa81595c03cc68bddd846fdf726cbc82f8263b",
-    "sheet": "768a4679d1d09ef6a545dd592244ddd5f5013ca03f0f76fbe5e1916a58d90bf0"
+    "idle": "be8fca47919a8e9c4f897096397879011792551adda84ed18dfdd30c0fee462f",
+    "sheet": "5562cea14f2d7cd46deac7841609afa516a0a62ee8c74edcd9a0b18410f90060"
   }
 }

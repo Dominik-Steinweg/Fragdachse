@@ -606,11 +606,11 @@
       "source": "assets/sprites/pipeline-v2/base-fort-core/albedo.png",
       "width": 704,
       "height": 704,
-      "sourceBytes": 185180,
-      "downloadBytes": 95374,
-      "sourceSha256": "e26e3a4b1b26d84e394dfeaacfbdefe37024dcb3a016310538e3ff693b205ba1",
-      "sha256": "2e143b7bd34dfe32642703d4a52f94ad9b81201ddb13dc43f5f74d49a432f3f9",
-      "visiblePixelSha256": "71ef7d7d1e15d4c77f4cd85a49619e22d13618004848f2813daa19a7342e9065",
+      "sourceBytes": 184246,
+      "downloadBytes": 94576,
+      "sourceSha256": "dfd64bd9bd9da03f6c103cb12ae187c76be109636b55f99d0110abdf52d3f7cf",
+      "sha256": "4eeb4955283a5f1edeee1305475ce9a420dbeb9f0be5443876be2ccf63042101",
+      "visiblePixelSha256": "fae25f87c265583658387e2ead4b2b1a22124fed5e27192141f65b9a28066bd0",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/base-fort-core/beauty.png": {
@@ -618,11 +618,11 @@
       "source": "assets/sprites/pipeline-v2/base-fort-core/beauty.png",
       "width": 704,
       "height": 704,
-      "sourceBytes": 279926,
-      "downloadBytes": 89618,
-      "sourceSha256": "a6b5f5d08988324a835f9be4b570d1270eb1f994fd0934bb38e0532e6a6b3009",
-      "sha256": "4e0fd2ef33d89172138479aae77e6d38d747d9475f2f0ae24e96d5617b46024d",
-      "visiblePixelSha256": "aa07c76dff48645df311cd28549a0794f7a63c180f9032ce0d1d96e3f1bf180d",
+      "sourceBytes": 277884,
+      "downloadBytes": 88954,
+      "sourceSha256": "cba4c473e4550080a61f6e8cfdab3885813edd6229b9c41dfbb439b02d9dfa83",
+      "sha256": "4d1993192a7ebc55b2aacdb5a008b8df2a577da5eaf325ef28be67050fd6b1f2",
+      "visiblePixelSha256": "bc017bf2a6b5fb78fdcdbbd216c90f487e2693b451610fdfa20ef35d316a7f01",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/base-fort-core/ground.png": {
@@ -630,11 +630,11 @@
       "source": "assets/sprites/pipeline-v2/base-fort-core/ground.png",
       "width": 704,
       "height": 704,
-      "sourceBytes": 781826,
-      "downloadBytes": 556440,
-      "sourceSha256": "5c777c2edf9359eeed244dc8050e12881622e7eaca16aecb17cbd09e68b706a3",
-      "sha256": "d7aebbe85e9f2126cfe2c95b650e984ec4a280a218c2d27f53d0913047718c80",
-      "visiblePixelSha256": "3efa00f577ee7ae46582414d40fb08626d91d63fe8e12155c821d183aefb7c81",
+      "sourceBytes": 783225,
+      "downloadBytes": 558592,
+      "sourceSha256": "9e201410e42dbd47c8d9dc5ef7f510acc2900f8bcd8118c95a13885fc7396f33",
+      "sha256": "7851ac495274e83e9cd1eece10550bfd67905bba4af5f35ea463e974d16c7b58",
+      "visiblePixelSha256": "afb7c1a39efe6d2514e7643b338d41cf6002d85f413b5a59a1b5707c2311b468",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/base-fort-core/solid.png": {
@@ -642,11 +642,11 @@
       "source": "assets/sprites/pipeline-v2/base-fort-core/solid.png",
       "width": 704,
       "height": 704,
-      "sourceBytes": 308253,
-      "downloadBytes": 106918,
-      "sourceSha256": "331c45cab296667c34ebc52349c942eeef021d2329a82ad8b79b38851639efcc",
-      "sha256": "128b4b34ae60ae4c6bb565c6de8a75203de563c3e3b1d03aff366d4f201dbcaf",
-      "visiblePixelSha256": "1058f93ab20bd40469e9f8dcdb1a6aaae3c9cbb92bf32a55eb1c908dd2555574",
+      "sourceBytes": 306457,
+      "downloadBytes": 105984,
+      "sourceSha256": "c44a14084730af7f55f3a039cf665911d206095392b254d572b6132acdcb5e7f",
+      "sha256": "286b5ee3f6c74818b62e07b36cd31dc6284957a4b41a6bc994fa3352d85acdf4",
+      "visiblePixelSha256": "0ddcd168189cdfd20d00a58054099047306b58063a87db77f92cca85e088fa90",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/base-fort-kit-v0/albedo.png": {
@@ -863,6 +863,18 @@
       "sourceSha256": "2dd9c428b684a3f08d1b66ba1a3bea4a3acfefae3605835f6df7fe3c95c1e91e",
       "sha256": "46a8736b6e389a24ce4873db62199465156481812ce21d8512f960b0f41dac45",
       "visiblePixelSha256": "acb13e1d016d21065fbaf2e0769e0c070cb43d633e9c69e00e88b0b9b0088e19",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/flame/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/flame/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/flame/sheet.png",
+      "width": 1312,
+      "height": 328,
+      "sourceBytes": 143364,
+      "downloadBytes": 120280,
+      "sourceSha256": "5562cea14f2d7cd46deac7841609afa516a0a62ee8c74edcd9a0b18410f90060",
+      "sha256": "3416c0ffdd7b59aac2ca56bef7b411b3d8587923aa77d641c42ede4b26a8704d",
+      "visiblePixelSha256": "1fbf3be67f728a56febf7d55f797eb23bba1f5ac2b92e0c313262b5199e185fb",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/grave-titan/mesh/enemy-mesh-r4-010/albedo-256.png": {
@@ -1439,6 +1451,18 @@
       "sourceSha256": "d34643ac717e09434151d9a59e95d36e4d90dd861195509c02fd4275aadfadc6",
       "sha256": "37b02c85164a90654fdda0aaea5c3183600a7a8e94c3c12cc73d02dd7a046cdb",
       "visiblePixelSha256": "46d09484e06fe3eff295a87a1f6b139e30f3cf668ad7a20cd63ec25f648e2f5f",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/spore/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/spore/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/spore/sheet.png",
+      "width": 1056,
+      "height": 396,
+      "sourceBytes": 302875,
+      "downloadBytes": 193638,
+      "sourceSha256": "435738f40ccc050cb3b052d33b602fa71be89ef13b2e8b47196a628da790145f",
+      "sha256": "d8a57995d75ffab55aae9bf35e51d3ec21ca74a5f32b6e9c373098060450a514",
+      "visiblePixelSha256": "4cdffd1937537cc20c68003b3b6126049abebe8563251a7c21bfca9e8eafee9f",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/pipeline-v2/tesla/sheet.png": {

@@ -2,7 +2,7 @@ import { WatchtowerVisual } from '../../effects/watchtower/WatchtowerVisual';
 import type { FireControlOriginalVisual } from '../../effects/fireControl/FireControlRenderer';
 import { getConstructionBounds, getConstructionCells } from '../../systems/ConstructionGeometry';
 import { createRockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
-import { createWorldTurretVisual, syncWorldTurretVisualPose } from '../../entities/WorldTurretVisual';
+import { createWorldTurretVisual, destroyWorldTurretVisual, syncWorldTurretFoundation, syncWorldTurretVisualPose, type WorldTurretVisual } from '../../entities/WorldTurretVisual';
 import type { TurretAnimationController } from '../../effects/TurretAnimationController';
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../../effects/health/WorldHealthBarRenderer';
 import { TURRET_HEALTH_BAR_STYLE } from '../../effects/health/healthBarStyles';
@@ -36,9 +36,7 @@ export interface RockVisualWorldPort {
   readonly getPowerUpRuntime: () => WorldPowerUpRuntime | null;
 }
 
-interface TurretVisualState {
-  image:     Phaser.GameObjects.Sprite;
-  aura:      Phaser.GameObjects.Image;
+interface TurretVisualState extends WorldTurretVisual {
 
   healthBar: HealthBarHandle | null;
   constructionId?: SyncedPlaceableRock['constructionId'];
@@ -437,6 +435,7 @@ export class RockVisualHelper {
     visual.raised = rock.ownership === 'base-owned';
     // A turret on a base deck stands on its emplacement post: no ground aura spilling over the palisade.
     if (visual.raised) visual.aura.setVisible(false);
+    syncWorldTurretFoundation(visual, world.x, world.y, !visual.raised);
 
     if (!indestructible && !this.healthBars?.isValid(visual.healthBar)) {
       visual.healthBar = this.healthBars?.bind(TURRET_HEALTH_BAR_STYLE, rock.hp, rock.maxHp,
@@ -498,8 +497,7 @@ export class RockVisualHelper {
     this.lighting?.releaseLight(turretLightKey(id));
     const visual = this.turretVisuals.get(id);
     if (!visual) return;
-    visual.image.destroy();
-    visual.aura.destroy();
+    destroyWorldTurretVisual(visual);
     this.healthBars?.release(visual.healthBar);
     this.turretVisuals.delete(id);
   }

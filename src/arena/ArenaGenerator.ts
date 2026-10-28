@@ -3,7 +3,7 @@ import { listEnemySpawnSources } from './EnemySpawnSources';
 import { placeReactiveProps, type ReactivePropAnchor } from './ReactivePropLayout';
 import { REACTIVE_PROP_ARENA_SCATTER, type ReactivePropScatterSpec } from '../config/reactiveProps/reactivePropKinds';
 import type { WorldSpawnZone } from '../config/spawnZones';
-import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isCoopDefenseBaseCell, isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseReservationCell, resolveCoopDefenseActivityBases, resolveCoopDefenseBases } from './BaseRegistry';
+import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS, isCoopDefenseBaseCell, isCoopDefenseBaseObstacleClearanceCell, isPersistentBaseCoreCell, isPersistentBaseReservationCell, resolveCoopDefenseActivityBases, resolveCoopDefenseBases } from './BaseRegistry';
 import type { BaseSpec } from './BaseRegistry';
 import { ARENA_DECAL_CONFIG, DIRT_ROCK_UNDERLAY_DECAL_CONFIG, ROCK_DECAL_CONFIG, ROCK_DECAL_SIZE, clampDecalOffsetPx, clampDecalPercent, getDecalTextureKey, getRockDecalMaxOffsetPx, getRockDecalVariant, getRockDecalVariantsForPlacement } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
@@ -1684,7 +1684,8 @@ export class ArenaGenerator {
     for (let gy = 0; gy < this.metrics.gridRows; gy++) {
       for (let gx = 0; gx < this.metrics.gridCols; gx++) {
         const key = this.cellKey(gx, gy);
-        if (blockedCells.has(key) || this.isReservedBaseSurfaceCell(gx, gy, coopBaseSpecs)) continue;
+        if (blockedCells.has(key) || this.isReservedBaseSurfaceCell(gx, gy, coopBaseSpecs)
+          || isPersistentBaseCoreCell(gx, gy, coopBaseSpecs ?? [])) continue;
 
         const terrain: DecalTerrainLayer = dirtSet.has(key) ? 'dirt' : 'grass';
         const layerConfig = ARENA_DECAL_CONFIG[terrain];

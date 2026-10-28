@@ -24,7 +24,7 @@ import {
   SPAWN_STRUCTURE_VEGETATION_CLEARING_CELLS,
   type ResolvedSpawnStructureArea,
 } from '../config/spawnStructure';
-import { resolvePersistentBaseReservationRadiusCells, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
+import { PERSISTENT_BASE_CORE_SIZE_CELLS, resolvePersistentBaseReservationRadiusCells, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
 import { isCellInsidePersistentBaseReservation } from '../persistentBase/PersistentBaseZone';
 import {
   resolveCoopDefenseWorldMetrics,
@@ -668,20 +668,36 @@ export function isCoopDefenseBaseObstacleClearanceCell(
   );
 }
 
+function persistentBaseAnchor(base: BaseSpec): { gridX: number; gridY: number } {
+  return {
+    gridX: base.anchorGridX ?? Math.floor((base.region.minGridX + base.region.maxGridX) / 2),
+    gridY: base.anchorGridY ?? Math.floor((base.region.minGridY + base.region.maxGridY) / 2),
+  };
+}
+
 export function isPersistentBaseReservationCell(
   gx: number,
   gy: number,
   bases: readonly BaseSpec[],
 ): boolean {
   return bases.some((base) => base.persistentReservationRadiusCells !== undefined && (
-    isCellInsidePersistentBaseReservation(
-      gx,
-      gy,
-      {
-        gridX: base.anchorGridX ?? Math.floor((base.region.minGridX + base.region.maxGridX) / 2),
-        gridY: base.anchorGridY ?? Math.floor((base.region.minGridY + base.region.maxGridY) / 2),
-      },
-      base.persistentReservationRadiusCells,
-    )
+    isCellInsidePersistentBaseReservation(gx, gy, persistentBaseAnchor(base), base.persistentReservationRadiusCells)
   ));
+}
+
+/**
+ * The persistent core's own square round its anchor: bastions, gates and the courtyard with the
+ * hearth. Its fort art is authored as one piece, so world decor (bushes, mushrooms) stays out of it.
+ */
+export function isPersistentBaseCoreCell(
+  gx: number,
+  gy: number,
+  bases: readonly BaseSpec[],
+): boolean {
+  const extent = (PERSISTENT_BASE_CORE_SIZE_CELLS - 1) / 2;
+  return bases.some((base) => {
+    if (base.persistentReservationRadiusCells === undefined) return false;
+    const anchor = persistentBaseAnchor(base);
+    return Math.abs(gx - anchor.gridX) <= extent && Math.abs(gy - anchor.gridY) <= extent;
+  });
 }

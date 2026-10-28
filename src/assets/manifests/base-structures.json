@@ -84,8 +84,8 @@
           "z": 53.7
         },
         "torch_14": {
-          "x": 127.5,
-          "y": 123.6,
+          "x": 116.5,
+          "y": 115.5,
           "z": 14.3
         },
         "bowl_15": {
@@ -109,8 +109,8 @@
           "z": 50.3
         },
         "torch_19": {
-          "x": 129.3,
-          "y": -127.3,
+          "x": 116.9,
+          "y": -116.4,
           "z": 14.6
         },
         "hearth_20": {
@@ -120,13 +120,13 @@
         }
       },
       "sha256": {
-        "beauty": "a6b5f5d08988324a835f9be4b570d1270eb1f994fd0934bb38e0532e6a6b3009",
-        "albedo": "e26e3a4b1b26d84e394dfeaacfbdefe37024dcb3a016310538e3ff693b205ba1",
-        "elevation": "bd1ddd4a2b07ca0246dd0c2a5eb704447e7042a5f344a6121c2c429583254cb7",
-        "solid": "331c45cab296667c34ebc52349c942eeef021d2329a82ad8b79b38851639efcc",
-        "caster-height": "cd25a89ff3c0db2afb219b730b60c794bf39d5dc5b1c860653f3397cae887c1b",
-        "ground": "5c777c2edf9359eeed244dc8050e12881622e7eaca16aecb17cbd09e68b706a3",
-        "emission-forge": "68422fac58485872ab85514aeafe5e99d3d5961837ab197851cee09f000daa7e"
+        "beauty": "cba4c473e4550080a61f6e8cfdab3885813edd6229b9c41dfbb439b02d9dfa83",
+        "albedo": "dfd64bd9bd9da03f6c103cb12ae187c76be109636b55f99d0110abdf52d3f7cf",
+        "elevation": "930aa33ef02487f8829de7a1eeda8a4a3f802c4c8ad175eb176e672364480d2c",
+        "solid": "c44a14084730af7f55f3a039cf665911d206095392b254d572b6132acdcb5e7f",
+        "caster-height": "95e82b6555f54ca6e995ba58db4bae3abf52df61a515ec783206bad3377e13e3",
+        "ground": "9e201410e42dbd47c8d9dc5ef7f510acc2900f8bcd8118c95a13885fc7396f33",
+        "emission-forge": "dee9602d1fc8a070acf5a6948a7c312f634ad098e155410d0810c7355cb3a0a4"
       }
     },
     "outpost-kit": {
@@ -1105,5 +1105,5 @@
       ]
     }
   },
-  "revision": "fort-r21d"
+  "revision": "fort-r22"
 }
