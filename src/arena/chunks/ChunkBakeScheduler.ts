@@ -24,6 +24,9 @@ export const CHUNK_BAKE_FRAME_BUDGET_MS = CHUNK_BAKE_URGENT_FRAME_BUDGET_MS;
  * einem Aufruf verschlingen, waehrend ein WebGL-Backend meist durch die Zeitgrenze stoppt. */
 const MAX_BAKE_OPERATIONS_PER_FRAME = 32;
 const MAX_CONSECUTIVE_OPERATIONS_PER_OWNER = 2;
+/** Jobs of one owner that may still ask for their worker material in a frame after one had to wait:
+ * the owner's worker then holds the next tiles instead of idling between frames. */
+const PREPARE_LOOKAHEAD_PER_OWNER = 4;
 const COMPLETION_PRIORITY_TOLERANCE = 250;
 
 export interface ChunkBakeJob {
@@ -50,6 +53,9 @@ function now(): number {
 export class ChunkBakeScheduler {
   private readonly jobs = new Map<string, ChunkBakeJob>();
   private readonly deferredOwners=new Set<object>();
+  /** Jobs that waited for their material in this frame, and how many per owner. */
+  private readonly waitingJobs=new Set<ChunkBakeJob>();
+  private readonly waitingPerOwner=new Map<object,number>();
   private lastOwner: object | null = null;
   private consecutiveOwnerOperations = 0;
   private activeCompletionKey: object | null = null;
@@ -92,6 +98,8 @@ export class ChunkBakeScheduler {
     if (effectiveBudget <= 0) return 0;
 
     this.deferredOwners.clear();
+    this.waitingJobs.clear();
+    this.waitingPerOwner.clear();
     const startedAt = now();
     const deadline = startedAt + effectiveBudget;
     let operations = 0;
@@ -100,7 +108,7 @@ export class ChunkBakeScheduler {
       if (!job) break;
       this.jobs.delete(job.key);
       const measuredAt = loadingTimeline.start();
-      if(job.run()===false){this.jobs.set(job.key,job);this.deferredOwners.add(job.owner);continue;}
+      if(job.run()===false){this.jobs.set(job.key,job);this.deferWaitingJob(job);continue;}
       if (measuredAt >= 0) loadingTimeline.end(job.diagnosticName ?? 'chunks/bake', measuredAt);
       operations += 1;
       this.recordOperation(job);
@@ -115,6 +123,8 @@ export class ChunkBakeScheduler {
   /** Nur fuer kontrollierte Tests/Teardown-Checks; der normale Frame-Pfad nutzt runFrame(). */
   drain(maxOperations = Number.POSITIVE_INFINITY): number {
     this.deferredOwners.clear();
+    this.waitingJobs.clear();
+    this.waitingPerOwner.clear();
     let operations = 0;
     while (this.jobs.size > 0 && operations < maxOperations) {
       const job = this.pickNextJob();
@@ -130,6 +140,19 @@ export class ChunkBakeScheduler {
     return operations;
   }
 
+  /** A job that waited for its material asks again next frame; a few others of its owner may
+   * still ask now, then the owner rests for this frame. */
+  private deferWaitingJob(job: ChunkBakeJob): void {
+    this.waitingJobs.add(job);
+    const waiting = (this.waitingPerOwner.get(job.owner) ?? 0) + 1;
+    this.waitingPerOwner.set(job.owner, waiting);
+    if (waiting >= PREPARE_LOOKAHEAD_PER_OWNER) this.deferredOwners.add(job.owner);
+  }
+
+  private isWaitingThisFrame(job: ChunkBakeJob): boolean {
+    return this.deferredOwners.has(job.owner) || this.waitingJobs.has(job);
+  }
+
   private pickNextJob(): ChunkBakeJob | null {
     if (this.activeCompletionKey && !this.hasCompletionJobs(this.activeCompletionKey)) {
       this.activeCompletionKey = null;
@@ -138,7 +161,7 @@ export class ChunkBakeScheduler {
     let best: ChunkBakeJob | null = null;
     let bestPriority = Number.POSITIVE_INFINITY;
     for (const job of this.jobs.values()) {
-      if(this.deferredOwners.has(job.owner))continue;
+      if(this.isWaitingThisFrame(job))continue;
       const priority = job.priority();
       if (priority < bestPriority) {
         best = job;
@@ -153,7 +176,7 @@ export class ChunkBakeScheduler {
       let completionBest: ChunkBakeJob | null = null;
       let completionPriority = Number.POSITIVE_INFINITY;
       for (const job of this.jobs.values()) {
-        if(this.deferredOwners.has(job.owner))continue;
+        if(this.isWaitingThisFrame(job))continue;
         if (job.completionKey !== this.activeCompletionKey) continue;
         const priority = job.priority();
         if (priority < completionPriority) {
@@ -173,7 +196,7 @@ export class ChunkBakeScheduler {
       let alternative: ChunkBakeJob | null = null;
       let alternativePriority = Number.POSITIVE_INFINITY;
       for (const job of this.jobs.values()) {
-        if(this.deferredOwners.has(job.owner))continue;
+        if(this.isWaitingThisFrame(job))continue;
         if (job.owner === this.lastOwner) continue;
         const priority = job.priority();
         if (priority < alternativePriority) {

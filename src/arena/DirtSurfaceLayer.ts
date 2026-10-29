@@ -9,6 +9,8 @@ import type { ArenaTrackColumnSpec } from './ArenaVisualFactory';
 import type { TerrainSnapshotMaterialSource } from './TerrainSnapshotMaterial';
 
 let nextId = 0;
+/** Tiles one soil worker holds: the next bakes' tiles are computed while the current one uploads. */
+const SOIL_TILES_IN_FLIGHT = 4;
 
 /** One reusable soil and riverbank canvas per World, not one texture/object per soil tile. */
 export class DirtSurfaceLayer {
@@ -18,7 +20,8 @@ export class DirtSurfaceLayer {
   private readonly image: Phaser.GameObjects.Image;
   private readonly pixels: ImageData;
   private worker:TerrainSnapshotWorkerClient|null=null;
-  private requested:string|null=null;
+  /** Keys of the tiles in flight, in request order. */
+  private readonly requested:string[]=[];
   private readonly prepared=new Map<string,Uint8ClampedArray>();
 
   constructor(private readonly scene: Phaser.Scene, seed: number, dirt: readonly DirtCell[],
@@ -37,18 +40,18 @@ export class DirtSurfaceLayer {
     this.image = new Phaser.GameObjects.Image(scene, 0, 0, key).setOrigin(0);
   }
 
-  /** One transferred tile in flight, bounded native cache, no readback. */
+  /** A few transferred tiles in flight (the worker never idles between bakes), bounded native
+   * cache, no readback. */
   prepare(worldX:number,worldY:number,size:number):boolean {
     if(typeof Worker==='undefined')return true;
-    this.worker??=new TerrainSnapshotWorkerClient();
-    const result=this.worker.take();
-    if(result&&this.requested!==null){
+    this.worker??=new TerrainSnapshotWorkerClient(undefined,SOIL_TILES_IN_FLIGHT);
+    for(let result=this.worker.take();result;result=this.worker.take()){
       if(this.prepared.size>=64)this.prepared.delete(this.prepared.keys().next().value!);
-      this.prepared.set(this.requested,new Uint8ClampedArray(result));this.requested=null;
+      this.prepared.set(this.requested.shift()!,new Uint8ClampedArray(result));
     }
     const key=worldX+':'+worldY+':'+size;
     if(this.prepared.has(key))return true;
-    if(this.requested===null){this.requested=key;
+    if(!this.requested.includes(key)&&this.worker.canRequest()){this.requested.push(key);
       this.worker.request(this.snapshotSource,size,worldX,worldY,size,size,new ArrayBuffer(size*size*4),true);
     }
     return false;
@@ -74,7 +77,7 @@ export class DirtSurfaceLayer {
   }
 
   destroy(): void {
-    this.worker?.destroy();this.worker=null;this.prepared.clear();this.requested=null;
+    this.worker?.destroy();this.worker=null;this.prepared.clear();this.requested.length=0;
     this.image.destroy();
     this.scene.textures.remove(this.surface.key);
   }

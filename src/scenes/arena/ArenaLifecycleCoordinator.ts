@@ -502,6 +502,7 @@ export class ArenaLifecycleCoordinator {
         isLocalPlayerSpectator: () => this.localPlayerState.spectator || bridge.isLocalSpectator(),
         isLocalPlayerAlive: () => this.localPlayerState.alive,
         isArenaLoading: () => bridge.isArenaLoading(),
+        getExpectedLocalSpawnFocus: () => this.ctx.playerManager.getExpectedSpawnFocus(),
         isArenaCountdownActive: () => bridge.isArenaCountdownActive(),
         isLoadingVeilShown: () => this.ctx.arenaCountdown?.isLoading() ?? false,
         stagesLocalSpawn: !isLobbyWorldDefinitionId(this.worldRuntime.descriptor.definitionId),

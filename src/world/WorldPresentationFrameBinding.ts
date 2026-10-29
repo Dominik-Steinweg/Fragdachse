@@ -245,6 +245,8 @@ export interface WorldPresentationFrameBindingInput {
   readonly isLocalPlayerAlive: () => boolean;
   /** Die Arena laedt noch; der erste bekannte Spawn ist bereits ein gueltiger Kamerafokus. */
   readonly isArenaLoading: () => boolean;
+  /** Where the round will spawn the local figure, before it exists; `null` without a known area. */
+  readonly getExpectedLocalSpawnFocus?: () => { x: number; y: number } | null;
   /** Der Countdown laeuft; wie beim Laden gilt der vorbereitete Startfokus bereits. */
   readonly isArenaCountdownActive: () => boolean;
   /** Ob diese World Spawn und Tod der eigenen Figur mit der Kamera inszeniert; die LobbyWorld nicht. */
@@ -532,6 +534,8 @@ export class WorldPresentationFrameBinding {
   private followFocusX = 0;
   private followFocusY = 0;
   private followFocusValid = false;
+  /** Kept once known: the spawn area does not move while the World loads. */
+  private expectedSpawnFocus: { x: number; y: number } | null = null;
   private lastCameraScrollY = 0;
   private spectatorCameraScrollX = 0;
   private spectatorCameraScrollY = 0;
@@ -675,9 +679,13 @@ export class WorldPresentationFrameBinding {
     // Ohne Figur, oder tot ohne inszenierte Todesnahaufnahme, haelt die Kamera ihren Punkt.
     const holding = !localSprite?.active || (!alive && !this.deathFocus);
     if (holding && !this.followFocusValid) this.holdFollowFocus();
+    // Before the first spawn the loading view already shows the spawn area, so the startup working
+    // set is the one the spawn reveals, not the previous view.
+    const expected = holding && this.input.isArenaLoading() && this.input.stagesLocalSpawn
+      ? this.expectedSpawnFocus ??= this.input.getExpectedLocalSpawnFocus?.() ?? null : null;
     // Ein inszenierter Fokus (Boss-Intro) blendet das Spielerziel weich zu seinem Punkt über.
     const focus = holding || !alive || this.input.isArenaLoading() ? null : getCameraFocusOverride(scene);
-    let followX = this.followFocusX, followY = this.followFocusY;
+    let followX = expected?.x ?? this.followFocusX, followY = expected?.y ?? this.followFocusY;
     if (!holding && localSprite) {
       const target = !alive && this.deathFocus ? this.deathFocus : localSprite;
       const focusWeight = focus?.weight ?? 0;

@@ -831,3 +831,15 @@ it('does not reveal or complete an async material region before its pixels exist
  ready=true;drain(scene);expect(bake).toHaveBeenCalled();expect(surface.getWorkingSet(view).ready).toBe(true);
  surface.destroy();expect(scheduler.pendingJobs).toBe(0);
 });
+
+it('lets a few further jobs of a waiting owner ask for their material in the same frame, then rests it', async () => {
+ const {getChunkBakeScheduler}=await import('../src/arena/chunks/ChunkBakeScheduler');
+ const scheduler=getChunkBakeScheduler({}),owner={},asked:number[]=[];
+ for(let i=0;i<8;i++)scheduler.enqueue({key:`tile-${i}`,owner,priority:()=>i,run:()=>{asked.push(i);return false;}});
+ const other=vi.fn();scheduler.enqueue({key:'other',owner:{},priority:()=>100,run:other});
+ scheduler.runFrame(100);
+ // Each waiting job is asked once; after four the owner rests and other owners proceed.
+ expect(asked).toEqual([0,1,2,3]);expect(other).toHaveBeenCalledOnce();
+ scheduler.runFrame(100);expect(asked).toEqual([0,1,2,3,0,1,2,3]);
+ expect(scheduler.pendingJobs).toBe(8);
+});

@@ -25,8 +25,9 @@ export interface Deployment {
  * Terrain of the next round, generated in the lobby before the round starts.
  *
  * Every peer generates it from the host's lobby snapshot (map and deployment seed) in the
- * background, so the base editor can show the real terrain around the base. Only campaign maps
- * with a persistent base have a preview: Dawn plans depend on the host's progress.
+ * background: the round start reuses it, and the base editor shows the real terrain around the
+ * base. Every campaign map is generated ahead; only maps with a persistent base have a preview.
+ * Dawn plans depend on the host's progress and are never generated ahead.
  */
 export class ArenaDeploymentTerrain {
   private cache: DeploymentLayoutCache | null = null;
@@ -36,16 +37,22 @@ export class ArenaDeploymentTerrain {
 
   /** The deployment the lobby announces, or `null` when there is no previewable terrain. */
   current(): Deployment | null {
+    const deployment = this.announced();
+    return deployment?.mapConfig.persistentBase ? deployment : null;
+  }
+
+  /** The campaign map and seed the lobby announces, previewable or not. */
+  private announced(): Deployment | null {
     if (!isCoopDefenseMode(this.source.getGameMode()) || this.source.getCoopProgram().kind !== 'campaign') return null;
     const seed = this.source.getDeploymentSeed();
     const mapConfig = resolveCoopDefenseMapConfig({ definitionId: toWorldDefinitionId(this.source.getCoopDefenseMapId()) }, null);
-    return seed === null || !mapConfig?.persistentBase ? null : { mapConfig, seed };
+    return seed === null || !mapConfig ? null : { mapConfig, seed };
   }
 
   /** Generates the announced terrain once per map and seed while the room is in the lobby. */
   prefetch(): void {
     if (this.source.getGamePhase() !== 'LOBBY') return;
-    const deployment = this.current();
+    const deployment = this.announced();
     const key = deployment ? DeploymentLayoutCache.key(deployment.mapConfig.mapId, deployment.seed) : null;
     if (!deployment || key === this.prefetchedKey) return;
     this.prefetchedKey = key;

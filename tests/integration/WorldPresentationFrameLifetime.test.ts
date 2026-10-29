@@ -793,6 +793,28 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       return { camera, time, scene, centre, run };
     }
 
+    it('zeigt beim Laden vor dem ersten Spawn bereits den erwarteten Spawnbereich', () => {
+      applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
+      const { scene, centre } = zoomableScene();
+      let player: { active: boolean; x: number; y: number } | null = null;
+      const expected = vi.fn(() => ({ x: 2400, y: 1300 }));
+      const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene, {
+        stagesLocalSpawn: true,
+        isArenaLoading: () => true,
+        getLocalPlayerSprite: () => player as never,
+        getExpectedLocalSpawnFocus: expected,
+      }));
+      binding.syncCamera(16, true); binding.syncCamera(16, true);
+      // The startup working set is the spawn area, resolved once while the World loads.
+      expect(centre().x).toBeCloseTo(2400, 3);
+      expect(centre().y).toBeCloseTo(1300, 3);
+      expect(expected).toHaveBeenCalledOnce();
+      player = { active: true, x: 2650, y: 1180 };
+      binding.syncCamera(16, true);
+      expect(centre().x).toBeCloseTo(2650, 3);
+      expect(centre().y).toBeCloseTo(1180, 3);
+    });
+
     it('schneidet beim Spawn auf die Figur, faehrt beim Tod heran und setzt den Respawn dort ohne Sprung an', () => {
       applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
       const { camera, time, scene, centre, run } = zoomableScene();

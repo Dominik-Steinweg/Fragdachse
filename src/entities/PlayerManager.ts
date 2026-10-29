@@ -446,6 +446,24 @@ export class PlayerManager implements OwnerVisualSource {
     };
   }
 
+  /**
+   * Where the next initial spawn is expected, in world coordinates: the mission's or World's spawn
+   * focus, else the centre of the calm own base. A loading view can prepare this area before the
+   * host spawns anyone; the actual spawn stays the host's choice near it.
+   */
+  getExpectedSpawnFocus(): { x: number; y: number } | null {
+    if (!this.worldGeometry) return null;
+    const spawnContext = this.spawnContextProvider?.(null) ?? EMPTY_SPAWN_CONTEXT;
+    const focus = spawnContext.preferredSpawnFocus ?? this.resolveWorldSpawnFocus();
+    if (focus) return focus;
+    const base = this.resolveCoopDefenseSpawnBase(spawnContext);
+    if (!base) return null;
+    return {
+      x: this.metrics.offsetX + (base.region.minGridX + base.region.maxGridX + 1) / 2 * CELL_SIZE,
+      y: this.metrics.offsetY + (base.region.minGridY + base.region.maxGridY + 1) / 2 * CELL_SIZE,
+    };
+  }
+
   /** Weltkoordinaten eines Spawns, einschliesslich des Offsets der gebundenen World. */
   getWorldSpawnPoint(requestingPlayerId: string | null = null): { x: number; y: number } {
     const spawn = this.getSpawnPoint(requestingPlayerId);

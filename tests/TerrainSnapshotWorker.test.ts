@@ -140,3 +140,28 @@ it('keeps a native chunk pending until its transferred material exists, then upl
  expect(native).not.toHaveBeenCalled();expect(put).toHaveBeenCalledOnce();expect(refresh).toHaveBeenCalledOnce();expect(target.render).toHaveBeenCalledOnce();
  expect(layer.prepare(35,17,side)).toBe(true);layer.prepare(167,17,side);layer.destroy();port.reply();expect(port.terminate).toHaveBeenCalledOnce();expect(remove).toHaveBeenCalledWith('soil');
 });
+
+it('keeps several soil tiles in flight and claims them in request order',()=>{
+ const port=new Port(),client=new TerrainSnapshotWorkerClient(()=>port as never,2),side=132;
+ client.request(source,side,35,17,side,side,new ArrayBuffer(side*side*4),true);
+ client.request(source,side,167,17,side,side,new ArrayBuffer(side*side*4),true);
+ expect(client.canRequest()).toBe(false);
+ expect(()=>client.request(source,side,299,17,side,side,new ArrayBuffer(side*side*4),true)).toThrow('lifetime');
+ port.reply();port.reply();
+ // Finished but unclaimed results still occupy the capacity.
+ expect(client.canRequest()).toBe(false);
+ expect(client.take()).not.toBeNull();expect(client.canRequest()).toBe(true);expect(client.take()).not.toBeNull();
+ expect(client.take()).toBeNull();client.destroy();
+});
+
+it('requests the next soil tiles while earlier ones are still computed',()=>{
+ const port=new Port();vi.stubGlobal('Worker',class {constructor(){return port;}});
+ const side=132;
+ const scene={textures:{createCanvas:()=>({key:'soil',context:{createImageData:()=>({width:side,height:side,data:new Uint8ClampedArray(side*side*4)}),putImageData:vi.fn()},refresh:vi.fn()}),remove:vi.fn()}};
+ const layer=new DirtSurfaceLayer(scene as never,source.seed,source.kind==='soil'?source.dirt:[],frame,side,materials,source.kind==='soil'?source.water:[]);
+ expect(layer.prepare(35,17,side)).toBe(false);expect(layer.prepare(167,17,side)).toBe(false);expect(layer.prepare(35,17,side)).toBe(false);
+ expect(port.jobs.filter(job=>job.kind==='bake')).toHaveLength(2);
+ port.reply();port.reply();
+ expect(layer.prepare(167,17,side)).toBe(true);expect(layer.prepare(35,17,side)).toBe(true);
+ layer.destroy();
+});
