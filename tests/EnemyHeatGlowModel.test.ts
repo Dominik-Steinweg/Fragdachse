@@ -28,6 +28,21 @@ describe('heat glow model', () => {
     }
   });
 
+  it('counts the warning down with a bright throb that speeds up towards the burst', () => {
+    const warningMs = 1200;
+    const peaks = (from: number, to: number) => {
+      let count = 0, previous = 0, rising = false;
+      for (let elapsed = from; elapsed <= to; elapsed += 4) {
+        const alpha = glow('telegraph', 1, 50_000 + elapsed, 0, false, 0, elapsed, warningMs).alpha;
+        if (alpha < previous && rising) count++;
+        rising = alpha > previous; previous = alpha;
+      }
+      return count;
+    };
+    expect(peaks(900, 1200)).toBeGreaterThan(peaks(0, 300) * 2);
+    expect(glow('telegraph', 1, 50_000, 0, false, 0, 600, warningMs).alpha).toBeGreaterThanOrEqual(0.7);
+  });
+
   it('flashes at the burst and cools down to dormant embers', () => {
     const flash = glow('vent', 0, 5010, 5000, false), cooled = glow('vent', 0, 6000, 5000, false);
     expect(flash.alpha).toBeGreaterThan(cooled.alpha);

@@ -52,7 +52,7 @@
           "salvo": {
             "count": 4,
             "intervalMs": 50,
-            "cooldownMs": 1700
+            "cooldownMs": 1000
           }
         },
         {
@@ -63,12 +63,12 @@
           "salvo": {
             "count": 4,
             "intervalMs": 50,
-            "cooldownMs": 1700
+            "cooldownMs": 1000
           }
         },
         {
           "weaponId": "DEMON_BADGER_BITE",
-          "targetMode": "all",
+          "targetMode": "rocks",
           "meleeTiming": {
             "hitDelayMs": 250,
             "strikeMs": 80,
@@ -83,7 +83,7 @@
       "heatBurst": {
         "chargeMinMs": 4800,
         "chargeMaxMs": 5200,
-        "telegraphMs": 900,
+        "telegraphMs": 1200,
         "ventMs": 400,
         "initialDelayMs": 1500,
         "speedBoost": 0.6,
@@ -92,7 +92,9 @@
           "stepMs": 450,
           "jitterMs": 60,
           "neighbourRadiusPx": 420,
-          "maxPerSlot": 3
+          "maxPerSlot": 3,
+          "chainRadiusPx": 320,
+          "chainMinHeat": 0.4
         },
         "telegraphTurnRateDegPerSec": 75,
         "alliedTriggerRadiusPx": 140,

@@ -199,6 +199,7 @@ export class CoopMissionEnemyBehaviourComposition {
     attack.setFlameGround({ ignite: (enemy, x, y, cell, now) => {
       fireSystem.hostRefreshGroundCell(x, y, { sourceKey: `${cell.sourceId}:${enemy.id}`, ownerId: enemy.id,
         durationMs: cell.durationMs, sourceId: cell.sourceId, visualStyle: cell.visualStyle, damageTarget: cell.damageTarget,
+        baseDamageMult: cell.baseDamageMult,
         burn: { durationMs: cell.burnDurationMs, damagePerTick: cell.burnDamagePerTick, visualStyle: cell.visualStyle },
         combatSource: fireSystem.captureCombatSource?.(enemy.id, cell.sourceId) }, now);
     } });

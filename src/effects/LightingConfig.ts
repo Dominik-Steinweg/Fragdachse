@@ -494,7 +494,7 @@ export const LIGHT_PRESETS = {
     enabled: true,
     shape: 'radial',
     radiusPx: 155,
-    color: 0xe9c6ff,
+    color: 0xd2a4ff,
     intensity: 1,
     durationMs: 0,
     decayExponent: 1,

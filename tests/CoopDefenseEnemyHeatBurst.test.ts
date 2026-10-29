@@ -23,6 +23,9 @@ function fixture(starts: readonly Point[], faction: 'hostile' | 'allied' = 'host
   const view = { gap: 0 };
   const hostileNear = { value: true };
   const route = { point: { x: 4000, y: 0 } as Point | null };
+  // Running at full speed along +x unless a test stops the body.
+  const motion = { vx: demon.moveSpeed, vy: 0 };
+  const aim = { angle: 0 };
   function body(id: string, start: Point) {
     states.set(id, EMPTY_ENEMY_HEAT_BURST_STATE);
     const self = {
@@ -34,8 +37,8 @@ function fixture(starts: readonly Point[], faction: 'hostile' | 'allied' = 'host
       },
       setAbilitySpeedFactor: (factor: number) => { speed.set(id, factor); },
       getMoveSpeed: () => demon.moveSpeed * (speed.get(id) ?? 1),
-      getDesiredVelocity: () => ({ vx: 1, vy: 0 }),
-      getAimAngle: () => 0,
+      getDesiredVelocity: () => motion,
+      getAimAngle: () => aim.angle,
     };
     return self;
   }
@@ -61,8 +64,18 @@ function fixture(starts: readonly Point[], faction: 'hostile' | 'allied' = 'host
     for (let now = from; now <= to; now += FRAME) system.hostUpdate(now, views);
   };
   const add = (start: Point) => { const added = body(`d${bodies.length}`, start); bodies.push(added); return added; };
-  return { bodies, system, run, add, bursts, fizzles, burst, view, hostileNear, route, speed,
+  return { bodies, system, run, add, bursts, fizzles, burst, view, hostileNear, route, speed, motion, aim,
     state: (id = 'd0') => states.get(id)! };
+}
+
+/** Runs a single body up to the start of its first warning and returns that time. */
+function toWarning(f: ReturnType<typeof fixture>): number {
+  f.run(0, 0);
+  const fullAt = f.state().fullAt;
+  f.run(FRAME, fullAt + 400);
+  const telegraphAt = f.state().telegraphAt;
+  f.run(fullAt + 400 + FRAME, telegraphAt + FRAME);
+  return telegraphAt + FRAME;
 }
 
 function death(id: string): EnemyDeathInfo {
@@ -137,6 +150,30 @@ describe('heat burst cascade', () => {
     f.add({ x: 60, y: -10 });
     f.run(120 + FRAME, 20_000);
     expect(f.bursts.slice(0, 3).map(entry => entry.id)).toEqual(['d0', 'd1', 'd2']);
+  });
+
+  it('pulls charged neighbours into a rolling chain, so a group spread over seconds goes off together', () => {
+    const f = fixture([{ x: 0, y: 0 }]);
+    f.run(0, 0);
+    // Arrivals spread over more than two seconds, inside the chain radius but each its own cycle.
+    f.run(FRAME, 1100);
+    f.add({ x: 120, y: 40 });
+    f.run(1100 + FRAME, 2300);
+    f.add({ x: 240, y: -30 });
+    f.run(2300 + FRAME, 30_000);
+    const first = f.bursts.slice(0, 3);
+    expect(first.map(entry => entry.id)).toEqual(['d0', 'd1', 'd2']);
+    for (let index = 1; index < 3; index++) {
+      const gap = first[index].at - first[index - 1].at;
+      expect(gap).toBeGreaterThanOrEqual(MIN_NEIGHBOUR_GAP - FRAME);
+      expect(gap).toBeLessThanOrEqual(config.cascade.stepMs + 2 * config.cascade.jitterMs + FRAME);
+    }
+    // A cold body is not pulled along, and a body beyond the chain radius keeps its own cycle.
+    const g = fixture([{ x: 0, y: 0 }, { x: config.cascade.chainRadiusPx + 40, y: 0 }]);
+    g.run(0, 0);
+    const ownFull = g.state('d1').fullAt;
+    g.run(FRAME, g.state('d0').fullAt);
+    expect(g.state('d1').fullAt).toBe(ownFull);
   });
 
   it('lets distant bodies share a slot, up to the world cap per slot', () => {
@@ -223,22 +260,44 @@ describe('heat burst holds and triggers', () => {
     expect(f.system.blocksRegularAttacks('d0')).toBe(false);
   });
 
-  it('keeps a warning body running but turns its heading at most at the authored rate', () => {
+  it('keeps a running body running through its warning, turning at the authored rate and slowing for a sharp turn', () => {
     const f = fixture([{ x: 0, y: 0 }]);
-    f.run(0, 0);
-    const fullAt = f.state().fullAt;
-    f.run(FRAME, fullAt + 400);
-    const booked = f.state();
-    f.run(fullAt + 400 + FRAME, booked.telegraphAt);
+    const warning = toWarning(f);
     const enemy = f.bodies[0] as unknown as EnemyEntity;
     expect(f.system.blocksRegularAttacks('d0')).toBe(true);
-    const start = f.system.getMovementOverride(enemy, booked.telegraphAt)!;
+    const start = f.system.getMovementOverride(enemy, warning)!;
     expect(Math.hypot(start.vx, start.vy)).toBeGreaterThan(demon.moveSpeed);
-    // The route swings to the opposite side; the heading follows at the turn rate only.
+    // The route bends by 90°: the heading follows at the turn rate only, and the body slows for the turn.
+    f.route.point = { x: 0, y: 4000 };
+    const bent = f.system.getMovementOverride(enemy, warning + 100)!;
+    const maxTurn = config.telegraphTurnRateDegPerSec * Math.PI / 180 * 0.1 + 1e-6;
+    expect(Math.abs(bent.aimAngle! - start.aimAngle!)).toBeLessThanOrEqual(maxTurn);
+    expect(Math.hypot(bent.vx, bent.vy)).toBeLessThan(Math.hypot(start.vx, start.vy) * 0.3);
+    // A route behind the body never makes it run off the other way; it turns on the spot.
     f.route.point = { x: -4000, y: 0 };
-    const later = f.system.getMovementOverride(enemy, booked.telegraphAt + 100)!;
-    const turned = Math.abs(Math.atan2(later.vy, later.vx) - Math.atan2(start.vy, start.vx));
-    expect(turned).toBeLessThanOrEqual(config.telegraphTurnRateDegPerSec * Math.PI / 180 * 0.1 + 1e-6);
+    const reversed = f.system.getMovementOverride(enemy, warning + 200)!;
+    expect(Math.hypot(reversed.vx, reversed.vy)).toBe(0);
+    expect(Math.abs(reversed.aimAngle! - bent.aimAngle!)).toBeLessThanOrEqual(maxTurn);
+  });
+
+  it('holds a standing or fighting body in place through its warning, facing its target', () => {
+    const f = fixture([{ x: 0, y: 0 }]);
+    f.motion.vx = demon.moveSpeed * 0.35;
+    f.aim.angle = 2;
+    const warning = toWarning(f);
+    const enemy = f.bodies[0] as unknown as EnemyEntity;
+    for (const at of [warning, warning + 300, warning + 600]) {
+      expect(f.system.getMovementOverride(enemy, at)).toEqual({ vx: 0, vy: 0, aimAngle: 2 });
+    }
+    // A runner that reaches its attack position stops there for the rest of the warning.
+    const g = fixture([{ x: 0, y: 0 }]);
+    const runner = g.bodies[0] as unknown as EnemyEntity;
+    const at = toWarning(g);
+    expect(Math.hypot(g.system.getMovementOverride(runner, at)!.vx, 0)).toBeGreaterThan(0);
+    g.route.point = { x: 10, y: 0 };
+    expect(g.system.getMovementOverride(runner, at + 50)).toMatchObject({ vx: 0, vy: 0 });
+    g.route.point = { x: 4000, y: 0 };
+    expect(g.system.getMovementOverride(runner, at + 100)).toMatchObject({ vx: 0, vy: 0 });
   });
 });
 

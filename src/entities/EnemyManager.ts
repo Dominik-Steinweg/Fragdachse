@@ -256,14 +256,14 @@ export class EnemyManager {
   }
   /** `detail` is chosen by the host frame's movement step; every other caller steers in full. */
   moveNormally(enemy: EnemyEntity, waypoint: { x: number; y: number } | null, speed: number,
-    aimAngle?: number, priority: 'ordinary' | 'attack' = 'ordinary', detail: EnemyAiDetail = 'full'): MovementFeedback {
+    aimAngle?: number, priority: 'ordinary' | 'attack' = 'ordinary', detail: EnemyAiDetail = 'full', arrive = false): MovementFeedback {
     const previous = enemy.getDesiredVelocity();
     const navigation = this.intents?.get(enemy.id)?.navigation;
     // An amphibious body steers against the world without water (its intent field carries that geometry).
     const geometry = enemy.isAmphibious() ? this.intents?.getField(enemy.id)?.getNavigationGeometry() ?? undefined : undefined;
     const result = this.locomotion.solve({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
       radius: enemy.getSize() / 2, speed, waypoint, priority, previousVx: previous.vx, previousVy: previous.vy,
-      routeCost: navigation?.status === 'ready' ? navigation.cost : undefined, geometry, detail });
+      routeCost: navigation?.status === 'ready' ? navigation.cost : undefined, geometry, detail, arrive });
     this.movementFeedback.set(enemy.id, result);
     enemy.setDesiredVelocity(result.vx, result.vy, this.movementNow, aimAngle,
       result.waitReason === 'none' ? 'locomotion' : 'immediate');
@@ -841,9 +841,13 @@ export class EnemyManager {
       const swimFactor = enemy.isSubmerged() ? config.amphibious?.swimSpeedFactor ?? 1 : 1;
       // Bounding runners pulse once per bound around their speed; the mean stays the authored one.
       const gaitFactor = config.pounce?.gait ? boundingGaitFactor(enemy.id, now, config.pounce.gait) : 1;
+      // In an attack position the body settles on the goal centre instead of swinging around it, and
+      // keeps facing its target (or its approach) rather than every small correction step.
+      const arrive = route.status === 'ready' && !!gridCell && flowFieldService.isGoalCell(gridCell.gridX, gridCell.gridY);
       const feedback = this.moveNormally(enemy, waypoint,
         enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor * swimFactor * gaitFactor,
-        combatMovement?.aimAngle, 'ordinary', aiDetail?.isFar(enemy.id) ? 'far' : 'full');
+        combatMovement?.aimAngle ?? (arrive ? enemy.getAimAngle() : undefined), 'ordinary',
+        aiDetail?.isFar(enemy.id) ? 'far' : 'full', arrive);
       const train = activeTrainAwareness?.resolveMovement(enemy, feedback.vx, feedback.vy, now);
       if (train?.override) enemy.setDesiredVelocity(train.vx, train.vy, now);
       else if (decoyTarget && route.status === 'ready') decoyTargets?.usedTarget(enemy.id);

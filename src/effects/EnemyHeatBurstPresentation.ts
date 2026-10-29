@@ -1,11 +1,12 @@
 import * as Phaser from 'phaser';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { DEPTH, DEPTH_LIGHTING } from '../config';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import { enemyEmissionTextureKey } from '../config/enemyEmission';
 import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
 import { enemyHeatAt, enemyHeatBurstPhaseAt } from '../systems/EnemyHeatBurstState';
 import { pounceUnitHash } from '../systems/enemyPounceRules';
-import type { EnemyZoneAttack } from './EnemyClawRenderer';
+import { ENEMY_CLAW_HOSTILE_COLOR, type EnemyZoneAttack } from './EnemyClawRenderer';
 import { fillRadialGradientTexture, makeAdditive } from './EffectUtils';
 import { emissiveAlpha } from './EmissiveScale';
 import { enemyHeatGlowAt, type EnemyHeatGlow } from './enemyHeatGlowModel';
@@ -17,6 +18,8 @@ export type EnemyHeatZoneSink = (id: string, attack: EnemyZoneAttack | null, now
 const STRIKE_LEAD_MS = 120;
 /** The zone lingers briefly after the burst so the hit reads as its result. */
 const BURST_LINGER_MS = 80;
+/** A warning seen this late (join, lag) starts silently. */
+const SOUND_GRACE_MS = 250;
 const TEX_HEAT_HALO = '_enemy_heat_halo';
 /** Halo diameter as a multiple of the body size, cold and at full heat. */
 const HALO_COLD = 1.5;
@@ -28,6 +31,8 @@ const EMISSION_DEPTH = DEPTH_LIGHTING + 0.08;
 /** Ground light radius as a multiple of the body size, cold and at full glow. */
 const LIGHT_RADIUS_MIN = 2.2;
 const LIGHT_RADIUS_MAX = 4.2;
+/** Warning light radius as a multiple of the burst radius (a radial light fades towards its edge). */
+const WARNING_LIGHT_RADIUS = 1.25;
 
 interface HeatVisual {
   readonly halo: Phaser.GameObjects.Image;
@@ -35,6 +40,8 @@ interface HeatVisual {
   readonly lightKey: string;
   readonly offset: number;
   lit: boolean;
+  /** Warning whose countdown sound already played. */
+  warnedAt: number;
 }
 
 /**
@@ -48,6 +55,7 @@ export class EnemyHeatBurstPresentation {
   private clock: () => number = () => this.scene.time.now;
   private zoneSink: EnemyHeatZoneSink | null = null;
   private lighting: LightingSystem | null = null;
+  private audio: GameAudioSystem | null = null;
   private readonly visuals = new Map<string, HeatVisual>();
   private readonly sunk = new Set<string>();
   private readonly glow = {} as EnemyHeatGlow;
@@ -61,6 +69,7 @@ export class EnemyHeatBurstPresentation {
   setClock(clock: () => number): void { this.clock = clock; }
   /** The warning is drawn by the shared enemy danger renderer as a tracking zone. */
   setZoneSink(sink: EnemyHeatZoneSink | null): void { this.zoneSink = sink; }
+  setAudioSystem(audio: GameAudioSystem | null): void { this.audio = audio; }
   setLightingSystem(lighting: LightingSystem | null): void {
     if (lighting !== this.lighting) for (const visual of this.visuals.values()) this.releaseLight(visual);
     this.lighting = lighting;
@@ -96,15 +105,18 @@ export class EnemyHeatBurstPresentation {
       const visible = sprite.visible && enemy.getHp() > 0;
       const phase = enemyHeatBurstPhaseAt(state, now), heat = enemyHeatAt(state, now);
       const visual = this.visuals.get(enemy.id) ?? this.createVisual(enemy);
-      const glow = enemyHeatGlowAt(this.glow, phase, heat, now, state.ventFromAt, enemy.faction === 'allied', visual.offset);
+      const glow = enemyHeatGlowAt(this.glow, phase, heat, now, state.ventFromAt, enemy.faction === 'allied', visual.offset,
+        now - state.telegraphAt, state.burstAt - state.telegraphAt);
 
       const haloSize = size * (HALO_COLD + (HALO_HOT - HALO_COLD) * Math.max(heat, phase === 'vent' ? glow.alpha : 0));
-      // During the warning the red zone owns the ground around the body; the halo steps back.
-      const haloShare = phase === 'telegraph' ? HALO_SHARE * 0.25 : HALO_SHARE;
+      // The warning halo throbs with the body: the red zone marks the reach, the halo the countdown.
+      const haloShare = phase === 'telegraph' ? HALO_SHARE * 0.8 : HALO_SHARE;
       visual.halo.setVisible(visible).setPosition(sprite.x, sprite.y).setDisplaySize(haloSize, haloSize)
         .setTint(glow.color).setAlpha(emissiveAlpha(glow.alpha * haloShare * sprite.alpha));
       this.syncEmission(visual, sprite, visible, glow);
-      this.syncLight(visual, sprite, visible, glow, size);
+      // A hostile warning lights the danger area itself in telegraph red, so it reads at night too.
+      const warningRadius = phase === 'telegraph' && enemy.faction === 'hostile' ? config.burst.radiusPx : 0;
+      this.syncLight(visual, sprite, visible, glow, size, warningRadius);
 
       const zone: EnemyZoneAttack | null = enemy.faction === 'hostile' && state.burstAt > 0 && now >= state.telegraphAt
         && now < state.burstAt + BURST_LINGER_MS ? {
@@ -115,6 +127,11 @@ export class EnemyHeatBurstPresentation {
       if (zone) {
         this.zoneSink?.(enemy.id, zone, now, visible);
         this.sunk.add(enemy.id);
+        if (visual.warnedAt !== state.telegraphAt) {
+          visual.warnedAt = state.telegraphAt;
+          // A rising countdown under the throb; it ends with the burst.
+          if (visible && now - state.telegraphAt < SOUND_GRACE_MS) this.audio?.playSound('sfx_demon_badger_warning', sprite.x, sprite.y, enemy.id);
+        }
       } else if (this.sunk.has(enemy.id)) {
         this.zoneSink?.(enemy.id, null, now, false);
         this.sunk.delete(enemy.id);
@@ -143,10 +160,18 @@ export class EnemyHeatBurstPresentation {
       .setTint(glow.color).setAlpha(emissiveAlpha(glow.alpha * sprite.alpha));
   }
 
-  /** Ground light only while the body glows noticeably: a horde of cold badgers costs no lights. */
-  private syncLight(visual: HeatVisual, sprite: Phaser.GameObjects.Sprite, visible: boolean, glow: EnemyHeatGlow, size: number): void {
+  /**
+   * Ground light only while the body glows noticeably: a horde of cold badgers costs no lights.
+   * Through a warning the light covers the burst radius in telegraph red and throbs with the body.
+   */
+  private syncLight(visual: HeatVisual, sprite: Phaser.GameObjects.Sprite, visible: boolean, glow: EnemyHeatGlow,
+    size: number, warningRadius: number): void {
     if (!this.lighting || !visible || glow.light <= 0.02) { this.releaseLight(visual); return; }
-    this.lighting.setLight(visual.lightKey, 'entityGlow', sprite.x, sprite.y, {
+    this.lighting.setLight(visual.lightKey, 'entityGlow', sprite.x, sprite.y, warningRadius > 0 ? {
+      color: ENEMY_CLAW_HOSTILE_COLOR,
+      radiusPx: warningRadius * WARNING_LIGHT_RADIUS,
+      intensity: 0.35 + glow.light,
+    } : {
       color: glow.color,
       radiusPx: size * (LIGHT_RADIUS_MIN + (LIGHT_RADIUS_MAX - LIGHT_RADIUS_MIN) * glow.light),
       intensity: 0.3 + 0.7 * glow.light,
@@ -169,7 +194,7 @@ export class EnemyHeatBurstPresentation {
     // Under the body, like the configured enemy glow halo: the heat radiates around it.
     const halo = makeAdditive(this.scene.add.image(enemy.sprite.x, enemy.sprite.y, TEX_HEAT_HALO).setDepth(DEPTH.PLAYERS - 0.09));
     const visual: HeatVisual = { halo, emission: null, lightKey: `heat-burst:${enemy.id}`,
-      offset: pounceUnitHash(enemy.id, 0, 31) * 1000, lit: false };
+      offset: pounceUnitHash(enemy.id, 0, 31) * 1000, lit: false, warnedAt: 0 };
     this.visuals.set(enemy.id, visual);
     return visual;
   }

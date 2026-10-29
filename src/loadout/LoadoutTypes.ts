@@ -58,6 +58,8 @@ export interface FlamethrowerWeaponFireConfig {
     readonly durationMs: number;
     readonly igniteProjectiles: number;
     readonly createOnFlameExpiry: number;
+    /** Share of the base fire damage this ground fire causes in a base it sets alight (default 1). */
+    readonly baseDamageMult?: number;
   };
   readonly fireRing?: {
     readonly radius: number;

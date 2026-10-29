@@ -308,6 +308,8 @@ selbst. Maßgeblich sind `CoopDefenseVoidHunterMap.test.ts`, `GroundHazardSpread
 Der zusätzliche Void-Basisbrand gehört zur Activity (`BaseVoidFireSystem`), nicht zum Blueprint
 oder World-Layout. Er prüft tatsächliche Basiszellen statt Bounding-Boxen, verwendet einen
 Schadensstrom je Basis und führt Schaden über `applyBaseStatusDamage` samt Fraktionsprüfung aus.
+Der Strom brennt mit dem Basis-Anteil (`baseDamageMult` der Bodenfeuer-Quelle, Standard 1) des
+stärksten berührenden Feuers; eine Quelle mit Anteil 0 setzt keine Basis in Brand.
 `SyncedBaseState.voidBurning` projiziert nur die Darstellung; Activity-Ende verwirft den Status.
 
 Bei einer neuen Activity oder Map zuerst entscheiden, welche Daten World-weit und welche Activity-spezifisch sind. Danach:

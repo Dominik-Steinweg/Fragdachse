@@ -1037,7 +1037,7 @@ export class EffectSystem implements EnemyVisualSink {
       const allied = color === ALLIED_COLOR, palette = allied ? ALLIED_PALETTE : VOID_PALETTE;
       this.spawnCombatExplosionGpu(x, y, radius, visualStyle, palette.primary, palette.bright, palette.primary);
       this.explosionGpuRenderer?.spawnHeatSparks(x, y, radius, allied ? ALLIED_PALETTE.bright : DEMON_HEAT_SPARK_COLOR,
-        visualStyle === 'demon_fizzle' ? 0.45 : 1);
+        visualStyle === 'demon_fizzle' ? 0.45 : 1.6);
       return;
     }
 

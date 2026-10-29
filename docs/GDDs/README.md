@@ -43,7 +43,7 @@ gesetzt.
 |---|---|
 | [Alien-Kegelangriff V1](Fragdachse_GDD_Alien_Kegelangriff_V1.md) | umgesetzt (die Kopfzeile „keine Implementierung“ ist veraltet) |
 | [Brandstifter](Fragdachse_GDD_Brandstifter.md) | umgesetzt |
-| [Demon Badger V1](Fragdachse_GDD_Demon_Badger_V1.md) | umgesetzt (Hitzezyklus, rollende Kaskade, Void-Explosion, Flammenstoß, Produktionsmodell `db-v2-r2`); Feintuning nach Spieltest offen |
+| [Demon Badger V1](Fragdachse_GDD_Demon_Badger_V1.md) | umgesetzt (Hitzezyklus, rollende Kettenkaskade, Void-Explosion, Flammenstoß, Produktionsmodell `db-v2-r2`); Spieltest-Feedback 1 umgesetzt, weiterer Spieltest offen |
 | [Kabummtula V1](Fragdachse_GDD_Kabummtula_V1.md) | umgesetzt (ersetzt den Zeitbomben-Dachs); Optimierungsphase mit Testfeedback offen |
 | [Mörser-Dachs V1](Fragdachse_GDD_Moerser_Dachs_V1.md) | umgesetzt |
 | [Rabid Rabbit V1](Fragdachse_GDD_Rabid_Rabbit_V1.md) | umgesetzt (ersetzt den Rabid Badger); Feel-Abnahme und Balance-Tuning offen |

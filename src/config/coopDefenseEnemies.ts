@@ -686,6 +686,13 @@ export interface CoopDefenseEnemyHeatBurstConfig {
     readonly neighbourRadiusPx: number;
     /** Bursts per grid slot across the whole world (bounds the effect rate of large waves). */
     readonly maxPerSlot: number;
+    /**
+     * A booked warning pulls charged bodies of its kind within this radius along: their charge
+     * completes one step later, so a pack goes off as a rolling chain instead of single bursts.
+     */
+    readonly chainRadiusPx: number;
+    /** Least heat a body needs to be pulled into a chain. */
+    readonly chainMinHeat: number;
   };
   /** While the warning runs the body keeps running but turns its heading at most this fast. */
   readonly telegraphTurnRateDegPerSec: number;
@@ -1719,14 +1726,14 @@ export function normalizeHeatBurstConfig(config: CoopDefenseEnemyHeatBurstConfig
   const { cascade, burst, fizzle, fireChunks } = config;
   if (!cascade || !burst || !fizzle || invalid([config.chargeMinMs, config.chargeMaxMs, config.telegraphMs,
     config.speedCurveExponent, config.telegraphTurnRateDegPerSec, config.alliedTriggerRadiusPx, cascade.stepMs,
-    cascade.neighbourRadiusPx, burst.radiusPx, fizzle.minRadiusPx, fizzle.maxRadiusPx],
+    cascade.neighbourRadiusPx, cascade.chainRadiusPx, burst.radiusPx, fizzle.minRadiusPx, fizzle.maxRadiusPx],
   [config.ventMs, config.initialDelayMs, config.speedBoost, cascade.jitterMs, burst.damage, burst.minDamage,
     burst.knockbackSpeed, burst.knockbackMs, burst.friendlyBaseDamageMult, burst.constructionDamageMult, burst.trainDamageMult,
-    fizzle.minHeat])) {
+    fizzle.minHeat, cascade.chainMinHeat])) {
     throw new Error(`[coopDefenseEnemies] Invalid heat-burst value: ${enemyId}`);
   }
   if (config.chargeMinMs > config.chargeMaxMs || burst.minDamage > burst.damage || cascade.jitterMs * 2 >= cascade.stepMs
-    || !Number.isInteger(cascade.maxPerSlot) || cascade.maxPerSlot < 1 || fizzle.minHeat > 1
+    || !Number.isInteger(cascade.maxPerSlot) || cascade.maxPerSlot < 1 || fizzle.minHeat > 1 || cascade.chainMinHeat > 1
     || fizzle.minRadiusPx > fizzle.maxRadiusPx || config.speedBoost > 2) {
     throw new Error(`[coopDefenseEnemies] Invalid heat-burst relation: ${enemyId}`);
   }

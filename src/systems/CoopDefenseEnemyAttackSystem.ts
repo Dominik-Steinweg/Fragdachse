@@ -68,6 +68,8 @@ export interface EnemyFlameGroundCell {
   readonly durationMs: number;
   readonly burnDurationMs: number;
   readonly burnDamagePerTick: number;
+  /** Share of the base fire damage while this fire keeps a base burning. */
+  readonly baseDamageMult: number;
   readonly visualStyle: import('../types').GroundFireVisualStyle;
   readonly damageTarget: import('../types').GroundFireDamageTarget;
   readonly sourceId: string;
@@ -477,7 +479,8 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     const fireGround = resolveEnemyFlameGround(enemy.faction, `enemy.${enemy.kind}.spit_fire`);
     for (const back of FLAME_GROUND_CELL_OFFSETS) {
       this.flameGround.ignite(enemy, x + cos * (reach - back), y + sin * (reach - back), {
-        durationMs: ground.durationMs, burnDurationMs: fire.burnDurationMs, burnDamagePerTick: fire.burnDamagePerTick, ...fireGround,
+        durationMs: ground.durationMs, burnDurationMs: fire.burnDurationMs, burnDamagePerTick: fire.burnDamagePerTick,
+        baseDamageMult: ground.baseDamageMult ?? 1, ...fireGround,
       }, now);
     }
   }

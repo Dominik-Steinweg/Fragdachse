@@ -30,6 +30,21 @@ describe('Shared enemy and ally locomotion', () => {
     }
   });
 
+  it('settles an arriving body on its attack position without swinging back and forth', () => {
+    // A body walking at full speed reaches the goal centre of its attack position; its velocity must
+    // never point back (each reversal flips its facing on the spot).
+    const movement = new EnemyLocomotion(), world = geometry(), goal = { x: 120, y: 64 };
+    let x = 100, vx = 224, reversals = 0;
+    for (let frame = 0; frame < 90; frame++) {
+      movement.begin([{ ...neighbor('a', x, 64), vx }], world, 16);
+      const step = movement.solve({ ...body, x, speed: 224, waypoint: goal, previousVx: vx, arrive: true });
+      if (step.vx < -0.5) reversals++;
+      vx = step.vx; x += vx * 0.016;
+    }
+    expect(reversals).toBe(0);
+    expect(Math.abs(x - goal.x)).toBeLessThan(4);
+  });
+
   it('does not overwrite another unit’s crowd-wait snapshot when reusing scratch lists', () => {
     const world = geometry(), movement = new EnemyLocomotion();
     const self = neighbor('a', body.x, body.y);

@@ -14,6 +14,9 @@ import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import { type MuzzleFlashPreset, type MuzzleProfile, resolveMuzzleProfile, resolveProjectileMuzzlePreset } from './muzzleFlashModel';
 
 const emissiveAlpha = (alpha: number) => alpha * (0.9 + getEmissiveScale() * 0.1);
+/** The outer flash body starts white-hot and takes its tint over its life. */
+const OUTER_TINT_BLEND_START = 0.42;
+const TINTED_FIRE_FLASH_ALPHA = 0.65;
 
 /** Two persistent GPU templates plus sparks. No per-shot Phaser objects, timers or tweens. */
 export class MuzzleFlashRenderer {
@@ -112,7 +115,7 @@ export class MuzzleFlashRenderer {
     this.outerSpec.positionEase = GpuVfxEase.Linear;
     this.outerSpec.scaleEase = GpuVfxEase.Linear;
     this.outerSpec.alphaEase = GpuVfxEase.CubicInOut;
-    this.outerSpec.tintBlendStart = 0.42;
+    this.outerSpec.tintBlendStart = OUTER_TINT_BLEND_START;
     this.outerSpec.tintBlendEnd = 1;
     this.sparkSpec.positionEase = GpuVfxEase.Linear;
     this.sparkSpec.scaleEase = GpuVfxEase.Linear;
@@ -171,9 +174,13 @@ export class MuzzleFlashRenderer {
         attachment.offset = anchor * cfg.scaleX;
       }
     }
-    this.configureBody(core, x, y, dx, dy, angle, anchor, cfg, 1, 1.15, cfg.duration, cfg.alpha, color ?? cfg.tint, frame);
+    // Tinted fire flashes stay below the blue clip the world grade would lift towards white.
+    const alpha = voidFlame ? cfg.alpha * TINTED_FIRE_FLASH_ALPHA : cfg.alpha;
+    this.configureBody(core, x, y, dx, dy, angle, anchor, cfg, 1, 1.15, cfg.duration, alpha, color ?? cfg.tint, frame);
     system.spawn(core, GPU_VFX_NO_SOURCE_HANDLE, now, 0, attachment?.core);
-    this.configureBody(outer, x, y, dx, dy, angle, anchor, cfg, 1.25, 1.08, cfg.outerDuration, cfg.alpha * 0.38, color ?? cfg.tint, frame);
+    // A tinted fire flash keeps its colour from the start; the white-hot start belongs to ordinary flashes.
+    outer.tintBlendStart = voidFlame ? 1 : OUTER_TINT_BLEND_START;
+    this.configureBody(outer, x, y, dx, dy, angle, anchor, cfg, 1.25, 1.08, cfg.outerDuration, alpha * 0.38, color ?? cfg.tint, frame);
     system.spawn(outer, GPU_VFX_NO_SOURCE_HANDLE, now, 0, attachment?.outer);
 
     const count = system.quality.scaleDiscreteBurst(GpuVfxEffectId.MuzzleFlashSpark, cfg.sparkCount);
@@ -191,7 +198,7 @@ export class MuzzleFlashRenderer {
       spark.stretchStart = cfg.sparkStretch + (i % 3) * 0.35;
       spark.stretchEnd = cfg.sparkStretch * 0.7 + (i % 3) * 0.2;
       const tintIndex = Math.floor(Phaser.Math.FloatBetween(0, cfg.sparkTints.length)) % cfg.sparkTints.length;
-      spark.tint = voidFlame ? (tintIndex % 3 === 0 ? 0xffffff : tintIndex % 3 === 1 ? lightColor : color!) : cfg.sparkTints[tintIndex];
+      spark.tint = voidFlame ? (tintIndex % 2 === 0 ? lightColor : color!) : cfg.sparkTints[tintIndex];
       system.spawn(spark, GPU_VFX_NO_SOURCE_HANDLE, now);
     }
   }

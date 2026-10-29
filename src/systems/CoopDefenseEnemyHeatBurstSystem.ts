@@ -53,9 +53,11 @@ interface HeatState {
   /** The warning of this cycle was already restarted once (a teleported body). */
   restarted: boolean;
   nextBookingCheckAt: number;
-  /** Heading of the warning run; null outside it. */
+  /** Heading of the warning (run or hold); null outside it. */
   heading: number | null;
   headingAt: number;
+  /** The body was running when its warning began; a standing or fighting body holds its ground. */
+  warningRun: boolean;
 }
 
 /** A booked warning reaches clients before it starts. */
@@ -70,13 +72,18 @@ const MAX_SLOT_SEARCH = 64;
 const RUN_PROBE_PX = 48;
 /** A discontinuous move farther than this (portal, translocator) restarts a running warning once. */
 const TELEPORT_PX = 48;
+/** A body moving at least this share of its speed when its warning begins keeps running. */
+const RUNNING_SPEED_SHARE = 0.6;
+/** A steering point this close means the body stands at its attack position: it holds there. */
+const ARRIVED_PX = 32;
 
 /**
  * Host decisions of heat-burst enemies (the Demon Badger): charge while running (the speed rises),
  * hold at full heat until a burst slot is free, announce the burst with a warning that travels with
  * the running body, burst around it and cool down. Bursts sit on a shared grid; two bodies close to
- * each other never share a slot, so a pack bursts one after another in spawn order. A full body
- * nobody can see holds its heat. Each transition is published as a replicated EnemyHeatBurstState.
+ * each other never share a slot, so a pack bursts one after another in spawn order, and a booked
+ * warning pulls charged neighbours into the next slots (a rolling chain). A full body nobody can see
+ * holds its heat. Each transition is published as a replicated EnemyHeatBurstState.
  */
 export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSource {
   private readonly states = new Map<string, HeatState>();
@@ -103,7 +110,11 @@ export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSour
     }
   }
 
-  /** Through its warning a hostile body keeps running at full heat but turns only at the authored rate. */
+  /**
+   * Through its warning a hostile body keeps doing what it did: a running body runs on at full heat,
+   * turns only at the authored rate and slows down for a sharp turn instead of running off; a body
+   * that stood or fought (e.g. spitting at a base) holds its ground facing its target.
+   */
   getMovementOverride(enemy: EnemyEntity, now: number): EnemyMovementOverride | null {
     const state = this.states.get(enemy.id);
     if (!state || state.enemy !== enemy) return null;
@@ -114,16 +125,25 @@ export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSour
     }
     const config = getCoopDefenseEnemyConfig(enemy.kind).heatBurst!;
     const x = enemy.sprite.x, y = enemy.sprite.y;
-    const elapsedS = state.heading === null ? 0 : Math.max(0, Math.min(0.1, (now - state.headingAt) / 1000));
-    let heading = state.heading ?? runHeading(enemy);
     const point = this.ports.steeringPoint(enemy);
-    if (point && Math.hypot(point.x - x, point.y - y) > 1) {
-      heading = turnToward(heading, Math.atan2(point.y - y, point.x - x), config.telegraphTurnRateDegPerSec * Math.PI / 180 * elapsedS);
+    const arrived = !point || Math.hypot(point.x - x, point.y - y) <= ARRIVED_PX;
+    if (state.heading === null) {
+      const velocity = enemy.getDesiredVelocity();
+      state.warningRun = !arrived && Math.hypot(velocity.vx, velocity.vy) >= RUNNING_SPEED_SHARE * enemy.getMoveSpeed();
+      state.heading = state.warningRun ? runHeading(enemy) : enemy.getAimAngle();
+      state.headingAt = now;
     }
+    // Reaching the attack position ends the run for the rest of the warning.
+    if (arrived) state.warningRun = false;
+    if (!state.warningRun) return { vx: 0, vy: 0, aimAngle: state.heading };
+    const elapsedS = Math.max(0, Math.min(0.1, (now - state.headingAt) / 1000));
+    const desired = Math.atan2(point!.y - y, point!.x - x);
+    const heading = turnToward(state.heading, desired, config.telegraphTurnRateDegPerSec * Math.PI / 180 * elapsedS);
     state.heading = heading;
     state.headingAt = now;
+    const speed = enemy.getMoveSpeed() * Math.max(0, Math.cos(desired - heading));
     const moved = this.ports.moveNormally(enemy, { x: x + Math.cos(heading) * RUN_PROBE_PX, y: y + Math.sin(heading) * RUN_PROBE_PX },
-      enemy.getMoveSpeed(), heading);
+      speed, heading);
     return moved.blocked ? { vx: 0, vy: 0, aimAngle: heading } : { vx: moved.vx, vy: moved.vy, aimAngle: heading };
   }
 
@@ -167,7 +187,7 @@ export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSour
       ventFromAt: 0, chargeStartAt: fullAt - chargeMs, fullAt, telegraphAt: 0, burstAt: 0, slot: null,
       seen: views ? views.viewGap(enemy.sprite.x, enemy.sprite.y) < views.farMarginPx : true,
       positionRevision: enemy.positionRevision, lastX: enemy.sprite.x, lastY: enemy.sprite.y, restarted: false,
-      nextBookingCheckAt: 0, heading: null, headingAt: now };
+      nextBookingCheckAt: 0, heading: null, headingAt: now, warningRun: false };
     this.states.set(enemy.id, state);
     this.publish(state);
     return state;
@@ -233,6 +253,27 @@ export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSour
     state.burstAt = Math.round(heatSlotTime(slot, jitter, config));
     state.telegraphAt = Math.max(state.fullAt, state.burstAt - config.telegraphMs);
     this.publish(state);
+    this.pullChain(state, config, now);
+  }
+
+  /**
+   * A booked warning pulls charged bodies of its kind nearby along: their charge completes one
+   * cascade step after its warning starts, so they book the next slots and pull their own neighbours
+   * in turn. A pack goes off as a rolling chain, and having vented together it charges up together.
+   */
+  private pullChain(igniter: HeatState, config: CoopDefenseEnemyHeatBurstConfig, now: number): void {
+    const { chainRadiusPx, chainMinHeat, stepMs } = config.cascade;
+    const fullAt = igniter.telegraphAt + stepMs, enemy = igniter.enemy;
+    for (const other of this.states.values()) {
+      if (other === igniter || other.burstAt > 0 || other.fullAt <= fullAt || other.enemy.kind !== enemy.kind
+        || other.enemy.faction !== enemy.faction) continue;
+      const dx = other.enemy.sprite.x - enemy.sprite.x, dy = other.enemy.sprite.y - enemy.sprite.y;
+      if (dx * dx + dy * dy > chainRadiusPx * chainRadiusPx
+        || enemyHeatAt(other.enemy.getHeatBurstState(), now) < chainMinHeat) continue;
+      other.fullAt = fullAt;
+      other.nextBookingCheckAt = 0;
+      this.publish(other);
+    }
   }
 
   private isSlotTaken(state: HeatState, slot: number, config: CoopDefenseEnemyHeatBurstConfig): boolean {

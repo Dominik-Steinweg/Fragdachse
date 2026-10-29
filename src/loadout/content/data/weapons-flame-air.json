@@ -125,7 +125,8 @@
           "cellSize": 0,
           "durationMs": 2200,
           "igniteProjectiles": 0,
-          "createOnFlameExpiry": 1
+          "createOnFlameExpiry": 1,
+          "baseDamageMult": 0.4
         }
       },
       "allowedSlots": [],
