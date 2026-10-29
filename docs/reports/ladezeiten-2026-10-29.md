@@ -2,7 +2,9 @@
 
 Branch `load-times` (Basis `main` 29a33e12), Plan: Lobby früher sichtbar, Kartenstart kürzer, Lobby-
 Wartezeit für die nächste Karte nutzen, Dateien ohne sichtbaren Verlust verkleinern. Dateigrößen und
-Service Worker liefen parallel auf eigenen Branches (siehe unten) und sind in diesen Zahlen nicht enthalten.
+Service Worker liefen parallel auf eigenen Branches (Berichte `assets-optimization-2026-10-29.md` und
+`service-worker-2026-10-29.md`), sind in diesen Zahlen nicht enthalten und gemeinsam mit diesem Stand in
+`main` integriert (89937520).
 
 ## Messung
 
@@ -71,13 +73,10 @@ Download vor der Lobby (lokal, kalt): Sprites 38,3 → 25,8 MB, UI 11,0 → 5,4 
 
 ## Offen
 
-- Dateigrößen (Branch `claude/inspiring-roentgen-6a79d1`, Bericht `assets-optimization-2026-10-29.md`)
-  und Service Worker (Branch `claude/elated-mcnulty-c921e0`, Bericht `service-worker-2026-10-29.md`)
-  sind noch nicht in `load-times` integriert; die Berichte liegen in diesen Branches.
 - Nicht umgesetzt: geteilte Sonnen-Shaderprogramme, Worker-Pool für Fels-Builds, Bilddecode außerhalb
   des Main-Threads, Priorisierung der Inhalte der angekündigten Karte in der zweiten Phase, Prefetch für PvP.
 - Nicht gemessen: Gastrolle, schwache GPU, Low.
 
 Rohdaten: `build/performance-results/2026-10-29T18-16-30.634Z-308fb8f9` (Baseline),
 `…T19-35-44.463Z-82bfb068` (Endstand lokal), `…T19-29-19.190Z-d7b6ea34` / `…T19-28-08.749Z-82d6c6e6`
-(50 Mbit/s Baseline / Endstand) im Worktree `load-times`.
+(50 Mbit/s Baseline / Endstand), lokal im Haupt-Checkout.
