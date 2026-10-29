@@ -20,7 +20,9 @@ import { GpuFlightRibbonStore, type FlightRibbonHandle, type FlightRibbonStyle }
 import { createFlightRibbonLayer, type FlightRibbonLayer } from './GpuFlightRibbonLayer';
 import type { ProjectileTrailSegment } from '../../projectile/ProjectileFlightPath';
 import type { ShaderWarmupProbe } from '../../graphics/ShaderWarmupProbe';
-import { beginShaderPrograms } from '../../graphics/compileShaderPrograms';
+import {
+  beginShaderPrograms, enableParallelShaderCompile, withPendingShaderLinks, type ShaderProgramBarrier,
+} from '../../graphics/compileShaderPrograms';
 import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
 
 /**
@@ -91,6 +93,8 @@ export type GpuVfxShaderWarmupState = 'inactive' | 'pending' | 'complete' | 'fai
  * am zahlreichsten und teilen sich fuer den Rauch ohnehin eine Quelle.
  */
 const MAX_SOURCES = 1024;
+/** Per-frame CPU budget of the parallel warmup; pending links themselves cost only a status query. */
+const PARALLEL_SHADER_WARMUP_BUDGET_MS = 4;
 
 const SOURCE_FREE   = 0;
 const SOURCE_KILL   = 1;
@@ -166,7 +170,11 @@ export class GpuVfxSystem {
    * Phaser compiles the final feature combination on the first `run()`.
    */
   private shaderWarmupLane = 0;
-  private finishLaneLinks: (() => void) | null = null;
+  private finishLaneLinks: ShaderProgramBarrier | null = null;
+  /** With KHR_parallel_shader_compile every link is submitted at once and only polled afterwards. */
+  private shaderWarmupParallel = false;
+  /** Lanes, ribbon and probes (in `shaderWarmupLane` order) whose programs are not resident yet. */
+  private readonly shaderWarmupPending: number[] = [];
   private readonly shaderWarmupProbes: ShaderWarmupProbe[];
   private shaderWarmupActive = false;
   private shaderWarmupState: GpuVfxShaderWarmupState = 'inactive';
@@ -182,21 +190,13 @@ export class GpuVfxSystem {
       this.failShaderWarmup('Renderer-Kontext oder Hauptkamera ist nicht mehr verfuegbar.');
       return;
     }
+    if (this.shaderWarmupParallel) { this.runParallelShaderWarmup(renderer); return; }
 
     const measuredAt = loadingTimeline.start();
     const lane = this.lanes[this.shaderWarmupLane];
     const probeOffset = this.lanes.length + (this.ribbonLayer ? 1 : 0);
     const probe = this.shaderWarmupProbes[this.shaderWarmupLane - probeOffset];
-    // `getClone()` copies the base state. The next camera render obtains another clone from the
-    // untouched base context, so the probe's color mask/scissor cannot leak into the real frame.
-    const context = renderer.baseDrawingContext.getClone();
-    context.setCamera(this.scene.cameras.main);
-    context.setAutoClear(false, false, false);
-    // The draw must reach SubmitterSpriteGPULayer.run(), but must not alter the current frame.
-    // A 1x1 scissor also avoids rasterizing the primed (dead) member buffer at full size.
-    context.setColorWritemask(false, false, false, false);
-    context.setScissorEnable(true);
-    context.setScissorBox(0, 0, 1, 1);
+    const context = this.createShaderWarmupContext(renderer);
 
       try {
         this.completeLaneLinks();
@@ -221,6 +221,69 @@ export class GpuVfxSystem {
       loadingTimeline.end(probe ? `vfx/shader-warmup-${probe.name}` : 'vfx/shader-warmup-submit', measuredAt);
     }
   };
+  /**
+   * Parallel variant: links are only submitted and then polled, so no frame waits for the driver.
+   * Each frame visits every pending item until the budget is spent; a probe's first visit builds
+   * its resources, later visits are completion checks. The masked 1x1 draws stay as before.
+   */
+  private runParallelShaderWarmup(renderer: Phaser.Renderer.WebGL.WebGLRenderer): void {
+    const measuredAt = loadingTimeline.start();
+    const started = performance.now();
+    const probeOffset = this.lanes.length + (this.ribbonLayer ? 1 : 0);
+    try {
+      withPendingShaderLinks(renderer, () => {
+        for (let i = 0; i < this.shaderWarmupPending.length;) {
+          if (performance.now() - started >= PARALLEL_SHADER_WARMUP_BUDGET_MS) break;
+          const index = this.shaderWarmupPending[i];
+          const context = this.createShaderWarmupContext(renderer);
+          let ready: boolean;
+          try {
+            const lane = this.lanes[index];
+            if (lane) {
+              lane.layer.submitterNode.run(context);
+              ready = !!lane.layer.submitterNode.programManager.getCurrentProgramSuite();
+            } else {
+              const probe = this.shaderWarmupProbes[index - probeOffset];
+              ready = probe ? probe.prepare(context) : this.ribbonLayer?.prepare(context) ?? true;
+            }
+          } finally { context.release(); }
+          if (ready) this.shaderWarmupPending.splice(i, 1); else i++;
+        }
+        if (this.shaderWarmupPending.length === 0 && prepareEnemyMeshWarmups(this.scene)) {
+          this.shaderWarmupState = 'complete';
+          this.stopShaderWarmup();
+        }
+      });
+    } catch (error) {
+      // Optional presentation optimization, exactly like the sequential path below.
+      this.failShaderWarmup(error);
+    } finally {
+      loadingTimeline.end('vfx/shader-warmup-parallel', measuredAt);
+    }
+  }
+
+  private createShaderWarmupContext(renderer: Phaser.Renderer.WebGL.WebGLRenderer): Phaser.Renderer.WebGL.DrawingContext {
+    // `getClone()` copies the base state. The next camera render obtains another clone from the
+    // untouched base context, so the probe's color mask/scissor cannot leak into the real frame.
+    const context = renderer.baseDrawingContext.getClone();
+    context.setCamera(this.scene.cameras.main);
+    context.setAutoClear(false, false, false);
+    // The draw must reach SubmitterSpriteGPULayer.run(), but must not alter the current frame.
+    // A 1x1 scissor also avoids rasterizing the primed (dead) member buffer at full size.
+    context.setColorWritemask(false, false, false, false);
+    context.setScissorEnable(true);
+    context.setScissorBox(0, 0, 1, 1);
+    return context;
+  }
+
+  /**
+   * True while the remaining combat links run in the driver without blocking any frame. Only then
+   * may a view that shows no combat yet (the Lobby) appear before the warmup completes.
+   */
+  isShaderWarmupInBackground(): boolean {
+    return this.shaderWarmupState === 'pending' && this.shaderWarmupParallel;
+  }
+
   /** Invalidates not-yet-emitted commands when live effects are forcibly cleared. */
   get emissionGeneration(): number { return this.generation; }
 
@@ -308,6 +371,10 @@ export class GpuVfxSystem {
     if (!renderer || !('baseDrawingContext' in renderer) || !renderer.baseDrawingContext
       || !this.scene.cameras.main || !events || typeof events.on !== 'function') return;
     this.shaderWarmupLane = 0;
+    this.shaderWarmupParallel = enableParallelShaderCompile(renderer);
+    const items = this.lanes.length + (this.ribbonLayer ? 1 : 0) + this.shaderWarmupProbes.length;
+    this.shaderWarmupPending.length = 0;
+    for (let index = 0; index < items; index++) this.shaderWarmupPending.push(index);
     this.shaderWarmupActive = true;
     this.shaderWarmupState = 'pending';
     events.on(Phaser.Scenes.Events.PRE_RENDER, this.runShaderWarmup, this);

@@ -17,6 +17,7 @@ import type { FormationWorkerRequest, FormationWorkerResult, FormationWorkerInit
 import { formationSurfaceFactor, ROCK_FORMATION_FRAGMENT } from './rockFormationShader';
 import type { FormationReceiverBinding } from './RockFoliageLighting';
 import { RockFormationGpuRepair } from './RockFormationGpuRepair';
+import { acquireRockFormationWorker, releaseRockFormationWorker } from './RockFormationWorkerPool';
 
 /** Borrowed geometry and optical inputs; consumers never own or retune these textures. */
 export type FormationCoverageBinding = Pick<FormationReceiverBinding, 'field' | 'lookup' | 'frame'> & {
@@ -123,6 +124,11 @@ export class RockFormationLighting {
   private readonly optionsUniform = new Float32Array(4);
   private readonly surfaceLights = createSurfaceLightFrame();
   private busy = false;
+  /** The job in flight, or the unpublished result, makes a chunk displayable (tier 0 or repair). */
+  private busyDisplay = false;
+  private pendingDisplay = false;
+  /** A pooled worker first delivers what it still built for its previous World. */
+  private awaitingWorkerInit = false;
   private buildCursor = 0;
   private pending: FormationWorkerResult | null = null;
   private disposed = false;
@@ -185,14 +191,16 @@ export class RockFormationLighting {
       frame.width,frame.height,states,{alpha,detail});
     rollback.push(()=>this.gpuRepair?.destroy());
     const timing = loadingTimeline.capture(), workerStarted = performance.now();
-    this.worker=new Worker(new URL('./RockFormationWorker.ts',import.meta.url),{type:'module'});
-    rollback.push(()=>{this.worker.onmessage=null;this.worker.onerror=null;this.worker.terminate();});
+    const acquired=acquireRockFormationWorker(scene);
+    this.worker=acquired.worker;this.awaitingWorkerInit=acquired.reused;
+    rollback.push(()=>releaseRockFormationWorker(scene,this.worker,false));
     const initial=states.map(s=>s?snapshot(s):undefined);
     for(const s of initial) if(s) this.signatures.set(s.id,signature(s));
     this.post({kind:'init',width:frame.width,height:frame.height,states:initial,source:{alpha,detail}},[alpha.buffer,detail.buffer]);
     this.worker.onmessage=(event: MessageEvent<FormationWorkerResult | FormationWorkerInitialized | FormationWorkerRepair>)=>{
       if(this.disposed) return;
       if ('initMs' in event.data) {
+        this.awaitingWorkerInit=false;
         timing?.add('rock-worker/startup-including-module-load', performance.now()-workerStarted, 'elapsed');
         timing?.add('rock-worker/init', event.data.initMs, 'worker');
         timing?.add('rock-worker/module-startup-and-delivery', Math.max(0, performance.now()-workerStarted-event.data.initMs), 'elapsed');
@@ -202,9 +210,10 @@ export class RockFormationLighting {
         timing?.add('rock-worker/main-thread-delivery', Math.max(0, performance.timeOrigin+performance.now()-event.data.finishedAt), 'elapsed');
         return;
       }
+      if(this.awaitingWorkerInit) return;
       timing?.add('rock-worker/build', event.data.buildMs, 'worker');
       if ('kind' in event.data && event.data.kind === 'repair') this.pendingRepair=event.data;
-      else this.pending=event.data as FormationWorkerResult;
+      else {this.pending=event.data as FormationWorkerResult;this.pendingDisplay=this.busyDisplay;}
       this.busy=false;
     };
     this.worker.onerror=(event)=>{this.error=event.message||'Formation worker failed';this.busy=false;};
@@ -385,23 +394,23 @@ export class RockFormationLighting {
     if(this.repairStartedAt!==null) {
       const repairs=[...this.resident.values()].filter(r=>r.repair&&r.dirty);
       if(repairs.length) {
-        this.busy=true;this.post({kind:'repair',revision:this.revision,
+        this.busy=true;this.busyDisplay=true;this.post({kind:'repair',revision:this.revision,
           chunks:repairs.map(({cx,cy,revision})=>({cx,cy,revision})),azimuth:this.azimuth,horizons:this.qualityHorizons});return;
       }
       this.repairStartedAt=null;
     }
     const job=this.nextHorizonJob();
-    if(job){this.busy=true;this.post({kind:'build',cx:job.resident.cx,cy:job.resident.cy,revision:job.resident.revision,azimuth:job.azimuth,horizons:this.qualityHorizons});}
+    if(job){this.busy=true;this.busyDisplay=job.tier===0;this.post({kind:'build',cx:job.resident.cx,cy:job.resident.cy,revision:job.resident.revision,azimuth:job.azimuth,horizons:this.qualityHorizons});}
   }
 
   /** Round-robin per tier prevents a moving sun from starving later resident chunks. */
-  private nextHorizonJob():{resident:Resident;azimuth:number}|null {
+  private nextHorizonJob():{resident:Resident;azimuth:number;tier:number}|null {
     for(let tier=0;tier<3;tier++)for(let i=0;i<this.wanted.length;i++) {
       const index=(this.buildCursor+i)%this.wanted.length;
       const r=this.resident.get(this.wanted[index]);if(!r)continue;
       const azimuth=this.missingSupport(r,tier);if(azimuth===null)continue;
       this.buildCursor=(index+1)%this.wanted.length;
-      return {resident:r,azimuth};
+      return {resident:r,azimuth,tier};
     }
     return null;
   }
@@ -582,13 +591,18 @@ export class RockFormationLighting {
     let light=count?sum/count:1;
     return light;
   }
-  /** The current start view includes the bounded residency halo, not the whole map. */
+  /**
+   * The current start view includes the bounded residency halo, not the whole map. Only
+   * displayable geometry counts: further sun supports fade in through `horizonOffset`
+   * after the reveal, exactly like supports baked while the sun travels.
+   */
   getPreparationState(): { ready: boolean; pending: number; resident: number; error?: string } {
     const pendingChunks = this.wanted.filter(key => {
       const chunk = this.resident.get(key);
       return !chunk?.ready || chunk.dirty || chunk.repair;
     }).length;
-    const publicationPending = this.busy || this.pending !== null || this.pendingRepair !== null;
+    const publicationPending = (this.busy && this.busyDisplay) || (this.pending !== null && this.pendingDisplay)
+      || this.pendingRepair !== null;
     const pending = pendingChunks + (publicationPending ? 1 : 0);
     return {
       ready: !this.disposed && !this.error && !this.overflow && this.viewKey !== '' && pending === 0,
@@ -648,7 +662,7 @@ export class RockFormationLighting {
     return binding;
   }
   destroy():void {
-    if(this.disposed)return;this.disposed=true;this.receiver=null;this.worker.onmessage=null;this.worker.onerror=null;this.worker.terminate();
+    if(this.disposed)return;this.disposed=true;this.receiver=null;releaseRockFormationWorker(this.scene,this.worker,!this.error);
     for(const quad of [this.surface,this.ground]) this.destroyQuad(quad);
     this.previous?.destroy();this.previous=null;
     this.gpuRepair?.destroy();

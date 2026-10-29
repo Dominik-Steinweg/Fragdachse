@@ -1121,6 +1121,9 @@ export class NetworkBridge {
   /**
    * Startet den Roster-Listener. Darf nur EINMAL aufgerufen werden (nach `connect()`).
    */
+  /** The Scene prepares its systems only after activation: the boot loads assets meanwhile. */
+  isActivated(): boolean { return this.activated; }
+
   activate(): void {
     if (this.activated) return;
     this.activated = true;

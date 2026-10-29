@@ -1266,6 +1266,30 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(prepareSmoke).not.toHaveBeenCalled();
   });
 
+  it('reveals the Lobby while combat links finish without blocking, never a round', () => {
+    let background = false;
+    const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.arenaBuilt = true;
+    coordinator.combatPresentationPrepared = false;
+    coordinator.worldRuntime = {
+      materialization: { arena: {} },
+      presentation: { layout: {} },
+      presentationFrame: { getWorldRenderWork: () => ({ pending: 0, resident: 1, renderReady: true }) },
+    };
+    coordinator.renderers = { gpuVfx: { isShaderWarmupComplete: () => false, isShaderWarmupInBackground: () => background } };
+    coordinator.getLocalWorldPresentation = () => ({ required: true });
+    const descriptor = vi.spyOn(bridge, 'getWorldDescriptor').mockReturnValue({ definitionId: 'world:lobby' } as any);
+    const view = { x: 0, y: 0, width: 100, height: 100 };
+
+    // Without non-blocking links the Lobby keeps the previous complete warmup.
+    expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+    background = true;
+    expect(coordinator.getWorldRevealState(view)).toEqual({ ready: true, progress: 100 });
+
+    descriptor.mockReturnValue({ definitionId: 'world:coop-defense:1' } as any);
+    expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+  });
+
   it('keeps both Scene camera passes on the prepared World while the loading veil hides it', () => {
     const scene = Object.create(ArenaScene.prototype) as any;
     scene.initializationReady = true;

@@ -443,6 +443,49 @@ describe('gpu vfx system: lanes', () => {
       expect(destroy).toHaveBeenCalledTimes(1);
     });
 
+  it('submits every link in one frame with KHR parallel compile and only polls afterwards', () => {
+    const scene = makeFakeGpuVfxScene(), events = makeWarmupEvents(), context = makeWarmupContext();
+    const extension = { COMPLETION_STATUS_KHR: 0x91B1 };
+    const renderer = {
+      game: { config: { skipUnreadyShaders: false } },
+      gl: { getExtension: vi.fn(() => extension), isContextLost: () => false },
+      parallelShaderCompileExtension: null as object | null,
+      baseDrawingContext: { getClone: () => context },
+    };
+    Object.assign(scene, { events, cameras: { main: {} }, renderer });
+    let lanesReady = false;
+    const flags: boolean[] = [];
+    const addLayer = scene.add.spriteGPULayer;
+    scene.add.spriteGPULayer = ((key: string, size: number) => Object.assign(addLayer(key, size), {
+      submitterNode: { run() { flags.push(renderer.game.config.skipUnreadyShaders); },
+        programManager: { getCurrentProgramSuite: () => lanesReady ? {} : null } },
+    })) as typeof scene.add.spriteGPULayer;
+    let probeReady = false;
+    const probe = { name: 'mortar', prepare: vi.fn(() => probeReady), destroy: vi.fn() };
+    const system = new GpuVfxSystem(scene as never, [probe]);
+
+    events.emit('prerender');
+    // Every lane and the probe are visited in the first frame, all as pending links.
+    expect(renderer.parallelShaderCompileExtension).toBe(extension);
+    expect(flags).toHaveLength(GPU_VFX_LANES.length);
+    expect(flags.every(Boolean)).toBe(true);
+    expect(probe.prepare).toHaveBeenCalledOnce();
+    expect(renderer.game.config.skipUnreadyShaders).toBe(false);
+    expect(system.isShaderWarmupInBackground()).toBe(true);
+    expect(system.isShaderWarmupComplete()).toBe(false);
+
+    lanesReady = true; events.emit('prerender');
+    expect(system.isShaderWarmupComplete()).toBe(false);
+    expect(probe.prepare).toHaveBeenCalledTimes(2);
+    probeReady = true; events.emit('prerender');
+    expect(system.getShaderWarmupState()).toBe('complete');
+    expect(system.isShaderWarmupInBackground()).toBe(false);
+    expect(probe.destroy).toHaveBeenCalledOnce();
+    expect(events.count('prerender')).toBe(0);
+    expect(context.setColorWritemask).toHaveBeenCalledWith(false, false, false, false);
+    system.destroy();
+  });
+
   it('keeps world mesh probes in the ready barrier and can wake without recreating disposed combat probes', () => {
     const scene = makeFakeGpuVfxScene(), events = makeWarmupEvents(), context = makeWarmupContext();
     Object.assign(scene, { events, cameras: { main: {} }, renderer: { baseDrawingContext: { getClone: () => context } } });

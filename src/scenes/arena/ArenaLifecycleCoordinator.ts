@@ -2118,12 +2118,16 @@ export class ArenaLifecycleCoordinator {
     }
     const work = this.collectWorldRenderWork(view);
     this.recordLoadingBarriers(work.renderReady);
-    const loadProgress = resolveWorldLoadProgress(
-      work.pending, work.resident, work.renderReady && this.renderers.gpuVfx.isShaderWarmupComplete()
-        && this.combatPresentationPrepared,
-    );
+    const lobby = isLobbyWorldDefinitionId(bridge.getWorldDescriptor()?.definitionId ?? '');
+    const gpuVfx = this.renderers.gpuVfx;
+    // The Lobby shows no combat on arrival. When the remaining links no longer block a frame,
+    // they and the budgeted combat preparation finish behind the visible Lobby; caches that are
+    // still cold fall back to their first-use path. A round keeps waiting for both.
+    const combatReady = (gpuVfx.isShaderWarmupComplete() && this.combatPresentationPrepared)
+      || (lobby && (gpuVfx.isShaderWarmupComplete() || gpuVfx.isShaderWarmupInBackground()));
+    const loadProgress = resolveWorldLoadProgress(work.pending, work.resident, work.renderReady && combatReady);
     loadingTimeline.get('world')?.gate('visible-reveal', loadProgress.ready);
-    if (loadProgress.ready && isLobbyWorldDefinitionId(bridge.getWorldDescriptor()?.definitionId ?? '')) loadingTimeline.get('world')?.finish('revealed');
+    if (loadProgress.ready && lobby) loadingTimeline.get('world')?.finish('revealed');
     return loadProgress.ready
       ? { ready: true, progress: loadProgress.progress }
       : { ready: false, progress: loadProgress.progress, pendingRenderWork: work.pending };

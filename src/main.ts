@@ -132,23 +132,25 @@ async function boot(): Promise<void> {
   BootScreen.setStatus(t('ui.boot.connecting'));
   BootScreen.setIndeterminate(true);
 
-  // Die UI-Schriften starten *vor* dem Verbindungsaufbau und werden erst danach abgewartet:
-  // beides laeuft dann nebeneinander, und der Start kostet keine zusaetzliche Zeit. Das
-  // Warten ist zeitlich begrenzt und schlaegt nie fehl (siehe `ui/uiFonts`).
+  // Die UI-Schriften starten *vor* dem Verbindungsaufbau und werden vor dem Spielstart abgewartet:
+  // beides laeuft nebeneinander, und der Start kostet keine zusaetzliche Zeit. Das Warten ist
+  // zeitlich begrenzt und schlaegt nie fehl (siehe `ui/uiFonts`).
   const fontsReady = loadUiFonts();
 
-  // 1. Raum eroeffnen oder dem Raum aus dem URL-Hash beitreten. Blockiert, bis die direkte
-  //    WebRTC-Verbindung steht bzw. endgueltig gescheitert ist – es gibt keinen Fallback.
-  await NetworkBridge.connect();
-  if (__PERFORMANCE_LAB__) labMarker('network-connected');
+  // 1. Raum eroeffnen oder dem Raum aus dem URL-Hash beitreten, bis die direkte WebRTC-Verbindung
+  //    steht bzw. endgueltig gescheitert ist – es gibt keinen Fallback. Danach die Bridge
+  //    aktivieren (einmalig – registriert Roster-Listener und RPC-Namen).
+  const connection = NetworkBridge.connect().then(() => {
+    if (__PERFORMANCE_LAB__) labMarker('network-connected');
+    bridge.activate();
+    installReconnectNotice();
+    installPageLeave();
+  });
+  // Awaited after the game exists; an early failure must not count as unhandled meanwhile.
+  connection.catch(() => {});
 
-  // 2. Bridge aktivieren (einmalig – registriert Roster-Listener und RPC-Namen)
-  bridge.activate();
-  installReconnectNotice();
-  installPageLeave();
-
-  // 3. Phaser-Spiel starten – ERST nach stehender Verbindung und geladenen Schriften.
-  BootScreen.setStatus(t('ui.boot.loadingData'));
+  // 2. Phaser-Spiel starten, sobald die Schriften stehen: Assets laden und verarbeiten, waehrend
+  //    die Verbindung entsteht. Die Scene bereitet ihre Systeme erst nach `bridge.activate()` vor.
   await fontsReady;
   const renderSize = initialRenderSize();
   const game = new Phaser.Game({
@@ -196,6 +198,12 @@ async function boot(): Promise<void> {
     installRenderResolution(game);
     installFullscreenSupport(game);
   });
+
+  // 3. Ohne Verbindung kein Spiel: ein gescheiterter Aufbau beendet auch das ladende Phaser.
+  try { await connection; } catch (error) {
+    game.destroy(true);
+    throw error;
+  }
 }
 
 function handleBootError(error: unknown): void {

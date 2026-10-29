@@ -7,6 +7,40 @@ export interface ShaderProgramBarrier {
   isReady(): boolean;
 }
 
+/** A barrier without pending programs, for warmups that had nothing to link. */
+export function readyShaderBarrier(finish: () => void = () => {}): ShaderProgramBarrier {
+  return Object.assign(finish, { isReady: (): boolean => true });
+}
+
+/**
+ * Phaser only requests KHR_parallel_shader_compile at boot when its global skip flag is on.
+ * Discover it without that flag: status queries no longer block, while ordinary consumers keep
+ * Phaser's complete-on-first-use behaviour instead of shader pop-in.
+ */
+export function enableParallelShaderCompile(renderer: Phaser.Renderer.WebGL.WebGLRenderer): boolean {
+  const gl = renderer?.gl;
+  // Headless runtimes and render-free tests provide no WebGL context.
+  if (typeof gl?.getExtension !== 'function' || gl.isContextLost()) return false;
+  if (!renderer.parallelShaderCompileExtension) {
+    const extension = gl.getExtension('KHR_parallel_shader_compile');
+    if (extension) renderer.parallelShaderCompileExtension = extension;
+  }
+  return !!renderer.parallelShaderCompileExtension;
+}
+
+/**
+ * Runs `submit` with links that are only handed to the driver: a program first requested here
+ * reports no suite until KHR completion; a later request completes it without waiting.
+ * Requires `enableParallelShaderCompile`, otherwise such a program never completes.
+ */
+export function withPendingShaderLinks<T>(renderer: Phaser.Renderer.WebGL.WebGLRenderer, submit: () => T): T {
+  // Runtime config is mutable; Phaser exposes it as readonly in declarations.
+  const config = renderer.game.config as { skipUnreadyShaders: boolean };
+  const previous = config.skipUnreadyShaders;
+  config.skipUnreadyShaders = true;
+  try { return submit(); } finally { config.skipUnreadyShaders = previous; }
+}
+
 /** Submit independent links before requesting any link status. All programs are
  * complete before returning: ordinary rendering and reveal never skip a draw.
  * The config flag is scoped to synchronous factory calls, not a rendered frame.

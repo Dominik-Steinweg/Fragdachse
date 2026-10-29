@@ -13,6 +13,15 @@ export function onBootSceneTeardown(
   events.once('destroy', stop);
 }
 
+const WAIT_PREFIX = 'wait:';
+
+/**
+ * A step that waits for work outside the main thread (driver links, network) yields this
+ * instead of its own name: the slice ends at once and the next one runs after a paint, so the
+ * wait neither spins through the budget nor blocks the browser.
+ */
+export function waitStep(name: string): string { return `${WAIT_PREFIX}${name}`; }
+
 /** Cooperative startup only: checkpoints describe completed work, not estimated percentages. */
 export class BootPreparation {
   private frame: number | null = null;
@@ -55,12 +64,15 @@ export class BootPreparation {
         const start = performance.now();
         const step = this.steps.next();
         if (this.stopped) return;
-        this.onStep(step.done ? 'commit' : step.value, performance.now() - start);
+        const waiting = !step.done && step.value.startsWith(WAIT_PREFIX);
+        this.onStep(step.done ? 'commit' : waiting ? step.value.slice(WAIT_PREFIX.length) : step.value,
+          performance.now() - start);
         if (step.done) {
           this.stopped = true;
           this.onReady();
           return;
         }
+        if (waiting) break;
       } while (performance.now() - sliceStart < this.budgetMs);
       this.afterPaint();
     } catch (error) {

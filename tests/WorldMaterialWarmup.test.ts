@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 const state=vi.hoisted(()=>({finish:Object.assign(vi.fn(),{isReady:()=>true}),managers:[] as any[],shaderDestroyed:vi.fn()}));
-vi.mock('../src/graphics/compileShaderPrograms',()=>({beginShaderPrograms:(_r:any,managers:any[])=>{state.managers=managers;return state.finish;}}));
+vi.mock('../src/graphics/compileShaderPrograms',()=>({beginShaderPrograms:(_r:any,managers:any[])=>{state.managers=managers;return state.finish;},
+ readyShaderBarrier:(finish=()=>{})=>Object.assign(finish,{isReady:()=>true})}));
 vi.mock('phaser',()=>({Filters:{Controller:class{}},Renderer:{Events:{SET_PARALLEL_TEXTURE_UNITS:'units',RESIZE:'resize'},WebGL:{
  ProgramManager:class{ name='';setBaseShader(name:string){this.name=name;} },RenderNodes:{
  BaseFilterShader:class{programManager:any;constructor(name:string){this.programManager={name};}},

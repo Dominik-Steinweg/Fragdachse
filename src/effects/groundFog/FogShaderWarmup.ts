@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { beginShaderPrograms } from '../../graphics/compileShaderPrograms';
+import { beginShaderPrograms, readyShaderBarrier, type ShaderProgramBarrier } from '../../graphics/compileShaderPrograms';
 import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
 import { canPrelightFog } from './FogMaterialLighting';
 import { SUN_TUNING_DEFAULTS } from '../sunlight/SunTuning';
@@ -10,9 +10,9 @@ import { FOG_SURFACE_FRAGMENT } from './FogSurfaceMask';
 /** Lobby's ordinary fog variants. No framebuffer, draw or display-list entry;
  * the real fields reuse the renderer's cached programs with their own uniforms.
  */
-export function warmupFogShaders(scene: Phaser.Scene, _quality: string): () => void {
+export function warmupFogShaders(scene: Phaser.Scene, _quality: string): ShaderProgramBarrier {
   const renderer = scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
-  if (!renderer?.gl) return () => {};
+  if (!renderer?.gl) return readyShaderBarrier();
   const prelit = canPrelightFog(SUN_TUNING_DEFAULTS, renderer.gl.getParameter(renderer.gl.MAX_TEXTURE_IMAGE_UNITS), true);
   const configs: [string, string, string?][] = [
     ['impulse', FOG_IMPULSE_FRAGMENT], ['density', FOG_DENSITY_FRAGMENT], ['velocity', FOG_VELOCITY_FRAGMENT],
@@ -29,15 +29,15 @@ export function warmupFogShaders(scene: Phaser.Scene, _quality: string): () => v
         fragmentSource, vertexSource }, 0, 0, 1, 1));
     }
     const finish = beginShaderPrograms(renderer, probes.map(p => p.renderNode.programManager));
-    return () => {
+    return Object.assign(() => {
       try { finish(); } catch (error) {
         // Fog's regular initialization owns capability failure and fallback.
         console.warn('[GroundFog] Shader precompile failed; using normal initialization.', error);
       }
-    };
+    }, { isReady: finish.isReady });
   } catch (error) {
     console.warn('[GroundFog] Shader precompile unavailable; using normal initialization.', error);
-    return () => {};
+    return readyShaderBarrier();
   } finally {
     for (const probe of probes) { disposeShaderWarmupNode(probe.renderNode); probe.destroy(); }
   }

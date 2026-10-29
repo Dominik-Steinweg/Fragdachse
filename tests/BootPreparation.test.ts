@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BootPreparation, onBootSceneTeardown } from '../src/ui/BootPreparation';
+import { BootPreparation, onBootSceneTeardown, waitStep } from '../src/ui/BootPreparation';
 
 describe('cooperative boot preparation', () => {
   let frames: Map<number, FrameRequestCallback>;
@@ -46,6 +46,24 @@ describe('cooperative boot preparation', () => {
     expect(ready).not.toHaveBeenCalled();
     frame(); vi.runOnlyPendingTimers();
     expect(completed).toEqual(['first', 'second']);
+    expect(ready).toHaveBeenCalledOnce();
+  });
+
+  it('ends the slice at a wait step instead of polling through the budget', () => {
+    const ready = vi.fn(), step = vi.fn();
+    let driverReady = false, polls = 0;
+    function* steps() {
+      while (!driverReady) { polls++; yield waitStep('links'); }
+      yield 'after';
+    }
+    new BootPreparation(steps(), step, ready, vi.fn(), 8).start();
+    frame(); vi.runOnlyPendingTimers();
+    frame(); vi.runOnlyPendingTimers();
+    expect(polls).toBe(2);
+    expect(step).toHaveBeenCalledWith('links', 0);
+    driverReady = true;
+    frame(); vi.runOnlyPendingTimers();
+    expect(step).toHaveBeenLastCalledWith('commit', 0);
     expect(ready).toHaveBeenCalledOnce();
   });
 

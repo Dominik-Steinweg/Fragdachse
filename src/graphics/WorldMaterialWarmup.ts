@@ -17,7 +17,7 @@ import { VOID_TAINT_FRAGMENT, VOID_TAINT_SHADER_NAME, VOID_TAINT_VERTEX } from '
 import { addCharacterMaterialAddition } from '../effects/CharacterMaterialLighting';
 import { STATUS_RING_FILL_FRAGMENT_SOURCE, STATUS_RING_FILL_SHADER_NAME, STATUS_RING_FRAGMENT_SOURCE,
   STATUS_RING_SHADER_NAME } from '../effects/living/statusRingShader';
-import { beginShaderPrograms } from './compileShaderPrograms';
+import { beginShaderPrograms, readyShaderBarrier, type ShaderProgramBarrier } from './compileShaderPrograms';
 import { getBarSdfProgramManager } from '../effects/bars/BarSdfGpu';
 import { disposeShaderWarmupNode } from './disposeShaderWarmupNode';
 
@@ -26,12 +26,12 @@ import { disposeShaderWarmupNode } from './disposeShaderWarmupNode';
  * link when entering the training ground or on the first damage. Only the program cache is
  * published; textures, World data, uniforms and visible draws remain with their
  * ordinary owners. The returned barrier must finish before World construction. */
-export function warmupWorldMaterials(scene: Phaser.Scene): () => void {
+export function warmupWorldMaterials(scene: Phaser.Scene): ShaderProgramBarrier {
   const renderer=scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
-  if(!renderer?.gl)return()=>{};
+  if(!renderer?.gl)return readyShaderBarrier();
   // The WebGL1 fallback uses different smooth-pixel variants; its ordinary
   // first-use path owns those rather than compiling unused desktop variants.
-  if(renderer.game.config.smoothPixelArt)return()=>{};
+  if(renderer.game.config.smoothPixelArt)return readyShaderBarrier();
   const batches: Phaser.Renderer.WebGL.RenderNodes.BatchHandlerQuadSingle[]=[];
   const quads:Phaser.GameObjects.Shader[]=[];
   try {
@@ -59,11 +59,11 @@ export function warmupWorldMaterials(scene: Phaser.Scene): () => void {
     try{bars=getBarSdfProgramManager(scene);}catch(error){console.warn('[WorldMaterials] Bar program unavailable.',error);}
     const finish=beginShaderPrograms(renderer,[...batches.map(b=>b.programManager),...quads.map(q=>q.renderNode.programManager),
       ...(bars?[bars]:[])]);
-    return ()=>{
+    return Object.assign(()=>{
       try{finish();}catch(error){console.warn('[WorldMaterials] Precompile failed; using normal initialization.',error);}
-    };
+    },{isReady:finish.isReady});
   } catch(error) {
-    console.warn('[WorldMaterials] Precompile unavailable; using normal initialization.',error);return()=>{};
+    console.warn('[WorldMaterials] Precompile unavailable; using normal initialization.',error);return readyShaderBarrier();
   } finally {
     // No suite/VAO was requested. Keep the renderer-owned compiled programs.
     for(const batch of batches){

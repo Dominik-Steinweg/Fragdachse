@@ -39,6 +39,10 @@ import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { ArenaBaseEditorPreparation, baseEditorStageKey } from './arena/ArenaBaseEditorPreparation';
 /** Standing still this long makes the lobby calm enough for a heavy build step of the Bauhof's stage. */
 const BASE_EDITOR_CALM_MS = 400;
+/** Standing still this long lets the lobby build a round-end view (up to ~0.2 s of CPU) in one frame. */
+const ROUND_END_OVERLAY_CALM_MS = 1500;
+/** Boot fade (250 ms) plus the lobby cards' entrance (100 + 500 ms), with a little slack. */
+const BOOT_REVEAL_SETTLE_MS = 900;
 import { composeArenaVoice } from './arena/ArenaVoiceComposition';
 import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
@@ -117,7 +121,9 @@ import { CenterHUD }             from '../ui/CenterHUD';
 import { DawnHUD } from '../ui/DawnHUD';
 import { LobbyOverlay }          from './LobbyOverlay';
 import { BootScreen, BOOT_ERROR_EVENT } from '../ui/BootScreen';
-import { BootPreparation, onBootSceneTeardown } from '../ui/BootPreparation';
+import { BootPreparation, onBootSceneTeardown, waitStep } from '../ui/BootPreparation';
+import { enableParallelShaderCompile, type ShaderProgramBarrier } from '../graphics/compileShaderPrograms';
+import { prewarmRockFormationWorker } from '../arena/rocks/RockFormationWorkerPool';
 import { isDevScenarioMode } from '../utils/devScenarioMode';
 import type { DevScenarioController } from '../dev/scenario/controller';
 import { observeBootLoader } from '../ui/BootLoaderProgress';
@@ -254,13 +260,61 @@ type ArenaFrameSignals = Readonly<{
 import { startPerformanceCapture, attachPerformanceLab, performanceLobbyRevealed, updatePerformanceLab, failPerformanceLab } from '../debug/performanceLab/boot';
 
 export class ArenaScene extends Phaser.Scene {
-  private finishFogWarmup: (() => void) | null = null;
-  private finishMaterialWarmup: (() => void) | null = null;
+  private finishFogWarmup: ShaderProgramBarrier | null = null;
+  private finishMaterialWarmup: ShaderProgramBarrier | null = null;
+  private isFogShaderWarmupReady(): boolean {
+    return (this.finishFogWarmup?.isReady() ?? true) && (this.finishMaterialWarmup?.isReady() ?? true);
+  }
   private completeFogShaderWarmup(): void {
     const finish = this.finishFogWarmup; this.finishFogWarmup = null;
     finish?.();
     const material = this.finishMaterialWarmup; this.finishMaterialWarmup = null;
     material?.();
+  }
+  /** Round-end views, each built once on its first need; the boot never waits for them. */
+  private resultsOverlay(): MatchResultsOverlay {
+    if (!this.matchResultsOverlay) {
+      const results = new MatchResultsOverlay(this, () => {
+        this.beginAfterRoundTransition(this.matchResultsOverlay?.getTransitionView() ?? null);
+        this.lobbyOverlay.setReadyButtonState(false);
+        this.meta?.startAfterRoundFlow();
+        return true;
+      }, () => this.openBalanceFeedback(), {
+        getState: () => ({
+          available: this.canRestartDefeatedMap(),
+          hasNewRewards: this.meta?.hasNewRoundRewards() ?? false,
+        }),
+        restart: () => this.restartDefeatedMap(),
+      });
+      results.build();
+      this.matchResultsOverlay = results;
+    }
+    return this.matchResultsOverlay;
+  }
+  private statisticsOverlay(): RoomStatisticsOverlay {
+    if (!this.roomStatisticsOverlay) {
+      const statistics = new RoomStatisticsOverlay(this);
+      statistics.build();
+      this.roomStatisticsOverlay = statistics;
+    }
+    return this.roomStatisticsOverlay;
+  }
+  /** One round-end view per frame of a long calm lobby, so a round rarely builds one on first use. */
+  private prepareRoundEndOverlays(): void {
+    if (!this.initializationReady || this.bootRevealPending
+      || (this.matchResultsOverlay && this.roomStatisticsOverlay && this.arenaExitFadeOverlay)
+      || !this.isLobbyCalm(ROUND_END_OVERLAY_CALM_MS)) return;
+    if (!this.arenaExitFadeOverlay) this.exitFadeOverlay();
+    else if (!this.roomStatisticsOverlay) this.statisticsOverlay();
+    else this.resultsOverlay();
+  }
+  private exitFadeOverlay(): ArenaExitFadeOverlay {
+    if (!this.arenaExitFadeOverlay) {
+      const exitFade = new ArenaExitFadeOverlay(this);
+      exitFade.build();
+      this.arenaExitFadeOverlay = exitFade;
+    }
+    return this.arenaExitFadeOverlay;
   }
   /** Explicit control surface for a separately booted, local-only analysis arena. */
   createNavigationLabPort(): import('../debug/navigationLab/NavigationLabPort').NavigationLabPort | null {
@@ -403,6 +457,10 @@ export class ArenaScene extends Phaser.Scene {
   preload(): void {
     installRuntimeAssetUrls(this.load);
     BootScreen.begin();
+    // Status queries of the boot links (and every later warmup) must never wait for the driver.
+    enableParallelShaderCompile(this.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer);
+    // The formation worker's module start-up runs beside the downloads, not on the World's path.
+    prewarmRockFormationWorker(this);
     this.finishMaterialWarmup = warmupWorldMaterials(this);
     onBootSceneTeardown(this.events, () => this.completeFogShaderWarmup());
     if (__PERFORMANCE_LAB__ || getStoredGroundFogEnabled()) {
@@ -551,6 +609,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private *prepareLobby(): Generator<string, void> {
+    // Assets load while the room connection is established; every system below talks to the bridge.
+    if (!bridge.isActivated()) BootScreen.setStatus(t('ui.boot.connecting'));
+    while (!bridge.isActivated()) yield waitStep('network-connect');
     if (__PERFORMANCE_LAB__ && window.__FD_PERF_REQUEST__?.systemProbe && window.__FD_PERF__) {
       window.__FD_PERF__.probeScene = this;
     }
@@ -567,6 +628,7 @@ export class ArenaScene extends Phaser.Scene {
       this.closeBaseEditor(false);
       this.baseEditorPreparation.release();
       this.matchResultsOverlay?.destroy();
+      this.matchResultsOverlay = null;
       this.coopDefenseBalanceReportOverlay?.destroy();
       this.coopDefenseBalanceReportOverlay = null;
       this.roomStatisticsOverlay?.destroy();
@@ -906,13 +968,13 @@ export class ArenaScene extends Phaser.Scene {
         isItemsOverlayOpen: () => this.itemsOverlay?.isOpen() ?? false,
         showItemRewardOverlay: (presentation, closeAfterClaim) => this.itemRewardOverlay?.show(presentation, closeAfterClaim, this.afterRoundOpening()),
         isItemRewardOverlayVisible: () => this.itemRewardOverlay?.isVisible() ?? false,
-        showMatchResultsSyncing: (modeLabel, mapLabel) => this.matchResultsOverlay?.showSyncing(modeLabel, mapLabel),
+        showMatchResultsSyncing: (modeLabel, mapLabel) => this.resultsOverlay().showSyncing(modeLabel, mapLabel),
         hideMatchResults: () => this.matchResultsOverlay?.hide(),
-        showMatchResults: (presentation) => this.matchResultsOverlay?.show(presentation),
-        showMatchResultsReplay: (presentation) => this.matchResultsOverlay?.showReplay(presentation),
+        showMatchResults: (presentation) => this.resultsOverlay().show(presentation),
+        showMatchResultsReplay: (presentation) => this.resultsOverlay().showReplay(presentation),
         isMatchResultsVisible: () => this.matchResultsOverlay?.isVisible() ?? false,
-        setMatchResultsBalanceFeedbackVisible: (visible) => this.matchResultsOverlay?.setBalanceFeedbackVisible(visible),
-        showMatchResultsTechnicalAbort: (message) => this.matchResultsOverlay?.showTechnicalAbort(message),
+        setMatchResultsBalanceFeedbackVisible: (visible) => this.resultsOverlay().setBalanceFeedbackVisible(visible),
+        showMatchResultsTechnicalAbort: (message) => this.resultsOverlay().showTechnicalAbort(message),
         setResultsReplayAvailable: (available) => this.lobbyOverlay?.setResultsReplayAvailable(available),
       },
     });
@@ -1026,25 +1088,8 @@ export class ArenaScene extends Phaser.Scene {
       canOpenMetaOverlay,
     );
     yield "items-overlay";
-    this.matchResultsOverlay = new MatchResultsOverlay(this, () => {
-      this.beginAfterRoundTransition(this.matchResultsOverlay?.getTransitionView() ?? null);
-      this.lobbyOverlay.setReadyButtonState(false);
-      this.meta?.startAfterRoundFlow();
-      return true;
-    }, () => this.openBalanceFeedback(), {
-      getState: () => ({
-        available: this.canRestartDefeatedMap(),
-        hasNewRewards: this.meta?.hasNewRoundRewards() ?? false,
-      }),
-      restart: () => this.restartDefeatedMap(),
-    });
-    this.matchResultsOverlay.build();
-    yield "results-overlay";
-    this.roomStatisticsOverlay = new RoomStatisticsOverlay(this);
-    this.roomStatisticsOverlay.build();
-    yield "statistics-overlay";
-    this.arenaExitFadeOverlay = new ArenaExitFadeOverlay(this);
-    this.arenaExitFadeOverlay.build();
+    // Results, room statistics and the exit fade are built behind the arena's loading veil or
+    // on their first use, not before the lobby appears.
 
 
     const arenaCountdown = new ArenaCountdownOverlay(
@@ -1070,10 +1115,8 @@ export class ArenaScene extends Phaser.Scene {
     };
 
     // ── Renderers ─────────────────────────────────────────────────────────
-    // No World (and therefore no fog consumer) exists during the preceding UI
-    // steps. Finish every link before creating renderers or publishing the World.
-    this.completeFogShaderWarmup();
-    yield 'fog-shader-ready';
+    // The boot links keep running in the driver while the remaining systems are built; the
+    // invisible Scene draws nothing, and the links finish before the World can appear.
     yield 'context';
     this.renderers = yield* createRendererBundleSteps(this, playerManager);
     this.renderers.attackDrone.setAudio(gameAudioSystem);
@@ -1270,7 +1313,7 @@ export class ArenaScene extends Phaser.Scene {
       );
     });
     this.lobbyOverlay.setRoomStatisticsDetailHandler(() => {
-      this.roomStatisticsOverlay?.show(bridge.getRoomPlayerStatistics());
+      this.statisticsOverlay().show(bridge.getRoomPlayerStatistics());
     });
 
     this.lobbyOverlay.show();
@@ -1600,6 +1643,12 @@ export class ArenaScene extends Phaser.Scene {
     this.meta?.refresh();
     this.meta?.applyDefaultCoopDefenseMapSelection();
     this.lastObservedGamePhase = bridge.getGamePhase();
+
+    // No World (and therefore no fog or material consumer) exists before this Scene resumes.
+    // Wait for the driver without blocking the page, then finish the links without waiting.
+    while (!this.isFogShaderWarmupReady()) yield waitStep('fog-shader-wait');
+    this.completeFogShaderWarmup();
+    yield 'fog-shader-ready';
 
     // Erst nach dem Rendern pruefen: auch UI, Kamera und die in diesem Frame gebackenen
     // Flaechen muessen bereits im fertigen Bild stehen, bevor der Bootscreen weicht.
@@ -2062,6 +2111,7 @@ export class ArenaScene extends Phaser.Scene {
     this.deploymentTerrain.prefetch();
     this.followBaseEditorDeployment();
     this.tickBaseEditorPreparation();
+    this.prepareRoundEndOverlays();
     this.measureBaseEditorFrame();
     this.matchResultsOverlay?.refreshRestartState();
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
@@ -2541,7 +2591,8 @@ export class ArenaScene extends Phaser.Scene {
   /** The Bauhof's stage is prepared in the lobby, ahead of the Bauhof button or building. */
   private tickBaseEditorPreparation(): void {
     // The next round's terrain exists only in co-op campaign lobbies (see ArenaDeploymentTerrain).
-    const eligible = getStoredPersistentBaseUnlocked() && bridge.getGamePhase() === 'LOBBY';
+    // The stage is lobby waiting work: it never competes with the boot for the first reveal.
+    const eligible = !this.bootRevealPending && getStoredPersistentBaseUnlocked() && bridge.getGamePhase() === 'LOBBY';
     const identity = eligible ? this.resolveBaseEditorTerrainIdentity() : null;
     this.baseEditorPreparation.tick({ now: performance.now(), eligible, busy: this.baseEditor !== null || this.pendingBaseEditor !== null,
       key: identity === undefined ? undefined : this.baseEditorStageKey(identity),
@@ -2554,13 +2605,13 @@ export class ArenaScene extends Phaser.Scene {
    * Calm enough for a heavy build step of the Bauhof's stage: a menu covers the lobby, or the local
    * player has stood still for a moment, so a long frame does not stutter a movement.
    */
-  private isLobbyCalm(): boolean {
+  private isLobbyCalm(minimumMs = BASE_EDITOR_CALM_MS): boolean {
     const now = performance.now();
     const sprite = this.ctx?.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
     if (sprite && (Math.abs(sprite.x - this.lobbyCalm.x) > .5 || Math.abs(sprite.y - this.lobbyCalm.y) > .5)) {
       this.lobbyCalm = { x: sprite.x, y: sprite.y, since: now };
     }
-    return now - this.lobbyCalm.since >= BASE_EDITOR_CALM_MS || this.isWorldMenuBlocking();
+    return now - this.lobbyCalm.since >= minimumMs || this.isWorldMenuBlocking();
   }
 
   /** The local player is about where the Bauhof's name plate shows. */
@@ -3394,6 +3445,8 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
     this.bootRevealPending = false;
+    // Heavy lobby waiting work starts only after the boot fade and the lobby cards' entrance.
+    this.lobbyCalm = { ...this.lobbyCalm, since: performance.now() + BOOT_REVEAL_SETTLE_MS };
     BootScreen.phase('ready');
     this.input.enabled = true;
     if (this.input.keyboard) this.input.keyboard.enabled = true;
@@ -3456,11 +3509,7 @@ export class ArenaScene extends Phaser.Scene {
       roundState,
     );
     if (outcome === 'victory' || outcome === 'defeat') {
-      const overlay = this.arenaExitFadeOverlay;
-      if (!overlay) {
-        this.arenaExitFadeComplete = true;
-        return false;
-      }
+      const overlay = this.exitFadeOverlay();
       overlay.play(outcome, () => {
         if (this.arenaRuntime.isMatchTerminated() || this.arenaExitResultsStarted) return;
         this.arenaExitFadeComplete = true;

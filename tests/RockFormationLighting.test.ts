@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { EventEmitter } from 'node:events';
 const TextureWrapper = createRequire(import.meta.url)('../node_modules/phaser/src/renderer/webgl/wrappers/WebGLTextureWrapper.js');
 import { WOODLAND_TRANSMISSION_KEY } from '../src/assets/WoodlandAssetManifest';
 import { WOODLAND_ROCK_COVERAGE_KEY, WOODLAND_ROCK_HEIGHT_KEY } from '../src/assets/WoodlandAssetManifest';
@@ -19,7 +20,7 @@ import { FORMATION_SIDE } from '../src/arena/rocks/RockFormationField';
 import type { RockLightingState } from '../src/arena/rocks/RockLightingState';
 
 
-function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourKey?: string,realTextures=false){
+function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourKey?: string,realTextures=false,events?: EventEmitter){
   class Worker {
     static instance:Worker; messages:any[]=[];onmessage:((e:any)=>void)|null=null;onerror:unknown;
     terminate=vi.fn();constructor(){Worker.instance=this;}
@@ -51,12 +52,12 @@ function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourK
   const getTexture=vi.fn((key:string)=>key===WOODLAND_TRANSMISSION_KEY?transmissionTexture:
     {getSourceImage:()=>({width:2,height:2})});
   const coverage=new Uint8Array([0,61,199,255]),getCoverage=vi.fn((key:string)=>key===WOODLAND_ROCK_COVERAGE_KEY?coverage:undefined);
-  const scene={cache:{binary:{get:getCoverage}},sys:{renderer},textures:{get:getTexture,addGLTexture:()=>({}),remove},add:{existing:(x:unknown)=>x}};
+  const scene={cache:{binary:{get:getCoverage}},sys:{renderer},textures:{get:getTexture,addGLTexture:()=>({}),remove},add:{existing:(x:unknown)=>x},events};
   const states:any[]=[{id:0,gridX,gridY,active:true,frame:0,damageTint:0xffffff}];
   const state:RockLightingState={enabled:true,normals:false,strength:1,sun:[-.5,-.5,Math.SQRT1_2],material:'mineral',colourTextureKey:colourKey};
   const lighting=new RockFormationLighting(scene as never,{offsetX:0,offsetY:0,width,height},states,state,heightKey);
   lighting.updateView({x:0,y:0,width:400,height:400});lighting.tick();
-  return{renderer,wrappers,coverage,getCoverage,lighting,worker:Worker.instance,states,state,upload,remove,transmissionTexture,getTexture};
+  return{renderer,wrappers,coverage,getCoverage,lighting,worker:Worker.instance,states,state,upload,remove,transmissionTexture,getTexture,scene,Worker};
 }
 afterEach(()=>{vi.unstubAllGlobals();vi.clearAllMocks();fake.quads.length=0;});
 describe('formation lighting ownership and incremental updates',()=>{
@@ -206,6 +207,24 @@ describe('formation lighting ownership and incremental updates',()=>{
     expect(f.worker.terminate).toHaveBeenCalledOnce();expect(f.remove).toHaveBeenCalledTimes(3);
     for(const q of fake.quads)expect(q.destroy).toHaveBeenCalledOnce();expect(fake.deleted).toHaveBeenCalledTimes(2);
   });
+  it('hands its worker to the next World of the Scene and ignores results built for the previous one',()=>{
+    const events=new EventEmitter(),f=fixture(512,512,4,4,undefined,undefined,false,events);settle(f);
+    f.lighting.destroy();
+    expect(f.worker.terminate).not.toHaveBeenCalled();expect(f.worker.onmessage).toBeNull();
+    const spawned=vi.fn();vi.stubGlobal('Worker',class{constructor(){spawned();}});
+    const next=new RockFormationLighting(f.scene as never,{offsetX:0,offsetY:0,width:512,height:512},f.states,f.state);
+    next.updateView({x:0,y:0,width:400,height:400});next.tick();
+    expect(spawned).not.toHaveBeenCalled();
+    expect(f.worker.messages.filter(m=>m.kind==='init')).toHaveLength(2);
+    // A build of the previous World is still queued ahead of the new initialisation.
+    f.worker.reply();next.tick();
+    expect(next.getPreparationState().ready).toBe(false);expect(next.getDiagnostics().builds).toBe(0);
+    f.worker.onmessage!({data:{kind:'initialized',initMs:1,startedAt:0,finishedAt:0}});
+    f.worker.reply();next.tick();
+    expect(next.getPreparationState().ready).toBe(true);
+    next.destroy();expect(f.worker.terminate).not.toHaveBeenCalled();
+    events.emit('shutdown');expect(f.worker.terminate).toHaveBeenCalledOnce();
+  });
 });
 
 /** Single-chunk fixture driver: advances the presentation clock and answers only open jobs. */
@@ -227,6 +246,21 @@ function sunDriver(f:ReturnType<typeof fixture>) {
   const builds=(azimuth?:number)=>f.worker.messages.filter(m=>m.kind==='build'&&(azimuth===undefined||m.azimuth===azimuth)).length;
   return {resident,frame,settle,shown,builds};
 }
+
+it('is ready once its view is displayable while further sun supports keep baking',async()=>{
+  const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
+  const {createSunTuning}=await import('../src/effects/sunlight/SunAtmosphere');
+  const f=fixture(512,512,4,4,undefined,undefined,true),sun=sunDriver(f);
+  f.state.clouds={tuning:createSunTuning(),timeSec:0,strength:1,sunPath:resolveSunPath(720,90.5,createSunPath())};
+  sun.frame();expect(f.lighting.getPreparationState().ready).toBe(false);
+  f.worker.reply();sun.frame();
+  expect(f.lighting.getPreparationState()).toMatchObject({ready:true,pending:0});
+  expect((f.lighting as any).busy).toBe(true);
+  // A finished further support sitting unpublished does not withdraw readiness either.
+  f.worker.reply();expect(f.lighting.getPreparationState().ready).toBe(true);
+  sun.settle();expect(sun.builds()).toBeGreaterThan(1);expect(f.lighting.getPreparationState().ready).toBe(true);
+  f.lighting.destroy();
+});
 
 it('interpolates horizon angles between bracketing supports, bakes the next one ahead and releases history',async()=>{
   const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
