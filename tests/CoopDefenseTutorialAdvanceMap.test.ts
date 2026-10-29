@@ -47,6 +47,9 @@ const CROSSINGS = [
   ...MISSION.barriers,
 ].sort((a, b) => a.cells[0].gridX - b.cells[0].gridX);
 
+/** How far either side of a crossing its river arms are followed. */
+const RIVER_ARM_REACH_CELLS = 20;
+
 function waterComponents(): GridCell[][] {
   const remaining = new Set((MAP.water ?? []).map(cellKey));
   const components: GridCell[][] = [];
@@ -312,10 +315,11 @@ describe('Map 1 as the guided advance tutorial', () => {
     for (const crossing of CROSSINGS) {
       const top = crossing.cells[0];
       const bottom = crossing.cells[crossing.cells.length - 1];
-      // Follow the two river arms at the crossing; separate inland ponds are not river width.
+      // Follow the two river arms at the crossing; separate inland ponds are not river width, and
+      // streams joining the river far from the crossing are not its arms.
       const river = components.filter((cells) => cells.some((cell) => (
         cell.gridX === top.gridX && (cell.gridY === top.gridY - 1 || cell.gridY === bottom.gridY + 1)
-      ))).flat();
+      ))).flat().filter((cell) => Math.abs(cell.gridX - top.gridX) <= RIVER_ARM_REACH_CELLS);
       let previousRow = new Set<number>();
       for (let y = 0; y < MAP.arenaHeightCells!; y++) {
         const row = new Set(river.filter((cell) => cell.gridY === y).map((cell) => cell.gridX));
