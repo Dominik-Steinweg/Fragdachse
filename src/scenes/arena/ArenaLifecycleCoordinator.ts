@@ -216,6 +216,7 @@ import {
 } from '../../world/WorldDescriptor';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import { CoopMissionVoidDanger } from '../../activity/CoopMissionVoidDanger';
+import { createVoidMarcherSample } from '../../arena/VoidDangerField';
 import type {
   PersistentBaseAnchor,
 } from '../../persistentBase/PersistentBaseTypes';
@@ -421,7 +422,10 @@ export class ArenaLifecycleCoordinator {
       return start > 0 && this.coopMissionRuntime
         ? this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow()) - start : null;
     },
+    forEachVoidMarcher: (visit) => this.coopMissionRuntime?.enemyManager?.visitVoidMarchers(this.voidMarcherSample, visit),
   });
+  /** One reused sample for the mission's void trails (E12). */
+  private readonly voidMarcherSample = createVoidMarcherSample();
   /**
    * Die Fragen der Coop-Mission an World, Scene und Netz.
    *

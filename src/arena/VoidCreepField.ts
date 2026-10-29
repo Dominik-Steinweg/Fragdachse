@@ -31,6 +31,8 @@ export interface VoidCreepField {
   readonly offsetX: number;
   readonly offsetY: number;
   readonly texelPx: number;
+  /** Only the land share: a World without danger whose Activity lays void trails (E12). */
+  readonly landOnly?: true;
 }
 
 /** What the creep reads from the World's void field. */
@@ -81,6 +83,21 @@ export function buildVoidCreepField(source: VoidCreepSource,
   if (source.hazeAt) field.haze.set(buildVoidCreepHaze(field, source, { x0: 0, y0: 0, x1: width - 1, y1: height - 1 }));
   for (let i = 0; i < data.length && !found; i++) found = data[i] > 0 || field.haze[i] > 0;
   return found ? field : null;
+}
+
+/**
+ * A field without scar or haze that still knows land from water, for a World whose places carry no
+ * void while its Activity lays void trails: the trails then keep the open-water film like any haze.
+ */
+export function buildVoidCreepLand(frame: { offsetX: number; offsetY: number; width: number; height: number },
+  landAt: (x: number, y: number) => number = () => 1): VoidCreepField {
+  const texel = VOID_CREEP_TEXEL_PX;
+  const width = Math.max(1, Math.ceil(frame.width / texel)), height = Math.max(1, Math.ceil(frame.height / texel));
+  const land = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++)
+    land[y * width + x] = Math.round(Math.max(0, Math.min(1, landAt(frame.offsetX + (x + .5) * texel, frame.offsetY + (y + .5) * texel))) * 255);
+  return { data: new Uint8Array(width * height), land, haze: new Uint8Array(width * height), width, height,
+    offsetX: frame.offsetX, offsetY: frame.offsetY, texelPx: texel, landOnly: true };
 }
 
 /**

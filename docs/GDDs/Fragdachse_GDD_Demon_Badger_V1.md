@@ -69,7 +69,7 @@ auf Spieler und Gebäude; erlöschende Flammen setzen den Boden in Brand, Basen 
 ## 5. Technik
 
 - Host-System `CoopDefenseEnemyHeatBurstSystem` (Activity), replizierter `EnemyHeatBurstState`
-  (Snapshot-Feld `FIELD_HEAT_BURST`, Protokoll 56): Zeitstempel für Laden, Voll, Warnung und Explosion; Phase
+  (Snapshot-Feld `FIELD_HEAT_BURST`, Protokoll 57): Zeitstempel für Laden, Voll, Warnung und Explosion; Phase
   und Hitze leiten Host und Clients aus der Zeit ab, kein Pro-Tick-Verkehr.
 - Tempo über `EnemyEntity.setAbilitySpeedFactor`; Sichtbarkeit über die Sichtfeld-Geometrie (`viewGap`) der
   KI-Detailstufen, nie über die Stufe selbst.

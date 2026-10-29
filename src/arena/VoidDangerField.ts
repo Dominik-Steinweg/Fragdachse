@@ -317,7 +317,7 @@ export function resolveVoidDangerSources(world: VoidDangerWorldSources): VoidDan
       rim: kind.rimCells * CELL_SIZE * reach, plants: kind.plants, haze: kind.haze });
   }
   for (const zone of world.spawnZones ?? []) {
-    out.push({ id: `zone:${zone.id}`, shapes: [{ kind: 'ellipse', x: world.offsetX + zone.gridX * CELL_SIZE, y: world.offsetY + zone.gridY * CELL_SIZE,
+    out.push({ id: `${VOID_ZONE_SOURCE}${zone.id}`, shapes: [{ kind: 'ellipse', x: world.offsetX + zone.gridX * CELL_SIZE, y: world.offsetY + zone.gridY * CELL_SIZE,
       width: zone.widthCells * CELL_SIZE, height: zone.heightCells * CELL_SIZE, rimPhase: spawnZoneRimPhase(zone) }],
     rim: DANGER.zone.rimCells * CELL_SIZE * reach, plants: DANGER.zone.plants, haze: DANGER.zone.haze });
   }
@@ -363,21 +363,48 @@ export interface ActivityVoidDanger {
   presenceOf(id: string): number;
   /** Spawn zones about to release enemies, strongest first; the haze over them thickens. */
   readonly alerts?: readonly VoidDangerAlert[];
-  /** Haze along lines (the situation map's void streams); joins the spore haze, never the flora. */
-  readonly hazeLines?: VoidHazeLines | null;
+  /** Bodies that taint the fog where they walk (E12): the mission's enemies, the situation map's marchers. */
+  readonly marchers?: VoidMarchers | null;
 }
 
+/** Danger source id of a World spawn zone: this prefix and the zone id. */
+export const VOID_ZONE_SOURCE = 'zone:';
+
+/** Thickness of a resting spawn zone's haze; a fresh trail carries the same (E12). */
+export const ZONE_HAZE = DANGER.zone.haze;
+
 /**
- * Spore haze an Activity lays along lines. It joins the haze of the World's places, so ground veil,
- * the fog's void air and colour and the motes follow it, but it never changes the flora: a new
- * revision only crossfades the haze over the old and new bounds.
+ * Bodies that lay a void trail this frame, pulled once per frame. Rounds report the mission's
+ * hostile enemies, the situation map phantom marchers along its planned routes; both read the same.
  */
-export interface VoidHazeLines {
-  readonly revision: number;
-  /** World rectangle the haze reaches; null without lines. */
-  readonly bounds: VoidDangerBounds | null;
-  /** Haze thickness 0..1 at a world point. */
-  hazeAt(x: number, y: number): number;
+export interface VoidMarchers {
+  /** Visits every body with one reused sample; keep nothing of it beyond the call. */
+  forEach(visit: (sample: Readonly<VoidMarcherSample>) => void): void;
+  /** Trail groups that dissolve quickly now (dropped routes); each revision applies once. */
+  readonly retired?: { readonly revision: number; readonly groups: readonly number[] } | null;
+}
+
+/** One trail-laying body, refilled per visit. */
+export interface VoidMarcherSample {
+  id: string;
+  x: number;
+  y: number;
+  /** Body size in world px; the trail widens with it. */
+  size: number;
+  /** Changes on a teleport: the trail breaks instead of bridging the jump. */
+  revision: number;
+  /** World spawn zone the body came out of; its trail lifts with that zone's wave. null never lifts. */
+  zone: string | null;
+  /** Trail strength 0..1. */
+  strength: number;
+  /** Trails retire together by group; 0 belongs to none. */
+  group: number;
+  /** False while the body lays nothing: hidden, dead, burrowed, under water or in the air. */
+  active: boolean;
+}
+
+export function createVoidMarcherSample(): VoidMarcherSample {
+  return { id: '', x: 0, y: 0, size: 0, revision: 0, zone: null, strength: 1, group: 0, active: false };
 }
 
 /** A spawn zone warning for the shaders: world rectangle and build-up 0..1 (E4/E8). */

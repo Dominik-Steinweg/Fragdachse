@@ -546,8 +546,9 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
 - Void entsteht nur aus Gefahrenquellen ([VoidDangerField](../../src/arena/VoidDangerField.ts)). Ohne Quellen gibt es
   kein Void, keine Textur und kein Quad, so bleiben PvP, Lobby und sicheres Gelände frei.
   - Die World liefert feindliche Basen, Spawnzonen, den Kraken-Teich mit Ausgängen und `voidDanger.foci`.
-  - Die Activity liefert per Pull dauerhafte Void-Bodengefahren und die Präsenz jeder Quelle
-    ([CoopMissionVoidDanger](../../src/activity/CoopMissionVoidDanger.ts)).
+  - Die Activity liefert per Pull dauerhafte Void-Bodengefahren, die Präsenz jeder Quelle und ihre
+    Marschierer ([CoopMissionVoidDanger](../../src/activity/CoopMissionVoidDanger.ts)). Die Lobby hat keine Activity
+    mit Marschierern, ihr Schießstand bleibt deshalb ohne Void.
 - Pflanzen und Dunst sind getrennt. Fehlt die Präsenz einer Quelle (Basis zerstört, Stätte geschlossen, Spawnort
   verbraucht), wird ihr Dunst von einer Welle aus ihrem Zentrum bis auf kleine, dichte Restflecken über den
   Void-Pflanzen abgetragen ([VoidHazeResidue](../../src/arena/VoidHazeResidue.ts)). Befallene Pflanzen stehen so nie in
@@ -555,15 +556,27 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
   schlafende Basis) trägt nur gedämpften Dunst.
 - Die Geflecht-Textur trägt getränkten Boden (R), Landanteil (G) und Dunst (B). Ein Präsenzwechsel schreibt nur B im
   Begrenzungsrahmen der Quelle neu und blendet über Teil-Uploads über. Daten im Alpha einer Canvas-Textur würden
-  vormultipliziert, und ein weiterer Sampler passt nicht in den Nebel-Pass.
+  vormultipliziert, und im Material-Pass des Nebels ist kein Sampler mehr frei.
 - Angekündigte Spawnzonen verdichten B im Shader (`uVoidAlert[8]`, `uVoidAlertLevel[8]` in `VOID_CREEP_GLSL`). Der
   Uniform trägt den Kasten der Zone; der Shader verdichtet die Ellipse darin, wie die Zone selbst rund ist. Boden,
   Fels, Glow, Nebelluft und Partikel lesen denselben Wert. Der Client glättet die Stärke, damit ein ersetzter Takt
   abklingt statt abzureißen ([CoopDefenseSpawnZoneAlerts.test.ts](../../tests/CoopDefenseSpawnZoneAlerts.test.ts)).
-- Eine Activity kann Dunst entlang von Linien legen (`ActivityVoidDanger.hazeLines`, z. B. die Ströme der
-  Lagekarte). Er geht in den Dunst-Kanal ein, Nebel, Bodenschleier und Sporen folgen ihm, die Flora aber nie: Eine
-  neue Revision blendet nur den Dunst über alte und neue Reichweite über. Ein neues `sources`-Array baut dagegen
-  Flora, Teiche und Creep neu und ist für häufige Änderungen zu teuer.
+- Gegner verseuchen den Nebel, durch den sie laufen ([VoidTaint](../../src/arena/VoidTaint.ts),
+  [VoidTaintLayer](../../src/effects/sunlight/VoidTaintLayer.ts)). Die Activity liefert ihre Marschierer
+  (`ActivityVoidDanger.marchers`): die feindlichen Gegner der Mission oder die Phantom-Marschierer der Lagekarte
+  ([RouteFlowMarchers](../../src/effects/routeFlow/RouteFlowMarchers.ts)). Beide lesen sich gleich.
+  - Die CPU hält nur weltverankerte Stempel mit Geburts- und Abklingzeit, die GPU wertet die Hüllkurve aus
+    (Anstieg hinter dem Körper, Aufleuchten, Halten, Abklingen) und rastert sie in ein kamerafolgendes Ziel.
+  - Die Spuren gehen in `creepTexel` neben den Warnungen ein. Nebel-Formpass, Boden- und Felsschleier, Glow und
+    Sporen tragen sie so ohne eigenen Pfad, mit dem Look einer aktiven Zone. `.a` ist der Deckungshub: Über einem
+    Ort voll, über einer Spur nur ein Anteil (leichter Schleier ohne Nebel). Das Aufleuchten reist im A-Kanal des
+    Formpasses zum Material. Gebunden wird im Formpass (Einheit 1) und im Display (Einheit 7), nie im Material-Pass.
+  - Die Auflösung einer Zone trifft genau die Spuren ihrer Gegner: Der Gegner trägt seine Spawnzone
+    (`spawnZoneId`, volle Zustände), und jede Abnahme der Zonenpräsenz startet eine Welle
+    ([VoidLiftWave](../../src/arena/VoidLiftWave.ts)), die Geflecht, Sporen und Spuren gemeinsam abträgt.
+  - Eine World ohne eigenes Void hält nur ein Landfeld (`buildVoidCreepLand`), solange ihre Activity Spuren legt;
+    so behalten auch Spuren den Wasserfilm. Ein neues `sources`-Array baut dagegen Flora, Teiche und Creep neu
+    und ist für häufige Änderungen zu teuer.
 - Das Feld verbraucht nie Zufall des Layouts, die Map-Fingerprints bleiben unverändert. Der Befall ist zusammenhängend:
   Es gibt keinen Wurf je Pflanze, der einzelne befallene Pflanzen neben unberührte setzt.
 - Void-Frames tragen zwingend das Präfix `void-` und liegen in eigenen Atlanten mit deckungsgleichem Emissive-Atlas.

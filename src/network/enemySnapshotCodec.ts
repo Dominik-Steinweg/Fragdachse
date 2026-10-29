@@ -7,6 +7,7 @@ import { isEnemyHopState } from '../systems/EnemyHopState';
 import { isKaboomtulaState, KABOOMTULA_PHASES, KABOOMTULA_TARGET_KINDS } from '../systems/KaboomtulaState';
 import { ENEMY_POUNCE_TARGET_KINDS, isEnemyPounceState } from '../systems/EnemyPounceState';
 import { isEnemyHeatBurstState } from '../systems/EnemyHeatBurstState';
+import { isWorldSpawnZoneId } from '../config/spawnZones';
 /**
  * Kompakte (De-)Serialisierung des Gegner-Upsert-Stroms für {@link SyncedEnemySnapshot}.
  *
@@ -17,7 +18,8 @@ import { isEnemyHeatBurstState } from '../systems/EnemyHeatBurstState';
  * Update-Frequenz oder Interpolation (Direktheit bleibt unverändert).
  *
  * Stromformat von `u` (Einträge hintereinander, variable Länge):
- *   idNum, mask, [x, y]?, [rotQuant]?, [hp, maxHp]?, [kindIndex]?, [burnStacks]?, [faction, ownerId, ownerColor]?, [burrowed]?, [dashPhase]?, [specialAction...]?, [plasmaChargeStacks]?, [entityGeneration]?, [claw...]?, [positionRevision]?
+ *   idNum, mask, [x, y]?, [rotQuant]?, [hp, maxHp]?, [kindIndex]?, [burnStacks]?, [faction, ownerId, ownerColor]?, [burrowed]?, [dashPhase]?, [specialAction...]?, [plasmaChargeStacks]?, [entityGeneration]?, [claw...]?, [positionRevision]?,
+ *   [areaClaw]?, [shieldCharge...]?, [energyCone...]?, [eliteAffixId]?, [submerged]?, [hop...]?, [kaboomtula...]?, [pounce...]?, [spawnZoneId]?, [heatBurst...]?
  * Reihenfolge der optionalen Felder ist fix; `mask` gibt an, welche vorhanden sind.
  */
 import {
@@ -46,8 +48,10 @@ const FIELD_HOP = 262144;
 const FIELD_KABOOMTULA = 524288;
 /** Pounce: revision, optional aim (target ref, origin, aim/lock time) with an optional locked landing. */
 const FIELD_POUNCE = 1048576;
+/** World spawn zone id the enemy came out of (full states only; validated on decode). */
+const FIELD_SPAWN_ZONE = 2097152;
 /** Heat cycle: revision, vent start, charge start, full, booked warning and burst (0 = none booked). */
-const FIELD_HEAT_BURST = 2097152;
+const FIELD_HEAT_BURST = 4194304;
 // Codes 0–6 are deployed legacy values; append new actions without renumbering them. Codes 4/5
 // (`timebomb-chase`/`timebomb-fuse`) are retired with the timebomb badger and never emitted again.
 const SPECIAL_ACTIONS = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase',
@@ -106,6 +110,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   if (entry.hop !== undefined) mask |= FIELD_HOP;
   if (entry.kaboomtula !== undefined) mask |= FIELD_KABOOMTULA;
   if (entry.pounce !== undefined) mask |= FIELD_POUNCE;
+  if (entry.spawnZoneId !== undefined) mask |= FIELD_SPAWN_ZONE;
   if (entry.heatBurst !== undefined) mask |= FIELD_HEAT_BURST;
 
   out.push(enemyIdToNum(entry.id), mask);
@@ -180,6 +185,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
       if (landing) out.push(landing.x, landing.y, landing.takeoffAt, landing.landAt, landing.recoverUntil, landing.armed ? 1 : 0);
     }
   }
+  if (mask & FIELD_SPAWN_ZONE) out.push(entry.spawnZoneId!);
   if (mask & FIELD_HEAT_BURST) {
     const state = entry.heatBurst!;
     out.push(state.revision, state.ventFromAt, state.chargeStartAt, state.fullAt, state.telegraphAt, state.burstAt);
@@ -321,6 +327,11 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
       }
       const state = { revision, pounce };
       if (isEnemyPounceState(state)) entry.pounce = state;
+    }
+    if (mask & FIELD_SPAWN_ZONE) {
+      // Always consumed; an invalid id is dropped without shifting later entries.
+      const zone = stream[i++];
+      if (isWorldSpawnZoneId(zone)) entry.spawnZoneId = zone;
     }
     if (mask & FIELD_HEAT_BURST) {
       // Every value is consumed even for an invalid state, so later entries stay aligned.

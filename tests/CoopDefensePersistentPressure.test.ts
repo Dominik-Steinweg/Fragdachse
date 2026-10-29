@@ -89,6 +89,17 @@ describe('CoopDefensePersistentPressureSystem', () => {
     expect(structureSpawn).toHaveBeenCalledTimes(2);
   });
 
+  it('spawns zone sources inside their zone and tags them with it', () => {
+    const mapSpawn = vi.fn();
+    const area = { gridX: 1, gridY: 1, widthCells: 2, heightCells: 2, shape: 'round' as const };
+    const system = new CoopDefensePersistentPressureSystem(
+      [{ ...source('zone-pressure', { type: 'map' }), source: { type: 'zone', zoneId: 'north-gate' }, spawnArea: area } as never],
+      { hostSpawnPersistentMapGroup: mapSpawn, hostSpawnPersistentStructureGroup: vi.fn() },
+    );
+    system.hostUpdate(16, false);
+    expect(mapSpawn).toHaveBeenCalledWith('zombie-badger', 2, undefined, area, 'north-gate');
+  });
+
   it('does not advance pressure during the arena countdown and honors a delayed start', () => {
     const mapSpawn = vi.fn();
     const system = new CoopDefensePersistentPressureSystem(

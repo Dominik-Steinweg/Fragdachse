@@ -1,6 +1,9 @@
 import { isPermanentVoidGroundHazard, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { CELL_SIZE } from '../config';
-import { MAX_VOID_DANGER_ALERTS, voidHazardSource, type ActivityVoidDanger, type VoidDangerAlert, type VoidDangerSource } from '../arena/VoidDangerField';
+import {
+  MAX_VOID_DANGER_ALERTS, VOID_ZONE_SOURCE, voidHazardSource, type ActivityVoidDanger, type VoidDangerAlert, type VoidDangerSource,
+  type VoidMarchers, type VoidMarcherSample,
+} from '../arena/VoidDangerField';
 import { SPAWN_ZONE_ALERT_LEAD_MS, spawnZoneAlertLevel } from '../systems/CoopDefenseSpawnZoneAlerts';
 import type { ArenaLayout, CoopDefenseSecondaryObjectivePresentationState, SyncedSpawnPlaceState, SyncedSpawnZoneAlert } from '../types';
 
@@ -17,6 +20,8 @@ export interface CoopMissionVoidDangerPorts {
   /** Host-announced spawn zones and the mission time they refer to; null outside a round. */
   getSpawnZoneAlerts(): readonly SyncedSpawnZoneAlert[];
   getMissionElapsedMs(): number | null;
+  /** The mission's enemies as trail samples (E12), through one reused sample; nothing outside a round. */
+  forEachVoidMarcher(visit: (sample: Readonly<VoidMarcherSample>) => void): void;
 }
 
 /** A warning settles this fast once its zone is quiet again, also when the host replaces it. */
@@ -31,7 +36,7 @@ const ALERT_SWELL_MS = 2400;
 const ALERT_JUMP_RATE = 2 / SPAWN_ZONE_ALERT_LEAD_MS;
 
 const BASE_PREFIX = 'base:';
-const ZONE_PREFIX = 'zone:';
+const ZONE_PREFIX = VOID_ZONE_SOURCE;
 /**
  * Haze of a spawn place that is not releasing enemies yet: a zone a later encounter will use, a
  * dormant spawn point. A place that never will again carries none (user 2026-10-19).
@@ -59,7 +64,12 @@ export class CoopMissionVoidDanger implements ActivityVoidDanger {
   private alertTime = NaN;
   private alertFrame: readonly VoidDangerAlert[] = [];
 
-  constructor(private readonly ports: CoopMissionVoidDangerPorts) {}
+  /** The mission's hostile enemies lay void trails where they walk (E12); the same object every frame. */
+  readonly marchers: VoidMarchers;
+
+  constructor(private readonly ports: CoopMissionVoidDangerPorts) {
+    this.marchers = { forEach: visit => ports.forEachVoidMarcher(visit) };
+  }
 
   /** This frame's answer, or null while no mission World is laid out. */
   read(): ActivityVoidDanger | null {

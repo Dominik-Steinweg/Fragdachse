@@ -343,7 +343,7 @@ export class PersistentBaseEditorWorld {
     const plan = this.routePlanner.plan(this.constructionCells, this.scenario);
     this.lastPlan = { cells, plan };
     const toFlow = (dim: number) => plan.routes.filter((route) => route.points.length > 1)
-      .map((route): RouteFlowRoute => ({ points: route.points, breach: route.breach !== null, strength: route.relevant ? 1 : dim,
+      .map((route): RouteFlowRoute => ({ key: route.key, points: route.points, breach: route.breach !== null, strength: route.relevant ? 1 : dim,
         ...(route.zone ? { sourceReach: zoneExit(route.points, route.zone) } : {}), arms: route.arms }));
     const zones = new Map<string, { x: number; y: number; width: number; height: number }>();
     for (const route of [...plan.routes].sort((a, b) => +b.relevant - +a.relevant)) {

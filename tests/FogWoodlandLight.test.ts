@@ -160,18 +160,25 @@ describe('optional fog woodland presentation',()=>{
       textures:{addGLTexture:()=>({}),get:()=>fallback,remove},add:{existing:(value:unknown)=>value}};
     const terrain=new FogTerrainModel({offsetX:100,offsetY:200,width:512,height:512},[]),tuning=fogTuning(1);
     const field=new FogGpuField(scene as never,terrain,1,tuning,10),view={x:100,y:200,width:512,height:512};
-    const creep={key:'__void_creep_test'},haze={texture:creep as never,frame:new Float32Array([100,200,512,512]),time:3,strength:.8};
+    const creep={key:'__void_creep_test'},trails={key:'__void_taint_test'};
+    const taint={texture:trails as never,view:new Float32Array([90,190,600,600]),on:1};
+    const haze={texture:creep as never,frame:new Float32Array([100,200,512,512]),time:3,strength:.8,taint};
     field.prepare(view,0);field.step([], [.3,.5],tuning,0);
     field.setVoidHaze(haze);field.render(view,256,256,'normal',1,[],'low');
     const display=fake.shaders.find(s=>s.config.name==='GroundFog_display');
     const uniforms=(shader:any)=>{const values=new Map();shader.config.setupUniforms((name:string,value:unknown)=>values.set(name,value));return values;};
-    // Units 3-6 hold creep, air velocity, chunk lookup and density state, even without rock coverage.
-    expect(display.textures).toHaveLength(7);expect(display.textures[3]).toBe(creep);
+    // Units 3-7 hold creep, air velocity, chunk lookup, density state and the void trails, even without rock coverage.
+    expect(display.textures).toHaveLength(8);expect(display.textures[3]).toBe(creep);expect(display.textures[7]).toBe(trails);
     expect(uniforms(display).get('uCreep')).toBe(3);expect(uniforms(display).get('uFogState')).toBe(6);
+    expect(uniforms(display).get('uVoidTaint')).toBe(7);expect(uniforms(display).get('uVoidTaintOn')).toBe(1);
     expect(Array.from(uniforms(display).get('uVoidHaze'))).toEqual([1,expect.closeTo(.8)]);
+    // Trails without stamps stay unbound.
+    taint.on=0;field.render(view,256,256,'normal',1,[],'low');
+    expect(display.textures[7]).toBe(fallback);expect(uniforms(display).get('uVoidTaintOn')).toBe(0);
     // The owner may destroy the creep texture right after unbinding: the samplers go with the call.
+    taint.on=1;field.render(view,256,256,'normal',1,[],'low');
     field.setVoidHaze(null);
-    expect(display.textures).toHaveLength(3);expect(display.textures).not.toContain(creep);
+    expect(display.textures).toHaveLength(3);expect(display.textures).not.toContain(creep);expect(display.textures).not.toContain(trails);
     expect(uniforms(display).get('uVoidHaze')[0]).toBe(0);
     field.destroy();expect(remove.mock.calls.some(call=>call[0]==='__void_creep_test')).toBe(false);
   });
@@ -201,8 +208,9 @@ describe('optional fog woodland presentation',()=>{
     const terrain=new FogTerrainModel({offsetX:100,offsetY:200,width:512,height:512},[]),tuning=fogTuning(1);
     const field=new FogGpuField(scene as never,terrain,1,tuning,10),view={x:100,y:200,width:512,height:512};
     const light:FogWoodlandLight={sunStrength:0,sun:[0,0,1],sunCompositeTuning:{...SUN_TUNING_DEFAULTS,fogStyle:0}};
-    const creep={key:'__void_creep_test'},haze={texture:creep as never,frame:new Float32Array([100,200,512,512]),time:3,strength:.8,
-      alerts:new Float32Array(32),alertLevels:new Float32Array(8)};
+    const creep={key:'__void_creep_test'},trails={key:'__void_taint_test'};
+    const haze={texture:creep as never,frame:new Float32Array([100,200,512,512]),time:3,strength:.8,
+      alerts:new Float32Array(32),alertLevels:new Float32Array(8),taint:{texture:trails as never,view:new Float32Array([90,190,600,600]),on:1}};
     const uniforms=(shader:any)=>{const values=new Map();shader.config.setupUniforms((name:string,value:unknown)=>values.set(name,value));return values;};
     field.setWoodlandLight(light);field.setVoidHaze(haze);
     field.prepare(view,0);field.step([], [.3,.5],tuning,0);field.render(view,256,256,'normal',1,[],'high');
@@ -216,7 +224,8 @@ describe('optional fog woodland presentation',()=>{
     // Night and day alike: one extra draw at a fraction of the material's resolution, no new sampler unit.
     expect(fake.draws).toHaveBeenCalledTimes(2);
     expect([shape.width,shape.height]).toEqual([256/FOG.shapeDownscale,256/FOG.shapeDownscale]);
-    expect(shape.textures).toEqual([creep]);
+    // Unit one carries the void trails; the material gains no sampler.
+    expect(shape.textures).toEqual([creep,trails]);expect(uniforms(shape).get('uVoidTaint')).toBe(1);
     expect(material.textures[3]).toBe(shape.texture);expect(material.textures).toHaveLength(8);
     expect(uniforms(material).get('uShape')).toBe(3);
     expect(Array.from(uniforms(shape).get('uShapeView'))).toEqual([100,200,512,512]);
@@ -224,7 +233,7 @@ describe('optional fog woodland presentation',()=>{
     const lent=field.getShapeBinding()!;
     expect(lent.texture).toBe(shape.texture);expect(Array.from(lent.view)).toEqual([100,200,512,512]);
     // The creep owner may destroy its texture right after unbinding: the shape pass lets go at once.
-    field.setVoidHaze(null);expect(shape.textures).not.toContain(creep);
+    field.setVoidHaze(null);expect(shape.textures).not.toContain(creep);expect(shape.textures).not.toContain(trails);
     light.sunCompositeTuning!.fogStyle=0;field.render(view,256,256,'normal',1,[],'high');
     expect(field.getShapeBinding()).toBeNull();expect(material.textures[3]).not.toBe(shape.texture);
     field.destroy();expect(shape.destroy).toHaveBeenCalledOnce();expect(field.getShapeBinding()).toBeNull();

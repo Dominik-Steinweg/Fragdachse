@@ -15,7 +15,8 @@ import { ROUTE_FLOW_SHAPE } from './RouteFlowStore';
  * Pass 2 (emissive, ADD with alpha 0, above the canopies and the light map) carries the light of
  * the current and its void motes, so routes stay readable under trees and at night. Where the
  * ground fog lends its shape, thick banks veil that light: the current glows through the fog
- * rather than over it. The streams' own haze tints the fog violet (VoidHazeLines).
+ * rather than over it. Phantom marchers along the routes taint the fog like the round's enemies
+ * (RouteFlowMarchers).
  *
  * Every pattern moves along `dist + time · speed`, the arc distance to the route's goal. Routes
  * of one flow field share their distances where they merge, so a trunk flows on without seams.

@@ -70,11 +70,12 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     originId?: string,
     front: SpawnFront = DEFAULT_SPAWN_FRONT,
     spawnArea?: CoopDefenseMapSpawnAreaConfig,
+    spawnZoneId?: string,
   ): CoopDefenseSpawnResult {
     return this.spawnArenaGroup(
       kind,
       count,
-      { ...(originId ? { originId } : {}), spawnFront: front },
+      { ...(originId ? { originId } : {}), ...(spawnZoneId ? { spawnZoneId } : {}), spawnFront: front },
       front,
       this.resolveSpawnFlowField(kind),
       spawnArea,
@@ -87,8 +88,9 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     count: number,
     front: SpawnFront = DEFAULT_SPAWN_FRONT,
     spawnArea?: CoopDefenseMapSpawnAreaConfig,
+    spawnZoneId?: string,
   ): readonly string[] {
-    return this.spawnArenaGroup(kind, count, spawnArea ? {} : { spawnFront: front }, front,
+    return this.spawnArenaGroup(kind, count, spawnArea ? { ...(spawnZoneId ? { spawnZoneId } : {}) } : { spawnFront: front }, front,
       this.resolveSpawnFlowField(kind), spawnArea).enemyIds;
   }
 

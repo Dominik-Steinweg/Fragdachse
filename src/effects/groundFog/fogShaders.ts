@@ -434,11 +434,12 @@ float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out
   // (in the shape pass) and density (here) follow the danger's strength.
   vec2 rolled=world+tangent*roll*6.0-uViewOrigin;
   vec4 shape=texture2D(uShape,vec2(rolled.x/uViewSize.x,1.0-rolled.y/uViewSize.y));
-  float core=shape.g,danger=shape.b;
+  float core=shape.g,danger=shape.b,flare=shape.a;
   float shaped=shape.r*shape.r*${f(FOG_SHAPE_RANGE)};
   vec2 haze=fogShapeDanger(danger);
   hazeShare=haze.x;
-  layered=core;patchDistance=1000.0;patchActivity=1.0;
+  // Fresh void trails flare up as a paler, brighter body before they settle (E12).
+  layered=max(core,flare*${f(FOG.voidFlareBody)});patchDistance=1000.0;patchActivity=1.0;
   // Wakes and blasts: the transport ratio is read at a torn, slowly churning offset, so a wake has
   // ragged wind-torn edges instead of a ruler-straight channel and a blast no perfect circle.
   vec2 tear=vec2(fogShapeNoise(global/70.0+vec2(3.1,7.7)+uCloudTime*.07),fogShapeNoise(global/70.0+vec2(9.4,1.3)-uCloudTime*.06))-.5;
@@ -465,7 +466,7 @@ float woodlandThickness(vec2 world,float surface,vec3 rock,out float layered,out
   // Fog thins towards obstacles over an eroded, never ruler-straight band, so the rock tops the
   // display pass cuts out meet thin mist instead of a dense wall along the stepped contour. Like a
   // wake it thins the coverage: thinner dense fog would still stand there as a wall.
-  float erode=(shape.a-.5)*${f(FOG.obstacleErode)};
+  float erode=(fogShapeNoise((global+tangent*roll*6.0)/52.0+vec2(4.3,1.9))-.5)*${f(FOG.obstacleErode)};
   wake*=mix(mix(${f(FOG.obstacleFloor)},1.0,smoothstep(-4.0,${f(FOG.obstacleReach)},max(edge,0.0)+erode)),1.0,rockWeight);
   float styledPile=mix(smoothstep(-5.0,uFogPileSoftness,edge),1.0,rockWeight);
   float styledShoulder=mix(mix(.22,1.0,smoothstep(-2.0,9.0,edge)),1.0,rockWeight);
@@ -580,7 +581,7 @@ void main() {
 /**
  * Shaped fog, once per frame over the material's view at a fraction of its resolution
  * (FOG.shapeDownscale): the field is far softer than a texel. R sqrt of thickness/FOG_SHAPE_RANGE, G dense core, B void danger (the creep's
- * haze, alerts included), A a static erosion noise for the obstacle band. Data, never PMA colour.
+ * haze, alerts and trails included), A the flare of fresh void trails. Data, never PMA colour.
  */
 export const FOG_SHAPE_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
@@ -591,14 +592,15 @@ uniform vec4 uShapeView,uShapeClock;
 ${VOID_CREEP_GLSL}
 void main() {
  vec2 world=uShapeView.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uShapeView.zw;
- float danger=uShapeClock.w>.5?clamp(creepTexel(world).b,0.0,1.0):0.0;
- // Danger raises the coverage towards the void haze's own; the shape stays the fog's.
- float lift=fogShapeDanger(danger).y;
- float cover=max(uShapeClock.z,mix(uShapeClock.z,${f(FOG.voidCover)},lift));
+ float flare=0.0;
+ vec4 creep=uShapeClock.w>.5?creepTexel(world,flare):vec4(0.0);
+ float danger=clamp(creep.b,0.0,1.0);
+ // Danger raises the coverage towards the void haze's own, a trail only partly; the shape stays the fog's.
+ float cover=max(uShapeClock.z,mix(uShapeClock.z,${f(FOG.voidCover)},creep.a));
  float core;
  vec2 q=world-vec2(1.0,.23)*uShapeClock.y;
- float thick=fogShapeSpores(q,uShapeClock.x,lift,core,fogShape(q,uShapeClock.x,cover,0.0,core));
- gl_FragColor=vec4(sqrt(clamp(thick/${f(FOG_SHAPE_RANGE)},0.0,1.0)),core,danger,fogShapeNoise(world/52.0+vec2(4.3,1.9)));
+ float thick=fogShapeSpores(q,uShapeClock.x,fogShapeDanger(danger).y,core,fogShape(q,uShapeClock.x,cover,0.0,core));
+ gl_FragColor=vec4(sqrt(clamp(thick/${f(FOG_SHAPE_RANGE)},0.0,1.0)),core,danger,clamp(flare,0.0,1.0));
 }
 `;
 
@@ -634,11 +636,13 @@ vec4 voidAir(vec2 world, float trace) {
  if(uVoidHaze.x<.5||(uFogStyle>.5&&uFogBankMetadata>.5)||creepTexel(world).b<.006)return vec4(0.0);
  vec3 fog=fogAt(world);
  vec2 carried=world-fog.xy*.35;
- float haze=creepTexel(carried).b;
+ float flare;
+ vec4 creep=creepTexel(carried,flare);
+ float haze=creep.b;
  if(haze<.006)return vec4(0.0);
- vec2 mist=creepHaze(carried,haze);
+ vec2 mist=creepHaze(carried,haze,creep.a);
  float stirred=1.0-.92*smoothstep(.03,.45,fog.z);
- float amount=(mist.x*.50+mist.y*.22)*uVoidHaze.y*stirred*(1.0-trace);
+ float amount=(mist.x*.50+mist.y*.22)*uVoidHaze.y*stirred*(1.0-trace)*(1.0+.5*flare);
  return vec4(mix(vec3(.30,.19,.37),vec3(.52,.42,.60),mist.y)*amount,amount);
 }
 // The haze sits inside the fog: fog over it veils it, and the fog itself takes a faint violet cast

@@ -1,6 +1,7 @@
 import { ROCK_COVERAGE_GLSL } from '../RockPenetrationShader';
 import { FOG_SHAPE_GLSL, FOG_SHAPE_RANGE } from './fogShape';
 import { FOG } from '../groundFog/FogConfig';
+import { VOID_TAINT } from '../../arena/VoidTaint';
 
 /** Fixed program keys: one linked program each per renderer, warmed while loading. */
 export const VOID_CREEP_GROUND_SHADER_NAME = 'VoidCreepGround';
@@ -17,6 +18,8 @@ export const VOID_CREEP_GLOW_SHADER_NAME = 'VoidCreepGlow';
  */
 /** Share of the haze that stays over open water (Map 20: the kraken must stay visible in its pond). */
 export const OPEN_WATER_HAZE = .2;
+/** How much brighter fresh contamination makes the ground veil and the night glow (E12). */
+const GROUND_FLARE = .45, GLOW_FLARE = 1.6;
 
 export const VOID_CREEP_GLSL = `
 uniform sampler2D uCreep;
@@ -37,6 +40,11 @@ uniform float uFogShapeLent;
 // Spawn zone warnings (Void-Gefahrenzonen V1): world rectangle and build-up per zone.
 uniform vec4 uVoidAlert[8];
 uniform float uVoidAlertLevel[8];
+// Trails hostile bodies laid this frame (VoidTaintLayer, E12): r haze, g flare, over the world rect
+// uVoidTaintView; uVoidTaintOn 0 without trails.
+uniform sampler2D uVoidTaint;
+uniform vec4 uVoidTaintView;
+uniform float uVoidTaintOn;
 float creepHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 // Gradient noise on a triangular lattice: no square plateaus, no shared grid direction.
 float creepNoise(vec2 p) {
@@ -69,20 +77,36 @@ float creepAlert(vec2 world) {
   }
   return 1.0-clear;
 }
-// Soaked ground (r, a scar that stays), land share (g) and spore haze (b, follows the danger's
-// presence and thickens over announced spawn zones) at a world point. The haze clings to land and
-// banks: over open water only a thin film stays, so what lives in the water stays readable; the
-// ink in the water carries the void there. A warning still shows over water, a little softer.
-vec3 creepTexel(vec2 world) {
-  vec2 uv=(world-uCreepFrame.xy)/uCreepFrame.zw;
-  if(any(lessThan(uv,vec2(0.0)))||any(greaterThan(uv,vec2(1.0)))) return vec3(0.0);
-  vec3 texel=texture2D(uCreep,vec2(uv.x,1.0-uv.y)).rgb;
-  texel.b=1.0-(1.0-texel.b*mix(${OPEN_WATER_HAZE.toFixed(2)},1.0,texel.g))*(1.0-.9*creepAlert(world)*mix(.6,1.0,texel.g));
-  return texel;
+// Haze and flare of the trails at a world point; zero while there are none.
+vec2 creepTaint(vec2 world) {
+  if(uVoidTaintOn<.5) return vec2(0.0);
+  vec2 uv=(world-uVoidTaintView.xy)/uVoidTaintView.zw;
+  if(any(lessThan(uv,vec2(0.0)))||any(greaterThan(uv,vec2(1.0)))) return vec2(0.0);
+  return texture2D(uVoidTaint,vec2(uv.x,1.0-uv.y)).rg;
 }
+// Soaked ground (r, a scar that stays), land share (g) and spore haze (b) at a world point. The
+// haze follows the danger's presence, thickens over announced spawn zones and joins the trails of
+// hostile bodies. It clings to land and banks: over open water only a thin film stays, so what
+// lives in the water stays readable; the ink in the water carries the void there. A warning still
+// shows over water, a little softer. a: how far the haze lifts the fog's coverage, fully over a
+// place, a share of it over a trail (its light veil where no fog lies). \`flare\`: fresh trails.
+vec4 creepTexel(vec2 world, out float flare) {
+  flare=0.0;
+  vec2 uv=(world-uCreepFrame.xy)/uCreepFrame.zw;
+  if(any(lessThan(uv,vec2(0.0)))||any(greaterThan(uv,vec2(1.0)))) return vec4(0.0);
+  vec3 texel=texture2D(uCreep,vec2(uv.x,1.0-uv.y)).rgb;
+  float film=mix(${OPEN_WATER_HAZE.toFixed(2)},1.0,texel.g);
+  float place=1.0-(1.0-texel.b*film)*(1.0-.9*creepAlert(world)*mix(.6,1.0,texel.g));
+  vec2 taint=creepTaint(world)*film;
+  flare=taint.y;
+  return vec4(texel.rg,1.0-(1.0-place)*(1.0-taint.x),
+    max(smoothstep(0.0,1.0,place),smoothstep(0.0,1.0,taint.x)*${VOID_TAINT.coverShare.toFixed(3)}));
+}
+vec4 creepTexel(vec2 world) { float flare; return creepTexel(world,flare); }
 // Spore haze: x thickness 0..1, y the thick body of the clouds (where light gathers), from two
-// drifting layers. Clearings stay open even where the creep is complete.
-vec2 creepHaze(vec2 world, float density) {
+// drifting layers. Clearings stay open even where the creep is complete. \`coverLift\` is how far
+// the haze raises the fog's coverage (creepTexel's a).
+vec2 creepHaze(vec2 world, float density, float coverLift) {
   if(uHazeShape.x>.5) {
     vec2 danger=fogShapeDanger(density);
     float share=danger.x;
@@ -97,7 +121,7 @@ vec2 creepHaze(vec2 world, float density) {
 #endif
     if(thick<0.0) {
       // Same coverage as the fog's shape pass (FOG_SHAPE_FRAGMENT).
-      float cover=max(uHazeShape.w,mix(uHazeShape.w,${FOG.voidCover.toFixed(3)},danger.y));
+      float cover=max(uHazeShape.w,mix(uHazeShape.w,${FOG.voidCover.toFixed(3)},coverLift));
       vec2 q=world-vec2(1.0,.23)*uHazeShape.z;
       thick=fogShape(q,uHazeShape.y,cover,0.0,core);
       thick=fogShapeSpores(q,uHazeShape.y,danger.y,core,thick);
@@ -139,23 +163,25 @@ ${VOID_CREEP_GLSL}
 ${rock ? ROCK_COVERAGE_GLSL : ''}
 void main() {
   vec2 world=uView.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uView.zw;
-  vec3 texel=creepTexel(world);
+  float flare;
+  vec4 texel=creepTexel(world,flare);
   float density=texel.r, haze=texel.b;
   if(max(density,haze)<.006) discard;
   ${rock ? '// A soft fade over the rock rim instead of a cut.\n  float surface=smoothstep(.25,.9,rockCoverage(world));\n  if(surface<.004) discard;' : 'float surface=1.0;'}
   // A faint, broad bruise under the haze, feathered from nothing: no contour of its own.
   float bruise=density*density*${bruise.toFixed(2)}*(.70+.60*creepNoise(world*.0062+5.0))*surface;
-  vec2 mist=creepHaze(world,haze)*surface;
+  vec2 mist=creepHaze(world,haze,texel.a)*surface;
   // Volume: the haze a few pixels towards the light is the lit top of a cloud, its far side the
   // shaded underside. Soft, so it reads as depth rather than an outline. The shaped fog carries
   // its own relief in the air above.
-  vec2 lit=uHazeShape.x>.5?mist:creepHaze(world+vec2(-5.0,-7.0),haze)*surface;
+  vec2 lit=uHazeShape.x>.5?mist:creepHaze(world+vec2(-5.0,-7.0),haze,texel.a)*surface;
   float relief=clamp((lit.x-mist.x)*2.2,-1.0,1.0);
   float grain=creepGrain(world,uPixelWorld);
   // Dense veil: plum-grey in thin haze, paler lilac-grey where the clouds are thick; the grain
   // shades the veil itself instead of adding specks.
   float veil=mist.x*${(haze * 0.50).toFixed(3)}*(.78+.50*grain)*mix(1.0,.55,uAirborne);
-  vec3 tone=mix(vec3(.24,.11,.31),vec3(.45,.33,.54),mist.y)*(1.0+.16*relief+.26*grain);
+  // Fresh contamination glows up a little lighter before it settles.
+  vec3 tone=mix(vec3(.24,.11,.31),vec3(.45,.33,.54),mist.y)*(1.0+.16*relief+.26*grain)*(1.0+${GROUND_FLARE.toFixed(2)}*flare);
   vec3 color=vec3(.11,.035,.13)*bruise;
   float alpha=bruise;
   color=tone*veil+color*(1.0-veil); alpha=veil+alpha*(1.0-veil);
@@ -184,10 +210,12 @@ uniform vec3 uGlow;
 ${VOID_CREEP_GLSL}
 void main() {
   vec2 world=uWorld.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uWorld.zw;
-  vec3 texel=creepTexel(world);
+  float flare;
+  vec4 texel=creepTexel(world,flare);
   if(texel.b<.006) { gl_FragColor=vec4(0.0,0.0,0.0,1.0); return; }
-  vec2 mist=creepHaze(world,texel.b);
+  vec2 mist=creepHaze(world,texel.b,texel.a);
   float breathe=.80+.20*sin(uCreepTime*.25+creepNoise(world*.0025)*6.2831853);
   // Shaped fog: the light gathers in the dense streaks and patches, so the glow keeps the fog's shape.
-  gl_FragColor=vec4(uGlow*(uHazeShape.x>.5?mist.x*.22+mist.y*.52:mist.x*.34+mist.y*.30)*breathe,1.0);
+  // Fresh contamination lights its surroundings brighter before it settles.
+  gl_FragColor=vec4(uGlow*(uHazeShape.x>.5?mist.x*.22+mist.y*.52:mist.x*.34+mist.y*.30)*breathe*(1.0+${GLOW_FLARE.toFixed(2)}*flare),1.0);
 }`;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildVoidCreepField, buildVoidCreepHaze, voidCreepAt, voidCreepHazeAt, voidCreepLandAt, voidCreepTexelRect } from '../src/arena/VoidCreepField';
+import { buildVoidCreepField, buildVoidCreepHaze, buildVoidCreepLand, voidCreepAt, voidCreepHazeAt, voidCreepLandAt, voidCreepTexelRect } from '../src/arena/VoidCreepField';
 import { buildVoidWaterStain } from '../src/arena/VoidWaterStain';
 
 const FRAME = { offsetX: 64, offsetY: 32, width: 2048, height: 1280 };
@@ -54,6 +54,17 @@ describe('void creep field', () => {
     expect(voidCreepLandAt(creep, 600, 600)).toBe(1);
     expect(voidCreepLandAt(creep, 900, 600)).toBe(0);
     expect(buildVoidCreepField(disc, FRAME, [], water)).toEqual(creep);
+  });
+
+  it('keeps only the land share for a World whose trails need it, the same for every peer', () => {
+    const water = (x: number) => x > 760 ? 0 : 1;
+    const land = buildVoidCreepLand(FRAME, water);
+    expect(land.landOnly).toBe(true);
+    expect(Math.max(...land.data, ...land.haze)).toBe(0);
+    expect(voidCreepLandAt(land, 600, 600)).toBe(1);
+    expect(voidCreepLandAt(land, 900, 600)).toBe(0);
+    expect(land.land).toEqual(buildVoidCreepField(disc, FRAME, [], water)!.land);
+    expect(buildVoidCreepLand(FRAME, water)).toEqual(land);
   });
 
   it('inks larger stretches of water where it reaches a pond', () => {

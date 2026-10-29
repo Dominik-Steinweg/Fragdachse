@@ -17,12 +17,14 @@ export interface SunRenderQuality {
   readonly voidCreepGlow: boolean;
   /** Spore mote layers over the void haze (1..2), and whether stirred air pushes them outwards. */
   readonly voidMoteLayers: number;
+  /** Long side of the void trails' camera target in texels (E12); a danger marker, so never off. */
+  readonly voidTaintTexels: number;
   readonly voidMoteGradient: boolean;
 }
 export const SUN_RENDER_QUALITY = {
-  high: { vegetationForm: true, vegetationShadows: true, compositeScale: .5, cloudTexel: 10, cloudMaxPixels: 262144, cloudMaxAxis: 2048, horizonStep: 6, horizons: true, ecologyDensity: 1, surfaceLights: 4, voidCreepRocks: true, voidCreepGlow: true, voidMoteLayers: 2, voidMoteGradient: true },
-  medium: { vegetationForm: true, vegetationShadows: false, compositeScale: .5, cloudTexel: 20, cloudMaxPixels: 65536, cloudMaxAxis: 1024, horizonStep: 12, horizons: true, ecologyDensity: .8, surfaceLights: 2, voidCreepRocks: true, voidCreepGlow: true, voidMoteLayers: 2, voidMoteGradient: false },
-  low: { vegetationForm: false, vegetationShadows: false, compositeScale: .25, cloudTexel: 40, cloudMaxPixels: 16384, cloudMaxAxis: 512, horizonStep: 24, horizons: false, ecologyDensity: .5, surfaceLights: 1, voidCreepRocks: false, voidCreepGlow: false, voidMoteLayers: 1, voidMoteGradient: false },
+  high: { vegetationForm: true, vegetationShadows: true, compositeScale: .5, cloudTexel: 10, cloudMaxPixels: 262144, cloudMaxAxis: 2048, horizonStep: 6, horizons: true, ecologyDensity: 1, surfaceLights: 4, voidCreepRocks: true, voidCreepGlow: true, voidMoteLayers: 2, voidMoteGradient: true, voidTaintTexels: 512 },
+  medium: { vegetationForm: true, vegetationShadows: false, compositeScale: .5, cloudTexel: 20, cloudMaxPixels: 65536, cloudMaxAxis: 1024, horizonStep: 12, horizons: true, ecologyDensity: .8, surfaceLights: 2, voidCreepRocks: true, voidCreepGlow: true, voidMoteLayers: 2, voidMoteGradient: false, voidTaintTexels: 384 },
+  low: { vegetationForm: false, vegetationShadows: false, compositeScale: .25, cloudTexel: 40, cloudMaxPixels: 16384, cloudMaxAxis: 512, horizonStep: 24, horizons: false, ecologyDensity: .5, surfaceLights: 1, voidCreepRocks: false, voidCreepGlow: false, voidMoteLayers: 1, voidMoteGradient: false, voidTaintTexels: 256 },
 } as const satisfies Record<string, SunRenderQuality>;
 
 /** Same world rectangle for material and display, independent of backing scale.

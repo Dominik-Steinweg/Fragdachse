@@ -72,7 +72,7 @@ gesetzt.
 |---|---|
 | [Bodennebel-Konzept v1](Fragdachse_Bodennebel_Konzept_v1.md) | umgesetzt ([Lab](../ground-fog-lab.md)) |
 | [Nachtsicht, Mondlicht und Void-Botanik V1](Fragdachse_GDD_Nachtsicht_Void_Botanik_V1.md) | umgesetzt (Mondinseln, Lampe an Felsen, Nachtwasser, Void-Botanik mit Argon- und ComfyUI-Assets); offen: Spieltest, Referenzbilder des Nachttests |
-| [Void-Gefahrenzonen und feste Spawnzonen V1](Fragdachse_GDD_Void_Gefahrenzonen_V1.md) | umgesetzt (2026-10-19); offen: Spieltest, Void-Vorschau im Map-Editor, Perf-Messpaar; ersetzt N-6/N-7 der Nachtsicht |
+| [Void-Gefahrenzonen und feste Spawnzonen V1](Fragdachse_GDD_Void_Gefahrenzonen_V1.md) | umgesetzt (2026-10-19), Verseuchung durch Gegnerspuren E12–E14 (2026-10-28); offen: Spieltest, Void-Vorschau im Map-Editor, Perf-Messpaar, Sichtprüfung der Lagekarte; ersetzt N-6/N-7 der Nachtsicht |
 | [Reaktive Map-Objekte V1 (explosive Fässer)](Fragdachse_GDD_Reaktive_Map_Objekte_V1.md) | umgesetzt auf `main` (Rostfass Standard, strategisch an Engstellen auf 8 Kampagnenkarten, PvP, 2 Dawn-Arenen, Map-Editor); offen: Playtest, Tonfreigabe im Audio-Studio; Sporen und Bienenstock in V2 |
 | [Reaktive Map-Objekte V2 (Riesenbovist, Strohkorb)](Fragdachse_GDD_Reaktive_Map_Objekte_V2.md) | in Umsetzung auf Branch `spores-bees` (Sporenwolke mit Slow, Bienenschwarm als GPU-Effekt, Kampagne thematisch und Dawn) |
 | [Hindernisklassen und Schusslinien](FRAGDACHSE_GDD_Hindernisklassen_und_Schusslinien.md) und [Umsetzung](FRAGDACHSE_Hindernisklassen_Umsetzung.md) | umgesetzt |

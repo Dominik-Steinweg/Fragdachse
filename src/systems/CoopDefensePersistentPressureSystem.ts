@@ -6,7 +6,7 @@ import { SPAWN_ZONE_ALERT_LEAD_MS } from './CoopDefenseSpawnZoneAlerts';
 
 interface PersistentPressureSpawnExecutor {
   hostSpawnPersistentMapGroup(kind: CoopDefenseEnemyKind, count: number, front?: SpawnFront,
-    spawnArea?: CoopDefenseMapSpawnAreaConfig): readonly string[];
+    spawnArea?: CoopDefenseMapSpawnAreaConfig, spawnZoneId?: string): readonly string[];
   hostSpawnPersistentStructureGroup(source: BaseSpec, kind: CoopDefenseEnemyKind, count: number): void;
 }
 
@@ -116,7 +116,7 @@ export class CoopDefensePersistentPressureSystem {
       return;
     }
     if (source.source.type === 'zone') {
-      if (source.spawnArea) this.spawnExecutor.hostSpawnPersistentMapGroup(source.enemyKind, source.countPerTick, undefined, source.spawnArea);
+      if (source.spawnArea) this.spawnExecutor.hostSpawnPersistentMapGroup(source.enemyKind, source.countPerTick, undefined, source.spawnArea, source.source.zoneId);
       return;
     }
 

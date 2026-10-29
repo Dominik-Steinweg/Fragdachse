@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRouteFlowGeometry, ROUTE_FLOW_INSTANCE_FLOATS, RouteFlowKind, routeFlowHalfWidth, RouteFlowStore, type RouteFlowRoute,
 } from '../src/effects/routeFlow/RouteFlowStore';
+import { ROUTE_MARCH, RouteFlowMarchers } from '../src/effects/routeFlow/RouteFlowMarchers';
 
 /** A flow-field route on the 16 px node grid: straight runs and 45° steps. */
 function route(steps: readonly [number, number][], start: [number, number], extra: Partial<RouteFlowRoute> = {}): RouteFlowRoute {
@@ -115,5 +116,63 @@ describe('route flow geometry', () => {
     const ages = Array.from({ length: store.count }, (_, slot) => bornAt(slot));
     expect(ages).toContain(1000);
     expect(ages).toContain(5000);
+  });
+});
+
+describe('situation map marchers (E14)', () => {
+  const clip = { x: -1000, y: -1000, width: 4000, height: 4000 };
+  const walk = (marchers: RouteFlowMarchers) => {
+    const out: { id: string; x: number; y: number; active: boolean; group: number; revision: number }[] = [];
+    marchers.forEach(sample => out.push({ id: sample.id, x: sample.x, y: sample.y, active: sample.active, group: sample.group, revision: sample.revision }));
+    return out;
+  };
+  const line = (key: string, length: number, extra: Partial<RouteFlowRoute> = {}): RouteFlowRoute =>
+    ({ key, points: [{ x: 0, y: 0 }, { x: length, y: 0 }], breach: false, strength: 1, ...extra });
+
+  it('stand evenly along a new route and take up the void only behind its surge', () => {
+    const marchers = new RouteFlowMarchers();
+    marchers.setRoutes([line('north', 2400)], clip);
+    const start = walk(marchers);
+    expect(start.filter(m => !m.id.endsWith('surge')).length).toBeGreaterThanOrEqual(2400 / ROUTE_MARCH.spacingPx);
+    expect(start.filter(m => m.active).every(m => m.x <= 1)).toBe(true);
+    marchers.update(1000);
+    const later = walk(marchers);
+    const surge = later.find(m => m.id.endsWith('surge'))!;
+    expect(surge.x).toBeCloseTo(ROUTE_MARCH.surgePxPerSec, 0);
+    for (const m of later) if (!m.id.endsWith('surge')) expect(m.active).toBe(m.x <= surge.x + .001);
+    marchers.update(5000);
+    const walked = walk(marchers);
+    expect(walked.some(m => m.id.endsWith('surge'))).toBe(false);
+    expect(walked.every(m => m.active)).toBe(true);
+  });
+
+  it('keeps a route that stays planned and retires the groups of dropped routes once', () => {
+    const marchers = new RouteFlowMarchers();
+    marchers.setRoutes([line('north', 1200), line('south', 1200, { points: [{ x: 0, y: 400 }, { x: 1200, y: 400 }] })], clip);
+    const groups = new Set(walk(marchers).map(m => m.group));
+    marchers.update(2000);
+    marchers.setRoutes([line('north', 1200)], clip);
+    const kept = walk(marchers);
+    expect(kept.every(m => groups.has(m.group))).toBe(true);
+    expect(kept.some(m => m.id.endsWith('surge'))).toBe(false);
+    expect(marchers.retired?.groups).toHaveLength(1);
+    const revision = marchers.retired!.revision;
+    marchers.setRoutes([line('north', 1200)], clip);
+    expect(marchers.retired!.revision).toBe(revision);
+    // Rerouted: a new group that surges in again.
+    marchers.setRoutes([line('north', 1300)], clip);
+    expect(walk(marchers).every(m => !groups.has(m.group))).toBe(true);
+    expect(marchers.retired!.revision).toBe(revision + 1);
+  });
+
+  it('jumps through a portal without a trail across the gap', () => {
+    const marchers = new RouteFlowMarchers();
+    marchers.setRoutes([{ key: 'jump', breach: false, strength: 1,
+      points: [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 2000, y: 0, portal: true }, { x: 2300, y: 0 }] }], clip);
+    marchers.update(10_000);
+    const samples = walk(marchers).filter(m => !m.id.endsWith('surge'));
+    expect(samples.filter(m => m.x > 300 && m.x < 2000)).toEqual([]);
+    expect(new Set(samples.filter(m => m.x >= 2000).map(m => m.revision))).toEqual(new Set([1]));
+    expect(new Set(samples.filter(m => m.x < 300).map(m => m.revision))).toEqual(new Set([0]));
   });
 });

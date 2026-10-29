@@ -27,6 +27,7 @@ import { isWeaponShotFeedbackEvent, type WeaponShotFeedbackEvent } from '../load
 import { parseTimeBubbleUtilityState, type TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
 import { parseTranslocatorUseState, type TranslocatorUseState } from '../loadout/TranslocatorUseState';
 import type { PortalPair } from '../systems/PortalTraversal';
+import { isWorldSpawnZoneId } from '../config/spawnZones';
 import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeState } from '../loadout/UtilityChargeState';
 /**
  * NetworkBridge – die Grenze zwischen Spiellogik und Netzwerk.
@@ -267,8 +268,7 @@ const KEY_COOP_PORTAL_LINKS = 'cpl'; // global reliable: WirePortalLinkState | n
 const MAX_COOP_SPAWN_PLACE_IDS = 64;
 const MAX_COOP_SPAWN_ZONE_ALERTS = 16;
 const MAX_COOP_ENCOUNTER_ZONES = 64;
-const SPAWN_ZONE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const isSpawnZoneId = (value: unknown): value is string => typeof value === 'string' && value.length <= 64 && SPAWN_ZONE_ID.test(value);
+const isSpawnZoneId = isWorldSpawnZoneId;
 const NO_SPAWN_ZONE_ALERTS: readonly SyncedSpawnZoneAlert[] = [];
 const MAX_COOP_MAP_EVENT_PRESENTATION_ENTRIES = 64;
 const MAX_COOP_SECONDARY_OBJECTIVE_PRESENTATION_ENTRIES = 32;

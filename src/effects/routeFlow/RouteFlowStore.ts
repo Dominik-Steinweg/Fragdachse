@@ -68,6 +68,8 @@ export interface RouteFlowPoint {
 }
 
 export interface RouteFlowRoute {
+  /** The planner's route identity; a route keeps its marchers while its key and path stay. */
+  readonly key?: string;
   /** From the source to the goal or the breach, World pixels. */
   readonly points: readonly RouteFlowPoint[];
   /** The last point is where enemies break through a sealed base. */

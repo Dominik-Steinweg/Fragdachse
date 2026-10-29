@@ -25,6 +25,9 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 | E10 | (Nachtrag) Ein Spawnort, der noch nicht aktiv ist, trägt schwächeren Dunst. Gemeint sind eine Zone, die erst ein späterer Encounter, eine spätere Quelle oder der Boss nutzt, und ein schlafender Spawnpunkt. Ein Spawnort, der nie mehr aktiv wird, verliert den Dunst ganz, die Pflanzen bleiben als Narbe. |
 | E11 | (Nachtrag) Ein deaktivierter Spawnort verliert den Dunst nicht ganz. Nur kleine, weiterhin dichte Flächen bleiben, über den Void-Pflanzen und an wenigen Stellen des getränkten Bodens. Das Abklingen ist ein Erfolgserlebnis: Eine weiche violette Welle läuft auf der GPU vom Zentrum nach außen, die Sporen flackern auf und werden mitgerissen. Eine Zone gilt bis zum Abwehren ihrer Welle als aktiv. |
 | E9 | Die Sporen werden feiner, weniger weiß und dezenter, leuchten aber weiter. Wie der Dunst reagieren sie auf Explosionen und Bewegung. |
+| E12 | (Nachtrag 2026-10-28) Gegner verseuchen den Nebel, durch den sie laufen. Hinter ihnen nimmt der Nebel den Dunst einer aktiven Spawnzone an, inklusive Farbe, hellem Wolkenkörper, höherer Dichte, Bodenschleier, Sporen und Nachtleuchten. Ohne Nebel liegt auf der Spur ein leichter eigener Schleier. Frische Verseuchung leuchtet erst auf und setzt sich dann. Nach etwa 15 s ist die Spur wieder normaler Nebel. Der Dunst sammelt sich hinter dem Körper, wo ein Gegner steht, bleibt die Luft offen. Besetzte Zonen werden dadurch nachts besser beleuchtet. |
+| E13 | (Nachtrag 2026-10-28) Wird die Welle einer Zone abgewehrt, löst dieselbe Welle wie in E11 die Spuren genau ihrer Gegner auf. Sie läuft von der Zone über die Spuren hinaus, die Spur leuchtet beim Erreichen der Front noch einmal auf und verschwindet. Das gilt auch, wenn die Zone später wieder genutzt wird (1 → 0,45); ist sie verbraucht, nimmt dieselbe Welle auch ihren Dunst mit. Spuren anderer Zonen und ungetaggter Gegner (Fronten, Dawn, Boss, Kraken) klingen nur von selbst ab. |
+| E14 | (Nachtrag 2026-10-28) Die Lagekarte nutzt dasselbe System: Phantom-Marschierer laufen die geplanten Routen im Gegnertempo ab und verseuchen den Nebel wie die Gegner der Runde. Eine neue oder umgeleitete Route bricht mit einem schnellen Stoß aus ihrer Zone hervor, eine weggefallene Route klingt schnell ab. |
 
 ## 3. Modell
 
@@ -48,6 +51,12 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
   - G: Landanteil;
   - B: Dunst.
   - Fällt die Präsenz einer Quelle weg, wird nur B im Begrenzungsrahmen dieser Quelle neu berechnet und über 3 s überblendet. Pflanzen und R bleiben.
+- **Verseuchung (E12–E14, `src/arena/VoidTaint.ts`):**
+  - Die Activity liefert per Pull ihre Marschierer (`ActivityVoidDanger.marchers`): die feindlichen Gegner der Mission oder die Phantom-Marschierer der Lagekarte.
+  - Die CPU hält weltverankerte Kapsel-Stempel mit Geburts- und Abklingzeit (16-bit-Uhr). Die GPU rastert sie jeden Frame in ein kleines kamerafolgendes Ziel (`VoidTaintLayer`: R Dunst, G Aufleuchten).
+  - Die Spuren gehen in `creepTexel` neben den Warnungen ein, so tragen Nebel-Formpass, Boden- und Felsschleier, Nachtleuchten und Sporen sie mit. `.a` ist der Deckungshub: voll über einem Ort, ein Anteil über einer Spur.
+  - Jeder Gegner trägt seine Spawnzone (`spawnZoneId`, volle Zustände, Protokoll 56). Die Auflösung setzt die Abklingzeit jedes Stempels der Zone auf die Ankunft der Wellenfront (`VoidLiftWave`).
+  - Eine World ohne eigenes Void hält ein reines Landfeld, solange eine Activity Spuren legt.
 
 ## 4. Phasen
 
@@ -60,6 +69,7 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 | 5 | Gerichtete Randwarnung und HUD-Richtung | fertig, an Zonen angeschlossen |
 | 6 | Umbau der Front-Karten (02–06, 08–15, 17–20) auf feste Spawnzonen | fertig; Void-Vorschau im Map-Editor offen |
 | 7 | Doku und Release | fertig; Spieltest und Perf-Messpaar offen |
+| 8 | Verseuchung durch Gegnerspuren, Auflösung per Zone, Lagekarte mit Phantom-Marschierern (E12–E14, Protokoll 56) | umgesetzt; Spieltest, Perf-Messpaar und Sichtprüfung der Lagekarte offen |
 
 ## 5. Entscheidungslog
 
@@ -75,4 +85,5 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
   - Der Dunst haftet an Land und Ufern. Über offenem Wasser bleibt ein Film von 20 %, Warnungen zu 60 %. Der Teich zeigt Tinte, Ufer und Ausgänge bleiben dicht.
   - Körper ab Bossgröße (56 px) halten Nebel und Dunst um sich offen, auch in Ruhe. Davon profitiert auch der normale Nebel, der über Wasser dichter ist.
 - 2026-10-28 (Spieltest Lagekarte): Spawnzonen sind rund statt rechteckig: die Ellipse im authored Kasten, ihr Rand schwingt organisch nach innen. Spawns, Routenquellen, Prüfungen, Dunst, Warnungen, Lagekarte und Map-Editor lesen dieselbe Form. Bodenzonen über Wasser wurden verlegt (Maps 02, 05, 08, 11, 13, 14; Map 02 bekommt dafür ein trockenes Westufer), sehr flache Randzonen wurden runder (Maps 05, 06, 08, 09, 10, 14, 15, 17). Generator 17, Protokoll 53.
+- 2026-10-28 (E12–E14): Die Spuren sind ein eigenes GPU-Feld statt weiterer Teil-Uploads in B: Bewegte Quellen änderten B jeden Frame. Das Feld bindet im Formpass und in den Void-Ebenen, nicht im Material-Pass (dort ist kein Sampler frei). Das Aufleuchten trägt der Formpass in A, das Erosionsrauschen rechnet das Material selbst. Die Auflösung setzt Abklingzeiten auf der CPU statt Zonen-Tags auf der GPU: Das Raster hängt nur von Stempeln und Uhr ab. Die Zone reist am Gegner (`spawnZoneId`), weil Encounter und Zone nicht eins zu eins sind. Die statischen Dunstlinien der Lagekarte (`hazeLines`) sind entfallen.
 - 2026-10-19: Die Dawn-Angriffswellen behalten ihr intern erzeugtes Inline-Rechteck. Sie sind eine generierte Activity ohne authored Ort. Der Dunst über Dawn-Stätten kommt aus den feindlichen Stätten-Basen.

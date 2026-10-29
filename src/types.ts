@@ -2185,6 +2185,8 @@ export interface SyncedBaseTurretState {
 /** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
 export interface SyncedEnemyState {
   eliteAffixId?: import('./dawn/contracts/DawnContentIds').DawnEliteAffixId;
+  /** World spawn zone the enemy came out of; fixed for its life, carried by full states only. */
+  spawnZoneId?: string;
   areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   /** Host-fixed shield charge (lane + phase timeline); absent until the first charge. */
@@ -2232,6 +2234,8 @@ export interface SyncedEnemyState {
 /** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverändert. */
 export interface SyncedEnemyDeltaState {
   eliteAffixId?: import('./dawn/contracts/DawnContentIds').DawnEliteAffixId;
+  /** World spawn zone the enemy came out of; fixed for its life, carried by full states only. */
+  spawnZoneId?: string;
   areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   /** Host-fixed shield charge (lane + phase timeline); absent until the first charge. */

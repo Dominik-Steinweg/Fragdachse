@@ -18,4 +18,9 @@ export interface FogVoidHaze {
   /** Spawn zone warnings (`uVoidAlert[0]`: x, y, width, height per zone; `uVoidAlertLevel[0]`). */
   readonly alerts: Float32Array;
   readonly alertLevels: Float32Array;
+  /**
+   * Trails of hostile bodies (VoidTaintLayer, E12): R haze, G flare over the world rect `view`;
+   * `on` 1 while the texture holds trails. Read every frame; absent in Worlds without trails.
+   */
+  readonly taint?: { readonly texture: Phaser.Textures.Texture | null; readonly view: Float32Array; readonly on: number } | null;
 }
