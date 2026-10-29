@@ -214,6 +214,11 @@ export class EffectSystem implements EnemyVisualSink {
     if (attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
     this.enemyClawRenderer?.syncZone(id, attack, now, visible, color, tracking);
   }
+  /** Landing mark of an announced leap in the shared enemy-attack family (rabbit pounce). */
+  syncEnemyLandingMark(id: string, mark: import('./EnemyClawRenderer').EnemyLandingMark | null, now: number, visible: boolean): void {
+    if (mark) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
+    this.enemyClawRenderer?.syncLandingMark(id, mark, now, visible);
+  }
   clearEnemyClaw(id: string): void { this.enemyClawRenderer?.release(id); }
   clearEnemyClawEffects(): void { this.enemyClawRenderer?.clear(); this.tongueLash?.clear(); }
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;

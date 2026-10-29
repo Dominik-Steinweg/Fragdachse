@@ -7,6 +7,13 @@
     "cameras": [],
     "sites": [
       {
+        "key": "syncPounceMenace/this.pounceHalo/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.09",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
         "key": "module/this.sprite/setDepth/0",
         "expression": "DEPTH.PLAYERS - 0.05",
         "blends": [
@@ -42,6 +49,28 @@
     }
   },
   "cpuLayers": [
+    {
+      "id": "cpu:entities/EnemyEntity.ts:syncPounceMenace/this.pounceHalo/setDepth/0",
+      "owner": "entities/EnemyEntity.ts",
+      "component": "syncPounceMenace/this.pounceHalo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.91
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncPounceMenace/this.pounceHalo/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.09"
+      }
+    },
     {
       "id": "cpu:entities/EnemyEntity.ts:module/this.sprite/setDepth/0",
       "owner": "entities/EnemyEntity.ts",

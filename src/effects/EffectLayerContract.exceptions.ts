@@ -405,6 +405,7 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/repairDroneVisuals.ts:createRepairDroneBody/scene.add/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:entities/BaseEntity.ts:setVulnerable/marker/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:entities/EnemyEntity.ts:createGlowHalo/this.glowHalo/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
+  {"id":"cpu:entities/EnemyEntity.ts:syncPounceMenace/this.pounceHalo/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/EnemyHeatBurstPresentation.ts:createVisual/halo/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:entities/PlayerEntity.ts:module/this.spawnShine/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:entities/PlayerEntity.ts:module/this.stealthShell/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},

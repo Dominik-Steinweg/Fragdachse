@@ -79,6 +79,21 @@ describe('enemy claw presentation lifetime', () => {
     f.renderer.syncZone('late', { ...zone, attackId: 'hop:e:2' }, 1650, true);
     expect(f.store.count).toBe(0);
   });
+
+  it('rewrites a landing mark on one timeline through the lock and drops it when cancelled', () => {
+    const f = fixture();
+    const mark = { attackId: 'pounce:e:1000', x: 300, y: 200, radius: 64, startedAt: 1000, lockAt: 1450, hitAt: 2000 };
+    f.renderer.syncLandingMark('pounce', mark, 1000, true);
+    const time = (i: number) => f.store.data[4 + i] - f.store.data[4];
+    expect(f.store.data[10]).toBe(ClawVfxKind.LandingMark);
+    // The lock fixes position and landing time; the start of the timeline stays where it was.
+    f.renderer.syncLandingMark('pounce', { ...mark, x: 320, hitAt: 2150 }, 1500, true);
+    expect(f.store.count).toBe(1);
+    expect([time(1), time(2)]).toEqual([450, 1150]);
+    expect(f.store.data[0] - f.store.data[2]).toBeCloseTo(320);
+    f.renderer.syncLandingMark('pounce', null, 1600, true);
+    expect(f.store.count).toBe(0);
+  });
 });
 
 describe('enemy claw instance store', () => {

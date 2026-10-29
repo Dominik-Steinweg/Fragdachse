@@ -3,7 +3,7 @@ import { ALLIED_COLOR, DEPTH, DEPTH_LIGHTING, DEPTH_TRACE } from '../config';
 import { emissiveAlpha } from './EmissiveScale';
 import type { SyncedMeleeSwing } from '../types';
 import type { EnemyClawState, EnemyAreaClawAttack, EnemyAreaClawEvent, EnemyAreaClawImpact } from '../systems/EnemyClawAttack';
-import { EnemyClawVfxStore, type ClawVfxAttackSpec } from './enemyClaw/EnemyClawVfxStore';
+import { CLAW_VFX_TELEGRAPH_FADE_MS, EnemyClawVfxStore, type ClawVfxAttackSpec } from './enemyClaw/EnemyClawVfxStore';
 import { ClawVfxPass, createEnemyClawGpuLayer, type EnemyClawGpuLayer } from './enemyClaw/EnemyClawGpuLayer';
 
 /** One danger family for every hostile claw: the sector must read as "leave" regardless of species. */
@@ -34,6 +34,13 @@ export interface EnemyZoneAttack {
   readonly attackId: string;
   readonly x: number; readonly y: number; readonly radius: number;
   readonly startedAt: number; readonly strikeAt: number; readonly hitAt: number; readonly endsAt: number;
+}
+
+/** Announced landing of a leap (pounce): hint from `startedAt`, mark from `lockAt`, landing at `hitAt`. */
+export interface EnemyLandingMark {
+  readonly attackId: string;
+  readonly x: number; readonly y: number; readonly radius: number;
+  readonly startedAt: number; readonly lockAt: number; readonly hitAt: number;
 }
 
 /** Bounded warmup: a pass that never renders must not hold the world-load barrier. */
@@ -182,6 +189,30 @@ export class EnemyClawRenderer {
       telegraphOnly: true, startedAt: attack.startedAt + offset, strikeAt: attack.strikeAt + offset,
       hitAt: attack.hitAt + offset, color }, clock)) {
       this.active.set(id, { attackId: attack.attackId, hitClock: attack.hitAt + offset });
+    }
+  }
+
+  /**
+   * Landing mark of an announced leap on one timeline: a faint hint until `lockAt`, then a mark
+   * that fills from its centre up to the hit radius at `hitAt`. Position and timing are rewritten under the same identity
+   * (the hint glides, the lock fixes the real landing time) without restarting the timeline.
+   * `null` before the hit makes it vanish (cancelled or unarmed leap).
+   */
+  syncLandingMark(id: string, mark: EnemyLandingMark | null, now: number, visible: boolean,
+    color = ENEMY_CLAW_HOSTILE_COLOR): void {
+    const clock = this.clock();
+    this.retire(clock);
+    if (!mark || !visible || now >= mark.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS) { this.release(id); return; }
+    const current = this.active.get(id);
+    if (current && current.attackId !== mark.attackId) this.release(id);
+    if (now >= mark.hitAt) {
+      if (!current || current.attackId !== mark.attackId) this.remember(this.struck, mark.attackId, clock);
+      return;
+    }
+    const offset = clock - now;
+    if (this.store.addAttack(mark.attackId, { shape: 'mark', x: mark.x, y: mark.y, angle: 0, radius: mark.radius,
+      startedAt: mark.startedAt + offset, strikeAt: mark.lockAt + offset, hitAt: mark.hitAt + offset, color }, clock)) {
+      this.active.set(id, { attackId: mark.attackId, hitClock: mark.hitAt + offset });
     }
   }
 

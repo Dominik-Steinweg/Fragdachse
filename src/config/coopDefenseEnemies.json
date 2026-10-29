@@ -175,7 +175,7 @@
         "cancelDisplacementPx": 72,
         "cancelLockoutMs": 600,
         "impact": {
-          "radiusPx": 80,
+          "radiusPx": 64,
           "damage": 28,
           "knockbackSpeed": 520,
           "knockbackMs": 220

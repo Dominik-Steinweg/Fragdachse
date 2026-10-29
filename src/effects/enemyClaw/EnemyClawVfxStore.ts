@@ -19,7 +19,7 @@ export const CLAW_VFX_CONTACT_MS = 280;
 /** The ground telegraph dissolves this long after the hit; shared with the shader. */
 export const CLAW_VFX_TELEGRAPH_FADE_MS = 110;
 
-export const ClawVfxKind = { Attack: 0, Contact: 1, Lane: 2, TelegraphSector: 3, FanWedge: 4 } as const;
+export const ClawVfxKind = { Attack: 0, Contact: 1, Lane: 2, TelegraphSector: 3, FanWedge: 4, LandingMark: 5 } as const;
 
 /** Rays of a fan telegraph (wedges = rays - 1); matches the replicated energy cone cover profile. */
 export const CLAW_VFX_FAN_RAYS = 16;
@@ -43,6 +43,8 @@ interface ClawVfxTiming {
 export type ClawVfxAttackSpec = ClawVfxTiming & (
   | { readonly shape?: 'sector'; readonly range: number; readonly halfArc: number; readonly telegraphOnly?: boolean }
   | { readonly shape: 'lane'; readonly length: number; readonly width: number }
+  /** Announced landing point: a faint hint until `strikeAt` (the lock), then a mark that fills up to `hitAt`. */
+  | { readonly shape: 'mark'; readonly radius: number }
 );
 
 /**
@@ -84,6 +86,14 @@ export class EnemyClawVfxStore {
         -pad, spec.length + pad, -spec.width / 2 - pad, spec.width / 2 + pad,
         spec.startedAt - e, spec.strikeAt - e, spec.hitAt - e, spec.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS - e,
         spec.length, spec.width / 2, ClawVfxKind.Lane, spec.color);
+      this.expiresAt[slot] = spec.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS;
+      return true;
+    }
+    if (spec.shape === 'mark') {
+      const extent = spec.radius * 1.05 + 4, e = this.epoch;
+      this.writeQuad(slot, spec.x, spec.y, 0, -extent, extent, -extent, extent,
+        spec.startedAt - e, spec.strikeAt - e, spec.hitAt - e, spec.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS - e,
+        spec.radius, 0, ClawVfxKind.LandingMark, spec.color);
       this.expiresAt[slot] = spec.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS;
       return true;
     }

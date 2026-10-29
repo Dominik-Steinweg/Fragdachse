@@ -1,6 +1,6 @@
 import type * as Phaser from 'phaser';
 import { getPipelineAssetForTexture, type PipelineClip } from '../config/pipelineAssets';
-import { enemyPouncePhaseAt, type EnemyPounceState } from '../systems/EnemyPounceState';
+import { enemyPounceAirProgress, enemyPouncePhaseAt, type EnemyPounceState } from '../systems/EnemyPounceState';
 import { leapClipFrame } from './leapPresentation';
 
 type ClipSource = (name: string) => Pick<PipelineClip, 'frames' | 'markers' | 'frameRate'> | undefined;
@@ -45,6 +45,52 @@ export function pounceClipFrame(state: EnemyPounceState, now: number, clip: Clip
   if (phase === 'air') return stretch(claw.frames, strike, impact, landing!.takeoffAt, landing!.landAt, now);
   if (phase === 'recover') return stretch(claw.frames, impact, last, landing!.landAt, landing!.recoverUntil, now);
   return stretch(claw.frames, 0, strike, pounce.aimAt, takeoffAt, now);
+}
+
+/** Take-off signal of a pouncing body: void glow, light share and coil, each 0..1. */
+export interface PounceMenace {
+  readonly glow: number;
+  readonly light: number;
+  readonly coil: number;
+}
+
+const NO_MENACE: PounceMenace = Object.freeze({ glow: 0, light: 0, coil: 0 });
+/** Quiet build-up while aiming; the lock carries the real rise. */
+const MENACE_AIM_GLOW = 0.25;
+const MENACE_TAKEOFF_GLOW = 0.85;
+/** Short flicker on top of the rise during the crouch, so the take-off moment reads. */
+const MENACE_CROUCH_PULSE = 0.15;
+const MENACE_CROUCH_PULSE_MS = 90;
+const MENACE_LANDED_GLOW = 0.2;
+
+const smooth = (t: number): number => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
+
+/**
+ * The body announces its own take-off instead of a lane across the ground: a void glow that swells
+ * quietly while aiming, rises through the lock with a short flicker in the crouch, and dies away
+ * in the air and the recovery; the body coils (shrinks slightly) towards the take-off.
+ */
+export function pounceMenace(state: EnemyPounceState, now: number): PounceMenace {
+  const pounce = state.pounce;
+  const phase = enemyPouncePhaseAt(state, now);
+  const landing = pounce?.landing;
+  if (!pounce || phase === 'idle') return NO_MENACE;
+  if (phase === 'aim' || !landing) {
+    return { glow: MENACE_AIM_GLOW * smooth((now - pounce.aimAt) / Math.max(1, pounce.lockAt - pounce.aimAt)), light: 0, coil: 0 };
+  }
+  if (phase === 'lock') {
+    const lockFrom = Math.min(pounce.lockAt, landing.takeoffAt);
+    const rise = smooth((now - lockFrom) / Math.max(1, landing.takeoffAt - lockFrom));
+    const crouch = now >= landing.takeoffAt - POUNCE_CROUCH_MS
+      ? MENACE_CROUCH_PULSE * (0.5 + 0.5 * Math.sin(now * Math.PI * 2 / MENACE_CROUCH_PULSE_MS)) : 0;
+    return { glow: MENACE_AIM_GLOW + (MENACE_TAKEOFF_GLOW - MENACE_AIM_GLOW) * rise + crouch, light: 0.35 + 0.65 * rise, coil: rise };
+  }
+  if (phase === 'air') {
+    const progress = enemyPounceAirProgress(landing, now);
+    return { glow: MENACE_TAKEOFF_GLOW + (MENACE_LANDED_GLOW - MENACE_TAKEOFF_GLOW) * progress, light: 1 - progress, coil: 0 };
+  }
+  const settle = (now - landing.landAt) / Math.max(1, landing.recoverUntil - landing.landAt);
+  return { glow: MENACE_LANDED_GLOW * (1 - smooth(settle)), light: 0, coil: 0 };
 }
 
 export function syncEnemyPounceAnimation(sprite: Phaser.GameObjects.Sprite, texture: string,

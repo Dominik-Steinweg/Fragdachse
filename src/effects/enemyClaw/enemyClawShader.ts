@@ -1,5 +1,10 @@
 import { CLAW_VFX_FAN_RAYS, CLAW_VFX_SLASH_MS, CLAW_VFX_TELEGRAPH_FADE_MS } from './EnemyClawVfxStore';
 
+/** Landing mark tuning: hint while aiming, base disk after the lock, extra fill reached at the landing. */
+const MARK_HINT_ALPHA = '0.14';
+const MARK_BASE_ALPHA = '0.1';
+const MARK_FILL_ALPHA = '0.13';
+
 /**
  * Analytic claw visuals, all passes reading the same instance buffer:
  * 0 ground telegraph below the figures, 1 rakes and contact marks above them (both lit by
@@ -148,6 +153,36 @@ vec4 lane(float gain) {
   return vec4(mix(vColor.rgb, HOT, 0.35 * strike) * a, a);
 }
 
+// Landing mark of an announced leap (pounce): one calm timeline instead of repeated charge pulses.
+// Until the lock (vTiming.y) only a faint, soft-edged spot hints at the predicted landing; after it
+// the spot firms up into a soft disk that fills from its centre and reaches the hit radius exactly
+// at the landing. Nothing is drawn beyond the hit radius, and there is no hub cut-out: the attacker
+// is not standing in the zone.
+vec4 mark(float gain) {
+  float radius = vShape.x;
+  float r = length(vLocal);
+  float rn = r / radius;
+  if (rn >= 1.05) return vec4(0.0);
+  float lock = smoothstep(vTiming.y, vTiming.y + 140.0, uTime);
+  float progress = clamp((uTime - vTiming.y) / max(1.0, vTiming.z - vTiming.y), 0.0, 1.0);
+  float vis = smoothstep(vTiming.x, vTiming.x + 140.0, uTime)
+    * (1.0 - smoothstep(vTiming.z, vTiming.z + FADE_MS, uTime));
+  float hint = (1.0 - smoothstep(0.3, 1.0, rn)) * ${MARK_HINT_ALPHA};
+  float disk = 1.0 - smoothstep(0.82, 1.0, rn);
+  // The filled share grows with the remaining air time and has a soft front.
+  float front = radius * progress;
+  float fillWidth = radius * 0.14;
+  float filled = 1.0 - smoothstep(front - fillWidth, front + fillWidth, r);
+  float rimD = (rn - 0.93) / 0.07;
+  float rim = exp(-rimD * rimD) * (0.08 + 0.08 * progress);
+  float markA = disk * (${MARK_BASE_ALPHA} + ${MARK_FILL_ALPHA} * filled) + rim;
+  float a = mix(hint, markA, lock) * gain * vis;
+  if (a <= 0.0) return vec4(0.0);
+  float warm = 0.25 * smoothstep(vTiming.z - 80.0, vTiming.z, uTime);
+  vec3 color = mix(vColor.rgb, HOT, warm);
+  return vec4(color * a, a);
+}
+
 // Two mirrored paws closing like a pincer: each drags three stacked claw arcs from the
 // flank of the sector toward its centre line, reaching slightly further as it closes.
 vec4 rake() {
@@ -236,7 +271,8 @@ vec4 contact() {
 
 void main() {
   vec4 color;
-  if (vShape.z > 3.5) color = uPass < .5 ? fan(1.0) : uPass > 1.5 ? fan(.55) : vec4(0.0);
+  if (vShape.z > 4.5) color = uPass < .5 ? mark(1.0) : uPass > 1.5 ? mark(.55) : vec4(0.0);
+  else if (vShape.z > 3.5) color = uPass < .5 ? fan(1.0) : uPass > 1.5 ? fan(.55) : vec4(0.0);
   else if (vShape.z > 2.5) color = uPass < .5 ? telegraph(1.0) : uPass > 1.5 ? telegraph(.55) : vec4(0.0);
   else if (vShape.z > 1.5) color = uPass < 0.5 ? lane(1.0) : uPass > 1.5 ? lane(0.55) : vec4(0.0);
   else if (uPass < 0.5) color = telegraph(1.0);

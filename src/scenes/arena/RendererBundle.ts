@@ -641,9 +641,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.kaboomtula.setSinks(
     (id, attack, now, visible) => effectSystem.syncEnemyLane(`kaboomtula-lane:${id}`, attack, now, visible, undefined, true),
     (id, attack, now, visible) => effectSystem.syncEnemyZone(`kaboomtula-ring:${id}`, attack, now, visible, undefined, true));
-  bundle.enemyPounces.setSinks(
-    (id, attack, now, visible) => effectSystem.syncEnemyLane(`pounce-lane:${id}`, attack, now, visible, undefined, true),
-    (id, attack, now, visible) => effectSystem.syncEnemyZone(`pounce-zone:${id}`, attack, now, visible, undefined, true));
+  bundle.enemyPounces.setMarkSink((id, mark, now, visible) => effectSystem.syncEnemyLandingMark(`pounce-mark:${id}`, mark, now, visible));
   // The heat warning travels with its running body: a tracking zone in the shared danger family.
   bundle.enemyHeatBursts.setZoneSink((id, attack, now, visible) =>
     effectSystem.syncEnemyZone(`heat-zone:${id}`, attack, now, visible, undefined, true));

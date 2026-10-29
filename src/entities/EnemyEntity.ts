@@ -10,7 +10,7 @@ import { EMPTY_ENERGY_CONE_STATE, isEnergyConeState, type EnergyConeState } from
 import { EMPTY_ENEMY_HOP_STATE, enemyHopAirProgress, enemyHopPhaseAt, isEnemyHopState, type EnemyHopState } from '../systems/EnemyHopState';
 import { syncEnemyHopAnimation } from '../animations/EnemyHopAnimation';
 import { syncEnemyKaboomtulaAnimation } from '../animations/EnemyKaboomtulaAnimation';
-import { syncEnemyPounceAnimation } from '../animations/EnemyPounceAnimation';
+import { pounceMenace, syncEnemyPounceAnimation } from '../animations/EnemyPounceAnimation';
 import { EMPTY_ENEMY_POUNCE_STATE, enemyPounceAirProgress, enemyPouncePhaseAt, isEnemyPounceState,
   type EnemyPounceState } from '../systems/EnemyPounceState';
 import { EMPTY_KABOOMTULA_STATE, isKaboomtulaState, kaboomtulaLeapProgress, kaboomtulaPhaseProgress,
@@ -88,6 +88,15 @@ const LEAP_LIFT_AMPLITUDE = 0.32;
 const HOP_LIFT_AMPLITUDE = 0.24;
 /** Apex growth of a pounce: the long attack jump rises highest. */
 const POUNCE_LIFT_AMPLITUDE = 0.36;
+/** A pouncing body coils (shrinks) by this share towards its take-off. */
+const POUNCE_COIL_SQUASH = 0.06;
+/** Soft additive void halo of the take-off signal: diameter in body sizes and alpha at full glow. */
+const POUNCE_HALO_MIN_SIZE = 1.6;
+const POUNCE_HALO_MAX_SIZE = 3.2;
+const POUNCE_HALO_ALPHA = 0.85;
+/** Small void light of the take-off signal, so it still reads at night. */
+const POUNCE_LIGHT_RADIUS_PX = 42;
+const POUNCE_LIGHT_INTENSITY = 0.55;
 
 export type EnemyFaction = 'hostile' | 'allied';
 
@@ -102,6 +111,15 @@ export interface EnemyAttackWeapon {
   readonly salvo?: CoopDefenseEnemyWeaponSalvoConfig;
   /** Visual muzzle ahead of the centre along the aim (0 = the centre). */
   readonly muzzleForwardPx: number;
+}
+
+function ensureEnemyGlowTexture(scene: Phaser.Scene): void {
+  fillRadialGradientTexture(scene.textures, TEX_ENEMY_GLOW, 96, [
+    [0,    'rgba(255,255,255,1)'],
+    [0.32, 'rgba(255,255,255,0.55)'],
+    [0.68, 'rgba(255,255,255,0.16)'],
+    [1,    'rgba(255,255,255,0)'],
+  ]);
 }
 
 export class EnemyEntity {
@@ -196,6 +214,8 @@ export class EnemyEntity {
   private allyGlow: GlowHandle | null = null;
   /** Void silhouette glow of a hunting Kabummtula: its danger signal, there is no marker. */
   private kaboomtulaAura: GlowHandle | null = null;
+  /** Soft void halo of a pouncing Rabid Rabbit: its take-off signal, there is no lane. */
+  private pounceHalo: Phaser.GameObjects.Image | null = null;
   private burnStacks = 0;
   private plasmaChargeStacks = 0;
   private burnVisualStyle: GroundFireVisualStyle = 'normal';
@@ -293,12 +313,44 @@ export class EnemyEntity {
     const progress = airborne ? enemyPounceAirProgress(landing, now) : 0;
     if (airborne) this.placeOnFlightLine(pounce!.originX, pounce!.originY, landing.x, landing.y, progress);
     this.pounceAirborne = airborne;
-    this.setAirLiftScale(1 + POUNCE_LIFT_AMPLITUDE * airborneLift(progress), false);
+    const menace = pounceMenace(state, now);
+    this.setAirLiftScale(airborne ? 1 + POUNCE_LIFT_AMPLITUDE * airborneLift(progress) : 1 - POUNCE_COIL_SQUASH * menace.coil, false);
+    this.syncPounceMenace(menace.glow, menace.light);
     const wasAnimating = this.pounceAnimating;
     this.pounceAnimating = syncEnemyPounceAnimation(this.sprite, this.config.imageKey, state, now,
       this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
     if (wasAnimating && !this.pounceAnimating) this.syncWalkingAnimation();
   }
+
+  /** Void glow and light of the take-off signal in the eye colour; red stays reserved for the landing mark. */
+  private syncPounceMenace(glow: number, light: number): void {
+    const visible = this.sprite.visible && !this.burrowed && this.currentHp > 0 && this.faction === 'hostile';
+    const color = this.config.eyeGlow?.color ?? 0xb45cff;
+    const on = visible && glow > 0.01;
+    if (on && !this.pounceHalo) {
+      const scene = this.sprite.scene;
+      ensureEnemyGlowTexture(scene);
+      this.pounceHalo = scene.add.image(this.sprite.x, this.sprite.y, TEX_ENEMY_GLOW);
+      this.pounceHalo.setDepth(DEPTH.PLAYERS - 0.09);
+      makeAdditive(this.pounceHalo);
+    }
+    if (this.pounceHalo) {
+      this.pounceHalo.setVisible(on);
+      if (on) {
+        const diameter = this.config.size * (POUNCE_HALO_MIN_SIZE + (POUNCE_HALO_MAX_SIZE - POUNCE_HALO_MIN_SIZE) * glow);
+        this.pounceHalo.setPosition(this.sprite.x, this.sprite.y).setDisplaySize(diameter, diameter).setTint(color)
+          .setAlpha(emissiveAlpha(POUNCE_HALO_ALPHA * glow));
+      }
+    }
+    const key = this.pounceLightKey();
+    if (!this.lighting) return;
+    if (!visible || light <= 0.01) { this.lighting.releaseLight(key); return; }
+    this.lighting.setLight(key, 'entityGlow', this.sprite.x, this.sprite.y, {
+      color, radiusPx: POUNCE_LIGHT_RADIUS_PX, intensity: POUNCE_LIGHT_INTENSITY * light,
+    });
+  }
+
+  private pounceLightKey(): string { return `enemypounce:${this.id}`; }
 
   private heatBurstState: EnemyHeatBurstState = EMPTY_ENEMY_HEAT_BURST_STATE;
 
@@ -1223,6 +1275,9 @@ export class EnemyEntity {
     this.allyGlow = null;
     removeExternalFx(this.sprite, this.kaboomtulaAura);
     this.kaboomtulaAura = null;
+    this.pounceHalo?.destroy();
+    this.pounceHalo = null;
+    this.lighting?.releaseLight(this.pounceLightKey());
     if (this.glowHalo) {
       this.sprite.scene.tweens.killTweensOf(this.glowHalo);
       this.glowHalo.destroy();
@@ -1271,12 +1326,7 @@ export class EnemyEntity {
     const glow = this.config.glow;
     if (!glow) return;
 
-    fillRadialGradientTexture(scene.textures, TEX_ENEMY_GLOW, 96, [
-      [0,    'rgba(255,255,255,1)'],
-      [0.32, 'rgba(255,255,255,0.55)'],
-      [0.68, 'rgba(255,255,255,0.16)'],
-      [1,    'rgba(255,255,255,0)'],
-    ]);
+    ensureEnemyGlowTexture(scene);
 
     const diameter = this.config.size * glow.sizeFactor;
     this.glowHalo = scene.add.image(this.sprite.x, this.sprite.y, TEX_ENEMY_GLOW);
