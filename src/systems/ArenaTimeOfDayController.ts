@@ -136,7 +136,10 @@ export class ArenaTimeOfDayController {
 
   sample(synchronizedNowMs: number, signals: ArenaTimeOfDaySignals = {}): ArenaTimeOfDaySample {
     const nowMs = Number.isFinite(synchronizedNowMs) ? synchronizedNowMs : this.roundStartTime;
-    const elapsedMs = Math.max(0, nowMs - this.roundStartTime);
+    // Until the host anchors the round start, the round shows its start time. An unknown anchor is
+    // not the epoch: a dynamic schedule would otherwise run to its end while the World loads, and
+    // the start would then relight and rebake the whole view.
+    const elapsedMs = this.roundStartTime > 0 ? Math.max(0, nowMs - this.roundStartTime) : 0;
     const bossSpawnedAtMs = Number.isFinite(signals.bossSpawnedAtMs)
       ? signals.bossSpawnedAtMs!
       : null;

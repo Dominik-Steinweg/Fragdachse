@@ -14,6 +14,15 @@ function controller(dynamic?: CoopDefenseDynamicTimeOfDayConfig, startMinutes = 
 }
 
 describe('ArenaTimeOfDayController', () => {
+  it('shows the start time while the round start is not anchored yet', () => {
+    const clock = new ArenaTimeOfDayController({ startMinutes: 20 * 60 + 45, roundStartTime: 0, dynamic: { transitions: [
+      { start: { type: 'time', atMs: 0 }, targetTimeOfDay: '23:30', durationMs: 1_000 },
+    ] } });
+    expect(clock.sample(1_800_000_000_000).minutes).toBe(20 * 60 + 45);
+    clock.setRoundStartTime(1_800_000_000_000);
+    expect(clock.sample(1_800_000_002_000).minutes).toBe(23 * 60 + 30);
+  });
+
   function authoredController(dynamicTimeOfDay: CoopDefenseDynamicTimeOfDayConfig) {
     const map = normalizeCoopDefenseMapConfig({
       mapId: 'time-transition-contract', objective: 'defeat-boss', balanceReferenceDurationSec: 60,
