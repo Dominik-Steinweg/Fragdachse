@@ -2,6 +2,29 @@ import { readFile, readdir, mkdir, copyFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { sha256 } from './runtime-colours.mjs';
 
+/**
+ * Authoring sources, provenance and retired passes that no runtime path requests. They stay in
+ * public/ for exporters and tests; RuntimePublication.test.ts checks them against the loaders.
+ */
+export const NEVER_REQUESTED = [
+  // Provenance and notes.
+  /(^|[/-])(prompts?|PROMPTS)\.json$|\.prompt\.txt$|\.md$/,
+  /-source\.png$/,
+  // UI exporters read these top-level originals; the loaders request their runtime/ outputs.
+  /^assets\/ui\/(base|dawn|dawn-merchant|hud-frames|loading|lobby-forest|match-results|upgrades)\/[^/]+\.png$/,
+  /^assets\/ui\/(dawn-merchant|dawn-clock)\/sources\//,
+  /^assets\/ui\/dawn\/art\/[^/]+\.png$/,
+  // Export sizes and superseded versions that no loader selects.
+  /^assets\/ui\/dawn\/art\/runtime\/(manifest\.json|dawn-keyart-1920\.webp|dawn-(victory|defeat)-960\.webp|dealer-portrait-(128|512)\.webp)$/,
+  /^assets\/ui\/match-results\/runtime\/section-title\.webp$/,
+  /^assets\/ui\/upgrades\/runtime\/(apply-button|xp-frame)\.webp$/,
+  // Superseded material revision and the character shadow masks (CHARACTER_SHADOW_MASKS_ENABLED = false).
+  /^assets\/sprites\/pipeline-v2\/badger\/passes\/(player-material-21e4|player-shadow-21c-production)\//,
+  // Sounds that no AudioCatalog key loads.
+  /^assets\/sounds\/(airstrike2s\.wav|zeus\.mp3)$/,
+];
+export const isNeverRequested = file => NEVER_REQUESTED.some(pattern => pattern.test(file));
+
 /** Explicit, manifest-proven replacements only. Authoring files stay in public/ on disk. */
 export async function publicDeploymentExclusions() {
   const colours = JSON.parse(await readFile('src/assets/manifests/runtime-colours.json', 'utf8')).assets;
@@ -40,7 +63,7 @@ export async function publicDeploymentFiles() {
     for (const entry of (await readdir(resolve('public', relative), { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name, 'en'))) {
       const file = relative ? `${relative}/${entry.name}` : entry.name;
       if (entry.isDirectory()) await visit(file);
-      else if (!excluded.has(file)) files.push(file);
+      else if (!excluded.has(file) && !isNeverRequested(file)) files.push(file);
     }
   };
   await visit(); return files;

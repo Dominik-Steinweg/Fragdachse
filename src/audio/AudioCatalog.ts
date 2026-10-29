@@ -1,7 +1,7 @@
 import type * as Phaser from 'phaser';
+import { runtimeAssetUrl } from '../assets/RuntimeAssetUrls';
 
 const SHIPPED_AUDIO_FILES = new Set([
-  'airstrike2s.wav',
   'ak-47.ogg',
   'asmd-prim.ogg',
   'asmd-sec.ogg',
@@ -47,7 +47,6 @@ const SHIPPED_AUDIO_FILES = new Set([
   'shotgun.ogg',
   'spore.ogg',
   'throw.ogg',
-  'zeus.mp3',
   'zeus.ogg',
   "music_arena.ogg",
   "sfx_menu_hover.ogg",
@@ -468,11 +467,23 @@ export function getSoundVolume(key: string | undefined): number {
 /**
  * Laedt alle Audio-Assets in den Phaser-Loader.
  * Geplante Sounds bleiben ohne Ladeanfrage, bis Audio Studio ihre Datei veroeffentlicht.
+ * Byte-identische Zieldateien veroeffentlicht die Runtime-Pipeline unter einer URL: Sie wird
+ * einmal geladen und dekodiert, alle Keys dieser URL teilen sich denselben AudioBuffer.
  */
 export function preloadAllAudio(loader: Phaser.Loader.LoaderPlugin): void {
+  const shared = new Map<string, { key: string; assetPath: string; aliases: string[] }>();
   for (const [key, assetPath] of Object.entries(AUDIO_ASSETS)) {
     if (isMusicAudioKey(key)) continue;
     if (!isShippedAudioAsset(assetPath)) continue;
+    const url = runtimeAssetUrl(assetPath), first = shared.get(url);
+    if (first) first.aliases.push(key);
+    else shared.set(url, { key, assetPath, aliases: [] });
+  }
+  for (const { key, assetPath, aliases } of shared.values()) {
+    // Cached keys skip loading; their aliases were registered with the first load.
+    if (aliases.length) loader.once(`filecomplete-audio-${key}`, (_key: string, _type: string, buffer: unknown) => {
+      for (const alias of aliases) loader.cacheManager.audio.add(alias, buffer);
+    });
     loader.audio(key, assetPath);
   }
 }

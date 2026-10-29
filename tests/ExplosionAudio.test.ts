@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AUDIO_ASSETS, preloadAllAudio } from '../src/audio/AudioCatalog';
+import { AUDIO_ASSETS } from '../src/audio/AudioCatalog';
+import { preloadedAudio } from './AudioPreloadTestHelper';
 import { EXPLOSION_AUDIO, resolveAvailableExplosionKey, resolveExplosionAudio } from '../src/audio/ExplosionAudio';
 import { WEAPON_CONFIGS } from '../src/loadout/content/LoadoutRegistry';
 
@@ -23,8 +24,7 @@ describe('source-owned explosion audio', () => {
   });
 
   it('provides a shipped substitute until each dedicated recording is published', () => {
-    const shipped = new Set<string>();
-    preloadAllAudio({ audio: (key: string) => shipped.add(key) } as never);
+    const shipped = new Set(preloadedAudio().keys());
     for (const key of Object.values(EXPLOSION_AUDIO)) {
       expect(shipped.has(resolveAvailableExplosionKey(key, k => shipped.has(k))), key).toBe(true);
       expect(resolveAvailableExplosionKey(key, () => true)).toBe(key);
@@ -39,8 +39,7 @@ describe('source-owned explosion audio', () => {
   });
 
   it('loads every source through its own published asset key', () => {
-    const shipped = new Set<string>();
-    preloadAllAudio({ audio: (key: string) => shipped.add(key) } as never);
+    const shipped = new Set(preloadedAudio().keys());
     for (const key of Object.values(EXPLOSION_AUDIO)) {
       expect(shipped.has(key), key).toBe(true);
       expect(resolveAvailableExplosionKey(key, k => shipped.has(k))).toBe(key);

@@ -8,6 +8,7 @@ import { DAWN_UI_ASSETS, DAWN_UI_TEXTURES } from '../../src/assets/DawnUiAssets'
 import { runtimeAssetUrl } from '../../src/assets/RuntimeAssetUrls';
 import { preloadDawnMerchantUiAssets } from '../../src/assets/DawnMerchantUiAssets';
 import { DAWN_CLOCK_PARTS } from '../../src/assets/DawnClockAssets';
+import publication from '../../src/assets/manifests/runtime-colours.json';
 
 /** The clock picks its 1x/2x set from the backing store, like RenderResolution. */
 const loader = (image: ReturnType<typeof vi.fn>) => ({ image, scene: { scale: { width: 1920 } } }) as any;
@@ -52,8 +53,10 @@ describe('lobby forest artwork', () => {
         expect(metadata.width).toBe(asset.key === DAWN_UI_TEXTURES.keyart ? 960 : 1920);
       }
       // Woodcut print set (Art Direction V1): icons sit on their own dark square plate, alpha is optional.
+      // Large illustrations may be served from their published (lossy) runtime file.
+      const served = (publication.assets as Record<string, { file: string }>)[file]?.file ?? file;
       const url = runtimeAssetUrl('./' + file);
-      expect(url).toBe(`./${file}?v=${createHash('sha256').update(bytes).digest('hex')}`);
+      expect(url).toBe(`./${served}?v=${createHash('sha256').update(readFileSync(resolve(__dirname, '../../public', served))).digest('hex')}`);
       expect(image).toHaveBeenCalledWith(asset.key, url);
     }
   });

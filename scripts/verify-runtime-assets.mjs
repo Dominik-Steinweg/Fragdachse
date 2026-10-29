@@ -2,46 +2,27 @@ import sharp from 'sharp';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { sha256, visiblePixels } from './lib/runtime-colours.mjs';
 
+// Offline pixel proof of every lossless publication, plus a browser page that repeats the game's
+// Blob -> HTMLImageElement -> WebGL upload for the source and published file of each pair.
+// Serve public/ at / and build/ at /build/, open /build/a2-proof/index.html; it sets window.__ASSET_PROOF__.
 const manifest = JSON.parse(await readFile('src/assets/manifests/runtime-colours.json', 'utf8'));
 const proof = 'build/a2-proof';
 await mkdir(proof, { recursive: true });
-const pairs = [], candidates = [];
+const pairs = [], skipped = {};
 for (const asset of Object.values(manifest.assets)) {
+  if (asset.category !== 'colour' && asset.category !== 'data') { skipped[asset.category] = (skipped[asset.category] ?? 0) + 1; continue; }
   const before = await readFile(`public/${asset.source}`), after = await readFile(`public/${asset.file}`);
   if (sha256(before) !== asset.sourceSha256 || sha256(after) !== asset.sha256) throw Error(`Stale publication: ${asset.file}`);
-  const a = visiblePixels(await sharp(before).ensureAlpha().raw().toBuffer());
-  const b = visiblePixels(await sharp(after).ensureAlpha().raw().toBuffer());
-  if (!a.equals(b) || sha256(b) !== asset.visiblePixelSha256) throw Error(`Pixel mismatch: ${asset.file}`);
+  const a = await sharp(before).ensureAlpha().raw().toBuffer();
+  const b = await sharp(after).ensureAlpha().raw().toBuffer();
+  if (asset.category === 'data') {
+    // Data keeps every channel: compare raw RGBA, then both upload modes in the browser.
+    if (!a.equals(b) || sha256(b) !== asset.pixelSha256) throw Error(`Data mismatch: ${asset.file}`);
+    pairs.push({ source: '/' + asset.source, target: '/' + asset.file, pma: false });
+  } else if (!visiblePixels(a).equals(visiblePixels(b)) || sha256(visiblePixels(b)) !== asset.visiblePixelSha256) throw Error(`Pixel mismatch: ${asset.file}`);
   pairs.push({ source: '/' + asset.source, target: '/' + asset.file, pma: true });
 }
-for (const file of ['canopy/normal-ao-thickness.png', 'canopy/horizon-0.png', 'canopy/horizon-1.png',
-  'rock/mineral-height.png', 'sun/transmission.png', 'ecology/rock-contact-atlas.png']) {
-  const source = `assets/environment/woodland/${file}`;
-  const original = `build/a2-original/${file}`;
-  const baseline = await readFile(original).catch(() => null);
-  const bytes = baseline ?? await readFile(`public/${source}`);
-  const {data, info} = await sharp(bytes).ensureAlpha().raw().toBuffer({resolveWithObject:true});
-  const png = await sharp(bytes).png({compressionLevel:9, adaptiveFiltering:true, palette:false}).toBuffer();
-  const webp = await sharp(bytes).webp({lossless:true, effort:6}).toBuffer();
-  const decoded = await sharp(webp).ensureAlpha().raw().toBuffer();
-  let changed = 0;
-  for (let i=0;i<data.length;i++) if (decoded[i]!==data[i]) changed++;
-  // Opaque two-panel packing is exact but needs an additional runtime decode/unpack and memory.
-  const rgb = Buffer.alloc(info.width*info.height*6);
-  for (let p=0;p<info.width*info.height;p++) {
-    const x=p%info.width, y=Math.floor(p/info.width), i=(y*info.width*2+x)*3;
-    data.copy(rgb,i,p*4,p*4+3); rgb.fill(data[p*4+3],i+info.width*3,i+info.width*3+3);
-  }
-  const packed = await sharp(rgb,{raw:{width:info.width*2,height:info.height,channels:3}}).webp({lossless:true,effort:6}).toBuffer();
-  if (!(await sharp(png).ensureAlpha().raw().toBuffer()).equals(data)) throw Error(`PNG changed data: ${file}`);
-  if (!(await sharp(packed).removeAlpha().raw().toBuffer()).equals(rgb)) throw Error(`Packed channels changed: ${file}`);
-  candidates.push({ file, original:bytes.length, optimizedPng:png.length, webp:webp.length, webpChangedChannels:changed,
-    opaquePackedWebp:packed.length, retained:'optimized lossless PNG; unchanged decode/upload contract' });
-  const raw = `data-${pairs.length}.rgba`; await writeFile(`${proof}/${raw}`,data);
-  pairs.push({source:baseline ? '/'+original : '/'+source,target:'/'+source,pma:false,raw});
-}
-await writeFile(`${proof}/pairs.json`, JSON.stringify(pairs,null,2));
-await writeFile(`${proof}/data-candidates.json`, JSON.stringify(candidates,null,2));
+await writeFile(`${proof}/pairs.json`, JSON.stringify(pairs, null, 2));
 await writeFile(`${proof}/index.html`, `<!doctype html><meta charset="utf-8"><title>Runtime asset channel proof</title>
 <pre id="result">Running ImageFile-style Blob -> HTMLImageElement -> WebGL upload comparison...</pre>
 <script type="module">
@@ -64,12 +45,11 @@ async function upload(path,pma){
 }
 try{for(const p of pairs){
  const a=await upload(p.source,p.pma), b=await upload(p.target,p.pma);
- const raw=p.raw?new Uint8Array(await (await fetch(p.raw)).arrayBuffer()):a;
- let changed=0;for(let i=0;i<a.length;i++)if(a[i]!==b[i]||b[i]!==raw[i])changed++;
+ let changed=0;for(let i=0;i<a.length;i++)if(a[i]!==b[i])changed++;
  results.push({file:p.target,pma:p.pma,channels:b.length,changed});
  if(changed)throw Error('Channel mismatch: '+p.target);
- document.querySelector('#result').textContent=JSON.stringify(results,null,2);
+ document.querySelector('#result').textContent=results.length+' / '+pairs.length;
 }window.__ASSET_PROOF__={passed:true,results};document.querySelector('#result').textContent='PASS\\n'+JSON.stringify(results,null,2);
 }catch(error){window.__ASSET_PROOF__={passed:false,error:String(error),results};document.querySelector('#result').textContent=JSON.stringify(window.__ASSET_PROOF__,null,2);throw error;}
 </script>`);
-console.log(JSON.stringify({ colours:pairs.length-candidates.length, candidates, browserProof:proof+'/index.html' },null,2));
+console.log(JSON.stringify({ pairs: pairs.length, nonPma: pairs.filter(p => !p.pma).length, skipped, browserProof: proof + '/index.html' }, null, 2));
