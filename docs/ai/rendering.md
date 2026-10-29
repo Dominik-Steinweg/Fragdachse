@@ -681,14 +681,22 @@ Vertragstest: [ShadowStaticBake.test.ts](../../tests/ShadowStaticBake.test.ts).
 
 ## Runtime-Asset-Vertrag
 
-Farbtexturen werden durch `scripts/prepare-runtime-assets.mjs` verlustfrei veroeffentlicht.
-`src/assets/RuntimeAssetUrls.ts` bindet logische Loader-Pfade an den Inhalts-Hash der tatsaechlich
-geladenen Datei, auch fuer Deferred-Assets und Retry. Logische Asset-IDs bleiben stabil.
-Die PNG-Exportzwischenprodukte bleiben fuer Offline-Paritaetspruefungen vorhanden.
-Bei premultipliziert hochgeladenen Farbtexturen sind Alpha und RGB bei Alpha > 0 exakt;
-unsichtbares RGB darf nur dort entfallen. Datenatlanten behalten alle Kanaele, auch RGB
-unter Alpha 0, und ihren bisherigen non-PMA-Upload. Farbkompression darf nicht auf Daten
-uebertragen werden. Nach einem Export aktualisiert `npm run assets:runtime` die Runtime-Dateien;
+Farbtexturen, Datenpaesse und wenige UI-Illustrationen werden durch `scripts/prepare-runtime-assets.mjs`
+veroeffentlicht. `src/assets/RuntimeAssetUrls.ts` bindet logische Loader-Pfade an den Inhalts-Hash der
+tatsaechlich geladenen Datei, auch fuer Deferred-Assets und Retry. Logische Asset-IDs bleiben stabil;
+die Quelldateien bleiben fuer Exporter und Offline-Paritaetspruefungen in `public/`. Jeder Eintrag in
+`runtime-colours.json` traegt eine `category`; ihre Regel steht unter `contracts`:
+`colour` ist verlustfrei, bei premultipliziertem Upload sind Alpha und RGB bei Alpha > 0 exakt, nur
+unsichtbares RGB darf entfallen. `data` (Normalen, Hoehen, Horizonte, Coverage, Transmission, Emission,
+Elevation) ist verlustfrei mit libwebp `exact`: alle Kanaele, auch RGB unter Alpha 0, sind bit-identisch,
+der bisherige non-PMA-Upload bleibt. Farbkompression darf nicht auf Daten uebertragen werden. `ui-art`
+gilt nur fuer die in `UI_ART` gelisteten UI-Illustrationen ohne Spielbeleuchtung: verlustbehaftet,
+Alpha exakt, premultiplizierter PSNR >= 40 dB; Spieltexturen nie. `alias` liefert byte-identische
+Dateien (Audio) unter der URL der ersten Datei aus, die Autorendateien bleiben je Key getrennt.
+Dateien, deren Bytes ein Loader per SHA-256 prueft oder ein eigenes Manifest pinnt (Kraken-Boss-Atlanten,
+Gegner-Meshes, Powerup-Layer), werden nicht veroeffentlicht. Nie angeforderte Quellen stehen in
+`NEVER_REQUESTED` (`scripts/lib/public-deployment.mjs`) und werden nicht deployt; ein Asset-Test laesst
+die Preload-Funktionen laufen und verlangt, dass jede angeforderte Datei ausgeliefert wird. Nach einem Export aktualisiert `npm run assets:runtime` die Runtime-Dateien;
 die Build-Scripts fuehren diesen Schritt automatisch aus. Die URL-Versionen sind nicht committet:
 `scripts/asset-cache.ts` leitet sie bei jedem Build-, Dev- und Testlauf aus den Bytes unter
 `public/assets` ab und stellt sie als `virtual:runtime-asset-urls` bereit.
