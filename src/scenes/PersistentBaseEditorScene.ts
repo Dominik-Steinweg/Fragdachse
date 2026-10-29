@@ -108,10 +108,13 @@ export interface PersistentBaseEditorOptions {
   readonly revealed?: () => void;
   readonly retire?: () => void;
 }
-/** Bake budget per frame while the hidden stage prepares in the lobby, and while a player waits for it. */
-export const PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS = { background: 1.5, urgent: 24 } as const;
-/** Build steps per lobby frame while the stage prepares in the background (at least one step). */
-export const PERSISTENT_BASE_EDITOR_BUILD_SLICE_MS = 4;
+/**
+ * Bake budget per frame while the hidden stage prepares in the lobby, while the after-round flow is
+ * about to open it (menus cover the lobby), and while a player waits for it.
+ */
+export const PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS = { background: 1.5, expected: 8, urgent: 24 } as const;
+/** Build steps per lobby frame while the stage prepares ahead (at least one step). */
+export const PERSISTENT_BASE_EDITOR_BUILD_SLICE_MS = { background: 4, expected: 8 } as const;
 /**
  * Hidden cameras never draw, so a stage's first visible frame would link its shaders and allocate
  * its buffers. Before it counts as ready it draws this many frames at an invisible alpha.
@@ -177,6 +180,8 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private ready = false;
   private readyWaiters: { resolve: () => void; reject: (error: Error) => void }[] = [];
   private urgent = false;
+  /** The after-round flow opens this stage soon. */
+  private expected = false;
   /** The open session shows. */
   private presentationReady = false;
   private revealTween: Phaser.Tweens.Tween | null = null;
@@ -401,7 +406,8 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
    */
   private stepBuild(): void {
     const building = this.building!;
-    const deadline = this.urgent ? Infinity : performance.now() + PERSISTENT_BASE_EDITOR_BUILD_SLICE_MS;
+    const deadline = this.urgent ? Infinity
+      : performance.now() + PERSISTENT_BASE_EDITOR_BUILD_SLICE_MS[this.expected ? 'expected' : 'background'];
     do {
       if (this.heavyNext && !this.urgent && !this.calm) return;
       const step = building.next();
@@ -450,6 +456,8 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   }
   /** A player waits for this stage: its bakes may take most of the frame. */
   setUrgent(urgent: boolean): void { this.urgent = urgent; }
+  /** The after-round flow opens this stage soon: a larger share of the frame while menus cover the lobby. */
+  setExpected(expected: boolean): void { this.expected = expected; }
   /** The lobby is calm (the player stands still or a menu is open): a heavy build step may run now. */
   setCalm(calm: boolean): void { this.calm = calm; }
 
@@ -1140,7 +1148,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     if (this.ready && this.closed) return;
     const view = this.world.view;
     const budget = this.ready ? undefined
-      : this.urgent ? PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.urgent : PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.background;
+      : PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS[this.urgent ? 'urgent' : this.expected ? 'expected' : 'background'];
     this.world.update(now, delta, view, budget);
     this.measureLoading(view);
     if (!this.ready && this.world.isReadyForView(view)) this.warm();

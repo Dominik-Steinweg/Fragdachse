@@ -22,6 +22,8 @@ export interface BaseEditorPreparationFrame {
   readonly busy: boolean;
   /** The player is near the Bauhof: no quiet time. */
   readonly near: boolean;
+  /** The after-round flow will open the Bauhof (mission rewards): no quiet time, a larger budget. */
+  readonly expected: boolean;
   /** The lobby is calm (player standing, or a menu open): heavy build steps may run. */
   readonly calm: boolean;
   readonly options: () => PersistentBaseEditorStageOptions;
@@ -48,10 +50,11 @@ export class ArenaBaseEditorPreparation {
   /**
    * Builds the stage for the next round's terrain ahead, hidden and on a small budget, and drops
    * one whose terrain went stale. The first terrain after entering the lobby starts at once; a
-   * changed one waits for quiet unless the player is near the Bauhof.
+   * changed one waits for quiet unless the player is near the Bauhof or the after-round flow will open it.
    */
   tick(frame: BaseEditorPreparationFrame): void {
     this.current?.stage.setCalm(frame.calm);
+    this.current?.stage.setExpected(frame.expected);
     if (frame.busy) return;
     if (!frame.eligible || frame.key === null) {
       this.release();
@@ -61,7 +64,9 @@ export class ArenaBaseEditorPreparation {
     if (frame.key === undefined || this.current?.key === frame.key) return;
     this.release();
     if (this.seen?.key !== frame.key) this.seen = { key: frame.key, since: this.seen ? frame.now : -Infinity };
-    if (frame.near || frame.now - this.seen.since >= BASE_EDITOR_PREPARE_SETTLE_MS) this.acquire(frame.key, frame.options, false);
+    if (frame.near || frame.expected || frame.now - this.seen.since >= BASE_EDITOR_PREPARE_SETTLE_MS) {
+      this.acquire(frame.key, frame.options, false).setExpected(frame.expected);
+    }
   }
 
   /** The stage a session would open on, ready or not. */

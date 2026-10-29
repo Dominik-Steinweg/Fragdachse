@@ -825,6 +825,14 @@ export class ArenaMetaController {
 
   isAfterRoundFlowActive(): boolean { return this.afterRound.active; }
 
+  /** The after-round flow will open the Bauhof: from the results on, before its turn comes. */
+  expectsAfterRoundBase(): boolean {
+    if (this.destroyed || !this.afterRound.active || !this.input.session.isHost()) return false;
+    // Grants that arrive during the results join the flow when it starts or moves on.
+    return this.afterRound.includes('base') || this.input.progressStore.getProgress().persistentBaseRewardUnlocks
+      .some(id => !this.baseRewardIdsBeforeRound.includes(id));
+  }
+
   hasNewRoundRewards(): boolean {
     const presentation = this.lastMatchResultsPresentation;
     if (this.destroyed || this.matchResultsPending || !presentation) return false;

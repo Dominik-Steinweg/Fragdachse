@@ -64,6 +64,9 @@ describe('base menu drag interaction', () => {
     const view = { x: 0, y: 0, width: world.size, height: world.size };
     scene.update(0, 16);
     expect(world.update).toHaveBeenLastCalledWith(0, 16, view, PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.background);
+    scene.setExpected(true);
+    scene.update(8, 16);
+    expect(world.update).toHaveBeenLastCalledWith(8, 16, view, PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.expected);
     scene.setUrgent(true);
     scene.update(16, 16);
     expect(world.update).toHaveBeenLastCalledWith(16, 16, view, PERSISTENT_BASE_EDITOR_BAKE_BUDGET_MS.urgent);

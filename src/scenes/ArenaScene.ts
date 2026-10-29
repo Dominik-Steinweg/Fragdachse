@@ -2545,7 +2545,8 @@ export class ArenaScene extends Phaser.Scene {
     const identity = eligible ? this.resolveBaseEditorTerrainIdentity() : null;
     this.baseEditorPreparation.tick({ now: performance.now(), eligible, busy: this.baseEditor !== null || this.pendingBaseEditor !== null,
       key: identity === undefined ? undefined : this.baseEditorStageKey(identity),
-      near: eligible && this.isNearBaseEditorYard(), calm: this.isLobbyCalm(),
+      near: eligible && this.isNearBaseEditorYard(), expected: eligible && (this.meta?.expectsAfterRoundBase() ?? false),
+      calm: this.isLobbyCalm(),
       options: () => this.baseEditorStageOptions(this.resolveBaseEditorTerrain() ?? null) });
   }
 

@@ -7,7 +7,7 @@ import {
 
 function fakeStage() {
   let ready = false;
-  return { isReady: () => ready, setUrgent: vi.fn(), setCalm: vi.fn(), closeSession: vi.fn(), finish: () => { ready = true; } };
+  return { isReady: () => ready, setUrgent: vi.fn(), setCalm: vi.fn(), setExpected: vi.fn(), closeSession: vi.fn(), finish: () => { ready = true; } };
 }
 
 function harness() {
@@ -18,7 +18,7 @@ function harness() {
     remove: (stage) => { removed.push(stage); },
   });
   const tick = (now: number, key: string | null | undefined, frame: Partial<BaseEditorPreparationFrame> = {}) =>
-    preparation.tick({ now, key, eligible: true, busy: false, near: false, calm: true, options: () => ({}) as never, ...frame });
+    preparation.tick({ now, key, eligible: true, busy: false, near: false, expected: false, calm: true, options: () => ({}) as never, ...frame });
   return { preparation, added, removed, tick };
 }
 
@@ -50,6 +50,16 @@ describe('Bauhof stage preparation', () => {
     expect(added).toHaveLength(2);
     tick(5000, 'map10', { near: true });
     expect(added).toHaveLength(3);
+  });
+
+  it('builds at once and with the larger budget while the after-round flow will open the Bauhof', () => {
+    const { added, tick } = harness();
+    tick(0, 'map18');
+    tick(1000, 'map13', { expected: true });
+    expect(added).toHaveLength(2);
+    expect(added[1].setExpected).toHaveBeenLastCalledWith(true);
+    tick(1016, 'map13');
+    expect(added[1].setExpected).toHaveBeenLastCalledWith(false);
   });
 
   it('keeps out of an open session and keeps the stage while the next terrain is still generated', () => {

@@ -12,6 +12,8 @@ export class AfterRoundFlow {
   private readonly seen = new Set<string>();
   get active(): boolean { return this.round !== null; }
   get step(): AfterRoundStep | null { return this.current; }
+  /** The step is current or still to come. */
+  includes(step: AfterRoundStep): boolean { return this.current === step || this.pending.includes(step); }
   prepare(round: number, steps: readonly AfterRoundStep[], identity?: CoopDefenseRoundIdentity): void {
     this.cancel();
     const key = identity ? `${identity.roomCode}:${identity.roundRevision}` : `legacy:${round}`;
