@@ -55,20 +55,21 @@ export interface PounceMenace {
 }
 
 const NO_MENACE: PounceMenace = Object.freeze({ glow: 0, light: 0, coil: 0 });
-/** Quiet build-up while aiming; the lock carries the real rise. */
-const MENACE_AIM_GLOW = 0.25;
-const MENACE_TAKEOFF_GLOW = 0.85;
-/** Short flicker on top of the rise during the crouch, so the take-off moment reads. */
-const MENACE_CROUCH_PULSE = 0.15;
+/** The aim already lights the body up clearly (it is the only warning then); the lock completes the rise. */
+const MENACE_AIM_GLOW = 0.6;
+const MENACE_TAKEOFF_GLOW = 1;
+const MENACE_AIM_LIGHT = 0.5;
+/** Short flicker during the crouch, so the take-off moment reads. */
+const MENACE_CROUCH_DIP = 0.25;
 const MENACE_CROUCH_PULSE_MS = 90;
-const MENACE_LANDED_GLOW = 0.2;
+const MENACE_LANDED_GLOW = 0.25;
 
 const smooth = (t: number): number => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
 
 /**
- * The body announces its own take-off instead of a lane across the ground: a void glow that swells
- * quietly while aiming, rises through the lock with a short flicker in the crouch, and dies away
- * in the air and the recovery; the body coils (shrinks slightly) towards the take-off.
+ * The body announces its own pounce: while aiming (no ground mark yet) a void glow lights it up,
+ * through the lock it rises to full with a short flicker in the crouch, and it dies away in the air
+ * and the recovery; the body coils (shrinks slightly) towards the take-off.
  */
 export function pounceMenace(state: EnemyPounceState, now: number): PounceMenace {
   const pounce = state.pounce;
@@ -76,14 +77,16 @@ export function pounceMenace(state: EnemyPounceState, now: number): PounceMenace
   const landing = pounce?.landing;
   if (!pounce || phase === 'idle') return NO_MENACE;
   if (phase === 'aim' || !landing) {
-    return { glow: MENACE_AIM_GLOW * smooth((now - pounce.aimAt) / Math.max(1, pounce.lockAt - pounce.aimAt)), light: 0, coil: 0 };
+    const rise = smooth((now - pounce.aimAt) / Math.max(1, pounce.lockAt - pounce.aimAt));
+    return { glow: MENACE_AIM_GLOW * rise, light: MENACE_AIM_LIGHT * rise, coil: 0 };
   }
   if (phase === 'lock') {
     const lockFrom = Math.min(pounce.lockAt, landing.takeoffAt);
     const rise = smooth((now - lockFrom) / Math.max(1, landing.takeoffAt - lockFrom));
-    const crouch = now >= landing.takeoffAt - POUNCE_CROUCH_MS
-      ? MENACE_CROUCH_PULSE * (0.5 + 0.5 * Math.sin(now * Math.PI * 2 / MENACE_CROUCH_PULSE_MS)) : 0;
-    return { glow: MENACE_AIM_GLOW + (MENACE_TAKEOFF_GLOW - MENACE_AIM_GLOW) * rise + crouch, light: 0.35 + 0.65 * rise, coil: rise };
+    const flicker = now >= landing.takeoffAt - POUNCE_CROUCH_MS
+      ? MENACE_CROUCH_DIP * (0.5 + 0.5 * Math.sin(now * Math.PI * 2 / MENACE_CROUCH_PULSE_MS)) : 0;
+    return { glow: MENACE_AIM_GLOW + (MENACE_TAKEOFF_GLOW - MENACE_AIM_GLOW) * rise - flicker,
+      light: MENACE_AIM_LIGHT + (1 - MENACE_AIM_LIGHT) * rise, coil: rise };
   }
   if (phase === 'air') {
     const progress = enemyPounceAirProgress(landing, now);

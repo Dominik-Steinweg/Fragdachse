@@ -126,6 +126,7 @@ export const GpuVfxEffectId = {
   PounceGrit: 112,
   PounceDust: 113,
   PounceGlint: 114,
+  PounceWindup: 115,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -781,6 +782,9 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.DeathDustMoteB, importance: 'standard', release: 'linger' },
   { id: GpuVfxEffectId.PounceGlint, label: 'enemy.pounce-glint', lane: GpuVfxLaneId.ExplosionLowGlow,
     frame: GpuVfxFrameId.DeathGlow, importance: 'decorative', release: 'linger' },
+  // Rabid Rabbit lock windup: void haze streaming from the body along the jump direction, above the light map.
+  { id: GpuVfxEffectId.PounceWindup, label: 'enemy.pounce-windup', lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'critical', release: 'linger' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

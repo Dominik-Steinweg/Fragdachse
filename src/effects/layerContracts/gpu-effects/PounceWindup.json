@@ -1,0 +1,24 @@
+{
+  "name": "PounceWindup",
+  "contract": {
+    "id": "gpu:PounceWindup",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "PounceWindup",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowGlow"
+    ]
+  }
+}

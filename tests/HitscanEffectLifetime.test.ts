@@ -67,7 +67,7 @@ function fixture() {
   const unused = { clear() {}, destroy() {}, destroyAll() {}, clearAll() {}, clearAllUnderground() {},
     clearUpgrades() {}, clearPending() {}, releaseAll() {} };
   const bundle = Object.fromEntries([
-    'translocatorTeleport', 'portals', 'movement', 'turretAnimations', 'interactions', 'burrowGpu', 'pounceImpact', 'timeBubble',
+    'translocatorTeleport', 'portals', 'movement', 'turretAnimations', 'interactions', 'burrowGpu', 'pounceImpact', 'pounceWindup', 'timeBubble',
     'blackHole', 'reinforcementMatrix', 'energyInjector', 'plasmaBurner', 'remoteControl', 'teslaDome',
     'teslaNova', 'teslaBolt', 'zeusTaser', 'healingAura', 'miniTeslaDome', 'energyShield', 'guardianSpirit',
     'repairDrone', 'attackDrone', 'objectiveRepairDrones', 'slimeTrail', 'corpseMarker',

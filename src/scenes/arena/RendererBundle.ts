@@ -24,6 +24,7 @@ import { createCombatShaderWarmupProbes } from '../../effects/CombatShaderWarmup
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import { PounceImpactGpuRenderer } from '../../effects/PounceImpactGpuRenderer';
+import { PounceWindupGpuRenderer } from '../../effects/PounceWindupGpuRenderer';
 import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
 import { BossPresenceRenderer } from '../../effects/BossPresenceRenderer';
 import { VoidMeteorIntroRenderer } from '../../effects/VoidMeteorIntroRenderer';
@@ -154,6 +155,7 @@ export interface RendererBundle {
   movement:            MovementEffectsRenderer;
   burrowGpu:           BurrowGpuRenderer;
   pounceImpact:        PounceImpactGpuRenderer;
+  pounceWindup:        PounceWindupGpuRenderer;
   bossIntro:           BossIntroGraveyardRenderer;
   bossPresence:        BossPresenceRenderer;
   voidHunterSparks:    VoidHunterSparksRenderer;
@@ -225,6 +227,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => burrowGpu.destroy());
   const pounceImpact = new PounceImpactGpuRenderer(gpuVfx);
   cleanup.push(() => pounceImpact.destroy());
+  const pounceWindup = new PounceWindupGpuRenderer(gpuVfx);
+  cleanup.push(() => pounceWindup.destroy());
   const earthbreakFissures = createEarthbreakFissureLayers(scene, burrowGpu.earthbreakFissures, () => gpuVfx.now());
   cleanup.push(() => earthbreakFissures.destroy());
   // Ein gemeinsamer Emissions-Tick fuer alle brennenden Entities. Die per-Entity-Renderer
@@ -549,6 +553,7 @@ export function* createRendererBundleSteps(
     movement,
     burrowGpu,
     pounceImpact,
+    pounceWindup,
     bossIntro,
     bossPresence,
     voidHunterSparks,
@@ -642,6 +647,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
     (id, attack, now, visible) => effectSystem.syncEnemyLane(`kaboomtula-lane:${id}`, attack, now, visible, undefined, true),
     (id, attack, now, visible) => effectSystem.syncEnemyZone(`kaboomtula-ring:${id}`, attack, now, visible, undefined, true));
   bundle.enemyPounces.setMarkSink((id, mark, now, visible) => effectSystem.syncEnemyLandingMark(`pounce-mark:${id}`, mark, now, visible));
+  bundle.enemyPounces.setWindupSink((x, y, angle, strength, color) => bundle.pounceWindup.emit(x, y, angle, strength, color));
   // The heat warning travels with its running body: a tracking zone in the shared danger family.
   bundle.enemyHeatBursts.setZoneSink((id, attack, now, visible) =>
     effectSystem.syncEnemyZone(`heat-zone:${id}`, attack, now, visible, undefined, true));

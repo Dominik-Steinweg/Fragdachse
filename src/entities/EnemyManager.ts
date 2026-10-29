@@ -68,7 +68,8 @@ function captureEnemyDeathVisual(enemy: EnemyEntity): Pick<
     displayWidth: Number.isFinite(sprite.displayWidth) ? sprite.displayWidth : Math.max(1, enemy.getSize()),
     displayHeight: Number.isFinite(sprite.displayHeight) ? sprite.displayHeight : Math.max(1, enemy.getSize()),
     rotation: Number.isFinite(sprite.rotation) ? sprite.rotation : 0,
-    tint: sprite.tint ?? 0xffffff,
+    // An additive glow tint (pounce take-off signal) is a live effect, not the body's colour.
+    tint: sprite.tintMode === Phaser.TintModes.ADD ? 0xffffff : sprite.tint ?? 0xffffff,
   };
 }
 

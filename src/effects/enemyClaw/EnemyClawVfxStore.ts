@@ -43,7 +43,7 @@ interface ClawVfxTiming {
 export type ClawVfxAttackSpec = ClawVfxTiming & (
   | { readonly shape?: 'sector'; readonly range: number; readonly halfArc: number; readonly telegraphOnly?: boolean }
   | { readonly shape: 'lane'; readonly length: number; readonly width: number }
-  /** Announced landing point: a faint hint until `strikeAt` (the lock), then a mark that fills up to `hitAt`. */
+  /** Announced landing point from `startedAt` (the lock), filling up to `hitAt`. */
   | { readonly shape: 'mark'; readonly radius: number }
 );
 

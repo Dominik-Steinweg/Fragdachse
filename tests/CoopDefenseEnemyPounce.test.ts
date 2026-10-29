@@ -108,11 +108,12 @@ describe('pounce host decisions', () => {
     expect(f.immune.get('r0')).not.toBe(true);
   });
 
-  it('hits only the announced zone on arrival: a straight runner is met, a player who turns after the lock is not', () => {
+  it('hits only the announced zone on arrival: a player who holds still is met, one who turns after the lock is not', () => {
     for (const turns of [false, true]) {
       const f = fixture([{ x: 0, y: 0 }], { x: 220, y: -120 });
       const aimAt = f.runUntilAim();
-      f.target.vy = PLAYER_SPEED;
+      // Moderate lead: the zone leads the course a little; only a runner who keeps going gets out.
+      f.target.vy = turns ? PLAYER_SPEED : 0;
       const lockAt = f.state().pounce!.lockAt;
       f.run(aimAt + FRAME, lockAt + FRAME);
       const landing = f.state().pounce!.landing!;

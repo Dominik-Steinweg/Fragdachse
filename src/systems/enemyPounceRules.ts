@@ -23,8 +23,8 @@ export interface PounceTargetTrack {
 
 /** Position jumps beyond this between two samples are teleports (dash portals, respawns), not velocity. */
 const TRACK_TELEPORT_PX = 64;
-/** Blend window of the velocity estimate. */
-const TRACK_BLEND_MS = 120;
+/** Blend window of the velocity estimate: long enough that a jink does not swing the aim at once. */
+const TRACK_BLEND_MS = 220;
 
 export function createPounceTargetTrack(x: number, y: number, at: number): PounceTargetTrack {
   return { x, y, at, vx: 0, vy: 0 };

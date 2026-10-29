@@ -57,7 +57,7 @@ import type { EntityStatusVisualTarget } from '../effects/SmokeBodyEffect';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { PlasmaChargeRenderer, MAX_PLASMA_CHARGE_STACKS } from '../effects/PlasmaChargeRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
-import { fillRadialGradientTexture, makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
+import { fillRadialGradientTexture, makeAdditive, mixColors, registerGraphicsObject } from '../effects/EffectUtils';
 import { emissiveAlpha } from '../effects/EmissiveScale';
 import { getEnemyName } from '../i18n/contentPresentation';
 import { getLocale } from '../i18n';
@@ -91,12 +91,16 @@ const POUNCE_LIFT_AMPLITUDE = 0.36;
 /** A pouncing body coils (shrinks) by this share towards its take-off. */
 const POUNCE_COIL_SQUASH = 0.06;
 /** Soft additive void halo of the take-off signal: diameter in body sizes and alpha at full glow. */
-const POUNCE_HALO_MIN_SIZE = 1.6;
-const POUNCE_HALO_MAX_SIZE = 3.2;
-const POUNCE_HALO_ALPHA = 0.85;
+const POUNCE_HALO_MIN_SIZE = 2.2;
+const POUNCE_HALO_MAX_SIZE = 5;
+const POUNCE_HALO_ALPHA = 1;
+/** By day additive light is damped (`emissiveAlpha`); the danger signal keeps at least this share. */
+const POUNCE_HALO_DAY_FLOOR = 0.6;
+/** The body itself lights up: additive void tint at full glow (share of the eye colour). */
+const POUNCE_BODY_TINT = 0.6;
 /** Small void light of the take-off signal, so it still reads at night. */
-const POUNCE_LIGHT_RADIUS_PX = 42;
-const POUNCE_LIGHT_INTENSITY = 0.55;
+const POUNCE_LIGHT_RADIUS_PX = 72;
+const POUNCE_LIGHT_INTENSITY = 1.2;
 
 export type EnemyFaction = 'hostile' | 'allied';
 
@@ -216,6 +220,7 @@ export class EnemyEntity {
   private kaboomtulaAura: GlowHandle | null = null;
   /** Soft void halo of a pouncing Rabid Rabbit: its take-off signal, there is no lane. */
   private pounceHalo: Phaser.GameObjects.Image | null = null;
+  private pounceTinted = false;
   private burnStacks = 0;
   private plasmaChargeStacks = 0;
   private burnVisualStyle: GroundFireVisualStyle = 'normal';
@@ -339,8 +344,16 @@ export class EnemyEntity {
       if (on) {
         const diameter = this.config.size * (POUNCE_HALO_MIN_SIZE + (POUNCE_HALO_MAX_SIZE - POUNCE_HALO_MIN_SIZE) * glow);
         this.pounceHalo.setPosition(this.sprite.x, this.sprite.y).setDisplaySize(diameter, diameter).setTint(color)
-          .setAlpha(emissiveAlpha(POUNCE_HALO_ALPHA * glow));
+          .setAlpha(Math.max(emissiveAlpha(POUNCE_HALO_ALPHA * glow), POUNCE_HALO_DAY_FLOOR * POUNCE_HALO_ALPHA * glow));
       }
+    }
+    // Only an untinted body may light up; tinted species (allies, coloured variants) keep their tint.
+    if (on && this.config.color === undefined) {
+      this.sprite.setTint(mixColors(0x000000, color, POUNCE_BODY_TINT * Math.min(1, glow))).setTintMode(Phaser.TintModes.ADD);
+      this.pounceTinted = true;
+    } else if (this.pounceTinted) {
+      this.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+      this.pounceTinted = false;
     }
     const key = this.pounceLightKey();
     if (!this.lighting) return;

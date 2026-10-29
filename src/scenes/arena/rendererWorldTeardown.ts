@@ -16,6 +16,7 @@ export function resetRenderersForWorldGameplayTeardown(bundle: RendererBundle): 
   bundle.burrowGpu.clearAllUnderground();
   bundle.burrowGpu.clear();
   bundle.pounceImpact.clear();
+  bundle.pounceWindup.clear();
   bundle.timeBubble.destroyAll();
   bundle.blackHole.destroyAll();
   bundle.reinforcementMatrix.destroyAll();

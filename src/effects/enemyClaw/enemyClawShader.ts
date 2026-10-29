@@ -1,7 +1,6 @@
 import { CLAW_VFX_FAN_RAYS, CLAW_VFX_SLASH_MS, CLAW_VFX_TELEGRAPH_FADE_MS } from './EnemyClawVfxStore';
 
-/** Landing mark tuning: hint while aiming, base disk after the lock, extra fill reached at the landing. */
-const MARK_HINT_ALPHA = '0.14';
+/** Landing mark tuning: base disk from the lock on, extra fill reached at the landing. */
 const MARK_BASE_ALPHA = '0.1';
 const MARK_FILL_ALPHA = '0.13';
 
@@ -153,30 +152,25 @@ vec4 lane(float gain) {
   return vec4(mix(vColor.rgb, HOT, 0.35 * strike) * a, a);
 }
 
-// Landing mark of an announced leap (pounce): one calm timeline instead of repeated charge pulses.
-// Until the lock (vTiming.y) only a faint, soft-edged spot hints at the predicted landing; after it
-// the spot firms up into a soft disk that fills from its centre and reaches the hit radius exactly
-// at the landing. Nothing is drawn beyond the hit radius, and there is no hub cut-out: the attacker
-// is not standing in the zone.
+// Landing mark of an announced leap (pounce), shown from the lock on: a soft disk fades in and
+// fills from its centre, reaching the hit radius exactly at the landing. Nothing is drawn beyond
+// the hit radius, and there is no hub cut-out: the attacker is not standing in the zone.
 vec4 mark(float gain) {
   float radius = vShape.x;
   float r = length(vLocal);
   float rn = r / radius;
   if (rn >= 1.05) return vec4(0.0);
-  float lock = smoothstep(vTiming.y, vTiming.y + 140.0, uTime);
-  float progress = clamp((uTime - vTiming.y) / max(1.0, vTiming.z - vTiming.y), 0.0, 1.0);
+  float progress = clamp((uTime - vTiming.x) / max(1.0, vTiming.z - vTiming.x), 0.0, 1.0);
   float vis = smoothstep(vTiming.x, vTiming.x + 140.0, uTime)
     * (1.0 - smoothstep(vTiming.z, vTiming.z + FADE_MS, uTime));
-  float hint = (1.0 - smoothstep(0.3, 1.0, rn)) * ${MARK_HINT_ALPHA};
   float disk = 1.0 - smoothstep(0.82, 1.0, rn);
-  // The filled share grows with the remaining air time and has a soft front.
+  // The filled share grows with the remaining time and has a soft front.
   float front = radius * progress;
   float fillWidth = radius * 0.14;
   float filled = 1.0 - smoothstep(front - fillWidth, front + fillWidth, r);
   float rimD = (rn - 0.93) / 0.07;
   float rim = exp(-rimD * rimD) * (0.08 + 0.08 * progress);
-  float markA = disk * (${MARK_BASE_ALPHA} + ${MARK_FILL_ALPHA} * filled) + rim;
-  float a = mix(hint, markA, lock) * gain * vis;
+  float a = (disk * (${MARK_BASE_ALPHA} + ${MARK_FILL_ALPHA} * filled) + rim) * gain * vis;
   if (a <= 0.0) return vec4(0.0);
   float warm = 0.25 * smoothstep(vTiming.z - 80.0, vTiming.z, uTime);
   vec3 color = mix(vColor.rgb, HOT, warm);

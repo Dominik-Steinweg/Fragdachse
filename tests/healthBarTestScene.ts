@@ -41,6 +41,7 @@ export class HealthTestObject {
   setDisplaySize(w: number, h = w) { this.displayWidth = w; this.displayHeight = h; return this; }
   setScrollFactor() { return this; }
   setTint() { return this; }
+  setTintMode() { return this; }
   clearTint() { return this; }
   setTexture(key: string, frame = '__BASE') { this.texture.key = key; this.frame.name = frame; return this; }
   setData() { return this; }

@@ -16,10 +16,10 @@ Richtung wechselt, stoppt oder dasht, bleibt heil. Zwischen den Sprüngen läuft
 
 ## 2. Kern
 
-- **Primärangriff Sprung.** Der Hase bleibt stehen und zielt; ein leiser roter Hauch zeigt, wo er landen
-  wird, wenn der Spieler seinen Kurs hält (volles Vorhalten). Beim Einrasten wird der Hauch ohne Blitz zur
-  festen Marke, die sich bis zur Landung von innen füllt. Er springt auf einer festen Linie und trifft bei
-  der Ankunft die angekündigte Fläche.
+- **Primärangriff Sprung.** Der Hase bleibt stehen, leuchtet violett auf und zielt kurz; am Boden ist noch
+  nichts markiert. Beim Einrasten erscheint die rote Landezone (mäßiger Vorhalt auf den Laufweg) und füllt
+  sich bis zur Landung von innen; Void-Dunst strömt in Sprungrichtung. Er springt auf einer festen Linie und
+  trifft bei der Ankunft die angekündigte Fläche.
 - **Sekundär Biss.** Zwischen den Sprüngen läuft er normal und beißt im Nahkampf (wie bisher).
 - **Rudel.** Höchstens zwei Hasen zielen gleichzeitig auf denselben Spieler; ihre Sprünge starten
   gestaffelt. Weitere Hasen laufen und beißen.
@@ -29,20 +29,21 @@ Richtung wechselt, stoppt oder dasht, bleibt heil. Zwischen den Sprüngen läuft
 | Phase | Verhalten (Startwerte, alle in `src/config/coopDefenseEnemies.json`) |
 |---|---|
 | Start | Spieler 110–480 px entfernt, Sicht, freie Bahn, kein laufender Biss, Abklingzeit vorbei; erster Sprung frühestens 0,9 s nach dem Erscheinen |
-| Zielen (0,45 s) | steht, schaut zum Zielpunkt, Void-Schein wächst leise; der Hauch gleitet dem vorhergesagten Landepunkt nach, sein Vorhalt schwenkt aber höchstens 400 px/s um (kein Hin- und Herspringen bei Richtungswechseln) |
-| Einrasten (0,25 s) | Marke steht fest und füllt sich bis zur Landung; der Hase duckt sich, sein Void-Schein steigt; der Flug startet dort, wo er jetzt steht; Fluchtfenster beginnt |
+| Zielen (0,3 s) | steht, schaut zum Zielpunkt und leuchtet violett auf; noch keine Bodenmarke. Der Zielpunkt folgt einer geglätteten Laufrichtung, sein Vorhalt (höchstens 120 px) schwenkt höchstens 320 px/s um |
+| Einrasten (0,42 s) | Landezone erscheint fest und füllt sich bis zur Landung; Void-Dunst strömt in Sprungrichtung, der Hase duckt sich, sein Leuchten erreicht den Höhepunkt; der Flug startet dort, wo er jetzt steht; Fluchtfenster beginnt |
 | Flug (0,35–0,62 s, längenabhängig) | fester Flug zur Zone, nicht wegstoßbar, Treffer-Stagger wirkungslos |
 | Landung | Flächenschaden r 64 px, 28 in der Mitte bis 14 am Rand, Rückstoß nur für Spieler; Köder nehmen Schaden, Bauwerke nicht |
 | Erholung (0,45 s) | steht, kein Biss |
 | Abklingzeit (2,4–3,2 s) | läuft und beißt normal |
 
 Abbrüche: Stun, Eingraben, Teleport oder Wegstoßen um mehr als 72 px beim Zielen brechen den Sprung mit
-kurzer Sperre ab; verliert der Hase den Spieler länger als 0,35 s aus der Sicht oder kommt er näher als 45 px,
+kurzer Sperre ab; verliert der Hase den Spieler länger als 0,2 s aus der Sicht oder kommt er näher als 45 px,
 beißt er stattdessen. Ist der Landepunkt blockiert, rückt er entlang der Bahn bis zur Mindestreichweite zurück. Stun oder Teleport
 im Flug lassen ihn ohne Schaden dort landen, wo er ist. Verbündete Hasen (Nekromantie) springen nicht.
 
-Fairness: Ab dem Einrasten bleiben mindestens 0,6 s bis zur Landung. Ein Spieler (280 px/s) braucht für
-80 px Flucht aus der Zonenmitte ca. 0,29 s; eine 90°-Wendung bringt ihn rund 170 px vom Landepunkt weg.
+Fairness: Ab dem Einrasten bleiben mindestens 0,77 s bis zur Landung. Ein Spieler (280 px/s) braucht für
+80 px Flucht aus der Zonenmitte ca. 0,29 s. Der Vorhalt ist bewusst mäßig: Wer stehen bleibt, wird getroffen;
+wer konsequent weiterläuft oder abbiegt, entkommt meist.
 Der Vertragstest prüft `lockMs + airMinMs ≥ Reaktion + (Radius + 16) / 280` für jede authored Konfiguration.
 
 ## 4. Bewegung
@@ -54,11 +55,13 @@ Der Vertragstest prüft `lockMs + airMinMs ≥ Reaktion + (Radius + 16) / 280` f
 
 ## 5. Darstellung
 
-- Eine Landemarke auf einer durchgehenden Zeitlinie aus dem gemeinsamen Gegner-Gefahrenrenderer
-  (`EnemyClawRenderer.syncLandingMark`): leiser Hauch beim Zielen, ab dem Einrasten eine weiche Scheibe,
-  die sich bis zur Landung von innen füllt; nichts reicht über den Trefferradius hinaus. Keine Bahn über
-  den Boden: Den Absprung kündigt der Körper an (weicher additiver Void-Schein in Augenfarbe, kleines
-  Licht für die Nacht, leichtes Ducken). Rot ist Telegraph, Void-Violett allgemeine Gefahr, kein Gelb.
+- Beim Zielen warnt nur der Körper: additive Void-Tönung und Halo in Augenfarbe (auch am Tag deutlich),
+  kleines Licht für die Nacht.
+- Ab dem Einrasten eine Landemarke aus dem gemeinsamen Gegner-Gefahrenrenderer
+  (`EnemyClawRenderer.syncLandingMark`): weiche Scheibe, die sich bis zur Landung von innen füllt; nichts
+  reicht über den Trefferradius hinaus. Dazu violetter Void-Dunst (`PounceWindupGpuRenderer`), der in einem
+  schmalen Kegel 65–160 px in Sprungrichtung strömt, und leichtes Ducken. Keine Bahn über den Boden.
+  Rot ist Telegraph, Void-Violett allgemeine Gefahr, kein Gelb.
 - Flug mit Anhebung zur Kamera; Clients setzen den Körper auf die replizierte Fluglinie; Absprung- und
   Landespuren über den Bewegungsmodus `airborne`.
 - Landung als GPU-Partikel (`PounceImpactGpuRenderer`, Explosionsstil `pounce_impact`): rund 120 feine Körner

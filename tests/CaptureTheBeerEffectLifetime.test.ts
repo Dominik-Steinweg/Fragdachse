@@ -60,7 +60,7 @@ function fixture() {
   const unused = { clear() {}, clearDynamicShadows() {}, setTerrainColorSnapshot() {}, setActive() {} };
   const bundle = Object.fromEntries([
     'powerUp', 'nuke', 'airstrike', 'encounterTelegraph', 'bossIntro', 'bossPresence', 'voidHunterSparks', 'voidRift', 'voidMeteorIntro', 'meteor', 'rockDestruction', 'watchtowerDestruction',
-    'mortarStrike', 'firestarter', 'shieldCharger', 'alienCone', 'enemyHops', 'kaboomtula', 'enemyPounces', 'enemyHeatBursts', 'turretWeb', 'leafBlower', 'movement', 'burrowGpu', 'pounceImpact', 'portals', 'shadow', 'lighting',
+    'mortarStrike', 'firestarter', 'shieldCharger', 'alienCone', 'enemyHops', 'kaboomtula', 'enemyPounces', 'enemyHeatBursts', 'turretWeb', 'leafBlower', 'movement', 'burrowGpu', 'pounceImpact', 'pounceWindup', 'portals', 'shadow', 'lighting',
   ].map(key => [key, unused]));
   Object.assign(bundle, { beer });
   const clear = () => resetRenderersForWorldPresentationTeardown(bundle as never, false);

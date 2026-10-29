@@ -20,42 +20,38 @@ function fixture() {
   presentation.setEnemySource(() => [rabbit] as unknown as EnemyVisualSource[]);
   let now = 0;
   presentation.setClock(() => now);
-  const player = { x: 200, y: 0 };
-  presentation.setTargetResolver(() => ({ ...player }));
   const marks: [string, EnemyLandingMark | null][] = [];
+  const windups: { angle: number; strength: number }[] = [];
   presentation.setMarkSink((id, mark) => marks.push([id, mark]));
-  return { render: (at: number) => { now = at; render(); }, set: (state: EnemyPounceState) => { pounce = state; }, player, marks };
+  presentation.setWindupSink((_x, _y, angle, strength) => windups.push({ angle, strength }));
+  return { render: (at: number) => { now = at; render(); }, set: (state: EnemyPounceState) => { pounce = state; }, marks, windups };
 }
 
-const aim = { target: { kind: 'player' as const, id: 'p1' }, originX: 0, originY: 0, aimAt: 1000, lockAt: 1450 };
-const landing = { x: 180, y: 90, takeoffAt: 1700, landAt: 2100, recoverUntil: 2550, armed: true };
+const aim = { target: { kind: 'player' as const, id: 'p1' }, originX: 0, originY: 0, aimAt: 1000, lockAt: 1300 };
+const takeoffAt = aim.lockAt + config.lockMs;
+const landing = { x: 180, y: 90, takeoffAt, landAt: takeoffAt + 400, recoverUntil: takeoffAt + 850, armed: true };
 
 describe('pounce presentation', () => {
-  it('lets the aiming hint lead the target course within the pounce range, landing estimated after the lock', () => {
+  it('marks nothing on the ground while aiming', () => {
     const f = fixture();
     f.set({ revision: 1, pounce: { ...aim, landing: null } });
-    f.render(1000);
-    const [, first] = f.marks.at(-1)!;
-    expect(first).toEqual(expect.objectContaining({ x: 200, y: 0, radius: config.impact.radiusPx, lockAt: aim.lockAt }));
-    expect(first!.hitAt).toBeGreaterThan(aim.lockAt + config.lockMs);
-    // The target runs south: the hint leads it, within the pounce range.
-    for (let at = 1016; at <= 1440; at += 16) { f.player.y += 280 * 0.016; f.render(at); }
-    const [, leading] = f.marks.at(-1)!;
-    expect(leading!.y).toBeGreaterThan(f.player.y + 20);
-    expect(Math.hypot(leading!.x, leading!.y)).toBeLessThanOrEqual(config.maxRangePx + 1e-6);
+    for (let at = 1000; at <= 1290; at += 16) f.render(at);
+    expect(f.marks.filter(([, mark]) => mark !== null)).toHaveLength(0);
+    expect(f.windups).toHaveLength(0);
   });
 
-  it('keeps one identity across the lock and lands exactly on the announced point', () => {
+  it('announces the landing from the lock and streams windup haze along the jump direction', () => {
     const f = fixture();
-    f.set({ revision: 1, pounce: { ...aim, landing: null } });
-    for (let at = 1000; at <= 1440; at += 16) f.render(at);
-    const aimId = f.marks.at(-1)![1]!.attackId;
     f.set({ revision: 2, pounce: { ...aim, landing } });
-    f.player.x = 600;
-    for (let at = 1456; at < landing.landAt; at += 16) f.render(at);
-    f.render(landing.landAt);
-    const [, landed] = f.marks.at(-1)!;
-    expect(landed).toEqual(expect.objectContaining({ attackId: aimId, x: 180, y: 90, hitAt: landing.landAt }));
+    f.render(aim.lockAt + 16);
+    expect(f.marks.at(-1)).toEqual(['r', expect.objectContaining({ x: 180, y: 90, startedAt: aim.lockAt, hitAt: landing.landAt,
+      radius: config.impact.radiusPx })]);
+    f.render(takeoffAt - 16);
+    expect(f.windups.at(-1)!.angle).toBeCloseTo(Math.atan2(90, 180));
+    expect(f.windups.at(-1)!.strength).toBeGreaterThan(f.windups[0]!.strength);
+    const streamed = f.windups.length;
+    f.render(takeoffAt + 100);
+    expect(f.windups).toHaveLength(streamed);
     expect(new Set(f.marks.map(([, mark]) => mark?.attackId).filter(Boolean)).size).toBe(1);
   });
 
@@ -63,25 +59,24 @@ describe('pounce presentation', () => {
     const f = fixture();
     f.set({ revision: 2, pounce: { ...aim, landing } });
     f.render(1500);
-    expect(f.marks.at(-1)).toEqual(['r', expect.objectContaining({ x: 180, y: 90 })]);
-    f.render(2300);
+    f.render(landing.landAt + 200);
     expect(f.marks.at(-1)).toEqual(['r', null]);
     f.set({ revision: 3, pounce: { ...aim, landing: { ...landing, armed: false } } });
-    f.render(1900);
+    f.render(1500);
     expect(f.marks.at(-1)).toEqual(['r', null]);
   });
 
-  it('builds the take-off signal on the body and lets it die away after the landing', () => {
+  it('lights the body up from the aim, peaks before the take-off and lets it die away after the landing', () => {
     const state = (landed: typeof landing | null): EnemyPounceState => ({ revision: 1, pounce: { ...aim, landing: landed } });
     expect(pounceMenace(state(null), 900).glow).toBe(0);
-    const aiming = pounceMenace(state(null), 1300);
-    const locked = pounceMenace(state(landing), 1500);
-    const crouching = pounceMenace(state(landing), 1690);
-    expect(aiming.glow).toBeGreaterThan(0);
+    const aiming = pounceMenace(state(null), 1250);
+    const locked = pounceMenace(state(landing), aim.lockAt + 100);
+    const crouching = pounceMenace(state(landing), takeoffAt - 170);
+    expect(aiming.glow).toBeGreaterThan(0.3);
     expect(locked.glow).toBeGreaterThan(aiming.glow);
     expect(crouching.glow).toBeGreaterThan(locked.glow);
     expect(crouching.coil).toBeGreaterThan(locked.coil);
-    expect(pounceMenace(state(landing), 2000).glow).toBeLessThan(crouching.glow);
-    expect(pounceMenace(state(landing), 2600)).toEqual({ glow: 0, light: 0, coil: 0 });
+    expect(pounceMenace(state(landing), landing.landAt - 50).glow).toBeLessThan(crouching.glow);
+    expect(pounceMenace(state(landing), landing.recoverUntil + 50)).toEqual({ glow: 0, light: 0, coil: 0 });
   });
 });

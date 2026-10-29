@@ -500,6 +500,7 @@ export function createFakePhaserModule(): Record<string, unknown> {
   return {
     Scenes: { Events: { POST_UPDATE: 'postupdate', PRE_RENDER: 'prerender', SHUTDOWN: 'shutdown' } },
     BlendModes: { NORMAL: 0, MULTIPLY: 1, ADD: 2, ERASE: 17, SKIP_CHECK: -1 },
+    TintModes: { MULTIPLY: 0, FILL: 1, ADD: 2, SCREEN: 3, OVERLAY: 4, HARD_LIGHT: 5 },
     Math: {
       Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
       Linear: (a: number, b: number, t: number) => a + (b - a) * t,
