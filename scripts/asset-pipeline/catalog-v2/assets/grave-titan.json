@@ -6,10 +6,9 @@
     "grave-titan"
   ],
   "reference": "public/assets/sprites/enemies/enemy_grave_titan.png",
-  "targetSize": 56,
+  "targetSize": 112,
   "sourceSizes": [
-    128,
-    256
+    336
   ],
   "forward": "north",
   "pivot": [
@@ -17,28 +16,34 @@
     0.5
   ],
   "description": {
-    "silhouette": "Sehr breiter schwerer Rückenpanzer mit großen Steinplatten und massigen Pfoten.",
-    "colors": "Dunkles Steingrau, gedecktes Moosgrün und helle Kopfzeichnung.",
-    "anatomy": "Vierbeiniger Boss mit langsamen Lastwechseln; große Rumpfmasse und Panzerplatten prägen den Gang.",
-    "materials": "Organisch verwitterter Granit mit mineralischer Körnung, verzweigten Brüchen, Erosionsporen und kleinen Flechten über dichtem olivgrauem Fell."
+    "silhouette": "Kolossaler Vierbeiner, dessen RÃ¼cken eine versiegelte Gruft ist: heller Sarkophagdeckel in der Mitte, je Flanke drei schrÃ¤g liegende Grabsteine mit Bogen nach auÃŸen, rohe Schulter- und HÃ¼ftmonolithe, ein elfenbeinerner SchÃ¤del mit nach vorn gerichtetem V aus Steinbrauen und zwei gebrochenen Hauern, breite steinbeschlagene Pranken und ein kurzer Schwanz aus gestapelten Wirbelsteinen.",
+    "colors": "Heller Kalkstein-Deckel, verwittertes Granitgrau, dunkles olivgraues Fell, tiefes MoosgrÃ¼n und blasse Flechten, gealtertes Elfenbein. Grablicht kalt als dunkle Kruste mit schwachem grÃ¼nem Kern; das Aufladen liegt im getrennten, zur Laufzeit eingefÃ¤rbten Emissions-Sheet. Augen grabgrÃ¼n.",
+    "anatomy": "Schwerer Vierbeiner, Kopf nach Norden. Steuerungen: body, head (Nacken-Drehpunkt), tail (Schwanzwurzel), lid (Gruftdeckel mit Kreuzriss), stones_l/stones_r (Grabsteinreihen, Drehpunkt an der inneren Basislinie), grave_flare (VerstÃ¤rkung der Grablicht-Emissionsfarbe) und ground_cut (HÃ¶he, unter der alle Materialien transparent sind; nur emerge senkt sie ab). Sockets eyeLeft/eyeRight und crown (Sammelpunkt der GlÃ¼hwÃ¼rmchen Ã¼ber dem Deckel).",
+    "materials": "Verwitterter Granit und Kalkstein mit Bruchkanten, Poren und eingeschnittenen Rillen (Deckelrahmen, Bogen auf jedem Grabstein, keine Schrift), Moospolster und Flechtenrosetten auf allen Steinkanten, dunkle hÃ¤ngende Wurzeln, dichtes olivgraues Fell, Elfenbein mit Wachstumsrillen. Grablicht-Material mit FD_EmissionChannel grave: Kreuzriss im Deckel, Spalten zwischen Deckel und Grabsteinen, fÃ¼nf LaternenlÃ¶cher an den Flanken (Nester der GlÃ¼hwÃ¼rmchen). Augen behalten ihr eigenes Material ohne Kanal.",
+    "stage": "Rework 2026-10-29: 85 % der Kraken-GrÃ¶ÃŸe, Leinwand 336 px 1:1 (targetSize 112 Ã— displayScale 3,0), neue Clips idle, slam, stomp, cast und emerge."
   },
   "requiredClips": [
     "move",
-    "claw"
+    "idle",
+    "slam",
+    "stomp",
+    "cast",
+    "emerge"
   ],
   "production": "reference",
   "recipe": "grave-titan",
   "model": {
-    "mossSpread": 1
+    "mossSpread": 1,
+    "seed": 5
   },
-  "orthoScale": 8.112,
+  "orthoScale": 3.4,
   "textures": {
     "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
     "technical": "art/poc/pipeline-v1/textures/technical.png"
   },
   "materialVariants": {
     "standard": {
-      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "label": "Verwitterter Granit, Moos und dichtes Fell",
       "textureStrength": 0.84,
       "formShadowStrength": 0
     }
@@ -47,42 +52,98 @@
     {
       "name": "move",
       "motion": "quadruped",
-      "frameCount": 12,
-      "frameRate": 8,
+      "frameCount": 16,
+      "frameRate": 13,
       "loop": true,
       "parameters": {
-        "strideForward": 0.14,
-        "strideBack": 0.11,
-        "lift": 0.04,
-        "footRoll": 0.07,
-        "footYaw": 0.034,
-        "bodyYaw": 0.021,
-        "bodyBob": 0.018,
-        "bodyRoll": 0.019,
-        "bodyPitch": 0.014,
-        "bodyShift": 0.015,
-        "headYaw": -0.01,
-        "headBob": 0.008,
-        "tailYaw": 0.04,
+        "strideForward": 0.3,
+        "strideBack": 0.25,
+        "lift": 0.1,
+        "footRoll": 0.1,
+        "footYaw": 0.035,
+        "bodyYaw": 0.02,
+        "bodyBob": 0.025,
+        "bodyRoll": 0.03,
+        "bodyPitch": 0.012,
+        "bodyShift": 0.02,
+        "headYaw": -0.012,
+        "headBob": 0.012,
+        "tailYaw": 0.05,
         "rearPhase": 0.18,
-        "bodySurge": 0.012
+        "bodySurge": 0.015
       }
     },
     {
-      "name": "claw",
-      "motion": "claw_quadruped",
+      "name": "idle",
+      "motion": "titan_idle",
+      "frameCount": 10,
+      "frameRate": 8,
+      "loop": true,
+      "parameters": {
+        "breath": 1,
+        "sway": 1
+      }
+    },
+    {
+      "name": "slam",
+      "motion": "titan_slam",
+      "frameCount": 22,
+      "frameRate": 24,
+      "loop": false,
+      "start": "rest",
+      "markers": {
+        "strike": 12,
+        "impact": 15
+      },
+      "parameters": {
+        "rear": 1,
+        "lunge": 1
+      }
+    },
+    {
+      "name": "stomp",
+      "motion": "titan_stomp",
       "frameCount": 18,
       "frameRate": 24,
       "loop": false,
+      "start": "rest",
       "markers": {
-        "strike": 8,
-        "impact": 11
+        "strike": 10,
+        "impact": 12
       },
       "parameters": {
-        "strength": 1,
-        "leapDistance": 1.352
+        "lift": 1,
+        "quake": 1
+      }
+    },
+    {
+      "name": "cast",
+      "motion": "titan_cast",
+      "frameCount": 12,
+      "frameRate": 24,
+      "loop": false,
+      "start": "rest",
+      "markers": {
+        "release": 8
+      },
+      "parameters": {
+        "rise": 1,
+        "splay": 1
+      }
+    },
+    {
+      "name": "emerge",
+      "motion": "titan_emerge",
+      "frameCount": 16,
+      "frameRate": 12,
+      "loop": false,
+      "start": "free",
+      "parameters": {
+        "cutFrom": 1.05,
+        "cutTo": -0.15,
+        "heave": 1
       }
     }
   ],
-  "displayScale": 2.4
+  "displayScale": 3.0
 }

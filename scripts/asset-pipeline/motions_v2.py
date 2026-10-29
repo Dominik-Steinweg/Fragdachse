@@ -95,6 +95,12 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
     if 'throat_glow' in parts:
         parts['throat_glow'].default_value = parts['throat_glow_rest']
         parts['throat_glow'].keyframe_insert(data_path='default_value', frame=frame)
+    # Recipe-declared extra controls and keyed shader values rest outside their own clips.
+    for name in parts.get('rest_controls', ()):
+        pose(name)
+    for socket, rest in parts.get('rest_sockets', ()):
+        socket.default_value = rest
+        socket.keyframe_insert(data_path='default_value', frame=frame)
     if motion == 'relay_deploy':
         # Deployed rest is also the final one-shot pose. Hinges retain their
         # nonzero pivots; lens rise follows the initial leg clearance phase.
@@ -157,6 +163,8 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         importlib.import_module('rabid_rabbit_motion_v2').apply_rabid_rabbit(asset, motion, phase, frame, idle, p, pose, key)
     elif motion.startswith('demon_'):
         importlib.import_module('demon_badger_motion_v2').apply_demon_badger(asset, motion, phase, frame, idle, p, pose, key)
+    elif motion.startswith('titan_'):
+        importlib.import_module('grave_titan_motion_v2').apply_grave_titan(asset, motion, phase, frame, idle, p, pose, key)
     elif motion.startswith('shield_'):
         pose('left_arm')
         pose('right_arm')

@@ -35,7 +35,7 @@ export function motionModule(motion) {
   for (const [prefix, module] of [['kraken_land_', 'kraken_motion_land_v2'], ['kraken_tentacle_', 'kraken_tentacle_motion_v2'],
     ['kraken_egg_', 'kraken_egg_motion_v2'], ['kraken_spine_', 'kraken_egg_motion_v2'], ['kraken_', 'kraken_motion_v2'],
     ['toad_', 'plague_toad_motion_v2'], ['kaboomtula_', 'kaboomtula_motion_v2'], ['rabbit_', 'rabid_rabbit_motion_v2'],
-    ['demon_', 'demon_badger_motion_v2']]) {
+    ['demon_', 'demon_badger_motion_v2'], ['titan_', 'grave_titan_motion_v2']]) {
     if (motion.startsWith(prefix)) return module + '.py';
   }
   return 'motions_v2.py';
