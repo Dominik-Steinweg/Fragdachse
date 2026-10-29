@@ -6,6 +6,8 @@ export interface EnemyMeleeTiming {
   readonly hitDelayMs: number;
   readonly strikeMs: number;
   readonly recoveryMs: number;
+  /** Sheet clip sampled over this timeline (with `strike`/`impact` markers); default `claw`. */
+  readonly clip?: string;
 }
 
 export interface EnemyClawAttack {

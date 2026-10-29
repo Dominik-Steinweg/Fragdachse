@@ -210,7 +210,7 @@
       "pawCount": 4,
       "maxHp": 1800,
       "xp": 300,
-      "size": 56,
+      "size": 112,
       "moveSpeed": 48,
       "knockbackFactor": 0.15,
       "movementTarget": "bases",
@@ -224,16 +224,30 @@
             "count": 10,
             "intervalMs": 80,
             "cooldownMs": 10000,
-            "targetDistribution": "round_robin"
+            "targetDistribution": "round_robin",
+            "chargeMs": 800
           }
         },
         {
-          "weaponId": "GRAVE_TITAN_BITE",
-          "targetMode": "all",
+          "weaponId": "GRAVE_TITAN_STOMP",
+          "targetMode": "players",
+          "usableDuringPriorityPause": true,
           "meleeTiming": {
-            "hitDelayMs": 550,
-            "strikeMs": 80,
-            "recoveryMs": 320
+            "hitDelayMs": 1100,
+            "strikeMs": 160,
+            "recoveryMs": 800,
+            "clip": "stomp"
+          }
+        },
+        {
+          "weaponId": "GRAVE_TITAN_SLAM",
+          "targetMode": "all",
+          "usableDuringPriorityPause": true,
+          "meleeTiming": {
+            "hitDelayMs": 1300,
+            "strikeMs": 220,
+            "recoveryMs": 900,
+            "clip": "slam"
           }
         }
       ],
@@ -247,7 +261,7 @@
         "color": 8191882,
         "sizeFactor": 1.25,
         "alpha": 0.45,
-        "lightRadiusPx": 150,
+        "lightRadiusPx": 260,
         "lightIntensity": 0.45
       },
       "bossPresence": {

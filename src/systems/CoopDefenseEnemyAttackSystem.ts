@@ -53,6 +53,13 @@ interface MeleeWindupState {
   executed: boolean;
 }
 
+/** Sammelphase einer Salve mit `salvo.chargeMs`: der Gegner haelt an, bis bei `fireAt` ihr erster Schuss faellt. */
+interface SalvoChargeState {
+  readonly attackWeapon: EnemyAttackWeapon;
+  readonly target: EnemyAttackCandidate;
+  readonly fireAt: number;
+}
+
 /** Laufende Salve eines Gegners; pro Gegner kann nur eine Waffe gleichzeitig salvieren. */
 interface EnemySalvoState {
   readonly weaponId: string;
@@ -137,6 +144,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   private readonly salvoStates = new Map<string, EnemySalvoState>();
   private readonly playerTargetLocks = new Map<string, PlayerTargetLockState>();
   private readonly meleeWindups = new Map<string, MeleeWindupState>();
+  private readonly salvoCharges = new Map<string, SalvoChargeState>();
   private clawRevision = 0;
   private clawStateSink: ((enemy: EnemyEntity, state: EnemyClawState) => void) | null = null;
   setClawStateSink(sink: ((enemy: EnemyEntity, state: EnemyClawState) => void) | null): void { this.clawStateSink = sink; }
@@ -148,13 +156,14 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
 
   destroy(): void {
     for (const enemy of this.enemyManager.getAllEnemies()) this.clearClawAttack(enemy);
-    this.meleeWindups.clear();
+    this.meleeWindups.clear(); this.salvoCharges.clear();
     this.salvoStates.clear(); this.sustainedAttacks.clear(); this.playerTargetLocks.clear(); this.lastAttackTargets.clear();
     this.clawStateSink = null;
   }
 
   removeEnemy(enemy: EnemyEntity): void {
     this.clearClawAttack(enemy);
+    this.salvoCharges.delete(enemy.id);
     this.salvoStates.delete(enemy.id); this.sustainedAttacks.delete(enemy.id);
     this.playerTargetLocks.delete(enemy.id); this.lastAttackTargets.delete(enemy.id);
   }
@@ -177,6 +186,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
 
   getCurrentTarget(enemyId: string, now = Date.now()): EnemyAiTargetRef | null {
     return this.meleeWindups.get(enemyId)?.target.targetRef
+      ?? this.salvoCharges.get(enemyId)?.target.targetRef
       ?? this.salvoStates.get(enemyId)?.target.targetRef
       ?? this.sustainedAttacks.get(enemyId)?.targetRef
       ?? ((this.playerTargetLocks.get(enemyId)?.lockedUntil ?? 0) >= now
@@ -200,6 +210,8 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
 
     const windup = this.meleeWindups.get(enemy.id);
     if (windup) return { aimAngle: windup.presentation.angle, holdPosition: true, committed: true };
+    const charge = this.salvoCharges.get(enemy.id);
+    if (charge) return { aimAngle: this.aimAt(enemy, charge.target.targetX, charge.target.targetY, now), holdPosition: true, committed: true };
     const salvo = this.salvoStates.get(enemy.id);
     const sustained = this.sustainedAttacks.get(enemy.id);
     const committedWeaponId = salvo && now < salvo.expiresAt ? salvo.weaponId
@@ -273,6 +285,11 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
         continue;
       }
 
+      if (this.salvoCharges.has(enemy.id)) {
+        this.updateSalvoCharge(enemy, now);
+        continue;
+      }
+
 
       // Eine laufende Salve haelt ihren eigenen Takt. Ohne diesen Vorrang wuerde sie auf das
       // Zielscan-Raster des Gegners einrasten und langsamer feuern als konfiguriert.
@@ -290,6 +307,11 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
         continue;
       }
 
+      if (!sustained.active && this.shouldStartSalvoCharge(enemy, attack)) {
+        this.startSalvoCharge(enemy, attack, now);
+        continue;
+      }
+
       this.fireAttack(enemy, attack, now, undefined, sustained.active);
     }
 
@@ -302,6 +324,11 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
    * damit ein wiederholt blockierter Gegner nicht beliebig viele Salven ohne Cooldown feuert.
    */
   private abortCombat(enemy: EnemyEntity, now: number): void {
+    const charge = this.salvoCharges.get(enemy.id);
+    if (charge) {
+      this.salvoCharges.delete(enemy.id);
+      this.spendSalvo(enemy, charge.attackWeapon, now, 0);
+    }
     this.finishSalvo(enemy, now);
     this.sustainedAttacks.delete(enemy.id);
     this.playerTargetLocks.delete(enemy.id);
@@ -315,7 +342,50 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     if (!state) return;
     this.salvoStates.delete(enemy.id);
     const attackWeapon = enemy.getAttackWeapons().find(candidate => candidate.weapon.config.id === state.weaponId);
-    if (attackWeapon?.salvo) enemy.lockWeaponUntil(attackWeapon.weapon, now + attackWeapon.salvo.cooldownMs);
+    if (attackWeapon) this.spendSalvo(enemy, attackWeapon, now, state.shotsFired);
+  }
+
+  /** Sperrt eine Salvenwaffe fuer ihre Pause; eine angekuendigte Salve meldet dabei ihr Ende. */
+  private spendSalvo(enemy: EnemyEntity, attackWeapon: EnemyAttackWeapon, now: number, shotsFired: number): void {
+    const salvo = attackWeapon.salvo;
+    if (!salvo) return;
+    enemy.lockWeaponUntil(attackWeapon.weapon, now + salvo.cooldownMs);
+    if (!salvo.chargeMs) return;
+    const volley = enemy.getVolleyState();
+    if (volley.revision === 0 || volley.endedAt > 0) return;
+    enemy.applyVolleyState({ ...volley, revision: volley.revision + 1, endedAt: now, rechargedAt: now + salvo.cooldownMs, shotsFired });
+  }
+
+  private shouldStartSalvoCharge(enemy: EnemyEntity, attack: SelectedEnemyAttack): boolean {
+    return (attack.attackWeapon.salvo?.chargeMs ?? 0) > 0 && !this.isSalvoInProgress(enemy.id, attack.attackWeapon.weapon.config.id);
+  }
+
+  /** Kuendigt die Salve an: der Gegner haelt an und repliziert die Sammelphase bis zum ersten Schuss. */
+  private startSalvoCharge(enemy: EnemyEntity, attack: SelectedEnemyAttack, now: number): void {
+    const fireAt = now + attack.attackWeapon.salvo!.chargeMs!;
+    this.salvoCharges.set(enemy.id, { attackWeapon: attack.attackWeapon, target: { ...attack.target }, fireAt });
+    const revision = enemy.getVolleyState().revision + 1;
+    enemy.applyVolleyState({ revision, chargeStartAt: now, fireAt, endedAt: 0, rechargedAt: 0, shotsFired: 0 });
+    if (attack.target.targetRef) this.decoyTargets?.usedTarget(enemy.id, attack.target.targetRef);
+    enemy.stopMovement();
+    enemy.faceAngle(this.aimAt(enemy, attack.target.targetX, attack.target.targetY, now));
+  }
+
+  /**
+   * Haelt den Gegner bis `fireAt` und feuert dann den ersten Schuss auf das dann gueltige Ziel; den
+   * Rest der Salve taktet `continueSalvo` wie ohne Sammelphase. Faellt kein erster Schuss (Ziel weg,
+   * Angriff verweigert), gilt die angekuendigte Salve als verbraucht – sonst koennte er endlos sammeln.
+   */
+  private updateSalvoCharge(enemy: EnemyEntity, now: number): void {
+    const charge = this.salvoCharges.get(enemy.id)!;
+    enemy.stopMovement();
+    enemy.faceAngle(this.aimAt(enemy, charge.target.targetX, charge.target.targetY, now));
+    if (now < charge.fireAt) return;
+    this.salvoCharges.delete(enemy.id);
+    const { attackWeapon } = charge, weapon = attackWeapon.weapon;
+    const target = enemy.isWeaponReady(weapon, now) ? this.resolveWeaponTarget(enemy, attackWeapon, now, 0) : null;
+    if (target) this.fireAttack(enemy, { attackWeapon, target }, now);
+    if (!this.isSalvoInProgress(enemy.id, weapon.config.id) && enemy.isWeaponReady(weapon, now)) this.spendSalvo(enemy, attackWeapon, now, 0);
   }
 
   /**
@@ -610,6 +680,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
         higherPriorityWeaponBusy
         && target.kind !== 'obstacle'
         && target.kind !== 'base'
+        && !attackWeapon.usableDuringPriorityPause
       ) return null;
       return { attackWeapon, target };
     }

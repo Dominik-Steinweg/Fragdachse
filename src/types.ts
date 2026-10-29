@@ -2201,6 +2201,8 @@ export interface SyncedEnemyState {
   pounce?: import('./systems/EnemyPounceState').EnemyPounceState;
   /** Host-decided heat cycle (charge, booked warning, burst); absent until the body's first cycle. */
   heatBurst?: import('./systems/EnemyHeatBurstState').EnemyHeatBurstState;
+  /** Host-decided gather-and-fire salvo cycle (charge, first shot, end, recharge); absent until the first gather. */
+  volley?: import('./systems/EnemyVolleyState').EnemyVolleyState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;
@@ -2250,6 +2252,8 @@ export interface SyncedEnemyDeltaState {
   pounce?: import('./systems/EnemyPounceState').EnemyPounceState;
   /** Host-decided heat cycle (charge, booked warning, burst); absent until the body's first cycle. */
   heatBurst?: import('./systems/EnemyHeatBurstState').EnemyHeatBurstState;
+  /** Host-decided gather-and-fire salvo cycle (charge, first shot, end, recharge); absent until the first gather. */
+  volley?: import('./systems/EnemyVolleyState').EnemyVolleyState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;

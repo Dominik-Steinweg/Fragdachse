@@ -52,6 +52,11 @@ export interface CoopDefenseEnemyWeaponSalvoConfig {
    * Spielerziele neu und verteilt die Salve deterministisch auf sie.
    */
   readonly targetDistribution?: 'locked' | 'round_robin';
+  /**
+   * Optionale Sammelphase vor dem ersten Schuss: der Gegner haelt an, kuendigt die Salve fuer diese
+   * Dauer an (replizierter Volley-Zustand) und feuert sie danach im gewohnten Takt.
+   */
+  readonly chargeMs?: number;
 }
 
 export interface CoopDefenseEnemyWeaponConfig {
@@ -69,6 +74,11 @@ export interface CoopDefenseEnemyWeaponConfig {
   readonly salvo?: CoopDefenseEnemyWeaponSalvoConfig;
   /** Visual muzzle ahead of the body centre along its aim (e.g. a mouth); gameplay still fires from the centre. */
   readonly muzzleForwardPx?: number;
+  /**
+   * Darf angreifen, waehrend eine hoeher priorisierte Waffe ihre Pause abwartet. Sonst wartet der
+   * Gegner deren Cooldown ab, statt umzuschalten (z. B. ein Fernkaempfer, der nicht zubeissen soll).
+   */
+  readonly usableDuringPriorityPause?: boolean;
 }
 
 export interface CoopDefenseEnemyStinkAuraConfig {
@@ -1409,6 +1419,7 @@ function normalizeWeapons(
         : Math.max(0, weapon.minTargetDistancePx),
       salvo: normalizeWeaponSalvoConfig(weapon.salvo),
       muzzleForwardPx: weapon.muzzleForwardPx === undefined ? undefined : Math.max(0, weapon.muzzleForwardPx),
+      usableDuringPriorityPause: weapon.usableDuringPriorityPause === true ? true : undefined,
     };
   });
 }
@@ -1417,6 +1428,9 @@ function normalizeMeleeTiming(timing: CoopDefenseEnemyWeaponConfig['meleeTiming'
   if (!timing) return undefined;
   if (![timing.hitDelayMs, timing.strikeMs, timing.recoveryMs].every(value => Number.isFinite(value) && value > 0)
     || timing.strikeMs >= timing.hitDelayMs) throw new Error('[coopDefenseEnemies] Invalid melee timing');
+  if (timing.clip !== undefined && (typeof timing.clip !== 'string' || timing.clip.trim().length === 0)) {
+    throw new Error('[coopDefenseEnemies] Invalid melee clip');
+  }
   return { ...timing };
 }
 
@@ -1434,6 +1448,7 @@ function normalizeWeaponSalvoConfig(
     intervalMs: Math.max(1, Math.floor(config.intervalMs)),
     cooldownMs: Math.max(1, Math.floor(config.cooldownMs)),
     targetDistribution: config.targetDistribution ?? 'locked',
+    ...(config.chargeMs !== undefined && Math.floor(config.chargeMs) > 0 ? { chargeMs: Math.floor(config.chargeMs) } : {}),
   };
 }
 

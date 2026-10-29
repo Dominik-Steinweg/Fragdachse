@@ -16,6 +16,7 @@ import { EMPTY_ENEMY_POUNCE_STATE, enemyPounceAirProgress, enemyPouncePhaseAt, i
 import { EMPTY_KABOOMTULA_STATE, isKaboomtulaState, kaboomtulaLeapProgress, kaboomtulaPhaseProgress,
   type KaboomtulaState } from '../systems/KaboomtulaState';
 import { EMPTY_ENEMY_HEAT_BURST_STATE, isEnemyHeatBurstState, type EnemyHeatBurstState } from '../systems/EnemyHeatBurstState';
+import { EMPTY_ENEMY_VOLLEY_STATE, isEnemyVolleyState, type EnemyVolleyState } from '../systems/EnemyVolleyState';
 import { heatSpeedFactorAt } from '../systems/enemyHeatBurstRules';
 import { EnemySpitPlayback, syncEnemyHeatBurstAnimation } from '../animations/EnemyHeatBurstAnimation';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
@@ -115,6 +116,8 @@ export interface EnemyAttackWeapon {
   readonly salvo?: CoopDefenseEnemyWeaponSalvoConfig;
   /** Visual muzzle ahead of the centre along the aim (0 = the centre). */
   readonly muzzleForwardPx: number;
+  /** May attack while a higher-priority weapon waits out its pause. */
+  readonly usableDuringPriorityPause?: boolean;
 }
 
 function ensureEnemyGlowTexture(scene: Phaser.Scene): void {
@@ -375,6 +378,16 @@ export class EnemyEntity {
     this.heatBurstState = state;
   }
 
+  private volleyState: EnemyVolleyState = EMPTY_ENEMY_VOLLEY_STATE;
+
+  getVolleyState(): EnemyVolleyState { return this.volleyState; }
+
+  /** Host: publish a new gather/fire transition (revision must grow). Clients: apply a newer replicated state. */
+  applyVolleyState(state: EnemyVolleyState): void {
+    if (!isEnemyVolleyState(state) || state.revision <= this.volleyState.revision) return;
+    this.volleyState = state;
+  }
+
   private readonly spitPlayback = new EnemySpitPlayback();
   private heatBurstAnimating = false;
 
@@ -536,7 +549,8 @@ export class EnemyEntity {
     this.clawAnimating = !!attack && now < attack.endsAt && this.sprite.visible && !this.burrowed && this.currentHp > 0;
     if (this.clawAnimating && attack) {
       this.faceAngle(attack.angle);
-      syncEnemyClawAnimation(this.sprite, this.config.imageKey, attack, now);
+      const clip = this.config.weapons.find(weapon => weapon.weaponId === attack.weaponId)?.meleeTiming?.clip;
+      syncEnemyClawAnimation(this.sprite, this.config.imageKey, attack, now, clip);
     } else if (wasAnimating) this.syncWalkingAnimation();
   }
   private movementRevision = 0;
@@ -1267,6 +1281,7 @@ export class EnemyEntity {
     if (this.kaboomtulaState.revision > 0) snapshot.kaboomtula = this.kaboomtulaState;
     if (this.pounceState.revision > 0) snapshot.pounce = this.pounceState;
     if (this.heatBurstState.revision > 0) snapshot.heatBurst = this.heatBurstState;
+    if (this.volleyState.revision > 0) snapshot.volley = this.volleyState;
     if (this.energyCone.revision > 0) snapshot.energyCone = this.energyCone;
     if (this.eliteAffixId) snapshot.eliteAffixId = this.eliteAffixId;
     if (this.spawnZoneId) snapshot.spawnZoneId = this.spawnZoneId;
@@ -1504,6 +1519,7 @@ export class EnemyEntity {
         minTargetDistancePx: configuredWeapon.minTargetDistancePx ?? 0,
         salvo: configuredWeapon.salvo,
         muzzleForwardPx: configuredWeapon.muzzleForwardPx ?? 0,
+        usableDuringPriorityPause: configuredWeapon.usableDuringPriorityPause,
       };
     });
   }

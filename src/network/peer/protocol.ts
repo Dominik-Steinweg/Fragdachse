@@ -59,7 +59,8 @@
 // Void taint: enemy full states carry the spawn zone the enemy came out of (spawnZoneId).
 // Demon Badger heat burst: enemy snapshots gained the heat timeline field, and the burst and the
 // fizzle of a killed charged badger travel as the new explosion styles `demon_burst`/`demon_fizzle`.
-export const PEER_PROTOCOL_VERSION = 57;
+// Grave Titan: enemy snapshots gained the volley field (gather, first shot, end, recharge, shots).
+export const PEER_PROTOCOL_VERSION = 58;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';
