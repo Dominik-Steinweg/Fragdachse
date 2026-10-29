@@ -139,7 +139,7 @@
       "loop": false,
       "start": "free",
       "parameters": {
-        "cutFrom": 1.05,
+        "cutFrom": 1.30,
         "cutTo": -0.15,
         "heave": 1
       }
