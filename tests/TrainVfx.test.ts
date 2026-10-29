@@ -161,3 +161,21 @@ it('immediately hides the complete train and never restores it from a stale aliv
   f.setTarget(null); assert.equal(visible,false);
   f.setTarget({alive:true,x:50,y:100,dir:1,hp:100,maxHp:100}); assert.equal(f.destructionShown,false);
 });
+
+it('bakes the train only once its deferred material sources are loaded', () => {
+  const loaded = new Set<string>(), created: string[] = []; let texture = '__DEFAULT', visible = false;
+  const scene = { textures: {
+    exists: (key: string) => loaded.has(key),
+    createCanvas: (key: string) => { created.push(key); loaded.add(key); return { context: { clearRect: () => {} }, refresh: () => {} }; },
+    get: () => ({ getSourceImage: () => ({}) }),
+  } };
+  const f: any = Object.create(TrainRenderer.prototype);
+  Object.assign(f, { scene, textureBound: false, textureCenterOffsetY: 0, lastX: 0, displayY: 0, lastDir: 1, draw: () => {},
+    image: { setVisible(v: boolean) { visible = v; return this; }, setTexture(key: string) { texture = key; return this; },
+      setPosition() { return this; }, setFlipY() { return this; } } });
+  f.syncImage();
+  assert.equal(visible, false); assert.equal(created.length, 0); assert.equal(texture, '__DEFAULT');
+  for (const key of ['train_material_light_top', 'train_material_red_top', 'train_material_dark_top', 'train_overlay_scratches', 'train_overlay_grime']) loaded.add(key);
+  f.syncImage(); f.syncImage();
+  assert.equal(visible, true); assert.equal(created.length, 1); assert.notEqual(texture, '__DEFAULT');
+});

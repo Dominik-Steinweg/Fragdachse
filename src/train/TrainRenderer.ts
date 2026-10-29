@@ -49,8 +49,10 @@ export { preloadTrainMaterialAssets } from './TrainAssets';
  * move and flip a single Image, keeping the previous render cost and network boundary intact.
  */
 export class TrainRenderer {
+  private readonly scene: Phaser.Scene;
   private readonly image: Phaser.GameObjects.Image;
   private readonly textureCenterOffsetY: number;
+  private textureBound = false;
 
   private targetY = 0;
   private displayY = 0;
@@ -66,8 +68,11 @@ export class TrainRenderer {
   private destructionShown = false;
 
   constructor(scene: Phaser.Scene, vfx?: TrainVfxPorts) {
-    this.textureCenterOffsetY = this.ensureTrainTexture(scene);
-    this.image = scene.add.image(0, 0, TEX_TRAIN_RB54)
+    this.scene = scene;
+    this.textureCenterOffsetY = this.computeTextureLayout().centerOffsetY;
+    // The material sources are round content that loads behind the revealed lobby, while the
+    // renderer already exists in the LobbyWorld: the bake waits for the first visible frame.
+    this.image = scene.add.image(0, 0, '__DEFAULT')
       .setDepth(DEPTH.TRAIN)
       .setVisible(false);
     this.vfx = vfx ? new TrainVfxController(scene, vfx) : null;
@@ -483,6 +488,11 @@ export class TrainRenderer {
   }
 
   private syncImage(): void {
+    if (!this.textureBound) {
+      if (!this.ensureTrainTexture()) { this.image.setVisible(false); return; }
+      this.image.setTexture(TEX_TRAIN_RB54);
+      this.textureBound = true;
+    }
     this.image
       .setVisible(true)
       .setPosition(
@@ -492,8 +502,7 @@ export class TrainRenderer {
       .setFlipY(this.lastDir < 0);
   }
 
-  /** Builds the complete train once in local texture coordinates and returns its loco offset. */
-  private ensureTrainTexture(scene: Phaser.Scene): number {
+  private computeTextureLayout(): { readonly centerOffsetY: number; readonly minY: number; readonly maxY: number } {
     const segmentYs = this.computeSegYs(0, 1);
     let minY = -TRAIN.LOCO_HEIGHT * 0.5;
     let maxY = TRAIN.LOCO_HEIGHT * 0.5;
@@ -501,9 +510,19 @@ export class TrainRenderer {
       minY = Math.min(minY, segmentYs[index] - TRAIN.WAGON_HEIGHT * 0.5);
       maxY = Math.max(maxY, segmentYs[index] + TRAIN.WAGON_HEIGHT * 0.5);
     }
-    const centerOffsetY = (minY + maxY) * 0.5;
-    if (scene.textures.exists(TEX_TRAIN_RB54)) return centerOffsetY;
+    return { centerOffsetY: (minY + maxY) * 0.5, minY, maxY };
+  }
 
+  /**
+   * Builds the complete train once in local texture coordinates. False while a material source
+   * is still missing, so the scene-lifetime cache never holds a bake of Phaser's missing texture.
+   */
+  private ensureTrainTexture(): boolean {
+    const scene = this.scene;
+    if (scene.textures.exists(TEX_TRAIN_RB54)) return true;
+    if (!Object.values(TRAIN_MATERIAL_ASSETS).every(key => scene.textures.exists(key))) return false;
+
+    const { minY, maxY } = this.computeTextureLayout();
     const padding = 5;
     const width = Math.ceil(TRAIN.VISUAL_WIDTH + padding * 2);
     const height = Math.ceil(maxY - minY + padding * 2);
@@ -511,7 +530,7 @@ export class TrainRenderer {
     texture.context.clearRect(0, 0, width, height);
     this.draw(texture.context, this.getTrainMaterials(scene), width * 0.5, padding - minY, 1);
     texture.refresh();
-    return centerOffsetY;
+    return true;
   }
 
   private getTrainMaterials(scene: Phaser.Scene): TrainMaterials {
