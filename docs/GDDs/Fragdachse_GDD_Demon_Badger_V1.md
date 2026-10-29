@@ -57,8 +57,17 @@ Void-Flammenstöße auf Spieler und Gebäude; erlöschende Flammen setzen den Bo
 | Reichweite | ca. 170 px, große Start-Hitbox, schneller Abfall: kompakte Stichflamme |
 | Schaden | 4,25 je Flamme plus Void-Brand |
 | Bewegung | bremst beim Spucken auf 35 %; vor der Basis steht er in Spuckreichweite und betritt seine Angriffsposition ohne Schwung (kein Pendeln) |
-| Brand | Erlöschende Flammen hinterlassen Void-Bodenfeuer (2,2 s); eine Basis darin fängt über `BaseVoidFireSystem` Feuer, brennt aber nur mit 40 % des Basisbrands (`burningGround.baseDamageMult` 0,4) |
+| Basis | Gegner-Projektile treffen eigene Basen nicht per Kontakt; jede auf eine Basis gezielte Flamme versengt sie deshalb direkt mit Schaden × `baseDamageMult` (0,35), so wächst der Druck mit der Zahl der Spucker |
+| Brand | Erlöschende Flammen hinterlassen Void-Bodenfeuer (2,2 s); eine Basis darin fängt über `BaseVoidFireSystem` Feuer, brennt aber nur mit 40 % des Basisbrands (`burningGround.baseDamageMult` 0,4; nicht stapelnd) |
 | Klaue | nur Felsen und Hindernisse (Zielmodus `rocks`), nie Basis oder Spieler |
+
+Basisschaden je Sekunde (Map 04, Basis in der Messung unzerstörbar, 10–40 s nach dem Erscheinen):
+
+| Dachse | vor der Überarbeitung (nur Klaue) | jetzt (Versengen, Brand, Explosion) |
+|---|---|---|
+| 1 | 11,8 | 14,6 |
+| 6 | 43,3 | 32,5 |
+| 12 | 64,0 | 62,7 |
 
 ## 4. Darstellung
 

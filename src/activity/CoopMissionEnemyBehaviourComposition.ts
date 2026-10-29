@@ -202,6 +202,9 @@ export class CoopMissionEnemyBehaviourComposition {
         baseDamageMult: cell.baseDamageMult,
         burn: { durationMs: cell.burnDurationMs, damagePerTick: cell.burnDamagePerTick, visualStyle: cell.visualStyle },
         combatSource: fireSystem.captureCombatSource?.(enemy.id, cell.sourceId) }, now);
+    }, scorchBase: (enemy, baseId, damage, sourceId, now) => {
+      const combat = this.options.combatSystem, source = combat.captureWorldDamageSource(enemy.id, sourceId, 'direct');
+      combat.applyBaseStatusDamage(baseId, damage, source, now);
     } });
     attack.setIntents(runtime.enemyIntents);
     attack.setObstacleExclusion(this.options.isReactivePropObstacle ?? null);
