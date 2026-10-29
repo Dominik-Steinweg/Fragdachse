@@ -705,12 +705,16 @@ export class WorldPresentationFrameBinding {
     const zoomedMaxScrollX = zoom > 1 ? Math.max(minScrollX, ARENA_MAX_X - (ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH) / zoom) : maxScrollX;
     const zoomedMaxScrollY = zoom > 1 ? Math.max(minScrollY, ARENA_MAX_Y - (ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT) / zoom) : maxScrollY;
     // The first local spawn is already known during loading; snap once so the startup working
-    // set is not invalidated by a camera glide while the barrier is being evaluated. A spawn
-    // close-up cuts onto the figure. Otherwise the followed point glides; the view is then
-    // derived exactly, so any zoom change (staged or by wheel) and its clamp stay one motion.
-    const followLerp = this.input.isArenaLoading() || spawn.cut || !this.followFocusValid ? 1 : 1 - Math.exp(-deltaMs / 120);
-    this.followFocusX = Phaser.Math.Linear(this.followFocusX, followX, followLerp);
-    this.followFocusY = Phaser.Math.Linear(this.followFocusY, followY, followLerp);
+    // set is not invalidated by a camera glide while the barrier is being evaluated. The veil can
+    // outlast loading (the countdown's spawn): behind it the camera snaps as well, since the
+    // reveal waits for two identical rendered views. A spawn close-up cuts onto the figure.
+    // Otherwise the followed point glides; the view is then derived exactly, so any zoom change
+    // (staged or by wheel) and its clamp stay one motion.
+    const snap = this.input.isArenaLoading() || (this.input.isLoadingVeilShown?.() ?? false)
+      || spawn.cut || !this.followFocusValid;
+    const followLerp = snap ? 1 : 1 - Math.exp(-deltaMs / 120);
+    this.followFocusX = settleFollow(this.followFocusX, followX, followLerp);
+    this.followFocusY = settleFollow(this.followFocusY, followY, followLerp);
     this.followFocusValid = true;
     this.lastCameraScrollX = Phaser.Math.Clamp(this.followFocusX - focusScreenX / zoom, minScrollX, zoomedMaxScrollX);
     this.lastCameraScrollY = Phaser.Math.Clamp(this.followFocusY - focusScreenY / zoom, minScrollY, zoomedMaxScrollY);
@@ -1404,4 +1408,13 @@ interface TrainLamp {
 interface TrainLightPlan {
   readonly headlights: readonly TrainLamp[];
   readonly windows: readonly TrainLamp[];
+}
+
+/** Below this the glide is invisible; it ends exactly instead of creeping through float precision,
+ * which keeps an unchanged view unchanged (the reveal compares rendered views exactly). */
+const FOLLOW_SETTLE_PX = 1 / 64;
+
+function settleFollow(current: number, target: number, lerp: number): number {
+  const next = Phaser.Math.Linear(current, target, lerp);
+  return Math.abs(target - next) < FOLLOW_SETTLE_PX ? target : next;
 }

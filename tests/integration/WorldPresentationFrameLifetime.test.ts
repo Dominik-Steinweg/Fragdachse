@@ -793,6 +793,36 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       return { camera, time, scene, centre, run };
     }
 
+    it('springt hinter dem Ladeschleier auf die Figur und beendet ein Gleiten exakt', () => {
+      applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
+      const { scene, centre, camera, run } = zoomableScene();
+      const player = { active: true, x: 1500, y: 900 };
+      let veil = true;
+      // Without a staged close-up, the lifted veil leaves the ordinary glide.
+      const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene, {
+        stagesLocalSpawn: false,
+        getLocalPlayerSprite: () => player as never,
+        isLocalPlayerAlive: () => true,
+        isLoadingVeilShown: () => veil,
+      }));
+      binding.syncCamera(16, true);
+      // The countdown's spawn moves the figure while the veil still covers the World.
+      Object.assign(player, { x: 2400, y: 1300 });
+      binding.syncCamera(16, true);
+      expect(centre().x).toBeCloseTo(2400, 6);
+      expect(centre().y).toBeCloseTo(1300, 6);
+      // Visible: the camera glides, then comes to rest exactly, so the rendered view stops changing.
+      veil = false;
+      Object.assign(player, { x: 2500 });
+      binding.syncCamera(16, true);
+      expect(centre().x).toBeLessThan(2500);
+      run(binding, 3000);
+      const rest = camera.scrollX;
+      binding.syncCamera(16, true);
+      expect(camera.scrollX).toBe(rest);
+      expect(centre().x).toBe(2500);
+    });
+
     it('zeigt beim Laden vor dem ersten Spawn bereits den erwarteten Spawnbereich', () => {
       applyArenaWorldMetrics(WIDE_DYNAMIC_PROFILE);
       const { scene, centre } = zoomableScene();

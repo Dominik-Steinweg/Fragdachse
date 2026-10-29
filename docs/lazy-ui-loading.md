@@ -2,7 +2,7 @@
 
 Upgrade-, Items- und Reward-Ansicht behalten ihre Scene-Owner, bauen ihre Phaser-Objekte aber erst bei der ersten erfolgreichen Öffnung. Erneute Öffnungen verwenden den Aufbau weiter und lesen den aktuellen Meta-Zustand.
 
-Die 24 Ausrüstungsbilder liegen in `ITEM_VIEW_ASSETS` (`src/ui/OverlayAssets.ts`) außerhalb von `ArenaScene.preload`. Die großen Dekorationen aus `DeferredAssets` werden bereits im initialen Preload hochgeladen, damit ihre Texture-Uploads hinter dem Boot-Schleier bleiben. Die zweite Ladephase verwendet den Cache und übernimmt fehlgeschlagene optionale Bilder sowie Musik. Vor dem ersten Aufbau müssen die benötigten Bilder vorhanden sein; fehlgeschlagene optionale Dekorationen werden bei Öffnung erneut versucht.
+Die 24 Ausrüstungsbilder liegen in `ITEM_VIEW_ASSETS` (`src/ui/OverlayAssets.ts`) außerhalb von `ArenaScene.preload`. Die großen Dekorationen aus `DeferredAssets` laden in der zweiten Ladephase nach dem Lobby-Reveal, in begrenzten Paketen zusammen mit Musik und Rundeninhalten; fehlgeschlagene optionale Bilder werden dort erneut versucht. Vor dem ersten Aufbau müssen die benötigten Bilder vorhanden sein; fehlgeschlagene optionale Dekorationen werden bei Öffnung erneut versucht.
 
 Der UI-Ladeowner wartet auf das Ende von `DeferredAssets` und arbeitet danach seriell mit dem Scene-Loader in kleinen Bildpaketen. Nach Lobby-Reveal startet ein verzögerter Prefetch, der keine Ansicht aufbaut. Ready, Host-/Client- und World-Barrieren werden durch UI-Downloads nicht erweitert. Dies ist kein allgemeiner World-/Activity-Paketlader.
 

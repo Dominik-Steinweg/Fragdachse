@@ -26,7 +26,10 @@ Explosions-RPC, damit Snapshot-Entfernungen keinen zweiten Sound auslösen.
 
 ## Initialer Boot und Lobby-Bereitschaft
 
-`ArenaScene.create()` startet den budgetierten Aufbau; Phasers `CREATE` bedeutet noch keine
+Phaser und das Asset-Preload starten parallel zum Verbindungsaufbau; der budgetierte Aufbau aus
+`ArenaScene.create()` beginnt erst nach `bridge.activate()` (Warte-Schritt `waitStep` in
+[BootPreparation.ts](../../src/ui/BootPreparation.ts), der den Slice beendet statt zu pollen).
+Phasers `CREATE` bedeutet noch keine
 Systembereitschaft. Die Scene bleibt waehrenddessen pausiert und unsichtbar, Eingaben gesperrt.
 Gameplay-/Effekt-Callbacks werden erst nach Aufbau ihrer Abhaengigkeiten ohne weiteren
 Yield registriert; Verbindungsfehler und Kick werden bis dahin gehalten. Neue Startschritte
@@ -34,6 +37,14 @@ muessen ihren Cleanup vor dem naechsten Yield fuer Shutdown und direkten Destroy
 Erst der abgeschlossene Aufbau erlaubt Updates. Der DOM-Bootscreen bleibt bis zur bestehenden
 World-Reveal-Barriere nach einem Render bestehen; Direktbeitritte gehen weiterhin an den
 Arena-Ladeschleier.
+
+Shader-Vorwaermung blockiert keinen Frame: `KHR_parallel_shader_compile` wird beim Boot aktiviert
+(`enableParallelShaderCompile` in [compileShaderPrograms.ts](../../src/graphics/compileShaderPrograms.ts)),
+Warmups reichen ihre Links nur ein (`withPendingShaderLinks`) und fragen danach den Status ab. Die
+Lobby zeigt beim Erscheinen keinen Kampf: Ihr Reveal wartet nur auf die sichtbare Render-Arbeit,
+solange Kampf-Links und die budgetierte Kampf-Praesentation im Hintergrund fertig werden; ohne die
+Erweiterung gilt die vollstaendige Vorwaermung. Eine Runde wartet immer auf beides. Wartearbeit der
+Lobby (Bauhof-Buehne, Rundenend-Overlays, Sprachpakete) beginnt erst nach dem Reveal.
 
 [BootLoaderProgress.ts](../../src/ui/BootLoaderProgress.ts) beruecksichtigt Download- und
 Verarbeitungswarteschlangen gemeinsam; Phasers Download-`PROGRESS` allein ist keine
@@ -44,7 +55,14 @@ gemessene Aufbauabschnitte und die aktuell noch verarbeiteten Dateien fuer lokal
 ## Zweite Asset-Ladephase und Musik
 
 [DeferredAssets.ts](../../src/assets/DeferredAssets.ts) besitzt die zweite Ladephase fuer die
-Lebensdauer der ArenaScene. Nur zum Lobby-Reveal unnoetige Inhalte gehoeren in `DEFERRED_ASSETS`.
+Lebensdauer der ArenaScene. Das Boot-Preload traegt nur, was die Lobby zeigt; nur zum Lobby-Reveal
+unnoetige Inhalte gehoeren in `DEFERRED_ASSETS`. Inhalte, die nur Runden zeigen (Gegnerfiguren
+ausser dem Ziel des Schiessstands, Dawn, Karten-Props, Bruecken, Gleise, Gegnerbasen,
+Missionsobjekte), sind dort erforderliche Eintraege aus
+[RoundAssets.ts](../../src/assets/RoundAssets.ts); `recordDeferredFiles` uebernimmt sie aus den
+bestehenden Preload-Funktionen, Keys und Pfade behalten einen Owner. Animationen solcher Sheets
+entstehen erst, wenn sie resident sind. Die Bauhof-Buehne zeigt die Inhalte der naechsten Runde
+und wartet deshalb ebenfalls auf die zweite Phase. Der Owner laedt in begrenzten Paketen.
 Lobby-Freigabe und direkte Arena-Einstiege starten denselben idempotenten Owner; UI und Audio
 beobachten ihn. Audio ist erst nach Phasers Verarbeitung/Decodierung verwendbar. Browser-Freigabe,
 Lautstaerke und Wiedergabe gehoeren dagegen allein dem Audio-System und sind keine Ladebedingungen.
@@ -67,7 +85,7 @@ Die World-Kamera trägt World-FX und Camera-Feedback. Eine transparente Clarity-
 
 Camera-Feedback besitzt einen zentralen Owner: [CameraFeedbackController.ts](../../src/effects/camera/CameraFeedbackController.ts) und [CameraFeedbackModel.ts](../../src/effects/camera/CameraFeedbackModel.ts) sammeln, priorisieren, begrenzen und lösen Requests. Gameplay ruft keine direkten Kamera-Shakes auf; der Feedback-Offset verändert nicht die fachliche World- oder Pointer-Geometrie.
 
-Zusatzzoom der Weltkamera multipliziert den Designzoom und ist nie kleiner als 1: Die Standardansicht ist die weiteste Sicht. Der Spieler wählt per Mausrad eine Grundsicht ([PlayerCameraZoom.ts](../../src/effects/camera/PlayerCameraZoom.ts)), Spawn- und Todesnahaufnahme ([SpawnCameraZoom.ts](../../src/effects/camera/SpawnCameraZoom.ts)) setzen darauf auf, ein Boss-Intro ([cameraFocusOverride.ts](../../src/graphics/cameraFocusOverride.ts)) gewinnt nur, wenn es näher heranholt. Allein die Kameraverfolgung in [WorldPresentationFrameBinding.ts](../../src/world/WorldPresentationFrameBinding.ts) wendet den Zoom an. Sie glättet den gezeigten Weltpunkt, nie den geklemmten Ausschnitt; der Ausschnitt entsteht jeden Frame exakt aus Punkt, Zoom und Klemmung, sonst zöge die Kamera am Arenarand nach jeder Zoomänderung nach. Die Residency hält während eines Zooms die Standardansicht vor, World-Teardown setzt den Zoom zurück. Kameras, die die Verfolgung ersetzen (Dev-Szenario), lesen den angewandten Faktor über `getAppliedStagedZoom`. Bildschirmfeste Ebenen, die Weltpunkte selbst in Designkoordinaten umrechnen, multiplizieren mit dem Zusatzzoom (`camera.zoomX` geteilt durch die Renderskalierung), siehe `resolveRadialFocusFrame` in [radialFocusState.ts](../../src/effects/postfx/radialFocusState.ts).
+Zusatzzoom der Weltkamera multipliziert den Designzoom und ist nie kleiner als 1: Die Standardansicht ist die weiteste Sicht. Der Spieler wählt per Mausrad eine Grundsicht ([PlayerCameraZoom.ts](../../src/effects/camera/PlayerCameraZoom.ts)), Spawn- und Todesnahaufnahme ([SpawnCameraZoom.ts](../../src/effects/camera/SpawnCameraZoom.ts)) setzen darauf auf, ein Boss-Intro ([cameraFocusOverride.ts](../../src/graphics/cameraFocusOverride.ts)) gewinnt nur, wenn es näher heranholt. Allein die Kameraverfolgung in [WorldPresentationFrameBinding.ts](../../src/world/WorldPresentationFrameBinding.ts) wendet den Zoom an. Sie glättet den gezeigten Weltpunkt, nie den geklemmten Ausschnitt; der Ausschnitt entsteht jeden Frame exakt aus Punkt, Zoom und Klemmung, sonst zöge die Kamera am Arenarand nach jeder Zoomänderung nach. Die Residency hält während eines Zooms die Standardansicht vor, World-Teardown setzt den Zoom zurück. Vor dem ersten Spawn zeigt die Ladekamera den erwarteten Spawnbereich (`PlayerManager.getExpectedSpawnFocus`), damit die Ladebarriere den Ausschnitt vorbereitet, den der Spawn freigibt. Kameras, die die Verfolgung ersetzen (Dev-Szenario), lesen den angewandten Faktor über `getAppliedStagedZoom`. Bildschirmfeste Ebenen, die Weltpunkte selbst in Designkoordinaten umrechnen, multiplizieren mit dem Zusatzzoom (`camera.zoomX` geteilt durch die Renderskalierung), siehe `resolveRadialFocusFrame` in [radialFocusState.ts](../../src/effects/postfx/radialFocusState.ts).
 
 GPU-Fels-/Mauerflächen, Power-Up-Podeste und GPU-VFX verwenden
 [GpuLayerCameraTransform.ts](../../src/graphics/GpuLayerCameraTransform.ts), damit ihre View-Matrix
@@ -644,6 +662,10 @@ Worker-Transaktion ueber betroffene residente Chunks veroeffentlicht; bis dahin 
 Feldstand erhalten. Die gemeinsamen Empfaenger (Felsoberflaeche, Boden und Felsbewuchs) lesen denselben
 Stand. Geometrie-Reparaturen schreiben weder Zellraster-Schaetzungen noch einen Reparatur-Fade.
 Uebertragene Worker-Ergebnisse sind Kopien; der begrenzte Geometrie-Cache behaelt seine eigenen Buffer.
+Die Ladebereitschaft zaehlt nur darstellbare Geometrie bei der aktuellen Stuetzstelle; weitere
+Stuetzstellen entstehen danach und blenden ueber den abklingenden Versatz ein. Der Worker gehoert der
+Scene, wird beim Preload vorgestartet und je World neu initialisiert; Ergebnisse vor seiner
+Init-Bestaetigung stammen aus der vorigen World und werden verworfen.
 Owner: [RockFormationLighting.ts](../../src/arena/rocks/RockFormationLighting.ts);
 Vertragstest: [RockFormationLighting.test.ts](../../tests/RockFormationLighting.test.ts).
 
