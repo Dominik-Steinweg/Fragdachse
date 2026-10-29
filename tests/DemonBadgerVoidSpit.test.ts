@@ -55,7 +55,7 @@ function createBadger(faction: 'hostile' | 'allied' = 'hostile'): TestBadger {
 function createSystem(enemy: TestBadger, players: readonly ReturnType<typeof fakeEntity>[], surface: { x: number; y: number } | null) {
   const shots: { weaponId: string; muzzle?: { x: number; y: number } }[] = [];
   const cells: { x: number; y: number; cell: EnemyFlameGroundCell }[] = [];
-  const bases = surface ? [{ faction: 'friendly', role: 'main', isInert: () => false, getHp: () => 1_000, getTurrets: () => [],
+  const bases = surface ? [{ id: 'base-main', faction: 'friendly', role: 'main', isInert: () => false, getHp: () => 1_000, getTurrets: () => [],
     getNearestSurfacePoint: () => ({ ...surface, distance: Math.hypot(surface.x - 100, surface.y - 100) }) }] : [];
   const system = new CoopDefenseEnemyAttackSystem(
     { getAllEnemies: () => [enemy], canSeeThroughSmoke: () => true, getAlliedEnemies: () => [], getEnemy: () => undefined,
@@ -69,8 +69,10 @@ function createSystem(enemy: TestBadger, players: readonly ReturnType<typeof fak
     } } as unknown as AutomatedWeaponExecution,
     () => [],
   );
-  system.setFlameGround({ ignite: (_enemy, x, y, cell) => { cells.push({ x, y, cell }); } });
-  return { system, shots, cells };
+  const scorches: { baseId: string; damage: number }[] = [];
+  system.setFlameGround({ ignite: (_enemy, x, y, cell) => { cells.push({ x, y, cell }); },
+    scorchBase: (_enemy, baseId, damage) => { scorches.push({ baseId, damage }); } });
+  return { system, shots, cells, scorches };
 }
 
 const run = (system: CoopDefenseEnemyAttackSystem, from: number, to: number) => {
@@ -95,11 +97,16 @@ describe('Demon Badger void spit', () => {
     expect(shots.length).toBe(after);
   });
 
-  it('spits at a reachable base and ignites inside its wall', () => {
-    const { system, shots, cells } = createSystem(createBadger(), [], { x: 240, y: 100 });
+  it('spits at a reachable base, scorches it with every flame and ignites inside its wall', () => {
+    const { system, shots, cells, scorches } = createSystem(createBadger(), [], { x: 240, y: 100 });
     run(system, 1_000, 1_000 + SALVO.intervalMs * (SALVO.count + 1));
     expect(shots.length).toBeGreaterThan(0);
     expect(shots.every(shot => shot.weaponId === WEAPON_CONFIGS.DEMON_BADGER_VOID_SPIT_SIEGE.id)).toBe(true);
+    // Enemy flames never hurt a base by contact: each shot at it deals its share directly, so spitters add up.
+    const siege = WEAPON_CONFIGS.DEMON_BADGER_VOID_SPIT_SIEGE;
+    expect(scorches).toHaveLength(shots.length);
+    for (const scorch of scorches) expect(scorch.damage).toBeCloseTo(siege.damage * (siege.baseDamageMult ?? 1));
+    expect(siege.baseDamageMult).toBeGreaterThan(0);
     expect(cells.length).toBeGreaterThan(0);
     expect(Math.max(...cells.map(cell => cell.x))).toBeGreaterThan(240);
   });

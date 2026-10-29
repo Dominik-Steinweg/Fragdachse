@@ -78,10 +78,10 @@ export const EXPLOSION_VISUAL_PROFILES = {
     family: 'pop', layering: 'legacy', countScale: 0.45, lifeScale: 0.45, bodyScale: 0.45,
     smokeScale: 0, chunkScale: 0, upwardEmbers: true,
   },
-  // Demon Badger heat burst: a lighter void energy burst (it repeats every few seconds per body);
-  // the red spark spray rides on top in EffectSystem.
+  // Demon Badger heat burst: a full void energy burst that reads at a glance in a fight (the cascade
+  // bounds how often it repeats); the red spark spray rides on top in EffectSystem.
   demon_burst: {
-    family: 'energy', layering: 'legacy', countScale: 0.8, lifeScale: 0.7, bodyScale: 0.74,
+    family: 'energy', layering: 'legacy', countScale: 1.1, lifeScale: 0.95, bodyScale: 1,
     smokeScale: 0, chunkScale: 0.3, upwardEmbers: true,
   },
   // A killed charged badger only fizzles: a small void pop sized by its heat.

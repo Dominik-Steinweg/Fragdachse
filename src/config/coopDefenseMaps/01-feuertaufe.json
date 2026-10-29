@@ -5516,343 +5516,419 @@
     },
     {
       "gridX": 247,
-      "gridY": 21
-    },
-    {
-      "gridX": 247,
-      "gridY": 22
+      "gridY": 20
     },
     {
       "gridX": 248,
-      "gridY": 22
+      "gridY": 20
     },
     {
       "gridX": 249,
-      "gridY": 22
-    },
-    {
-      "gridX": 250,
-      "gridY": 22
-    },
-    {
-      "gridX": 248,
-      "gridY": 21
-    },
-    {
-      "gridX": 249,
-      "gridY": 21
-    },
-    {
-      "gridX": 251,
-      "gridY": 22
+      "gridY": 20
     },
     {
       "gridX": 252,
-      "gridY": 22
+      "gridY": 19
+    },
+    {
+      "gridX": 252,
+      "gridY": 20
     },
     {
       "gridX": 253,
-      "gridY": 22
+      "gridY": 20
+    },
+    {
+      "gridX": 251,
+      "gridY": 20
     },
     {
       "gridX": 254,
-      "gridY": 22
-    },
-    {
-      "gridX": 255,
-      "gridY": 22
+      "gridY": 20
     },
     {
       "gridX": 256,
-      "gridY": 22
+      "gridY": 19
     },
     {
-      "gridX": 257,
-      "gridY": 22
+      "gridX": 256,
+      "gridY": 20
     },
     {
-      "gridX": 257,
-      "gridY": 21
-    },
-    {
-      "gridX": 258,
-      "gridY": 21
-    },
-    {
-      "gridX": 258,
-      "gridY": 22
-    },
-    {
-      "gridX": 259,
-      "gridY": 22
-    },
-    {
-      "gridX": 260,
-      "gridY": 22
-    },
-    {
-      "gridX": 289,
-      "gridY": 23
-    },
-    {
-      "gridX": 289,
-      "gridY": 24
-    },
-    {
-      "gridX": 288,
-      "gridY": 24
-    },
-    {
-      "gridX": 284,
-      "gridY": 24
-    },
-    {
-      "gridX": 284,
-      "gridY": 23
-    },
-    {
-      "gridX": 283,
-      "gridY": 23
-    },
-    {
-      "gridX": 282,
-      "gridY": 23
-    },
-    {
-      "gridX": 283,
-      "gridY": 24
-    },
-    {
-      "gridX": 282,
-      "gridY": 24
-    },
-    {
-      "gridX": 281,
-      "gridY": 24
-    },
-    {
-      "gridX": 281,
-      "gridY": 23
-    },
-    {
-      "gridX": 275,
-      "gridY": 23
-    },
-    {
-      "gridX": 275,
-      "gridY": 24
-    },
-    {
-      "gridX": 276,
-      "gridY": 24
-    },
-    {
-      "gridX": 277,
-      "gridY": 24
-    },
-    {
-      "gridX": 278,
-      "gridY": 24
-    },
-    {
-      "gridX": 284,
-      "gridY": 22
-    },
-    {
-      "gridX": 285,
-      "gridY": 23
-    },
-    {
-      "gridX": 285,
-      "gridY": 24
-    },
-    {
-      "gridX": 272,
-      "gridY": 24
-    },
-    {
-      "gridX": 272,
-      "gridY": 23
-    },
-    {
-      "gridX": 271,
-      "gridY": 23
-    },
-    {
-      "gridX": 270,
-      "gridY": 23
-    },
-    {
-      "gridX": 270,
-      "gridY": 24
+      "gridX": 255,
+      "gridY": 20
     },
     {
       "gridX": 269,
-      "gridY": 24
+      "gridY": 18
+    },
+    {
+      "gridX": 269,
+      "gridY": 19
+    },
+    {
+      "gridX": 270,
+      "gridY": 19
     },
     {
       "gridX": 271,
-      "gridY": 24
-    },
-    {
-      "gridX": 268,
-      "gridY": 24
-    },
-    {
-      "gridX": 247,
-      "gridY": 23
-    },
-    {
-      "gridX": 248,
-      "gridY": 23
-    },
-    {
-      "gridX": 249,
-      "gridY": 23
-    },
-    {
-      "gridX": 250,
-      "gridY": 23
-    },
-    {
-      "gridX": 251,
-      "gridY": 23
-    },
-    {
-      "gridX": 252,
-      "gridY": 23
-    },
-    {
-      "gridX": 253,
-      "gridY": 23
-    },
-    {
-      "gridX": 254,
-      "gridY": 23
-    },
-    {
-      "gridX": 255,
-      "gridY": 23
-    },
-    {
-      "gridX": 256,
-      "gridY": 23
-    },
-    {
-      "gridX": 257,
-      "gridY": 23
-    },
-    {
-      "gridX": 258,
-      "gridY": 23
-    },
-    {
-      "gridX": 259,
-      "gridY": 23
-    },
-    {
-      "gridX": 260,
-      "gridY": 23
-    },
-    {
-      "gridX": 260,
-      "gridY": 24
-    },
-    {
-      "gridX": 259,
-      "gridY": 24
-    },
-    {
-      "gridX": 258,
-      "gridY": 24
-    },
-    {
-      "gridX": 257,
-      "gridY": 24
-    },
-    {
-      "gridX": 256,
-      "gridY": 24
-    },
-    {
-      "gridX": 255,
-      "gridY": 24
-    },
-    {
-      "gridX": 254,
-      "gridY": 24
-    },
-    {
-      "gridX": 253,
-      "gridY": 24
-    },
-    {
-      "gridX": 252,
-      "gridY": 24
-    },
-    {
-      "gridX": 251,
-      "gridY": 24
-    },
-    {
-      "gridX": 250,
-      "gridY": 24
-    },
-    {
-      "gridX": 249,
-      "gridY": 24
-    },
-    {
-      "gridX": 248,
-      "gridY": 24
-    },
-    {
-      "gridX": 247,
-      "gridY": 24
-    },
-    {
-      "gridX": 261,
-      "gridY": 23
-    },
-    {
-      "gridX": 262,
-      "gridY": 23
-    },
-    {
-      "gridX": 261,
-      "gridY": 24
-    },
-    {
-      "gridX": 262,
-      "gridY": 24
-    },
-    {
-      "gridX": 263,
-      "gridY": 24
-    },
-    {
-      "gridX": 264,
-      "gridY": 24
+      "gridY": 19
     },
     {
       "gridX": 272,
-      "gridY": 22
+      "gridY": 19
     },
     {
       "gridX": 273,
-      "gridY": 24
+      "gridY": 19
     },
     {
-      "gridX": 274,
-      "gridY": 24
+      "gridX": 270,
+      "gridY": 18
+    },
+    {
+      "gridX": 271,
+      "gridY": 18
     },
     {
       "gridX": 273,
-      "gridY": 23
+      "gridY": 20
     },
     {
       "gridX": 274,
-      "gridY": 23
+      "gridY": 20
+    },
+    {
+      "gridX": 279,
+      "gridY": 20
+    },
+    {
+      "gridX": 284,
+      "gridY": 20
+    },
+    {
+      "gridX": 285,
+      "gridY": 20
+    },
+    {
+      "gridX": 285,
+      "gridY": 19
+    },
+    {
+      "gridX": 286,
+      "gridY": 19
+    },
+    {
+      "gridX": 287,
+      "gridY": 19
+    },
+    {
+      "gridX": 287,
+      "gridY": 18
+    },
+    {
+      "gridX": 287,
+      "gridY": 17
+    },
+    {
+      "gridX": 288,
+      "gridY": 17
+    },
+    {
+      "gridX": 288,
+      "gridY": 16
+    },
+    {
+      "gridX": 289,
+      "gridY": 16
+    },
+    {
+      "gridX": 289,
+      "gridY": 15
+    },
+    {
+      "gridX": 286,
+      "gridY": 20
+    },
+    {
+      "gridX": 287,
+      "gridY": 20
+    },
+    {
+      "gridX": 288,
+      "gridY": 19
+    },
+    {
+      "gridX": 288,
+      "gridY": 20
+    },
+    {
+      "gridX": 289,
+      "gridY": 20
+    },
+    {
+      "gridX": 289,
+      "gridY": 19
+    },
+    {
+      "gridX": 289,
+      "gridY": 18
+    },
+    {
+      "gridX": 288,
+      "gridY": 18
+    },
+    {
+      "gridX": 289,
+      "gridY": 17
+    },
+    {
+      "gridX": 288,
+      "gridY": 15
+    },
+    {
+      "gridX": 288,
+      "gridY": 14
+    },
+    {
+      "gridX": 288,
+      "gridY": 13
+    },
+    {
+      "gridX": 289,
+      "gridY": 13
+    },
+    {
+      "gridX": 289,
+      "gridY": 14
+    },
+    {
+      "gridX": 288,
+      "gridY": 12
+    },
+    {
+      "gridX": 289,
+      "gridY": 12
+    },
+    {
+      "gridX": 289,
+      "gridY": 11
+    },
+    {
+      "gridX": 288,
+      "gridY": 11
+    },
+    {
+      "gridX": 288,
+      "gridY": 10
+    },
+    {
+      "gridX": 288,
+      "gridY": 9
+    },
+    {
+      "gridX": 287,
+      "gridY": 9
+    },
+    {
+      "gridX": 287,
+      "gridY": 8
+    },
+    {
+      "gridX": 286,
+      "gridY": 8
+    },
+    {
+      "gridX": 286,
+      "gridY": 7
+    },
+    {
+      "gridX": 289,
+      "gridY": 10
+    },
+    {
+      "gridX": 289,
+      "gridY": 9
+    },
+    {
+      "gridX": 288,
+      "gridY": 8
+    },
+    {
+      "gridX": 288,
+      "gridY": 7
+    },
+    {
+      "gridX": 287,
+      "gridY": 7
+    },
+    {
+      "gridX": 288,
+      "gridY": 6
+    },
+    {
+      "gridX": 289,
+      "gridY": 6
+    },
+    {
+      "gridX": 289,
+      "gridY": 7
+    },
+    {
+      "gridX": 287,
+      "gridY": 6
+    },
+    {
+      "gridX": 288,
+      "gridY": 5
+    },
+    {
+      "gridX": 288,
+      "gridY": 4
+    },
+    {
+      "gridX": 289,
+      "gridY": 4
+    },
+    {
+      "gridX": 289,
+      "gridY": 5
+    },
+    {
+      "gridX": 289,
+      "gridY": 8
+    },
+    {
+      "gridX": 288,
+      "gridY": 3
+    },
+    {
+      "gridX": 289,
+      "gridY": 3
+    },
+    {
+      "gridX": 289,
+      "gridY": 2
+    },
+    {
+      "gridX": 287,
+      "gridY": 12
+    },
+    {
+      "gridX": 287,
+      "gridY": 13
+    },
+    {
+      "gridX": 287,
+      "gridY": 14
+    },
+    {
+      "gridX": 268,
+      "gridY": 19
+    },
+    {
+      "gridX": 267,
+      "gridY": 19
+    },
+    {
+      "gridX": 266,
+      "gridY": 19
+    },
+    {
+      "gridX": 266,
+      "gridY": 20
+    },
+    {
+      "gridX": 265,
+      "gridY": 20
+    },
+    {
+      "gridX": 264,
+      "gridY": 20
+    },
+    {
+      "gridX": 263,
+      "gridY": 20
+    },
+    {
+      "gridX": 262,
+      "gridY": 20
+    },
+    {
+      "gridX": 259,
+      "gridY": 20
+    },
+    {
+      "gridX": 258,
+      "gridY": 20
+    },
+    {
+      "gridX": 257,
+      "gridY": 20
+    },
+    {
+      "gridX": 267,
+      "gridY": 20
+    },
+    {
+      "gridX": 268,
+      "gridY": 20
+    },
+    {
+      "gridX": 269,
+      "gridY": 20
+    },
+    {
+      "gridX": 270,
+      "gridY": 20
+    },
+    {
+      "gridX": 271,
+      "gridY": 20
+    },
+    {
+      "gridX": 272,
+      "gridY": 20
+    },
+    {
+      "gridX": 275,
+      "gridY": 20
+    },
+    {
+      "gridX": 276,
+      "gridY": 20
+    },
+    {
+      "gridX": 281,
+      "gridY": 20
+    },
+    {
+      "gridX": 282,
+      "gridY": 20
+    },
+    {
+      "gridX": 274,
+      "gridY": 19
+    },
+    {
+      "gridX": 274,
+      "gridY": 18
+    },
+    {
+      "gridX": 275,
+      "gridY": 18
+    },
+    {
+      "gridX": 275,
+      "gridY": 19
+    },
+    {
+      "gridX": 276,
+      "gridY": 19
+    },
+    {
+      "gridX": 277,
+      "gridY": 20
     }
   ],
   "balanceReferenceDurationSec": 300,
@@ -6026,7 +6102,7 @@
       "id": "map01-extraction",
       "checkpointId": "cp5-base-defense",
       "visibleFrom": "completion",
-      "anchor": { "gridX": 265, "gridY": 1 }
+      "anchor": { "gridX": 259, "gridY": 5 }
     }
   ],
   "secondaryObjectives": [
@@ -6117,9 +6193,9 @@
   "waterAreas": [
     {
       "gridX": 247,
-      "gridY": 25,
+      "gridY": 21,
       "widthCells": 43,
-      "heightCells": 8
+      "heightCells": 12
     }
   ]
 }

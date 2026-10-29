@@ -4,7 +4,8 @@ import type { EnemyHeatBurstPhase } from '../systems/EnemyHeatBurstState';
 /**
  * Pure colour and intensity model of a heat-burst body's glow (emission overlay, halo, light).
  * Charging ember red brightens and tips into void violet shortly before full heat; a full body
- * shimmers violet, its warning throbs fast, the burst flashes and cools down to dormant embers.
+ * shimmers violet, its warning throbs bright and ever faster up to the burst (a countdown), the
+ * burst flashes and cools down to dormant embers.
  * Red belongs to the heat and the sparks, void violet to the coming burst; no yellow, no white core.
  */
 
@@ -17,7 +18,11 @@ const HOT_RED = 0xff3a22;
 /** Heat at which the glow starts to tip from red into void violet. */
 const VIOLET_TIP_HEAT = 0.8;
 const HOLD_SHIMMER_MS = 600;
+/** Throb period without a known warning length. */
 const WARNING_THROB_MS = 125;
+/** The warning throb speeds up from this period at its start to this one at the burst. */
+const WARNING_THROB_START_MS = 300;
+const WARNING_THROB_END_MS = 80;
 const VENT_FLASH_MS = 260;
 const BREATH_MS = 1400;
 
@@ -32,10 +37,11 @@ export interface EnemyHeatGlow {
 
 /**
  * Glow at `now` for a body in `phase` with charge `heat` in [0, 1]. `ventFromAt` is the last burst,
- * `phaseOffset` desynchronises the pulse of neighbours (ms, from the body id).
+ * `phaseOffset` desynchronises the pulse of neighbours (ms, from the body id). `warningElapsedMs`
+ * of `warningMs` time the countdown throb of the warning.
  */
 export function enemyHeatGlowAt(out: EnemyHeatGlow, phase: EnemyHeatBurstPhase, heat: number, now: number,
-  ventFromAt: number, allied: boolean, phaseOffset = 0): EnemyHeatGlow {
+  ventFromAt: number, allied: boolean, phaseOffset = 0, warningElapsedMs = 0, warningMs = 0): EnemyHeatGlow {
   const palette = allied ? ALLIED_PALETTE : VOID_PALETTE;
   const dormant = allied ? ALLIED_PALETTE.shadow : DORMANT_EMBER;
   const t = now + phaseOffset;
@@ -66,11 +72,16 @@ export function enemyHeatGlowAt(out: EnemyHeatGlow, phase: EnemyHeatBurstPhase, 
       return out;
     }
     case 'telegraph': {
-      // The body throbs, but its halo and light step back so the red warning zone reads on top.
-      const throb = 0.5 - 0.5 * Math.cos(2 * Math.PI * t / WARNING_THROB_MS);
+      // A countdown: the body throbs bright and ever faster (a linear chirp) until it bursts.
+      const progress = warningMs > 0 ? Math.max(0, Math.min(1, warningElapsedMs / warningMs)) : 0;
+      const cycles = warningMs > 0
+        ? warningElapsedMs / WARNING_THROB_START_MS
+          + (1 / WARNING_THROB_END_MS - 1 / WARNING_THROB_START_MS) * warningElapsedMs * warningElapsedMs / (2 * warningMs)
+        : t / WARNING_THROB_MS;
+      const throb = 0.5 - 0.5 * Math.cos(2 * Math.PI * cycles);
       out.color = mixColor(palette.primary, palette.bright, throb);
-      out.alpha = 0.55 + 0.35 * throb;
-      out.light = 0.08 + 0.06 * throb;
+      out.alpha = 0.7 + 0.3 * throb;
+      out.light = (0.25 + 0.45 * throb) * (0.6 + 0.4 * progress);
       return out;
     }
   }

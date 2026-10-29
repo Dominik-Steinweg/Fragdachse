@@ -32,6 +32,11 @@ export interface LocomotionRequest {
    * counts as a neighbour for everybody else. Default `full`.
    */
   readonly detail?: EnemyAiDetail;
+  /**
+   * The body already stands in an attack position: it steps onto the goal centre without velocity
+   * smoothing, so it never overshoots it (each overshoot reverses the body and flips its facing).
+   */
+  readonly arrive?: boolean;
 }
 export interface MovementFeedback {
   readonly vx: number; readonly vy: number;

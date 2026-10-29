@@ -32,10 +32,11 @@ function harness(hp = 2000, faction: VoidFireBase['faction'] = 'friendly', confi
   }, config);
   return { system, damage, hp: () => hp, burning: () => burning,
     eligible: (value: boolean) => { eligible = value; }, permitted: (value: boolean) => { permitted = value; },
-    contact: (count = 1, style: 'normal' | 'void' = 'void') => {
+    contact: (count = 1, style: 'normal' | 'void' = 'void', baseDamageMult?: readonly number[]) => {
       contacts = Array.from({ length: count }, (_, i) => ({ sourceKey: String(i), x: 0, y: 0,
         ownerId: 'hazard', damagePerTick: 0, allowTeamDamage: false, sourceId: 'void',
-        visualStyle: style, damageTarget: 'players' as const, combatSource: source }));
+        visualStyle: style, damageTarget: 'players' as const, combatSource: source,
+        ...(baseDamageMult ? { baseDamageMult: baseDamageMult[i] } : {}) }));
     },
   };
 }
@@ -66,6 +67,22 @@ describe('finite base void burn', () => {
     expect(h.hp()).toBeCloseTo(2000 - testConfig.damagePerSecond[faction]
       * (contactDurationMs + testConfig.afterburnMs) / 1000);
     expect(h.burning()).toBe(false);
+  });
+  it('burns at the base share of the strongest touching fire; a fire without a share never ignites', () => {
+    const tick = testConfig.damagePerSecond.friendly * BURN_TICK_INTERVAL_MS / 1000;
+    const h = harness();
+    h.contact(1, 'void', [0]);
+    h.system.hostUpdate(0);
+    expect(h.burning()).toBe(false);
+    h.contact(2, 'void', [0.4, 0.25]);
+    h.system.hostUpdate(BURN_TICK_INTERVAL_MS);
+    h.system.hostUpdate(BURN_TICK_INTERVAL_MS * 2);
+    expect(h.damage).toEqual([tick * 0.4]);
+    // A full-strength fire joining raises the burn from the next tick on (ticks already earned keep their share).
+    h.contact(2, 'void', [0.4, 1]);
+    h.system.hostUpdate(BURN_TICK_INTERVAL_MS * 3);
+    h.system.hostUpdate(BURN_TICK_INTERVAL_MS * 4);
+    expect(h.damage.at(-1)).toBeCloseTo(tick);
   });
   it('samples occupied cells of a concave footprint without igniting through its courtyard', () => {
     const fire = new FireSystem({} as never);

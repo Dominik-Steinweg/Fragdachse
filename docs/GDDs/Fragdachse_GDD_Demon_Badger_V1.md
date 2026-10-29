@@ -1,9 +1,10 @@
 # Fragdachse – GDD Demon Badger V1
 
-- Version: 1.0
-- Datum: 2026-10-28
+- Version: 1.1
+- Datum: 2026-10-29
 - Status: umgesetzt (Verhalten, Netz, Effekte; Produktionsmodell `db-v2-r2` mit Hitzezonen, Clips
-  `idle`/`burst`/`spit`, Emissions-Sheet und Schattenmesh `enemy-mesh-db-v2-r2`); Feintuning nach Spieltest offen
+  `idle`/`burst`/`spit`, Emissions-Sheet und Schattenmesh `enemy-mesh-db-v2-r2`); Spieltest-Feedback 1
+  (2026-10-29) umgesetzt, weiterer Spieltest offen
 - Spielmodus: Coop Defense (Kampagne, From Dachs Till Dawn)
 - Name: Dämonen-Dachs / Demon Badger
 - Gegner-ID: `demon-badger` (Registry-Position und Wire-Kind-Index 1 unverändert)
@@ -13,9 +14,10 @@
 Ein Schwarmgegner, der sich beim Laufen mit Hitze auflädt und sie als Void-Explosion um sich herum
 entlädt. Je heißer er wird, desto schneller läuft er und desto stärker glühen Hörner, Schwanz, Wirbel und
 Platten – erst dunkelrot, dann hell, kurz vor voller Ladung kippt die Glut ins Void-Violett. Die rote
-Gefahrenzone kündigt die Explosion an und wandert mit dem weiterrennenden Dachs mit. Ein Rudel explodiert
-nie gleichzeitig, sondern rollend nacheinander. Zwischendurch spuckt er kurze, kräftige Void-Flammenstöße
-auf Spieler und Gebäude; erlöschende Flammen setzen den Boden in Brand, Basen fangen Feuer.
+Gefahrenzone kündigt die Explosion an, der Körper pulsiert immer schneller wie ein Countdown; ein rennender
+Dachs nimmt die Zone mit, ein stehender oder kämpfender bleibt stehen. Ein Rudel explodiert nie
+gleichzeitig, sondern als rollende Kette nacheinander. Zwischendurch spuckt er kurze, kräftige
+Void-Flammenstöße auf Spieler und Gebäude; erlöschende Flammen setzen den Boden in Brand, Basen fangen Feuer.
 
 ## 2. Hitzezyklus
 
@@ -23,7 +25,7 @@ auf Spieler und Gebäude; erlöschende Flammen setzen den Boden in Brand, Basen 
 |---|---|
 | Laden (4,8–5,2 s, je Dachs fest aus der ID) | Hitze 0 → 1; Tempo ×1,0 → ×1,6 (Hitze^1,6); Laufanimation läuft im selben Verhältnis schneller |
 | Halten | voll geladen, wartet auf seinen Kaskaden-Slot oder darauf, dass ihn jemand sieht; Höchsttempo, violettes Flimmern |
-| Warnung (0,9 s) | rote Zone r 110 px folgt dem Dachs; er rennt mit Höchsttempo weiter, wendet aber höchstens 75°/s; kein Biss, kein Spucken |
+| Warnung (1,2 s) | rote Zone r 110 px folgt dem Dachs; Körper pulsiert immer schneller (300 → 80 ms), steigender Warnton; kein Biss, kein Spucken. Rannte er beim Start, rennt er weiter, wendet höchstens 75°/s und bremst für scharfe Kurven statt davonzulaufen; stand oder kämpfte er (z. B. spuckend vor der Basis) oder erreicht er seine Angriffsposition, bleibt er stehen und blickt aufs Ziel |
 | Explosion | 20 Schaden in der Mitte bis 6 am Rand; Rückstoß nur für Spieler; Köder voll; Basen, Bauwerke ×0,5, Zug ×0,3; nie Felsen, nie andere Gegner; 4 brennende Brocken (Void-Bodenfeuer 2,6 s) |
 | Abklingen (0,4 s) | Hitze 0, Normaltempo, dann neuer Zyklus |
 
@@ -32,6 +34,10 @@ auf Spieler und Gebäude; erlöschende Flammen setzen den Boden in Brand, Basen 
   Zyklus). Zwei Dachse innerhalb von 420 px teilen nie einen Slot; neu erscheinende Dachse kommen frühestens
   einen Schritt nach den Nachbarn auf volle Hitze. So rollt ein Rudel in Spawn-Reihenfolge durch seine
   Explosionen. Pro Slot explodieren weltweit höchstens drei Dachse (begrenzt die Effektlast großer Wellen).
+- **Kettenreaktion:** Bucht ein Dachs seine Warnung, zieht er geladene Dachse seiner Art (Hitze ≥ 0,4) in
+  320 px mit: Ihre Ladung endet einen Kaskadenschritt nach dem Start seiner Warnung (die Glut springt sichtbar
+  hoch), sie buchen die nächsten Slots und ziehen ihrerseits ihre Nachbarn mit. Ein über Sekunden verteilt
+  erschienenes Rudel geht so als rollende Kette hoch und lädt danach gemeinsam neu.
 - **Sichtbarkeit:** Ein voller Dachs, den kein Spieler sehen kann (jenseits des Sichtfelds samt Randband),
   hält seine Ladung und bucht erst, wenn er in Sicht kommt. Verlässt er vor dem Start der Warnung jede
   Sicht, verfällt die Buchung; eine laufende Warnung endet immer in der Explosion.
@@ -47,23 +53,37 @@ auf Spieler und Gebäude; erlöschende Flammen setzen den Boden in Brand, Basen 
 | Wert | |
 |---|---|
 | Waffen | `DEMON_BADGER_VOID_SPIT` (Spieler, Nebenangriff auch während der Belagerung) und `DEMON_BADGER_VOID_SPIT_SIEGE` (Basen, bewaffnete Bauwerke; gleiche Werte per `baseId`) |
-| Stoß | Salve aus 5 Flammen im Abstand von 45 ms, danach 1,7 s Pause – kein Dauerstrahl |
+| Stoß | Salve aus 4 Flammen im Abstand von 50 ms, danach 1,0 s Pause – kein Dauerstrahl |
 | Reichweite | ca. 170 px, große Start-Hitbox, schneller Abfall: kompakte Stichflamme |
-| Schaden | 3,5 je Flamme plus Void-Brand |
-| Bewegung | bremst beim Spucken auf 35 % |
-| Brand | Erlöschende Flammen hinterlassen Void-Bodenfeuer (2,2 s); eine Basis darin fängt über `BaseVoidFireSystem` Feuer |
-| Klaue | Biss wie bisher, nachrangig: Felsen und Hindernisse; Waffen ohne Felsschaden wählen nie Felsen als Ziel |
+| Schaden | 4,25 je Flamme plus Void-Brand |
+| Bewegung | bremst beim Spucken auf 35 %; vor der Basis steht er in Spuckreichweite und betritt seine Angriffsposition ohne Schwung (kein Pendeln) |
+| Basis | Gegner-Projektile treffen eigene Basen nicht per Kontakt; jede auf eine Basis gezielte Flamme versengt sie deshalb direkt mit Schaden × `baseDamageMult` (0,35), so wächst der Druck mit der Zahl der Spucker |
+| Brand | Erlöschende Flammen hinterlassen Void-Bodenfeuer (2,2 s); eine Basis darin fängt über `BaseVoidFireSystem` Feuer, brennt aber nur mit 40 % des Basisbrands (`burningGround.baseDamageMult` 0,4; nicht stapelnd) |
+| Klaue | nur Felsen und Hindernisse (Zielmodus `rocks`), nie Basis oder Spieler |
+
+Basisschaden je Sekunde (Map 04, Basis in der Messung unzerstörbar, 10–40 s nach dem Erscheinen):
+
+| Dachse | vor der Überarbeitung (nur Klaue) | jetzt (Versengen, Brand, Explosion) |
+|---|---|---|
+| 1 | 11,8 | 14,6 |
+| 6 | 43,3 | 32,5 |
+| 12 | 64,0 | 62,7 |
 
 ## 4. Darstellung
 
-- Warnung: weiche rote Zone aus dem gemeinsamen Gegner-Gefahrenrenderer (`EnemyClawRenderer`, mitlaufend);
-  Rot ist Telegraph, Void-Violett Gefahr, kein Gelb, kein weißer Kern.
+- Warnung: weiche rote Zone aus dem gemeinsamen Gegner-Gefahrenrenderer (`EnemyClawRenderer`, mitlaufend)
+  und ein rotes, mit dem Körper pulsierendes Bodenlicht über dem Explosionsradius, das die Zone auch nachts
+  lesbar macht; Rot ist Telegraph, Void-Violett Gefahr, kein Gelb, kein weißer Kern.
 - Glut: Emissions-Sheet der Hitzezonen (nur Hitze-Material, Augen ausgenommen), additiv knapp über der
   Lichtkarte, eingefärbt nach Hitze; dazu ein weicher Hitzehalo unter dem Körper und ab mittlerer Hitze ein
   Bodenlicht. Modell bleibt der bestehende gehörnte Dachs, mit Glutrillen an Hörnern, Schwanz, Wirbeln,
   Schulter- und Flankenplatten sowie einer Kehlnaht für den Flammenstoß.
-- Explosion: Stil `demon_burst` – leichter Void-Energieausbruch in der Fraktionspalette, rote Funkengarbe und
-  aufsteigende rote Funken; brennende Brocken als Void-Feuer. Getötet: Stil `demon_fizzle`.
+- Explosion: Stil `demon_burst` – voller Void-Energieausbruch in der Fraktionspalette, dichte rote
+  Funkengarbe und aufsteigende rote Funken; brennende Brocken als Void-Feuer. Getötet: Stil `demon_fizzle`.
+- Flammenstoß: gemeinsame Void-Flammenpalette aller Void-Flammenwerfer, auch im heißesten Band violett
+  (wenig Grün und Rot), Void-Kerne ohne Weißglut, halb so dicht und mit geringerer Deckkraft, damit ein
+  dichter Stoß nicht über den Blaukanal hinaus sättigt und im Weltgrading zu Weiß kippt; Mündungsblitz in
+  der Feuerfarbe.
 - Clips: `idle`, `move`, `claw`, `burst` (Ruck beim Ausbruch), `spit` (Kopfstoß, Kiefer auf).
 
 ## 5. Technik

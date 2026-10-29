@@ -31,6 +31,20 @@ const CORE_LIFESPAN  = { min: 120, max: 280 };
 const OUTER_LIFESPAN = { min: 200, max: 450 };
 const SPARK_LIFESPAN = { min: 100, max: 300 };
 
+/**
+ * Void core tongues: no white glow at ignition, a lower opacity and half the density. A burst stacks
+ * many particles additively, and the world grade (brightness, contrast) lifts a clipped blue channel
+ * towards white; the void jet stays below that clip so it reads violet instead of white.
+ */
+const CORE_ALPHA = 0.58;
+const CORE_TINT_BLEND = 0.62;
+const VOID_CORE_ALPHA = 0.24;
+const VOID_CORE_TINT_BLEND = 1;
+/** Halo strength of a void flame (several flames of a burst overlap on top of each other). */
+const VOID_GLOW_ALPHA = 0.3;
+/** Void billows: a burst overlaps dozens of them additively, so each stays faint. */
+const OUTER_ALPHA = 0.4;
+const VOID_OUTER_ALPHA = 0.2;
 const CORE_FREQUENCY_MS  = 16;
 const OUTER_FREQUENCY_MS = 17;
 const SPARK_FREQUENCY_MS = 50;
@@ -201,18 +215,18 @@ export class FlameRenderer {
     this.coreSpec = system.createSpec(GpuVfxEffectId.FlameCore);
     this.coreSpec.frame = GpuVfxFrameId.FlameTongue;
     this.coreSpec.scaleEase = GpuVfxEase.QuadOut;
-    this.coreSpec.alphaStart = 0.58;
+    this.coreSpec.alphaStart = CORE_ALPHA;
     this.coreSpec.alphaEnd = 0;
     // Ein Hauch Weissglut beim Zuenden, danach die volle Bandfarbe. Bewusst nur ein Hauch:
     // additiv hebt jeder entsaettigte Beitrag alle drei Kanaele an, und der Strahl kippt als
-    // Ganzes ins Weisse, statt gelb-orange zu lesen.
-    this.coreSpec.tintBlendStart = 0.62;
+    // Ganzes ins Weisse, statt gelb-orange zu lesen. Void-Kerne setzen beides je Spawn selbst.
+    this.coreSpec.tintBlendStart = CORE_TINT_BLEND;
     this.coreSpec.tintBlendEnd = 1;
 
     this.outerSpec = system.createSpec(GpuVfxEffectId.FlameOuter);
     this.outerSpec.frame = GpuVfxFrameId.FlameBillow;
     this.outerSpec.scaleEase = GpuVfxEase.QuadOut;
-    this.outerSpec.alphaStart = 0.4;
+    this.outerSpec.alphaStart = OUTER_ALPHA;
     this.outerSpec.alphaEnd = 0;
     // Die Huelle deckt die groesste Flaeche ab und traegt deshalb praktisch keine Entsaettigung.
     this.outerSpec.tintBlendStart = 0.9;
@@ -243,7 +257,7 @@ export class FlameRenderer {
     const isVoid = palette !== null;
     // Der Halo ist eine breite additive Flaeche unter dem ganzen Strahl; er hebt den Untergrund
     // gleichmaessig an und ist damit der zweite Weg, auf dem die Flamme ins Weisse kippt.
-    const glowBaseAlpha = isVoid ? 0.64 : 0.4;
+    const glowBaseAlpha = isVoid ? VOID_GLOW_ALPHA : 0.4;
 
     // Glow: additiver Leucht-Halo der mit der Hitbox waechst.
     const glowImage = this.scene.add.image(
@@ -255,7 +269,9 @@ export class FlameRenderer {
     glowImage.setDepth(DEPTH_FLAME - 0.1);
     glowImage.setAlpha(emissiveAlpha(glowBaseAlpha));
     glowImage.setScale(glowScale(size));
-    glowImage.setTint(palette?.accent ?? 0xffaa44);
+    // A void halo takes the deep jet violet: the pinker accent saturates red under four stacked halos,
+    // and the grade rolls such highlights off to white.
+    glowImage.setTint(palette ? palette.jetMid[0] : 0xffaa44);
 
     const visual: FlameVisual = {
       id,
@@ -480,7 +496,8 @@ export class FlameRenderer {
         const due = visual.coreFlow.tick(deltaMs);
         for (let n = 0; n < due; n += 1) {
           this.spawnCore(visual, coreSpec, nowMs, ageMs);
-          this.spawnCore(visual, coreSpec, nowMs, ageMs);
+          // Void cores stack half as densely: violet must survive where a jet overlaps itself.
+          if (!visual.isVoid) this.spawnCore(visual, coreSpec, nowMs, ageMs);
         }
       } else {
         system.recordQualityDrop(GpuVfxEffectId.FlameCore);
@@ -546,6 +563,8 @@ export class FlameRenderer {
     spec.stretchStart = 1.15;
     spec.stretchEnd = 0.95;
     spec.tint = pickHeatTint(visual.hotTints, visual.midTints, visual.coolTints, place.heat * 0.55 + 0.45);
+    spec.alphaStart = visual.isVoid ? VOID_CORE_ALPHA : CORE_ALPHA;
+    spec.tintBlendStart = visual.isVoid ? VOID_CORE_TINT_BLEND : CORE_TINT_BLEND;
     system.spawn(spec, visual.source, nowMs);
   }
 
@@ -574,6 +593,7 @@ export class FlameRenderer {
     spec.stretchStart = 1.55;
     spec.stretchEnd = 1.1;
     spec.tint = pickHeatTint(visual.hotTints, visual.midTints, visual.coolTints, place.heat);
+    spec.alphaStart = visual.isVoid ? VOID_OUTER_ALPHA : OUTER_ALPHA;
     system.spawn(spec, visual.source, nowMs);
   }
 

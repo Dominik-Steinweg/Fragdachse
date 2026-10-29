@@ -13,6 +13,7 @@ import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
 import type { BulletRenderer } from '../effects/BulletRenderer';
 import type { FlameRenderer } from '../effects/FlameRenderer';
+import { fireStyleForColor } from '../effects/FlameShared';
 import type { ProjectileBurnRenderer } from '../effects/ProjectileBurnRenderer';
 import type { LeafBlowerRenderer } from '../effects/LeafBlowerRenderer';
 import type { BfgRenderer } from '../effects/BfgRenderer';
@@ -340,7 +341,7 @@ export class ProjectilePresentationRuntime {
       cfg.projectileStyle,
       cfg.bulletVisualPreset,
       cfg.energyBallVariant,
-      cfg.ownerColor ?? cfg.color,
+      muzzleFlashColor(cfg.projectileStyle, cfg.color, cfg.ownerColor),
       cfg.sourceTurretId ? undefined : ownerId,
     );
     this.audioSystem?.playSound(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId);
@@ -735,7 +736,7 @@ export class ProjectilePresentationRuntime {
               proj.vx,
               proj.vy,
             ));
-        this.muzzleFlashRenderer?.playProjectileFlash(flashOrigin.x, flashOrigin.y, proj.vx, proj.vy, proj.style as ProjectileStyle | undefined, proj.bulletVisualPreset, proj.energyBallVariant, proj.ownerColor ?? proj.color, proj.sourceTurretId ? undefined : proj.ownerId);
+        this.muzzleFlashRenderer?.playProjectileFlash(flashOrigin.x, flashOrigin.y, proj.vx, proj.vy, proj.style as ProjectileStyle | undefined, proj.bulletVisualPreset, proj.energyBallVariant, muzzleFlashColor(proj.style, proj.color, proj.ownerColor), proj.sourceTurretId ? undefined : proj.ownerId);
         const isUtilityProjectile = proj.style === 'grenade' || proj.style === 'holy_grenade' || proj.style === 'bfg';
         if (proj.ownerId !== localPlayerId || isUtilityProjectile) this.audioSystem?.playSound(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId);
       }
@@ -944,6 +945,11 @@ export class ProjectilePresentationRuntime {
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
     this.clientVisuals.clear();
   }
+}
+
+/** A tinted fire flame (void, allied) flashes in its fire colour; every other shot in its owner's colour. */
+function muzzleFlashColor(style: string | undefined, color: number, ownerColor: number | undefined): number {
+  return style === 'flame' && fireStyleForColor(color) !== 'normal' ? color : ownerColor ?? color;
 }
 
 function resolveBulletVisualPreset(style?: string, preset?: BulletVisualPreset): BulletVisualPreset {

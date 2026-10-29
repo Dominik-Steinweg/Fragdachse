@@ -35,9 +35,12 @@ export interface BaseVoidFireDeps {
   readonly damage: (baseId: string, amount: number, source: CombatSource, now: number) => void;
 }
 
-interface BaseBurn { source: CombatSource; expiresAt: number; nextTickAt: number }
+interface BaseBurn { source: CombatSource; expiresAt: number; nextTickAt: number; damageMult: number }
 
-/** One non-stacking burn per base, owned and discarded by the active mission. */
+/**
+ * One non-stacking burn per base, owned and discarded by the active mission. It burns at the base
+ * share of the strongest fire touching the base (a fire with share 0 never sets a base alight).
+ */
 export class BaseVoidFireSystem {
   private readonly burns = new Map<string, BaseBurn>();
   private destroyed = false;
@@ -61,7 +64,7 @@ export class BaseVoidFireSystem {
         // Integrate only the lifetime already earned by prior contacts. Late frames do not
         // invent damage in a gap between an expired burn and the next observed contact.
         while (burn.nextTickAt <= Math.min(now, burn.expiresAt) && base.isDamageable()) {
-          this.deps.damage(base.id, this.config.damagePerSecond[base.faction] * BURN_TICK_INTERVAL_MS / 1000,
+          this.deps.damage(base.id, this.config.damagePerSecond[base.faction] * burn.damageMult * BURN_TICK_INTERVAL_MS / 1000,
             burn.source, burn.nextTickAt);
           burn.nextTickAt += BURN_TICK_INTERVAL_MS;
           if (this.destroyed) return;
@@ -72,18 +75,21 @@ export class BaseVoidFireSystem {
         }
       }
       if (base.isDamageable()) {
+        let strongest: { source: CombatSource; damageMult: number } | null = null;
         for (const contact of this.deps.getContacts(base.id, now)) {
           // Verbündetes Feuer ist umgefärbtes Void-Feuer und brennt Basen genauso an.
-          if (contact.visualStyle === 'normal') continue;
+          const damageMult = contact.baseDamageMult ?? 1;
+          if (contact.visualStyle === 'normal' || !(damageMult > 0) || (strongest && damageMult <= strongest.damageMult)) continue;
           const source = contact.combatSource ?? this.deps.captureSource(contact);
-          if (!this.deps.canDamage(source, base.faction)) continue;
-          if (burn) burn.expiresAt = now + this.config.afterburnMs;
-          else {
-            burn = { source: { ...source, origin: 'burn' }, expiresAt: now + this.config.afterburnMs,
-              nextTickAt: now + BURN_TICK_INTERVAL_MS };
-            this.burns.set(base.id, burn);
-          }
-          break;
+          if (this.deps.canDamage(source, base.faction)) strongest = { source, damageMult };
+        }
+        if (strongest && burn) {
+          burn.expiresAt = now + this.config.afterburnMs;
+          burn.damageMult = strongest.damageMult;
+        } else if (strongest) {
+          burn = { source: { ...strongest.source, origin: 'burn' }, expiresAt: now + this.config.afterburnMs,
+            nextTickAt: now + BURN_TICK_INTERVAL_MS, damageMult: strongest.damageMult };
+          this.burns.set(base.id, burn);
         }
       }
       base.setVoidBurning(!!burn && base.isDamageable());

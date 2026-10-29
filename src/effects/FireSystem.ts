@@ -51,6 +51,8 @@ export interface GroundFireContact {
   sourceId: string;
   visualStyle: GroundFireVisualStyle;
   damageTarget: GroundFireDamageTarget;
+  /** Damage factor against bases (a base this fire sets alight burns at this share); default 1. */
+  baseDamageMult?: number;
 }
 
 export interface GroundFireProjectileIgniter {
@@ -559,6 +561,7 @@ export class FireSystem {
           sourceId: source.sourceId,
           visualStyle: source.visualStyle,
           damageTarget: source.damageTarget,
+          baseDamageMult: source.baseDamageMult,
           firewalker: source.firewalker ? structuredClone(source.firewalker) : undefined,
         });
       }

@@ -86,6 +86,7 @@ const SHIPPED_AUDIO_FILES = new Set([
   "sfx_bfg_charge.ogg",
   "sfx_alien_cone_charge.ogg",
   "sfx_alien_cone_pulse.ogg",
+  "sfx_demon_badger_warning.ogg",
   "sfx_bfg_fly.ogg",
   "sfx_bfg_laser.ogg",
   "sfx_pickup_bfg.ogg",
@@ -173,6 +174,8 @@ const LOADOUT_ASSETS = {
   // Alien energy cone placeholders: BFG charge and alien plasma impact under replaceable keys.
   sfx_alien_cone_charge:    './assets/sounds/sfx_alien_cone_charge.ogg',
   sfx_alien_cone_pulse:     './assets/sounds/sfx_alien_cone_pulse.ogg',
+  // Demon Badger warning placeholder: the BFG charge pitched up into a 1.25 s rising countdown.
+  sfx_demon_badger_warning: './assets/sounds/sfx_demon_badger_warning.ogg',
   sfx_bfg_fly:              './assets/sounds/sfx_bfg_fly.ogg',
   sfx_bfg_laser:            './assets/sounds/sfx_bfg_laser.ogg',
   sfx_nuke_countdown:       './assets/sounds/sfx_nuke_countdown.ogg', //done
@@ -367,6 +370,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_shield_active:         0.5,
   sfx_bfg_charge:            0.5,
   sfx_alien_cone_charge:     0.35,
+  sfx_demon_badger_warning:  0.3,
   sfx_alien_cone_pulse:      0.55,
   sfx_bfg_fly:               0.5,
   sfx_bfg_laser:             0.5,

@@ -68,6 +68,8 @@ export interface EnemyFlameGroundCell {
   readonly durationMs: number;
   readonly burnDurationMs: number;
   readonly burnDamagePerTick: number;
+  /** Share of the base fire damage while this fire keeps a base burning. */
+  readonly baseDamageMult: number;
   readonly visualStyle: import('../types').GroundFireVisualStyle;
   readonly damageTarget: import('../types').GroundFireDamageTarget;
   readonly sourceId: string;
@@ -75,6 +77,8 @@ export interface EnemyFlameGroundCell {
 
 export interface EnemyFlameGroundPort {
   ignite(enemy: EnemyEntity, x: number, y: number, cell: EnemyFlameGroundCell, now: number): void;
+  /** Direct damage of a flame shot to the base it was aimed at. */
+  scorchBase?(enemy: EnemyEntity, baseId: string, damage: number, sourceId: string, now: number): void;
 }
 
 /** A burst's ground fire lands this far behind its target (inside a struck base wall). */
@@ -433,6 +437,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       options: clawAttackId ? { clawAttackId } : undefined,
     });
     if (!didFire) return;
+    this.scorchBase(enemy, attackWeapon, target, now);
     this.igniteFlameGround(enemy, attackWeapon, target, angle, now);
     if (target.targetRef) this.decoyTargets?.usedTarget(enemy.id, target.targetRef);
 
@@ -458,6 +463,18 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   }
 
   /**
+   * Enemy projectiles never hurt a friendly base by contact, so a flame shot aimed at a base in its
+   * reach scorches it directly: its damage times the weapon's `baseDamageMult`. Each shot of each body
+   * counts, so the pressure on a base grows with the number of spitters (the base burn does not stack).
+   */
+  private scorchBase(enemy: EnemyEntity, attackWeapon: EnemyAttackWeapon, target: EnemyAttackCandidate, now: number): void {
+    const config = attackWeapon.weapon.config, baseDamageMult = config.baseDamageMult ?? 1;
+    const baseId = target.kind === 'base' ? target.targetId ?? target.targetRef?.id : undefined;
+    if (!this.flameGround?.scorchBase || config.fire.type !== 'flamethrower' || !baseId || !(baseDamageMult > 0)) return;
+    this.flameGround.scorchBase(enemy, baseId, config.damage * baseDamageMult, `enemy.${enemy.kind}.spit_fire`, now);
+  }
+
+  /**
    * A flame weapon that authors `burningGround.createOnFlameExpiry` sets the ground on fire where its
    * burst ends: just behind the target, at most at its reach. The last flame of a salvo (or every
    * single shot) ignites, whether the flames hit or died out, so a struck base reliably catches fire.
@@ -477,7 +494,8 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     const fireGround = resolveEnemyFlameGround(enemy.faction, `enemy.${enemy.kind}.spit_fire`);
     for (const back of FLAME_GROUND_CELL_OFFSETS) {
       this.flameGround.ignite(enemy, x + cos * (reach - back), y + sin * (reach - back), {
-        durationMs: ground.durationMs, burnDurationMs: fire.burnDurationMs, burnDamagePerTick: fire.burnDamagePerTick, ...fireGround,
+        durationMs: ground.durationMs, burnDurationMs: fire.burnDurationMs, burnDamagePerTick: fire.burnDamagePerTick,
+        baseDamageMult: ground.baseDamageMult ?? 1, ...fireGround,
       }, now);
     }
   }

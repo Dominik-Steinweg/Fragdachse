@@ -21,6 +21,8 @@ const FAR_CROWDED_REUSE_FRAMES = 1;
 const FAR_ORDERED_AFTER_STALL_S = 1;
 /** ...and one stalled this long ignores the far crowd until it moves again, so no off-screen wait lasts. */
 const FAR_CROWD_RELEASE_S = 2;
+/** An arriving body this close to its attack position counts as there; it does not chase sub-pixel corrections. */
+const ARRIVAL_DEAD_ZONE_PX = 3;
 interface Conflict { dx: number; dy: number; vx: number; vy: number; separation: number;
   separationSq: number; existingOverlap: number; weight: number }
 interface SteeringChoice { angle: number; scale: number; heading: number; vx: number; vy: number; frame: number;
@@ -122,7 +124,7 @@ export class EnemyLocomotion {
     this.previous.set(request.id, history);
     // A waypoint may be the precise attachment needed to turn around a rock corner.
     // Stopping a pixel short can leave the following body sweep permanently blocked.
-    if (distance < 1e-3) return result(0, 0, 'arrival', progress);
+    if (distance < (request.arrive ? ARRIVAL_DEAD_ZONE_PX : 1e-3)) return result(0, 0, 'arrival', progress);
     const dt = this.deltaSeconds;
     if (dt <= 0 || speed <= 0) return result(0, 0, 'arrival', progress);
     const far = request.detail === 'far';
@@ -150,7 +152,8 @@ export class EnemyLocomotion {
     }
     if (far) this.farSolves++;
     const horizon = Math.max(dt, 0.12);
-    const blend = 1 - Math.exp(-dt * 14);
+    // An arriving body drops its momentum: smoothed, it would sail past its attack position and back.
+    const blend = request.arrive ? 1 : 1 - Math.exp(-dt * 14);
     // Every smoothed candidate lies inside this envelope, including previous dash/impulse
     // velocities. Query buckets once, then retain the exact capsule test for each heading.
     const reach = (Math.hypot(request.previousVx, request.previousVy) * (1 - blend) + speed * blend) * horizon;

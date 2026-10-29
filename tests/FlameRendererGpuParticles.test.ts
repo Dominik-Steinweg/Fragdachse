@@ -58,6 +58,7 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 
 import { DEPTH, VOID_FIRE_COLOR } from '../src/config';
 import { FlameRenderer } from '../src/effects/FlameRenderer';
+import { VOID_FLAME_COLORS_SPARK, VOID_JET_TINTS_HOT, VOID_JET_TINTS_MID } from '../src/effects/FlameShared';
 import { GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
@@ -162,9 +163,15 @@ describe('flame renderer gpu particles', () => {
     expect(core.members.slice(-6).every((member) => member.frame === 'flame-tongue')).toBe(true);
     expect(outer.members.slice(-4).every((member) => member.frame === 'flame-billow')).toBe(true);
     expect(spark.members.at(-1)?.frame).toBe('flame-spark-void');
-    expect(core.members.at(-1)?.tint).toBe(0xd79bff);
-    expect(outer.members.at(-1)?.tint).toBe(0xd79bff);
-    expect(spark.members.at(-1)?.tint).toBe(0xd477ff);
+    expect(core.members.at(-1)?.tint).toBe(VOID_JET_TINTS_HOT[2]);
+    expect(outer.members.at(-1)?.tint).toBe(VOID_JET_TINTS_HOT[2]);
+    expect(spark.members.at(-1)?.tint).toBe(VOID_FLAME_COLORS_SPARK[2]);
+    // Void flames stay violet even where they are hottest: no pale tint that stacks to white.
+    for (const tint of [...VOID_JET_TINTS_HOT, ...VOID_JET_TINTS_MID, ...VOID_FLAME_COLORS_SPARK]) {
+      const r = (tint >> 16) & 0xff, g = (tint >> 8) & 0xff, b = tint & 0xff;
+      expect(b - g, tint.toString(16)).toBeGreaterThanOrEqual(0x60);
+      expect(r, tint.toString(16)).toBeLessThan(0xe8);
+    }
   });
 
   it('streams along the flight path instead of clustering on the hitbox', () => {

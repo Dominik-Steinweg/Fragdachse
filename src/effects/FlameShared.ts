@@ -15,9 +15,12 @@ export const TEX_VOID_FLAME_GLOW  = '__void_flame_glow';
 export const FLAME_COLORS_CORE  = [0xffee88, 0xffcc44, 0xff9922, 0xffffff];
 export const FLAME_COLORS_OUTER = [0xff6622, 0xff4400, 0xdd2200, 0xcc3300];
 export const FLAME_COLORS_SPARK = [0xffffff, 0xffee88, 0xffaa44, 0xff6622];
-export const VOID_FLAME_COLORS_CORE = [0xffffff, 0xf2c8ff, 0xd887ff, VOID_FIRE_COLOR] as const;
+// Void flames carry their violet into the hottest band. Dense flames stack many additive particles:
+// every channel a tint carries saturates there, so the hot band keeps green (and red) low enough that
+// a stacked core ends violet-lavender instead of white; red stays well below blue so it never tips to pink.
+export const VOID_FLAME_COLORS_CORE = [0x8a4cff, 0x7c3cff, 0x7032ff, VOID_FIRE_COLOR] as const;
 export const VOID_FLAME_COLORS_OUTER = [0xe7b4ff, 0xc76cff, 0x9d35ee, 0x6717a8] as const;
-export const VOID_FLAME_COLORS_SPARK = [0xffffff, 0xf4d4ff, 0xd477ff, 0xa83cff] as const;
+export const VOID_FLAME_COLORS_SPARK = [0xd69cff, 0xcf86ff, 0xb85cff, 0xa83cff] as const;
 
 export function ensureFlameTextures(scene: Phaser.Scene): void {
   const textures = scene.textures;
@@ -101,9 +104,9 @@ export const TEX_FLAME_BED    = '__flame_bed';
 export const FLAME_JET_TINTS_HOT  = [0xffe9a8, 0xffd979, 0xffc65a, 0xffb845] as const;
 export const FLAME_JET_TINTS_MID  = [0xffa838, 0xff8a20, 0xff7412, 0xffbb52] as const;
 export const FLAME_JET_TINTS_COOL = [0xe0450c, 0xb63108, 0xc93a0a, 0x8e2c0c] as const;
-export const VOID_JET_TINTS_HOT   = [0xf2d3ff, 0xe6b6ff, 0xd79bff, 0xc98cff] as const;
-export const VOID_JET_TINTS_MID   = [0xc76cff, 0xb14ef2, 0x9c37e4, 0xd486ff] as const;
-export const VOID_JET_TINTS_COOL  = [0x7620b8, 0x571590, 0x3c0f68, 0x6a1aa4] as const;
+export const VOID_JET_TINTS_HOT   = [0x7034ff, 0x682cfa, 0x7a3cff, 0x6024f0] as const;
+export const VOID_JET_TINTS_MID   = [0x5a1ee0, 0x5018cc, 0x6424e8, 0x4614b0] as const;
+export const VOID_JET_TINTS_COOL  = [0x5e16a0, 0x46107c, 0x320b58, 0x52148c] as const;
 
 /**
  * Getoente Feuerfamilie (Void, Verbuendete). Die Texturen und GPU-Frames dieser Familie sind
