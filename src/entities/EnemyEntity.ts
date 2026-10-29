@@ -1,5 +1,5 @@
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
-import { EMPTY_ENEMY_CLAW_STATE, isEnemyClawState, type EnemyClawState } from '../systems/EnemyClawAttack';
+import { EMPTY_ENEMY_CLAW_STATE, isEnemyClawState, meleeLiftProfile, type EnemyClawState } from '../systems/EnemyClawAttack';
 import { syncEnemyClawAnimation } from '../animations/EnemyClawAnimation';
 import { stepTurnRateFacing } from './turnRateFacing';
 import { syncEnemyShieldChargeAnimation } from '../animations/EnemyShieldChargeAnimation';
@@ -17,6 +17,7 @@ import { EMPTY_KABOOMTULA_STATE, isKaboomtulaState, kaboomtulaLeapProgress, kabo
   type KaboomtulaState } from '../systems/KaboomtulaState';
 import { EMPTY_ENEMY_HEAT_BURST_STATE, isEnemyHeatBurstState, type EnemyHeatBurstState } from '../systems/EnemyHeatBurstState';
 import { EMPTY_ENEMY_VOLLEY_STATE, isEnemyVolleyState, type EnemyVolleyState } from '../systems/EnemyVolleyState';
+import { syncEnemyVolleyAnimation } from '../animations/EnemyVolleyAnimation';
 import { heatSpeedFactorAt } from '../systems/enemyHeatBurstRules';
 import { EnemySpitPlayback, syncEnemyHeatBurstAnimation } from '../animations/EnemyHeatBurstAnimation';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
@@ -379,8 +380,18 @@ export class EnemyEntity {
   }
 
   private volleyState: EnemyVolleyState = EMPTY_ENEMY_VOLLEY_STATE;
+  private volleyAnimating = false;
 
   getVolleyState(): EnemyVolleyState { return this.volleyState; }
+
+  /** The gather gesture (`cast` clip) follows the replicated volley timeline; melee always wins. */
+  syncVolleyAnimation(now: number): void {
+    if (this.volleyState.revision === 0) return;
+    const wasAnimating = this.volleyAnimating;
+    this.volleyAnimating = !this.clawAnimating && this.sprite.visible && !this.burrowed && this.currentHp > 0
+      && syncEnemyVolleyAnimation(this.sprite, this.config.imageKey, this.volleyState, now);
+    if (wasAnimating && !this.volleyAnimating) this.syncWalkingAnimation();
+  }
 
   /** Host: publish a new gather/fire transition (revision must grow). Clients: apply a newer replicated state. */
   applyVolleyState(state: EnemyVolleyState): void {
@@ -543,15 +554,25 @@ export class EnemyEntity {
     if (!this.clawAnimating) this.syncWalkingAnimation();
   }
 
+  /** A heavy windup grows the sprite towards the camera; reset once its clip ends. */
+  private meleeLifted = false;
+
   syncClawAnimation(now: number): void {
     const attack = this.clawState.attack;
     const wasAnimating = this.clawAnimating;
     this.clawAnimating = !!attack && now < attack.endsAt && this.sprite.visible && !this.burrowed && this.currentHp > 0;
     if (this.clawAnimating && attack) {
       this.faceAngle(attack.angle);
-      const clip = this.config.weapons.find(weapon => weapon.weaponId === attack.weaponId)?.meleeTiming?.clip;
-      syncEnemyClawAnimation(this.sprite, this.config.imageKey, attack, now, clip);
-    } else if (wasAnimating) this.syncWalkingAnimation();
+      const timing = this.config.weapons.find(weapon => weapon.weaponId === attack.weaponId)?.meleeTiming;
+      syncEnemyClawAnimation(this.sprite, this.config.imageKey, attack, now, timing?.clip, timing?.holdMs);
+      if (timing?.lift) {
+        this.meleeLifted = true;
+        this.setAirLiftScale(1 + timing.lift * meleeLiftProfile(attack, now), false);
+      }
+      return;
+    }
+    if (wasAnimating) this.syncWalkingAnimation();
+    if (this.meleeLifted) { this.meleeLifted = false; this.setAirLiftScale(1, false); }
   }
   private movementRevision = 0;
   /** Decaying teleport offset, separate from the normal interpolation lag while walking. */
@@ -839,7 +860,7 @@ export class EnemyEntity {
 
   private syncWalkingAnimation(): void {
     if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating || this.energyConeAnimating || this.hopAnimating
-      || this.pounceAnimating || this.heatBurstAnimating) return;
+      || this.pounceAnimating || this.heatBurstAnimating || this.volleyAnimating) return;
     if (!this.walkingSheet) return;
     syncBadgerWalkingAnimation(
       this.sprite,

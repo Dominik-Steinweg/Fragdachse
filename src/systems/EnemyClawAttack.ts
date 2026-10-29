@@ -8,6 +8,10 @@ export interface EnemyMeleeTiming {
   readonly recoveryMs: number;
   /** Sheet clip sampled over this timeline (with `strike`/`impact` markers); default `claw`. */
   readonly clip?: string;
+  /** Presentation only: the impact pose holds this long before the recovery plays. */
+  readonly holdMs?: number;
+  /** Presentation only: peak display growth of the windup (a heavy body rearing towards the camera). */
+  readonly lift?: number;
 }
 
 export interface EnemyClawAttack {
@@ -112,12 +116,38 @@ export function isEnemyClawState(value: unknown): value is EnemyClawState {
     && attack.range > 0 && attack.arcDegrees > 0 && attack.arcDegrees <= 360;
 }
 
-/** Clip-local indices. The authored markers separate slow anticipation from the fast strike. */
-export function clawFrameIndex(attack: EnemyClawAttack, now: number, count: number, markers: { strike: number; impact: number }): number {
+/**
+ * Clip-local indices. The authored markers separate slow anticipation from the fast strike; an
+ * optional `holdMs` keeps the impact pose on screen before the recovery (presentation only).
+ */
+export function clawFrameIndex(attack: EnemyClawAttack, now: number, count: number, markers: { strike: number; impact: number },
+  holdMs = 0): number {
+  const hold = Math.max(0, Math.min(holdMs, attack.endsAt - attack.hitAt - 1));
+  if (now >= attack.hitAt && now < attack.hitAt + hold) return markers.impact;
   const [fromTime, toTime, fromFrame, toFrame] = now < attack.strikeAt
     ? [attack.startedAt, attack.strikeAt, 0, markers.strike]
     : now < attack.hitAt ? [attack.strikeAt, attack.hitAt, markers.strike, markers.impact]
-      : [attack.hitAt, attack.endsAt, markers.impact, count - 1];
+      : [attack.hitAt + hold, attack.endsAt, markers.impact, count - 1];
   const progress = Math.max(0, Math.min(1, (now - fromTime) / (toTime - fromTime)));
   return Math.min(count - 1, Math.floor(fromFrame + (toFrame - fromFrame) * progress));
+}
+
+const MELEE_SQUASH_MS = 240;
+
+/**
+ * Presentation height of a heavy windup seen from above: it rises to 1 at the strike, crashes to 0
+ * at the hit and dips into a short squash afterwards. Gameplay never reads it.
+ */
+export function meleeLiftProfile(attack: EnemyClawAttack, now: number): number {
+  if (now <= attack.startedAt || now >= attack.endsAt) return 0;
+  if (now < attack.strikeAt) {
+    const t = (now - attack.startedAt) / (attack.strikeAt - attack.startedAt);
+    return t * t * (3 - 2 * t);
+  }
+  if (now < attack.hitAt) {
+    const t = (now - attack.strikeAt) / (attack.hitAt - attack.strikeAt);
+    return 1 - t * t;
+  }
+  const t = (now - attack.hitAt) / MELEE_SQUASH_MS;
+  return t < 1 ? -0.35 * Math.sin(Math.PI * t) : 0;
 }

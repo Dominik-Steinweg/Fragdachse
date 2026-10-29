@@ -1,0 +1,26 @@
+{
+  "owner": "effects/gpu/GraveWispGpuLayer.ts",
+  "notes": [
+    "Grave Titan grave lights: the salvo's ammunition circling over its back, the gathering crown, the plasma shots flying as grave lights and their soul puffs; one additive draw in the emissive band, like the boss's fireflies."
+  ],
+  "gpuLayers": [
+    {
+      "id": "grave-wisps",
+      "owner": "effects/gpu/GraveWispGpuLayer.ts",
+      "component": "glow",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect"
+    }
+  ]
+}

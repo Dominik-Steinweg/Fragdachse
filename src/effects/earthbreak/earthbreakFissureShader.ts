@@ -75,6 +75,10 @@ uniform float uPass;
 uniform float uPixel;
 uniform float uAlpha;
 uniform float uDetail;
+// Glow palette of the owning layer (embers by default, grave light for the Grave Titan).
+uniform vec3 uEmber;
+uniform vec3 uGlow;
+uniform vec3 uHot;
 varying vec2 vWorld;
 varying vec2 vLocal;
 varying vec4 vShape;
@@ -86,9 +90,9 @@ ${COMMON}
 const float TAU = 6.28318530718;
 // Top-down key light from the north-west (screen y points south).
 const vec2 TO_LIGHT = vec2(-0.5547, -0.8321);
-const vec3 EMBER = vec3(1.0, 0.42, 0.08);
-const vec3 GLOW = vec3(1.0, 0.62, 0.2);
-const vec3 HOT = vec3(1.0, 0.93, 0.72);
+#define EMBER uEmber
+#define GLOW uGlow
+#define HOT uHot
 
 float hash21(vec2 p) {
   vec3 q = fract(vec3(p.xyx) * 0.1031);

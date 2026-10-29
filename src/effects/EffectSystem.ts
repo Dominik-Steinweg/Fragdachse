@@ -64,7 +64,7 @@ interface ExplosionSequenceHost {
   hasActiveNukeSequence(): boolean;
 }
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
-import { impactExceptional, impactLight, impactMedium } from './camera/cameraFeedbackPresets';
+import { impactExceptional, impactHeavy, impactLight, impactMedium } from './camera/cameraFeedbackPresets';
 import {
   EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS,
   EXPLOSION_LIGHT_RADIUS_FACTOR,
@@ -111,6 +111,9 @@ export interface GroundFogCombatSink {
  * Die Buddel-Effekte werden nicht nur für Spieler, sondern auch für eingebuddelte Coop-Defense-
  * Gegner genutzt; `implements` hält die dafür erwartete Signatur kompilierzeit-fest.
  */
+/** Grave light of the Grave Titan's slam: impact glints and light burst. */
+const GRAVE_TITAN_SLAM_GLINT = 0x8dff7a;
+
 /** Body radius used to place a tongue's mouth when the swing does not name its body. */
 const DEFAULT_TONGUE_BODY_RADIUS = 15;
 
@@ -175,8 +178,8 @@ export class EffectSystem implements EnemyVisualSink {
   syncEnemyClaw(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean, alliedColor?: number, bodyRadius = DEFAULT_TONGUE_BODY_RADIUS): void {
     if (state.attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
     const preset = meleePresetOf(state.attack?.weaponId), tongue = preset === 'enemy_tongue';
-    // Tongue and ink announce only their red danger sector; their strike has its own visual, no rakes.
-    this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor, tongue || preset === 'enemy_ink');
+    // Tongue, ink and slam announce only their red danger sector; their strike has its own visual, no rakes.
+    this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor, tongue || preset === 'enemy_ink' || preset === 'enemy_slam');
     if (tongue) this.withTongueLash(renderer => renderer.sync(id, state.attack, x, y, bodyRadius, now, visible));
     else this.tongueLash?.sync(id, null, x, y, bodyRadius, now, visible);
   }
@@ -334,6 +337,13 @@ export class EffectSystem implements EnemyVisualSink {
 
   setPounceImpactRenderer(renderer: import('./PounceImpactGpuRenderer').PounceImpactGpuRenderer | null): void {
     this.pounceImpactRenderer = renderer;
+  }
+
+  private graveTitanImpact: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play'> | null = null;
+
+  /** Torn ground of the Grave Titan's slam and stomp; driven only by the replicated melee swing. */
+  setGraveTitanImpactRenderer(renderer: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play'> | null): void {
+    this.graveTitanImpact = renderer;
   }
 
   setBurrowGpuRenderer(renderer: BurrowGpuRenderer | null): void {
@@ -1781,6 +1791,19 @@ export class EffectSystem implements EnemyVisualSink {
    * Dedupliziert anhand der swingId, damit der Effekt pro Event nur einmal gerendert wird
    * (der Host-Zustand wird mehrere Frames länger gesendet als die Animation dauert).
    */
+  /**
+   * A Grave Titan slam or stomp breaks the ground where it lands: glowing cracks, terrain grit with a
+   * dust ring at the struck edge, a green light burst, a screen shockwave and heavy camera feedback.
+   */
+  private confirmGraveTitanSlam(swing: SyncedMeleeSwing): void {
+    const impact = this.graveTitanImpact?.play(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range);
+    const x = impact?.x ?? swing.x, y = impact?.y ?? swing.y, radius = impact?.radius ?? swing.range;
+    this.pounceImpactRenderer?.play(x, y, radius, GRAVE_TITAN_SLAM_GLINT);
+    this.lighting?.pulse('explosion', x, y, { radiusPx: radius * 1.8, color: GRAVE_TITAN_SLAM_GLINT, intensity: 1.5, durationMs: 650, occludes: false });
+    this.visualFeedback?.startExplosionShockwave({ x, y, radiusPx: radius * 1.5, style: 'default' });
+    this.cameraFeedback?.request(impactHeavy({ sourceX: x, sourceY: y }));
+  }
+
   playSyncedMeleeSwing(swing: SyncedMeleeSwing): void {
     const now = this.scene.time.now;
     const key = `${swing.shooterId}:${swing.swingId}`;
@@ -1802,6 +1825,11 @@ export class EffectSystem implements EnemyVisualSink {
     }
     if (swing.visualPreset === 'enemy_tongue') {
       this.withTongueLash(renderer => renderer.confirm(swing, DEFAULT_TONGUE_BODY_RADIUS));
+      this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.weaponSourceId);
+      return;
+    }
+    if (swing.visualPreset === 'enemy_slam') {
+      this.confirmGraveTitanSlam(swing);
       this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.weaponSourceId);
       return;
     }

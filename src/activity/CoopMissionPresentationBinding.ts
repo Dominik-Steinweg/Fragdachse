@@ -16,6 +16,10 @@ import type {
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { BossIntroState } from '../config/bossIntros';
 import type { BossPresenceSource } from '../effects/BossPresenceRenderer';
+import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
+
+/** Grave lights gather over the grave on the back, this far behind the body centre. */
+const BOSS_CROWN_BACK_PX = 7;
 import { resolvePortalObjectiveStatusLines } from '../ui/coopDefenseSecondaryObjectiveModel';
 import type {
   CoopDefenseMapConfig,
@@ -395,6 +399,9 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       const presence = enemy.getBossPresence();
       const voidPhase = enemy.kind === 'void-hunter' ? enemy.getBossPhase() : undefined;
       if ((!presence && !voidPhase) || !enemy.sprite.active || enemy.getHp() <= 0) continue;
+      // An announced salvo carries its ammunition as grave lights; they gather over the grave just behind the centre.
+      const announced = presence ? getCoopDefenseEnemyConfig(enemy.kind).weapons.find(weapon => weapon.salvo?.chargeMs) : undefined;
+      const aim = enemy.getAimAngle();
       this.bossPresenceSources.push({
         id: enemy.id,
         x: enemy.sprite.x,
@@ -403,6 +410,8 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
         visible: enemy.sprite.visible && !enemy.isBurrowed(),
         presence,
         voidPhase,
+        volley: announced?.salvo ? { state: enemy.getVolleyState(), count: announced.salvo.count, weaponId: announced.weaponId,
+          crownX: enemy.sprite.x - Math.cos(aim) * BOSS_CROWN_BACK_PX, crownY: enemy.sprite.y - Math.sin(aim) * BOSS_CROWN_BACK_PX } : undefined,
       });
     }
     this.ui.worldSpace.syncBossPresence(this.bossPresenceSources, this.reads.getSynchronizedNow());

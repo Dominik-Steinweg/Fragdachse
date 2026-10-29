@@ -367,7 +367,9 @@ export class ProjectilePresentationRuntime {
   }
 
   destroyProjectileVisuals(projectile: ProjectilePresentationDespawnState): void {
-    this.customVisuals.get(projectile.id)?.destroy(); this.customVisuals.delete(projectile.id);
+    // A feature-owned view plays its own end; the generic style impact would double it.
+    const custom = this.customVisuals.get(projectile.id);
+    custom?.destroy(); this.customVisuals.delete(projectile.id);
     this.groundFogPoses.delete(projectile.id);
     this.ownershipAppearance.delete(projectile.id);
     this.pathCursors.delete(projectile.id);
@@ -383,7 +385,7 @@ export class ProjectilePresentationRuntime {
     this.leafBlowerRenderer?.destroyVisual(projectile.id);
     this.bfgRenderer?.destroyVisual(projectile.id);
     this.gaussRenderer?.destroyVisual(projectile.id);
-    if (projectile.style === 'energy_ball') {
+    if (projectile.style === 'energy_ball' && !custom) {
       this.energyBallRenderer?.playImpact(destroyX, destroyY, projectile.color, projectile.energyBallVariant, destroyScale);
     }
     if (projectile.style === 'hydra') {

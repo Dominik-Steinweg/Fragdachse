@@ -1463,6 +1463,7 @@ export class EnemyManager {
 
   private syncClawVisuals(enemy: EnemyEntity, now: number): void {
     enemy.syncClawAnimation(now);
+    enemy.syncVolleyAnimation(now);
     enemy.syncShieldChargeAnimation(now);
     enemy.syncEnergyConeAnimation(now);
     enemy.syncHopPresentation(now);

@@ -236,7 +236,9 @@
             "hitDelayMs": 1100,
             "strikeMs": 160,
             "recoveryMs": 800,
-            "clip": "stomp"
+            "clip": "stomp",
+            "holdMs": 90,
+            "lift": 0.06
           }
         },
         {
@@ -247,7 +249,9 @@
             "hitDelayMs": 1300,
             "strikeMs": 220,
             "recoveryMs": 900,
-            "clip": "slam"
+            "clip": "slam",
+            "holdMs": 120,
+            "lift": 0.09
           }
         }
       ],
@@ -265,7 +269,7 @@
         "lightIntensity": 0.45
       },
       "bossPresence": {
-        "fireflyCount": 22,
+        "fireflyCount": 12,
         "footprintGlowColor": 9305946
       },
       "trainAwareness": {

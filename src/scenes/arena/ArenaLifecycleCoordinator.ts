@@ -3810,6 +3810,7 @@ export class ArenaLifecycleCoordinator {
       this.renderers.movement.setTerrainColorSnapshot(snapshot);
       this.renderers.burrowGpu.setTerrainColorSnapshot(snapshot);
       this.renderers.pounceImpact.setTerrainColorSnapshot(snapshot);
+      this.renderers.graveTitanImpact.setTerrainColorSnapshot(snapshot);
       this.renderers.portals.setTerrainColorSnapshot(snapshot);
       this.terrainSnapshotReady = true;
     }).catch((error: unknown) => {

@@ -1431,6 +1431,10 @@ function normalizeMeleeTiming(timing: CoopDefenseEnemyWeaponConfig['meleeTiming'
   if (timing.clip !== undefined && (typeof timing.clip !== 'string' || timing.clip.trim().length === 0)) {
     throw new Error('[coopDefenseEnemies] Invalid melee clip');
   }
+  if ((timing.holdMs !== undefined && !(Number.isFinite(timing.holdMs) && timing.holdMs >= 0 && timing.holdMs < timing.recoveryMs))
+    || (timing.lift !== undefined && !(Number.isFinite(timing.lift) && timing.lift >= 0 && timing.lift <= 0.3))) {
+    throw new Error('[coopDefenseEnemies] Invalid melee presentation timing');
+  }
   return { ...timing };
 }
 

@@ -12,6 +12,18 @@ export type FissurePass = (typeof FissurePass)[keyof typeof FissurePass];
 
 const DETAIL = { high: 1, medium: 1, low: 0 } as const;
 
+/** Linear glow colours of a fissure family: deep embers, the glowing seam and its hot core. */
+export interface FissurePalette {
+  readonly name: string;
+  readonly ember: readonly [number, number, number];
+  readonly glow: readonly [number, number, number];
+  readonly hot: readonly [number, number, number];
+}
+
+export const EMBER_FISSURE_PALETTE: FissurePalette = {
+  name: '', ember: [1.0, 0.42, 0.08], glow: [1.0, 0.62, 0.2], hot: [1.0, 0.93, 0.72],
+};
+
 /**
  * One display-list entry and one draw call per pass for every Earthbreak fissure on screen.
  * The store owns the data; this node uploads the committed dirty slot range (or everything
@@ -19,12 +31,12 @@ const DETAIL = { high: 1, medium: 1, low: 0 } as const;
  * returns null for headless or canvas renderers.
  */
 export function createEarthbreakFissureGpuLayer(scene: Phaser.Scene, store: EarthbreakFissureStore, pass: FissurePass,
-  depth: number, time: () => number, alpha: () => number = () => 1): Phaser.GameObjects.Image | null {
+  depth: number, time: () => number, alpha: () => number = () => 1, palette = EMBER_FISSURE_PALETTE): Phaser.GameObjects.Image | null {
   const renderer = scene.sys?.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
   if (!renderer?.gl) return null;
   const manager = renderer.renderNodes;
   const image = scene.add.image(0, 0, '__WHITE');
-  image.name = pass === FissurePass.Ground ? 'earthbreak-fissures' : 'earthbreak-fissure-glow';
+  image.name = (pass === FissurePass.Ground ? 'earthbreak-fissures' : 'earthbreak-fissure-glow') + (palette.name ? `-${palette.name}` : '');
   if (pass === FissurePass.Emissive) image.setBlendMode(Phaser.BlendModes.ADD);
   image.setDepth(depth);
   let ready = false;
@@ -33,7 +45,7 @@ export function createEarthbreakFissureGpuLayer(scene: Phaser.Scene, store: Eart
     private uploadedVersion = -1;
     constructor() {
       super(manager, {
-        name: `BatchHandlerEarthbreakFissure${pass}`, shaderName: 'EARTHBREAK_FISSURE',
+        name: `BatchHandlerEarthbreakFissure${pass}${palette.name}`, shaderName: 'EARTHBREAK_FISSURE',
         instancesPerBatch: FISSURE_CAPACITY,
         verticesPerInstance: FISSURE_VERTICES, indicesPerInstance: FISSURE_VERTICES,
         topology: renderer!.gl.TRIANGLES,
@@ -86,6 +98,9 @@ export function createEarthbreakFissureGpuLayer(scene: Phaser.Scene, store: Eart
         program.setUniform('uPixel', 1 / Math.max(1e-4, Math.hypot(m.a, m.b)));
         program.setUniform('uAlpha', image.alpha * alpha());
         program.setUniform('uDetail', DETAIL[getGraphicsQualityProfile(scene).level]);
+        program.setUniform('uEmber', palette.ember);
+        program.setUniform('uGlow', palette.glow);
+        program.setUniform('uHot', palette.hot);
         program.applyUniforms(suite.program);
         renderer!.drawElements(context, [image.frame.source.glTexture!], suite.program, suite.vao,
           Math.max(1, store.count) * FISSURE_VERTICES, 0, this.topology);
@@ -108,7 +123,7 @@ export function createEarthbreakFissureGpuLayer(scene: Phaser.Scene, store: Eart
 
   const batch = new FissureBatch();
   class FissureSubmitter extends Phaser.Renderer.WebGL.RenderNodes.RenderNode {
-    constructor() { super(`SubmitterEarthbreakFissure${pass}`, manager); }
+    constructor() { super(`SubmitterEarthbreakFissure${pass}${palette.name}`, manager); }
     run(context: Phaser.Renderer.WebGL.DrawingContext): void {
       manager.startStandAloneRender(); this.onRunBegin(context);
       batch.run(context);
@@ -127,12 +142,12 @@ export interface EarthbreakFissureLayers { destroy(): void }
  * `now` is the presentation clock the store's times are written in.
  */
 export function createEarthbreakFissureLayers(scene: Phaser.Scene, store: EarthbreakFissureStore,
-  now: () => number): EarthbreakFissureLayers {
+  now: () => number, palette = EMBER_FISSURE_PALETTE): EarthbreakFissureLayers {
   const time = (): number => store.time(now());
   const layers = [
-    createEarthbreakFissureGpuLayer(scene, store, FissurePass.Ground, DEPTH.DECALS + 0.05, time),
+    createEarthbreakFissureGpuLayer(scene, store, FissurePass.Ground, DEPTH.DECALS + 0.05, time, undefined, palette),
     createEarthbreakFissureGpuLayer(scene, store, FissurePass.Emissive, DEPTH_LIGHTING + 0.07, time,
-      nightGlowAlpha),
+      nightGlowAlpha, palette),
   ];
   return { destroy: () => { for (const layer of layers) layer?.destroy(); layers.length = 0; } };
 }

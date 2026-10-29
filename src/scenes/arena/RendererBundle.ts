@@ -24,6 +24,7 @@ import { createCombatShaderWarmupProbes } from '../../effects/CombatShaderWarmup
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import { PounceImpactGpuRenderer } from '../../effects/PounceImpactGpuRenderer';
+import { GraveTitanImpactRenderer } from '../../effects/graveTitan/GraveTitanImpactRenderer';
 import { PounceWindupGpuRenderer } from '../../effects/PounceWindupGpuRenderer';
 import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
 import { BossPresenceRenderer } from '../../effects/BossPresenceRenderer';
@@ -155,6 +156,7 @@ export interface RendererBundle {
   movement:            MovementEffectsRenderer;
   burrowGpu:           BurrowGpuRenderer;
   pounceImpact:        PounceImpactGpuRenderer;
+  graveTitanImpact:    GraveTitanImpactRenderer;
   pounceWindup:        PounceWindupGpuRenderer;
   bossIntro:           BossIntroGraveyardRenderer;
   bossPresence:        BossPresenceRenderer;
@@ -227,6 +229,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => burrowGpu.destroy());
   const pounceImpact = new PounceImpactGpuRenderer(gpuVfx);
   cleanup.push(() => pounceImpact.destroy());
+  const graveTitanImpact = new GraveTitanImpactRenderer(scene, gpuVfx);
+  cleanup.push(() => graveTitanImpact.destroy());
   const pounceWindup = new PounceWindupGpuRenderer(gpuVfx);
   cleanup.push(() => pounceWindup.destroy());
   const earthbreakFissures = createEarthbreakFissureLayers(scene, burrowGpu.earthbreakFissures, () => gpuVfx.now());
@@ -530,6 +534,8 @@ export function* createRendererBundleSteps(
   const projectileVisualOverrides = new ProjectileVisualOverrides();
   // Scene lifetime: the thrown fire-control portal device draws with its own HQ art.
   projectileVisualOverrides.register(createFireControlPortalFlightFactory(scene));
+  // A boss's announced salvo flies as its grave lights instead of generic energy balls.
+  cleanup.push(projectileVisualOverrides.register(bossPresence.plasmaFactory));
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -553,6 +559,7 @@ export function* createRendererBundleSteps(
     movement,
     burrowGpu,
     pounceImpact,
+    graveTitanImpact,
     pounceWindup,
     bossIntro,
     bossPresence,
@@ -635,6 +642,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   });
   effectSystem.setBurrowGpuRenderer(bundle.burrowGpu);
   effectSystem.setPounceImpactRenderer(bundle.pounceImpact);
+  effectSystem.setGraveTitanImpactRenderer(bundle.graveTitanImpact);
   effectSystem.setCombatGoreGpuRenderer(bundle.combatGoreGpu);
   effectSystem.setBloodField(bundle.bloodField);
   bundle.mortarStrike.setImpactSystems(bundle.explosionGpu, bundle.lighting);
