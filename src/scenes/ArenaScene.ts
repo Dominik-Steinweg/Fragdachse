@@ -10,10 +10,8 @@ import { getRenderScale } from '../graphics/RenderResolution';
 import { createMarkerCameraTransform } from '../effects/markers/MarkerLayoutModel';
 import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades';
 import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
-import { preloadBridgeAssets } from '../effects/bridge/BridgeTextures';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
-import { DAWN_BOMBER_SHADOW_TEXTURE, DAWN_PIPELINE_ASSETS, preloadDawnDecalAssets, preloadDawnNightAssets } from '../assets/DawnAssets';
-import { REACTIVE_PROP_PIPELINE_ASSETS } from '../assets/ReactivePropAssets';
+import { DAWN_BOMBER_SHADOW_TEXTURE } from '../assets/DawnAssets';
 import { resolveScheduledAirstrikeRuns, type ScheduledAirstrikeRun } from '../systems/AirstrikeRun';
 import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
 import { preloadPowerUpAssets, assertPowerUpAssetsReady } from '../assets/PowerUpAssets';
@@ -21,12 +19,12 @@ import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/Wood
 import { preloadCharacterMeshAssets, assertCharacterMeshAssetsReady } from '../assets/CharacterMeshAssets';
 import { preloadGroundMaterials } from '../arena/GroundMaterialConfig';
 import { preloadRockBase } from '../arena/RockBaseConfig';
-import { TRACK_RAIL_TEXTURE } from '../arena/TrackGravelConfig';
 import { PersistentBaseEditorScene, type PersistentBaseEditorSaveResult, type PersistentBaseEditorStageOptions } from './PersistentBaseEditorScene';
 import { PersistentBaseEditorModel, type PersistentBaseEditorRoomBase } from '../persistentBase/PersistentBaseEditorModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import { getStoredCoopDefenseProgress, getStoredLocalOwnerId, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, getStoredPersonalPersistentBaseAreaStage, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
-import { getDeferredAssets, preloadDeferredImages } from '../assets/DeferredAssets';
+import { createDeferredAssets, DEFERRED_ASSETS, getDeferredAssets } from '../assets/DeferredAssets';
+import { LOBBY_ENEMY_TEXTURE_KEYS, preloadLobbyEnemyImages, registerLoadedFigureAnimations, roundDeferredAssets } from '../assets/RoundAssets';
 import { SHOOTING_RANGE_CONTROLS } from '../shootingRange/ShootingRangeLayout';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import { preloadAttackDroneAssets } from '../effects/AttackDroneRenderer';
@@ -44,6 +42,7 @@ const ROUND_END_OVERLAY_CALM_MS = 1500;
 /** Boot fade (250 ms) plus the lobby cards' entrance (100 + 500 ms), with a little slack. */
 const BOOT_REVEAL_SETTLE_MS = 900;
 import { composeArenaVoice } from './arena/ArenaVoiceComposition';
+import { voiceLibrary } from '../voice/VoiceLibrary';
 import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
 import { getForestModalSurfaces, preloadForestModalAssets } from '../ui/ForestModal';
@@ -60,14 +59,12 @@ import {
 } from '../arena/rocks/RockRendererSettings';
 import { ChunkedRenderSurface }  from '../arena/chunks/ChunkedRenderSurface';
 import { CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS } from '../arena/chunks/ChunkBakeScheduler';
-import { preloadCanopyAssets }   from '../arena/CanopyConfig';
 import { preloadRuntimeAtlas, assertRuntimeAtlasesReady } from '../assets/RuntimeAtlases';
 import { preloadBaseGroundingAssets } from '../arena/BaseGroundingConfig';
 import { preloadPersistentBaseGravelAssets } from '../arena/PersistentBaseGravelConfig';
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
 import { preloadRockVegetationMask } from '../arena/RockVegetationConfig';
-import { preloadTurretVisualAssets, registerTurretAnimations } from '../config/turretVisuals';
-import { preloadSpawnStructureAssets } from '../effects/spawnStructure/SpawnStructureAssets';
+import { preloadTurretVisualAssets } from '../config/turretVisuals';
 import { PlayerManager }         from '../entities/PlayerManager';
 import { InputSystem }           from '../systems/InputSystem';
 import { HostPhysicsSystem }     from '../systems/HostPhysicsSystem';
@@ -140,10 +137,8 @@ import {
 import type { GameState } from '../network/NetworkBridge';
 import { DEFAULT_LOADOUT, LOADOUT_CATALOG_ENTRIES, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
 import { preloadHeldItemAssets } from '../loadout/HeldItemVisuals';
-import { preloadTrainMaterialAssets } from '../train/TrainRenderer';
 import {
   preloadBadgerAnimationAssets,
-  registerBadgerAnimations,
 } from '../animations/BadgerAnimations';
 import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
 import { copyRoomShareUrl, rejoinCurrentRoom, restartWithNewRoom } from '../utils/roomQuality';
@@ -192,7 +187,6 @@ import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFireP
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
 import { getMapName } from '../i18n/contentPresentation';
-import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
 import { PersistentBasePreviewRenderer } from './arena/PersistentBasePreviewRenderer';
@@ -492,12 +486,12 @@ export class ArenaScene extends Phaser.Scene {
     preloadAllAudio(this.load);
     preloadForestAssets(this.load);
     preloadForestModalAssets(this.load);
-    preloadDeferredImages(this.load);
+    // Round-only content and large decoration follow behind the revealed lobby (second phase).
+    createDeferredAssets(this, [...DEFERRED_ASSETS, ...roundDeferredAssets()]);
     preloadHudFrameAssets(this.load);
     preloadRadialWheelAssets(this.load);
     preloadGroundMaterials(this.load);
     this.load.image('lobby_bg', './assets/sprites/lobby_bg.png');
-    this.load.image(TRACK_RAIL_TEXTURE.key, TRACK_RAIL_TEXTURE.path);
     this.load.spritesheet('rocks', './assets/sprites/rocks47blob.png', { frameWidth: 32, frameHeight: 32 });
     preloadRockBase(this.load);
     preloadWoodlandAssets(this);
@@ -506,49 +500,28 @@ export class ArenaScene extends Phaser.Scene {
     for (const control of SHOOTING_RANGE_CONTROLS) {
       this.load.image(`shooting-range-${control}`, `./assets/shooting-range/${control}.png`);
     }
-    this.load.spritesheet('mission_barrier', './assets/sprites/missionbarrier47blob.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('rock_mottle', './assets/sprites/rocks47blob_alt.png', { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('base',  './assets/sprites/base47blob.png',  { frameWidth: 32, frameHeight: 32 });
-    // Authored Void-Panzerung fuer Gegnerbasen (scripts/generate-hostile-base-sheet.mjs). Gleiche
-    // Frame-Indizes, daher unveraenderte Autotile-Logik.
-    this.load.spritesheet('base_hostile', './assets/sprites/base47blob_hostile.png', { frameWidth: 32, frameHeight: 32 });
     preloadRuntimeAtlas(this.load, 'decals');
     preloadBaseGroundingAssets(this.load);
     preloadRuntimeAtlas(this.load, 'groundcover');
     preloadPersistentBaseGravelAssets(this.load);
     preloadRockMossAssets(this.load);
     preloadRockVegetationMask(this.load);
-    preloadTurretVisualAssets(this.load, [...DAWN_PIPELINE_ASSETS, ...REACTIVE_PROP_PIPELINE_ASSETS]);
-    preloadSpawnStructureAssets(this.load);
-    preloadDawnDecalAssets(this.load);
-    preloadDawnNightAssets(this.load);
-    preloadCanopyAssets(this.load);
-    preloadTrainMaterialAssets(this.load);
+    preloadTurretVisualAssets(this.load);
     preloadPowerUpAssets(this);
-    this.load.image('mission_reward_pedestal', './assets/sprites/mission_reward_pedestal.png');
-    this.load.image('mission_reward_pickup', './assets/sprites/mission_reward_pickup.png');
     this.load.image('reward_plasma_turret', './assets/sprites/rewards/plasma_turret.png');
-    this.load.image('mission_carry_spawn_zone', './assets/sprites/objectives/mission_carry_spawn_zone.png');
-    this.load.image('mission_carry_delivery_zone', './assets/sprites/objectives/mission_carry_delivery_zone.png');
     // Die waffenlose Fassung der Figur. Die getragene Waffe ist seit `HeldItemVisual` ein eigenes
     // Bild; `32x32dachsweapon01.png` mit den braunen Platzhalterpixeln wird nicht mehr geladen.
     this.load.image('badger',      getPipelineAssetForTexture('badger')!.idlePath);
     this.load.atlas('dachs_death', './assets/player/death-a01-r03/death-sheet.png', './assets/player/death-a01-r03/death-atlas.json');
-    preloadBadgerAnimationAssets(this.load);
+    preloadBadgerAnimationAssets(this.load, LOBBY_ENEMY_TEXTURE_KEYS);
     preloadHeldItemAssets(this.load);
     preloadAttackDroneAssets(this.load);
     preloadBomberSquadronAssets(this.load);
     preloadWatchtowerAssets(this.load);
-    preloadBridgeAssets(this.load);
     preloadRepairDroneAssets(this.load);
-    // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
-    // ueber die Einfaerbung), deshalb wird jeder Key nur einmal in die Ladeschlange gestellt.
-    const enemyImageKeys = new Set(
-      Object.values(COOP_DEFENSE_ENEMY_CONFIGS).map((enemyConfig) => enemyConfig.imageKey),
-    );
-    for (const imageKey of enemyImageKeys) {
-      this.load.image(imageKey, getPipelineAssetForTexture(imageKey)?.idlePath ?? `./assets/sprites/enemies/${imageKey}.png`);
-    }
+    preloadLobbyEnemyImages(this.load);
 
     preloadRuntimeAtlas(this.load, 'icons');
   }
@@ -779,8 +752,7 @@ export class ArenaScene extends Phaser.Scene {
         repeat:    0,
       });
     }
-    registerBadgerAnimations(this.anims);
-    registerTurretAnimations(this.anims, DAWN_PIPELINE_ASSETS);
+    registerLoadedFigureAnimations(this);
 
     yield 'cameras-and-diagnostics';
     if (__PERFORMANCE_LAB__ && this.diagnostics) startPerformanceCapture(this.diagnostics);
@@ -812,6 +784,8 @@ export class ArenaScene extends Phaser.Scene {
     onBootSceneTeardown(this.events, () => { bridge.registerVoiceHandler(null); voice.destroy(); });
     onBootSceneTeardown(this.events, bindUiAudio(this, gameAudioSystem));
     const unsubscribeDeferredAssets = getDeferredAssets(this).subscribe(state => {
+      // Round figures' animations exist before any peer may start a round on them.
+      if (state.ready) registerLoadedFigureAnimations(this);
       bridge.setLocalDeferredAssetsReady(state.ready);
     });
     onBootSceneTeardown(this.events, unsubscribeDeferredAssets);
@@ -2591,8 +2565,10 @@ export class ArenaScene extends Phaser.Scene {
   /** The Bauhof's stage is prepared in the lobby, ahead of the Bauhof button or building. */
   private tickBaseEditorPreparation(): void {
     // The next round's terrain exists only in co-op campaign lobbies (see ArenaDeploymentTerrain).
-    // The stage is lobby waiting work: it never competes with the boot for the first reveal.
-    const eligible = !this.bootRevealPending && getStoredPersistentBaseUnlocked() && bridge.getGamePhase() === 'LOBBY';
+    // The stage is lobby waiting work: it never competes with the boot for the first reveal, and it
+    // shows the next round's own content (bridges, tracks, hostile bases) from the second phase.
+    const eligible = !this.bootRevealPending && getStoredPersistentBaseUnlocked() && bridge.getGamePhase() === 'LOBBY'
+      && getDeferredAssets(this).getState().status === 'complete';
     const identity = eligible ? this.resolveBaseEditorTerrainIdentity() : null;
     this.baseEditorPreparation.tick({ now: performance.now(), eligible, busy: this.baseEditor !== null || this.pendingBaseEditor !== null,
       key: identity === undefined ? undefined : this.baseEditorStageKey(identity),
@@ -2650,6 +2626,10 @@ export class ArenaScene extends Phaser.Scene {
       terrain = generated ? this.resolveBaseEditorTerrain() : null;
     }
     loadingTimeline.end('editor/terrain-wait', waited, 'elapsed');
+    // The map's own content arrives with the second loading phase, usually long before this.
+    const deferred = getDeferredAssets(this);
+    deferred.start();
+    await deferred.whenSettled();
     if (!this.pendingBaseEditor) return;
     const created = loadingTimeline.start();
     const stage = this.acquireBaseEditorStage(terrain ?? null, true);
@@ -3456,6 +3436,8 @@ export class ArenaScene extends Phaser.Scene {
       if (this.sys.isActive()) {
         this.lobbyOverlay.completeBootReveal();
         getOverlayAssets(this).prefetch();
+        // Optional voice packs (several MB of script) parse and validate behind the visible lobby.
+        void voiceLibrary.load();
       }
       if (__PERFORMANCE_LAB__ && this.sys.isActive()) performanceLobbyRevealed();
     });

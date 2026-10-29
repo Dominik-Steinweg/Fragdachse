@@ -3,8 +3,8 @@ import type { GameAudioSystem } from '../../audio/GameAudioSystem';
 import { VoiceRuntime } from '../../voice/VoiceRuntime';
 import { readVoicePreferences, voiceLibrary } from '../../voice/VoiceLibrary';
 
+/** Voice packs are optional content: the library loads them after the boot reveal (`voiceLibrary.load`). */
 export function composeArenaVoice(audio: GameAudioSystem): VoiceRuntime {
-  void voiceLibrary.load();
   bridge.setLocalVoiceChecksum(readVoicePreferences().checksum);
   const runtime = new VoiceRuntime({
     now: () => bridge.getSynchronizedNow(),

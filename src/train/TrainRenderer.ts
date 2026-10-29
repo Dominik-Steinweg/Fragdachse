@@ -5,17 +5,11 @@ import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { TRAIN } from './TrainConfig';
 import { TrainVfxController, type TrainVfxPorts } from '../effects/train/TrainVfxController';
+import { TRAIN_MATERIAL_ASSETS } from './TrainAssets';
 
 const TEX_TRAIN_RB54 = '__train_rb54_material_baked_v1';
 const MATERIAL_TILE_SIZE = 192;
 
-const TRAIN_MATERIAL_ASSETS = {
-  light: 'train_material_light_top',
-  red: 'train_material_red_top',
-  dark: 'train_material_dark_top',
-  scratches: 'train_overlay_scratches',
-  grime: 'train_overlay_grime',
-} as const;
 
 interface TrainMaterials {
   readonly light: CanvasImageSource;
@@ -46,12 +40,7 @@ interface MaterialBounds {
 
 type PathTracer = (ctx: CanvasRenderingContext2D) => void;
 
-/** Queues the compact runtime copies used by the procedural train bake. */
-export function preloadTrainMaterialAssets(loader: Phaser.Loader.LoaderPlugin): void {
-  for (const textureKey of Object.values(TRAIN_MATERIAL_ASSETS)) {
-    loader.image(textureKey, `./assets/sprites/train/${textureKey}.png`);
-  }
-}
+export { preloadTrainMaterialAssets } from './TrainAssets';
 
 /**
  * Client- and host-side renderer for the procedural RB 54 train.

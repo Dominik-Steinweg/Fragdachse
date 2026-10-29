@@ -96,8 +96,13 @@ export function getTurretVisualTransform(
 }
 
 export function preloadTurretVisualAssets(loader: Phaser.Loader.LoaderPlugin, additionalAssets: readonly PipelineAsset[] = []): void {
+  preloadPipelineSheetAssets(loader, [...Object.values(TURRET_VISUALS).filter(spec => spec.assetPath).map(spec => spec.asset), ...additionalAssets]);
+}
+
+/** Idle image, sheet and optional emission sheet of turret-shaped pipeline props. */
+export function preloadPipelineSheetAssets(loader: Pick<Phaser.Loader.LoaderPlugin, 'image' | 'spritesheet'>,
+  assets: readonly PipelineAsset[]): void {
   const loaded = new Set<string>();
-  const assets = [...Object.values(TURRET_VISUALS).filter(spec => spec.assetPath).map(spec => spec.asset), ...additionalAssets];
   for (const asset of assets) {
     if (loaded.has(asset.textureKey)) continue;
     loaded.add(asset.textureKey);
@@ -120,8 +125,11 @@ export function preloadTurretVisualAssets(loader: Phaser.Loader.LoaderPlugin, ad
   }
 }
 
-export function registerTurretAnimations(anims: Phaser.Animations.AnimationManager, additionalAssets: readonly PipelineAsset[] = []): void {
+/** Sheets that are not loaded yet (`isLoaded`) are skipped and registered by a later call. */
+export function registerTurretAnimations(anims: Phaser.Animations.AnimationManager, additionalAssets: readonly PipelineAsset[] = [],
+  isLoaded: (textureKey: string) => boolean = () => true): void {
   for (const asset of new Set([...Object.values(TURRET_VISUALS).map(spec => spec.asset), ...additionalAssets])) {
+    if (!isLoaded(asset.sheetTextureKey)) continue;
     for (const clip of asset.clips) {
       const key = pipelineAnimationKey(asset, clip);
       if (anims.exists(key)) continue;

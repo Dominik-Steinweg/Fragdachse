@@ -1,19 +1,5 @@
-import type * as Phaser from 'phaser';
-
-const CANOPY_ASSET_PATH = './assets/sprites/canopies';
-
-export const CANOPY_VARIANTS = [
-  { textureKey: 'bg_canopy_01', fileName: 'canopy01.png' },
-  { textureKey: 'bg_canopy_02', fileName: 'canopy02.png' },
-  { textureKey: 'bg_canopy_03', fileName: 'canopy03.png' },
-  { textureKey: 'bg_canopy_04', fileName: 'canopy04.png' },
-  { textureKey: 'bg_canopy_05', fileName: 'canopy05.png' },
-] as const;
-
-export const CANOPY_TEXTURE_KEYS = CANOPY_VARIANTS.map(({ textureKey }) => textureKey);
-
-export function preloadCanopyAssets(loader: Phaser.Loader.LoaderPlugin): void {
-  for (const { textureKey, fileName } of CANOPY_VARIANTS) {
-    loader.image(textureKey, `${CANOPY_ASSET_PATH}/${fileName}`);
-  }
-}
+/**
+ * Legacy canopy keys. No canopy texture is loaded or drawn from them any more; tree placement
+ * still draws one pick per canopy so the authored decoration keeps its random sequence.
+ */
+export const CANOPY_TEXTURE_KEYS: string[] = ['bg_canopy_01', 'bg_canopy_02', 'bg_canopy_03', 'bg_canopy_04', 'bg_canopy_05'];

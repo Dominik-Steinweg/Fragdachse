@@ -10,10 +10,15 @@ import { MATCH_RESULTS_BANNER, MATCH_RESULTS_BACKGROUND, MATCH_RESULTS_TITLE } f
 /** Only assets unnecessary for revealing the lobby belong here. Required assets fail closed. */
 export interface DeferredAsset {
   readonly key: string;
-  readonly type: 'audio' | 'image';
+  readonly type: 'audio' | 'image' | 'spritesheet';
   readonly url: string;
   readonly optional: boolean;
+  /** Spritesheet layout, exactly as the original preload declared it. */
+  readonly frameConfig?: Phaser.Types.Loader.FileTypes.ImageFrameConfig;
 }
+
+/** Files one deferred batch may queue: uploads after the reveal stay spread over frames. */
+const DEFERRED_BATCH_FILES = 16;
 
 export const DEFERRED_ASSETS: readonly DeferredAsset[] = [
   ...UPGRADE_CONTROLS.map(asset => ({ ...asset, type: 'image' as const, optional: true })),
@@ -27,13 +32,28 @@ export const DEFERRED_ASSETS: readonly DeferredAsset[] = [
   { key: 'music_arena', type: 'audio', url: getMusicAssetPath('music_arena'), optional: true },
 ];
 
-/** Large decoration uploads belong behind the boot cover. Overlay construction and item
- * images stay lazy; the deferred owner reuses this cache and retries optional load failures.
+type RecordedFile = string | { key: string; url?: string; frameConfig?: Phaser.Types.Loader.FileTypes.ImageFrameConfig };
+
+/**
+ * The files an existing preload function queues, as deferred entries: keys, paths and layouts
+ * keep a single owner. Only images and spritesheets are recorded; any other file type fails loudly.
  */
-export function preloadDeferredImages(loader: Phaser.Loader.LoaderPlugin): void {
-  for (const asset of DEFERRED_ASSETS) {
-    if (asset.type === 'image') loader.image({ key: asset.key, url: asset.url });
-  }
+export function recordDeferredFiles(preload: (loader: Phaser.Loader.LoaderPlugin) => void, optional: boolean): DeferredAsset[] {
+  const assets = new Map<string, DeferredAsset>();
+  const add = (type: 'image' | 'spritesheet', file: RecordedFile, url?: string,
+    frameConfig?: Phaser.Types.Loader.FileTypes.ImageFrameConfig): void => {
+    const entry = typeof file === 'string' ? { key: file, url: url!, frameConfig } : { ...file, url: file.url! };
+    if (!assets.has(entry.key)) assets.set(entry.key, { key: entry.key, type, url: entry.url, optional,
+      ...(type === 'spritesheet' ? { frameConfig: entry.frameConfig } : {}) });
+  };
+  const recorder = {
+    image(file: RecordedFile, url?: string) { add('image', file, url); return recorder; },
+    spritesheet(file: RecordedFile, url?: string, frameConfig?: Phaser.Types.Loader.FileTypes.ImageFrameConfig) {
+      add('spritesheet', file, url, frameConfig); return recorder;
+    },
+  };
+  preload(recorder as unknown as Phaser.Loader.LoaderPlugin);
+  return [...assets.values()];
 }
 
 export interface DeferredAssetState {
@@ -58,12 +78,24 @@ export class DeferredAssets {
   private destroyed = false;
   private stopTiming: (() => void) | null = null;
 
-  constructor(private readonly scene: Phaser.Scene, assets = DEFERRED_ASSETS) {
+  constructor(private readonly scene: Phaser.Scene, assets: readonly DeferredAsset[] = DEFERRED_ASSETS,
+    private readonly batchFiles = DEFERRED_BATCH_FILES) {
     this.entries = assets.map(asset => ({ asset, attempts: 0, done: false, failed: false,
       total: 0, loaded: 0, cached: false }));
   }
 
   getState(): DeferredAssetState { return this.state; }
+
+  /** Resolves once the phase ended, ready or with failed files; starting it stays with its owners. */
+  whenSettled(): Promise<void> {
+    return new Promise(resolve => {
+      const unsubscribe = this.subscribe(state => {
+        if (state.status !== 'complete' && state.status !== 'error') return;
+        queueMicrotask(() => unsubscribe());
+        resolve();
+      });
+    });
+  }
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
@@ -77,6 +109,7 @@ export class DeferredAssets {
     this.scene.load.on('fileprogress', this.onProgress);
     this.scene.load.on('filecomplete', this.onFileComplete);
     this.scene.load.on('complete', this.onBatchComplete);
+    loadingTimeline.begin('deferred', String(performance.now()));
     this.publish();
     this.queueBatch();
   }
@@ -86,10 +119,9 @@ export class DeferredAssets {
   }
 
   private queueBatch(): void {
-    const pending = this.entries.filter(entry => !entry.done && !entry.failed);
+    const pending = this.entries.filter(entry => !entry.done && !entry.failed).slice(0, this.batchFiles);
     if (pending.length === 0) { this.finish(); return; }
     const loader = this.scene.load;
-    loadingTimeline.begin('deferred', String(performance.now()));
     this.stopTiming?.();
     this.stopTiming = observeLoaderProcessing(loader);
     // This owner retries both download and decode failures, after Phaser releases its queue.
@@ -103,6 +135,7 @@ export class DeferredAssets {
         };
         const config = { key: entry.asset.key, url: entry.asset.url, xhrSettings };
         if (entry.asset.type === 'audio') loader.audio(config);
+        else if (entry.asset.type === 'spritesheet') loader.spritesheet({ ...config, frameConfig: entry.asset.frameConfig });
         else loader.image(config);
       }
     } finally { loader.maxRetries = previousRetries; }
@@ -175,10 +208,14 @@ export class DeferredAssets {
 }
 
 const owners = new WeakMap<Phaser.Scene, DeferredAssets>();
-export function getDeferredAssets(scene: Phaser.Scene): DeferredAssets {
+/** The Scene's preload decides the second phase's content once, before any lookup. */
+export function createDeferredAssets(scene: Phaser.Scene, assets: readonly DeferredAsset[]): DeferredAssets {
+  return owners.get(scene) ?? getDeferredAssets(scene, assets);
+}
+export function getDeferredAssets(scene: Phaser.Scene, assets: readonly DeferredAsset[] = DEFERRED_ASSETS): DeferredAssets {
   let owner = owners.get(scene);
   if (!owner) {
-    owner = new DeferredAssets(scene);
+    owner = new DeferredAssets(scene, assets);
     owners.set(scene, owner);
     const created = owner;
     scene.events.once('shutdown', () => { created.destroy(); owners.delete(scene); });

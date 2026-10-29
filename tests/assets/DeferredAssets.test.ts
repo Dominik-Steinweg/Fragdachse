@@ -19,7 +19,7 @@ describe('deferred asset manifest', () => {
   it('references unique shipped files, with explicit failure policy and valid audio containers', () => {
     expect(new Set(DEFERRED_ASSETS.map(asset => asset.key)).size).toBe(DEFERRED_ASSETS.length);
     for (const asset of DEFERRED_ASSETS) {
-      const path = resolve(__dirname, '../../public', asset.url);
+      const path = resolve(__dirname, '../../public', asset.url.split('?')[0]);
       expect(statSync(path).size).toBeGreaterThan(0);
       expect(typeof asset.optional).toBe('boolean');
       if (asset.type === 'audio' && asset.url.endsWith('.ogg')) {

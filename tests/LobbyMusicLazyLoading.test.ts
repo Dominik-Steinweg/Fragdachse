@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as Phaser from 'phaser';
 import { preloadAllAudio } from '../src/audio/AudioCatalog';
 import { GameAudioSystem } from '../src/audio/GameAudioSystem';
-import { DEFERRED_ASSETS, DeferredAssets, getDeferredAssets, preloadDeferredImages } from '../src/assets/DeferredAssets';
+import { DEFERRED_ASSETS, DeferredAssets, getDeferredAssets, recordDeferredFiles } from '../src/assets/DeferredAssets';
 import { SOUND_MUSIC_VOLUME } from '../src/config';
 
 vi.mock('phaser', () => ({ Math: { Clamp: (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)) } }));
@@ -48,15 +48,36 @@ function setup(cached: string[] = DEFERRED_ASSETS.filter(asset => asset.type ===
 afterEach(() => vi.unstubAllGlobals());
 
 describe('central second asset phase', () => {
-  it('uploads decoration images during boot and reuses them without loading music or building overlays', () => {
-    const h = setup([]);
-    preloadDeferredImages(h.loader as unknown as Phaser.Loader.LoaderPlugin);
-    const images = DEFERRED_ASSETS.filter(asset => asset.type === 'image');
-    expect(h.loader.queued.map(file => file.key)).toEqual(images.map(asset => asset.key));
-    for (const asset of images) h.complete(asset.key);
-    h.loader.queued.length = 0;
+  it('reuses already resident decoration images and loads only what is missing', () => {
+    const h = setup();
     h.assets.start();
     expect(h.loader.queued.map(file => file.key)).toEqual(['music_lobby', 'music_arena']);
+  });
+  it('queues large phases in bounded batches and records preload functions without changing their files', async () => {
+    const files = recordDeferredFiles(loader => {
+      loader.image('round-image', './assets/a.png');
+      loader.spritesheet('round-sheet', './assets/b.png', { frameWidth: 32, frameHeight: 16 });
+      loader.image({ key: 'round-config', url: './assets/c.png' });
+      loader.image('round-image', './assets/a.png');
+    }, false);
+    expect(files).toEqual([
+      { key: 'round-image', type: 'image', url: './assets/a.png', optional: false },
+      { key: 'round-sheet', type: 'spritesheet', url: './assets/b.png', optional: false, frameConfig: { frameWidth: 32, frameHeight: 16 } },
+      { key: 'round-config', type: 'image', url: './assets/c.png', optional: false },
+    ]);
+    const h = setup([]);
+    const spritesheet = vi.fn((config: { key: string; url: string }) => { h.loader.queued.push(config); return h.loader; });
+    Object.assign(h.loader, { spritesheet });
+    const owner = new DeferredAssets(h.scene, files, 2);
+    owner.start();
+    expect(h.loader.queued.map(file => file.key)).toEqual(['round-image', 'round-sheet']);
+    expect(spritesheet).toHaveBeenCalledWith(expect.objectContaining({ key: 'round-sheet', frameConfig: { frameWidth: 32, frameHeight: 16 } }));
+    h.complete('round-image'); h.complete('round-sheet'); await h.loader.finish();
+    expect(h.loader.queued.map(file => file.key)).toEqual(['round-image', 'round-sheet', 'round-config']);
+    expect(owner.getState().ready).toBe(false);
+    h.complete('round-config'); await h.loader.finish();
+    expect(owner.getState()).toMatchObject({ status: 'complete', ready: true });
+    await owner.whenSettled();
   });
   it('loads result artwork in the shared second phase and accepts its image completion events', async () => {
     const h = setup([]); h.assets.start();

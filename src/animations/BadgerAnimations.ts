@@ -46,6 +46,8 @@ export interface WalkingSheet {
   readonly staticTextureKey?: string;
   /** Emission sheet in the same layout (heat channels), loaded as `enemyEmissionTextureKey(textureKey)`. */
   readonly emissionPath?: string;
+  /** A player character rather than an enemy. */
+  readonly character: boolean;
 }
 
 /** Frame 0 ist die neutrale Ruhepose für inaktive Figuren und Sheets ohne Idle-Clip. */
@@ -73,6 +75,7 @@ const WALKING_SHEETS: readonly WalkingSheet[] = PIPELINE_ASSETS
       idle: idle ? { animationKey: pipelineAnimationKey(asset, idle), frames: idle.frames, frameRate: idle.frameRate } : undefined,
       staticTextureKey: asset.textureKey,
       emissionPath: enemyEmissionSheetPath(asset) ?? undefined,
+      character: asset.category === 'character',
     }];
   });
 
@@ -96,12 +99,31 @@ export function getWalkingSheetForStaticTexture(staticTextureKey: string): Walki
   return WALKING_SHEETS.find((sheet) => sheet.staticTextureKey === staticTextureKey) ?? null;
 }
 
-/** Queue walking sheets and the separate idle-only lobby decoration before scene creation. */
-export function preloadBadgerAnimationAssets(loader: Phaser.Loader.LoaderPlugin): void {
+/** Queue the lobby's figures and its idle-only decoration before scene creation. Sheets the
+ * lobby never shows (`lobbyStaticTextureKeys` decides) follow with the second loading phase. */
+export function preloadBadgerAnimationAssets(loader: Phaser.Loader.LoaderPlugin,
+  lobbyStaticTextureKeys?: ReadonlySet<string>): void {
   preloadLobbyStaffAssets(loader);
   preloadLobbyStructureAssets(loader);
   preloadBaseFortAssets(loader);
+  preloadWalkingSheets(loader, sheet => !lobbyStaticTextureKeys || isLobbyWalkingSheet(sheet, lobbyStaticTextureKeys));
+}
+
+/** Walking sheets of figures that appear only in rounds. */
+export function preloadRoundWalkingSheets(loader: Pick<Phaser.Loader.LoaderPlugin, 'spritesheet'>,
+  lobbyStaticTextureKeys: ReadonlySet<string>): void {
+  preloadWalkingSheets(loader, sheet => !isLobbyWalkingSheet(sheet, lobbyStaticTextureKeys));
+}
+
+/** Player characters are always shown; enemies only when the lobby itself places them. */
+function isLobbyWalkingSheet(sheet: WalkingSheet, lobbyStaticTextureKeys: ReadonlySet<string>): boolean {
+  return sheet.character || lobbyStaticTextureKeys.has(sheet.staticTextureKey ?? '');
+}
+
+function preloadWalkingSheets(loader: Pick<Phaser.Loader.LoaderPlugin, 'spritesheet'>,
+  include: (sheet: WalkingSheet) => boolean): void {
   for (const sheet of WALKING_SHEETS) {
+    if (!include(sheet)) continue;
     const layout = {
       frameWidth: sheet.frameWidth,
       frameHeight: sheet.frameHeight,
@@ -119,9 +141,12 @@ export function genericEnemyImageKeys(enemies: readonly { imageKey: string; krak
   return [...new Set(enemies.filter(e => !e.krakenBoss && !e.krakenEgg && !isPipelineBossTexture(e.imageKey)).map(e => e.imageKey))];
 }
 
-/** Register the global animations once; AnimationManager is shared by all Scenes. */
-export function registerBadgerAnimations(anims: Phaser.Animations.AnimationManager): void {
+/** Register the global animations once; AnimationManager is shared by all Scenes. Sheets that are
+ * not loaded yet (`isLoaded`) are skipped and registered by a later call. */
+export function registerBadgerAnimations(anims: Phaser.Animations.AnimationManager,
+  isLoaded: (textureKey: string) => boolean = () => true): void {
   for (const sheet of WALKING_SHEETS) {
+    if (!isLoaded(sheet.textureKey)) continue;
     for (const clip of sheet.idle ? [sheet, sheet.idle] : [sheet]) {
       if (anims.exists(clip.animationKey)) continue;
       anims.create({
