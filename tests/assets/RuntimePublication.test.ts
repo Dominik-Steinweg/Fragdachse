@@ -8,10 +8,25 @@ import publication from '../../src/assets/manifests/runtime-colours.json';
 import atlases from '../../src/assets/manifests/runtime-atlases.json';
 import runtimeFrames from '../../src/assets/manifests/runtime-atlas-frames.json';
 import { atlasSources, packAtlas } from '../../scripts/lib/runtime-atlases.mjs';
-import { publicDeploymentFiles, publicDeploymentExclusions } from '../../scripts/lib/public-deployment.mjs';
-import { isColourPng, bossAtlasImages } from '../../scripts/prepare-runtime-assets.mjs';
+import { publicDeploymentFiles, publicDeploymentExclusions, isNeverRequested } from '../../scripts/lib/public-deployment.mjs';
+import { isColourPng, bossAtlasImages, UI_ART } from '../../scripts/prepare-runtime-assets.mjs';
+import { psnr, premultipliedPixels, UI_ART_MIN_PSNR } from '../../scripts/lib/runtime-colours.mjs';
+import { readPipelineRegistry } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
+import { preloadForestAssets } from '../../src/ui/LobbyForestAssets';
+import { preloadHudFrameAssets } from '../../src/ui/HudFrameAssets';
+import { DEFERRED_ASSETS } from '../../src/assets/DeferredAssets';
+import { BADGER_CURSOR, BUTTON_CURSOR } from '../../src/ui/gameCursor';
+import { CHARACTER_MATERIAL_PAGES } from '../../src/assets/CharacterMaterialAssetManifest';
+import { CHARACTER_SHADOW_FILES } from '../../src/assets/CharacterShadowAssetManifest';
+import { CHARACTER_SHADOW_MASKS_ENABLED } from '../../src/effects/ShadowConfig';
+import { preloadedAudio } from '../AudioPreloadTestHelper';
 const hash=(data:Buffer)=>createHash('sha256').update(data).digest('hex');
 const visible=(pixels:Buffer)=>{for(let i=0;i<pixels.length;i+=4)if(pixels[i+3]===0)pixels.fill(0,i,i+3);return pixels;};
+type Publication={file:string;source:string;category:string;sourceBytes:number;downloadBytes:number;sourceSha256:string;sha256:string;
+ visiblePixelSha256?:string;pixelSha256?:string;psnr?:number};
+const published=publication.assets as Record<string,Publication>;
+const category=(name:string)=>Object.values(published).filter(a=>a.category===name);
+const decode=(bytes:Buffer)=>sharp(bytes).ensureAlpha().raw().toBuffer({resolveWithObject:true});
 
 it('retains packed elevation and linear emission as data PNGs', () => {
  for (const pass of ['elevation', 'emission', 'normal', 'height']) {
@@ -62,9 +77,12 @@ it('packs exactly the active registries with untrimmed frames, lossless PMA pixe
 
 it('deploys replacement atlases and colour outputs while retaining their source files for authoring', async () => {
  const files=new Set(await publicDeploymentFiles()), excluded=await publicDeploymentExclusions();
- for(const asset of Object.values(publication.assets)) {
+ const atlasInputs=new Set(Object.values(atlases.groups).flatMap(group=>group.sources.map(source=>source.source)));
+ for(const asset of Object.values(published)) {
   const preserved=/^assets\/sprites\/pipeline-v2\/(badger\/passes|powerups)\//.test(asset.source);
   expect(files.has(asset.source)).toBe(preserved);
+  if(!atlasInputs.has(asset.source))expect(files.has(asset.file),asset.file).toBe(true);
+  expect(publication.contracts[asset.category as keyof typeof publication.contracts],asset.source).toBeTruthy();
  }
  for(const group of Object.values(atlases.groups)) {
   for(const source of group.sources) {
@@ -75,8 +93,8 @@ it('deploys replacement atlases and colour outputs while retaining their source 
  }
  for(const file of excluded) expect(file).not.toMatch(/badger\/passes|pipeline-v2\/powerups/);
 },30000);
-it('publishes exact alpha and visible RGB, unchanged dimensions, valid content hashes and smaller downloads',async()=>{
- for(const a of Object.values(publication.assets)){
+it('publishes colour with exact alpha and visible RGB, unchanged dimensions, valid content hashes and smaller downloads',async()=>{
+ for(const a of category('colour')){
   const source=await readFile('public/'+a.source),runtime=await readFile('public/'+a.file);
   expect(hash(source)).toBe(a.sourceSha256);expect(hash(runtime)).toBe(a.sha256);expect(runtime.length).toBe(a.downloadBytes);
   expect(runtime.length).toBeLessThan(source.length);
@@ -87,6 +105,59 @@ it('publishes exact alpha and visible RGB, unchanged dimensions, valid content h
   expect(hash(after.data)).toBe(a.visiblePixelSha256);
   expect((await sharp(source).metadata()).icc).toBeUndefined();
   expect(runtimeAssetUrl('./'+a.source)).toBe('./'+a.file+'?v='+a.sha256);
+ }
+},30000);
+it('publishes data passes bit-identical in every channel, including RGB under alpha 0',async()=>{
+ const data=category('data');expect(data.length).toBeGreaterThan(0);
+ for(const a of data){
+  const source=await readFile('public/'+a.source),runtime=await readFile('public/'+a.file);
+  expect(hash(source)).toBe(a.sourceSha256);expect(hash(runtime)).toBe(a.sha256);expect(runtime.length).toBeLessThan(source.length);
+  const before=await decode(source),after=await decode(runtime);
+  expect([after.info.width,after.info.height]).toEqual([before.info.width,before.info.height]);
+  expect(after.data.equals(before.data),a.file).toBe(true);expect(hash(after.data)).toBe(a.pixelSha256);
+  expect(runtimeAssetUrl('./'+a.source)).toBe('./'+a.file+'?v='+a.sha256);
+ }
+ // Residency loaders that verify the bytes they fetch keep their exact files.
+ const bound=bossAtlasImages((await readPipelineRegistry()).assets);
+ for(const a of Object.values(published)){expect(bound.has(a.source),a.source).toBe(false);expect(a.source).not.toMatch(/\.bin$/);}
+},60000);
+it('publishes only the listed UI illustrations lossy, with exact alpha and premultiplied PSNR at or above the floor',async()=>{
+ const art=category('ui-art');
+ expect(art.map(a=>'public/'+a.source).sort()).toEqual([...UI_ART].sort());
+ for(const a of art){
+  const source=await readFile('public/'+a.source),runtime=await readFile('public/'+a.file);
+  expect(hash(source)).toBe(a.sourceSha256);expect(hash(runtime)).toBe(a.sha256);expect(runtime.length).toBeLessThan(source.length);
+  const before=await decode(source),after=await decode(runtime);
+  expect([after.info.width,after.info.height]).toEqual([before.info.width,before.info.height]);
+  for(let i=3;i<before.data.length;i+=4)if(before.data[i]!==after.data[i])expect.fail(`${a.file}: alpha changed at ${i}`);
+  const quality=psnr(premultipliedPixels(before.data),premultipliedPixels(after.data));
+  expect(quality,a.file).toBeGreaterThanOrEqual(UI_ART_MIN_PSNR);expect(quality).toBeCloseTo(a.psnr!,1);
+  expect(runtimeAssetUrl('./'+a.source)).toBe('./'+a.file+'?v='+a.sha256);
+ }
+},60000);
+it('serves byte-identical sounds from one canonical URL',async()=>{
+ const aliases=category('alias');expect(aliases.length).toBeGreaterThan(0);
+ for(const a of aliases){
+  expect((await readFile('public/'+a.source)).equals(await readFile('public/'+a.file)),a.source).toBe(true);
+  expect(published[a.file],a.file).toBeUndefined();
+  expect(runtimeAssetUrl('./'+a.source)).toBe(runtimeAssetUrl('./'+a.file));
+ }
+});
+it('deploys every file the UI, character and audio loaders request, and none of the never-requested sources',async()=>{
+ const files=new Set(await publicDeploymentFiles()),requested=new Set<string>();
+ const add=(url:string)=>requested.add(url.replace(/^\.?\//,'').split('?')[0]);
+ const loader=(width:number)=>({scene:{scale:{width}},
+  image:(key:string|{url:string},url?:string)=>add(typeof key==='string'?url!:key.url),atlas:(_key:string,url:string)=>add(url)});
+ for(const width of [1920,3840]){preloadForestAssets(loader(width) as never);preloadHudFrameAssets(loader(width) as never);}
+ for(const asset of DEFERRED_ASSETS)add(asset.url);
+ for(const cursor of [BADGER_CURSOR,BUTTON_CURSOR])add(/url\("([^"]+)"\)/.exec(cursor)![1]);
+ for(const page of CHARACTER_MATERIAL_PAGES)add(page.url);
+ if(CHARACTER_SHADOW_MASKS_ENABLED)for(const file of CHARACTER_SHADOW_FILES)add(file.url);
+ for(const path of preloadedAudio().values())add(path);
+ expect(requested.size).toBeGreaterThan(100);
+ for(const path of requested){
+  expect(isNeverRequested(path),path).toBe(false);
+  expect(files.has(published[path]?.file??path),path).toBe(true);
  }
 },30000);
 it('versions actual file contents, including unconverted data and audio, without stale cache URLs',async()=>{

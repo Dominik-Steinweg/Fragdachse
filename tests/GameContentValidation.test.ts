@@ -3,7 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { validateResolvedUtility } from '../src/loadout/content/LoadoutSchemas';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../src/loadout/CoopDefenseLoadoutModifiers';
-import { AUDIO_ASSETS, preloadAllAudio } from '../src/audio/AudioCatalog';
+import { AUDIO_ASSETS } from '../src/audio/AudioCatalog';
+import { preloadedAudio } from './AudioPreloadTestHelper';
 import {
   CONFIG_STAT_DESCRIPTORS,
   getLoadoutModifierTargetContracts,
@@ -69,8 +70,7 @@ describe('game-wide loadout content validation', () => {
   });
 
   it('has an audio-catalog entry and file for every referenced shot sound', () => {
-    const shippedKeys = new Set<string>();
-    preloadAllAudio({ audio: (key: string) => shippedKeys.add(key) } as never);
+    const shippedKeys = new Set(preloadedAudio().keys());
     const configs = [
       ...Object.values(WEAPON_CONFIGS),
       ...Object.values(UTILITY_CONFIGS),
@@ -93,8 +93,7 @@ describe('game-wide loadout content validation', () => {
   });
 
   it('keeps every shipped audio file present with a recognized container header', () => {
-    const shipped = new Map<string, string>();
-    preloadAllAudio({ audio: (key: string, path: string) => shipped.set(key, path) } as never);
+    const shipped = preloadedAudio();
     for (const [key, assetPath] of shipped) {
       const filePath = resolve('public', assetPath.replace(/^\.\//, ''));
       expect(existsSync(filePath), `${key}:${assetPath}`).toBe(true);

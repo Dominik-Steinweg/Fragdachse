@@ -9,7 +9,8 @@ vi.mock('phaser', () => ({ Math: {
 } }));
 vi.mock('../src/assets/DeferredAssets', () => ({ getDeferredAssets: () => ({ subscribe: () => () => {} }) }));
 import { GameAudioSystem } from '../src/audio/GameAudioSystem';
-import { getSoundVolume, preloadAllAudio, AUDIO_ASSETS } from '../src/audio/AudioCatalog';
+import { getSoundVolume, AUDIO_ASSETS } from '../src/audio/AudioCatalog';
+import { preloadedAudio } from './AudioPreloadTestHelper';
 
 function fixture() {
   const available = new Set<string>();
@@ -131,10 +132,9 @@ describe('GameAudioSystem one-shot feedback', () => {
   });
 
   it('loads only published catalog assets and silently drops missing or locked feedback without backlog', () => {
-    const load = vi.fn();
-    preloadAllAudio({ audio: load } as never);
+    const playable = preloadedAudio();
     for (const [key, path] of Object.entries(AUDIO_ASSETS)) {
-      if (!existsSync(`public/${path}`)) expect(load).not.toHaveBeenCalledWith(key, path);
+      if (!existsSync(`public/${path}`)) expect(playable.has(key), key).toBe(false);
     }
     const { audio, available, sound } = fixture();
     audio.playLocalSound('sfx_round_victory');
