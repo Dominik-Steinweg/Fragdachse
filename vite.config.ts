@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { runtimeAssetCache } from './scripts/asset-cache.ts';
+import { serviceWorkerBuild } from './scripts/service-worker-build.ts';
 import { publicDeployment } from './scripts/lib/public-deployment.mjs';
 import gameVersion from './game-version.json' with { type: 'json' };
 import { devScenarioArtifacts } from './scripts/dev-scenario-artifacts.ts';
@@ -15,13 +16,15 @@ import { cpus, platform, release, totalmem } from 'node:os';
 const WATCHED_DIRECTORIES = new Set(['src', 'public', 'scripts']);
 const watchRoot = resolve('.');
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const buildTimestamp = new Date().toISOString();
   const navigationBuild = mode === 'navigation-lab';
   const fogBuild = mode === 'fog-lab';
   const groundBuild = mode === 'ground-lab';
   const deathBuild = mode === 'death-lab';
   const performanceBuild = mode === 'performance-lab';
+  // Builds that run from the shipped file set (scripts/lib/public-deployment.mjs) embed only its URLs.
+  const deployedAssetsOnly = command === 'build' && (mode === 'production' || performanceBuild);
   const sourceHash = createHash('sha256');
   if (navigationBuild) {
     const visit = (directory: string): void => {
@@ -38,7 +41,7 @@ export default defineConfig(({ mode }) => {
 
   return {
   base: navigationBuild ? `/build/${mode}/` : './',
-  plugins: [runtimeAssetCache(), publicDeployment(), devScenarioArtifacts(), {
+  plugins: [runtimeAssetCache({ deployedOnly: deployedAssetsOnly }), publicDeployment(), serviceWorkerBuild(), devScenarioArtifacts(), {
     name: 'local-navigation-report',
     configureServer(server) {
       server.middlewares.use('/__navigation-environment', (_request, response) => {
@@ -118,7 +121,7 @@ export default defineConfig(({ mode }) => {
   // Rollups Default für Worker ist IIFE und würde dessen Imports brechen.
   worker: {
     format: 'es' as const,
-    plugins: () => [runtimeAssetCache()],
+    plugins: () => [runtimeAssetCache({ deployedOnly: deployedAssetsOnly })],
   },
   build: {
     copyPublicDir: false,

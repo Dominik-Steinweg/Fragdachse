@@ -9,6 +9,7 @@ import atlases from '../../src/assets/manifests/runtime-atlases.json';
 import runtimeFrames from '../../src/assets/manifests/runtime-atlas-frames.json';
 import { atlasSources, packAtlas } from '../../scripts/lib/runtime-atlases.mjs';
 import { publicDeploymentFiles, publicDeploymentExclusions } from '../../scripts/lib/public-deployment.mjs';
+import { deployedRuntimeAssetUrls } from '../../scripts/asset-cache';
 import { isColourPng, bossAtlasImages } from '../../scripts/prepare-runtime-assets.mjs';
 const hash=(data:Buffer)=>createHash('sha256').update(data).digest('hex');
 const visible=(pixels:Buffer)=>{for(let i=0;i<pixels.length;i+=4)if(pixels[i+3]===0)pixels.fill(0,i,i+3);return pixels;};
@@ -74,6 +75,11 @@ it('deploys replacement atlases and colour outputs while retaining their source 
   for(const page of group.pages) {expect(files.has(page.image)).toBe(true);expect(files.has(page.data)).toBe(true);}
  }
  for(const file of excluded) expect(file).not.toMatch(/badger\/passes|pipeline-v2\/powerups/);
+},30000);
+it('embeds exactly the shipped targets in deployable builds and keeps every shipped asset addressable',async()=>{
+ const shipped=new Set(await publicDeploymentFiles()), deployed=await deployedRuntimeAssetUrls();
+ for(const [key,url] of Object.entries(urls)) expect(deployed[key],key).toBe(shipped.has(url.split('?v=')[0])?url:undefined);
+ for(const file of shipped) if(file.startsWith('assets/')) expect(deployed[file],file).toBeDefined();
 },30000);
 it('publishes exact alpha and visible RGB, unchanged dimensions, valid content hashes and smaller downloads',async()=>{
  for(const a of Object.values(publication.assets)){
