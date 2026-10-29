@@ -509,7 +509,7 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   /** RPC-Handler registrieren – Effekte werden bei ALLEN Clients (inkl. Host) abgespielt. */
-  setup(onLocalConfirmedHit?: () => void): void {
+  setup(onLocalConfirmedHit?: (hit: { totalDamage: number; isKill: boolean; isCritical?: boolean }) => void): void {
     this.ensureTextures();
 
     this.bridge.registerEffectHandler((effect: SyncedCombatEffect) => {
@@ -519,7 +519,7 @@ export class EffectSystem implements EnemyVisualSink {
       }
       if (effect.type === 'hit') {
         if (effect.shooterId === this.bridge.getLocalPlayerId()) {
-          onLocalConfirmedHit?.();
+          onLocalConfirmedHit?.(effect);
           this.audioSystem?.queueHitFeedback(effect.totalDamage);
         }
         this.playHitEffect(effect);

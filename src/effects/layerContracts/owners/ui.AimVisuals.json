@@ -1,26 +1,14 @@
 {
   "owner": "ui/AimVisuals.ts",
   "source": {
-    "blends": [],
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
     "cameras": [],
     "sites": [
       {
         "key": "module/this.chargeGfx/setDepth/0",
         "expression": "DEPTH_AIM",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "setHighVisibility/image/setDepth/0",
-        "expression": "enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "setHighVisibility/this.chargeGfx/setDepth/0",
-        "expression": "enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM",
         "blends": [
           "NORMAL"
         ]
@@ -44,66 +32,18 @@
       "lighting": "emissive",
       "camera": "world",
       "depths": [
-        19.6
+        99
       ],
       "blends": [
         "NORMAL"
       ],
       "profiles": [
-        "E"
+        "H"
       ],
       "role": "ui",
       "source": {
         "selector": "module/this.chargeGfx/setDepth/0",
         "expression": "DEPTH_AIM"
-      }
-    },
-    {
-      "id": "cpu:ui/AimVisuals.ts:setHighVisibility/image/setDepth/0",
-      "owner": "ui/AimVisuals.ts",
-      "component": "setHighVisibility/image/setDepth/0",
-      "height": "body",
-      "lighting": "emissive",
-      "camera": "world",
-      "depths": [
-        19.6,
-        99
-      ],
-      "blends": [
-        "NORMAL"
-      ],
-      "profiles": [
-        "E",
-        "H"
-      ],
-      "role": "ui",
-      "source": {
-        "selector": "setHighVisibility/image/setDepth/0",
-        "expression": "enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM"
-      }
-    },
-    {
-      "id": "cpu:ui/AimVisuals.ts:setHighVisibility/this.chargeGfx/setDepth/0",
-      "owner": "ui/AimVisuals.ts",
-      "component": "setHighVisibility/this.chargeGfx/setDepth/0",
-      "height": "body",
-      "lighting": "emissive",
-      "camera": "world",
-      "depths": [
-        19.6,
-        99
-      ],
-      "blends": [
-        "NORMAL"
-      ],
-      "profiles": [
-        "E",
-        "H"
-      ],
-      "role": "ui",
-      "source": {
-        "selector": "setHighVisibility/this.chargeGfx/setDepth/0",
-        "expression": "enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM"
       }
     },
     {
@@ -114,13 +54,13 @@
       "lighting": "emissive",
       "camera": "world",
       "depths": [
-        19.6
+        99
       ],
       "blends": [
         "NORMAL"
       ],
       "profiles": [
-        "E"
+        "H"
       ],
       "role": "ui",
       "source": {

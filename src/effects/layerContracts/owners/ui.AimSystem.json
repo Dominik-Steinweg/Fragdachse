@@ -23,13 +23,13 @@
       "lighting": "emissive",
       "camera": "world",
       "depths": [
-        19.6
+        99
       ],
       "blends": [
         "NORMAL"
       ],
       "profiles": [
-        "E"
+        "H"
       ],
       "role": "ui",
       "source": {

@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { COLORS, DEPTH_AIM, DEPTH_AIM_HIGH_VISIBILITY } from '../config';
+import { COLORS, DEPTH_AIM } from '../config';
 import { ensureCanvasTexture, fillRadialGradientTexture } from '../effects/EffectUtils';
 
 export type SlotPalette = {
@@ -17,74 +17,83 @@ const CROSS_SHADOW_COLOR = COLORS.GREY_10;
 // das Strecken auf beliebige Strahllaengen laesst die Ausblendung deshalb bei 10 % und 90 %.
 const STRIP_W            = 256;
 const BEAM_STRIP_H       = 8;
-const BEAM_SHADOW_W      = 4;
-const BEAM_GLOW_W        = 2;
+const BEAM_SHADOW_H      = 10;
 const BEAM_CORE_W        = 1;
-const BEAM_SHADOW_ALPHA  = 0.10;
-const BEAM_CORE_ALPHA    = 0.34;
+const BEAM_GLOW_W        = 2;
 const BEAM_START_FADE_AT = 0.10;
 const BEAM_END_FADE_AT   = 0.90;
+/** Weicher Kontrastsaum: haelt die farbige Linie auf hellem Boden lesbar, ohne harte Kontur. */
+const BEAM_SHADOW_ALPHA  = 0.30;
+const BEAM_CORE_ALPHA    = 0.60;
+const BEAM_CORE_ALPHA_MIN = 0.46;
+
+// ── Schusspuls ─────────────────────────────────────────────────────────────
+const PULSE_TEX_SIZE     = 32;
+const PULSE_WORLD_LEN    = 30;
+const PULSE_WORLD_H      = 7;
 
 // ── Reichweiten-Indikator ──────────────────────────────────────────────────
 const RANGE_BAR_HALF_LEN = 9;
 const RANGE_TICK_H       = 10;
 
-// ── Ring-Atlanten ──────────────────────────────────────────────────────────
+// ── Fadenkreuz-Ring ────────────────────────────────────────────────────────
 // Frames werden nach Radius indiziert und mit Skalierung 1 gezeichnet. Die Strichstaerke bleibt
 // dadurch ueber den gesamten Spread-Bereich konstant; ein einzelner skalierter Ring wuerde sie
-// vervierfachen.
-const RING_SHADOW_W = 5;
-const RING_GLOW_W   = 3;
-const RING_R_MIN    = 5;    // Fadenkreuz-Minimum: 5 * 1.1 = 5.5
-const RING_R_MAX    = 36;   // AWP-Ladering-Maximum: 22 + AIM_CHARGE_RING_OFFSET_BOLD
+// vervierfachen. Bewusst ohne Achsen-Ticks: Striche gehoeren allein dem Hitmarker.
+const RING_R_MIN    = 5;
 const RING_R_STEP   = 0.5;
-const RING_FRAMES   = Math.round((RING_R_MAX - RING_R_MIN) / RING_R_STEP) + 1;
-// Groesste gezeichnete Ausdehnung ist r + 1 + (RING_GLOW_W + 4) / 2 = 40.5. Die Zelle muss gerade
-// sein, damit ein ganzzahliges Zentrum mit Origin 0.5 auf ganzen Pixeln landet.
-const RING_CELL     = 82;
 const RING_COLS     = 8;
-const RING_ROWS     = Math.ceil(RING_FRAMES / RING_COLS);
+/** Spread-Maximum 20 * 1.1 = 22 plus Federueberschwinger und Schuss-Kick. */
+export const AIM_CROSS_RING_R_MAX = 26;
+const CROSS_FRAMES  = Math.round((AIM_CROSS_RING_R_MAX - RING_R_MIN) / RING_R_STEP) + 1;
+const RING_GLOW_W   = 3;
+const HALO_MAX_W    = 9;
+// Groesste Ausdehnung: r + HALO_MAX_W / 2 = 30.5. Die Zelle muss gerade sein, damit ein
+// ganzzahliges Zentrum mit Origin 0.5 auf ganzen Pixeln landet.
+const CROSS_CELL    = 64;
+const CROSS_ROWS    = Math.ceil(CROSS_FRAMES / RING_COLS);
 
-const RING_FRAME_NAMES: readonly string[] = Array.from(
-  { length: RING_FRAMES },
-  (_, index) => String(RING_R_MIN + index * RING_R_STEP),
-);
-
-function ringFrameIndex(radius: number): number {
-  return Phaser.Math.Clamp(Math.round((radius - RING_R_MIN) / RING_R_STEP), 0, RING_FRAMES - 1);
-}
-
-// ── Deutliche Zielhilfe ────────────────────────────────────────────────────
-// Opt-in-Variante fuer Spieler, die das Fadenkreuz im Gefecht verlieren. Jede Form traegt eine
-// dunkle Kontur in derselben Textur: Der multiplikative Tint faerbt nur den weissen Kern, die
-// Kontur bleibt dunkel und haelt den Kontrast auf hellem wie dunklem Boden.
-/** Abstand des AWP-Laderings zum Spread-Ring, damit er ausserhalb der Ticks liegt. */
-export const AIM_CHARGE_RING_OFFSET      = 8;
-export const AIM_CHARGE_RING_OFFSET_BOLD = 14;
-
-const BOLD_RING_R_MAX     = 22.5; // Spread-Maximum: 20 * 1.1 = 22
-const BOLD_RING_FRAMES    = Math.round((BOLD_RING_R_MAX - RING_R_MIN) / RING_R_STEP) + 1;
-const BOLD_RING_CORE_W    = 2;
-const BOLD_OUTLINE_W      = 4.5;
-const BOLD_TICK_INNER     = 3;    // Abstand der Ticks zum Ring
-const BOLD_TICK_LEN       = 6;
-// Groesste Ausdehnung: r + BOLD_TICK_INNER + BOLD_TICK_LEN + BOLD_OUTLINE_W / 2 = 33.75.
-const BOLD_RING_CELL      = 72;
-const BOLD_RING_ROWS      = Math.ceil(BOLD_RING_FRAMES / RING_COLS);
-const BOLD_BEAM_STRIP_H   = 12;
-/** Luecke zwischen Beam-Ende und Spread-Ring, damit die Linie nicht in das Fadenkreuz laeuft. */
-export const AIM_BOLD_BEAM_RING_GAP = 5;
-
-function boldRingFrameIndex(radius: number): number {
-  return Phaser.Math.Clamp(Math.round((radius - RING_R_MIN) / RING_R_STEP), 0, BOLD_RING_FRAMES - 1);
-}
+// ── AWP-Ladering ───────────────────────────────────────────────────────────
+const CHARGE_SHADOW_W = 5;
+const CHARGE_R_MAX    = 34;   // AIM_CROSS_RING_R_MAX + AIM_CHARGE_RING_OFFSET
+const CHARGE_FRAMES   = Math.round((CHARGE_R_MAX - RING_R_MIN) / RING_R_STEP) + 1;
+// Groesste gezeichnete Ausdehnung: r + CHARGE_SHADOW_W / 2 = 38.5.
+const CHARGE_CELL     = 82;
+const CHARGE_ROWS     = Math.ceil(CHARGE_FRAMES / RING_COLS);
+/** Abstand des AWP-Laderings zum Spread-Ring, damit sich beide Glowbaender nicht beruehren. */
+export const AIM_CHARGE_RING_OFFSET = 8;
 
 // ── Mittelpunkt ────────────────────────────────────────────────────────────
-// Der komplette vierstufige Glowstapel steckt als Luminanz im Radialverlauf, 2x uebersampelt.
 const CENTER_DOT_R     = 1.5;
 const DOT_TEX_SIZE     = 32;
 const DOT_TEX_RADIUS   = DOT_TEX_SIZE / 2;
 const DOT_WORLD_RADIUS = 8;
+
+// ── Hitmarker ──────────────────────────────────────────────────────────────
+// Vier diagonale Bogensegmente, konzentrisch zum Ring und mit demselben Glowprofil und Saum: Ein
+// Treffer liest als Aufbluehen des Fadenkreuzes, nicht als fremdes Symbol. Atlas nach Radius wie
+// beim Ring, damit die Strichstaerke bei jedem Abstand gleich bleibt.
+/** Ringradius-Maximum + Abstand + Pop-Ausdehnung. */
+const HIT_R_MAX     = 36;
+const HIT_FRAMES    = Math.round((HIT_R_MAX - RING_R_MIN) / RING_R_STEP) + 1;
+// Groesste Ausdehnung: r + HALO_MAX_W / 2 = 40.5.
+const HIT_CELL      = 82;
+const HIT_ROWS      = Math.ceil(HIT_FRAMES / RING_COLS);
+const HIT_DIAGONALS: readonly number[] = [-0.75, -0.25, 0.25, 0.75].map((turn) => turn * Math.PI);
+
+/** Bogenlaenge waechst leicht mit dem Radius, damit Segmente weder zu Punkten noch zu Halbkreisen werden. */
+function hitArcHalfAngle(radius: number): number {
+  return Math.min(0.34, (2.2 + radius * 0.12) / radius);
+}
+
+const RING_FRAME_NAMES: readonly string[] = Array.from(
+  { length: Math.max(CROSS_FRAMES, CHARGE_FRAMES, HIT_FRAMES) },
+  (_, index) => String(RING_R_MIN + index * RING_R_STEP),
+);
+
+function ringFrameIndex(radius: number, frames: number): number {
+  return Phaser.Math.Clamp(Math.round((radius - RING_R_MIN) / RING_R_STEP), 0, frames - 1);
+}
 
 // ── Ziel-Reticle ───────────────────────────────────────────────────────────
 const RETICLE_TEX_SIZE = 100;
@@ -103,22 +112,24 @@ const GAUSS_EMIT_TEX_RADIUS = GAUSS_EMIT_TEX_SIZE / 2;
  * Schluessel, damit eine Konstantenaenderung keinen veralteten Cache trifft.
  */
 const TEX = {
-  beamShadow: `__aim/beam-shadow/${STRIP_W}x${BEAM_STRIP_H}/w${BEAM_SHADOW_W}/f${BEAM_START_FADE_AT}-${BEAM_END_FADE_AT}`,
+  beamShadow: `__aim/beam-shadow-soft/${STRIP_W}x${BEAM_STRIP_H}/f${BEAM_START_FADE_AT}-${BEAM_END_FADE_AT}`,
   beamEnergy: `__aim/beam-energy/${STRIP_W}x${BEAM_STRIP_H}/w${BEAM_CORE_W}-${BEAM_GLOW_W}/f${BEAM_START_FADE_AT}-${BEAM_END_FADE_AT}`,
-  ringPlain:  `__aim/ring-plain/${RING_CELL}/${RING_R_MIN}-${RING_R_MAX}-${RING_R_STEP}/w${RING_SHADOW_W}`,
-  ringGlow:   `__aim/ring-glow/${RING_CELL}/${RING_R_MIN}-${RING_R_MAX}-${RING_R_STEP}/w${RING_GLOW_W}`,
+  pulse:      `__aim/shot-pulse/${PULSE_TEX_SIZE}`,
+  crossHalo:  `__aim/cross-halo/${CROSS_CELL}/${RING_R_MIN}-${AIM_CROSS_RING_R_MAX}-${RING_R_STEP}/h${HALO_MAX_W}`,
+  crossGlow:  `__aim/cross-glow/${CROSS_CELL}/${RING_R_MIN}-${AIM_CROSS_RING_R_MAX}-${RING_R_STEP}/w${RING_GLOW_W}`,
+  chargeRing: `__aim/charge-ring/${CHARGE_CELL}/${RING_R_MIN}-${CHARGE_R_MAX}-${RING_R_STEP}/w${CHARGE_SHADOW_W}`,
+  dot:        `__aim/cross-dot/${DOT_TEX_SIZE}/v2`,
+  hitHalo:    `__aim/hit-arcs-halo/${HIT_CELL}/${RING_R_MIN}-${HIT_R_MAX}-${RING_R_STEP}/h${HALO_MAX_W}`,
+  hitGlow:    `__aim/hit-arcs-glow/${HIT_CELL}/${RING_R_MIN}-${HIT_R_MAX}-${RING_R_STEP}/w${RING_GLOW_W}`,
   reticle:    `__aim/reticle-targeting/${RETICLE_TEX_SIZE}/26-12-34-12-9`,
   gaussWide:  `__aim/gauss-wide/${STRIP_W}x${GAUSS_WIDE_TEX_H}`,
   gaussCore:  `__aim/gauss-core/${STRIP_W}x${GAUSS_CORE_TEX_H}`,
   gaussEmit:  `__aim/gauss-emitter/${GAUSS_EMIT_TEX_SIZE}`,
-  boldBeam:   `__aim/bold-beam/${STRIP_W}x${BOLD_BEAM_STRIP_H}/f${BEAM_START_FADE_AT}-${BEAM_END_FADE_AT}`,
-  boldRing:   `__aim/bold-ring/${BOLD_RING_CELL}/${RING_R_MIN}-${BOLD_RING_R_MAX}-${RING_R_STEP}/w${BOLD_RING_CORE_W}-${BOLD_OUTLINE_W}/t${BOLD_TICK_INNER}-${BOLD_TICK_LEN}`,
-  boldDot:    `__aim/bold-dot/${DOT_TEX_SIZE}`,
 } as const;
 
 /**
- * Weicher Glowpunkt. Wird vom Fadenkreuz und von den Sparks des Statusrings geteilt und deshalb
- * eigenstaendig exportiert statt in `AimVisuals` gekapselt.
+ * Weicher Glowpunkt. Wird von den Sparks des Statusrings geteilt und deshalb eigenstaendig
+ * exportiert statt in `AimVisuals` gekapselt.
  */
 export const AIM_GLOW_DOT_TEXTURE = `__aim/center-dot/${DOT_TEX_SIZE}/r${CENTER_DOT_R}`;
 
@@ -142,8 +153,7 @@ export function ensureAimGlowDotTexture(scene: Phaser.Scene): void {
 type GradientStop = readonly [offset: number, css: string];
 
 /**
- * Laengsrampe des Beams: dieselbe Smoothstep-Ausblendung wie zuvor, aber stufenlos abgetastet
- * statt in drei Segmentlaeufe mit harten Alphakanten zusammengefasst.
+ * Laengsrampe des Beams: Smoothstep-Ausblendung an beiden Enden, stufenlos abgetastet.
  */
 const LENGTH_RAMP_STOPS: readonly (readonly [number, number])[] = (() => {
   const samples = [0, 0.25, 0.5, 0.75, 1];
@@ -207,13 +217,15 @@ function strokeRing(
   ctx.stroke();
 }
 
+const AXES: readonly (readonly [number, number])[] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
 function bakeRingAtlas(
   textures: Phaser.Textures.TextureManager,
   key: string,
+  cell: number,
+  frames: number,
+  rows: number,
   drawRing: (ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number) => void,
-  cell = RING_CELL,
-  frames = RING_FRAMES,
-  rows = RING_ROWS,
 ): void {
   ensureCanvasTexture(textures, key, RING_COLS * cell, rows * cell, (ctx, canvas) => {
     ctx.strokeStyle = '#ffffff';
@@ -229,6 +241,45 @@ function bakeRingAtlas(
   });
 }
 
+/** Ring-Frame-Cache eines Images: `setFrame` nur bei Wechsel. */
+class RingImage {
+  private frame = -1;
+
+  constructor(readonly image: Phaser.GameObjects.Image, private readonly frames: number) {}
+
+  setRadius(radius: number): Phaser.GameObjects.Image {
+    const frame = ringFrameIndex(radius, this.frames);
+    if (frame !== this.frame) {
+      this.image.setFrame(RING_FRAME_NAMES[frame]);
+      this.frame = frame;
+    }
+    return this.image;
+  }
+}
+
+/** Darstellungsparameter des Fadenkreuzes eines Frames; Animation rechnet `AimSystem`. */
+export interface CrosshairLook {
+  ringRadius: number;
+  ringColor: number;
+  ringAlpha: number;
+  /** Additiver Glow: Farbe und Deckkraft relativ zu `ringAlpha`. */
+  bloomColor: number;
+  bloom: number;
+  dotColor: number;
+  dotScale: number;
+  /** Gesamtdeckkraft: Einblenden und Ausser-Reichweite-Dimmung. */
+  opacity: number;
+}
+
+export interface HitMarkerLook {
+  color: number;
+  /** Radius der Bogensegmente. */
+  radius: number;
+  alpha: number;
+  /** Additiver Glow relativ zu `alpha`. */
+  bloom: number;
+}
+
 /**
  * Darstellung der Zielhilfe. Alle Visuals entstehen einmalig und werden pro Frame nur noch ueber
  * Transform, Frame, Tint und Alpha aktualisiert – kein Immediate-Mode-Neuaufbau.
@@ -236,53 +287,60 @@ function bakeRingAtlas(
  * Hintergrund: `Graphics.strokeCircle`, `fillCircle` und `arc` erzeugen im WebGL-Renderer rund 101
  * Punkte pro Bogen, unabhaengig vom Radius, und die Tessellierung laeuft in jedem gezeichneten
  * Frame erneut ueber den gesamten Command-Buffer.
+ *
+ * Lesbarkeit entsteht aus drei Schichten statt harter Konturen: ein weicher dunkler Saum fuer
+ * hellen Boden, der getintete Glowkoerper und ein additiver Glow, der nachts traegt. Alles liegt
+ * auf `DEPTH_AIM`, der obersten Ebene der Weltkamera.
  */
 export class AimVisuals {
   private readonly beamShadow:   Phaser.GameObjects.Image;
   private readonly beamEnergy:   Phaser.GameObjects.Image;
+  private readonly beamPulse:    Phaser.GameObjects.Image;
   private readonly tickShadow:   Phaser.GameObjects.Image;
   private readonly tickCore:     Phaser.GameObjects.Image;
-  private readonly ringShadow:   Phaser.GameObjects.Image;
-  private readonly ringGlow:     Phaser.GameObjects.Image;
+  private readonly crossHalo:    RingImage;
+  private readonly crossGlow:    RingImage;
+  private readonly crossBloom:   RingImage;
   private readonly centerDot:    Phaser.GameObjects.Image;
-  private readonly chargeShadow: Phaser.GameObjects.Image;
-  private readonly chargeGlow:   Phaser.GameObjects.Image;
+  private readonly hitHalo:      RingImage;
+  private readonly hitGlow:      RingImage;
+  private readonly hitBloom:     RingImage;
+  private readonly chargeShadow: RingImage;
+  private readonly chargeGlow:   RingImage;
+  private readonly chargeFlash:  RingImage;
   private readonly chargeGfx:    Phaser.GameObjects.Graphics;
   private readonly gaussWide:    Phaser.GameObjects.Image;
   private readonly gaussCore:    Phaser.GameObjects.Image;
   private readonly gaussEmit:    Phaser.GameObjects.Image;
   private readonly reticle:      Phaser.GameObjects.Image;
-  private readonly boldBeam:     Phaser.GameObjects.Image;
-  private readonly boldRing:     Phaser.GameObjects.Image;
-  private readonly boldDot:      Phaser.GameObjects.Image;
 
   private readonly images: readonly Phaser.GameObjects.Image[];
-
-  private ringShadowFrame = -1;
-  private ringGlowFrame   = -1;
-  private chargeRingFrame = -1;
-  private boldRingFrame   = -1;
-  private highVisibility  = false;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.generateTextures();
 
     // Alles liegt auf DEPTH_AIM; Phaser sortiert bei gleicher Tiefe stabil nach
     // Einfuegereihenfolge. Die Reihenfolge hier IST also die Z-Reihenfolge.
-    this.beamShadow   = this.addStrip(TEX.beamShadow, BEAM_STRIP_H);
+    this.beamShadow   = this.addStrip(TEX.beamShadow, BEAM_SHADOW_H);
     this.beamEnergy   = this.addStrip(TEX.beamEnergy, BEAM_STRIP_H);
-    this.boldBeam     = this.addStrip(TEX.boldBeam, BOLD_BEAM_STRIP_H);
-    this.tickShadow   = this.addStrip(TEX.beamShadow, RANGE_TICK_H, RANGE_BAR_HALF_LEN * 2);
+    this.beamPulse    = this.addImage(TEX.pulse).setBlendMode(Phaser.BlendModes.ADD);
+    this.beamPulse.setDisplaySize(PULSE_WORLD_LEN, PULSE_WORLD_H);
+    this.tickShadow   = this.addStrip(TEX.beamShadow, RANGE_TICK_H + 2, RANGE_BAR_HALF_LEN * 2);
     this.tickCore     = this.addStrip(TEX.beamEnergy, RANGE_TICK_H, RANGE_BAR_HALF_LEN * 2);
-    this.ringShadow   = this.addImage(TEX.ringPlain, RING_FRAME_NAMES[0]);
-    this.ringGlow     = this.addImage(TEX.ringGlow,  RING_FRAME_NAMES[0]);
-    this.boldRing     = this.addImage(TEX.boldRing,  RING_FRAME_NAMES[0]);
-    this.centerDot    = this.addImage(AIM_GLOW_DOT_TEXTURE);
+    this.crossHalo    = new RingImage(this.addImage(TEX.crossHalo, RING_FRAME_NAMES[0]), CROSS_FRAMES);
+    this.crossGlow    = new RingImage(this.addImage(TEX.crossGlow, RING_FRAME_NAMES[0]), CROSS_FRAMES);
+    this.crossBloom   = new RingImage(this.addImage(TEX.crossGlow, RING_FRAME_NAMES[0]), CROSS_FRAMES);
+    this.crossBloom.image.setBlendMode(Phaser.BlendModes.ADD);
+    this.centerDot    = this.addImage(TEX.dot);
     this.centerDot.setDisplaySize(DOT_WORLD_RADIUS * 2, DOT_WORLD_RADIUS * 2);
-    this.boldDot      = this.addImage(TEX.boldDot);
-    this.boldDot.setDisplaySize(DOT_WORLD_RADIUS * 2, DOT_WORLD_RADIUS * 2);
-    this.chargeShadow = this.addImage(TEX.ringPlain, RING_FRAME_NAMES[0]);
-    this.chargeGlow   = this.addImage(TEX.ringPlain, RING_FRAME_NAMES[0]);
+    this.hitHalo      = new RingImage(this.addImage(TEX.hitHalo, RING_FRAME_NAMES[0]), HIT_FRAMES);
+    this.hitGlow      = new RingImage(this.addImage(TEX.hitGlow, RING_FRAME_NAMES[0]), HIT_FRAMES);
+    this.hitBloom     = new RingImage(this.addImage(TEX.hitGlow, RING_FRAME_NAMES[0]), HIT_FRAMES);
+    this.hitBloom.image.setBlendMode(Phaser.BlendModes.ADD);
+    this.chargeShadow = new RingImage(this.addImage(TEX.chargeRing, RING_FRAME_NAMES[0]), CHARGE_FRAMES);
+    this.chargeGlow   = new RingImage(this.addImage(TEX.chargeRing, RING_FRAME_NAMES[0]), CHARGE_FRAMES);
+    this.chargeFlash  = new RingImage(this.addImage(TEX.chargeRing, RING_FRAME_NAMES[0]), CHARGE_FRAMES);
+    this.chargeFlash.image.setBlendMode(Phaser.BlendModes.ADD);
 
     this.chargeGfx = scene.add.graphics();
     this.chargeGfx.setDepth(DEPTH_AIM);
@@ -294,10 +352,11 @@ export class AimVisuals {
     this.reticle   = this.addImage(TEX.reticle);
 
     this.images = [
-      this.beamShadow, this.beamEnergy, this.boldBeam,
+      this.beamShadow, this.beamEnergy, this.beamPulse,
       this.tickShadow, this.tickCore,
-      this.ringShadow, this.ringGlow, this.boldRing, this.centerDot, this.boldDot,
-      this.chargeShadow, this.chargeGlow,
+      this.crossHalo.image, this.crossGlow.image, this.crossBloom.image, this.centerDot,
+      this.hitHalo.image, this.hitGlow.image, this.hitBloom.image,
+      this.chargeShadow.image, this.chargeGlow.image, this.chargeFlash.image,
       this.gaussWide, this.gaussCore, this.gaussEmit,
       this.reticle,
     ];
@@ -313,20 +372,6 @@ export class AimVisuals {
     this.chargeGfx.setVisible(false);
   }
 
-  /** Waehlt zwischen dezenter und kontrastreicher Zielhilfe; wirkt ab dem naechsten `show*`. */
-  setHighVisibility(enabled: boolean): void {
-    if (enabled === this.highVisibility) return;
-    this.highVisibility = enabled;
-    // Die gesamte Zielhilfe wechselt die Ebene gemeinsam, damit ihre Einfuegereihenfolge als
-    // Z-Reihenfolge erhalten bleibt. Nur bei Umschaltung: setDepth loest eine Neusortierung aus.
-    for (const image of this.images) image.setDepth(enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM);
-    this.chargeGfx.setDepth(enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM);
-  }
-
-  isHighVisibility(): boolean {
-    return this.highVisibility;
-  }
-
   showBeam(
     sx: number,
     sy: number,
@@ -334,6 +379,7 @@ export class AimVisuals {
     ey: number,
     palette: SlotPalette,
     frac: number,
+    opacity: number,
   ): void {
     const dx = ex - sx;
     const dy = ey - sy;
@@ -341,75 +387,63 @@ export class AimVisuals {
     if (length < 0.5) return;
     const rotation = Math.atan2(dy, dx);
 
-    if (this.highVisibility) {
-      this.boldBeam.setVisible(true).setPosition(sx, sy).setRotation(rotation)
-        .setTint(palette.beamCore).setAlpha(0.62 - frac * 0.12);
-      this.boldBeam.displayWidth = length;
-      return;
-    }
-
     this.beamShadow.setVisible(true).setPosition(sx, sy).setRotation(rotation)
-      .setTint(palette.beamShadow).setAlpha(BEAM_SHADOW_ALPHA + frac * 0.04);
+      .setTint(CROSS_SHADOW_COLOR).setAlpha(BEAM_SHADOW_ALPHA * opacity);
     this.beamShadow.displayWidth = length;
 
     this.beamEnergy.setVisible(true).setPosition(sx, sy).setRotation(rotation)
-      .setTint(palette.beamCore).setAlpha(Math.max(0.14, BEAM_CORE_ALPHA - frac * 0.08));
+      .setTint(palette.beamCore)
+      .setAlpha(Math.max(BEAM_CORE_ALPHA_MIN, BEAM_CORE_ALPHA - frac * 0.14) * opacity);
     this.beamEnergy.displayWidth = length;
   }
 
+  /** Heller Fleck, der nach einem Schuss den Beam vom Lauf zum Fadenkreuz entlanglaeuft. */
+  showShotPulse(x: number, y: number, rotation: number, color: number, alpha: number): void {
+    if (alpha <= 0.01) return;
+    this.beamPulse.setVisible(true).setPosition(x, y).setRotation(rotation)
+      .setTint(color).setAlpha(alpha);
+  }
+
   /** `nx`/`ny` ist die Schussrichtung; der Tick steht senkrecht dazu. */
-  showRangeTick(rx: number, ry: number, nx: number, ny: number, accentColor: number): void {
+  showRangeTick(rx: number, ry: number, nx: number, ny: number, accentColor: number, scale: number): void {
     const perpX = -ny;
     const perpY = nx;
     const rotation = Math.atan2(perpY, perpX);
-    const startX = rx - perpX * RANGE_BAR_HALF_LEN;
-    const startY = ry - perpY * RANGE_BAR_HALF_LEN;
+    const halfLen = RANGE_BAR_HALF_LEN * scale;
+    const startX = rx - perpX * halfLen;
+    const startY = ry - perpY * halfLen;
 
-    const bold = this.highVisibility;
     this.tickShadow.setVisible(true).setPosition(startX, startY).setRotation(rotation)
-      .setTint(CROSS_SHADOW_COLOR).setAlpha(bold ? 0.5 : 0.28);
+      .setTint(CROSS_SHADOW_COLOR).setAlpha(0.45);
+    this.tickShadow.displayWidth = halfLen * 2;
     this.tickCore.setVisible(true).setPosition(startX, startY).setRotation(rotation)
-      .setTint(accentColor).setAlpha(bold ? 0.9 : 0.55);
+      .setTint(accentColor).setAlpha(0.9);
+    this.tickCore.displayWidth = halfLen * 2;
   }
 
-  showCrosshair(
-    cx: number,
-    cy: number,
-    ringRadius: number,
-    ringColor: number,
-    ringAlpha: number,
-    accentColor: number,
-  ): void {
-    if (this.highVisibility) {
-      const boldFrame = boldRingFrameIndex(ringRadius);
-      if (boldFrame !== this.boldRingFrame) {
-        this.boldRing.setFrame(RING_FRAME_NAMES[boldFrame]);
-        this.boldRingFrame = boldFrame;
-      }
-      this.boldRing.setVisible(true).setPosition(cx, cy).setTint(ringColor).setAlpha(ringAlpha);
-      this.boldDot.setVisible(true).setPosition(cx, cy).setTint(accentColor);
-      return;
+  showCrosshair(cx: number, cy: number, look: CrosshairLook): void {
+    const { ringRadius, opacity } = look;
+    this.crossHalo.setRadius(ringRadius).setVisible(true).setPosition(cx, cy)
+      .setTint(CROSS_SHADOW_COLOR).setAlpha(0.5 * opacity);
+    this.crossGlow.setRadius(ringRadius).setVisible(true).setPosition(cx, cy)
+      .setTint(look.ringColor).setAlpha(look.ringAlpha * opacity);
+    if (look.bloom > 0.01) {
+      this.crossBloom.setRadius(ringRadius).setVisible(true).setPosition(cx, cy)
+        .setTint(look.bloomColor).setAlpha(Math.min(1, look.ringAlpha * look.bloom) * opacity);
     }
+    this.centerDot.setVisible(true).setPosition(cx, cy)
+      .setScale((DOT_WORLD_RADIUS * 2 * look.dotScale) / DOT_TEX_SIZE)
+      .setTint(look.dotColor).setAlpha(opacity);
+  }
 
-    const shadowFrame = ringFrameIndex(ringRadius + 1.5);
-    if (shadowFrame !== this.ringShadowFrame) {
-      this.ringShadow.setFrame(RING_FRAME_NAMES[shadowFrame]);
-      this.ringShadowFrame = shadowFrame;
-    }
-    this.ringShadow.setVisible(true).setPosition(cx, cy)
-      .setTint(CROSS_SHADOW_COLOR).setAlpha(0.22);
-
-    const glowFrame = ringFrameIndex(ringRadius);
-    if (glowFrame !== this.ringGlowFrame) {
-      this.ringGlow.setFrame(RING_FRAME_NAMES[glowFrame]);
-      this.ringGlowFrame = glowFrame;
-    }
-    // Glowband und Kern teilen sich ein Bild-Alpha, genau wie zuvor `ringAlpha`: das Band ist mit
-    // 0.45 vorgebacken, der Kern mit 1.
-    this.ringGlow.setVisible(true).setPosition(cx, cy)
-      .setTint(ringColor).setAlpha(ringAlpha);
-
-    this.centerDot.setVisible(true).setPosition(cx, cy).setTint(accentColor);
+  showHitMarker(cx: number, cy: number, look: HitMarkerLook): void {
+    if (look.alpha <= 0.01) return;
+    this.hitHalo.setRadius(look.radius).setVisible(true).setPosition(cx, cy)
+      .setTint(CROSS_SHADOW_COLOR).setAlpha(0.5 * look.alpha);
+    this.hitGlow.setRadius(look.radius).setVisible(true).setPosition(cx, cy)
+      .setTint(look.color).setAlpha(look.alpha);
+    this.hitBloom.setRadius(look.radius).setVisible(true).setPosition(cx, cy)
+      .setTint(look.color).setAlpha(Math.min(1, look.alpha * look.bloom));
   }
 
   showChargeRing(
@@ -421,17 +455,18 @@ export class AimVisuals {
     color: number,
     pulse: number,
     full: boolean,
+    readyFlash: number,
   ): void {
-    const frame = ringFrameIndex(radius);
-    if (frame !== this.chargeRingFrame) {
-      this.chargeShadow.setFrame(RING_FRAME_NAMES[frame]);
-      this.chargeGlow.setFrame(RING_FRAME_NAMES[frame]);
-      this.chargeRingFrame = frame;
+    this.chargeShadow.setRadius(radius).setVisible(true).setPosition(cx, cy)
+      .setTint(CROSS_SHADOW_COLOR).setAlpha(0.38);
+    this.chargeGlow.setRadius(radius).setVisible(true).setPosition(cx, cy)
+      .setTint(palette.crossGlow).setAlpha(0.22);
+    if (readyFlash > 0.01) {
+      // Einmaliger Ausdehnungsblitz bei Vollladung; die Skalierung verbreitert den Strich bewusst.
+      this.chargeFlash.setRadius(radius).setVisible(true).setPosition(cx, cy)
+        .setScale(1 + (1 - readyFlash) * 0.45)
+        .setTint(color).setAlpha(readyFlash * 0.9);
     }
-    this.chargeShadow.setVisible(true).setPosition(cx, cy)
-      .setTint(CROSS_SHADOW_COLOR).setAlpha(0.34);
-    this.chargeGlow.setVisible(true).setPosition(cx, cy)
-      .setTint(palette.crossGlow).setAlpha(0.18);
 
     const sweep = Math.PI * 2 * Phaser.Math.Clamp(chargeFrac, 0, 1);
     if (sweep <= 0) return;
@@ -441,7 +476,7 @@ export class AimVisuals {
     // dieser Segmentzahl ueber den ganzen Radiusbereich unter einem Pixel.
     const fullSegments = Phaser.Math.Clamp(Math.ceil(radius * 0.9), 12, 40);
     const segments = Math.max(2, Math.ceil(fullSegments * (sweep / (Math.PI * 2))));
-    this.chargeGfx.lineStyle(full ? 3 : 2, color, pulse);
+    this.chargeGfx.lineStyle(full ? 3 : 2.5, color, pulse);
     this.chargeGfx.beginPath();
     for (let index = 0; index <= segments; index += 1) {
       const angle = -Math.PI / 2 + sweep * (index / segments);
@@ -516,12 +551,15 @@ export class AimVisuals {
   private generateTextures(): void {
     const textures = this.scene.textures;
 
-    // Beam-Schatten: 4-px-Band, je 2 px ausgefedert.
+    // Beam-Saum: weiches, gaussaehnliches Band ohne Plateau – kein harter Rand.
     bakeStrip(textures, TEX.beamShadow, BEAM_STRIP_H, [
-      [0.00, 'rgba(255,255,255,0)'],
-      [0.25, 'rgba(255,255,255,1)'],
-      [0.75, 'rgba(255,255,255,1)'],
-      [1.00, 'rgba(255,255,255,0)'],
+      [0.00, 'rgba(255,255,255,0.00)'],
+      [0.20, 'rgba(255,255,255,0.35)'],
+      [0.38, 'rgba(255,255,255,0.85)'],
+      [0.50, 'rgba(255,255,255,1.00)'],
+      [0.62, 'rgba(255,255,255,0.85)'],
+      [0.80, 'rgba(255,255,255,0.35)'],
+      [1.00, 'rgba(255,255,255,0.00)'],
     ], true);
 
     // Beam-Energie: Kern (1 px) → Glow (2 px) → weicher Halo (5 px), Gewichte im Alphakanal.
@@ -536,23 +574,46 @@ export class AimVisuals {
       [1.000, 'rgba(255,255,255,0.00)'],
     ], true);
 
-    bakeRingAtlas(textures, TEX.ringPlain, (ctx, cx, cy, radius) => {
-      strokeRing(ctx, cx, cy, radius, RING_SHADOW_W, 1);
+    fillRadialGradientTexture(textures, TEX.pulse, PULSE_TEX_SIZE, [
+      [0.00, 'rgba(255,255,255,1.00)'],
+      [0.30, 'rgba(255,255,255,0.65)'],
+      [0.65, 'rgba(255,255,255,0.18)'],
+      [1.00, 'rgba(255,255,255,0.00)'],
+    ]);
+
+    // Saum: mehrere weite, schwache Striche ergeben eine weich auslaufende dunkle Zone.
+    bakeRingAtlas(textures, TEX.crossHalo, CROSS_CELL, CROSS_FRAMES, CROSS_ROWS, (ctx, cx, cy, radius) => {
+      strokeRing(ctx, cx, cy, radius, HALO_MAX_W, 0.16);
+      strokeRing(ctx, cx, cy, radius, 6, 0.28);
+      strokeRing(ctx, cx, cy, radius, 4, 0.42);
     });
 
-    bakeRingAtlas(textures, TEX.ringGlow, (ctx, cx, cy, radius) => {
-      // Breitester Strich zuerst: die Ueberlagerung entspricht den frueheren zwei Ringstrichen,
-      // der dreistufige Verlauf ersetzt deren harte Kante durch einen weichen Halo.
-      strokeRing(ctx, cx, cy, radius + 1, RING_GLOW_W + 4, 0.18);
-      strokeRing(ctx, cx, cy, radius + 1, RING_GLOW_W + 3, 0.30);
-      strokeRing(ctx, cx, cy, radius + 1, RING_GLOW_W + 2, 0.45);
+    // Glowkoerper: breitester Strich zuerst, der Verlauf ersetzt eine harte Kante durch einen
+    // weichen Halo.
+    bakeRingAtlas(textures, TEX.crossGlow, CROSS_CELL, CROSS_FRAMES, CROSS_ROWS, (ctx, cx, cy, radius) => {
+      strokeRing(ctx, cx, cy, radius, RING_GLOW_W + 3, 0.16);
+      strokeRing(ctx, cx, cy, radius, RING_GLOW_W + 1, 0.32);
       strokeRing(ctx, cx, cy, radius, 2, 1);
     });
 
+    bakeRingAtlas(textures, TEX.chargeRing, CHARGE_CELL, CHARGE_FRAMES, CHARGE_ROWS, (ctx, cx, cy, radius) => {
+      strokeRing(ctx, cx, cy, radius, CHARGE_SHADOW_W, 1);
+    });
+
+    // Mittelpunkt: deckender Kern (r = 2) mit dunklem Zwischenring und farbigem Glow bis r = 7.
+    fillRadialGradientTexture(textures, TEX.dot, DOT_TEX_SIZE, [
+      [0.000, 'rgba(255,255,255,1.00)'],
+      [0.250, 'rgba(255,255,255,1.00)'],  // r = 2.0
+      [0.330, 'rgba( 20, 20, 26,0.62)'],
+      [0.440, 'rgba( 20, 20, 26,0.62)'],  // r = 3.5
+      [0.540, 'rgba(255,255,255,0.42)'],
+      [0.700, 'rgba(255,255,255,0.20)'],
+      [0.880, 'rgba(255,255,255,0.06)'],  // r = 7.0
+      [1.000, 'rgba(255,255,255,0.00)'],
+    ]);
     ensureAimGlowDotTexture(this.scene);
 
-    this.bakeHighVisibilityTextures(textures);
-
+    this.bakeHitMarker(textures);
     this.bakeTargetingReticle(textures);
 
     // Gauss-Strahl: der frueher aus fuenf Strichen gestapelte Querschnitt als Verlauf. Ohne
@@ -589,51 +650,36 @@ export class AimVisuals {
     ]);
   }
 
-  private bakeHighVisibilityTextures(textures: Phaser.Textures.TextureManager): void {
-    const outline = 'rgb(20,20,26)';
-
-    // Beam: weisser Kern (~2.4 px) mit dunkler Kontur je ~2 px, weich ausgefedert.
-    bakeStrip(textures, TEX.boldBeam, BOLD_BEAM_STRIP_H, [
-      [0.00, 'rgba( 20, 20, 26,0.00)'],
-      [0.17, 'rgba( 20, 20, 26,0.42)'],
-      [0.33, 'rgba( 20, 20, 26,0.42)'],
-      [0.40, 'rgba(255,255,255,0.92)'],
-      [0.60, 'rgba(255,255,255,0.92)'],
-      [0.67, 'rgba( 20, 20, 26,0.42)'],
-      [0.83, 'rgba( 20, 20, 26,0.42)'],
-      [1.00, 'rgba( 20, 20, 26,0.00)'],
-    ], true);
-
-    // Spread-Ring plus vier Achsen-Ticks. Erst alle Konturen, dann alle Kerne, damit keine Kontur
-    // einen bereits gezeichneten Kern ueberdeckt.
-    bakeRingAtlas(textures, TEX.boldRing, (ctx, cx, cy, radius) => {
-      const axes: readonly (readonly [number, number])[] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-      const inner = radius + BOLD_TICK_INNER;
-      const outer = inner + BOLD_TICK_LEN;
-      const pass = (color: string, alpha: number, width: number): void => {
-        ctx.strokeStyle = color;
-        strokeRing(ctx, cx, cy, radius, width, alpha);
-        ctx.lineCap = 'round';
-        for (const [dx, dy] of axes) {
-          ctx.beginPath();
-          ctx.moveTo(cx + dx * inner, cy + dy * inner);
-          ctx.lineTo(cx + dx * outer, cy + dy * outer);
-          ctx.stroke();
-        }
-      };
-      pass(outline, 0.62, BOLD_OUTLINE_W);
-      pass('#ffffff', 1, BOLD_RING_CORE_W);
-    }, BOLD_RING_CELL, BOLD_RING_FRAMES, BOLD_RING_ROWS);
-
-    // Mittelpunkt: deckender Kern (r = 2.4) mit dunklem Saum bis r = 4, auf 8 px Weltradius.
-    fillRadialGradientTexture(textures, TEX.boldDot, DOT_TEX_SIZE, [
-      [0.00, 'rgba(255,255,255,1.00)'],
-      [0.30, 'rgba(255,255,255,1.00)'],
-      [0.36, 'rgba( 20, 20, 26,0.72)'],
-      [0.50, 'rgba( 20, 20, 26,0.72)'],
-      [0.64, 'rgba( 20, 20, 26,0.00)'],
-      [1.00, 'rgba( 20, 20, 26,0.00)'],
-    ]);
+  /** Hitmarker-Bogen in Saum und Glowkoerper, Strichaufbau identisch zum Fadenkreuz-Ring. */
+  private bakeHitMarker(textures: Phaser.Textures.TextureManager): void {
+    const arcs = (
+      ctx: CanvasRenderingContext2D,
+      cx: number,
+      cy: number,
+      radius: number,
+      width: number,
+      alpha: number,
+    ): void => {
+      const half = hitArcHalfAngle(radius);
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      for (const angle of HIT_DIAGONALS) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, angle - half, angle + half);
+        ctx.stroke();
+      }
+    };
+    bakeRingAtlas(textures, TEX.hitHalo, HIT_CELL, HIT_FRAMES, HIT_ROWS, (ctx, cx, cy, radius) => {
+      arcs(ctx, cx, cy, radius, HALO_MAX_W, 0.16);
+      arcs(ctx, cx, cy, radius, 6, 0.28);
+      arcs(ctx, cx, cy, radius, 4, 0.42);
+    });
+    bakeRingAtlas(textures, TEX.hitGlow, HIT_CELL, HIT_FRAMES, HIT_ROWS, (ctx, cx, cy, radius) => {
+      arcs(ctx, cx, cy, radius, RING_GLOW_W + 3, 0.16);
+      arcs(ctx, cx, cy, radius, RING_GLOW_W + 1, 0.32);
+      arcs(ctx, cx, cy, radius, 2, 1);
+    });
   }
 
   /**
@@ -673,13 +719,12 @@ export class AimVisuals {
       ring(outerRadius, 4, COLORS.RED_3, 0.46);
       ring(innerRadius, 2, COLORS.GREY_1, 0.90);
 
-      const axes: readonly (readonly [number, number])[] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-      for (const [dx, dy] of axes) {
+      for (const [dx, dy] of AXES) {
         line(4, COLORS.RED_6, 0.28,
           dx * bracketGap, dy * bracketGap,
           dx * (bracketGap + bracketLen), dy * (bracketGap + bracketLen));
       }
-      for (const [dx, dy] of axes) {
+      for (const [dx, dy] of AXES) {
         line(2, COLORS.RED_1, 0.95,
           dx * bracketGap, dy * bracketGap,
           dx * (bracketGap + bracketLen), dy * (bracketGap + bracketLen));

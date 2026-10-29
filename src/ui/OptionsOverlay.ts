@@ -22,8 +22,6 @@ import {
   setStoredEffectsVolume,
   setStoredGraphicsQuality,
   setStoredGroundFogEnabled,
-  getStoredHighVisibilityAim,
-  setStoredHighVisibilityAim,
   setStoredMasterVolume,
   setStoredMusicVolume,
 } from '../utils/localPreferences';
@@ -51,7 +49,6 @@ const QUALITY_BUTTON_GAP = 12;
 const TOGGLE_Y = QUALITY_BUTTON_Y + 44;
 const TOGGLE_W = 230;
 const TOGGLE_H = 28;
-const TOGGLE_GAP = 14;
 
 const DIM_COLOR = COLORS.GREY_10;
 const DIM_ALPHA = 0.58;
@@ -229,7 +226,6 @@ export class OptionsOverlay {
   private readonly sliders = new Map<VolumeSliderKey, SliderState>();
   private readonly qualityButtons = new Map<GraphicsQuality, QualityButtonState>();
   private fogButton: QualityButtonState | null = null;
-  private aimButton: QualityButtonState | null = null;
   private readonly localeButtons = new Map<Locale, LocaleButtonState>();
   private visible = false;
   private visibilityTween: Phaser.Tweens.Tween | null = null;
@@ -301,7 +297,7 @@ export class OptionsOverlay {
       slider.fillEffect.destroy();
     }
     this.sliders.clear();
-    this.qualityButtons.clear(); this.fogButton = null; this.aimButton = null;
+    this.qualityButtons.clear(); this.fogButton = null;
     this.localeButtons.clear();
     this.container?.destroy(true);
     this.container = null;
@@ -480,7 +476,7 @@ export class OptionsOverlay {
       slider.fillEffect.destroy();
     }
     this.sliders.clear();
-    this.qualityButtons.clear(); this.fogButton = null; this.aimButton = null;
+    this.qualityButtons.clear(); this.fogButton = null;
     this.localeButtons.clear();
     this.container?.destroy(true);
     this.container = null;
@@ -525,14 +521,9 @@ export class OptionsOverlay {
   }
 
   private buildQualitySelector(objects: Phaser.GameObjects.GameObject[]): void {
-    const toggleOffset = (TOGGLE_W + TOGGLE_GAP) / 2;
-    this.fogButton = this.buildToggle(CX - toggleOffset, objects, () => {
+    this.fogButton = this.buildToggle(CX, objects, () => {
       const enabled = !this.graphicsQuality.getGroundFogEnabled();
       this.graphicsQuality.setGroundFogEnabled(enabled); setStoredGroundFogEnabled(enabled);
-    });
-    // Die Zielhilfe liest die Einstellung selbst; das Umschalten wirkt ab dem naechsten Frame.
-    this.aimButton = this.buildToggle(CX + toggleOffset, objects, () => {
-      setStoredHighVisibilityAim(!getStoredHighVisibilityAim());
     });
     const totalWidth = QUALITY_OPTIONS.length * QUALITY_BUTTON_W
       + (QUALITY_OPTIONS.length - 1) * QUALITY_BUTTON_GAP;
@@ -580,7 +571,6 @@ export class OptionsOverlay {
 
   private syncQualityButtons(): void {
     this.syncToggle(this.fogButton, this.graphicsQuality.getGroundFogEnabled(), 'ui.options.groundFog');
-    this.syncToggle(this.aimButton, getStoredHighVisibilityAim(), 'ui.options.highVisibilityAim');
     const selected = this.graphicsQuality.getLevel();
     for (const [level, state] of this.qualityButtons) {
       const active = level === selected;

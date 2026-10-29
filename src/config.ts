@@ -710,19 +710,12 @@ export const DEPTH_TRACE = 16;
 export const DEPTH_FX = 25;
 
 /**
- * Die Zielhilfe ist ein reines HUD-Element und darf weder vom Lightmap-Overlay
- * verdunkelt noch von seiner Färbung verschoben werden – sie soll zu jeder Uhrzeit
- * gleich aussehen. Sie liegt deshalb knapp über `DEPTH_LIGHTING`, aber unter den
- * Baumkronen (`DEPTH.CANOPY`).
+ * Die Zielhilfe ist ein reines HUD-Element und liegt auf der obersten Ebene der Weltkamera:
+ * Lightmap, Kronen, Rauch, Explosionen und Himmelsblitze verdecken oder verfaerben das
+ * Fadenkreuz nie, es sieht zu jeder Uhrzeit gleich aus. Nur das Scope-Overlay und die
+ * Clarity-Kamera mit HUD und Overlays zeichnen darueber.
  */
-export const DEPTH_AIM = DEPTH.CANOPY - 0.4;
-
-/**
- * Deutliche Zielhilfe (Option): oberste Ebene der Weltkamera, damit Explosionen, Kronen,
- * Rauch und Himmelsblitze das Fadenkreuz nie verdecken. Die Clarity-Kamera mit HUD und
- * Overlays zeichnet unabhaengig von der Tiefe weiterhin darueber.
- */
-export const DEPTH_AIM_HIGH_VISIBILITY = DEPTH.OVERLAY - 1;
+export const DEPTH_AIM = DEPTH.OVERLAY - 1;
 
 /**
  * Lightmap-Overlay der dynamischen Beleuchtung: über Boden, Felsen, Baumstämmen und

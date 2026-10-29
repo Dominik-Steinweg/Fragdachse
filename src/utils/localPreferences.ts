@@ -211,8 +211,6 @@ interface LocalPreferences {
   graphics: {
     quality: GraphicsQuality;
     groundFogEnabled: boolean;
-    /** Kontrastreiche Zielhilfe; ohne gespeicherte Wahl aus. */
-    highVisibilityAim: boolean;
   };
   progression: {
     coopDefense: CoopDefenseProgressPreferences;
@@ -361,7 +359,6 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
   graphics: {
     quality: 'high',
     groundFogEnabled: true,
-    highVisibilityAim: false,
   },
   progression: {
     coopDefense: {
@@ -769,7 +766,6 @@ function sanitizeSettingsDocument(raw: unknown): LocalSettingsDocumentV2 | null 
     graphics: {
       quality: raw.graphics.quality,
       groundFogEnabled: raw.graphics.groundFogEnabled !== false,
-      highVisibilityAim: raw.graphics.highVisibilityAim === true,
     },
   };
 }
@@ -796,7 +792,6 @@ function readLegacySettings(raw: string | null): LocalSettingsDocumentV2 | null 
       graphics: {
         quality: isGraphicsQuality(graphics.quality) ? graphics.quality : 'high',
         groundFogEnabled: graphics.groundFogEnabled !== false,
-        highVisibilityAim: graphics.highVisibilityAim === true,
       },
     };
   } catch { return null; }
@@ -2464,11 +2459,6 @@ export function setStoredGraphicsQuality(quality: GraphicsQuality): void {
 export function getStoredGroundFogEnabled(): boolean { return readPreferences().graphics.groundFogEnabled; }
 export function setStoredGroundFogEnabled(groundFogEnabled: boolean): void {
   updatePreferences(current => ({ ...current, graphics: { ...current.graphics, groundFogEnabled } }));
-}
-
-export function getStoredHighVisibilityAim(): boolean { return readPreferences().graphics.highVisibilityAim; }
-export function setStoredHighVisibilityAim(highVisibilityAim: boolean): void {
-  updatePreferences(current => ({ ...current, graphics: { ...current.graphics, highVisibilityAim } }));
 }
 
 /** Overrides the locally stored XP, boss points and map unlock level for the cheat/debug menu. */
