@@ -54,6 +54,7 @@ import {
 import type { RockVisualHelper }      from './RockVisualHelper';
 import type { PlacementPreviewRenderer } from './PlacementPreviewRenderer';
 import type { PersistentBasePreviewRenderer } from './PersistentBasePreviewRenderer';
+import { isBaseFortLoaded } from '../../arena/baseStructures/BaseFortAssets';
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
@@ -3054,8 +3055,12 @@ export class ArenaLifecycleCoordinator {
       ? toPersistentBaseGravelZone(persistentBaseVisualSite, worldDescriptor.seed)
       : null;
     this.persistentBaseVisualSite = persistentBaseVisualSite;
+    // A previewed base presents as the same fort as the real core; the base tiles stay the fallback
+    // while the fort art is not loaded.
+    const previewSite = persistentBaseSite === null ? persistentBaseVisualSite : null;
+    const previewFortAnchor = previewSite && presentation && isBaseFortLoaded(this.scene) ? previewSite.anchor : null;
     this.persistentBasePreviewRenderer.sync(
-      persistentBaseSite === null ? persistentBaseVisualSite : null,
+      previewFortAnchor ? null : previewSite,
       world.metrics,
       persistentBaseGravel,
     );
@@ -3074,6 +3079,7 @@ export class ArenaLifecycleCoordinator {
       reusablePresentation,
       handoff: this.worldPresentationHandoff,
       persistentBaseGravel,
+      persistentBasePreviewAnchor: previewFortAnchor,
       playerManager: this.ctx.playerManager,
       baseDestructionHooks: {
         playExplosion: (x, y, radius, color) => {

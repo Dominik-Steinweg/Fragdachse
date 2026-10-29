@@ -10,6 +10,7 @@ import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } 
 import { resolveSpawnStructureVegetationClearings, type BaseSpec } from '../arena/BaseRegistry';
 import { RockRegistry } from '../arena/RockRegistry';
 import type { GroundSurfacePersistentBaseGravelZone } from '../arena/chunks/GroundSurfaceStreamer';
+import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 import {
   getArenaMetricsProfile,
   getAuthoredWorldMetricsProfile,
@@ -169,6 +170,8 @@ export interface MaterializeWorldCompositionInput {
   readonly reusablePresentation: WorldPresentationBinding | null;
   readonly handoff: WorldPresentationHandoff;
   readonly persistentBaseGravel: GroundSurfacePersistentBaseGravelZone | null;
+  /** A persistent base the Activity only previews; the base manager presents it as a fort. */
+  readonly persistentBasePreviewAnchor?: PersistentBaseAnchor | null;
   readonly playerManager: PlayerManager;
   readonly persistentBaseSink?: PersistentBaseWorldBindingSink;
   readonly baseDestructionHooks: BaseDestructionHooks;
@@ -270,7 +273,8 @@ export function materializeWorldComposition(
   );
   materialization.setPlacement(placement);
   materialization.setReactiveProps(createReactivePropRuntime(input.scene, materialization, arena, layout, world.metrics));
-  const baseManager = bases.length > 0
+  const fortPreviewAnchor = input.persistentBasePreviewAnchor ?? null;
+  const baseManager = bases.length > 0 || fortPreviewAnchor
     ? new BaseManager(
       input.scene,
       bases,
@@ -281,6 +285,7 @@ export function materializeWorldComposition(
       input.healthBars,
       input.turretAnimations,
       input.entityBurnGpu,
+      fortPreviewAnchor,
     )
     : null;
   baseManager?.setPersistentBaseGravel(input.persistentBaseGravel);

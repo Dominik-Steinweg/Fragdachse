@@ -36,6 +36,10 @@ import { isBaseFortLoaded } from '../arena/baseStructures/BaseFortAssets';
 import type { ShadowSystem } from '../effects/ShadowSystem';
 import type { LobbyStructureSunlight } from '../arena/lobbyStructures/LobbyStructureRenderer';
 import type { FogSurfaceStamp } from '../effects/groundFog/FogSurfaceMask';
+import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
+import { isPersistentBaseSolidDomain, resolvePersistentBaseCoreCells } from '../persistentBase/PersistentBaseCore';
+
+const PERSISTENT_BASE_PREVIEW_FORT_ID = 'persistent-base-preview';
 
 /**
  * Verwaltet die world-owned Base-Geometrie und bindet bei Bedarf genau einen Activity-Overlay.
@@ -107,6 +111,11 @@ export class BaseManager {
     healthBars: WorldHealthBarRenderer | null = null,
     turretAnimations: TurretAnimationController | null = null,
     burnGpu: EntityBurnGpuController | null = null,
+    /**
+     * Anchor of a persistent base a mission only previews (the reward base at the end of map 1): it
+     * shows as the same fort as the real core, without cells, collision or HP.
+     */
+    fortPreviewAnchor: PersistentBaseAnchor | null = null,
   ) {
     this.presentation = presentation;
     this.scene = scene;
@@ -115,8 +124,15 @@ export class BaseManager {
     this.group = scene.physics.add.staticGroup();
     this.destructionRenderer = presentation ? new BaseDestructionRenderer(scene, destructionHooks) : null;
     // The persistent core and every friendly cell base (outposts, middle bases) present as forts.
-    this.fortRenderer = presentation && isBaseFortLoaded(scene) && baseSpecs.some((spec) => (
-      spec.faction === 'friendly' && spec.surface !== 'none' && spec.role !== 'spawn-point')) ? new BaseFortRenderer(scene) : null;
+    this.fortRenderer = presentation && isBaseFortLoaded(scene) && (fortPreviewAnchor !== null || baseSpecs.some((spec) => (
+      spec.faction === 'friendly' && spec.surface !== 'none' && spec.role !== 'spawn-point'))) ? new BaseFortRenderer(scene) : null;
+    if (this.fortRenderer && fortPreviewAnchor) {
+      const cells = resolvePersistentBaseCoreCells(fortPreviewAnchor)
+        .filter((cell) => isPersistentBaseSolidDomain(cell.domain))
+        .map((cell) => worldCellCenter(metrics, cell.gridX, cell.gridY));
+      const centre = worldCellCenter(metrics, fortPreviewAnchor.gridX, fortPreviewAnchor.gridY);
+      this.fortRenderer.add(PERSISTENT_BASE_PREVIEW_FORT_ID, centre.x, centre.y, cells);
+    }
     for (const spec of baseSpecs) {
       const entity = new BaseEntity(scene, spec, metrics, presentation, damageable, healthBars, turretAnimations, this.fortRenderer);
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
