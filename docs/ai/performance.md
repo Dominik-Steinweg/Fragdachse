@@ -107,8 +107,13 @@ benutzt denselben Kontext ohne Loeschung. Dies leert keinen OS-, Shader- oder Tr
 Resource-Timing-Transferbytes und CDP-Cache-/Header-Belege im Laufbericht bestimmen, ob
 der erwartete Cache wirklich greift; die Laufdauer allein belegt das nicht.
 Inhaltsversionierte Asset-URLs erhalten lokal bei Vite/Preview immutable-Header. Das
-`gh-pages`-Deployment besitzt keine Repository-Konfiguration fuer eigene HTTP-Header;
-langlebige Cache-Control-Header muessen bei einem dafuer geeigneten Host/CDN gesetzt werden.
+`gh-pages`-Deployment besitzt keine Repository-Konfiguration fuer eigene HTTP-Header; dort
+uebernimmt ein Service Worker je Deployment-Ordner das Langzeit-Caching
+([serviceWorkerPolicy.ts](../../src/serviceWorker/serviceWorkerPolicy.ts)). Er liefert nur
+`assets/…?v=<sha256>` und gehashte Vite-Ausgaben cache-first aus; ein `?v=` mit 64 Hex-Zeichen
+darf deshalb ausschliesslich den SHA-256 der ausgelieferten Bytes tragen. Navigationen und
+ungehashte Dateien gehen ans Netz. Nur Produktionsbuilds registrieren ihn; Dev-Server und
+Perf-Lab entfernen einen vorhandenen, Perf-Lab-Ladezeiten enthalten ihn also nicht.
 
 Native Bodenmaterial-Kacheln und Terrain-Snapshot verwenden denselben Material-Worker-Vertrag. Ein Chunk-Bake bleibt bis zu seinen vollständigen Materialdaten pending; wartende Jobs blockieren keine anderen Surface-Owner. Der World-Owner beendet Worker und verwirft übertragene Kacheln beim Teardown.
 
@@ -119,3 +124,5 @@ und Perf-Archiv dieselben Public-Dateien. Manifestbelegte PNG-Zwillinge und durc
 ersetzte Einzelbilder bleiben als Authoring-/Testquellen im Repository, werden aber nicht kopiert.
 Die Auswahl prueft Inhalts-Hashes der Quellen und Ersatzdateien; ein veralteter Export bricht den
 Build ab. Die generierten Atlasbilder und Frame-Metadaten werden gemeinsam ueber Inhalts-Hash-URLs geladen.
+Produktions- und Perf-Builds betten in `virtual:runtime-asset-urls` nur Eintraege ein, deren Zieldatei
+diese Auswahl ausliefert.
