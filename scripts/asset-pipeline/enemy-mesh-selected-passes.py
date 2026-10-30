@@ -162,9 +162,12 @@ def main():
                   normalEncoding='linear RGB world (X right, Y south, Z up); A raw AO visibility; coverage in albedo A',
                   albedoEncoding='sRGB straight RGB, coverage A; no form light/AO/specular',
                   emissionEncoding='separate sRGB radiance (authored strengths <=1), coverage A')
+    # Material tiles are exact block means of the 1024 master; a source size that does not divide it
+    # (the Grave Titan's 336) keeps only the 64/128 material sheets and binds its Beauty at seal.
+    sizes = sorted({64, 128} | ({job['layout']['frameWidth']} if 1024 % job['layout']['frameWidth'] == 0 else set()))
     for mode in ('beauty', 'albedo', 'normal', 'emission'):
         (output/mode/'masters').mkdir(parents=True, exist_ok=True)
-        for size in sorted({64,128,job['layout']['frameWidth']}):
+        for size in sizes:
             (output/mode/str(size)).mkdir(exist_ok=True)
 
     # Pass-major rendering prevents mutable material graphs from leaking between passes.
@@ -194,7 +197,7 @@ def main():
     for pose in selected:
         index,frame=pose['index'],pose['blenderFrame'];name=f'frame-{index:04d}.png'
         values={mode:np.load(output/'intermediate'/f'{mode}-{index:04d}.npy') for mode in ('albedo','normal','ao','emission')}
-        for size in sorted({1024,64,128,job['layout']['frameWidth']}):
+        for size in [*sizes, 1024]:
             reduced={k:reduce_blocks(v,1024//size) for k,v in values.items()}
             a,n,ambient=reduced['albedo'],reduced['normal'],reduced['ao'];coverage=a[:,:,3:4]
             if max(float(np.max(np.abs(coverage[:,:,0]-v[:,:,3]))) for v in reduced.values())>.025:raise ValueError('Material coverage mismatch')

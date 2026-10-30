@@ -88,7 +88,9 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
         || !['idle', 'move'].every(name => selected.clips.some(c => c.name === name && c.loop)))) {
       throw new Error(`Dawn scavenger requires unbound idle + move loops: ${entry.id}`);
     }
-    if (entry.category === 'enemy' && !isBossRuntime(entry) && !dawnFleeingEnemy && !selected.clips.some(c => c.name === 'claw')) throw new Error(`Enemy claw clip missing: ${entry.id}`);
+    // A marked melee clip: `claw`, or the per-weapon clips a melee weapon names (the Grave Titan's slam, stomp).
+    const meleeClip = c => c.name === 'claw' || (c.markers?.strike !== undefined && c.markers?.impact !== undefined);
+    if (entry.category === 'enemy' && !isBossRuntime(entry) && !dawnFleeingEnemy && !selected.clips.some(meleeClip)) throw new Error(`Enemy melee clip missing: ${entry.id}`);
     const folder = `assets/sprites/pipeline-v2/${entry.id}`;
     const hashes = {};
     for (const [field, name] of isBossRuntime(entry) ? [] : [['idle', 'idle.png'], ['sheet', 'sheet.png']]) {

@@ -35,7 +35,7 @@ Render-only sub-pixel detail (the Kabummtula's setae spikes) carries
 excluded from the proxy, its silhouette reference and the contacts.
 
 Assets whose catalog category is not `enemy` (turrets) use the `rigid` profile of the
-same flow: any forward and clips, no move/claw requirement, no paw contacts (`feet: []`). Their
+same flow: any forward and clips, no move/melee requirement, no paw contacts (`feet: []`). Their
 selected sprite material stays; `seal` skips the data passes and binds the mesh to the live Beauty
 sheet at source size, which `import` references instead of copying. Extract an archived selection's
 `source-bundle.zip` (and the zip itself) to `art/poc/pipeline-v2/runs/<source-revision>/<asset>/`
@@ -46,8 +46,12 @@ a fan to each loop's centroid before the voxel union (`close_open` in `enemy_mes
 shell would remesh to a skin that decimation drops, and its shadow would lose the enclosed volume.
 
 Pose counts and sheet rows follow the selected clips, including optional `cast`
-poses. `move` and `claw` remain required; clip blocks must cover every non-rest
-pose exactly once. Biped and quadruped contacts use the shared authored paw names.
+poses. A looping `move` and at least one melee clip with `strike` before `impact` remain
+required: `claw`, or per-weapon clips such as the Grave Titan's `slam` and `stomp`. Clip blocks
+must cover every non-rest pose exactly once. Biped and quadruped contacts use the shared authored paw names.
+
+The rest union voxelises at 0.08 world px up to ~96 px of extent; larger bodies keep 1200 voxels
+across (`VOXELS_ACROSS` in `enemy_mesh_union.py`), so a boss-sized canvas does not exhaust memory.
 The historical 31-pose/four-paw examples below describe their original assets.
 
 ## Offline material preparation for all selected enemies

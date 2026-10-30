@@ -8,6 +8,8 @@ from mathutils.kdtree import KDTree
 from mesh_shadow_blender import evaluated, fixed_proxy, bind
 from mesh_shadow_weapon_blender import voxel_union
 
+VOXELS_ACROSS = 1200
+
 
 def shell(points, triangles, thickness):
     """Close thin fur cards before the volumetric rest approximation."""
@@ -79,9 +81,13 @@ def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
             if name.startswith(leg) or ob.vertex_groups.get(leg) or ob.parent_bone==leg:
                 owner=i+1;break
         owners.extend([owner]*len(p['rest']));offset+=len(p['rest'])
+    # 0.08 world px up to ~96 px of extent; larger bodies (the 336-px Grave Titan) keep the same voxel count
+    # across instead, or the sparse volume outgrows memory long before it could matter for a 2000-vertex proxy.
+    every=np.concatenate([p['rest'] for p in sources])
+    voxel_world=max(.08,float((every.max(0)-every.min(0))[:2].max())*scale/VOXELS_ACROSS)
     union_points,union_faces,union_groups,count=[],[],[],0
     for index,group in enumerate(names):
-        group_points,group_faces=voxel_union(scene,volume[group],.08,scale,evaluated)
+        group_points,group_faces=voxel_union(scene,volume[group],voxel_world,scale,evaluated)
         union_points.append(group_points);union_faces.append(group_faces+count);count+=len(group_points)
         union_groups.append(np.full(len(group_points),index,np.int32))
     union_points,union_faces,union_groups=np.concatenate(union_points),np.concatenate(union_faces),np.concatenate(union_groups)
@@ -93,7 +99,7 @@ def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
                      signature=hashlib.sha256(''.join(p['signature'] for p in sources).encode()).hexdigest(),
                      sourceTriangleCleanup=dict(degenerateTriangles=0,duplicateTriangles=0),
                      sourceOwners=np.array(owners,dtype=np.int8),
-                     unionAudit=dict(voxelWorld=.08,furShellBlender=.012,restVertices=len(union_points),unionGroups=names,
+                     unionAudit=dict(voxelWorld=voxel_world,furShellBlender=.012,restVertices=len(union_points),unionGroups=names,
                                      sourceParts=[p['ob'].name for p in sources]))
     source_groups=np.array(source_groups,np.int32)
     if len(names)>1:

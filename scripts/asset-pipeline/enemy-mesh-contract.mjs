@@ -1,5 +1,5 @@
 /**
- * Projected mesh contract for selected V2 assets. Enemies use the `creature` profile (move/claw clips,
+ * Projected mesh contract for selected V2 assets. Enemies use the `creature` profile (move and marked melee clips,
  * paw contacts); other categories such as turrets use `rigid` (any clips, no contacts). No dependency
  * on the immutable 37-pose player manifest.
  */
@@ -31,13 +31,17 @@ export function enemyCoordinates(render) {
       : 'evaluated rigid geometry above its own ground plane' };
 }
 
+/** Melee clips carry strike/impact markers: `claw`, or an asset's own per weapon (the Grave Titan's slam, stomp). */
+const markedMelee = clip => clip.markers?.strike !== undefined || clip.markers?.impact !== undefined;
+const validMelee = clip => clip.loop === false && clip.markers.strike > 0 && clip.markers.impact > clip.markers.strike
+  && clip.markers.impact < clip.frames.length - 1;
+
 export function enemyPoses(render) {
   if (!render.frames?.length || render.idleFrame !== 0) throw Error('Expected enemy rest and clip poses');
   const clips = render.clips;
   if (!clips?.length || new Set(clips.map(c => c.name)).size !== clips.length) throw Error('Expected unique enemy clips');
-  const move = clips.find(c => c.name === 'move'), claw = clips.find(c => c.name === 'claw');
-  if (meshProfile(render) === 'creature' && (!move?.loop || claw?.loop !== false || !(claw.markers?.strike > 0)
-    || !(claw.markers.impact > claw.markers.strike) || !(claw.markers.impact < claw.frames.length - 1)))
+  const move = clips.find(c => c.name === 'move'), melee = clips.filter(markedMelee);
+  if (meshProfile(render) === 'creature' && (!move?.loop || !melee.length || !melee.every(validMelee)))
     throw Error('Unsupported enemy clip mapping');
   const mapped = clips.flatMap(c => c.frames);
   if (JSON.stringify(mapped) !== JSON.stringify(Array.from({length:render.frames.length-1},(_,i)=>i+1)))
@@ -74,6 +78,7 @@ export function validateEnemyMeshManifest(m) {
   if (!['diagnostic', 'awaiting-visual-review', 'reviewed-not-imported'].includes(m.status)) throw Error('Invalid enemy mesh status');
   const rigid = m.profile === 'rigid';
   if (m.profile !== undefined && !['creature', 'rigid'].includes(m.profile)) throw Error('Invalid mesh profile');
+  // Creatures: rest, move and at least one attack clip; enemyPoses checked the melee markers at prepare.
   const seenClips = new Set();
   if (!m.poses?.length || m.poses[0].clip !== 'rest' || m.poses[0].clipFrame !== 0 || m.poses.some((p, i) => {
     const previous = m.poses[i-1];
@@ -81,7 +86,7 @@ export function validateEnemyMeshManifest(m) {
     const invalid = p.index !== i || !Number.isFinite(p.blenderFrame) || !shaPattern.test(p.sourceBeautySha256)
       || !/^[a-z][a-z0-9-]*$/.test(p.clip) || (newClip ? seenClips.has(p.clip) || p.clipFrame !== 0 : p.clipFrame !== previous.clipFrame + 1);
     seenClips.add(p.clip); return invalid;
-  }) || (!rigid && (!seenClips.has('move') || !seenClips.has('claw'))))
+  }) || (!rigid && (!seenClips.has('move') || seenClips.size < 3)))
     throw Error('Incomplete enemy poses');
   const c = m.coordinates;
   if (c?.axes !== 'X-right,Y-south,Z-up' || JSON.stringify(c.pivot) !== '[0.5,0.5]'

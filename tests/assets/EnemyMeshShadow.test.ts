@@ -124,3 +124,22 @@ it('retains additional authored cast poses and rejects gaps or repeated clip blo
   const truncated = structuredClone(m); truncated.mesh.positions.bytes=31*m.mesh.vertexCount*6;
   expect(()=>validateEnemyMeshManifest(truncated)).toThrow(/binary size/);
 });
+
+it('accepts per-weapon melee clips in place of claw and still requires their strike before impact', () => {
+  const sha = 'a'.repeat(64);
+  const render = {
+    category: 'enemy',
+    idleFrame: 0,
+    frames: Array.from({length:31}, (_,index) => ({index,blenderFrame:index,file:`frame-${index}.png`,sha256:sha})),
+    clips: [
+      {name:'move',loop:true,frames:Array.from({length:12},(_,i)=>i+1)},
+      {name:'slam',loop:false,frames:Array.from({length:10},(_,i)=>i+13),markers:{strike:5,impact:7}},
+      {name:'stomp',loop:false,frames:Array.from({length:8},(_,i)=>i+23),markers:{strike:4,impact:5}},
+    ],
+  };
+  expect(enemyPoses(render)[23]).toMatchObject({clip:'stomp',clipFrame:0});
+  const lateImpact = structuredClone(render); lateImpact.clips[2].markers.impact = 7;
+  expect(()=>enemyPoses(lateImpact)).toThrow(/clip mapping/);
+  const unmarked = structuredClone(render); for (const clip of unmarked.clips) delete clip.markers;
+  expect(()=>enemyPoses(unmarked)).toThrow(/clip mapping/);
+});

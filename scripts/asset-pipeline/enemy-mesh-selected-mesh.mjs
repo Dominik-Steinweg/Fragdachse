@@ -118,6 +118,12 @@ if(mode==='prepare'){
     const metrics=inspectPasses(sheets);qa.push({size,...metrics});
     if(metrics.invalidNormals||metrics.blackOverLitBeauty||metrics.alphaInteriorMismatch)throw Error('Material sheet defect '+size);
   }
+  // A larger source size (the Grave Titan's 336) keeps the 64/128 material sheets; its Beauty still binds the mesh.
+  if(![64,128].includes(job.layout.frameWidth)){
+    const member=`beauty/sheet-${job.layout.frameWidth}.png`,dest=path.join(root,member);
+    await copyFile(path.join(job.source,selected.variant,`sheet-${job.layout.frameWidth}.png`),dest,constants.COPYFILE_EXCL);
+    images[member]=await fileHash(dest);
+  }
   const validation={fullSilhouettes:silhouettes.samples,minimumIou:silhouettes.minimumIou,minimumFineIou:silhouettes.minimumFineIou,
     beautyOutsideRepairPixels:0,beautyOutsideRepairAlphaPixels:0,materialMetrics:qa,
     evidence:{'candidate.blend':job.sourceFiles['candidate.blend'],'silhouette-review.json':await fileHash(path.join(root,'silhouette-review.json')),'render-passes.json':await fileHash(path.join(root,'render-passes.json'))}};
@@ -147,8 +153,11 @@ if(mode==='prepare'){
   for(const [member,h] of Object.entries(m.images)){
     const data=await readFile(path.join(root,relativeMember(member)));if(hash(data)!==h)throw Error('Changed image');
     const [,pass,size]=member.match(/^(beauty|albedo|normal|emission)\/sheet-(\d+)\.png$/);
-    // Rigid assets reference the live Beauty sheet the game already ships instead of a copy.
-    if(m.profile==='rigid'){images[`${pass}${size}`]={file:live.sheetPath.replace(/^\.\//,''),sha256:h};continue;}
+    // Rigid assets, and a creature's Beauty at a source size without material sheets, reference the live Beauty
+    // sheet the game already ships instead of a copy.
+    if(m.profile==='rigid'||(pass==='beauty'&&!m.images[`albedo/sheet-${size}.png`])){
+      images[`${pass}${size}`]={file:live.sheetPath.replace(/^\.\//,''),sha256:h};continue;
+    }
     const file=`${folder}/${pass}-${size}.png`;images[`${pass}${size}`]={file,sha256:h};copies.push({file,data});
   }
   if(images[`beauty${live.sourceSize}`].sha256!==live.hashes.sheet)throw Error('Selected Beauty changed');
