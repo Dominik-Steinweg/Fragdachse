@@ -129,7 +129,7 @@ export const deContent = {
   "map.19.name": "Map 19 – Brandherd",
   "map.20.name": "Map 20 – Abgrundteich",
   "map.1.tutorial": "Willkommen bei FRAGDACHSE! Kämpft euch mit euren Dachsen Richtung Osten vor und lauft über die markierten Checkpoints.",
-  "map.2.tutorial": "Angriffe können aus verschiedenen Richtungen kommen. Achtet auf West- und Ostfront und wechselt rechtzeitig die Seite. Dämonen-Dachse laden sich glühend auf und explodieren: Die rote Zone läuft mit ihnen mit – tretet seitlich aus ihrer Bahn.",
+  "map.2.tutorial": "Angriffe können aus verschiedenen Richtungen kommen. Achtet auf West- und Ostfront und wechselt rechtzeitig die Seite. Dämonen-Dachse heizen sich mit jedem Flammenstoß auf – ihre Glut wandert vom Kopf zum Schwanz. Nach dem fünften bleiben sie stehen und schmelzen in einer großen roten Zone durch: Tötet sie vorher oder verlasst die Zone.",
   "map.3.tutorial": "Nicht alle Gegner greifen die Basis an. Manche jagen gezielt euch – erkennt gefährliche Gegner früh und setzt Prioritäten. Rabid Rabbits springen euch an: Färbt sich der Boden vor euch rot, wechselt die Richtung, bevor sie landen.",
   "map.4.tutorial": "Am vorderen Stützpunkt findet ihr Adrenalin und eine BFG, die sich erst aufladen muss. Nutzt sie gegen dichte Gegnergruppen und schützt die Versorgungspodeste.",
   "map.5.tutorial": "Boss-Maps enden erst, wenn der Boss fällt. Der erste Sieg bringt einen Boss-Punkt. Nach dieser Map werden Dachs Nukem und Dachs of Steel freigeschaltet. Inspector bleibt gesperrt.",

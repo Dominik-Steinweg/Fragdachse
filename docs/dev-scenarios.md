@@ -1063,7 +1063,7 @@ anderen laufen und beißen. Im Spiel: Karte 3 (Rastlos) und alle früheren Rabid
 
 Headless-Nachweise: `tests/CoopDefenseEnemyPounce.test.ts`, `tests/EnemyPouncePresentation.test.ts`.
 
-### Demon Badger: Hitze-Aufladung und Void-Explosion
+### Demon Badger: Hitzestufen und Kernschmelze
 
 Map `0` (`00-test`) enthält den Encounter `demon-badger-gate-1` (acht Dachse ab 18 s, gestaffelt über
 2,4 s). Für einen isolierten Versuch dasselbe Szenario mit `suppressWaves: true` starten, ein paar Türme
@@ -1077,21 +1077,22 @@ dev.run({ action: 'start', scenario: { version: 1, mapId: '0', seed: 12345, clas
 await dev.whenReady();
 // Ziel auf freie Zellen etwa 300 px vom Spieler entfernt setzen, dann mehrmals kurz hintereinander:
 await dev.run({ action: 'spawn', kind: 'demon-badger', pinned: false });
-// Phase und Hitze je Dachs (heatPhase: charge/hold/telegraph/vent, heat 0..1):
+// Phase und Stufe je Dachs (heatPhase: heat/telegraph/burst, heatStage 0..5):
 dev.status().enemies.filter(enemy => enemy.kind === 'demon-badger');
 ```
 
-Erwartung: Jeder Dachs lädt sich ca. 5 s auf; Hörner, Schwanz und Rückenplatten glühen dunkelrot →
-hellrot und kippen kurz vor voller Ladung ins Violett, dabei wird er schneller (bis ×1,6). Voll geladen
-zeigt eine rote Zone (r 110 px) die Explosion an; sie wandert mit dem weiterlaufenden Dachs mit, der
-seinen Kurs nur langsam ändert, also seitlich ausweichen. Nach 0,9 s explodiert er void-violett mit
-roten Funken und wirft brennende Brocken, dann beginnt er langsam von vorn. Nahe beieinander stehende
-Dachse zünden nie gleichzeitig, sondern nacheinander in Spawn-Reihenfolge. Außerhalb jeder Sicht hält ein
-voller Dachs seine Ladung. Zwischendurch spuckt er kurze Void-Flammenstöße auf Spieler und Gebäude in
-ca. 170 px; erlöschende Flammen setzen den Boden in Brand, eine getroffene Basis fängt Feuer. Getötet
-mit Hitze verpufft er nur klein. Im Spiel: ab Karte 2 (Zweite Front).
+Erwartung: Jeder Dachs startet kalt. Jede Spucksalve (auf Spieler, Köder, Basis oder Bauwerke) heizt ihn
+um eine Stufe auf, die er bis zum Tod behält: Die Glut füllt sich vom Kopf über Schultern, Wirbel und
+Flanken bis zum Schwanz, jeder Sprung flammt kurz auf, er läuft schneller und spuckt schneller (Pause 1,4 →
+0,6 s, je Dachs fest um ±10 % gestreut). Nach der fünften Salve bleibt er stehen; nach der letzten Pause
+zeigt die rote Zone (r 220) 1,4 s lang die Kernschmelze, Glutrisse öffnen sich über dem Körper und
+violetter Dunst wird eingesogen. Dann explodiert er mit einer violetten Dunstwelle, roten Funken und acht
+Feuerbrocken und verschwindet ohne Kill-Belohnung. Vorher getötet, verpufft er harmlos (Glut und Rauch).
 
-Headless-Nachweise: `tests/CoopDefenseEnemyHeatBurst.test.ts`.
+Headless-Nachweise: `tests/CoopDefenseEnemyHeatBurst.test.ts`, `tests/EnemyHeatGlowModel.test.ts`,
+`tests/DemonBadgerVoidSpit.test.ts`. Aufnahmen: `tools/capture-kit/examples/demon-badger.json` (Stufen,
+Kernschmelze, Verpuffen; Stufen über `salvoSpent` gesetzt) und `demon-badger-pack.json` (echte Belagerung
+der mittleren Basis auf Map 04).
 
 ### Grufttitan: Intro, Schlag, Stampfer und Grablicht-Salve
 

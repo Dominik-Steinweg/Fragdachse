@@ -125,6 +125,9 @@ function meleePresetOf(weaponId: string | undefined): string | undefined {
 
 export type ExplosionObserver = (x: number, y: number, radius: number, style: ExplosionVisualStyle) => void;
 
+/** Light reach of a Demon Badger meltdown relative to its burst radius (the shared explosion light uses 2.4). */
+const DEMON_HEAT_LIGHT_RADIUS_FACTOR = 1.3;
+
 export class EffectSystem implements EnemyVisualSink {
   private groundFogCombat: GroundFogCombatSink | null = null;
   bindGroundFogCombat(sink: GroundFogCombatSink): () => void {
@@ -1252,6 +1255,7 @@ export class EffectSystem implements EnemyVisualSink {
     visualStyle: ExplosionVisualStyle,
   ): void {
     if (!this.lighting) return;
+    const demonHeat = visualStyle === 'demon_burst' || visualStyle === 'demon_fizzle';
 
     // Heiße Kernfarben statt satter Flammentöne: unter dem MULTIPLY-Composite der Nacht
     // begrenzt der schwächste Kanal, wie hell der Boden werden kann. Ein Feuerorange
@@ -1269,14 +1273,18 @@ export class EffectSystem implements EnemyVisualSink {
             ? 0xffefbe
             : visualStyle === 'nuke' || visualStyle === 'void_nuke'
               ? (visualStyle === 'void_nuke' ? 0xe0b8ff : 0xffe4b8)
-              : mixColors(color ?? 0xff5a1e, 0xffffff, 0.6);
+              : demonHeat
+                ? mixColors(color ?? VOID_PALETTE.primary, 0xffffff, 0.25)
+                : mixColors(color ?? 0xff5a1e, 0xffffff, 0.6);
 
     this.lighting.pulse('explosion', x, y, {
       // Größe skaliert durchgehend mit der Detonation – auch bei sehr großen Radien,
-      // dort verzichtet das Licht stattdessen auf seinen Schattenwurf.
-      radiusPx: radius * (visualStyle === 'train' ? 2.8 : EXPLOSION_LIGHT_RADIUS_FACTOR),
+      // dort verzichtet das Licht stattdessen auf seinen Schattenwurf. Die Kernschmelze des
+      // Dämonen-Dachses leuchtet nur ihren eigenen Kreis violett aus: Mehrere dicht hintereinander
+      // überstrahlten sonst die ganze Front.
+      radiusPx: radius * (visualStyle === 'train' ? 2.8 : demonHeat ? DEMON_HEAT_LIGHT_RADIUS_FACTOR : EXPLOSION_LIGHT_RADIUS_FACTOR),
       color: lightColor,
-      intensity: 1,
+      intensity: demonHeat ? 0.7 : 1,
       // Die authored Explosionsgröße bestimmt Reichweite und Lebensdauer gemeinsam. Die
       // Stilvariante bleibt bei Farbe und Darstellung, bringt aber keine Sonderdauer mit.
       durationMs: getExplosionLightDurationMs(radius),

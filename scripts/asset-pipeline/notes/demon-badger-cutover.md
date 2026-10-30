@@ -59,3 +59,11 @@ Nothing below is imported anywhere yet; the cutover runs in the code worktree `C
   keep ADD above the lighting. Its alpha is antialiased at 128 px; the heat regions are ~1–1.5 world px wide.
 - Re-staging after another production build: `node scripts/asset-pipeline/sheet-emission.mjs demon-badger --revision <rev> --channel heat --neutral --run-root <runs root>`.
 - Authoring previews of the mask: `sheet-emission.mjs demon-badger --preview <assets:preview folder> --channel heat --neutral`.
+
+## Zonen-Sheet (Demon Badger V2, 2026-10-30)
+- `emission-heat-zones.png` ersetzt `emission-heat.png`: derselbe neutrale Heat-Kanal aus dem archivierten
+  `db-v2-r2`-Blend, je Fläche einer Stufe zugeordnet (`emissionZones` im Katalogeintrag, Kodierung
+  `srgb-zone-alpha-coverage`, `zones: 5` im Manifest). Beauty, Clips und Schattenmesh bleiben `db-v2-r2`.
+- Neu erzeugen: `node scripts/asset-pipeline/sheet-emission.mjs demon-badger --channel heat --neutral --zones --run-root D:/Fragdachse-render/demon-badger/runs`.
+- Eine neue Produktionsrevision muss die Teilnamen der Zonen behalten (sonst bricht der Pass mit
+  „belongs to no emission zone“ ab).

@@ -631,6 +631,11 @@ Turmablaufs erhalten.
   `emission-<channel>.png` (der Name enthält „emission“, `assets:runtime` behält sie als PNG).
 - Gegner-Sheets prüfen, dass die Augenanker jedes Frames transparent bleiben (Alpha ≤ 0,08 auf den
   1024er-Mastern); das Ergebnis steht als `eyeCheck` im Manifest.
+- `--zones` (nur mit neutralem Kanal) ordnet jede Kanalfläche über ihren Teilnamen einer Stufe zu
+  (`emissionZones` im Katalogeintrag, ein Präfix trifft auch Blenders `.001`-Kopien). Kodierung
+  `srgb-zone-alpha-coverage`: Rot trägt die Stufe k/n gleichmäßig verteilt, Alpha die Abdeckung; das
+  Manifest nennt die Zahl der Zonen (`zones`). Datei `emission-<channel>-zones.png`; der Pass läuft auf
+  dem archivierten `asset.blend` und braucht keine neue Beauty-Revision.
 
 ```powershell
 # Turm (Live-Eintrag rendern und sofort veröffentlichen, unverändert):
@@ -639,6 +644,8 @@ node scripts/asset-pipeline/sheet-emission.mjs flame
 node scripts/asset-pipeline/sheet-emission.mjs demon-badger --revision db-v2-r1 --channel heat --neutral
 # ... und nach import-runtime derselben Revision ohne Render veröffentlichen:
 node scripts/asset-pipeline/sheet-emission.mjs demon-badger --publish --channel heat
+# Stufenzonen der Live-Revision rendern und veröffentlichen (Demon Badger, emission-heat-zones.png):
+node scripts/asset-pipeline/sheet-emission.mjs demon-badger --channel heat --neutral --zones --run-root D:/Fragdachse-render/demon-badger/runs
 # Authoring-Prüfung einer Vorschau (assets:preview), nur Master unter <Vorschau>/emission-heat/:
 node scripts/asset-pipeline/sheet-emission.mjs demon-badger --preview art/poc/pipeline-v2/previews/<Label>/demon-badger --channel heat --neutral
 ```

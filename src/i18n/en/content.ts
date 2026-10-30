@@ -129,7 +129,7 @@ export const enContent = {
   "map.19.name": "Map 19 – Firestorm",
   "map.20.name": "Map 20 – Abyss Pond",
   "map.1.tutorial": "[TUTORIAL START] Try out movement, aiming and your primary and secondary weapon. Then push east: the route runs across marked checkpoints up to the extraction.",
-  "map.2.tutorial": "Attacks can come from different directions. Watch the west and east fronts and switch sides before the pressure shifts. Demon Badgers glow as they charge and then explode: the red zone runs with them, so step sideways out of their path.",
+  "map.2.tutorial": "Attacks can come from different directions. Watch the west and east fronts and switch sides before the pressure shifts. Demon Badgers heat up with every flame burst they spit, the glow spreading from head to tail. After the fifth they stop and melt down in a large red zone: kill them first or get out of the zone.",
   "map.3.tutorial": "Not every enemy attacks the base. Some hunt you directly—spot dangerous targets early and set your priorities. Rabid Rabbits pounce: when the ground ahead of you turns red, change direction before they land.",
   "map.4.tutorial": "The forward outpost supplies adrenaline and a BFG that needs time to charge. Use it against dense groups and protect the supply pedestals.",
   "map.5.tutorial": "Boss maps end only when the boss falls. Your first victory grants a boss point. This map unlocks Dachs Nukem and Dachs of Steel; Inspector stays locked.",

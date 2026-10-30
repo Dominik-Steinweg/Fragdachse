@@ -2,6 +2,7 @@
 
 - Version: 1.1
 - Datum: 2026-10-29
+- Ersetzt durch: [Demon Badger V2](Fragdachse_GDD_Demon_Badger_V2.md) (2026-10-30)
 - Status: umgesetzt (Verhalten, Netz, Effekte; Produktionsmodell `db-v2-r2` mit Hitzezonen, Clips
   `idle`/`burst`/`spit`, Emissions-Sheet und Schattenmesh `enemy-mesh-db-v2-r2`); Spieltest-Feedback 1
   (2026-10-29) umgesetzt, weiterer Spieltest offen
