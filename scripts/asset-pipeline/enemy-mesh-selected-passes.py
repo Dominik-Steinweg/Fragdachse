@@ -10,6 +10,20 @@ import time
 sys.dont_write_bytecode = True
 
 
+def through_ground_cut(material, shader):
+    """Route a data-pass shader through the material's copied recipe ground cut, if it has one.
+
+    A keyed shader cut (the Grave Titan digging itself out) hides geometry in Beauty; copies of the
+    material keep the cut mix and its keyed level, so every pass composites the same transparency.
+    """
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    cut = nodes.get('Ground cut')
+    for output in [n for n in nodes if n.type == 'OUTPUT_MATERIAL']:
+        links.new(cut.outputs[0] if cut else shader, output.inputs['Surface'])
+    if cut:
+        links.new(shader, cut.inputs[2])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--job', required=True)
@@ -31,7 +45,7 @@ def main():
     import numpy as np
     from mesh_shadow_geometry import select_source_scene
     from enemy_mesh_anatomy import legacy_anatomy, freeze_anchors, follow_body, add_transitions
-    from character_pass_blender import (png, render_float, reduce_blocks, emission_material,
+    from character_pass_blender import (png, render_float, reduce_blocks, emission_material, pass_shader,
                                         unlit_copy, extend_normal_edges)
     def sha(p):
         return hashlib.sha256(Path(p).read_bytes()).hexdigest()
@@ -133,6 +147,7 @@ def main():
         strength = bs.inputs['Emission Strength'].default_value
         bs.inputs['Emission Strength'].default_value = 0
         albedos[material] = unlit_copy(clone, audit)
+        through_ground_cut(albedos[material], albedos[material].node_tree.nodes['FD_Albedo_Output'].outputs[0])
         audit[-1]['sourceMaterial'] = material.name
         audit[-1]['enemyBypassed'] = removed
         audit[-1]['separateEmissionStrength'] = strength
@@ -146,11 +161,20 @@ def main():
         else:
             out.inputs['Color'].default_value = color.default_value
         out.inputs['Strength'].default_value = strength
-        for node in [n for n in nodes if n.type == 'OUTPUT_MATERIAL']:
-            links.new(out.outputs[0], node.inputs['Surface'])
+        through_ground_cut(emitter, out.outputs[0])
         emissions[material] = emitter
+    ao_spec = {'material':{'aoSamples':16,'aoDistanceBlender':.5}}
     normal_material = emission_material('FD_Enemy_Normal', 'normal', {})
-    ao_material = emission_material('FD_Enemy_AO', 'ao', {'material':{'aoSamples':16,'aoDistanceBlender':.5}})
+    ao_material = emission_material('FD_Enemy_AO', 'ao', ao_spec)
+    # Ground-cut materials get their own normal/AO copies, so the data shader composites through the same cut.
+    normals, aos = {}, {}
+    for material in materials:
+        if not material.node_tree.nodes.get('Ground cut'):
+            continue
+        for variants, mode, spec in ((normals, 'normal', {}), (aos, 'ao', ao_spec)):
+            variant = material.copy(); variant.name = f'FD_Enemy_{mode}_{material.name}'
+            through_ground_cut(variant, pass_shader(variant.node_tree.nodes, variant.node_tree.links, mode, spec))
+            variants[material] = variant
     dark = bpy.data.worlds.new('FD_Enemy_Data_World'); dark.use_nodes = True
     dark.node_tree.nodes['Background'].inputs['Strength'].default_value = 0
     selected = job['poses'] if args.frames == 'all' else [p for p in job['poses'] if p['index'] in [int(s) for s in args.frames.split(',')]]
@@ -170,6 +194,9 @@ def main():
         for size in sizes:
             (output/mode/str(size)).mkdir(exist_ok=True)
 
+    if normals:
+        report['groundCut'] = dict(materials=len(normals), method='data shaders composite through the copied keyed recipe cut')
+
     # Pass-major rendering prevents mutable material graphs from leaking between passes.
     for mode in ('beauty','albedo','normal','ao','emission'):
         scene.world = original_world if mode=='beauty' else dark
@@ -178,7 +205,7 @@ def main():
         for ob,state in light_states.items(): ob.hide_render = state if mode=='beauty' else True
         for ob,mats in originals.items():
             for i,mat in enumerate(mats):
-                ob.material_slots[i].material = mat if mode=='beauty' else albedos[mat] if mode=='albedo' else emissions[mat] if mode=='emission' else normal_material if mode=='normal' else ao_material
+                ob.material_slots[i].material = mat if mode=='beauty' else albedos[mat] if mode=='albedo' else emissions[mat] if mode=='emission' else normals.get(mat, normal_material) if mode=='normal' else aos.get(mat, ao_material)
         scene.render.image_settings.file_format = 'PNG' if mode=='beauty' else 'OPEN_EXR'
         scene.render.image_settings.color_mode = 'RGBA'
         scene.render.image_settings.color_depth = '8' if mode=='beauty' else '32'

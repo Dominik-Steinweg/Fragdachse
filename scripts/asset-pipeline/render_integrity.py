@@ -46,11 +46,14 @@ def inspect_float(pixels, mode):
     # Zero is a valid AO visibility or emission; never repair it as colour.
     if mode in ('albedo', 'normal') and black:
         raise ValueError(f'Opaque black {mode} corruption: {black} pixels')
+    # Unit normals and AO in [0, 1] hold where surfaces cover the pixel fully; edge and soft-cut composites
+    # (coverage just under 1, e.g. the Grave Titan digging itself out) carry sampling noise in coverage.
+    covered = coverage > .9999
     if mode == 'normal':
         length = np.linalg.norm(rgb * 2 - 1, axis=2)
-        if np.any(opaque & ((length < 1e-5) | (length > 1.02))):
+        if np.any(covered & ((length < 1e-5) | (length > 1.02))):
             raise ValueError('Invalid raw normal vectors')
-    if mode == 'ao' and np.any(opaque[:, :, None] & ((rgb < -1e-5) | (rgb > 1.00001))):
+    if mode == 'ao' and np.any(covered[:, :, None] & ((rgb < -1e-5) | (rgb > 1.00001))):
         raise ValueError('AO outside visibility range')
     return dict(opaqueBlack=black, finite=True)
 

@@ -1,11 +1,12 @@
 /** Incremental mesh/material derivation from an immutable V2 selection. */
-import {readFile,writeFile,mkdir,copyFile,readdir} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,copyFile,readdir,access} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
-import {verifySelectionV2} from './export-v2.mjs';
+import {verifySelectionV2,packSheet} from './export-v2.mjs';
+import {resizeMaster} from './export.mjs';
 import {enemyCoordinates,enemyPoses,meshProfile,validateEnemyMeshManifest,decodeEnemyMesh,ENEMY_MESH_VIEWS,relativeMember} from './enemy-mesh-contract.mjs';
 import {project,extents,raster,compare} from './enemy-mesh-raster.mjs';
 import {rgba,inspectPasses} from './pass-quality.mjs';
@@ -101,8 +102,16 @@ if(mode==='prepare'){
     const columns=job.layout.columns,rows=Math.ceil(m.poses.length/columns),width=columns*(size+4),height=rows*(size+4);
     for(const pass of ['beauty','albedo','normal','emission']){
       const member=`${pass}/sheet-${size}.png`,dest=path.join(root,member);
-      if(pass==='beauty')await copyFile(path.join(job.source,selected.variant,`sheet-${size}.png`),dest,constants.COPYFILE_EXCL);
-      else{
+      const exported=path.join(job.source,selected.variant,`sheet-${size}.png`);
+      if(pass==='beauty'&&await access(exported).then(()=>true,()=>false))await copyFile(exported,dest,constants.COPYFILE_EXCL);
+      else if(pass==='beauty'){
+        // A boss canvas (the Grave Titan exports 112/336 only) derives the material-size Beauty from the
+        // selected masters exactly as export does.
+        const frames=await Promise.all(m.poses.map(async pose=>resizeMaster(await readFile(path.join(job.source,selected.variant,'masters',`frame-${String(pose.index).padStart(4,'0')}.png`)),size)));
+        const packed=await packSheet(frames,size);
+        if(packed.layout.columns!==columns)throw Error('Beauty sheet layout mismatch');
+        await writeFile(dest,packed.buffer,{flag:'wx'});
+      }else{
         const data=Buffer.alloc(width*height*4);
         for(const pose of m.poses){
           const name=`frame-${String(pose.index).padStart(4,'0')}.png`,tile=await rgba(path.join(root,pass,String(size),name));

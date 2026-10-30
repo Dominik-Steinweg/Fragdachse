@@ -117,8 +117,13 @@ def emission_material(name, mode, spec):
     nodes, links = material.node_tree.nodes, material.node_tree.links
     nodes.clear()
     output = nodes.new('ShaderNodeOutputMaterial')
+    links.new(pass_shader(nodes, links, mode, spec), output.inputs['Surface'])
+    return material
+
+
+def pass_shader(nodes, links, mode, spec):
+    """The normal or AO data shader built into a node tree; returns its emission output."""
     emission = nodes.new('ShaderNodeEmission')
-    links.new(emission.outputs[0], output.inputs['Surface'])
     if mode == 'normal':
         geometry = nodes.new('ShaderNodeNewGeometry')
         multiply = nodes.new('ShaderNodeVectorMath'); multiply.operation = 'MULTIPLY'
@@ -134,7 +139,7 @@ def emission_material(name, mode, spec):
         ao.inputs['Distance'].default_value = spec['material']['aoDistanceBlender']
         ao.only_local = False
         links.new(ao.outputs['AO'], emission.inputs['Color'])
-    return material
+    return emission.outputs[0]
 
 
 def unlit_copy(material, report):

@@ -52,6 +52,12 @@ must cover every non-rest pose exactly once. Biped and quadruped contacts use th
 
 The rest union voxelises at 0.08 world px up to ~96 px of extent; larger bodies keep 1200 voxels
 across (`VOXELS_ACROSS` in `enemy_mesh_union.py`), so a boss-sized canvas does not exhaust memory.
+
+A recipe's keyed shader ground cut (mix node `Ground cut`, the Grave Titan's emerge) hides geometry
+in Beauty. `enemy-mesh-selected-passes.py` routes every data shader through the material's copied cut
+(`through_ground_cut`; normal/AO get per-material copies), so the passes composite the same soft
+transparency; a hard holdout plane cannot match stacked semi-transparent layers, and seal rejects
+opaque albedo under transparent Beauty. The shadow proxy keeps the full body: the cut belongs to the intro.
 The historical 31-pose/four-paw examples below describe their original assets.
 
 ## Offline material preparation for all selected enemies
