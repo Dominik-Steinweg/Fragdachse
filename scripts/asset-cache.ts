@@ -10,7 +10,12 @@ const resolvedModule = `\0${RUNTIME_ASSET_URLS_MODULE}`;
 // One table per process, shared by the page and worker plugin instances.
 let table: { urls: Record<string, string>; values: Set<string> } | undefined;
 const current = () => {
-  if (!table) { const urls = runtimeAssetUrls(); table = { urls, values: new Set(Object.values(urls)) }; }
+  if (!table) {
+    const urls = runtimeAssetUrls({ onStale: keys => console.warn(`[runtime-asset-cache] ${keys.length} published `
+      + `entr${keys.length === 1 ? 'y no longer matches its file' : 'ies no longer match their files'} (e.g. ${keys[0]}); `
+      + 'served directly until `npm run assets:runtime` refreshes the manifest.') });
+    table = { urls, values: new Set(Object.values(urls)) };
+  }
   return table;
 };
 let deployed: Promise<Record<string, string>> | undefined;
