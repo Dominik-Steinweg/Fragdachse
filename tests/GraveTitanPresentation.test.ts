@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { clawFrameIndex, meleeLiftProfile, type EnemyClawAttack } from '../src/systems/EnemyClawAttack';
 import { graveTitanImpactGeometry } from '../src/effects/graveTitan/graveTitanImpactGeometry';
-import { GRAVE_LIGHTS, graveLightPose, launchedGraveLights, type GraveLightPose } from '../src/effects/graveTitan/graveLightModel';
+import { GRAVE_LIGHTS, graveGlowLevel, graveLightPose, launchedGraveLights, type GraveLightPose } from '../src/effects/graveTitan/graveLightModel';
 import { volleyCastFrameIndex, VOLLEY_CAST_SETTLE_MS } from '../src/animations/EnemyVolleyAnimation';
 import { EMPTY_ENEMY_VOLLEY_STATE, type EnemyVolleyState } from '../src/systems/EnemyVolleyState';
 
@@ -71,6 +71,16 @@ describe('Grave Titan presentation', () => {
 
     const cancelled: EnemyVolleyState = { ...charging, revision: 2, endedAt: 1_500, rechargedAt: 11_500, shotsFired: 0 };
     expect(pose(4, cancelled, 0, 1_600).alpha).toBe(1);
+  });
+
+  it('stokes the fissure glow through the gather, spends it with the salvo and flashes it on a hit', () => {
+    const charging: EnemyVolleyState = { revision: 1, chargeStartAt: 1_000, fireAt: 1_800, endedAt: 0, rechargedAt: 0, shotsFired: 0 };
+    const rest = graveGlowLevel(EMPTY_ENEMY_VOLLEY_STATE, null, 1_000);
+    expect(graveGlowLevel(charging, null, 1_400)).toBeGreaterThan(rest);
+    expect(graveGlowLevel(charging, null, 1_900)).toBeGreaterThan(graveGlowLevel(charging, null, 1_400));
+    const spent: EnemyVolleyState = { ...charging, revision: 2, endedAt: 2_600, rechargedAt: 12_600, shotsFired: 10 };
+    expect(graveGlowLevel(spent, null, 2_700)).toBeLessThan(rest);
+    expect(graveGlowLevel(EMPTY_ENEMY_VOLLEY_STATE, ATTACK, ATTACK.hitAt + 20)).toBeGreaterThan(rest);
   });
 
   it('plays the gather gesture up to its release marker and settles after the first shot', () => {

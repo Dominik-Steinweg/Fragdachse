@@ -25,6 +25,7 @@ import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import { PounceImpactGpuRenderer } from '../../effects/PounceImpactGpuRenderer';
 import { GraveTitanImpactRenderer } from '../../effects/graveTitan/GraveTitanImpactRenderer';
+import { GraveTitanGlowPresentation } from '../../effects/graveTitan/GraveTitanGlowPresentation';
 import { PounceWindupGpuRenderer } from '../../effects/PounceWindupGpuRenderer';
 import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
 import { BossPresenceRenderer } from '../../effects/BossPresenceRenderer';
@@ -114,6 +115,7 @@ export interface RendererBundle {
   kaboomtula: KaboomtulaPresentation;
   enemyPounces: EnemyPouncePresentation;
   enemyHeatBursts: EnemyHeatBurstPresentation;
+  graveTitanGlow: GraveTitanGlowPresentation;
   turretWeb: TurretWebRenderer;
   eliteMarkers: EliteMarkerRenderer;
   enemyReadability: EnemyReadabilityRenderer;
@@ -486,6 +488,8 @@ export function* createRendererBundleSteps(
   const enemyPounces = new EnemyPouncePresentation(scene);
   cleanup.push(() => enemyPounces.destroy());
   const enemyHeatBursts = new EnemyHeatBurstPresentation(scene);
+  const graveTitanGlow = new GraveTitanGlowPresentation(scene);
+  cleanup.push(() => graveTitanGlow.destroy());
   cleanup.push(() => enemyHeatBursts.destroy());
   enemyHeatBursts.setLightingSystem(lighting);
   const turretWeb = new TurretWebRenderer(scene);
@@ -551,6 +555,7 @@ export function* createRendererBundleSteps(
     kaboomtula,
     enemyPounces,
     enemyHeatBursts,
+    graveTitanGlow,
     turretWeb,
     eliteMarkers,
     enemyReadability,

@@ -90,5 +90,6 @@ export function resetRenderersForWorldPresentationTeardown(
   bundle.kaboomtula.clear();
   bundle.enemyPounces.clear();
   bundle.enemyHeatBursts.clear();
+  bundle.graveTitanGlow.clear();
   bundle.turretWeb.clear();
 }

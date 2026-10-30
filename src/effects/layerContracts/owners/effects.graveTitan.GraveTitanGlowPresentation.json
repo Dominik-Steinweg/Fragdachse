@@ -1,0 +1,43 @@
+{
+  "owner": "effects/graveTitan/GraveTitanGlowPresentation.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "render/overlay/setDepth/0",
+        "expression": "EMISSION_DEPTH",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/graveTitan/GraveTitanGlowPresentation.ts:render/overlay/setDepth/0",
+      "owner": "effects/graveTitan/GraveTitanGlowPresentation.ts",
+      "component": "render/overlay/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "render/overlay/setDepth/0",
+        "expression": "EMISSION_DEPTH"
+      }
+    }
+  ]
+}

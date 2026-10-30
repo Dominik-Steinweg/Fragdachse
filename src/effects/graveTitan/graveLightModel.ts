@@ -1,4 +1,5 @@
 import { enemyVolleyChargeAt, enemyVolleyPhaseAt, type EnemyVolleyState } from '../../systems/EnemyVolleyState';
+import { meleeLiftProfile, type EnemyClawAttack } from '../../systems/EnemyClawAttack';
 
 /**
  * The Grave Titan's ammunition made visible: one grave light per salvo shot. Ready lights circle
@@ -116,4 +117,25 @@ export function graveLightPose(index: number, count: number, site: GraveLightSit
   out.alpha = rise;
   out.size = GRAVE_LIGHTS.size * (0.4 + 0.6 * rise);
   return out;
+}
+
+const HIT_FLASH_MS = 260;
+
+/**
+ * Brightness of the grave light in the fissures: a quiet smoulder at rest, flaring up through the
+ * gather to full strength at the first shot, spent after the salvo and recovering while the lights
+ * refill; rearing for a melee strike stokes it and the hit flashes it. Pure presentation.
+ */
+export function graveGlowLevel(volley: EnemyVolleyState, attack: EnemyClawAttack | null, now: number): number {
+  let level = 0.45;
+  const phase = enemyVolleyPhaseAt(volley, now);
+  if (phase === 'charge') level = 0.45 + 0.75 * enemyVolleyChargeAt(volley, now);
+  else if (phase === 'fire') level = 1.2;
+  else if (phase === 'recharge') level = 0.25 + 0.2 * Math.max(0, Math.min(1, (now - volley.endedAt) / Math.max(1, volley.rechargedAt - volley.endedAt)));
+  if (attack && now < attack.endsAt) {
+    level += 0.4 * Math.max(0, meleeLiftProfile(attack, now));
+    const since = now - attack.hitAt;
+    if (since >= 0 && since < HIT_FLASH_MS) level += 0.7 * (1 - since / HIT_FLASH_MS);
+  }
+  return Math.max(0, Math.min(1.4, level));
 }

@@ -17,6 +17,10 @@ export interface EnemyVisualSource {
   readonly getPounceState?: () => import('../systems/EnemyPounceState').EnemyPounceState;
   /** Replicated heat cycle (charge, booked warning, burst); absent on views without a heat burst. */
   readonly getHeatBurstState?: () => import('../systems/EnemyHeatBurstState').EnemyHeatBurstState;
+  /** Replicated gather/fire cycle of an announced salvo; absent on views without one. */
+  readonly getVolleyState?: () => import('../systems/EnemyVolleyState').EnemyVolleyState;
+  /** Replicated melee windup (claw state); absent on views without one. */
+  readonly getClawAttackState?: () => import('../systems/EnemyClawAttack').EnemyClawState;
   /** Presented general vulnerability (host status or replicated snapshot), never a rule input. */
   readonly isVulnerable: () => boolean;
   /** Optional local gesture; placeholders and other enemy views need no cast clip. */
