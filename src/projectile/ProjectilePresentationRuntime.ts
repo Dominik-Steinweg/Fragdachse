@@ -324,6 +324,7 @@ export class ProjectilePresentationRuntime {
     angle: number,
     ownerId: string,
     cfg: ProjectileSpawnConfig,
+    weaponSourceId?: string,
   ): void {
     if (cfg.tracerConfig) {
       this.tracerRenderer?.createTracer(id, tracerX, tracerY, cfg.tracerConfig, cfg.color);
@@ -333,7 +334,7 @@ export class ProjectilePresentationRuntime {
     if (isFireControlTemporarySourceId(cfg.turretVisualId)) this.fireControlCopyShot?.(cfg.turretVisualId);
     else if (turretVisualId !== undefined) this.turretAnimations?.onShot(turretVisualId);
     const muzzleOrigin = cfg.visualMuzzleOrigin ?? getTopDownMuzzleOrigin(muzzleX, muzzleY, angle);
-    this.muzzleFlashRenderer?.playProjectileFlash(
+    if (!this.visualOverrides?.ownsSpawnFx(weaponSourceId)) this.muzzleFlashRenderer?.playProjectileFlash(
       muzzleOrigin.x,
       muzzleOrigin.y,
       Math.cos(angle) * cfg.speed,
@@ -601,13 +602,14 @@ export class ProjectilePresentationRuntime {
     samples.length = 0;
     if (hostProjectiles.length > 0) {
       for (const projectile of hostProjectiles) {
+        if (this.visualOverrides?.ownsSpawnFx(projectile.weaponSourceId)) continue;
         samples.push({ id: projectile.id, x: projectile.x, y: projectile.y, size: projectile.size, color: projectile.color, style: projectile.style, energyBallVariant: projectile.energyBallVariant, grenadeVisualPreset: projectile.grenadeVisualPreset });
       }
       return samples;
     }
     replica.readExtrapolated(performance.now(), ({ id, state, x, y }) => {
       const head = this.clientPathHeads.get(id);
-      if (this.flightPlayback.has(id) && !head) return;
+      if ((this.flightPlayback.has(id) && !head) || this.visualOverrides?.ownsSpawnFx(state.weaponSourceId)) return;
       samples.push({ id, x: head?.x ?? x, y: head?.y ?? y, size: state.size, color: state.color, style: state.style, energyBallVariant: state.energyBallVariant, grenadeVisualPreset: state.grenadeVisualPreset });
     });
     return samples;
@@ -738,7 +740,7 @@ export class ProjectilePresentationRuntime {
               proj.vx,
               proj.vy,
             ));
-        this.muzzleFlashRenderer?.playProjectileFlash(flashOrigin.x, flashOrigin.y, proj.vx, proj.vy, proj.style as ProjectileStyle | undefined, proj.bulletVisualPreset, proj.energyBallVariant, muzzleFlashColor(proj.style, proj.color, proj.ownerColor), proj.sourceTurretId ? undefined : proj.ownerId);
+        if (!this.visualOverrides?.ownsSpawnFx(proj.weaponSourceId)) this.muzzleFlashRenderer?.playProjectileFlash(flashOrigin.x, flashOrigin.y, proj.vx, proj.vy, proj.style as ProjectileStyle | undefined, proj.bulletVisualPreset, proj.energyBallVariant, muzzleFlashColor(proj.style, proj.color, proj.ownerColor), proj.sourceTurretId ? undefined : proj.ownerId);
         const isUtilityProjectile = proj.style === 'grenade' || proj.style === 'holy_grenade' || proj.style === 'bfg';
         if (proj.ownerId !== localPlayerId || isUtilityProjectile) this.audioSystem?.playSound(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId);
       }

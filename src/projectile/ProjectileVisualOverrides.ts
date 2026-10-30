@@ -18,9 +18,20 @@ export type ProjectileCustomVisualFactory = (projectile: ProjectileVisualRequest
  */
 export class ProjectileVisualOverrides {
   private readonly factories = new Set<ProjectileCustomVisualFactory>();
-  register(factory: ProjectileCustomVisualFactory): () => void {
+  private readonly spawnFxOwners = new Set<(weaponSourceId: string) => boolean>();
+  /** `ownsSpawnFx` marks weapon sources whose view also brings its own launch and light (no generic muzzle flash or projectile light). */
+  register(factory: ProjectileCustomVisualFactory, ownsSpawnFx?: (weaponSourceId: string) => boolean): () => void {
     this.factories.add(factory);
-    return () => { this.factories.delete(factory); };
+    if (ownsSpawnFx) this.spawnFxOwners.add(ownsSpawnFx);
+    return () => {
+      this.factories.delete(factory);
+      if (ownsSpawnFx) this.spawnFxOwners.delete(ownsSpawnFx);
+    };
+  }
+  ownsSpawnFx(weaponSourceId: string | undefined): boolean {
+    if (!weaponSourceId) return false;
+    for (const owns of this.spawnFxOwners) if (owns(weaponSourceId)) return true;
+    return false;
   }
   create(projectile: ProjectileVisualRequest): ProjectileCustomVisual | null {
     if (!projectile.weaponSourceId) return null;

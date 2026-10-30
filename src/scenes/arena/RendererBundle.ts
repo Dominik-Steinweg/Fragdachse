@@ -539,7 +539,7 @@ export function* createRendererBundleSteps(
   // Scene lifetime: the thrown fire-control portal device draws with its own HQ art.
   projectileVisualOverrides.register(createFireControlPortalFlightFactory(scene));
   // A boss's announced salvo flies as its grave lights instead of generic energy balls.
-  cleanup.push(projectileVisualOverrides.register(bossPresence.plasmaFactory));
+  cleanup.push(projectileVisualOverrides.register(bossPresence.plasmaFactory, bossPresence.ownsSalvoSpawnFx));
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,

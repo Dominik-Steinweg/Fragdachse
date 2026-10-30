@@ -3,7 +3,7 @@ import type { CoopDefenseEnemyBossPresenceConfig } from '../config/coopDefenseEn
 import type { ProjectileCustomVisual, ProjectileCustomVisualFactory } from '../projectile/ProjectileVisualOverrides';
 import type { EnemyVolleyState } from '../systems/EnemyVolleyState';
 import { GraveFireflySwarm, type GraveFireflyPose } from './GraveFireflySwarm';
-import { graveLightPose, type GraveLightPose } from './graveTitan/graveLightModel';
+import { GRAVE_LIGHTS, graveLightPose, type GraveLightPose } from './graveTitan/graveLightModel';
 import { GraveWispGpuLayer, GraveWispKind } from './gpu/GraveWispGpuLayer';
 import type { LightingSystem } from './LightingSystem';
 
@@ -82,8 +82,10 @@ const FLIGHT_SIZE = 6.2;
 const FLIGHT_TRAIL_S = 0.07;
 const FLIGHT_TRAIL_MAX = 34;
 const PUFF_MS = 380;
-/** Ground light of one grave light: green, and weak enough that ten in a crown never wash out the boss. */
+/** Ground light of one grave light: green and weak. */
 const GRAVE_LIGHT_GROUND = 0.4;
+/** The whole crown lights the ground like this many separate grave lights. */
+const CROWN_GROUND_SHARE = 2.5;
 const GRAVE_LIGHT_COLOR = 0x7dff8a;
 /** A newly seen boss's grave lights rise out of it over this time. */
 const GRAVE_LIGHTS_APPEAR_MS = 900;
@@ -109,6 +111,9 @@ export class BossPresenceRenderer {
   ) {
     this.wisps = new GraveWispGpuLayer(scene);
   }
+
+  /** A grave light launches itself and carries its own ground light: no generic muzzle flash or projectile light. */
+  readonly ownsSalvoSpawnFx = (weaponSourceId: string): boolean => this.salvoWeapons.has(weaponSourceId);
 
   /** Registered with the projectile visual overrides: salvo shots of a tracked boss fly as grave lights. */
   readonly plasmaFactory: ProjectileCustomVisualFactory = request => {
@@ -239,7 +244,11 @@ export class BossPresenceRenderer {
       if (!source.visible || alpha <= 0.01) continue;
       this.wisps.add({ tailX: light.x, tailY: light.y, headX: light.x, headY: light.y, halfWidth: light.size * 2.6,
         kind: GraveWispKind.Light, t: 0, seed: (index * 0.37 + salt) % 1, size: light.size, intensity: light.intensity * alpha });
-      this.light(`graveLight:${source.id}:${index}`, light.x, light.y, alpha * Math.min(1.6, light.intensity));
+      // Gathered into the crown the lights share one ground glow; ten stacked ground lights burn to white.
+      const crownDistance = Math.hypot(light.x - volley.crownX, light.y - volley.crownY);
+      const gathered = 1 - Math.min(1, Math.max(0, crownDistance / GRAVE_LIGHTS.crownRadius - 1));
+      const share = 1 - gathered * (1 - CROWN_GROUND_SHARE / volley.count);
+      this.light(`graveLight:${source.id}:${index}`, light.x, light.y, alpha * Math.min(1.6, light.intensity) * share);
     }
   }
 
@@ -257,7 +266,7 @@ export class BossPresenceRenderer {
       const tailX = speed > 1 ? x - flight.vx / speed * trail : x, tailY = speed > 1 ? y - flight.vy / speed * trail : y;
       this.wisps.add({ tailX, tailY, headX: x, headY: y, halfWidth: FLIGHT_SIZE * 2.6, kind: GraveWispKind.Light, t: 0,
         seed: flight.seed, size: FLIGHT_SIZE, intensity: 1.9 });
-      this.light(flight.key, x, y, 1.4);
+      this.light(flight.key, x, y, 1.0);
     }
   }
 

@@ -401,7 +401,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       if ((!presence && !voidPhase) || !enemy.sprite.active || enemy.getHp() <= 0) continue;
       // An announced salvo carries its ammunition as grave lights; they gather over the grave just behind the centre.
       const announced = presence ? getCoopDefenseEnemyConfig(enemy.kind).weapons.find(weapon => weapon.salvo?.chargeMs) : undefined;
-      const aim = enemy.getAimAngle();
+      const aim = announced?.salvo ? enemy.getAimAngle() : 0;
       this.bossPresenceSources.push({
         id: enemy.id,
         x: enemy.sprite.x,

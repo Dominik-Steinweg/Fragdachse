@@ -8,7 +8,11 @@ import { graveGlowLevel } from './graveLightModel';
 
 /** The grave light inside the titan's fissures: its emission sheet, tinted, just above the light map. */
 const EMISSION_DEPTH = DEPTH_LIGHTING + 0.08;
-const GRAVE_LIGHT_TINT = 0x7dff8a;
+/** Saturated: a paler tint added over the green fissure light and crown whitens the cross. */
+const GRAVE_LIGHT_TINT = 0x52ff6e;
+/** The smoulder shows as authored; flares above it are compressed, or the additive cross and crown clip to white. */
+const SMOULDER = 0.45;
+const FLARE_GAIN = 0.35;
 /** Volley-carrying bosses with an emission sheet glow along their grave fissures. */
 export class GraveTitanGlowPresentation {
   private enemies: () => readonly EnemyVisualSource[] = () => [];
@@ -53,9 +57,10 @@ export class GraveTitanGlowPresentation {
       if (!visible) continue;
       if (overlay.frame.name !== sprite.frame.name && overlay.texture.has(sprite.frame.name)) overlay.setFrame(sprite.frame.name);
       const level = graveGlowLevel(volley, enemy.getClawAttackState?.().attack ?? null, now);
+      const glow = level <= SMOULDER ? level : SMOULDER + (level - SMOULDER) * FLARE_GAIN;
       overlay.setOrigin(sprite.originX, sprite.originY).setPosition(sprite.x, sprite.y).setRotation(sprite.rotation)
         .setScale(sprite.scaleX, sprite.scaleY).setFlip(sprite.flipX, sprite.flipY)
-        .setTint(GRAVE_LIGHT_TINT).setAlpha(emissiveAlpha(Math.min(1, level) * sprite.alpha));
+        .setTint(GRAVE_LIGHT_TINT).setAlpha(emissiveAlpha(glow * sprite.alpha));
     }
     for (const [id, overlay] of this.overlays) {
       if (live.has(id)) continue;
