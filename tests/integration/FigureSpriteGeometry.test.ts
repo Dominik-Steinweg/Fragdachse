@@ -11,7 +11,7 @@ import { BadgerPreview } from '../../src/ui/BadgerPreview';
 import { SpawnEffectRenderer } from '../../src/effects/SpawnEffectRenderer';
 import { BADGER_WALKING_FRAME_WIDTH } from '../../src/animations/BadgerAnimations';
 import { getHeldItemSpriteSpec } from '../../src/loadout/HeldItemVisuals';
-import { resolveCoopDefenseEnemyConfigs } from '../../src/config/coopDefenseEnemies';
+import { resolveCoopDefenseEnemyConfigs, enemyBodyRadius } from '../../src/config/coopDefenseEnemies';
 import { getPipelineAssetForTexture, getPipelineSpriteScale } from '../../src/config/pipelineAssets';
 import { EQUIPABLE_LOADOUT_CATALOG_ENTRIES } from '../equipableLoadoutEntries';
 import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../../src/config';
@@ -108,22 +108,24 @@ describe('figure source resolution and Arcade geometry', () => {
       const { scene } = sceneWithArcadeBodies(asset.sourceSize);
       const enemy = new EnemyEntity(scene, 'enemy', 100, 200, true, config.id,
         { ...config, weapons: [], glow: undefined, isBoss: false });
+      // The artwork follows `size`; the physical body may be wider (a boss's legs, `bodyRadiusFactor`).
+      const bodyDiameter = enemyBodyRadius(config) * 2;
       for (const factor of [1, 0.5, 1]) {
         enemy.setDashScale(factor);
         expect(enemy.sprite.displayWidth).toBeCloseTo(config.size * factor * getPipelineSpriteScale(asset.textureKey));
         const body = enemy.body;
         body.updateFromGameObject();
-        expect(body.width).toBeCloseTo(config.size * factor);
-        expect(body.height).toBeCloseTo(config.size * factor);
+        expect(body.width).toBeCloseTo(bodyDiameter * factor);
+        expect(body.height).toBeCloseTo(bodyDiameter * factor);
         expect(Math.abs(body.center.x - 100)).toBeLessThanOrEqual(0.5);
         expect(Math.abs(body.center.y - 200)).toBeLessThanOrEqual(0.5);
-        expect(enemy.getCollisionRadius()).toBe(Math.floor(config.size * factor / 2));
+        expect(enemy.getCollisionRadius()).toBe(Math.floor(bodyDiameter * factor / 2));
       }
       enemy.applyClawAttackState({ revision: 1, attack: { attackId: 'pounce', weaponId: 'claws',
         angle: 1.2, range: 40, arcDegrees: 100, startedAt: 0, strikeAt: 270, hitAt: 350, endsAt: 570 } });
       for (const now of [0, 270, 350, 390, 569]) {
         enemy.syncClawAnimation(now);
-        expectPlayerBody(enemy.body, 100, 200, config.size);
+        expectPlayerBody(enemy.body, 100, 200, bodyDiameter);
       }
     }
   });

@@ -20,7 +20,7 @@ import { bridge } from '../../network/bridge';
 import { quantizeAngle } from '../../utils/angle';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
 import { NavigationGeometry } from '../../systems/navigation/NavigationGeometry';
-import { COOP_DEFENSE_ENEMY_CONFIGS, type CoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
+import { COOP_DEFENSE_ENEMY_CONFIGS, type CoopDefenseEnemyKind, enemyBodyRadius } from '../../config/coopDefenseEnemies';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../../config/coopDefenseConstructions';
 import { GAME_WIDTH, GAME_HEIGHT } from '../../config';
 import { getVisibleWorldView } from '../../graphics/CameraWorldView';
@@ -532,7 +532,7 @@ export class DevScenarioController {
     this.requireReady();
     if (!COOP_DEFENSE_ENEMY_CONFIGS[kind] || (hp !== null && (!Number.isFinite(hp) || hp < 1 || hp > 10000000))) throw new Error('Gegner oder HP ungültig.');
     if (this.runtime.navigationLabPort.readEnemies().length >= 200) throw new Error('Maximal 200 Gegner im Dev-Szenario.');
-    const position = this.free(point, COOP_DEFENSE_ENEMY_CONFIGS[kind].size / 2);
+    const position = this.free(point, enemyBodyRadius(COOP_DEFENSE_ENEMY_CONFIGS[kind]));
     const id = this.runtime.navigationLabPort.spawnEnemy(position.x, position.y, kind, false);
     if (!id) throw new Error('Gegner konnte nicht erzeugt werden.');
     if (hp !== null) this.runtime.devScenarioPort.setEnemyHp(id, hp);

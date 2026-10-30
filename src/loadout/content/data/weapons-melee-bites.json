@@ -168,8 +168,8 @@
     "GRAVE_TITAN_SLAM": {
       "id": "GRAVE_TITAN_SLAM",
       "cooldown": 500,
-      "damage": 400,
-      "range": 220,
+      "damage": 200,
+      "range": 280,
       "fire": {
         "type": "melee",
         "hitArcDegrees": 110,
@@ -192,12 +192,13 @@
         "successKey": "shot_bite",
         "failureKey": "shot_dry_trigger"
       },
-      "_notes": "Langsamer, toedlicher Prankenschlag des Grufttitans (400 > HP + Ruestung). Er tritt bis auf Kopflaenge an Bauwerke heran (structureReachPx im Gegnereintrag), die Pranken landen ~140 px vor der Mitte und der Faecher reicht darueber hinaus; Basen bekommen etwa den frueheren Bissdruck."
+      "_notes": "Schwerer Prankenschlag des Grufttitans. Er tritt bis auf Kopflaenge an Bauwerke heran (structureReachPx im Gegnereintrag), die Pranken landen ~140 px vor der Mitte und der Faecher reicht weit darueber hinaus."
     },
     "GRAVE_TITAN_STOMP": {
       "id": "GRAVE_TITAN_STOMP",
+      "cooldown": 3000,
       "damage": 400,
-      "range": 300,
+      "range": 400,
       "fire": {
         "type": "melee",
         "hitArcDegrees": 360,
@@ -205,9 +206,9 @@
       },
       "rockDamageMult": 0,
       "trainDamageMult": 0,
-      "baseDamageMult": 0,
+      "baseDamageMult": 1,
       "baseId": "GRAVE_TITAN_SLAM",
-      "_notes": "Rundum-Druckwelle gegen Spieler im Umkreis des Grufttitans; hat Vorrang vor dem Schlag und trifft weder Felsen noch Basen."
+      "_notes": "Toedliche Rundum-Druckwelle des Grufttitans (400 > HP + Ruestung) gegen Spieler und Basen im Umkreis, alle 3 s; hat Vorrang vor dem Schlag und trifft keine Felsen."
     },
     "INFERNO_COLOSSUS_BITE": {
       "id": "INFERNO_COLOSSUS_BITE",

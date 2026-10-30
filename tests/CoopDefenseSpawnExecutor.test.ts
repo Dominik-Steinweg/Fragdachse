@@ -93,7 +93,7 @@ describe('Spawn coordinates across World and navigation grids', () => {
 
   it('separates a burst by physical body size even for bodies wider than the usual cell spacing', () => {
     const boss = getCoopDefenseEnemyConfig('grave-titan');
-    const config = vi.spyOn(enemyConfigs, 'getCoopDefenseEnemyConfig').mockReturnValue({ ...boss, size: 128 });
+    const config = vi.spyOn(enemyConfigs, 'getCoopDefenseEnemyConfig').mockReturnValue({ ...boss, size: 128, bodyRadiusFactor: undefined });
     const world = setup();
     try {
       const result = world.executor.hostSpawnEncounterGroup('grave-titan', 10, 'wide', 'west',
@@ -175,6 +175,10 @@ describe('Spawn coordinates across World and navigation grids', () => {
   });
 
   it('keeps buried arrivals on the World border and bosses inside the checked arena', () => {
+    // The titan's legs widen its body past this small arena; the case needs a body of its `size`.
+    const original = enemyConfigs.getCoopDefenseEnemyConfig;
+    const config = vi.spyOn(enemyConfigs, 'getCoopDefenseEnemyConfig')
+      .mockImplementation(kind => kind === 'grave-titan' ? { ...original(kind), bodyRadiusFactor: undefined } : original(kind));
     const world = setup();
     expect(world.executor.hostSpawnBoss('grave-titan')).toBe(true);
     const boss = world.spawned[0];
@@ -182,6 +186,7 @@ describe('Spawn coordinates across World and navigation grids', () => {
     expect(world.executor.hostSpawnEncounterGroup('alien-badger', 1, 'burrow', 'east').enemyIds).toHaveLength(1);
     expect(world.spawned.at(-1)?.x).toBe(240);
     world.destroy();
+    config.mockRestore();
   });
 
   it('lets burrowing arrivals emerge inside an authored spawn area instead of tunnelling from the edge', () => {

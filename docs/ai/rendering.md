@@ -268,6 +268,11 @@ rechnet diesen Faktor aus dem zentrierten Arcade-Kreis heraus; Trefferabfragen v
 `getCollisionRadius()`. Augenanker und Silhouettenkopien folgen dem gesamten Canvas,
 während körperbezogene Licht-, Markierungs- und Effektgrößen den Faktor herausrechnen.
 Die im Blender-Clip vorgezogene Figur verschiebt weder Entity-Position noch Trefferkugel.
+Reichen die Gliedmaßen eines Bosses über `size` hinaus, vergrößert `bodyRadiusFactor` nur den
+physischen Körper; die Darstellung behält `size × displayScale`. Physische Abfragen (Felsen,
+Navigation, Ausweichen, Spawnplatz, Treffer) lesen deshalb `enemyBodyRadius` aus
+[coopDefenseEnemies.ts](../../src/config/coopDefenseEnemies.ts) bzw. `getSize()` und
+`getCollisionRadius()`, nie `config.size` direkt.
 
 [BadgerAnimations.ts](../../src/animations/BadgerAnimations.ts) registriert optionale `idle`-Clips
 aus derselben Assetauswahl wie den Lauf. Stehende aktive Figuren spielen diesen Clip ohne

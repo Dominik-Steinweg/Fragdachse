@@ -5,6 +5,7 @@ import { getSpawnStructureOutletVector, resolveSpawnStructureLaneOffset, SPAWN_S
 import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemyKind,
+  enemyBodyRadius,
 } from '../config/coopDefenseEnemies';
 import type { CoopDefenseMapSpawnAreaConfig } from '../config/coopDefenseMaps';
 import type { SpawnFront } from '../types';
@@ -221,7 +222,7 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
       const enemy = this.enemyManager.hostSpawnAtWorld(world.x, world.y, kind, spawnOptions);
       spawnedEnemyIds.push(enemy.id);
       this.pushRecent(this.key(pick.gridX, pick.gridY));
-      const minimumDistance = getCoopDefenseEnemyConfig(kind).size * 0.5 + enemy.getCollisionRadius();
+      const minimumDistance = enemyBodyRadius(getCoopDefenseEnemyConfig(kind)) + enemy.getCollisionRadius();
       candidates = candidates.filter((cell) => {
         if (!spawnArea?.cluster && Math.abs(cell.gridX - pick.gridX) <= MIN_INTRA_GROUP_DISTANCE_CELLS
           && Math.abs(cell.gridY - pick.gridY) <= MIN_INTRA_GROUP_DISTANCE_CELLS) return false;
@@ -245,7 +246,7 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     }
 
     const enemies = this.enemyManager.getAllEnemies();
-    const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
+    const spawnRadius = enemyBodyRadius(getCoopDefenseEnemyConfig(kind));
     const cells: SpawnCell[] = [];
     const edgeBand = spawnArea ? this.getAuthoredBand(spawnArea) : this.getEdgeBand(front);
     if (spawnArea?.medium === 'water') return this.collectWaterCandidates(spawnArea, edgeBand, spawnRadius, enemies);
@@ -333,7 +334,7 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     flowFieldService: EnemyFlowFieldService,
   ): SpawnCell[] {
     const enemies = this.enemyManager.getAllEnemies();
-    const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
+    const spawnRadius = enemyBodyRadius(getCoopDefenseEnemyConfig(kind));
     const edgeCells: Array<{ cell: SpawnCell; digCells: number }> = [];
     let shortestDigCells = Number.POSITIVE_INFINITY;
 

@@ -3,7 +3,7 @@ import { bindKrakenDevHost, krakenDevAuthorized } from '../dev/scenario/krakenHo
 import type { WorldCombatCore } from '../combat/WorldCombatCore';
 import type { CombatScope } from '../combat/CombatScope';
 import type { CombatPartHitReceipt } from '../combat/CombatPartContact';
-import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
+import { getCoopDefenseEnemyConfig, enemyBodyRadius } from '../config/coopDefenseEnemies';
 import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import type { ArenaLayout } from '../types';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
@@ -96,7 +96,7 @@ export function materializeCoopMissionKraken(runtime: CoopMissionRuntime, map: C
     removeEgg: (id, generation) => { if (currentEgg(id, generation)) manager.hostRemoveWithoutKill(id); },
     landingFree: (p, radius) => habitat.isDryBodyFree(p, radius) && !occupied(p.x, p.y, radius),
     reserveChild: (kind, p) => {
-      const radius = getCoopDefenseEnemyConfig(kind).size / 2;
+      const radius = enemyBodyRadius(getCoopDefenseEnemyConfig(kind));
       if (!habitat.isDryBodyFree(p, radius)) return { status: 'invalid' };
       if (occupied(p.x, p.y, radius, manager.getAllEnemies().find(e => e.isKrakenEgg() && e.sprite.x === p.x && e.sprite.y === p.y)?.id ?? null)) return { status: 'blocked' };
       const reachable = runtime.enemyPlayerFlowFieldService?.canReachCurrentGoals(p.x, p.y);

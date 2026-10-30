@@ -505,7 +505,7 @@ export function* createRendererBundleSteps(
   cleanup.push(() => movement.destroy());
   const bossIntro = new BossIntroGraveyardRenderer(scene, lighting, burrowGpu);
   cleanup.push(() => bossIntro.destroy());
-  const bossPresence = new BossPresenceRenderer(scene, lighting);
+  const bossPresence = new BossPresenceRenderer(scene, lighting, graveTitanImpact);
   cleanup.push(() => bossPresence.destroy());
   const voidHunterSparks = new VoidHunterSparksRenderer(scene, gpuVfx, lighting);
   cleanup.push(() => voidHunterSparks.destroy());

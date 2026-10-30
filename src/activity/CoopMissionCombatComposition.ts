@@ -11,6 +11,7 @@ import type { ArenaLayout } from '../types';
 import {
   getCoopDefenseEnemyConfig,
   type ResolvedCoopDefenseEnemyConfigs,
+  enemyBodyRadius,
 } from '../config/coopDefenseEnemies';
 import type {
   ResolvedCoopDefenseMapEncounterConfig,
@@ -141,7 +142,7 @@ export class CoopMissionCombatComposition {
       ? getCoopDefenseEnemyConfig(this.options.activity.mapConfig.boss.enemyKind)
       : null;
     const bossClearanceCells = bossConfig
-      ? Math.ceil(Math.max(0, bossConfig.size * 0.5 - CELL_SIZE * 0.5) / CELL_SIZE)
+      ? Math.ceil(Math.max(0, enemyBodyRadius(bossConfig) - CELL_SIZE * 0.5) / CELL_SIZE)
       : 0;
     const exact = this.options.geometryProvider !== undefined;
     const { metrics, staticKind, bases } = resolveCoopMissionFlowFieldInputs({ worldMetrics: this.options.worldMetrics,
@@ -181,7 +182,7 @@ export class CoopMissionCombatComposition {
         flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.boss, {
           goalMode: bossConfig.movementTarget === 'players' ? 'dynamic-fallback-bases' : 'bases',
           clearanceCells: bossClearanceCells,
-          bodyRadius: bossConfig.size / 2,
+          bodyRadius: enemyBodyRadius(bossConfig),
         }),
       )
       : null;

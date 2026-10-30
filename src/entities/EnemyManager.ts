@@ -37,6 +37,7 @@ import {
   resolveCoopDefenseEnemyConfigs,
   type CoopDefenseEnemyKind,
   type ResolvedCoopDefenseEnemyConfigs,
+  enemyBodyRadius,
 } from '../config/coopDefenseEnemies';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type {
@@ -545,8 +546,8 @@ export class EnemyManager {
   hostSpawnKrakenEggAtWorld(x: number, y: number, kind: CoopDefenseEnemyKind, originId: string,
     isBodyFree: (x: number, y: number, radius: number) => boolean): EnemyEntity | null {
     const config = this.resolvedConfigs[kind];
-    if (!config?.krakenEgg || this.waterGeometry?.isCircleBlocked(x, y, config.size / 2)
-      || !isBodyFree(x, y, config.size / 2)) return null;
+    if (!config?.krakenEgg || this.waterGeometry?.isCircleBlocked(x, y, enemyBodyRadius(config))
+      || !isBodyFree(x, y, enemyBodyRadius(config))) return null;
     return this.hostSpawnAtWorld(x, y, kind, { originId, skipSpawnEffect: true });
   }
 
@@ -580,7 +581,7 @@ export class EnemyManager {
   ): EnemyEntity {
     if (this.resolvedConfigs[kind].krakenBoss && !habitatPermit) throw new Error('Kraken requires a validated habitat spawn');
     if (this.waterGeometry && !habitatPermit && !this.resolvedConfigs[kind].amphibious) {
-      const dry = this.waterGeometry.resolveDryPoint(x, y, this.resolvedConfigs[kind].size * .5);
+      const dry = this.waterGeometry.resolveDryPoint(x, y, enemyBodyRadius(this.resolvedConfigs[kind]));
       if (!dry) throw new Error('[EnemyManager] No dry ground available for enemy spawn');
       x = dry.x; y = dry.y;
     }
@@ -606,7 +607,7 @@ export class EnemyManager {
     enemy.setHealthBarRenderer(this.healthBars);
     this.enemies.set(id, enemy);
     // An amphibious unit spawned in water starts submerged, so the first replicated state already hides it.
-    if (this.resolvedConfigs[kind].amphibious && (this.waterGeometry?.wetShare(x, y, this.resolvedConfigs[kind].size / 2) ?? 0) >= .8) enemy.setSubmerged(true);
+    if (this.resolvedConfigs[kind].amphibious && (this.waterGeometry?.wetShare(x, y, enemyBodyRadius(this.resolvedConfigs[kind])) ?? 0) >= .8) enemy.setSubmerged(true);
     if (enemy.eliteAffixId === 'shielding') this.eliteShields.add(enemy);
     this.registerCombatTarget(id, this.nextEnemyGeneration++);
     this.playSpawnEffect(enemy, options);

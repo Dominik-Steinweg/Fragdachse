@@ -1111,16 +1111,19 @@ await dev.run({ action: 'spawn', kind: 'grave-titan', pinned: false, gridX: 20, 
 Erwartung: Intro mit großem Gräberfeld; der Titan gräbt sich Kopf und Vorderpranken voran aus (die
 Frames werden weich ineinander geblendet), die Glühwürmchen tauchen in ihn ein, der Durchbruch brüllt
 grün. Im Kampf umschwärmen ihn 30 normale Glühwürmchen, je drei sind Munition für einen Schuss. Vor
-jeder Salve ziehen sie sich 1,6 s zu einer Krone über dem Grab zusammen und beginnen zu glühen, dann
-fliegt jeder Schuss aus seiner Gruppe; in der 10-s-Pause steigen sie einzeln und wieder dunkel auf. Wer
-bis 300 px am Titan steht, wird gestampft (rotes Rundumfeld, 1,5 s, danach grüne Dunst-Druckwelle bis
-zum Rand). Bauwerke greift er mit dem Prankenschlag an, erst wenn er bis auf Kopflänge herangetreten
-ist (rotes Fächerfeld vor dem Kopf, 1,3 s, dann ein Dunstfächer in die Basis). Beide töten auch mit
-voller Rüstung. Er dreht sich träge (55°/s), und Treffer zählen auf dem ganzen Körper mitsamt Beinen.
+jeder Salve strömt Grabdunst in die Krone, die Glühwürmchen glühen auf und verschmelzen in 1,6 s zu
+zehn pulsierenden Kugeln in Schussgröße; jeder Schuss ist eine davon. Dabei läuft der Titan weiter
+und schlägt zu. Wer bis 400 px am Titan steht oder welche Basis bis 210 px vor ihm liegt, wird
+gestampft (rote Rundzone füllt sich 1,5 s bis zum Rand, dann grüne Druckwelle, alle 3 s). Dazwischen
+richtet er sich zum Prankenschlag auf (scharfer roter Fächer bis 280 px, dann Dunstfächer). Felsen
+und Basen halten den breiten Körper (Radius 98) auf, andere Gegner weichen ihm aus.
 
-Für saubere Aufnahmen ohne tote Spielfigur: Spieler außerhalb der Plasma-Reichweite (900 px), Bots als
-Stampfer-Ziele und die Kamera auf den Titan, z. B. `bots: [{ name: 'A', player: { gridX: 15, gridY: 13 } }]`,
-`{ action: 'target', gridX: 12, gridY: 13 }` und `{ action: 'camera', zoom: 1.6, focusTarget: true }`.
+Der breite Körper braucht Platz: Für einen festgesetzten Titan eignet sich etwa `gridX 11, gridY 10`
+(Gräberfeldmitte und Gleisnähe sind zu eng; in Gleisnähe sperrt die Zugwachsamkeit einen
+festgesetzten Titan). Für saubere Aufnahmen ohne tote Spielfigur: Spieler außerhalb der
+Plasma-Reichweite (900 px), Bots als Ziele und die Kamera auf den Titan, z. B.
+`bots: [{ name: 'A', player: { gridX: 15, gridY: 10 } }]`, `{ action: 'target', gridX: 11, gridY: 10 }`
+und `{ action: 'camera', zoom: 1.2, focusTarget: true }`.
 
 Headless-Nachweise: `tests/GraveTitanVoidPlasma.test.ts`, `tests/GraveTitanPresentation.test.ts`.
 

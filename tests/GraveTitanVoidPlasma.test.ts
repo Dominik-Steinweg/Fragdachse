@@ -13,7 +13,7 @@ vi.mock('phaser', () => ({
   },
 }));
 
-import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyWeaponSalvoConfig } from '../src/config/coopDefenseEnemies';
+import { enemyBodyRadius, getCoopDefenseEnemyConfig, type CoopDefenseEnemyWeaponSalvoConfig } from '../src/config/coopDefenseEnemies';
 import { GenericWeapon } from '../src/loadout/GenericWeapon';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { CoopDefenseEnemyAttackSystem } from '../src/systems/CoopDefenseEnemyAttackSystem';
@@ -35,6 +35,8 @@ const SALVO = VOID_PLASMA_ATTACK.salvo!;
 const CHARGE_MS = SALVO.chargeMs ?? 0;
 const SLAM_TIMING = TITAN.weapons.find((weapon) => weapon.weaponId === 'GRAVE_TITAN_SLAM')!.meleeTiming!;
 const STOMP_RANGE = WEAPON_CONFIGS.GRAVE_TITAN_STOMP.range;
+const STOMP_TIMING = TITAN.weapons.find((weapon) => weapon.weaponId === 'GRAVE_TITAN_STOMP')!.meleeTiming!;
+const MELEE_IDS = ['GRAVE_TITAN_STOMP', 'GRAVE_TITAN_SLAM'];
 
 interface TestPlayer {
   id: string;
@@ -95,7 +97,7 @@ function createTitan(salvoOverride?: CoopDefenseEnemyWeaponSalvoConfig): TestTit
     getCollisionRadius: () => TITAN.size / 2,
     getAimAngle: () => 0,
     faceAngle: () => {},
-    hasTurnRateLimit: () => TITAN.turnRateDegPerSec !== undefined,
+    getTurnRateRadPerMs: () => TITAN.turnRateDegPerSec === undefined ? null : TITAN.turnRateDegPerSec * Math.PI / 180_000,
     stopMovement: () => {},
     canScanForAttack(now: number) { return now >= this.nextScanAt; },
     scheduleNextAttackScan(now: number) { this.nextScanAt = now + TITAN.attackScanIntervalMs; },
@@ -188,6 +190,8 @@ describe('Grufttitan Void-Plasma', () => {
       fakeEntity({ id: 'p2', x: 100 + inRangeDistance + 100, y: 100, active: true }),
     ];
     const enemy = createTitan();
+    // Only the plasma is under test: both players stand inside the stomp's pressure wave.
+    for (const id of MELEE_IDS) enemy.weaponLockouts.set(id, Number.MAX_SAFE_INTEGER);
     const { system, shots } = createAttackSystem(enemy, players);
 
     players[0].sprite.x = 100 + VOID_PLASMA.range + 100;
@@ -264,6 +268,7 @@ describe('Grufttitan Void-Plasma', () => {
   it('spends a gathered salvo whose target left, so it cannot gather again before the pause ends', () => {
     const players = [fakeEntity({ id: 'p1', x: 500, y: 100, active: true })];
     const enemy = createTitan();
+    for (const id of MELEE_IDS) enemy.weaponLockouts.set(id, Number.MAX_SAFE_INTEGER);
     const { system, shots } = createAttackSystem(enemy, players);
 
     runAttackFrames(system, 1_000, 1_100);
@@ -284,32 +289,28 @@ describe('Grufttitan Void-Plasma', () => {
     expect(enemy.volley.revision).toBe(revision + 2);
   });
 
-  it('greift eine erreichbare Basis waehrend des Plasma-Cooldowns an und setzt Plasma danach fort', () => {
-    const players = [fakeEntity({ id: 'p1', x: 500, y: 100, active: true })];
+  it('keeps striking a base in reach while its salvo gathers, and still fires the whole salvo', () => {
+    // A plasma target beyond the stomp's wave, and a base right ahead.
+    const players = [fakeEntity({ id: 'p1', x: 100 + STOMP_RANGE + 60, y: 100, active: true })];
     const bases: TestBase[] = [{
-      faction: 'friendly',
-      role: 'main',
-      isInert: () => false,
-      getHp: () => 1_000,
-      getTurrets: () => [],
+      faction: 'friendly', role: 'main', isInert: () => false, getHp: () => 1_000, getTurrets: () => [],
       getNearestSurfacePoint: () => ({ x: 200, y: 100, distance: 100 }),
     }];
     const enemy = createTitan();
     const { system, shots } = createAttackSystem(enemy, players, bases);
+    const windups: { at: number; weaponId: string }[] = [];
+    let clock = 0;
+    system.setClawStateSink((_enemy, state) => { if (state.attack) windups.push({ at: clock, weaponId: state.attack.weaponId }); });
 
-    runAttackFrames(system, 1_000, 1_000 + CHARGE_MS * 2 + SALVO.cooldownMs + SALVO.intervalMs * SALVO.count * 2
-      + SLAM_TIMING.hitDelayMs + SLAM_TIMING.recoveryMs + TITAN.attackScanIntervalMs * 2);
+    for (clock = 1_000; clock <= 1_000 + CHARGE_MS + SALVO.intervalMs * SALVO.count * 2 + STOMP_TIMING.hitDelayMs; clock += 10) {
+      system.hostUpdate(10, clock);
+    }
 
-    const weaponIds = shots.map((shot) => shot.weaponId);
-    const firstSlamIndex = weaponIds.indexOf('GRAVE_TITAN_SLAM');
-    expect(weaponIds.slice(0, SALVO.count).every((weaponId) => weaponId === VOID_PLASMA.id)).toBe(true);
-    expect(firstSlamIndex).toBeGreaterThanOrEqual(SALVO.count);
-    expect(shots[firstSlamIndex]).toMatchObject({
-      weaponId: 'GRAVE_TITAN_SLAM',
-      targetX: 200,
-      targetY: 100,
-    });
-    expect(weaponIds.slice(firstSlamIndex + 1)).toContain(VOID_PLASMA.id);
+    const { chargeStartAt, fireAt } = enemy.volley;
+    expect(fireAt - chargeStartAt).toBe(CHARGE_MS);
+    expect(windups.some(windup => windup.at >= chargeStartAt && windup.at < fireAt)).toBe(true);
+    expect(shots.filter(shot => shot.weaponId === VOID_PLASMA.id)).toHaveLength(SALVO.count);
+    expect(shots.find(shot => MELEE_IDS.includes(shot.weaponId))).toMatchObject({ targetX: 200, targetY: 100 });
   });
 
   it('schlaegt waehrend der Plasma-Pause zur Basis statt in Richtung des fernen Spielers', () => {
@@ -341,43 +342,33 @@ describe('Grufttitan Void-Plasma', () => {
     for (const angle of slamAngles) expect(angle).toBeCloseTo(Math.PI / 2, 5);
   });
 
-  it('stomps every player inside its pressure wave, even while the plasma waits out its pause, and slams only structures', () => {
+  it('stomps players and bases in its wave at most every 3 s and slams in between, even while the plasma waits', () => {
     const radius = TITAN.size / 2;
-    const players = [
-      fakeEntity({ id: 'hugger', x: 100 + radius + 30, y: 100, active: true }),
-      fakeEntity({ id: 'shooter', x: 100 + STOMP_RANGE + 200, y: 100, active: true }),
-    ];
-    const bases: TestBase[] = [{
-      faction: 'friendly', role: 'main', isInert: () => false, getHp: () => 1_000, getTurrets: () => [],
-      getNearestSurfacePoint: () => ({ x: 200, y: 100, distance: 100 }),
-    }];
+    const players = [fakeEntity({ id: 'hugger', x: 100 + radius + 30, y: 100, active: true })];
     const enemy = createTitan();
     enemy.weaponLockouts.set(VOID_PLASMA.id, Number.MAX_SAFE_INTEGER);
-    const { system } = createAttackSystem(enemy, players, bases);
-    const attacks: string[] = [];
-    system.setClawStateSink((_enemy, state) => { if (state.attack) attacks.push(state.attack.weaponId); });
+    const { system } = createAttackSystem(enemy, players);
+    const windups: { at: number; weaponId: string; hitAt: number }[] = [];
+    let clock = 0;
+    system.setClawStateSink((_enemy, state) => {
+      if (state.attack) windups.push({ at: clock, weaponId: state.attack.weaponId, hitAt: state.attack.hitAt });
+    });
+    for (clock = 1_000; clock <= 9_000; clock += 10) system.hostUpdate(10, clock);
 
-    runAttackFrames(system, 1_000, 1_100);
-    expect(attacks).toEqual(['GRAVE_TITAN_STOMP']);
-
-    // Still well inside the wave: stomped again rather than slammed.
-    players[0].sprite.x = 100 + STOMP_RANGE - 40;
-    runAttackFrames(system, 1_110, 1_110 + 3_000);
-    expect(attacks.slice(1)).toContain('GRAVE_TITAN_STOMP');
-    expect(attacks.slice(1)).not.toContain('GRAVE_TITAN_SLAM');
-
-    // Out of the wave: the base in reach takes the slam.
-    players[0].sprite.x = 100 + STOMP_RANGE + 200;
-    const before = attacks.length;
-    runAttackFrames(system, 4_200, 4_200 + 3_000);
-    expect(attacks.slice(before)).toContain('GRAVE_TITAN_SLAM');
-    expect(attacks.slice(before)).not.toContain('GRAVE_TITAN_STOMP');
+    const stomps = windups.filter(windup => windup.weaponId === 'GRAVE_TITAN_STOMP');
+    expect(windups[0].weaponId).toBe('GRAVE_TITAN_STOMP');
+    expect(stomps.length).toBeGreaterThanOrEqual(2);
+    expect(stomps[1].at - stomps[0].hitAt).toBeGreaterThanOrEqual(WEAPON_CONFIGS.GRAVE_TITAN_STOMP.cooldown);
+    // While the stomp cools down, the slam keeps the hugger busy.
+    expect(windups.some(windup => windup.weaponId === 'GRAVE_TITAN_SLAM' && windup.at > stomps[0].at && windup.at < stomps[1].at)).toBe(true);
   });
 
-  it('steps up to a base before it slams, although the slam reaches further', () => {
-    const SLAM = TITAN.weapons.find((weapon) => weapon.weaponId === 'GRAVE_TITAN_SLAM')!;
-    const reach = SLAM.structureReachPx!;
-    expect(reach).toBeLessThan(WEAPON_CONFIGS.GRAVE_TITAN_SLAM.range);
+  it('steps up to a base before it strikes it, although both strikes reach further', () => {
+    for (const id of MELEE_IDS) {
+      const weapon = TITAN.weapons.find((candidate) => candidate.weaponId === id)!;
+      expect(weapon.structureReachPx).toBeLessThan(WEAPON_CONFIGS[id as keyof typeof WEAPON_CONFIGS].range);
+    }
+    const reach = Math.max(...MELEE_IDS.map(id => TITAN.weapons.find((weapon) => weapon.weaponId === id)!.structureReachPx!));
     let distance = reach + 30;
     const bases: TestBase[] = [{
       faction: 'friendly', role: 'main', isInert: () => false, getHp: () => 1_000, getTurrets: () => [],
@@ -386,14 +377,22 @@ describe('Grufttitan Void-Plasma', () => {
     const enemy = createTitan();
     enemy.weaponLockouts.set(VOID_PLASMA.id, Number.MAX_SAFE_INTEGER);
     const { system } = createAttackSystem(enemy, [], bases);
-    const slams: number[] = [];
-    system.setClawStateSink((_enemy, state) => { if (state.attack) slams.push(state.attack.range); });
+    const strikes: string[] = [];
+    system.setClawStateSink((_enemy, state) => { if (state.attack) strikes.push(state.attack.weaponId); });
 
     runAttackFrames(system, 1_000, 2_000);
-    expect(slams).toEqual([]);
+    expect(strikes).toEqual([]);
     distance = reach - 10;
     runAttackFrames(system, 2_010, 2_500);
-    expect(slams).toEqual([WEAPON_CONFIGS.GRAVE_TITAN_SLAM.range]);
+    expect(strikes).toEqual(['GRAVE_TITAN_STOMP']);
+  });
+
+  it('has a body that covers its legs, and reaches structures from beyond that body', () => {
+    expect(enemyBodyRadius(TITAN)).toBeGreaterThan(TITAN.size / 2 * 1.5);
+    // A structure reach inside the body could never be met: walls stop the body before it.
+    for (const id of MELEE_IDS) {
+      expect(TITAN.weapons.find((weapon) => weapon.weaponId === id)!.structureReachPx!).toBeGreaterThan(enemyBodyRadius(TITAN) + 60);
+    }
   });
 
   it('turns its slow body towards a base before it rears for a slam', () => {
@@ -402,7 +401,8 @@ describe('Grufttitan Void-Plasma', () => {
       getNearestSurfacePoint: () => ({ x: 100, y: 200, distance: 100 }),
     }];
     const enemy = createTitan();
-    enemy.weaponLockouts.set(VOID_PLASMA.id, Number.MAX_SAFE_INTEGER);
+    // The stomp strikes all around and needs no facing.
+    for (const id of [VOID_PLASMA.id, 'GRAVE_TITAN_STOMP']) enemy.weaponLockouts.set(id, Number.MAX_SAFE_INTEGER);
     let aim = Math.PI;
     Object.assign(enemy, { getAimAngle: () => aim });
     const { system } = createAttackSystem(enemy, [], bases);

@@ -475,7 +475,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   readEnemyAimTargets(): readonly { id: string; bossId: string; x: number; y: number; radius: number; part?: CombatPartContactSnapshot }[] {
     return [
       ...(this.enemyManager?.getAllEnemies() ?? []).filter(e => this.isBodyTargetable(e.id) && !e.isBurrowed()).map(e => ({
-        id: e.id, bossId: e.id, x: e.sprite.x, y: e.sprite.y, radius: e.getHitRadius(),
+        id: e.id, bossId: e.id, x: e.sprite.x, y: e.sprite.y, radius: e.getCollisionRadius(),
       })),
       ...this.readPartTargets().map(p => ({ id: p.id, bossId: p.snapshot.contact.identity.boss.id,
         x: p.x, y: p.y, radius: p.radius, part: p.snapshot })),
@@ -948,7 +948,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       for (const e of this.enemyManager?.getAllEnemies() ?? []) {
         if (e.faction !== 'allied' || !this.isBodyTargetable(e.id) || e.isBurrowed()
           || !this.relationshipForSource(source, e.id).canDamage) continue;
-        select({ kind: 'enemy', id: e.id, x: e.sprite.x, y: e.sprite.y, radius: e.getHitRadius(), target: this.enemyManager?.getCombatTargetRef(e.id) ?? undefined });
+        select({ kind: 'enemy', id: e.id, x: e.sprite.x, y: e.sprite.y, radius: e.getCollisionRadius(), target: this.enemyManager?.getCombatTargetRef(e.id) ?? undefined });
       }
       for (const d of this.decoySystem?.getHostTargets() ?? []) {
         if (!this.relationshipForSource(source, d.ownerId).canDamage) continue;
@@ -2191,7 +2191,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (!enemy.sprite.active || !this.isAlive(enemy.id) || !this.isBodyTargetable(enemy.id) || enemy.isBurrowed()) continue;
-      const radius = enemy.getHitRadius();
+      const radius = enemy.getCollisionRadius();
       sink(
         'enemy', enemy.id, enemy.id,
         enemy.sprite.x, enemy.sprite.y,
@@ -4170,7 +4170,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       const hitDistance = this.getHitscanTargetHitDistance(
         this.hitscanLine,
-        toSpriteHitscanTarget(enemy.sprite, enemy.getHitRadius()),
+        toSpriteHitscanTarget(enemy.sprite, enemy.getCollisionRadius()),
         traceThickness,
         applyFavorTheShooter,
       );

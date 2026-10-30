@@ -217,9 +217,9 @@
       "maxHp": 2100,
       "xp": 300,
       "size": 112,
-      "hitRadiusFactor": 1.85,
+      "bodyRadiusFactor": 1.75,
       "moveSpeed": 48,
-      "turnRateDegPerSec": 55,
+      "turnRateDegPerSec": 72,
       "knockbackFactor": 0.15,
       "movementTarget": "bases",
       "weapons": [
@@ -238,8 +238,9 @@
         },
         {
           "weaponId": "GRAVE_TITAN_STOMP",
-          "targetMode": "players",
+          "targetMode": "all",
           "usableDuringPriorityPause": true,
+          "structureReachPx": 210,
           "meleeTiming": {
             "hitDelayMs": 1500,
             "strikeMs": 160,
@@ -253,7 +254,7 @@
           "weaponId": "GRAVE_TITAN_SLAM",
           "targetMode": "all",
           "usableDuringPriorityPause": true,
-          "structureReachPx": 150,
+          "structureReachPx": 210,
           "meleeTiming": {
             "hitDelayMs": 1300,
             "strikeMs": 220,

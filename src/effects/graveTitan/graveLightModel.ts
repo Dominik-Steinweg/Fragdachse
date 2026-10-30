@@ -4,20 +4,28 @@ import { meleeLiftProfile, type EnemyClawAttack } from '../../systems/EnemyClawA
 /**
  * The Grave Titan's ammunition made visible: its own ordinary fireflies, several per salvo shot.
  * Ready, they swarm loosely around it like any boss presence. The gather pulls them into a crown
- * over the grave where they visibly start to glow; every shot takes the next group with it (the
- * plasma flies out of their place in the crown); during the pause the spent fireflies rise again
- * one by one out of the lantern holes, dark as before. Pure presentation of the replicated volley
- * timeline plus the number of shots this client has seen launch.
+ * over the grave where they start to glow; then each shot's fireflies fuse into one orb that swells
+ * to the size and brightness of a flying shot, and the orbs pulse until the first shot. Every shot
+ * is its orb launching. During the pause the spent fireflies rise again one by one out of the
+ * lantern holes, dark as before. Pure presentation of the replicated volley timeline plus the
+ * number of shots this client has seen launch.
  */
 export const GRAVE_FIREFLIES = {
   /** Crown over the grave: radii (world px) of the gathered swarm and its spin (rad/s). */
   crownInner: 20, crownOuter: 66, crownSpin: 2.2,
-  /** The crown draws this much tighter by the first shot. */
-  crownTighten: 0.1,
-  /** Share of the gather spent flying in (staggered per firefly); afterwards the crown burns brighter. */
-  flyInShare: 0.6, flyInStagger: 0.35,
-  /** Glow (0..1) once a firefly has flown in; full glow at the first shot. */
+  /**
+   * Share of the gather spent flying in (staggered per firefly) and the share by which every shot's
+   * fireflies have fused into their orb; for the rest of the gather the orbs pulse.
+   */
+  flyInShare: 0.45, flyInStagger: 0.35, fuseEnd: 0.8,
+  /** Glow (0..1) once a firefly has flown in; it burns fully as it fuses. */
   flownInGlow: 0.45,
+  /** Orbs ring the crown at this radius (world px), turning at this rate (rad/s); the ring draws in while they pulse. */
+  orbRing: 46, orbSpin: 1.4, orbRingTighten: 0.15,
+  /** A full orb is a flying shot: its core scale (world px) and intensity. */
+  orbSize: 6.2, orbIntensity: 1.9,
+  /** Pulse of the full orbs before the first shot: rate (Hz) and depth. */
+  orbPulseHz: 3.2, orbPulse: 0.3,
   /** A refilled firefly rises out of a lantern hole at this share of the body radius and drifts to its orbit. */
   holeShare: 0.6, riseMs: 900,
   /** Fireflies that never launched (cancelled or cut salvo) drift back to their orbit and cool down. */
@@ -27,7 +35,7 @@ export const GRAVE_FIREFLIES = {
 export interface GraveFireflyAmmoPose {
   x: number;
   y: number;
-  /** 0 = hidden (launched, not yet refilled). */
+  /** 0 = hidden (launched, fused into its orb, or not yet refilled). */
   alpha: number;
   /** Charge glow 0..1 over the ordinary firefly. */
   glow: number;
@@ -72,17 +80,68 @@ export function spentFireflies(launchedShots: number, fireflies: number, shots: 
   return launchedShots >= shots ? fireflies : Math.ceil(launchedShots * fireflies / shots);
 }
 
-function crownPose(index: number, fireflies: number, site: GraveFireflySite, now: number, tighten: number,
-  out: { x: number; y: number }): void {
+function crownPose(index: number, fireflies: number, site: GraveFireflySite, now: number, out: { x: number; y: number }): void {
   const fx = GRAVE_FIREFLIES;
   const angle = index * 2.39996 + now / 1000 * fx.crownSpin * (index % 3 === 0 ? -1 : 1);
   const radius = (fx.crownInner + (fx.crownOuter - fx.crownInner) * Math.sqrt((index + 0.5) / fireflies))
-    * (1 - fx.crownTighten * tighten) * (0.9 + 0.2 * hash(index, 7));
+    * (0.9 + 0.2 * hash(index, 7));
   out.x = site.crownX + Math.cos(angle) * radius;
   out.y = site.crownY + Math.sin(angle) * radius;
 }
 
-const crown = { x: 0, y: 0 };
+/** Ring position of the orb of salvo shot `shot`. */
+function orbPosition(shot: number, shots: number, site: GraveFireflySite, now: number, swell: number,
+  out: { x: number; y: number }): void {
+  const fx = GRAVE_FIREFLIES;
+  const angle = shot / Math.max(1, shots) * Math.PI * 2 + now / 1000 * fx.orbSpin;
+  const radius = fx.orbRing * (1 - fx.orbRingTighten * swell);
+  out.x = site.crownX + Math.cos(angle) * radius;
+  out.y = site.crownY + Math.sin(angle) * radius;
+}
+
+/** How far the gather has fused its fireflies into orbs (0..1) and how far the full orbs pulse (0..1). */
+function gatherStages(charge: number): { fuse: number; swell: number } {
+  const fx = GRAVE_FIREFLIES;
+  return { fuse: ease((charge - fx.flyInShare) / (fx.fuseEnd - fx.flyInShare)), swell: ease((charge - fx.fuseEnd) / (1 - fx.fuseEnd)) };
+}
+
+const crown = { x: 0, y: 0 }, orb = { x: 0, y: 0 };
+
+export interface GraveOrbPose {
+  x: number;
+  y: number;
+  /** Core scale (world px); 0 = no orb. */
+  size: number;
+  intensity: number;
+}
+
+/**
+ * Orb of salvo shot `shot`: it grows out of its fusing fireflies through the gather, pulses at full
+ * shot size and stays until its shot launches; a cancelled salvo's orbs come apart again.
+ */
+export function graveOrbPose(shot: number, shots: number, site: GraveFireflySite, state: EnemyVolleyState, seenLaunches: number,
+  now: number, out: GraveOrbPose): GraveOrbPose {
+  const fx = GRAVE_FIREFLIES;
+  out.size = 0; out.intensity = 0;
+  if (state.revision === 0) return out;
+  const phase = enemyVolleyPhaseAt(state, now);
+  const launched = launchedGraveLights(state, seenLaunches, shots);
+  let grown: number, swell: number;
+  if (phase === 'charge' || phase === 'fire') {
+    if (shot < launched) return out;
+    ({ fuse: grown, swell } = gatherStages(enemyVolleyChargeAt(state, now)));
+  } else if (state.endedAt > 0 && now >= state.endedAt && shot >= launched) {
+    grown = 1 - ease((now - state.endedAt) / fx.returnMs);
+    swell = 0;
+  } else return out;
+  if (grown <= 0.001) return out;
+  orbPosition(shot, shots, site, now, swell, orb);
+  const beat = swell * Math.sin((now / 1000 * fx.orbPulseHz + shot * 0.37) * Math.PI * 2);
+  out.x = orb.x; out.y = orb.y;
+  out.size = fx.orbSize * grown * (1 + 0.12 * beat);
+  out.intensity = fx.orbIntensity * grown * (1 + fx.orbPulse * beat);
+  return out;
+}
 
 /**
  * Pose of firefly `index` of `fireflies` feeding a salvo of `shots` at `now`, starting from its
@@ -101,23 +160,28 @@ export function graveFireflyPose(index: number, fireflies: number, shots: number
     const charge = enemyVolleyChargeAt(state, now);
     const flyStart = hash(index, 6) * fx.flyInStagger;
     const pull = ease((charge / fx.flyInShare - flyStart) / (1 - fx.flyInStagger));
-    const burn = ease((charge - fx.flyInShare) / (1 - fx.flyInShare));
-    crownPose(index, fireflies, site, now, burn, crown);
-    out.x = orbitX + (crown.x - orbitX) * pull;
-    out.y = orbitY + (crown.y - orbitY) * pull;
-    out.glow = fx.flownInGlow * pull + (1 - fx.flownInGlow) * burn;
+    const { fuse, swell } = gatherStages(charge);
+    crownPose(index, fireflies, site, now, crown);
+    orbPosition(fireflyShot(index, fireflies, shots), shots, site, now, swell, orb);
+    // Flown in, it spirals from its crown slot into its shot's orb and vanishes in it.
+    const slotX = orbitX + (crown.x - orbitX) * pull, slotY = orbitY + (crown.y - orbitY) * pull;
+    out.x = slotX + (orb.x - slotX) * fuse;
+    out.y = slotY + (orb.y - slotY) * fuse;
+    out.glow = fx.flownInGlow * pull + (1 - fx.flownInGlow) * fuse;
+    out.alpha = 1 - fuse;
     out.gathered = pull;
     return out;
   }
   if (state.endedAt <= 0 || now < state.endedAt) return out;
   if (index >= spent) {
-    // Never launched: drift back from the crown to the orbit and cool down.
+    // Never launched: it comes out of its dissolving orb, drifts back to the orbit and cools down.
     const back = ease((now - state.endedAt) / fx.returnMs);
     if (back >= 1) return out;
-    crownPose(index, fireflies, site, now, 1, crown);
-    out.x = crown.x + (orbitX - crown.x) * back;
-    out.y = crown.y + (orbitY - crown.y) * back;
+    orbPosition(fireflyShot(index, fireflies, shots), shots, site, now, 0, orb);
+    out.x = orb.x + (orbitX - orb.x) * back;
+    out.y = orb.y + (orbitY - orb.y) * back;
     out.glow = 1 - back;
+    out.alpha = back;
     out.gathered = 1 - back;
     return out;
   }

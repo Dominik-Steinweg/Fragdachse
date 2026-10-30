@@ -52,6 +52,7 @@ import {
   type CoopDefenseEnemyWeaponSalvoConfig,
   type CoopDefenseEnemyWeaponTargetMode,
   type ResolvedCoopDefenseEnemyConfig,
+  enemyBodyRadius,
 } from '../config/coopDefenseEnemies';
 import type { GroundFireVisualStyle, SyncedEnemyState } from '../types';
 import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBurnRenderer';
@@ -472,8 +473,8 @@ export class EnemyEntity {
   /** While set, external impulses (knockback, recoil, stagger scaling) do not move this enemy. */
   setKnockbackImmune(immune: boolean): void { this.knockbackImmune = immune; }
 
-  /** True when an authored turn rate limits how fast the body can face a new heading. */
-  hasTurnRateLimit(): boolean { return this.turnRateRadPerMs() !== null; }
+  /** Authored limit on how fast the body can face a new heading (rad/ms), or null for instant facing. */
+  getTurnRateRadPerMs(): number | null { return this.turnRateRadPerMs(); }
 
   /** Authoritative turn rate in rad/ms, or null for ordinary instant facing. */
   private turnRateRadPerMs(): number | null {
@@ -1024,17 +1025,12 @@ export class EnemyEntity {
     if (this.authoritative && this.sprite.body) {
       return this.body.halfWidth;
     }
-    return this.config.size * 0.5;
-  }
-
-  /** Being hit: the body circle, widened for a body whose limbs reach beyond it (`hitRadiusFactor`). */
-  getHitRadius(): number {
-    return this.getCollisionRadius() * (this.config.hitRadiusFactor ?? 1);
+    return enemyBodyRadius(this.config);
   }
 
   /** Physischer Grunddurchmesser des Gegners vor der Ausweich-Skalierung. */
   getSize(): number {
-    return this.config.krakenBoss ? this.config.krakenBoss.bodyRadiusPx * 2 : this.config.size;
+    return this.config.krakenBoss ? this.config.krakenBoss.bodyRadiusPx * 2 : enemyBodyRadius(this.config) * 2;
   }
 
   /** Canvas includes the pounce's transparent margin; the physical size stays authored. */

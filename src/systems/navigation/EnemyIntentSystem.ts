@@ -19,6 +19,8 @@ const FAR_TARGET_SEARCH_MS = 400;
 /** ...staggered by its scan phase, so far searches of a group spread over 400-600 ms. */
 const FAR_TARGET_SEARCH_STAGGER_MS = 50;
 
+/** A swing with an authored structure reach approaches structures this much closer than it strikes. */
+const STRUCTURE_APPROACH_MARGIN_PX = 40;
 type Target = NonNullable<EnemyIntent['target']> & NavigationPoint & { radius?: number; objectId?: string };
 interface SharedField { readonly id: string; readonly field: EnemyFlowFieldService; signature: string; usedAt: number;
   sealedGoals: readonly number[]; acceptsOpenedGoal: ((index: number, opened: ReadonlySet<string>) => boolean) | undefined }
@@ -344,7 +346,10 @@ export class EnemyIntentSystem {
         : target.kind === 'armed-construct' || weapon.targetMode === 'players' || weapon.targetMode === 'all';
       if (!eligible) continue;
       const structure = ['base', 'armed-base', 'armed-outpost', 'armed-construct'].includes(target.kind);
-      range = Math.max(range, structure ? Math.min(weapon.weapon.config.range, weapon.structureReachPx ?? Infinity) : weapon.weapon.config.range);
+      // A big body steps up closer than its strike needs: walls may stop it short, and from there it still reaches.
+      const reach = structure && weapon.structureReachPx !== undefined
+        ? Math.min(weapon.weapon.config.range, weapon.structureReachPx) - STRUCTURE_APPROACH_MARGIN_PX : weapon.weapon.config.range;
+      range = Math.max(range, reach);
     }
     const positioning = getCoopDefenseEnemyConfig(enemy.kind).combatPositioning;
     return Math.max(enemy.getSize() / 2 + 1, Math.min(range || 32, positioning?.preferredDistancePx ?? Infinity));

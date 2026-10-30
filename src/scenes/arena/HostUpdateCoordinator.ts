@@ -35,7 +35,7 @@ import type { ReactivePropEffect } from '../../world/reactiveProps/ReactivePropR
 import type { HitscanSupportEffect, LoadoutSlot, PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, SupportProjectileImpact, SyncedActiveHudBuff, SyncedReinforcementMatrix, TeamId } from '../../types';
 import type { BaseManager } from '../../entities/BaseManager';
 import { emitArenaMapGridChanged } from './ArenaEvents';
-import { getCoopDefenseEnemyConfig, hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
+import { getCoopDefenseEnemyConfig, hasCoopDefenseEnemyKind, enemyBodyRadius } from '../../config/coopDefenseEnemies';
 import { resolveEnemyLandingPosition } from './arenaWorldQueries';
 import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
 import type { TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
@@ -662,7 +662,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         for (const contact of this.ctx.fireSystem.collectContacts(
           enemy.sprite.x,
           enemy.sprite.y,
-          enemy.getHitRadius(),
+          enemy.getCollisionRadius(),
           now,
         )) {
           if (contact.damageTarget === 'players') continue;
@@ -871,7 +871,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     this.effects?.syncZeusUpgrades(this.zeusBinding?.snapshot(now) ?? { balls: [], ground: [], stuns: [] }, now, (id, kind) => {
       if (kind === 'player') { const p = this.ctx.playerManager.getPlayer(id); return p?.active && !this.playerGameplayRuntime?.isControllingTurret(id) ? { x: p.x, y: p.y, radius: p.getCollisionRadius() } : null; }
       const e = this.enemyManager?.getEnemy(id);
-      return e?.sprite.active && e.getHp() > 0 && !e.isBurrowed() ? { x: e.sprite.x, y: e.sprite.y, radius: e.getHitRadius() } : null;
+      return e?.sprite.active && e.getHp() > 0 && !e.isBurrowed() ? { x: e.sprite.x, y: e.sprite.y, radius: e.getCollisionRadius() } : null;
     });
     this.ctx.smokeSystem.syncVisuals(this.smokeBinding?.runtime.getSnapshots(now) ?? [], now);
     this.ctx.smokeSystem.syncTargetVisuals(this.smokeBinding?.runtime.getTargetSnapshots(now) ?? [], now,
@@ -1518,7 +1518,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       ? this.worldFramePort?.getShootingRange?.()?.necromancy ?? this.coopMissionRuntime?.necromancySystem
       : undefined;
 
-    const bodyRadius = getCoopDefenseEnemyConfig(effect.enemyKind).size * 0.5;
+    const bodyRadius = enemyBodyRadius(getCoopDefenseEnemyConfig(effect.enemyKind));
     const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
     for (let index = 0; index < effect.count; index += 1) {
       const angle = baseAngle + index * (Math.PI * 2 / Math.max(1, effect.count));

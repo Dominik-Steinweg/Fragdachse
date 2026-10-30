@@ -130,6 +130,8 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
    * sobald sein Ziel einen Schritt zu nah kommt, und wechselt hektisch die Waffe.
    */
   private static readonly SALVO_MIN_DISTANCE_HYSTERESIS_PX = 60;
+  /** A gathering salvo renews its walking pace each frame for at most this long. */
+  private static readonly CHARGE_PACE_HOLD_MS = 120;
   /**
    * Verliert ein Gegner mitten in der Salve sein Ziel, laeuft sie nach diesem Vielfachen ihres
    * Schusstakts aus und startet ihre Pause – sonst bliebe ein halb verbrauchter Zaehler beliebig
@@ -211,7 +213,8 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     const windup = this.meleeWindups.get(enemy.id);
     if (windup) return { aimAngle: windup.presentation.angle, holdPosition: true, committed: true };
     const charge = this.salvoCharges.get(enemy.id);
-    if (charge) return { aimAngle: this.aimAt(enemy, charge.target.targetX, charge.target.targetY, now), holdPosition: true, committed: true };
+    if (charge) return { aimAngle: this.aimAt(enemy, charge.target.targetX, charge.target.targetY, now),
+      holdPosition: charge.attackWeapon.attackMovementSpeedFactor <= 0, committed: true };
     const salvo = this.salvoStates.get(enemy.id);
     const sustained = this.sustainedAttacks.get(enemy.id);
     const committedWeaponId = salvo && now < salvo.expiresAt ? salvo.weaponId
@@ -219,9 +222,10 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     for (const attackWeapon of enemy.getAttackWeapons()) {
       if (committedWeaponId && attackWeapon.weapon.config.id !== committedWeaponId) continue;
       // A salvo weapon in its pause cannot fire; aiming at its target would turn the body away from
-      // what the next ready weapon (e.g. a melee bite on a base) actually attacks.
+      // what the next ready weapon (e.g. a melee bite on a base) actually attacks. A blocked body
+      // faces what it has to break through first; the salvo needs no facing to start.
       if (attackWeapon.salvo && committedWeaponId !== attackWeapon.weapon.config.id
-        && !enemy.isWeaponReady(attackWeapon.weapon, now)) continue;
+        && (!enemy.isWeaponReady(attackWeapon.weapon, now) || enemy.isPathBlocked())) continue;
       const fire = attackWeapon.weapon.config.fire.type;
       if (fire === 'tesla_dome') continue;
       const range = attackWeapon.weapon.config.range;
@@ -280,27 +284,31 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
         continue;
       }
 
+      // An announced salvo gathers and fires beside the body's melee: the boss keeps working on
+      // what is in reach instead of standing idle while its ammunition gathers. The windup runs
+      // after it, so the strike keeps its direction.
+      const charging = this.salvoCharges.get(enemy.id)?.attackWeapon.weapon.config.id;
+      if (charging) this.updateSalvoCharge(enemy, now);
+      // Eine laufende Salve haelt ihren eigenen Takt. Ohne diesen Vorrang wuerde sie auf das
+      // Zielscan-Raster des Gegners einrasten und langsamer feuern als konfiguriert.
+      const firing = !charging && this.continueSalvo(enemy, now);
+
       if (this.meleeWindups.has(enemy.id)) {
         this.updateMeleeWindup(enemy, now);
         continue;
       }
-
-      if (this.salvoCharges.has(enemy.id)) {
-        this.updateSalvoCharge(enemy, now);
-        continue;
-      }
-
-
-      // Eine laufende Salve haelt ihren eigenen Takt. Ohne diesen Vorrang wuerde sie auf das
-      // Zielscan-Raster des Gegners einrasten und langsamer feuern als konfiguriert.
-      if (this.continueSalvo(enemy, now)) continue;
+      const gathering = this.salvoCharges.has(enemy.id) ? charging : undefined;
+      // The gather just ended (first shot fired or the salvo spent): the next frame carries on.
+      if (firing || (charging && !gathering)) continue;
 
       if (!enemy.canScanForAttack(now)) continue;
 
       enemy.scheduleNextAttackScan(now);
-      const sustained = this.getSustainedAttack(enemy, now);
-      const attack = sustained.active ? sustained.attack : this.selectAttack(enemy, now);
+      const sustained = gathering ? { active: false as const } : this.getSustainedAttack(enemy, now);
+      const attack = sustained.active ? sustained.attack : this.selectAttack(enemy, now, gathering);
       if (!attack) continue;
+      // While gathering only a melee strike may start; the salvo itself is already on its way.
+      if (gathering && !this.shouldStartMeleeWindup(attack)) continue;
 
       if (this.shouldStartMeleeWindup(attack)) {
         // Meanwhile the combat movement keeps turning the body towards this target.
@@ -380,8 +388,9 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
    */
   private updateSalvoCharge(enemy: EnemyEntity, now: number): void {
     const charge = this.salvoCharges.get(enemy.id)!;
-    enemy.stopMovement();
-    enemy.faceAngle(this.aimAt(enemy, charge.target.targetX, charge.target.targetY, now));
+    // The body keeps advancing at the salvo's attack pace; a melee windup holds it instead.
+    enemy.pauseAttackMovement(now, charge.attackWeapon.attackMovementSpeedFactor, CoopDefenseEnemyAttackSystem.CHARGE_PACE_HOLD_MS);
+    if (!this.meleeWindups.has(enemy.id)) enemy.faceAngle(this.aimAt(enemy, charge.target.targetX, charge.target.targetY, now));
     if (now < charge.fireAt) return;
     this.salvoCharges.delete(enemy.id);
     const { attackWeapon } = charge, weapon = attackWeapon.weapon;
@@ -434,16 +443,19 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   }
 
   /**
-   * A slowly turning body starts a frontal swing only once it roughly faces its target; otherwise
-   * the windup would rear towards one side and strike towards another.
+   * A slowly turning body starts a frontal swing only once it can face its target before the strike
+   * (it keeps turning through the windup); otherwise it would rear towards one side and strike
+   * towards another.
    */
   private facesSwingTarget(enemy: EnemyEntity, attack: SelectedEnemyAttack): boolean {
-    const config = attack.attackWeapon.weapon.config;
-    if (config.fire.type !== 'melee' || config.fire.hitArcDegrees >= 300 || !enemy.hasTurnRateLimit()) return true;
+    const config = attack.attackWeapon.weapon.config, rate = enemy.getTurnRateRadPerMs();
+    if (config.fire.type !== 'melee' || config.fire.hitArcDegrees >= 300 || rate === null) return true;
     const dx = attack.target.targetX - enemy.sprite.x, dy = attack.target.targetY - enemy.sprite.y;
     if (Math.hypot(dx, dy) < enemy.getCollisionRadius()) return true;
     const off = Math.atan2(dy, dx) - enemy.getAimAngle();
-    return Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= config.fire.hitArcDegrees * Math.PI / 720;
+    const windupMs = attack.attackWeapon.meleeTiming?.hitDelayMs ?? 0;
+    const allowed = Math.max(config.fire.hitArcDegrees * Math.PI / 720, rate * windupMs * 0.8);
+    return Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= allowed;
   }
 
   private startMeleeWindup(enemy: EnemyEntity, attack: SelectedEnemyAttack, now: number): void {
@@ -642,6 +654,11 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
           target = this.buildPlayerLikeTargetCandidate(enemy, ref, weapon.config.range);
         }
       }
+      // An all-round strike answers whatever stands in its reach, even while the body besieges a structure.
+      if (attackWeapon.targetMode === 'all' && weapon.config.fire.type === 'melee' && weapon.config.fire.hitArcDegrees >= 300) {
+        const living = this.findLivingTargetWithLock(enemy, weapon.config.range, now, updateLock);
+        if (this.isBetterCandidate(living, target)) target = living;
+      }
       const train = (weapon.config.trainDamageMult ?? 1) > 0 ? this.findTrainTarget(enemy, weapon.config.range) : null;
       if (this.isBetterCandidate(train, target)) target = train;
       return target && this.isWithinWeaponMinDistance(enemy, attackWeapon, target) ? target : null;
@@ -675,13 +692,13 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     return target;
   }
 
-  private selectAttack(enemy: EnemyEntity, now: number): SelectedEnemyAttack | null {
+  private selectAttack(enemy: EnemyEntity, now: number, gatheringWeaponId?: string): SelectedEnemyAttack | null {
     // Die Konfigurationsreihenfolge ist zugleich die Waffenpriorität:
     // Die erste Waffe mit einem gültigen Ziel gewinnt.
     let higherPriorityWeaponBusy = false;
     for (const attackWeapon of enemy.getAttackWeapons()) {
       const weapon = attackWeapon.weapon;
-      if (weapon.config.fire.type === 'tesla_dome') continue;
+      if (weapon.config.fire.type === 'tesla_dome' || weapon.config.id === gatheringWeaponId) continue;
       const target = this.resolveWeaponTarget(enemy, attackWeapon, now);
       if (!target) continue;
       // Existiert ein Ziel fuer eine hoeher priorisierte Waffe, wartet der

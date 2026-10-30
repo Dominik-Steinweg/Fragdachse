@@ -80,8 +80,9 @@ export interface CoopDefenseEnemyWeaponConfig {
    */
   readonly usableDuringPriorityPause?: boolean;
   /**
-   * A swing that reaches far past a big body: bases, rocks and constructs are approached and engaged
-   * only this close (px from the centre), while the swing keeps its full range around them.
+   * A swing that reaches far past a big body: bases, rocks and constructs are engaged only this close
+   * (px from the centre, so it includes the body), while the swing keeps its full range around them.
+   * Navigation steps up a little closer still, as far as walls let the body.
    */
   readonly structureReachPx?: number;
 }
@@ -755,10 +756,12 @@ export interface CoopDefenseEnemyConfig {
   readonly xp: number;
   readonly size: number;
   /**
-   * Hit circle as a multiple of the body radius, for a body whose limbs reach far beyond the
-   * circle it moves with (projectiles, hitscan, melee, explosions and auto-aim). Absent = 1.
+   * Physical body as a multiple of `size / 2`, for a boss whose limbs reach far past the body the
+   * artwork is scaled by: rocks, trunks and bases block it, navigation keeps its clearance, other
+   * bodies steer around it and every hit counts on it. The artwork keeps `size`. Absent = 1;
+   * read it through `enemyBodyRadius`.
    */
-  readonly hitRadiusFactor?: number;
+  readonly bodyRadiusFactor?: number;
   readonly moveSpeed: number;
   /**
    * Faktor auf alle Wegstoss-Impulse (Raketen, Granaten, Laubblaeser, Dash-Aufprall, Schockwellen …).
@@ -897,7 +900,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         ),
         xp: Math.max(0, Math.floor(config.xp)),
         size: config.size,
-        hitRadiusFactor: config.hitRadiusFactor,
+        bodyRadiusFactor: config.bodyRadiusFactor,
         moveSpeed: config.krakenEgg ? 0 : resolveCoopDefensePositiveNumber(
           config.moveSpeed,
           config.playerScaling?.moveSpeedFactorPerAdditionalPlayer,
@@ -1082,7 +1085,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     imageKey: enemy.imageKey,
     pawCount: requirePawCount(enemy.pawCount, enemy.id),
     pawSpan: normalizePawSpan(enemy.pawSpan, enemy.id),
-    hitRadiusFactor: normalizeHitRadiusFactor(enemy.hitRadiusFactor, enemy.id),
+    bodyRadiusFactor: normalizeBodyRadiusFactor(enemy.bodyRadiusFactor, enemy.id),
     spriteRotationOffsetDegrees: typeof enemy.spriteRotationOffsetDegrees === 'number'
       && Number.isFinite(enemy.spriteRotationOffsetDegrees)
       ? enemy.spriteRotationOffsetDegrees
@@ -1464,10 +1467,15 @@ function normalizeStructureReach(value: number | undefined): number | undefined 
   return value;
 }
 
-function normalizeHitRadiusFactor(value: number | undefined, enemyId: string): number | undefined {
+function normalizeBodyRadiusFactor(value: number | undefined, enemyId: string): number | undefined {
   if (value === undefined) return undefined;
-  if (!Number.isFinite(value) || value < 1 || value > 4) throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has an invalid hitRadiusFactor`);
+  if (!Number.isFinite(value) || value < 1 || value > 4) throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has an invalid bodyRadiusFactor`);
   return value;
+}
+
+/** Radius of the physical body (collision, navigation, spawn room, hits); the artwork keeps `size`. */
+export function enemyBodyRadius(config: Pick<CoopDefenseEnemyConfig, 'size' | 'bodyRadiusFactor'>): number {
+  return config.size * 0.5 * (config.bodyRadiusFactor ?? 1);
 }
 
 function normalizeMeleeTiming(timing: CoopDefenseEnemyWeaponConfig['meleeTiming']): CoopDefenseEnemyWeaponConfig['meleeTiming'] {

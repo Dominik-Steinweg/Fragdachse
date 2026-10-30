@@ -32,6 +32,7 @@ import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { PlasmaBurnerRenderer } from './PlasmaBurnerRenderer';
 import { BiteRenderer } from './BiteRenderer';
 import { EnemyClawRenderer } from './EnemyClawRenderer';
+import { CLAW_VFX_FAN_RAYS } from './enemyClaw/EnemyClawVfxStore';
 import type { MiniKrakenInkRenderer } from './MiniKrakenInkRenderer';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { EnemyVisualSink } from '../entities/EnemyManager';
@@ -114,6 +115,8 @@ export interface GroundFogCombatSink {
  */
 /** Grave light of the Grave Titan's slam: impact glints and light burst. */
 const GRAVE_TITAN_SLAM_GLINT = 0x8dff7a;
+/** An unclipped fan: every ray reaches the full range. */
+const FULL_FAN_CLIP: readonly number[] = new Array(CLAW_VFX_FAN_RAYS).fill(1);
 
 /** Body radius used to place a tongue's mouth when the swing does not name its body. */
 const DEFAULT_TONGUE_BODY_RADIUS = 15;
@@ -178,9 +181,22 @@ export class EffectSystem implements EnemyVisualSink {
 
   syncEnemyClaw(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean, alliedColor?: number, bodyRadius = DEFAULT_TONGUE_BODY_RADIUS): void {
     if (state.attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
-    const preset = meleePresetOf(state.attack?.weaponId), tongue = preset === 'enemy_tongue';
-    // Tongue, ink and slam announce only their red danger sector; their strike has its own visual, no rakes.
-    this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor, tongue || preset === 'enemy_ink' || preset === 'enemy_slam');
+    const preset = meleePresetOf(state.attack?.weaponId), tongue = preset === 'enemy_tongue', attack = state.attack;
+    if (preset === 'enemy_slam' && attack) {
+      // A titan's strike announces its exact reach, the area its haze then sweeps: a crisp fan for
+      // the slam, a zone filling out to its rim for the stomp's pressure wave.
+      if (attack.arcDegrees >= 300) {
+        this.enemyClawRenderer?.syncLandingMark(id, { attackId: attack.attackId, x, y, radius: attack.range,
+          startedAt: attack.startedAt, hitAt: attack.hitAt }, now, visible, alliedColor);
+      } else {
+        this.enemyClawRenderer?.syncSector(id, { attackId: attack.attackId, x, y, angle: attack.angle, range: attack.range,
+          arcDegrees: attack.arcDegrees, clip: FULL_FAN_CLIP, startedAt: attack.startedAt, strikeAt: attack.strikeAt,
+          hitAt: attack.hitAt, endsAt: attack.endsAt }, now, visible, alliedColor);
+      }
+    } else {
+      // Tongue and ink announce only their red danger sector; their strike has its own visual, no rakes.
+      this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor, tongue || preset === 'enemy_ink');
+    }
     if (tongue) this.withTongueLash(renderer => renderer.sync(id, state.attack, x, y, bodyRadius, now, visible));
     else this.tongueLash?.sync(id, null, x, y, bodyRadius, now, visible);
   }
@@ -1800,11 +1816,11 @@ export class EffectSystem implements EnemyVisualSink {
   private confirmGraveTitanSlam(swing: SyncedMeleeSwing): void {
     const impact = this.graveTitanImpact?.play(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range);
     const x = impact?.x ?? swing.x, y = impact?.y ?? swing.y, stomp = impact?.stomp ?? swing.arcDegrees >= 300;
-    const feet = stomp ? GRAVE_TITAN_IMPACT.bodyEdgePx * 1.15 : 64;
+    const feet = stomp ? GRAVE_TITAN_IMPACT.bodyEdgePx * 1.15 : 84;
     this.pounceImpactRenderer?.play(x, y, feet, GRAVE_TITAN_SLAM_GLINT);
-    this.lighting?.pulse('explosion', x, y, { radiusPx: stomp ? swing.range * 1.1 : 170, color: GRAVE_TITAN_SLAM_GLINT,
-      intensity: 0.9, durationMs: 600, occludes: false });
-    if (stomp) this.visualFeedback?.startExplosionShockwave({ x, y, radiusPx: swing.range, style: 'default' });
+    this.lighting?.pulse('explosion', x, y, { radiusPx: stomp ? swing.range * 1.1 : swing.range, color: GRAVE_TITAN_SLAM_GLINT,
+      intensity: stomp ? 0.9 : 1, durationMs: 650, occludes: false });
+    this.visualFeedback?.startExplosionShockwave({ x, y, radiusPx: stomp ? swing.range : swing.range * 0.6, style: 'default' });
     this.cameraFeedback?.request(impactHeavy({ sourceX: x, sourceY: y }));
   }
 
