@@ -19,7 +19,7 @@ import { EMPTY_KABOOMTULA_STATE, isKaboomtulaState, kaboomtulaLeapProgress, kabo
 import { EMPTY_ENEMY_HEAT_BURST_STATE, isEnemyHeatBurstState, type EnemyHeatBurstState } from '../systems/EnemyHeatBurstState';
 import { EMPTY_ENEMY_VOLLEY_STATE, isEnemyVolleyState, type EnemyVolleyState } from '../systems/EnemyVolleyState';
 import { syncEnemyVolleyAnimation } from '../animations/EnemyVolleyAnimation';
-import { heatSpeedFactorAt } from '../systems/enemyHeatBurstRules';
+import { heatSpeedFactorOf } from '../systems/enemyHeatBurstRules';
 import { EnemySpitPlayback, syncEnemyHeatBurstAnimation } from '../animations/EnemyHeatBurstAnimation';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
@@ -460,7 +460,7 @@ export class EnemyEntity {
       now, this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
     if (wasAnimating && !this.heatBurstAnimating) this.syncWalkingAnimation();
     if (this.heatBurstAnimating || !sheet || this.sprite.anims.currentAnim?.key !== sheet.animationKey) return;
-    this.sprite.anims.msPerFrame = 1000 / (sheet.frameRate * heatSpeedFactorAt(this.heatBurstState, config, now));
+    this.sprite.anims.msPerFrame = 1000 / (sheet.frameRate * heatSpeedFactorOf(this.heatBurstState, config));
   }
 
   private kaboomtulaState: KaboomtulaState = EMPTY_KABOOMTULA_STATE;

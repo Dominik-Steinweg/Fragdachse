@@ -12,21 +12,19 @@ function clipFrameMs(clip: Pick<PipelineClip, 'frameRate'>, fallbackFps: number)
 }
 
 /**
- * Texture frame of the heat burst recoil, or null when ordinary clips apply. The `burst` clip is
- * placed on the replicated timeline so its `blast` marker lands on the burst: the lead-in runs while
- * the warning ends, the tail after it (the next cycle's `ventFromAt` keeps it on time after the host
- * has moved on). Sheets without `burst` show no recoil. Pure presentation of host state.
+ * Texture frame of the meltdown recoil, or null when ordinary clips apply. The `burst` clip is placed
+ * on the replicated timeline so its `blast` marker lands on the burst: the lead-in (the body ducks)
+ * runs while the warning ends; the body leaves with the burst. Sheets without `burst` show no recoil.
+ * Pure presentation of host state.
  */
 export function heatBurstClipFrame(state: EnemyHeatBurstState, now: number, clip: ClipSource): number | null {
   const burst = clip('burst');
-  if (!burst?.frames.length) return null;
+  if (!burst?.frames.length || state.burstAt <= 0) return null;
   const last = burst.frames.length - 1;
   const blast = Math.min(last, Math.max(0, burst.markers?.blast ?? Math.round(last * 0.3)));
   const frameMs = clipFrameMs(burst, 24);
-  const at = state.burstAt > 0 && now >= state.burstAt - blast * frameMs ? state.burstAt
-    : state.ventFromAt > 0 && now >= state.ventFromAt ? state.ventFromAt : null;
-  if (at === null) return null;
-  const index = blast + Math.floor((now - at) / frameMs);
+  if (now < state.burstAt - blast * frameMs) return null;
+  const index = blast + Math.floor((now - state.burstAt) / frameMs);
   return index >= 0 && index <= last ? burst.frames[index]! : null;
 }
 

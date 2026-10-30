@@ -7,6 +7,7 @@ import type { BaseManager } from '../entities/BaseManager';
 import type { CombatActivityPort } from '../combat/CombatCapabilities';
 import type { CoopMissionEnemySpecialRuntime, CoopMissionRuntime } from './CoopMissionRuntime';
 import type { PlayerManager } from '../entities/PlayerManager';
+import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import {
   CoopDefenseKaboomtulaSystem,
@@ -161,6 +162,11 @@ export class CoopMissionEnemySupportComposition {
           || (runtime.coopDefenseEnemyHeatBurstSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseEnemyAbilitySystem?.blocksRegularAttacks(enemyId) ?? false)
         ));
+        // The heat owner counts spent salvos (hostile and allied) and sets the pause of the next one.
+        const salvoHooks = { salvoSpent: (enemy: EnemyEntity, shotsFired: number, now: number) =>
+          runtime.coopDefenseEnemyHeatBurstSystem?.salvoSpent(enemy, shotsFired, now) ?? null };
+        runtime.coopDefenseEnemyAttackSystem?.setSalvoHooks(salvoHooks);
+        necromancy?.setSalvoHooks(salvoHooks);
         runtime.coopDefenseEnemyDodgeSystem?.setBlockedChecker(enemyId =>
           (runtime.coopDefenseVoidHunterSystem?.blocksDodge(enemyId) ?? false)
           || (runtime.coopDefenseFirestarterSystem?.blocksDodge(enemyId) ?? false)
@@ -182,6 +188,8 @@ export class CoopMissionEnemySupportComposition {
       detach: () => {
         this.options.combatSystem.setEnemyFrontalShieldPort?.(null);
         runtime.coopDefenseEnemyAttackSystem?.setActionBlockedChecker(null);
+        runtime.coopDefenseEnemyAttackSystem?.setSalvoHooks(null);
+        necromancy?.setSalvoHooks(null);
         runtime.coopDefenseEnemyDodgeSystem?.setBlockedChecker(null);
         if (necromancy) {
           necromancy.setCorpseSink(null);

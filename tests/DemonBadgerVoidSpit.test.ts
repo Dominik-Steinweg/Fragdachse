@@ -111,6 +111,21 @@ describe('Demon Badger void spit', () => {
     expect(Math.max(...cells.map(cell => cell.x))).toBeGreaterThan(240);
   });
 
+  it('reports each spent salvo to its owner, whose pause rests both spit weapons', () => {
+    // A player and a base both in reach: without one shared pause the badger would alternate weapons.
+    const players = [fakeEntity({ id: 'p1', x: 250, y: 100, active: true })];
+    const { system, shots } = createSystem(createBadger(), players, { x: 240, y: 100 });
+    const spent: number[] = [];
+    system.setSalvoHooks({ salvoSpent: (_enemy, shotsFired) => { spent.push(shotsFired); return 2_000; } });
+    run(system, 1_000, 1_000 + SALVO.intervalMs * (SALVO.count + 1));
+    expect(spent).toEqual([SALVO.count]);
+    const after = shots.length;
+    run(system, 1_000 + SALVO.intervalMs * (SALVO.count + 2), 2_900);
+    expect(shots.length).toBe(after);
+    run(system, 2_910, 3_500);
+    expect(shots.length).toBeGreaterThan(after);
+  });
+
   it('burns in allied fire against enemies when the badger is a necromancy ally', () => {
     const players = [fakeEntity({ id: 'p1', x: 250, y: 100, active: true })];
     const { system, cells } = createSystem(createBadger('allied'), players, null);

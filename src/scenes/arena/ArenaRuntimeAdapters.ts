@@ -19,7 +19,7 @@ import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService'
 import type { WeaponBalanceLabWorldPort } from '../../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import type { ArenaInputPersistentBasePorts, ArenaInputPlacementPorts } from './ArenaInputBindings';
 import { enemyPouncePhaseAt } from '../../systems/EnemyPounceState';
-import { enemyHeatAt, enemyHeatBurstPhaseAt } from '../../systems/EnemyHeatBurstState';
+import { enemyHeatBurstPhaseAt } from '../../systems/EnemyHeatBurstState';
 import type { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import type { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 import type {
@@ -400,7 +400,7 @@ export function createNavigationLabWorldPort(
           ...(enemy.getKaboomtulaState().revision > 0 ? { kaboomtulaPhase: enemy.getKaboomtulaState().phase } : {}),
           ...(enemy.getPounceState().revision > 0 ? { pouncePhase: enemyPouncePhaseAt(enemy.getPounceState(), now) } : {}),
           ...(enemy.getHeatBurstState().revision > 0 ? { heatPhase: enemyHeatBurstPhaseAt(enemy.getHeatBurstState(), now),
-            heat: Math.round(enemyHeatAt(enemy.getHeatBurstState(), now) * 100) / 100 } : {}) };
+            heatStage: enemy.getHeatBurstState().stage } : {}) };
       });
     },
     getPlayerPosition: () => {

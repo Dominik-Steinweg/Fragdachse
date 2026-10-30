@@ -686,53 +686,37 @@ export interface CoopDefenseEnemyHeatBurstImpactConfig {
 }
 
 /**
- * Heat cycle of a body that charges while it runs and releases the heat as a burst around itself.
- * Charging raises its speed; a full body announces the burst with the shared red zone that travels
- * with it, bursts, cools down and charges again. Bursts of nearby bodies roll through a pack in a
- * fixed order (cascade), never at once. A full body nobody can see holds its heat.
+ * Heat of a body that heats up with every salvo it spits and melts down at its last stage. Each
+ * spent salvo adds a stage the body keeps until it dies: it runs faster and spits sooner again. The
+ * last stage stops it; the shared red zone announces the meltdown, the body bursts around itself and
+ * dies in the burst (no kill reward). Killed before, it fizzles harmlessly. A pack stays apart through
+ * the fixed per-body spread of the salvo pause, never through a shared schedule.
  */
 export interface CoopDefenseEnemyHeatBurstConfig {
-  /** Charge time from cold to full; each body gets its own value in this range (hashed from its id). */
-  readonly chargeMinMs: number;
-  readonly chargeMaxMs: number;
-  readonly telegraphMs: number;
-  /** Cold phase right after a burst: heat 0 and the ordinary speed. */
-  readonly ventMs: number;
-  /** Grace after the first sighting of a body before its first charge completes. */
-  readonly initialDelayMs: number;
-  /** Speed share added at full heat (0.6 = ×1.6). */
+  /** Heat stages up to the meltdown; every salvo with at least one shot adds one. */
+  readonly stages: number;
+  /** Speed share added at the last stage (0.5 = ×1.5), linear over the stages. */
   readonly speedBoost: number;
-  /** Ease of the speed rise: boost × heat^exponent. */
-  readonly speedCurveExponent: number;
-  readonly cascade: {
-    /** Bursts sit on a shared grid of this step; two bodies within `neighbourRadiusPx` never share a slot. */
-    readonly stepMs: number;
-    /** Per-body offset in [-jitterMs, jitterMs] on its slot, so the rhythm is not mechanical. */
-    readonly jitterMs: number;
-    readonly neighbourRadiusPx: number;
-    /** Bursts per grid slot across the whole world (bounds the effect rate of large waves). */
-    readonly maxPerSlot: number;
-    /**
-     * A booked warning pulls charged bodies of its kind within this radius along: their charge
-     * completes one step later, so a pack goes off as a rolling chain instead of single bursts.
-     */
-    readonly chainRadiusPx: number;
-    /** Least heat a body needs to be pulled into a chain. */
-    readonly chainMinHeat: number;
-  };
-  /** While the warning runs the body keeps running but turns its heading at most this fast. */
-  readonly telegraphTurnRateDegPerSec: number;
-  /** An allied body only books its burst while a hostile is this close (it never bursts beside its owner for nothing). */
-  readonly alliedTriggerRadiusPx: number;
+  /**
+   * Pause after a salvo spat at stage 0 … stages − 1. It replaces the weapons' authored pause and
+   * covers every salvo weapon of the body, so the stages follow one rhythm.
+   */
+  readonly salvoPauseMsByStage: readonly number[];
+  /** Fixed per-body spread of the pause (0.1 = ×0.9 … ×1.1, hashed from the id). */
+  readonly salvoPauseJitter: number;
+  readonly telegraphMs: number;
   readonly burst: CoopDefenseEnemyHeatBurstImpactConfig;
   /** Burning chunks thrown by the burst; fire style and targets follow the body's faction. */
   readonly fireChunks?: FireChunkBurstConfig;
-  /** A killed body with at least `minHeat` fizzles harmlessly; the radius grows with its heat. */
-  readonly fizzle: { readonly minHeat: number; readonly minRadiusPx: number; readonly maxRadiusPx: number };
+  /** A killed body with at least `minStage` fizzles harmlessly; the radius grows with its stage. */
+  readonly fizzle: { readonly minStage: number; readonly minRadiusPx: number; readonly maxRadiusPx: number };
 }
 
 /** Reaction time and player speed of the dodge-window contract of every authored heat burst. */
 export const HEAT_BURST_FAIRNESS = { reactionMs: 250, playerSpeedPxPerSec: 280, playerRadiusPx: 16 } as const;
+
+/** Most heat stages a body may author (the wire accepts more; the glow reads at most this many). */
+const MAX_AUTHORED_HEAT_STAGES = 8;
 
 export interface CoopDefenseEnemyConfig {
   readonly flee?: CoopDefenseEnemyFleeConfig;
@@ -1068,11 +1052,15 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     || enemy.engage || enemy.movementTarget !== 'players')) {
     throw new Error(`[coopDefenseEnemies] Pouncing enemy has a second movement owner or no player target: ${enemy.id}`);
   }
-  // The heat cycle owns the speed ramp, the warning run and the death fizzle: no second ability owner on the body.
+  // The heat owns the speed steps, the meltdown hold and the death fizzle: no second ability owner on the body.
   if (enemy.heatBurst && (flee || krakenBoss || krakenEgg || enemy.hop || enemy.kaboomtula || enemy.pounce || enemy.shieldCharger
     || enemy.energyCone || enemy.firestarter || enemy.mortar || enemy.burrow || enemy.dodge || enemy.amphibious
     || enemy.deathBurst || enemy.voidHunterBoss)) {
     throw new Error(`[coopDefenseEnemies] Heat-burst enemy has a second ability owner: ${enemy.id}`);
+  }
+  // Heat comes only from spent salvos: a body without a salvo weapon would never heat up.
+  if (enemy.heatBurst && !enemy.weapons?.some(weapon => weapon.salvo)) {
+    throw new Error(`[coopDefenseEnemies] Heat-burst enemy has no salvo weapon to heat up with: ${enemy.id}`);
   }
   if (enemy.basePreference && enemy.movementTarget !== 'players') {
     throw new Error(`[coopDefenseEnemies] basePreference needs movementTarget players: ${enemy.id}`);
@@ -1795,31 +1783,30 @@ export function normalizePounceConfig(config: CoopDefenseEnemyPounceConfig | und
 }
 
 function cloneHeatBurstConfig(config: CoopDefenseEnemyHeatBurstConfig): CoopDefenseEnemyHeatBurstConfig {
-  return { ...config, cascade: { ...config.cascade }, burst: { ...config.burst }, fizzle: { ...config.fizzle },
-    fireChunks: config.fireChunks ? { ...config.fireChunks } : undefined };
+  return { ...config, salvoPauseMsByStage: [...config.salvoPauseMsByStage], burst: { ...config.burst },
+    fizzle: { ...config.fizzle }, fireChunks: config.fireChunks ? { ...config.fireChunks } : undefined };
 }
 
 /**
- * Reject malformed heat timing, ranges and an unfair warning at the authored boundary. A body that
- * keeps running during its warning must leave a player time to react and step out of the zone sideways.
+ * Reject malformed stages, pauses, ranges and an unfair warning at the authored boundary. The body
+ * stands through its warning, so a player in the middle of the zone must have time to react and leave it.
  */
 export function normalizeHeatBurstConfig(config: CoopDefenseEnemyHeatBurstConfig | undefined,
   enemyId: string): CoopDefenseEnemyHeatBurstConfig | undefined {
   if (!config) return undefined;
   const invalid = (positive: readonly number[], nonNegative: readonly number[]) =>
     positive.some(v => !Number.isFinite(v) || v <= 0) || nonNegative.some(v => !Number.isFinite(v) || v < 0);
-  const { cascade, burst, fizzle, fireChunks } = config;
-  if (!cascade || !burst || !fizzle || invalid([config.chargeMinMs, config.chargeMaxMs, config.telegraphMs,
-    config.speedCurveExponent, config.telegraphTurnRateDegPerSec, config.alliedTriggerRadiusPx, cascade.stepMs,
-    cascade.neighbourRadiusPx, cascade.chainRadiusPx, burst.radiusPx, fizzle.minRadiusPx, fizzle.maxRadiusPx],
-  [config.ventMs, config.initialDelayMs, config.speedBoost, cascade.jitterMs, burst.damage, burst.minDamage,
-    burst.knockbackSpeed, burst.knockbackMs, burst.friendlyBaseDamageMult, burst.constructionDamageMult, burst.trainDamageMult,
-    fizzle.minHeat, cascade.chainMinHeat])) {
+  const { burst, fizzle, fireChunks, salvoPauseMsByStage: pauses } = config;
+  if (!burst || !fizzle || !Array.isArray(pauses) || invalid([config.telegraphMs, burst.radiusPx, fizzle.minRadiusPx,
+    fizzle.maxRadiusPx, ...pauses],
+  [config.speedBoost, config.salvoPauseJitter, burst.damage, burst.minDamage, burst.knockbackSpeed, burst.knockbackMs,
+    burst.friendlyBaseDamageMult, burst.constructionDamageMult, burst.trainDamageMult, fizzle.minStage])) {
     throw new Error(`[coopDefenseEnemies] Invalid heat-burst value: ${enemyId}`);
   }
-  if (config.chargeMinMs > config.chargeMaxMs || burst.minDamage > burst.damage || cascade.jitterMs * 2 >= cascade.stepMs
-    || !Number.isInteger(cascade.maxPerSlot) || cascade.maxPerSlot < 1 || fizzle.minHeat > 1 || cascade.chainMinHeat > 1
-    || fizzle.minRadiusPx > fizzle.maxRadiusPx || config.speedBoost > 2) {
+  if (!Number.isInteger(config.stages) || config.stages < 1 || config.stages > MAX_AUTHORED_HEAT_STAGES
+    || pauses.length !== config.stages || !Number.isInteger(fizzle.minStage) || fizzle.minStage > config.stages
+    || burst.minDamage > burst.damage || fizzle.minRadiusPx > fizzle.maxRadiusPx || config.speedBoost > 2
+    || config.salvoPauseJitter >= 0.5) {
     throw new Error(`[coopDefenseEnemies] Invalid heat-burst relation: ${enemyId}`);
   }
   const { reactionMs, playerSpeedPxPerSec, playerRadiusPx } = HEAT_BURST_FAIRNESS;

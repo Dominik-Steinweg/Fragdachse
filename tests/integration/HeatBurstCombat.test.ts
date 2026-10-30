@@ -79,7 +79,7 @@ function fixture(faction: 'hostile' | 'allied') {
   host.setPlayerFramePort({ getPlayerGameplayRuntime: () => ({ hostCreateFireChunkBurst: chunks }), getPowerUpRuntime: () => null } as never);
   const damageBase = vi.spyOn(combat, 'applyBaseStatusDamage').mockReturnValue(null);
   const fire = () => host.applyEnemyHeatBurst({ enemyId: source.id, kind: 'demon-badger', faction,
-    ownerId: faction === 'allied' ? 'owner' : undefined, x, y, config: heat, cycle: 0, nowMs: now });
+    ownerId: faction === 'allied' ? 'owner' : undefined, x, y, config: heat, nowMs: now });
   return { source, hostile, ally, combat, mutation, damageBase, decoys, chunks, fire, now };
 }
 

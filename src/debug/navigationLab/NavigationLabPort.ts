@@ -29,7 +29,8 @@ export interface NavigationLabEnemy {
   readonly pouncePhase?: string;
   /** Replicated heat phase (charge, hold, telegraph, vent) and heat 0..1; absent for bodies without a heat cycle. */
   readonly heatPhase?: string;
-  readonly heat?: number;
+  /** Reached heat stages of a heat-burst body (0 = cold). */
+  readonly heatStage?: number;
 }
 
 /** Explicit scenario inputs and read models; no runtime owner escapes to the lab. */

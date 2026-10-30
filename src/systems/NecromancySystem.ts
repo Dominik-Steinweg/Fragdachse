@@ -12,6 +12,8 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatActorStatePort, CombatGeometryPort } from '../combat/CombatCapabilities';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
+import { lockEnemySalvoWeapons, type EnemySalvoHooks } from './CoopDefenseEnemyAttackSystem';
+import type { EnemyAttackWeapon } from '../entities/EnemyEntity';
 
 const STAT_PREFIX = 'player.necromancy';
 const DEFAULT_INTERVAL_MS = 4000;
@@ -87,6 +89,9 @@ export class NecromancySystem {
   /** Steering point of allies whose locomotion owner keeps routing (hopping toads). */
   private readonly allySteering = new Map<string, { readonly x: number; readonly y: number }>();
   private readonly undyingAllyIds = new Set<string>();
+  /** Shots of the running salvo of an ally whose weapon fires in salvos. */
+  private readonly allySalvos = new Map<string, { readonly weaponId: string; shots: number }>();
+  private salvoHooks: EnemySalvoHooks | null = null;
   private corpseSink: NecromancyCorpseSink | null = null;
   private nextCorpseId = 1;
   private nextFollowSlot = 0;
@@ -113,6 +118,11 @@ export class NecromancySystem {
   /** Registriert die Leichen-Darstellung; ohne Sink bleibt das System rein mechanisch. */
   setCorpseSink(sink: NecromancyCorpseSink | null): void {
     this.corpseSink = sink;
+  }
+
+  /** Owner of salvo rhythms (heat); allies report their spent salvos like hostile bodies. */
+  setSalvoHooks(hooks: EnemySalvoHooks | null): void {
+    this.salvoHooks = hooks;
   }
 
   recordEnemyDeath(death: EnemyDeathInfo, now = Date.now()): void {
@@ -234,6 +244,25 @@ export class NecromancySystem {
     for (const allyId of [...this.allySteering.keys()]) {
       if (!knownAllyIds.has(allyId)) this.allySteering.delete(allyId);
     }
+    for (const allyId of [...this.allySalvos.keys()]) {
+      if (!knownAllyIds.has(allyId)) this.allySalvos.delete(allyId);
+    }
+  }
+
+  /**
+   * Counts a shot of an ally's salvo weapon; after the salvo's last shot every salvo weapon of the
+   * ally rests for the pause its salvo owner sets (else the weapon's authored pause).
+   */
+  private countAllySalvoShot(ally: EnemyEntity, attackWeapon: EnemyAttackWeapon, now: number): void {
+    const salvo = attackWeapon.salvo;
+    if (!salvo) return;
+    const weaponId = attackWeapon.weapon.config.id, current = this.allySalvos.get(ally.id);
+    const shots = (current?.weaponId === weaponId ? current.shots : 0) + 1;
+    if (shots < salvo.count) { this.allySalvos.set(ally.id, { weaponId, shots }); return; }
+    this.allySalvos.delete(ally.id);
+    const pauseMs = this.salvoHooks?.salvoSpent(ally, shots, now) ?? null;
+    if (pauseMs !== null) lockEnemySalvoWeapons(ally, now + pauseMs);
+    else ally.lockWeaponUntil(attackWeapon.weapon, now + salvo.cooldownMs);
   }
 
   /** Where a routing-keeping ally would steer this frame, or null when it should hold its place. */
@@ -248,6 +277,7 @@ export class NecromancySystem {
     this.owners.clear();
     this.followSlots.clear();
     this.allySteering.clear();
+    this.allySalvos.clear();
     this.undyingAllyIds.clear();
   }
 
@@ -414,6 +444,7 @@ export class NecromancySystem {
         if (this.weaponExecution.fire(config, { x: ally.sprite.x, y: ally.sprite.y, angle, targetX: breach.x, targetY: breach.y,
           ownerId: ally.id, ownerColor: ALLIED_COLOR })) {
           ally.faceAngle(angle); ally.pauseAttackMovement(now); ally.recordWeaponUse(weapon, now);
+          this.countAllySalvoShot(ally, attack, now);
         }
         return;
       }
@@ -441,6 +472,7 @@ export class NecromancySystem {
       ally.faceAngle(angle);
       ally.pauseAttackMovement(now);
       ally.recordWeaponUse(weapon, now);
+      this.countAllySalvoShot(ally, attackWeapon, now);
       return;
     }
   }

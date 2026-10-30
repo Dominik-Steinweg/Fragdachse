@@ -43,7 +43,6 @@ export interface HeatBurstRequest {
   readonly x: number;
   readonly y: number;
   readonly config: import('../config/coopDefenseEnemies').CoopDefenseEnemyHeatBurstConfig;
-  readonly cycle: number;
   readonly nowMs: number;
 }
 
@@ -64,6 +63,8 @@ export interface EnemyAreaEffectsPort {
 export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly playerManager: PlayerManager;
   readonly enemyAreaEffects?: EnemyAreaEffectsPort;
+  /** Drops a body that left without dying (a heat burst) from player-held references. */
+  readonly removeEnemyFromPlayerItems: (enemyId: string) => void;
   readonly getNowMs?: () => number;
   readonly projectileSpawn: ProjectileSpawnPort;
   readonly projectileThreatReadPort: ProjectileThreatReadPort;
@@ -318,21 +319,13 @@ export class CoopMissionEnemyBehaviourComposition {
       }));
       runtime.setHeatBurst(new CoopDefenseEnemyHeatBurstSystem({
         enemies: enemyManager,
-        steeringPoint: enemy => {
-          const navigation = intents.get(enemy.id)?.navigation;
-          return navigation?.status === 'ready' ? navigation.waypoint
-            : navigation?.status === 'pending' ? navigation.continuation ?? null : null;
-        },
-        moveNormally: (enemy, point, speed, aimAngle) => {
-          const result = enemyManager.moveNormally(enemy, point, speed, aimAngle);
-          return { vx: result.vx, vy: result.vy, blocked: result.waitReason !== 'none' };
-        },
-        hasHostileWithin: (enemy, radius) => enemyManager.getHostileEnemies().some(other => other.sprite.active
-          && other.getHp() > 0 && !other.isBurrowed()
-          && Math.hypot(other.sprite.x - enemy.sprite.x, other.sprite.y - enemy.sprite.y) <= radius),
         isEvadingTrain: enemyId => trainAwareness.blocksRegularAttacks(enemyId),
-        burst: (enemy, x, y, config, cycle, now) => this.options.enemyAreaEffects?.heatBurst({ enemyId: enemy.id, kind: enemy.kind,
-          faction: enemy.faction, ownerId: enemy.ownerId, x, y, config, cycle, nowMs: now }),
+        burst: (enemy, x, y, config, now) => this.options.enemyAreaEffects?.heatBurst({ enemyId: enemy.id, kind: enemy.kind,
+          faction: enemy.faction, ownerId: enemy.ownerId, x, y, config, nowMs: now }),
+        removeWithoutKill: enemy => {
+          enemyManager.hostRemoveWithoutKill(enemy.id);
+          this.options.removeEnemyFromPlayerItems(enemy.id);
+        },
         fizzle: (death, radius) => this.options.enemyAreaEffects?.heatFizzle(death.x, death.y, radius, death.faction),
       }));
       runtime.setEnergyCone(new CoopDefenseEnergyConeSystem({

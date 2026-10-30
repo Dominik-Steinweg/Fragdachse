@@ -88,6 +88,21 @@ export interface EnemyFlameGroundPort {
   scorchBase?(enemy: EnemyEntity, baseId: string, damage: number, sourceId: string, now: number): void;
 }
 
+/**
+ * Owner of a body's salvo rhythm (the Demon Badger's heat). A spent salvo with `shotsFired` > 0 is
+ * reported; a number locks every salvo weapon of the body for that pause, null keeps the weapon's own.
+ */
+export interface EnemySalvoHooks {
+  salvoSpent(enemy: EnemyEntity, shotsFired: number, now: number): number | null;
+}
+
+/** Lock every salvo weapon of a body until `readyAt` (one rhythm across its target modes). */
+export function lockEnemySalvoWeapons(enemy: EnemyEntity, readyAt: number): void {
+  for (const attackWeapon of enemy.getAttackWeapons()) {
+    if (attackWeapon.salvo) enemy.lockWeaponUntil(attackWeapon.weapon, readyAt);
+  }
+}
+
 /** A burst's ground fire lands this far behind its target (inside a struck base wall). */
 const FLAME_GROUND_OVERSHOOT_PX = 12;
 /** Cells lit along the end of the burst, measured back from its reach. */
@@ -171,6 +186,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   }
   private readonly lastAttackTargets = new Map<string, EnemyAttackCandidate>();
   private actionBlockedChecker: ((enemyId: string) => boolean) | null = null;
+  private salvoHooks: EnemySalvoHooks | null = null;
 
   private obstacleExcluded: ((obstacleIndex: number) => boolean) | null = null;
 
@@ -197,6 +213,10 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
 
   setActionBlockedChecker(checker: ((enemyId: string) => boolean) | null): void {
     this.actionBlockedChecker = checker;
+  }
+
+  setSalvoHooks(hooks: EnemySalvoHooks | null): void {
+    this.salvoHooks = hooks;
   }
 
   /** Hindernisse, die Gegner nie gezielt angreifen (reaktive Map-Objekte wie Fässer). */
@@ -376,11 +396,16 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     if (attackWeapon) this.spendSalvo(enemy, attackWeapon, now, state.shotsFired);
   }
 
-  /** Sperrt eine Salvenwaffe fuer ihre Pause; eine angekuendigte Salve meldet dabei ihr Ende. */
+  /**
+   * Sperrt eine Salvenwaffe fuer ihre Pause; eine angekuendigte Salve meldet dabei ihr Ende. Gibt der
+   * Salven-Owner des Koerpers eine Pause vor, sperrt sie alle seine Salvenwaffen.
+   */
   private spendSalvo(enemy: EnemyEntity, attackWeapon: EnemyAttackWeapon, now: number, shotsFired: number): void {
     const salvo = attackWeapon.salvo;
     if (!salvo) return;
-    enemy.lockWeaponUntil(attackWeapon.weapon, now + salvo.cooldownMs);
+    const ownedPauseMs = shotsFired > 0 ? this.salvoHooks?.salvoSpent(enemy, shotsFired, now) ?? null : null;
+    if (ownedPauseMs !== null) lockEnemySalvoWeapons(enemy, now + ownedPauseMs);
+    else enemy.lockWeaponUntil(attackWeapon.weapon, now + salvo.cooldownMs);
     if (!salvo.chargeMs) return;
     const volley = enemy.getVolleyState();
     if (volley.revision === 0 || volley.endedAt > 0) return;

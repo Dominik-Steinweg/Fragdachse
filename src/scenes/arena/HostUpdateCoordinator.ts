@@ -1952,7 +1952,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
     if (config.fireChunks && config.fireChunks.count > 0) {
       this.playerGameplayRuntime?.hostCreateFireChunkBurst(enemyId, x, y, resolveEnemyFireEffect(faction, config.fireChunks),
-        `heat-burst:${enemyId}:${request.cycle}`, nowMs, source);
+        `heat-burst:${enemyId}`, nowMs, source);
     }
   }
 

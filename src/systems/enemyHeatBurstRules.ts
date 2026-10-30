@@ -1,51 +1,43 @@
 import type { CoopDefenseEnemyHeatBurstConfig } from '../config/coopDefenseEnemies';
-import { enemyHeatAt, enemyHeatBurstPhaseAt, type EnemyHeatBurstState } from './EnemyHeatBurstState';
+import { enemyHeatBurstPhaseAt, type EnemyHeatBurstState } from './EnemyHeatBurstState';
 import { pounceUnitHash } from './enemyPounceRules';
 
 /**
- * Pure heat-cycle rules shared by the host decision and the client presentation: per-body charge
- * time, the speed ramp, the burst grid of the pack cascade and the fizzle size.
+ * Pure heat rules shared by the host decision and the client presentation: the speed of a stage,
+ * the salvo pause of a stage (with the fixed per-body spread that keeps a pack apart) and the fizzle
+ * size of a killed body.
  */
 
-/** Charge time of one body: fixed per body (a steady rhythm), spread over the authored range. */
-export function heatChargeMs(enemyId: string, config: CoopDefenseEnemyHeatBurstConfig): number {
-  return Math.round(config.chargeMinMs + (config.chargeMaxMs - config.chargeMinMs) * pounceUnitHash(enemyId, 0, 23));
+/** Speed factor at `stage`: rises linearly from 1 (cold) to 1 + boost (all stages). */
+export function heatStageSpeedFactor(stage: number, config: CoopDefenseEnemyHeatBurstConfig): number {
+  return 1 + config.speedBoost * Math.max(0, Math.min(1, stage / config.stages));
 }
 
-/** Speed factor at heat `heat` in [0, 1]: eased from 1 to 1 + boost. */
-export function heatSpeedFactor(heat: number, config: CoopDefenseEnemyHeatBurstConfig): number {
-  return 1 + config.speedBoost * Math.pow(Math.max(0, Math.min(1, heat)), config.speedCurveExponent);
+/** Speed factor of a replicated heat state; it never falls back while the body lives. */
+export function heatSpeedFactorOf(state: EnemyHeatBurstState, config: CoopDefenseEnemyHeatBurstConfig): number {
+  return heatStageSpeedFactor(state.stage, config);
 }
 
-/** Speed factor of a body at host time `now`: ramps while charging, holds at full, back to 1 after the burst. */
-export function heatSpeedFactorAt(state: EnemyHeatBurstState, config: CoopDefenseEnemyHeatBurstConfig, now: number): number {
-  return heatSpeedFactor(enemyHeatAt(state, now), config);
+/** Fixed spread of one body's salvo pause in [1 - jitter, 1 + jitter] (hashed from its id). */
+export function heatSalvoPauseSpread(enemyId: string, config: CoopDefenseEnemyHeatBurstConfig): number {
+  return 1 + (2 * pounceUnitHash(enemyId, 0, 31) - 1) * config.salvoPauseJitter;
 }
 
-/** True while the body runs its warning (the burst is booked and the zone shows). */
+/** Pause after a salvo spat at `stage` (the stage before the salvo's step), with the body's spread. */
+export function heatSalvoPauseMs(stage: number, enemyId: string, config: CoopDefenseEnemyHeatBurstConfig): number {
+  const pauses = config.salvoPauseMsByStage;
+  return Math.round(pauses[Math.max(0, Math.min(pauses.length - 1, stage))] * heatSalvoPauseSpread(enemyId, config));
+}
+
+/** True while the meltdown warning runs (the zone shows, the body stands). */
 export function isHeatTelegraphAt(state: EnemyHeatBurstState, now: number): boolean {
   return enemyHeatBurstPhaseAt(state, now) === 'telegraph';
 }
 
-/** Offset of a body's burst on its grid slot, in [-jitterMs, jitterMs], new for every cycle. */
-export function heatSlotJitterMs(enemyId: string, cycle: number, config: CoopDefenseEnemyHeatBurstConfig): number {
-  return (2 * pounceUnitHash(enemyId, cycle, 29) - 1) * config.cascade.jitterMs;
-}
-
-/** Host time of grid slot `slot` for one body and cycle. */
-export function heatSlotTime(slot: number, jitterMs: number, config: CoopDefenseEnemyHeatBurstConfig): number {
-  return slot * config.cascade.stepMs + jitterMs;
-}
-
-/** First grid slot whose burst lies at or after `earliest`. */
-export function heatFirstSlotAtOrAfter(earliest: number, jitterMs: number, config: CoopDefenseEnemyHeatBurstConfig): number {
-  return Math.ceil((earliest - jitterMs) / config.cascade.stepMs);
-}
-
-/** Fizzle radius of a body killed at heat `heat`; null below the authored minimum heat. */
-export function heatFizzleRadius(heat: number, config: CoopDefenseEnemyHeatBurstConfig): number | null {
-  const { minHeat, minRadiusPx, maxRadiusPx } = config.fizzle;
-  if (heat < minHeat) return null;
-  const share = minHeat >= 1 ? 1 : (heat - minHeat) / (1 - minHeat);
+/** Fizzle radius of a body killed at `stage`; null below the authored minimum stage. */
+export function heatFizzleRadius(stage: number, config: CoopDefenseEnemyHeatBurstConfig): number | null {
+  const { minStage, minRadiusPx, maxRadiusPx } = config.fizzle;
+  if (stage < minStage || stage <= 0) return null;
+  const share = config.stages <= minStage ? 1 : (stage - minStage) / (config.stages - minStage);
   return minRadiusPx + (maxRadiusPx - minRadiusPx) * Math.max(0, Math.min(1, share));
 }

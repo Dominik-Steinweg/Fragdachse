@@ -192,7 +192,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   if (mask & FIELD_SPAWN_ZONE) out.push(entry.spawnZoneId!);
   if (mask & FIELD_HEAT_BURST) {
     const state = entry.heatBurst!;
-    out.push(state.revision, state.ventFromAt, state.chargeStartAt, state.fullAt, state.telegraphAt, state.burstAt);
+    out.push(state.revision, state.stage, state.stageAt, state.telegraphAt, state.burstAt);
   }
   if (mask & FIELD_VOLLEY) {
     const state = entry.volley!;
@@ -343,8 +343,8 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
     }
     if (mask & FIELD_HEAT_BURST) {
       // Every value is consumed even for an invalid state, so later entries stay aligned.
-      const state = { revision: stream[i++] as number, ventFromAt: stream[i++] as number, chargeStartAt: stream[i++] as number,
-        fullAt: stream[i++] as number, telegraphAt: stream[i++] as number, burstAt: stream[i++] as number };
+      const state = { revision: stream[i++] as number, stage: stream[i++] as number, stageAt: stream[i++] as number,
+        telegraphAt: stream[i++] as number, burstAt: stream[i++] as number };
       if (isEnemyHeatBurstState(state)) entry.heatBurst = state;
     }
     if (mask & FIELD_VOLLEY) {

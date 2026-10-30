@@ -45,10 +45,10 @@ interface HeatVisual {
 }
 
 /**
- * Always-on presentation of heat-burst enemies (the Demon Badger), read from the replicated heat
- * timeline: the heat glow on the body (emission sheet when the asset has one, a soft halo under the
- * body and a ground light), the gait sped up with the heat, and the red warning zone that travels
- * with a running body until its burst. It only observes replicated state.
+ * Always-on presentation of heat-burst enemies (the Demon Badger), read from the replicated heat:
+ * the stage glow on the body (emission sheet when the asset has one, a soft halo under the body and
+ * a ground light), the flare of every step, and the red meltdown zone around the standing body until
+ * its burst. It only observes replicated state.
  */
 export class EnemyHeatBurstPresentation {
   private enemies: () => readonly EnemyVisualSource[] = () => [];
@@ -103,12 +103,12 @@ export class EnemyHeatBurstPresentation {
       live.add(enemy.id);
       const sprite = enemy.sprite, size = getCoopDefenseEnemyConfig(enemy.kind).size;
       const visible = sprite.visible && enemy.getHp() > 0;
-      const phase = enemyHeatBurstPhaseAt(state, now), heat = enemyHeatAt(state, now);
+      const phase = enemyHeatBurstPhaseAt(state, now), heat = enemyHeatAt(state, config.stages);
       const visual = this.visuals.get(enemy.id) ?? this.createVisual(enemy);
-      const glow = enemyHeatGlowAt(this.glow, phase, heat, now, state.ventFromAt, enemy.faction === 'allied', visual.offset,
-        now - state.telegraphAt, state.burstAt - state.telegraphAt);
+      const glow = enemyHeatGlowAt(this.glow, phase, state.stage, config.stages, now, state.stageAt, enemy.faction === 'allied',
+        visual.offset, now - state.telegraphAt, state.burstAt - state.telegraphAt);
 
-      const haloSize = size * (HALO_COLD + (HALO_HOT - HALO_COLD) * Math.max(heat, phase === 'vent' ? glow.alpha : 0));
+      const haloSize = size * (HALO_COLD + (HALO_HOT - HALO_COLD) * Math.min(1, heat + 0.25 * glow.flare));
       // The warning halo throbs with the body: the red zone marks the reach, the halo the countdown.
       const haloShare = phase === 'telegraph' ? HALO_SHARE * 0.8 : HALO_SHARE;
       visual.halo.setVisible(visible).setPosition(sprite.x, sprite.y).setDisplaySize(haloSize, haloSize)

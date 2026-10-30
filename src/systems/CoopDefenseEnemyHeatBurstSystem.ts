@@ -1,107 +1,69 @@
 import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyHeatBurstConfig } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyDeathInfo, EnemyMovementOverride, EnemySpecialMovementSource } from '../entities/EnemyManager';
-import { enemyHeatAt, enemyHeatBurstPhaseAt, type EnemyHeatBurstPhase } from './EnemyHeatBurstState';
-import { heatChargeMs, heatFirstSlotAtOrAfter, heatFizzleRadius, heatSlotJitterMs, heatSlotTime,
-  heatSpeedFactor } from './enemyHeatBurstRules';
-
-interface Point { readonly x: number; readonly y: number }
-
-/**
- * Distance of a point beyond every player's view (0 inside one), with the bands of the AI detail
- * tiers. The heat cycle reads this geometry itself; it never reads the detail tier.
- */
-export interface EnemyViewProximity {
-  viewGap(x: number, y: number): number;
-  readonly nearMarginPx: number;
-  readonly farMarginPx: number;
-}
+import type { EnemySalvoHooks } from './CoopDefenseEnemyAttackSystem';
+import { enemyHeatBurstPhaseAt, type EnemyHeatBurstPhase } from './EnemyHeatBurstState';
+import { heatFizzleRadius, heatSalvoPauseMs, heatStageSpeedFactor } from './enemyHeatBurstRules';
 
 export interface EnemyHeatBurstPorts {
   readonly enemies: { getAllEnemies(): readonly EnemyEntity[] };
-  /** Next steering point of the body's ordinary route, or null (the warning run then keeps its heading). */
-  readonly steeringPoint: (enemy: EnemyEntity) => Point | null;
-  /** Crowd- and geometry-aware locomotion towards a point, facing `aimAngle`. */
-  readonly moveNormally: (enemy: EnemyEntity, point: Point, speed: number, aimAngle: number) => { vx: number; vy: number; blocked: boolean };
-  /** A hostile body within `radius` of an allied burster. */
-  readonly hasHostileWithin: (enemy: EnemyEntity, radius: number) => boolean;
   /** The train-awareness owner currently moves the body off the track. */
   readonly isEvadingTrain?: (enemyId: string) => boolean;
   /** Area hit, fire chunks and effect of a burst at the body's position. */
-  readonly burst: (enemy: EnemyEntity, x: number, y: number, config: CoopDefenseEnemyHeatBurstConfig, cycle: number, now: number) => void;
+  readonly burst: (enemy: EnemyEntity, x: number, y: number, config: CoopDefenseEnemyHeatBurstConfig, now: number) => void;
+  /** The body died in its own burst: it leaves without a kill reward, death effect or corpse. */
+  readonly removeWithoutKill: (enemy: EnemyEntity) => void;
   /** Harmless pop of a body killed with heat in it. */
   readonly fizzle: (death: EnemyDeathInfo, radius: number) => void;
 }
 
 interface HeatState {
   readonly enemy: EnemyEntity;
-  readonly chargeMs: number;
   revision: number;
-  cycle: number;
-  ventFromAt: number;
-  chargeStartAt: number;
-  fullAt: number;
+  stage: number;
+  stageAt: number;
   telegraphAt: number;
   burstAt: number;
-  /** Booked grid slot of the pending burst (host only). */
-  slot: number | null;
-  /** Some player can see the body (hysteresis over the view bands). */
-  seen: boolean;
+  /** The warning was already restarted once (a teleported body or a long host stall). */
+  restarted: boolean;
   positionRevision: number;
   lastX: number;
   lastY: number;
-  /** The warning of this cycle was already restarted once (a teleported body). */
-  restarted: boolean;
-  nextBookingCheckAt: number;
-  /** Heading of the warning (run or hold); null outside it. */
-  heading: number | null;
-  headingAt: number;
-  /** The body was running when its warning began; a standing or fighting body holds its ground. */
-  warningRun: boolean;
+  /** Facing the body holds through its meltdown (its last target). */
+  heading: number;
 }
 
-/** A booked warning reaches clients before it starts. */
+/** A warning reaches clients before it starts, even with a short last pause. */
 const BOOKING_LEAD_MS = 200;
 /** Host frames missed by more than this skip no warning: the body announces its burst again. */
 const LATE_BURST_MS = 250;
-/** Allies re-check their trigger this often while holding. */
-const BOOKING_RECHECK_MS = 150;
-/** Grid slots searched for a free one before the body simply waits for the next check. */
-const MAX_SLOT_SEARCH = 64;
-/** The warning run steers at a point this far ahead along its heading. */
-const RUN_PROBE_PX = 48;
 /** A discontinuous move farther than this (portal, translocator) restarts a running warning once. */
 const TELEPORT_PX = 48;
-/** A body moving at least this share of its speed when its warning begins keeps running. */
-const RUNNING_SPEED_SHARE = 0.6;
-/** A steering point this close means the body stands at its attack position: it holds there. */
-const ARRIVED_PX = 32;
 
 /**
- * Host decisions of heat-burst enemies (the Demon Badger): charge while running (the speed rises),
- * hold at full heat until a burst slot is free, announce the burst with a warning that travels with
- * the running body, burst around it and cool down. Bursts sit on a shared grid; two bodies close to
- * each other never share a slot, so a pack bursts one after another in spawn order, and a booked
- * warning pulls charged neighbours into the next slots (a rolling chain). A full body nobody can see
- * holds its heat. Each transition is published as a replicated EnemyHeatBurstState.
+ * Host decisions of heat-burst enemies (the Demon Badger). Every salvo the body spits adds a heat
+ * stage it keeps until it dies: it runs faster and its next salvo comes sooner (one pause for all its
+ * salvo weapons, spread per body so a pack drifts apart). Its last salvo starts the meltdown: the body
+ * stands facing its target, the warning follows after the last pause, and the burst kills the body
+ * without a kill reward. Killed before, it fizzles. Each transition is published as a replicated
+ * EnemyHeatBurstState.
  */
-export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSource {
+export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSource, EnemySalvoHooks {
   private readonly states = new Map<string, HeatState>();
   private lastNow = 0;
 
   constructor(private readonly ports: EnemyHeatBurstPorts) {}
 
-  hostUpdate(now: number, views: EnemyViewProximity | null): void {
+  hostUpdate(now: number): void {
     this.lastNow = now;
     const live = new Set<string>();
     for (const enemy of this.ports.enemies.getAllEnemies()) {
       const config = getCoopDefenseEnemyConfig(enemy.kind).heatBurst;
       if (!config || !enemy.sprite.active || enemy.getHp() <= 0) continue;
       live.add(enemy.id);
-      let state = this.states.get(enemy.id);
-      if (!state || state.enemy !== enemy) state = this.createState(enemy, config, now, views);
-      this.step(state, config, now, views);
-      enemy.setAbilitySpeedFactor(heatSpeedFactor(enemyHeatAt(enemy.getHeatBurstState(), now), config));
+      const state = this.stateOf(enemy);
+      enemy.setAbilitySpeedFactor(heatStageSpeedFactor(state.stage, config));
+      this.step(state, config, now);
     }
     for (const [id, state] of this.states) {
       if (live.has(id)) continue;
@@ -111,64 +73,55 @@ export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSour
   }
 
   /**
-   * Through its warning a hostile body keeps doing what it did: a running body runs on at full heat,
-   * turns only at the authored rate and slows down for a sharp turn instead of running off; a body
-   * that stood or fought (e.g. spitting at a base) holds its ground facing its target.
+   * A spent salvo heats the body by one stage and sets its pause. The last stage books the meltdown:
+   * the warning starts after that stage's pause, so the burst comes in the rhythm the salvos set.
    */
+  salvoSpent(enemy: EnemyEntity, shotsFired: number, now: number): number | null {
+    const config = getCoopDefenseEnemyConfig(enemy.kind).heatBurst;
+    if (!config || shotsFired <= 0 || !enemy.sprite.active || enemy.getHp() <= 0) return null;
+    const state = this.stateOf(enemy);
+    if (state.burstAt > 0 || state.stage >= config.stages) return null;
+    const pauseMs = heatSalvoPauseMs(state.stage, enemy.id, config);
+    state.stage += 1;
+    state.stageAt = Math.round(now);
+    if (state.stage >= config.stages) {
+      state.heading = enemy.getAimAngle();
+      state.telegraphAt = Math.round(now + Math.max(BOOKING_LEAD_MS, pauseMs));
+      state.burstAt = state.telegraphAt + config.telegraphMs;
+    }
+    enemy.setAbilitySpeedFactor(heatStageSpeedFactor(state.stage, config));
+    this.publish(state);
+    return pauseMs;
+  }
+
+  /** From its last stage until the burst the body stands facing its target (a train still moves it off the track). */
   getMovementOverride(enemy: EnemyEntity, now: number): EnemyMovementOverride | null {
     const state = this.states.get(enemy.id);
-    if (!state || state.enemy !== enemy) return null;
-    if (enemy.faction !== 'hostile' || state.burstAt === 0 || now < state.telegraphAt || now >= state.burstAt
-      || this.ports.isEvadingTrain?.(enemy.id)) {
-      state.heading = null;
-      return null;
-    }
-    const config = getCoopDefenseEnemyConfig(enemy.kind).heatBurst!;
-    const x = enemy.sprite.x, y = enemy.sprite.y;
-    const point = this.ports.steeringPoint(enemy);
-    const arrived = !point || Math.hypot(point.x - x, point.y - y) <= ARRIVED_PX;
-    if (state.heading === null) {
-      const velocity = enemy.getDesiredVelocity();
-      state.warningRun = !arrived && Math.hypot(velocity.vx, velocity.vy) >= RUNNING_SPEED_SHARE * enemy.getMoveSpeed();
-      state.heading = state.warningRun ? runHeading(enemy) : enemy.getAimAngle();
-      state.headingAt = now;
-    }
-    // Reaching the attack position ends the run for the rest of the warning.
-    if (arrived) state.warningRun = false;
-    if (!state.warningRun) return { vx: 0, vy: 0, aimAngle: state.heading };
-    const elapsedS = Math.max(0, Math.min(0.1, (now - state.headingAt) / 1000));
-    const desired = Math.atan2(point!.y - y, point!.x - x);
-    const heading = turnToward(state.heading, desired, config.telegraphTurnRateDegPerSec * Math.PI / 180 * elapsedS);
-    state.heading = heading;
-    state.headingAt = now;
-    const speed = enemy.getMoveSpeed() * Math.max(0, Math.cos(desired - heading));
-    const moved = this.ports.moveNormally(enemy, { x: x + Math.cos(heading) * RUN_PROBE_PX, y: y + Math.sin(heading) * RUN_PROBE_PX },
-      speed, heading);
-    return moved.blocked ? { vx: 0, vy: 0, aimAngle: heading } : { vx: moved.vx, vy: moved.vy, aimAngle: heading };
+    if (!state || state.enemy !== enemy || state.burstAt === 0 || now >= state.burstAt
+      || this.ports.isEvadingTrain?.(enemy.id)) return null;
+    return { vx: 0, vy: 0, aimAngle: state.heading };
   }
 
-  /** A warning body runs on instead of stopping to bite or spit. */
+  /** A melting body neither bites nor spits. */
   blocksRegularAttacks(enemyId: string): boolean {
     const state = this.states.get(enemyId);
-    return !!state && state.enemy.faction === 'hostile' && state.burstAt > 0
-      && this.lastNow >= state.telegraphAt && this.lastNow < state.burstAt;
+    return !!state && state.burstAt > 0 && this.lastNow < state.burstAt;
   }
 
-  /** A killed body with heat in it fizzles (no damage); its booked slot is released. */
-  handleKilled(death: EnemyDeathInfo, now: number): void {
+  /** A killed body with heat in it fizzles (no damage). */
+  handleKilled(death: EnemyDeathInfo, _now: number): void {
     const state = this.states.get(death.id);
     if (!state) return;
     this.states.delete(death.id);
     const config = getCoopDefenseEnemyConfig(state.enemy.kind).heatBurst;
-    const radius = config ? heatFizzleRadius(enemyHeatAt(state.enemy.getHeatBurstState(), now), config) : null;
+    const radius = config ? heatFizzleRadius(state.stage, config) : null;
     if (radius !== null) this.ports.fizzle(death, radius);
   }
 
-  getDevStatus(enemyId: string, now: number): { phase: EnemyHeatBurstPhase; heat: number; slot: number | null } | null {
+  getDevStatus(enemyId: string, now: number): { phase: EnemyHeatBurstPhase; stage: number } | null {
     const state = this.states.get(enemyId);
     if (!state) return null;
-    const published = state.enemy.getHeatBurstState();
-    return { phase: enemyHeatBurstPhaseAt(published, now), heat: enemyHeatAt(published, now), slot: state.slot };
+    return { phase: enemyHeatBurstPhaseAt(state.enemy.getHeatBurstState(), now), stage: state.stage };
   }
 
   clear(): void {
@@ -176,153 +129,45 @@ export class CoopDefenseEnemyHeatBurstSystem implements EnemySpecialMovementSour
     this.states.clear();
   }
 
-  private createState(enemy: EnemyEntity, config: CoopDefenseEnemyHeatBurstConfig, now: number, views: EnemyViewProximity | null): HeatState {
-    const chargeMs = heatChargeMs(enemy.id, config);
-    // Cascade by arrival: a body comes to full heat at least one step after every body already near it.
-    let fullAt = now + config.initialDelayMs + chargeMs;
-    for (const other of this.states.values()) {
-      if (this.isNeighbour(other, enemy, config)) fullAt = Math.max(fullAt, other.fullAt + config.cascade.stepMs);
-    }
-    const state: HeatState = { enemy, chargeMs, revision: enemy.getHeatBurstState().revision, cycle: 0,
-      ventFromAt: 0, chargeStartAt: fullAt - chargeMs, fullAt, telegraphAt: 0, burstAt: 0, slot: null,
-      seen: views ? views.viewGap(enemy.sprite.x, enemy.sprite.y) < views.farMarginPx : true,
-      positionRevision: enemy.positionRevision, lastX: enemy.sprite.x, lastY: enemy.sprite.y, restarted: false,
-      nextBookingCheckAt: 0, heading: null, headingAt: now, warningRun: false };
+  private stateOf(enemy: EnemyEntity): HeatState {
+    const existing = this.states.get(enemy.id);
+    if (existing && existing.enemy === enemy) return existing;
+    const published = enemy.getHeatBurstState();
+    const state: HeatState = { enemy, revision: published.revision, stage: published.stage, stageAt: published.stageAt,
+      telegraphAt: published.telegraphAt, burstAt: published.burstAt, restarted: false,
+      positionRevision: enemy.positionRevision, lastX: enemy.sprite.x, lastY: enemy.sprite.y, heading: enemy.getAimAngle() };
     this.states.set(enemy.id, state);
-    this.publish(state);
     return state;
   }
 
-  private step(state: HeatState, config: CoopDefenseEnemyHeatBurstConfig, now: number, views: EnemyViewProximity | null): void {
+  private step(state: HeatState, config: CoopDefenseEnemyHeatBurstConfig, now: number): void {
     const enemy = state.enemy, moved = state.positionRevision !== enemy.positionRevision;
     const jumped = moved && Math.hypot(enemy.sprite.x - state.lastX, enemy.sprite.y - state.lastY) > TELEPORT_PX;
     state.positionRevision = enemy.positionRevision;
     state.lastX = enemy.sprite.x; state.lastY = enemy.sprite.y;
-    if (views) {
-      const gap = views.viewGap(enemy.sprite.x, enemy.sprite.y);
-      if (jumped) state.seen = gap < views.farMarginPx;
-      else if (state.seen && gap >= views.farMarginPx) state.seen = false;
-      else if (!state.seen && gap <= views.nearMarginPx) state.seen = true;
-    } else state.seen = true;
-
-    if (state.burstAt > 0) {
-      const warning = now >= state.telegraphAt;
-      // A teleported or long-delayed warning restarts once in full at the body's current place.
-      if (!state.restarted && ((warning && jumped && now < state.burstAt) || now > state.burstAt + LATE_BURST_MS)) {
-        state.restarted = true;
-        this.book(state, config, now, now);
-        return;
-      }
-      if (now >= state.burstAt) { this.burst(state, config, now); return; }
-      if (!warning && !this.mayBurst(state, config)) {
-        state.slot = null; state.telegraphAt = 0; state.burstAt = 0;
-        this.publish(state);
-      }
-      return;
-    }
-    if (now < state.fullAt - BOOKING_LEAD_MS || now < state.nextBookingCheckAt) return;
-    state.nextBookingCheckAt = now + BOOKING_RECHECK_MS;
-    if (this.mayBurst(state, config)) this.book(state, config, now, null);
-  }
-
-  /** Bursts need a watched, surfaced body; an ally also needs a hostile in reach. */
-  private mayBurst(state: HeatState, config: CoopDefenseEnemyHeatBurstConfig): boolean {
-    const enemy = state.enemy;
-    if (!state.seen || enemy.isBurrowed()) return false;
-    return enemy.faction !== 'allied' || this.ports.hasHostileWithin(enemy, config.alliedTriggerRadiusPx);
-  }
-
-  /** Book the first free grid slot (or, with `warningAt`, restart the warning there without a slot search). */
-  private book(state: HeatState, config: CoopDefenseEnemyHeatBurstConfig, now: number, warningAt: number | null): void {
-    if (warningAt !== null) {
-      state.slot = null;
-      state.telegraphAt = Math.max(state.fullAt, Math.round(warningAt));
+    if (state.burstAt === 0) return;
+    // A teleported or long-delayed warning restarts once in full at the body's current place.
+    if (!state.restarted && ((jumped && now >= state.telegraphAt && now < state.burstAt) || now > state.burstAt + LATE_BURST_MS)) {
+      state.restarted = true;
+      state.telegraphAt = Math.round(now);
       state.burstAt = state.telegraphAt + config.telegraphMs;
       this.publish(state);
       return;
     }
-    const jitter = heatSlotJitterMs(state.enemy.id, state.cycle, config);
-    const earliest = Math.max(state.fullAt, now + BOOKING_LEAD_MS) + config.telegraphMs;
-    let slot = heatFirstSlotAtOrAfter(earliest, jitter, config);
-    let found = false;
-    for (let tries = 0; tries < MAX_SLOT_SEARCH; tries++, slot++) {
-      if (!this.isSlotTaken(state, slot, config)) { found = true; break; }
-    }
-    if (!found) return;
-    state.slot = slot;
-    state.burstAt = Math.round(heatSlotTime(slot, jitter, config));
-    state.telegraphAt = Math.max(state.fullAt, state.burstAt - config.telegraphMs);
-    this.publish(state);
-    this.pullChain(state, config, now);
+    if (now >= state.burstAt) this.burst(state, config, now);
   }
 
-  /**
-   * A booked warning pulls charged bodies of its kind nearby along: their charge completes one
-   * cascade step after its warning starts, so they book the next slots and pull their own neighbours
-   * in turn. A pack goes off as a rolling chain, and having vented together it charges up together.
-   */
-  private pullChain(igniter: HeatState, config: CoopDefenseEnemyHeatBurstConfig, now: number): void {
-    const { chainRadiusPx, chainMinHeat, stepMs } = config.cascade;
-    const fullAt = igniter.telegraphAt + stepMs, enemy = igniter.enemy;
-    for (const other of this.states.values()) {
-      if (other === igniter || other.burstAt > 0 || other.fullAt <= fullAt || other.enemy.kind !== enemy.kind
-        || other.enemy.faction !== enemy.faction) continue;
-      const dx = other.enemy.sprite.x - enemy.sprite.x, dy = other.enemy.sprite.y - enemy.sprite.y;
-      if (dx * dx + dy * dy > chainRadiusPx * chainRadiusPx
-        || enemyHeatAt(other.enemy.getHeatBurstState(), now) < chainMinHeat) continue;
-      other.fullAt = fullAt;
-      other.nextBookingCheckAt = 0;
-      this.publish(other);
-    }
-  }
-
-  private isSlotTaken(state: HeatState, slot: number, config: CoopDefenseEnemyHeatBurstConfig): boolean {
-    let count = 0;
-    for (const other of this.states.values()) {
-      if (other === state || other.slot !== slot) continue;
-      if (this.isNeighbour(other, state.enemy, config)) return true;
-      if (++count >= config.cascade.maxPerSlot) return true;
-    }
-    return false;
-  }
-
+  /** The body stays registered through its burst (faction rules apply), then leaves without a kill. */
   private burst(state: HeatState, config: CoopDefenseEnemyHeatBurstConfig, now: number): void {
     const enemy = state.enemy;
-    this.ports.burst(enemy, enemy.sprite.x, enemy.sprite.y, config, state.cycle, now);
-    if (this.states.get(enemy.id) !== state) return;
-    state.cycle += 1;
-    state.slot = null;
-    state.restarted = false;
-    state.ventFromAt = Math.round(now);
-    state.chargeStartAt = state.ventFromAt + config.ventMs;
-    state.fullAt = state.chargeStartAt + state.chargeMs;
-    state.telegraphAt = 0;
-    state.burstAt = 0;
-    state.heading = null;
-    this.publish(state);
-  }
-
-  private isNeighbour(other: HeatState, enemy: EnemyEntity, config: CoopDefenseEnemyHeatBurstConfig): boolean {
-    const radius = config.cascade.neighbourRadiusPx;
-    const dx = other.enemy.sprite.x - enemy.sprite.x, dy = other.enemy.sprite.y - enemy.sprite.y;
-    return dx * dx + dy * dy <= radius * radius;
+    this.states.delete(enemy.id);
+    this.ports.burst(enemy, enemy.sprite.x, enemy.sprite.y, config, now);
+    this.ports.removeWithoutKill(enemy);
   }
 
   private publish(state: HeatState): void {
     state.revision = Math.max(state.revision, state.enemy.getHeatBurstState().revision) + 1;
-    state.enemy.applyHeatBurstState({ revision: state.revision, ventFromAt: Math.round(state.ventFromAt),
-      chargeStartAt: Math.round(state.chargeStartAt), fullAt: Math.round(state.fullAt),
+    state.enemy.applyHeatBurstState({ revision: state.revision, stage: state.stage, stageAt: state.stageAt,
       telegraphAt: Math.round(state.telegraphAt), burstAt: Math.round(state.burstAt) });
   }
-}
-
-/** Direction the body runs in: its current velocity, else its facing. */
-function runHeading(enemy: EnemyEntity): number {
-  const velocity = enemy.getDesiredVelocity();
-  return Math.hypot(velocity.vx, velocity.vy) > 1 ? Math.atan2(velocity.vy, velocity.vx) : enemy.getAimAngle();
-}
-
-function turnToward(current: number, desired: number, maxStep: number): number {
-  const delta = Math.atan2(Math.sin(desired - current), Math.cos(desired - current));
-  return current + Math.max(-maxStep, Math.min(maxStep, delta));
 }

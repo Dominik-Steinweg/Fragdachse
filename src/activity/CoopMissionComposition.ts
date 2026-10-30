@@ -391,6 +391,7 @@ export class CoopMissionComposition {
     new CoopMissionEnemyBehaviourComposition({
       playerManager,
       enemyAreaEffects: this.options.enemyAreaEffects,
+      removeEnemyFromPlayerItems: this.options.removeEnemyFromPlayerItems,
       getNowMs: this.options.getNowMs,
       projectileSpawn: projectileSpawnPort,
       projectileThreatReadPort,

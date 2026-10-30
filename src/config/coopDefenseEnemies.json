@@ -52,7 +52,7 @@
           "salvo": {
             "count": 4,
             "intervalMs": 50,
-            "cooldownMs": 1000
+            "cooldownMs": 1400
           }
         },
         {
@@ -63,7 +63,7 @@
           "salvo": {
             "count": 4,
             "intervalMs": 50,
-            "cooldownMs": 1000
+            "cooldownMs": 1400
           }
         },
         {
@@ -81,47 +81,35 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_demon_badger",
       "heatBurst": {
-        "chargeMinMs": 4800,
-        "chargeMaxMs": 5200,
-        "telegraphMs": 1200,
-        "ventMs": 400,
-        "initialDelayMs": 1500,
-        "speedBoost": 0.6,
-        "speedCurveExponent": 1.6,
-        "cascade": {
-          "stepMs": 450,
-          "jitterMs": 60,
-          "neighbourRadiusPx": 420,
-          "maxPerSlot": 3,
-          "chainRadiusPx": 320,
-          "chainMinHeat": 0.4
-        },
-        "telegraphTurnRateDegPerSec": 75,
-        "alliedTriggerRadiusPx": 140,
+        "stages": 5,
+        "speedBoost": 0.5,
+        "salvoPauseMsByStage": [1400, 1200, 1000, 800, 600],
+        "salvoPauseJitter": 0.1,
+        "telegraphMs": 1400,
         "burst": {
-          "radiusPx": 110,
-          "damage": 20,
-          "minDamage": 6,
-          "knockbackSpeed": 360,
-          "knockbackMs": 160,
-          "friendlyBaseDamageMult": 0.5,
-          "constructionDamageMult": 0.5,
+          "radiusPx": 220,
+          "damage": 45,
+          "minDamage": 12,
+          "knockbackSpeed": 420,
+          "knockbackMs": 200,
+          "friendlyBaseDamageMult": 1,
+          "constructionDamageMult": 0.6,
           "trainDamageMult": 0.3
         },
         "fireChunks": {
-          "count": 4,
-          "searchRadius": 140,
-          "flightMs": 460,
+          "count": 8,
+          "searchRadius": 220,
+          "flightMs": 520,
           "igniteCenter": false,
-          "durationMs": 2600,
+          "durationMs": 3000,
           "burnDurationMs": 1500,
           "burnDamagePerTick": 0.5,
           "sourceId": "enemy.demon-badger.heat_fire"
         },
         "fizzle": {
-          "minHeat": 0.25,
+          "minStage": 1,
           "minRadiusPx": 20,
-          "maxRadiusPx": 48
+          "maxRadiusPx": 56
         }
       },
       "playerScaling": {

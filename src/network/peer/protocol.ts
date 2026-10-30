@@ -60,7 +60,9 @@
 // Demon Badger heat burst: enemy snapshots gained the heat timeline field, and the burst and the
 // fizzle of a killed charged badger travel as the new explosion styles `demon_burst`/`demon_fizzle`.
 // Grave Titan: enemy snapshots gained the volley field (gather, first shot, end, recharge, shots).
-export const PEER_PROTOCOL_VERSION = 58;
+// Demon Badger V2: the heat field carries the salvo-fed stage and its step time instead of the
+// charge timeline (revision, stage, stageAt, telegraphAt, burstAt).
+export const PEER_PROTOCOL_VERSION = 59;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

@@ -3,10 +3,11 @@ import type { EnemyHeatBurstPhase } from '../systems/EnemyHeatBurstState';
 
 /**
  * Pure colour and intensity model of a heat-burst body's glow (emission overlay, halo, light).
- * Charging ember red brightens and tips into void violet shortly before full heat; a full body
- * shimmers violet, its warning throbs bright and ever faster up to the burst (a countdown), the
- * burst flashes and cools down to dormant embers.
- * Red belongs to the heat and the sparks, void violet to the coming burst; no yellow, no white core.
+ * The glow climbs in discrete stages, one per spat salvo: dormant embers, ember red, red, hot red,
+ * red with void-violet edges, and violet at the last stage. Every step flares the glow up for a
+ * moment, so the jump reads as an event. The meltdown warning throbs bright and ever faster up to the
+ * burst (a countdown). Red belongs to the heat and the sparks, void violet to the coming burst; no
+ * yellow, no white core.
  */
 
 /** Red sparks of the burst: the telegraph red family, never orange or yellow. */
@@ -14,16 +15,15 @@ export const DEMON_HEAT_SPARK_COLOR = 0xf01f2c;
 
 const DORMANT_EMBER = 0x5a0c06;
 const EMBER_RED = 0xc4200e;
+const RED = 0xe62a16;
 const HOT_RED = 0xff3a22;
-/** Heat at which the glow starts to tip from red into void violet. */
-const VIOLET_TIP_HEAT = 0.8;
-const HOLD_SHIMMER_MS = 600;
+/** A step flares up for this long after its salvo. */
+export const HEAT_STEP_FLARE_MS = 320;
 /** Throb period without a known warning length. */
 const WARNING_THROB_MS = 125;
 /** The warning throb speeds up from this period at its start to this one at the burst. */
 const WARNING_THROB_START_MS = 300;
 const WARNING_THROB_END_MS = 80;
-const VENT_FLASH_MS = 260;
 const BREATH_MS = 1400;
 
 export interface EnemyHeatGlow {
@@ -33,42 +33,55 @@ export interface EnemyHeatGlow {
   alpha: number;
   /** Strength of the ground light in [0, 1]; 0 = no light. */
   light: number;
+  /** Flare of the last step in [0, 1] (1 at the salvo, 0 after the flare). */
+  flare: number;
+}
+
+/** Colour, overlay strength and light of one heat share (stage / stages). */
+const STEP_LEVELS: readonly { share: number; color: number; violet: number; alpha: number; light: number }[] = [
+  { share: 0, color: DORMANT_EMBER, violet: 0, alpha: 0.16, light: 0 },
+  { share: 0.2, color: EMBER_RED, violet: 0, alpha: 0.5, light: 0.12 },
+  { share: 0.4, color: RED, violet: 0, alpha: 0.64, light: 0.3 },
+  { share: 0.6, color: HOT_RED, violet: 0, alpha: 0.78, light: 0.45 },
+  { share: 0.8, color: HOT_RED, violet: 0.35, alpha: 0.9, light: 0.58 },
+  { share: 1, color: HOT_RED, violet: 1, alpha: 1, light: 0.75 },
+];
+
+/** Discrete level of a heat share: the highest authored step at or below it. */
+function stepLevel(share: number): (typeof STEP_LEVELS)[number] {
+  let level = STEP_LEVELS[0]!;
+  for (const candidate of STEP_LEVELS) if (share + 1e-6 >= candidate.share) level = candidate;
+  return level;
+}
+
+/** Flare of a step `sinceStepMs` ago: a quick rise and an eased fall. */
+export function heatStepFlare(sinceStepMs: number): number {
+  if (!(sinceStepMs >= 0) || sinceStepMs >= HEAT_STEP_FLARE_MS) return 0;
+  const t = sinceStepMs / HEAT_STEP_FLARE_MS;
+  return t < 0.12 ? t / 0.12 : (1 - t) * (1 - t) / (0.88 * 0.88);
 }
 
 /**
- * Glow at `now` for a body in `phase` with charge `heat` in [0, 1]. `ventFromAt` is the last burst,
- * `phaseOffset` desynchronises the pulse of neighbours (ms, from the body id). `warningElapsedMs`
- * of `warningMs` time the countdown throb of the warning.
+ * Glow at `now` for a body in `phase` with `stage` of `stages`. `stageAt` is the last step (its
+ * flare), `phaseOffset` desynchronises the breath of neighbours (ms, from the body id).
+ * `warningElapsedMs` of `warningMs` time the countdown throb of the warning.
  */
-export function enemyHeatGlowAt(out: EnemyHeatGlow, phase: EnemyHeatBurstPhase, heat: number, now: number,
-  ventFromAt: number, allied: boolean, phaseOffset = 0, warningElapsedMs = 0, warningMs = 0): EnemyHeatGlow {
+export function enemyHeatGlowAt(out: EnemyHeatGlow, phase: EnemyHeatBurstPhase, stage: number, stages: number, now: number,
+  stageAt: number, allied: boolean, phaseOffset = 0, warningElapsedMs = 0, warningMs = 0): EnemyHeatGlow {
   const palette = allied ? ALLIED_PALETTE : VOID_PALETTE;
-  const dormant = allied ? ALLIED_PALETTE.shadow : DORMANT_EMBER;
   const t = now + phaseOffset;
   switch (phase) {
-    case 'vent': {
-      // The burst flashes in violet and fades to dormant embers.
-      const since = now - ventFromAt, flash = ventFromAt > 0 && since >= 0 ? Math.max(0, 1 - since / VENT_FLASH_MS) : 0;
-      out.color = mixColor(dormant, palette.bright, flash);
-      out.alpha = 0.18 + 0.7 * flash;
-      out.light = flash * 0.8;
-      return out;
-    }
-    case 'charge': {
+    case 'heat': {
+      const share = stages > 0 ? Math.max(0, Math.min(1, stage / stages)) : 0;
+      const level = stepLevel(share);
+      const base = allied ? mixColor(ALLIED_PALETTE.shadow, ALLIED_PALETTE.primary, share) : level.color;
+      const flare = stage > 0 ? heatStepFlare(now - stageAt) : 0;
       const breath = 0.5 - 0.5 * Math.cos(2 * Math.PI * t / BREATH_MS);
-      const red = allied ? mixColor(ALLIED_PALETTE.deep, ALLIED_PALETTE.primary, heat)
-        : heat < 0.5 ? mixColor(DORMANT_EMBER, EMBER_RED, heat * 2) : mixColor(EMBER_RED, HOT_RED, (heat - 0.5) * 2);
-      const tip = Math.max(0, (heat - VIOLET_TIP_HEAT) / (1 - VIOLET_TIP_HEAT));
-      out.color = mixColor(red, palette.bright, smooth(tip));
-      out.alpha = Math.min(1, 0.18 + 0.72 * heat + 0.08 * breath * heat);
-      out.light = heat < 0.45 ? 0 : (heat - 0.45) / 0.55 * 0.7;
-      return out;
-    }
-    case 'hold': {
-      const shimmer = 0.5 - 0.5 * Math.cos(2 * Math.PI * t / HOLD_SHIMMER_MS);
-      out.color = mixColor(palette.primary, palette.bright, shimmer);
-      out.alpha = 0.86 + 0.14 * shimmer;
-      out.light = 0.7 + 0.15 * shimmer;
+      const color = mixColor(base, allied ? palette.bright : palette.primary, smooth(level.violet));
+      out.color = mixColor(color, palette.bright, 0.55 * flare);
+      out.alpha = Math.min(1, level.alpha + 0.06 * breath * share + 0.4 * flare);
+      out.light = Math.min(1, level.light + 0.55 * flare);
+      out.flare = flare;
       return out;
     }
     case 'telegraph': {
@@ -82,6 +95,15 @@ export function enemyHeatGlowAt(out: EnemyHeatGlow, phase: EnemyHeatBurstPhase, 
       out.color = mixColor(palette.primary, palette.bright, throb);
       out.alpha = 0.7 + 0.3 * throb;
       out.light = (0.25 + 0.45 * throb) * (0.6 + 0.4 * progress);
+      out.flare = 0;
+      return out;
+    }
+    case 'burst': {
+      // The body is gone with the burst; until its removal arrives it shows nothing of its own.
+      out.color = palette.bright;
+      out.alpha = 0;
+      out.light = 0;
+      out.flare = 0;
       return out;
     }
   }
