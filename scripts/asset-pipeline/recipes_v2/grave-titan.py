@@ -237,9 +237,10 @@ def build(c, spec):
     rng = random.Random(int(spec.get('model', {}).get('seed', 5)))
     moss_amount = float(spec.get('model', {}).get('mossSpread', 1))
 
-    limbs = {}
+    limbs, paw_parts = {}, set()
     for name, x, y, width in [('front_left', -.99, .50, .32), ('front_right', .99, .50, .32), ('rear_left', -.82, -.72, .28), ('rear_right', .82, -.72, .28)]:
         joint, objects = paw(c, name, x, y, fur, dark, edge, width=width, length=.36, toe_length=.11)
+        paw_parts.update(objects[1:])
         side = -1 if x < 0 else 1
         outline = [(side * u, v) for u, v in [(-.15, .05), (-.10, -.16), (.09, -.18), (.17, -.04), (.11, .12), (-.09, .13)]]
         objects.append(embedded(c, name + ' stone greave', outline, .07, granite, edge, skin, objects, 11 + len(limbs),
@@ -371,6 +372,14 @@ def build(c, spec):
     refine(c, body, skull, limbs, (fur,), {ridge: ("horn", dark), granite: ("basalt", edge), lighter: ("basalt", edge), grave: ("basalt", edge), edge: ("basalt", dark),
                                                 moss: ("fungus", fur), bone: ("horn", dark), ivory: ("horn", dark), ribs: ("horn", dark)},
            extra=(tail, lid_group, rows[-1], rows[1]))
+    # The forelegs rear up and dig far away from the flank stones. Foreleg (with its proximal fur), paw and
+    # stone greave (with collar and stone details) each get their own shadow rest volume, or the proxy webs
+    # paw to shoulder and drops the stretched foreleg and the greave (ENEMY-MESH.md; scratch IoU 0.897 -> 0.960).
+    for name in ('front_left', 'front_right'):
+        foreleg = limbs[name][1][0]
+        for ob in limbs[name][1]:
+            segment = 'paw' if ob in paw_parts else 'leg' if ob is foreleg or ob.get('FD_CraftProximal') else 'greave'
+            ob['meshUnionGroup'] = f'{name}-{segment}'
     asset = finish(c, body, skull, limbs, tail)
     parts = asset['parts']
     parts['lid'] = control(c.scene, 'Great grave', location=(0, -.07, 1.14), parent=parts['body'])
