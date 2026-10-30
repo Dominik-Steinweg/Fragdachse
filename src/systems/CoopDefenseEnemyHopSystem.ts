@@ -17,7 +17,7 @@ export interface EnemyHopSteering {
 }
 
 /** Read-only attack decision of the attack owner: a target in reach (aim) or a committed windup. */
-export interface EnemyHopCombatIntent { readonly aimAngle: number; readonly committed?: boolean }
+export interface EnemyHopCombatIntent { readonly aimAngle?: number; readonly committed?: boolean }
 
 export interface EnemyHopPorts {
   readonly enemies: Pick<EnemyManager, 'getAllEnemies' | 'applyHealing'>;
@@ -193,7 +193,7 @@ export class CoopDefenseEnemyHopSystem implements EnemySpecialMovementSource {
     const elapsed = now - state.restAt;
     const attack = this.ports.combatIntent(enemy, now);
     // The resting body faces its attack target; the attack owner fires from this stance.
-    if (attack) enemy.faceAngle(attack.aimAngle);
+    if (attack?.aimAngle !== undefined) enemy.faceAngle(attack.aimAngle);
     if (attack?.committed || enemy.isAttackMovementPaused(now)) return false;
     const capped = elapsed >= config.restMaxMs;
     if (!capped && (elapsed < config.breathMs || state.links.length > 0 || attack)) return false;

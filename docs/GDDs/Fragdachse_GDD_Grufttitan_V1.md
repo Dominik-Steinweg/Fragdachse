@@ -1,7 +1,7 @@
 # Grufttitan V1 – erster Boss als echter Koloss
 
 Status: auf `main` (2026-10-30), HQ-Produktion `gt-v2-r3` mit Grab-Leuchtschicht (`emission-grave`) und
-Schattenmesh `enemy-mesh-gt-v2-r3`; Playtest-Feedback 1 bis 3 eingearbeitet. Maßgeblich ist der Code; Werte sind
+Schattenmesh `enemy-mesh-gt-v2-r3`; Playtest-Feedback 1 bis 4 eingearbeitet. Maßgeblich ist der Code; Werte sind
 Ausgangswerte für den Playtest.
 
 ## Ziel
@@ -20,8 +20,11 @@ sichtbar größer.
   von einem halben Körperradius, weichen ihm stärker aus und lassen ihm immer den Vortritt. Spieler laufen wie bei allen Gegnern hindurch: Ihre
   Bewegung wird lokal vorhergesagt, ein Wegschieben durch den Host würde sie ruckeln lassen. Die Regel
   gilt für jeden Boss, dessen Gliedmaßen über `size` hinausreichen.
-- Er dreht sich träge (`turnRateDegPerSec` 72) und beginnt den frontalen Schlag erst, wenn er sich bis
-  zum Treffer zum Ziel drehen kann.
+- Er dreht sich träge (`turnRateDegPerSec` 72) und beginnt den frontalen Schlag gegen ein Bauwerk erst,
+  wenn er sich bis zum Treffer zum Ziel drehen kann.
+- Er marschiert stur zum Vorposten bzw. zur Basis; Spieler lenken ihn kaum ab: Salve und Stampfer
+  drehen ihn nie, ein abkühlender Stampfer hält ihn nicht an, und für Spieler dreht er sich nicht
+  zum Schlag.
 - Ein Vierbeiner, dessen Rücken eine Gruft ist: großer Bogengrabstein mit grün leuchtendem
   Kreuzriss in der Mitte, je Flanke drei schräg liegende Grabsteine, Schultermonolithe, Geröll und
   Wirbelsteine. Alle Steine sind eingewachsen, Fleisch wölbt sich über ihre Kanten.
@@ -34,8 +37,8 @@ sichtbar größer.
 
 | Angriff | Wann | Ausholen | Wirkung |
 |---|---|---|---|
-| Stampfer | Spieler im Umkreis 360 und Basen ab 210 Abstand (`structureReachPx`), Vorrang vor dem Schlag | 1,5 s | 360° bis 360, 200 Schaden auch an Basen, 3 s Cooldown |
-| Prankenschlag | Spieler im Kegel, Bauwerke und Felsen ab 210 Abstand | 1,3 s | 110°-Kegel bis 280, 100 Schaden, bricht Felsen, 35 % an Basen |
+| Stampfer | Spieler im Umkreis 360 und Basen ab 210 Abstand (`structureReachPx`), Vorrang vor dem Schlag | 1,5 s | 360° bis 360, 200 Schaden auch an Basen, 6 s Cooldown |
+| Prankenschlag | Spieler nur, wenn sie schon im Kegel stehen (`turnsOnlyForStructures`); Bauwerke und Felsen ab 210 Abstand | 1,3 s | 110°-Kegel bis 280, 100 Schaden, bricht Felsen, 35 % an Basen |
 
 - Beide dürfen auch während der Plasma-Pause zuschlagen. Ein Rundumschlag reagiert auch während der
   Belagerung auf jeden in seiner Reichweite.
@@ -55,8 +58,12 @@ sichtbar größer.
 
 - Die Salve verhält sich wie zuvor (10 Schüsse, Takt, Homing, Schaden, 10 s Pause), bekommt aber
   eine Sammelphase von 1,6 s davor (`salvo.chargeMs`, replizierter Volley-Zustand).
-- Die Sammelphase hält den Körper nicht fest: Er läuft mit halbem Tempo weiter und schlägt zu, was in
-  Reichweite ist; die Salve startet trotzdem pünktlich.
+- Sammelphase und Salve halten und drehen den Körper nicht (`aimsWithoutTurning`): Er läuft mit
+  halbem Tempo auf seiner Route weiter und schlägt zu, was in Reichweite ist; die Kugeln steigen von
+  seinem Rücken auf und fliegen in jede Richtung.
+- Eine angekündigte Salve fliegt auch los, wenn Deckung ihr Ziel verbirgt, und bricht dann an der
+  Deckung; im Rauch zielt sie auf die letzte gesehene Position. Stirbt ihr Ziel, nimmt sie das
+  nächste, und beim Queren der Gleise läuft sie weiter. Nur ohne jedes Ziel in Reichweite verpufft sie.
 - Es gibt nur eine Art Glühwürmchen: 30 normale umschwärmen ihn, jedes mit eigener Trägheit, je drei
   sind die Munition eines Schusses.
 - Sammelphase als filmischer Ablauf: Grabdunst strömt in die Krone, die Glühwürmchen fliegen ein und
@@ -68,15 +75,16 @@ sichtbar größer.
 
 ## Map 5: die Grabinsel
 
-- Die Karte ist nach Westen auf 112 × 37 Zellen erweitert. Der Titan erhebt sich auf einer
+- Die Karte ist nach Westen auf 131 × 37 Zellen erweitert. Der Titan erhebt sich auf einer
   felsfreien Grabinsel (`titan-grave`, Lichtung `grave-island`) mitten in einem See, der mit dem
   Südteich verschmilzt. Ein 8 Zellen breiter, ebenfalls felsfreier Damm (`grave-causeway`) führt nach
-  Osten zum Schlachtfeld; eine Kette von Lichtungen (`titan-march-1` bis `-4`) hält von dort bis zum
+  Osten zum Schlachtfeld; eine Kette von Lichtungen (`titan-march-1` bis `-5`) hält von dort bis zum
   Vorposten auf jedem Seed einen Marschweg in Körperbreite frei.
 - Der Boss erscheint immer: Wäre seine Zone doch einmal durch Fels von den Basen abgeschnitten,
   erhebt er sich trotzdem und bricht sich durch, statt die Mission ohne Boss hängen zu lassen.
-- Bis zum Vorposten sind es rund 50 Zellen statt 13; die übrige Karte samt Basen, Gleisen und
-  Nebenspawns ist unverändert um 38 Zellen nach Osten gewandert.
+- Bis zum Vorposten sind es rund 56 Zellen statt 13; Vorposten, Gleise (Spalte 99) und Hauptbasis
+  stehen weiter im Osten, damit die Spieler den Titan unterwegs bekämpfen können. Ohne Störung
+  erreicht er den Vorposten nach gut 40 s.
 - Steht ein Gegner in der Gleiszone fest, weil Fels oder Basis seine Querung blockieren, gibt die
   Zugwachsamkeit ihn nach 0,7 s wieder an seine Route und seine Angriffe frei. So kann sich auch der
   Titan an den Gleisen durch Felsen schlagen.

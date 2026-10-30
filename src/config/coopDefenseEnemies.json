@@ -225,6 +225,7 @@
       "weapons": [
         {
           "weaponId": "GRAVE_TITAN_VOID_PLASMA",
+          "aimsWithoutTurning": true,
           "targetMode": "players",
           "attackMovementSpeedFactor": 0.5,
           "minTargetDistancePx": 200,
@@ -252,6 +253,7 @@
         },
         {
           "weaponId": "GRAVE_TITAN_SLAM",
+          "turnsOnlyForStructures": true,
           "targetMode": "all",
           "usableDuringPriorityPause": true,
           "structureReachPx": 210,

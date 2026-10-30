@@ -138,9 +138,12 @@ export interface EnemyCombatPositioningSource {
   getMovementOverride(enemyId: string): { vx: number; vy: number } | null;
 }
 
-/** Read-only combat decision, evaluated before ordinary movement without advancing weapons. */
+/**
+ * Read-only combat decision, evaluated before ordinary movement without advancing weapons. Without
+ * `aimAngle` the attack only sets the pace; the body keeps facing its route.
+ */
 export interface EnemyCombatMovementSource {
-  getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle: number; holdPosition: boolean; committed?: boolean } | null;
+  getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle?: number; holdPosition: boolean; committed?: boolean } | null;
 }
 
 /**
@@ -778,7 +781,7 @@ export class EnemyManager {
       const combatMovement = specialAction ? null : combatMovementSource?.getCombatMovement(enemy, now) ?? null;
       if (combatMovement?.committed) {
         enemy.stopMovement();
-        enemy.faceAngle(combatMovement.aimAngle);
+        if (combatMovement.aimAngle !== undefined) enemy.faceAngle(combatMovement.aimAngle);
         continue;
       }
       const attackMovementFactor = !combatMovementSource || combatMovement || specialAction
@@ -790,7 +793,7 @@ export class EnemyManager {
           enemy.setDesiredVelocity(trainDecision.vx, trainDecision.vy, now);
         } else {
           enemy.stopMovement();
-          if (combatMovement) enemy.faceAngle(combatMovement.aimAngle);
+          if (combatMovement?.aimAngle !== undefined) enemy.faceAngle(combatMovement.aimAngle);
         }
         continue;
       }

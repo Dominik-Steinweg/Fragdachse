@@ -122,6 +122,10 @@ export interface EnemyAttackWeapon {
   readonly usableDuringPriorityPause?: boolean;
   /** Bases, rocks and constructs are engaged only this close; absent = the weapon's range. */
   readonly structureReachPx?: number;
+  /** Fires in any direction; neither its announcement nor its shots turn or stop the body. */
+  readonly aimsWithoutTurning?: boolean;
+  /** A frontal swing that turns the body only for structures; living targets must stand inside it. */
+  readonly turnsOnlyForStructures?: boolean;
 }
 
 function ensureEnemyGlowTexture(scene: Phaser.Scene): void {
@@ -1551,6 +1555,8 @@ export class EnemyEntity {
         muzzleForwardPx: configuredWeapon.muzzleForwardPx ?? 0,
         usableDuringPriorityPause: configuredWeapon.usableDuringPriorityPause,
         structureReachPx: configuredWeapon.structureReachPx,
+        aimsWithoutTurning: configuredWeapon.aimsWithoutTurning,
+        turnsOnlyForStructures: configuredWeapon.turnsOnlyForStructures,
       };
     });
   }

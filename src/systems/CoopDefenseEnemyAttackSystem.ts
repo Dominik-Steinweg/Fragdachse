@@ -204,23 +204,32 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     this.obstacleExcluded = excluded;
   }
 
-  /** No scan, cooldown, lock or salvo mutation: locomotion reads this before moving the enemy. */
-  getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle: number; holdPosition: boolean; committed?: boolean } | null {
+  /**
+   * No scan, cooldown, lock or salvo mutation: locomotion reads this before moving the enemy. Without
+   * `aimAngle` the body keeps facing its route and only takes the attack's pace.
+   */
+  getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle?: number; holdPosition: boolean; committed?: boolean } | null {
     if (!enemy.sprite.active || enemy.faction !== 'hostile' || enemy.isBurrowed()
       || this.combatSystem.isStunned?.(enemy.id, now) || this.actionBlockedChecker?.(enemy.id)
       || this.enemyManager.isEnemyPanicking(enemy.id) || this.trainAwarenessSystem?.blocksRegularAttacks(enemy.id)) return null;
 
     const windup = this.meleeWindups.get(enemy.id);
-    if (windup) return { aimAngle: windup.presentation.angle, holdPosition: true, committed: true };
+    if (windup) return { aimAngle: isAllRoundStrike(windup.attackWeapon) ? undefined : windup.presentation.angle, holdPosition: true, committed: true };
     const charge = this.salvoCharges.get(enemy.id);
-    if (charge) return { aimAngle: this.aimAt(enemy, charge.target.targetX, charge.target.targetY, now),
+    if (charge && !charge.attackWeapon.aimsWithoutTurning) return { aimAngle: this.aimAt(enemy, charge.target.targetX, charge.target.targetY, now),
       holdPosition: charge.attackWeapon.attackMovementSpeedFactor <= 0, committed: true };
+    // A volley aiming without turning leaves facing and route to the body (or to a melee target).
+    let pace = charge?.attackWeapon;
     const salvo = this.salvoStates.get(enemy.id);
     const sustained = this.sustainedAttacks.get(enemy.id);
     const committedWeaponId = salvo && now < salvo.expiresAt ? salvo.weaponId
       : sustained && (now < sustained.fireUntil || sustained.lastShotAt < sustained.fireUntil) ? sustained.weaponId : null;
     for (const attackWeapon of enemy.getAttackWeapons()) {
       if (committedWeaponId && attackWeapon.weapon.config.id !== committedWeaponId) continue;
+      if (attackWeapon.aimsWithoutTurning) {
+        if (committedWeaponId === attackWeapon.weapon.config.id) pace = attackWeapon;
+        continue;
+      }
       // A salvo weapon in its pause cannot fire; aiming at its target would turn the body away from
       // what the next ready weapon (e.g. a melee bite on a base) actually attacks. A blocked body
       // faces what it has to break through first; the salvo needs no facing to start.
@@ -228,6 +237,9 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
         && (!enemy.isWeaponReady(attackWeapon.weapon, now) || enemy.isPathBlocked())) continue;
       const fire = attackWeapon.weapon.config.fire.type;
       if (fire === 'tesla_dome') continue;
+      // An all-round strike needs no facing and holds the body only once it can strike again.
+      const allRound = isAllRoundStrike(attackWeapon);
+      if (allRound && !enemy.isWeaponReady(attackWeapon.weapon, now)) continue;
       const range = attackWeapon.weapon.config.range;
       const frozen = committedWeaponId ? salvo?.target ?? this.lastAttackTargets.get(enemy.id) : undefined;
       const obscured = frozen && this.isAttackTargetObscured(enemy, frozen, range);
@@ -239,11 +251,11 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
           : this.resolveWeaponTarget(enemy, attackWeapon, now, salvo?.shotsFired, false);
       if (!target || (!obscured && !this.isWithinWeaponMinDistance(enemy, attackWeapon, target))) continue;
       return {
-        aimAngle: this.aimAt(enemy, target.targetX, target.targetY, now),
+        aimAngle: allRound ? undefined : this.aimAt(enemy, target.targetX, target.targetY, now),
         holdPosition: attackWeapon.attackMovementSpeedFactor <= 0,
       };
     }
-    return null;
+    return pace ? { holdPosition: pace.attackMovementSpeedFactor <= 0 } : null;
   }
 
   hostUpdate(delta: number, now: number): void {
@@ -258,7 +270,11 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       // smoke-obscured lock; the next scan must select the real construct/carrier reference.
       const currentTarget = this.getCurrentTarget(enemy.id, now);
       if (!this.meleeWindups.has(enemy.id) && currentTarget?.kind === 'player' && (this.combatSystem.isPlayerTargetable?.(currentTarget.id) === false
-        || this.targetCatalog?.getPlayerReplacement(currentTarget.id))) this.abortCombat(enemy, now);
+        || this.targetCatalog?.getPlayerReplacement(currentTarget.id))) {
+        // An announced volley picks its next target on its own instead of fizzling.
+        if (this.hasAnnouncedVolley(enemy.id)) { this.playerTargetLocks.delete(enemy.id); this.lastAttackTargets.delete(enemy.id); }
+        else this.abortCombat(enemy, now);
+      }
 
       if (this.combatSystem.isStunned?.(enemy.id, now) || this.actionBlockedChecker?.(enemy.id) || (enemy.getDashPhase?.() ?? 0) !== 0) {
         this.abortCombat(enemy, now);
@@ -280,7 +296,12 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       }
 
       if (this.trainAwarenessSystem?.blocksRegularAttacks(enemy.id)) {
-        this.abortCombat(enemy, now);
+        // An announced volley rides through a track crossing; only the other combat yields to it.
+        if (this.hasAnnouncedVolley(enemy.id)) {
+          this.clearClawAttack(enemy);
+          if (this.salvoCharges.has(enemy.id)) this.updateSalvoCharge(enemy, now);
+          else this.continueSalvo(enemy, now);
+        } else this.abortCombat(enemy, now);
         continue;
       }
 
@@ -377,6 +398,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     const revision = enemy.getVolleyState().revision + 1;
     enemy.applyVolleyState({ revision, chargeStartAt: now, fireAt, endedAt: 0, rechargedAt: 0, shotsFired: 0 });
     if (attack.target.targetRef) this.decoyTargets?.usedTarget(enemy.id, attack.target.targetRef);
+    if (attack.attackWeapon.aimsWithoutTurning) return;
     enemy.stopMovement();
     enemy.faceAngle(this.aimAt(enemy, attack.target.targetX, attack.target.targetY, now));
   }
@@ -390,12 +412,17 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     const charge = this.salvoCharges.get(enemy.id)!;
     // The body keeps advancing at the salvo's attack pace; a melee windup holds it instead.
     enemy.pauseAttackMovement(now, charge.attackWeapon.attackMovementSpeedFactor, CoopDefenseEnemyAttackSystem.CHARGE_PACE_HOLD_MS);
-    if (!this.meleeWindups.has(enemy.id)) enemy.faceAngle(this.aimAt(enemy, charge.target.targetX, charge.target.targetY, now));
+    if (!this.meleeWindups.has(enemy.id) && !charge.attackWeapon.aimsWithoutTurning) {
+      enemy.faceAngle(this.aimAt(enemy, charge.target.targetX, charge.target.targetY, now));
+    }
     if (now < charge.fireAt) return;
     this.salvoCharges.delete(enemy.id);
     const { attackWeapon } = charge, weapon = attackWeapon.weapon;
-    const target = enemy.isWeaponReady(weapon, now) ? this.resolveWeaponTarget(enemy, attackWeapon, now, 0) : null;
-    if (target) this.fireAttack(enemy, { attackWeapon, target }, now);
+    const ready = enemy.isWeaponReady(weapon, now);
+    const fresh = ready ? this.resolveWeaponTarget(enemy, attackWeapon, now, 0) : null;
+    const held = ready && !fresh ? this.heldVolleyTarget(enemy, attackWeapon, charge.target) : null;
+    const target = fresh ?? held;
+    if (target) this.fireAttack(enemy, { attackWeapon, target }, now, undefined, !!held);
     if (!this.isSalvoInProgress(enemy.id, weapon.config.id) && enemy.isWeaponReady(weapon, now)) this.spendSalvo(enemy, attackWeapon, now, 0);
   }
 
@@ -420,13 +447,43 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     // Der Zaehler bleibt bis zur Verfallszeit stehen, damit sie nach kurzem Sichtverlust weiterlaeuft.
     const obscured = this.isAttackTargetObscured(enemy, state.target, attackWeapon.weapon.config.range);
     const committed = this.decoyTargets?.getTarget(enemy.id) || state.target.targetRef?.kind === 'decoy';
-    const target = obscured ? state.target : committed
+    const resolved = obscured ? state.target : committed
       ? (state.target.targetRef ? this.buildPlayerLikeTargetCandidate(enemy, state.target.targetRef, attackWeapon.weapon.config.range) : null) ?? state.target
       : this.resolveWeaponTarget(enemy, attackWeapon, now, state.shotsFired);
+    const held = resolved ? null : this.heldVolleyTarget(enemy, attackWeapon, state.target);
+    const target = resolved ?? held;
     if (!target) return false;
 
-    this.fireAttack(enemy, { attackWeapon, target }, now, undefined, obscured || !!committed);
+    this.fireAttack(enemy, { attackWeapon, target }, now, undefined, obscured || !!committed || !!held);
     return true;
+  }
+
+  private hasAnnouncedVolley(enemyId: string): boolean {
+    if (this.salvoCharges.has(enemyId)) return true;
+    const state = this.salvoStates.get(enemyId);
+    return !!state && (this.enemyManager.getEnemy(enemyId)?.getAttackWeapons()
+      .find(candidate => candidate.weapon.config.id === state.weaponId)?.salvo?.chargeMs ?? 0) > 0;
+  }
+
+  /**
+   * An announced volley keeps a living target that cover hides from its line of fire: the shots fly
+   * at it and break on whatever stands in between, instead of the volley fizzling. Smoke hides the
+   * current position, so there the last seen one is kept. A gone, replaced or out-of-range target ends it.
+   */
+  private heldVolleyTarget(enemy: EnemyEntity, attackWeapon: EnemyAttackWeapon, target: EnemyAttackCandidate): EnemyAttackCandidate | null {
+    const ref = target.targetRef, range = attackWeapon.weapon.config.range;
+    if (!attackWeapon.salvo?.chargeMs || !ref || (ref.kind !== 'player' && ref.kind !== 'decoy')) return null;
+    if (this.targetCatalog && !this.targetCatalog.isTargetValid(ref)) return null;
+    if (ref.kind === 'player' && (this.combatSystem.isPlayerTargetable?.(String(ref.id)) === false
+      || this.targetCatalog?.getPlayerReplacement(String(ref.id)))) return null;
+    const current = this.targetCatalog?.resolve(ref)
+      ?? (ref.kind === 'player' && !this.targetCatalog ? this.playerManager.getPlayer(String(ref.id)) : null);
+    if (!current) return null;
+    const seen = ('resolvePosition' in current ? current.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) : null) ?? current;
+    const position = this.enemyManager.canSeeThroughSmoke(enemy.id, seen.x, seen.y, range) ? seen : { x: target.targetX, y: target.targetY };
+    const distance = Math.hypot(position.x - enemy.sprite.x, position.y - enemy.sprite.y);
+    const held = { ...target, targetX: position.x, targetY: position.y, distance };
+    return distance <= range && this.isWithinWeaponMinDistance(enemy, attackWeapon, held) ? held : null;
   }
 
   private expireStaleSalvo(enemy: EnemyEntity, now: number): void {
@@ -449,7 +506,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
    */
   private facesSwingTarget(enemy: EnemyEntity, attack: SelectedEnemyAttack): boolean {
     const config = attack.attackWeapon.weapon.config, rate = enemy.getTurnRateRadPerMs();
-    if (config.fire.type !== 'melee' || config.fire.hitArcDegrees >= 300 || rate === null) return true;
+    if (config.fire.type !== 'melee' || isAllRoundStrike(attack.attackWeapon) || rate === null) return true;
     const dx = attack.target.targetX - enemy.sprite.x, dy = attack.target.targetY - enemy.sprite.y;
     if (Math.hypot(dx, dy) < enemy.getCollisionRadius()) return true;
     const off = Math.atan2(dy, dx) - enemy.getAimAngle();
@@ -478,14 +535,14 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     this.clawStateSink?.(enemy, { revision, attack: presentation });
     if (attack.target.targetRef) this.decoyTargets?.usedTarget(enemy.id, attack.target.targetRef);
     enemy.stopMovement();
-    enemy.faceAngle(angle);
+    if (!isAllRoundStrike(attack.attackWeapon)) enemy.faceAngle(angle);
   }
 
   private updateMeleeWindup(enemy: EnemyEntity, now: number): void {
     const state = this.meleeWindups.get(enemy.id);
     if (!state) return;
     enemy.stopMovement();
-    enemy.faceAngle(state.presentation.angle);
+    if (!isAllRoundStrike(state.attackWeapon)) enemy.faceAngle(state.presentation.angle);
     if (!state.executed && now >= state.presentation.hitAt) {
       // Set before dispatch: damage callbacks may remove the attacker or end the Activity.
       state.executed = true;
@@ -517,8 +574,11 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       }
     }
     const weapon = attackWeapon.weapon;
-    const angle = forcedAngle ?? this.aimAt(enemy, target.targetX, target.targetY, now);
-    enemy.faceAngle(angle);
+    // A shot that aims without turning leaves straight for its target; the body keeps its facing.
+    const free = forcedAngle === undefined && !clawAttackId && attackWeapon.aimsWithoutTurning;
+    const angle = forcedAngle ?? (free ? Math.atan2(target.targetY - enemy.sprite.y, target.targetX - enemy.sprite.x)
+      : this.aimAt(enemy, target.targetX, target.targetY, now));
+    if (!free && !isAllRoundStrike(attackWeapon)) enemy.faceAngle(angle);
 
     const config = weapon.config, muzzle = attackWeapon.muzzleForwardPx;
     const didFire = this.weaponExecution.fire(config, {
@@ -655,18 +715,20 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
         }
       }
       // An all-round strike answers whatever stands in its reach, even while the body besieges a structure.
-      if (attackWeapon.targetMode === 'all' && weapon.config.fire.type === 'melee' && weapon.config.fire.hitArcDegrees >= 300) {
+      if (attackWeapon.targetMode === 'all' && isAllRoundStrike(attackWeapon)) {
         const living = this.findLivingTargetWithLock(enemy, weapon.config.range, now, updateLock);
         if (this.isBetterCandidate(living, target)) target = living;
       }
       const train = (weapon.config.trainDamageMult ?? 1) > 0 ? this.findTrainTarget(enemy, weapon.config.range) : null;
       if (this.isBetterCandidate(train, target)) target = train;
-      return target && this.isWithinWeaponMinDistance(enemy, attackWeapon, target) ? target : null;
+      return target && this.isWithinWeaponMinDistance(enemy, attackWeapon, target) && this.isInSwingWithoutTurning(enemy, attackWeapon, target)
+        ? target : null;
     }
     const decoy = this.decoyTargets?.getTarget(enemy.id);
     if (decoy) {
       const target = this.buildPlayerLikeTargetCandidate(enemy, decoy, weapon.config.range);
-      return target && this.isWithinWeaponMinDistance(enemy, attackWeapon, target) ? target : null;
+      return target && this.isWithinWeaponMinDistance(enemy, attackWeapon, target) && this.isInSwingWithoutTurning(enemy, attackWeapon, target)
+        ? target : null;
     }
     const distributesTargets = attackWeapon.targetMode === 'players'
       && attackWeapon.salvo?.targetDistribution === 'round_robin';
@@ -689,7 +751,24 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       : null;
     if (this.isBetterCandidate(trainTarget, target)) target = trainTarget;
     if (!target || !this.isWithinWeaponMinDistance(enemy, attackWeapon, target)) return null;
-    return target;
+    return this.isInSwingWithoutTurning(enemy, attackWeapon, target) ? target : null;
+  }
+
+  /**
+   * A swing that turns only for structures takes a living target (player, decoy, ally) only while it
+   * already stands inside the arc, so a player beside or behind the body cannot turn it off its route.
+   */
+  private isInSwingWithoutTurning(enemy: EnemyEntity, attackWeapon: EnemyAttackWeapon, target: EnemyAttackCandidate): boolean {
+    const fire = attackWeapon.weapon.config.fire;
+    if (!attackWeapon.turnsOnlyForStructures || fire.type !== 'melee' || isAllRoundStrike(attackWeapon)) return true;
+    const ref = target.targetRef?.kind;
+    const living = target.kind === 'ally' || (ref ? ref === 'player' || ref === 'decoy' || ref === 'hostile-enemy'
+      : target.kind === 'player' || target.kind === 'decoy');
+    if (!living) return true;
+    const dx = target.targetX - enemy.sprite.x, dy = target.targetY - enemy.sprite.y;
+    if (Math.hypot(dx, dy) < enemy.getCollisionRadius()) return true;
+    const off = Math.atan2(dy, dx) - enemy.getAimAngle();
+    return Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= fire.hitArcDegrees * Math.PI / 360;
   }
 
   private selectAttack(enemy: EnemyEntity, now: number, gatheringWeaponId?: string): SelectedEnemyAttack | null {
@@ -1207,4 +1286,10 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
 interface SelectedEnemyAttack {
   readonly attackWeapon: EnemyAttackWeapon;
   readonly target: EnemyAttackCandidate;
+}
+
+/** A melee strike all around the body: it needs no facing at all. */
+function isAllRoundStrike(attackWeapon: EnemyAttackWeapon): boolean {
+  const fire = attackWeapon.weapon.config.fire;
+  return fire.type === 'melee' && fire.hitArcDegrees >= 300;
 }

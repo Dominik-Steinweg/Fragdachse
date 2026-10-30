@@ -28,7 +28,7 @@ function planFor(mapId: string, seed = 4242) {
 }
 
 describe('situation map routes', () => {
-  it.each(['2', '3', '5', '6', '8', '10', '11', '13', '15', '18', '19', '20'])('shows routes that reach the base area on map %s', (mapId) => {
+  it.each(['2', '3', '6', '8', '10', '11', '13', '15', '18', '19', '20'])('shows routes that reach the base area on map %s', (mapId) => {
     const { planner } = planFor(mapId);
     const plan = planner.plan([]);
     planner.destroy();
@@ -36,7 +36,7 @@ describe('situation map routes', () => {
     expect(plan.routes.some((route) => route.relevant && route.reachedGoal)).toBe(true);
   });
 
-  it.each([['4', 'front-base'], ['12', 'front-base'], ['14', 'front-base'], ['17', 'front-base'],
+  it.each([['4', 'front-base'], ['5', 'front-base'], ['12', 'front-base'], ['14', 'front-base'], ['17', 'front-base'],
     ['16', 'players-away']] as const)('explains on map %s why no route reaches the base (%s)', (mapId, hint) => {
     const { planner } = planFor(mapId);
     const plan = planner.plan([]);

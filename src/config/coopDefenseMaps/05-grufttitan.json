@@ -1,17 +1,17 @@
 {
   "mapId": "5",
-  "arenaWidthCells": 112,
+  "arenaWidthCells": 131,
   "arenaHeightCells": 37,
   "spawnZones": [
     { "id": "west-upper", "gridX": 38, "gridY": 0, "widthCells": 8, "heightCells": 8 },
     { "id": "west-lower", "gridX": 38, "gridY": 16, "widthCells": 8, "heightCells": 8 },
-    { "id": "south-mid", "gridX": 73, "gridY": 31, "widthCells": 10, "heightCells": 6 },
+    { "id": "south-mid", "gridX": 70, "gridY": 31, "widthCells": 10, "heightCells": 6 },
     { "id": "titan-grave", "gridX": 17, "gridY": 16, "widthCells": 4, "heightCells": 4 }
   ],
   "timeOfDay": "22:30",
   "objective": "defeat-boss",
-  "rockFillRatio": 0.2,
-  "trackPosition": { "kind": "grid", "gridX": 72 },
+  "rockFillRatio": 0.22,
+  "trackPosition": { "kind": "grid", "gridX": 99 },
   "mapEvents": [{
     "id": "train-rhythm",
     "type": "train",
@@ -25,8 +25,8 @@
       "hpMax": 850,
       "anchor": {
         "kind": "grid",
-        "gridX": 69,
-        "gridY": 18
+        "gridX": 75,
+        "gridY": 17
       },
       "shape": {
         "kind": "cells",
@@ -70,7 +70,7 @@
   "persistentBase": {
     "baseId": "coop-base-rear",
     "anchor": {
-      "gridX": 99,
+      "gridX": 116,
       "gridY": 19
     }
   },
@@ -85,13 +85,21 @@
       "defId": "HEALTH_PACK",
       "region": "middle",
       "respawnMs": 5000,
-      "spawnOnArenaStart": true
+      "spawnOnArenaStart": true,
+      "anchor": {
+        "gridX": 52,
+        "gridY": 7
+      }
     },
     {
       "defId": "HEALTH_PACK",
       "region": "rear",
       "respawnMs": 5000,
-      "spawnOnArenaStart": true
+      "spawnOnArenaStart": true,
+      "anchor": {
+        "gridX": 107,
+        "gridY": 33
+      }
     }
   ],
   "boss": {
@@ -155,7 +163,8 @@
     { "id": "titan-march-1", "gridX": 40, "gridY": 14, "radiusCells": 6 },
     { "id": "titan-march-2", "gridX": 47, "gridY": 16, "radiusCells": 6 },
     { "id": "titan-march-3", "gridX": 54, "gridY": 17, "radiusCells": 6 },
-    { "id": "titan-march-4", "gridX": 61, "gridY": 18, "radiusCells": 6 }
+    { "id": "titan-march-4", "gridX": 61, "gridY": 18, "radiusCells": 6 },
+    { "id": "titan-march-5", "gridX": 68, "gridY": 18, "radiusCells": 6 }
   ],
   "waterAreas": [
     { "gridX": 38, "gridY": 30, "widthCells": 22, "heightCells": 7 },

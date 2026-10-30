@@ -1114,16 +1114,16 @@ grün. Im Kampf umschwärmen ihn 30 normale Glühwürmchen, je drei sind Munitio
 jeder Salve strömt Grabdunst in die Krone, die Glühwürmchen glühen auf und verschmelzen in 1,6 s zu
 zehn pulsierenden Kugeln in Schussgröße; jeder Schuss ist eine davon. Dabei läuft der Titan weiter
 und schlägt zu. Wer bis 360 px am Titan steht oder welche Basis bis 210 px vor ihm liegt, wird
-gestampft (weiche rote Rundzone füllt sich 1,5 s bis zum Rand, dann grüne Druckwelle, alle 3 s).
+gestampft (weiche rote Rundzone füllt sich 1,5 s bis zum Rand, dann grüne Druckwelle, alle 6 s).
 Dazwischen richtet er sich zum Prankenschlag auf (weicher roter Kegel bis 280 px, dann Dunstfächer).
 Felsen und Basen halten den breiten Körper (Radius 98) auf, andere Gegner halten deutlich Abstand. Im
-echten Ablauf läuft er über den Damm nach Osten und erreicht den Vorposten nach gut 30 s.
+echten Ablauf läuft er über den Damm nach Osten und erreicht den Vorposten nach gut 40 s; Salve und Stampfer drehen ihn dabei nicht.
 
 Für einen festgesetzten Titan eignet sich die Inselmitte. Für saubere Aufnahmen ohne tote Spielfigur:
 Spieler außerhalb der Plasma-Reichweite (900 px), Bots als Ziele und die Kamera auf den Titan, z. B.
 `bots: [{ name: 'A', player: { gridX: 25, gridY: 18 } }]`, `{ action: 'target', gridX: 21, gridY: 18 }`
 und `{ action: 'camera', zoom: 1.1, focusTarget: true }` (ein Stampfer mit 200 Schaden tötet den Bot).
-Den Schlag gegen eine Basis zeigt ein freier Titan bei `gridX 62, gridY 21` vor dem Vorposten.
+Den Schlag gegen eine Basis zeigt ein freier Titan bei `gridX 68, gridY 18` vor dem Vorposten.
 
 Headless-Nachweise: `tests/GraveTitanVoidPlasma.test.ts`, `tests/GraveTitanPresentation.test.ts`.
 

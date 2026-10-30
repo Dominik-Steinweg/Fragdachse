@@ -85,6 +85,16 @@ export interface CoopDefenseEnemyWeaponConfig {
    * Navigation steps up a little closer still, as far as walls let the body.
    */
   readonly structureReachPx?: number;
+  /**
+   * Fires in any direction without turning the body (a volley rising from its back): announcing and
+   * firing neither stop nor turn it, so a slowly turning body keeps facing its route.
+   */
+  readonly aimsWithoutTurning?: boolean;
+  /**
+   * A frontal swing of a slowly turning body turns it only for structures (bases, rocks, constructs);
+   * living targets must already stand inside the swing, so players cannot pull it off its route.
+   */
+  readonly turnsOnlyForStructures?: boolean;
 }
 
 export interface CoopDefenseEnemyStinkAuraConfig {
@@ -1447,6 +1457,8 @@ function normalizeWeapons(
       muzzleForwardPx: weapon.muzzleForwardPx === undefined ? undefined : Math.max(0, weapon.muzzleForwardPx),
       usableDuringPriorityPause: weapon.usableDuringPriorityPause === true ? true : undefined,
       structureReachPx: normalizeStructureReach(weapon.structureReachPx),
+      aimsWithoutTurning: weapon.aimsWithoutTurning === true ? true : undefined,
+      turnsOnlyForStructures: weapon.turnsOnlyForStructures === true ? true : undefined,
     };
   });
 }
