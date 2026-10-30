@@ -216,6 +216,8 @@ export class EnemyHeatBurstPresentation {
     const stage = Math.min(state.stage, stages);
     if (stepped && stage > 0 && now - state.stageAt < STEP_GRACE_MS) {
       this.particles.step(sprite.x, sprite.y, sprite.rotation, frame, stage, haze, ember);
+      // One sound for every step, fuller with the heat (never a rising pitch ladder).
+      this.audio?.playSound('sfx_demon_badger_heat_step', sprite.x, sprite.y, enemy.id, 0.55 + 0.45 * stage / stages);
     }
     if (stage > 0) this.particles.glow(sprite.x, sprite.y, sprite.rotation, frame, stage, color, ember, moved > RUNNING_PX);
     if (melting) this.particles.inhale(sprite.x, sprite.y, radius, fissures, haze, ember);

@@ -1047,12 +1047,12 @@ export class ArenaLifecycleCoordinator {
         },
         heatBurst: request => {
           this.hostUpdate.applyEnemyHeatBurst(request);
-          // Void-violet burst with red sparks; allies burst in the allied palette.
+          // The meltdown in deep void haze with red sparks; allies burst in the allied palette.
           bridge.broadcastExplosionEffect(request.x, request.y, request.config.burst.radiusPx,
             request.faction === 'allied' ? ALLIED_COLOR : VOID_PALETTE.primary, 'demon_burst', undefined, `enemy.${request.kind}.heat_burst`);
         },
         heatFizzle: (x, y, radius, faction) => bridge.broadcastExplosionEffect(x, y, radius,
-          faction === 'allied' ? ALLIED_COLOR : VOID_PALETTE.primary, 'demon_fizzle', undefined, 'silent'),
+          faction === 'allied' ? ALLIED_COLOR : VOID_PALETTE.primary, 'demon_fizzle', undefined, 'enemy.demon-badger.heat_fizzle'),
         sweepBases: (enemyId, ax, ay, bx, by, radius, damage, nowMs) => this.hostUpdate.applyEnemySweepBaseDamage(enemyId, ax, ay, bx, by, radius, damage, nowMs),
       },
       broadcastExplosion: (x, y, radius, style, color) => bridge.broadcastExplosionEffect(x, y, radius, color ?? (style === 'mortar' ? VOID_PALETTE.primary : 0xb82fff), style, undefined, style === 'timebomb_pop' ? 'silent' : style === 'mortar' ? 'generic' : style === 'brood_hatch' ? 'brood_hatch' : 'enemy.kaboomtula'),

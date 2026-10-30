@@ -107,7 +107,7 @@
     },
     "DEMON_BADGER_VOID_SPIT": {
       "id": "DEMON_BADGER_VOID_SPIT",
-      "_notes": "Short, forceful void-flame bursts of the Demon Badger (enemy salvo), no sustained stream; flames that die out set the ground on fire. A shot aimed at a base scorches it with damage x baseDamageMult.",
+      "_notes": "Short, forceful void-flame bursts of the Demon Badger (enemy salvo), no sustained stream; flames that die out set the ground on fire. A shot aimed at a base scorches it with damage x baseDamageMult. Every spent salvo heats the badger by one stage.",
       "cooldown": 45,
       "damage": 4.25,
       "baseDamageMult": 0.35,
@@ -147,7 +147,7 @@
       "rockDamageMult": 0,
       "trainDamageMult": 1,
       "shotAudio": {
-        "successKey": "shot_flame",
+        "successKey": "sfx_demon_badger_spit",
         "failureKey": "shot_dry_trigger"
       }
     },

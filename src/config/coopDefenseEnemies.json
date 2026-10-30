@@ -92,7 +92,7 @@
           "minDamage": 12,
           "knockbackSpeed": 420,
           "knockbackMs": 200,
-          "friendlyBaseDamageMult": 1,
+          "friendlyBaseDamageMult": 3,
           "constructionDamageMult": 0.6,
           "trainDamageMult": 0.3
         },
