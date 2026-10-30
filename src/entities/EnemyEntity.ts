@@ -11,6 +11,7 @@ import { EMPTY_ENEMY_HOP_STATE, enemyHopAirProgress, enemyHopPhaseAt, isEnemyHop
 import { syncEnemyHopAnimation } from '../animations/EnemyHopAnimation';
 import { syncEnemyKaboomtulaAnimation } from '../animations/EnemyKaboomtulaAnimation';
 import { pounceMenace, syncEnemyPounceAnimation } from '../animations/EnemyPounceAnimation';
+import { pounceUnitHash } from '../systems/enemyPounceRules';
 import { EMPTY_ENEMY_POUNCE_STATE, enemyPounceAirProgress, enemyPouncePhaseAt, isEnemyPounceState,
   type EnemyPounceState } from '../systems/EnemyPounceState';
 import { EMPTY_KABOOMTULA_STATE, isKaboomtulaState, kaboomtulaLeapProgress, kaboomtulaPhaseProgress,
@@ -99,9 +100,19 @@ const POUNCE_LIFT_AMPLITUDE = 0.36;
 /** A pouncing body coils (shrinks) by this share towards its take-off. */
 const POUNCE_COIL_SQUASH = 0.06;
 /** Soft additive void halo of the take-off signal: diameter in body sizes and alpha at full glow. */
-const POUNCE_HALO_MIN_SIZE = 2.2;
-const POUNCE_HALO_MAX_SIZE = 5;
-const POUNCE_HALO_ALPHA = 1;
+const POUNCE_HALO_MIN_SIZE = 2.6;
+const POUNCE_HALO_MAX_SIZE = 6;
+const POUNCE_HALO_ALPHA = 0.8;
+/** A tight, hotter core right under the body: diameter in body sizes, alpha and share of white. */
+const POUNCE_CORE_MIN_SIZE = 1.3;
+const POUNCE_CORE_MAX_SIZE = 2.2;
+const POUNCE_CORE_ALPHA = 0.95;
+const POUNCE_CORE_WHITE = 0.35;
+/** The glow breathes (slow) and shimmers (fast, out of step per body) so it reads as living void. */
+const POUNCE_BREATH_MS = 640;
+const POUNCE_BREATH = 0.1;
+const POUNCE_SHIMMER_MS = 210;
+const POUNCE_SHIMMER = 0.06;
 /** By day additive light is damped (`emissiveAlpha`); the danger signal keeps at least this share. */
 const POUNCE_HALO_DAY_FLOOR = 0.6;
 /** The body itself lights up: additive void tint at full glow (share of the eye colour). */
@@ -236,6 +247,7 @@ export class EnemyEntity {
   private kaboomtulaAura: GlowHandle | null = null;
   /** Soft void halo of a pouncing Rabid Rabbit: its take-off signal, there is no lane. */
   private pounceHalo: Phaser.GameObjects.Image | null = null;
+  private pounceCore: Phaser.GameObjects.Image | null = null;
   private pounceTinted = false;
   private burnStacks = 0;
   private plasmaChargeStacks = 0;
@@ -356,13 +368,25 @@ export class EnemyEntity {
       this.pounceHalo = scene.add.image(this.sprite.x, this.sprite.y, TEX_ENEMY_GLOW);
       this.pounceHalo.setDepth(DEPTH.PLAYERS - 0.09);
       makeAdditive(this.pounceHalo);
+      this.pounceCore = scene.add.image(this.sprite.x, this.sprite.y, TEX_ENEMY_GLOW);
+      this.pounceCore.setDepth(DEPTH.PLAYERS - 0.085);
+      makeAdditive(this.pounceCore);
     }
-    if (this.pounceHalo) {
+    if (this.pounceHalo && this.pounceCore) {
       this.pounceHalo.setVisible(on);
+      this.pounceCore.setVisible(on);
       if (on) {
-        const diameter = this.config.size * (POUNCE_HALO_MIN_SIZE + (POUNCE_HALO_MAX_SIZE - POUNCE_HALO_MIN_SIZE) * glow);
-        this.pounceHalo.setPosition(this.sprite.x, this.sprite.y).setDisplaySize(diameter, diameter).setTint(color)
-          .setAlpha(Math.max(emissiveAlpha(POUNCE_HALO_ALPHA * glow), POUNCE_HALO_DAY_FLOOR * POUNCE_HALO_ALPHA * glow));
+        const t = this.sprite.scene.time.now, phase = pounceUnitHash(this.id, 0, 29) * POUNCE_BREATH_MS;
+        const breath = 1 + POUNCE_BREATH * Math.sin((t + phase) * Math.PI * 2 / POUNCE_BREATH_MS)
+          + POUNCE_SHIMMER * Math.sin((t + phase) * Math.PI * 2 / POUNCE_SHIMMER_MS);
+        // By day additive light is damped; the danger signal keeps a floor so it still reads.
+        const alpha = (a: number) => Math.min(1, Math.max(emissiveAlpha(a), POUNCE_HALO_DAY_FLOOR * a));
+        const halo = this.config.size * (POUNCE_HALO_MIN_SIZE + (POUNCE_HALO_MAX_SIZE - POUNCE_HALO_MIN_SIZE) * glow) * breath;
+        this.pounceHalo.setPosition(this.sprite.x, this.sprite.y).setDisplaySize(halo, halo).setTint(color)
+          .setAlpha(alpha(POUNCE_HALO_ALPHA * glow * (2 - breath)));
+        const core = this.config.size * (POUNCE_CORE_MIN_SIZE + (POUNCE_CORE_MAX_SIZE - POUNCE_CORE_MIN_SIZE) * glow);
+        this.pounceCore.setPosition(this.sprite.x, this.sprite.y).setDisplaySize(core, core)
+          .setTint(mixColors(color, 0xffffff, POUNCE_CORE_WHITE)).setAlpha(alpha(POUNCE_CORE_ALPHA * Math.min(1, glow) * breath));
       }
     }
     // Only an untinted body may light up; tinted species (allies, coloured variants) keep their tint.
@@ -1354,6 +1378,8 @@ export class EnemyEntity {
     this.kaboomtulaAura = null;
     this.pounceHalo?.destroy();
     this.pounceHalo = null;
+    this.pounceCore?.destroy();
+    this.pounceCore = null;
     this.lighting?.releaseLight(this.pounceLightKey());
     if (this.glowHalo) {
       this.sprite.scene.tweens.killTweensOf(this.glowHalo);

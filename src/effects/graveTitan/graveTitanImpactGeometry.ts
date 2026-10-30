@@ -1,5 +1,5 @@
 /**
- * Authored look of the slam and the stomp: the Rabid Rabbit's void haze (`PounceWindupGpuRenderer`,
+ * Authored look of the slam and the stomp: the Rabid Rabbit's void haze (`PounceAuraGpuRenderer`,
  * the same smoke frame above the light map) in grave-light green, pushed out as a pressure wave.
  * Every puff stays inside the announced danger zone: a sector's haze is inset from its flanks by
  * the puff's own half length, so the fan and its warning share one outline.

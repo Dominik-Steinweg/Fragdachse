@@ -21,10 +21,10 @@ function fixture() {
   let now = 0;
   presentation.setClock(() => now);
   const marks: [string, EnemyLandingMark | null][] = [];
-  const windups: { angle: number; strength: number }[] = [];
+  const auras: { strength: number; turn: number }[] = [];
   presentation.setMarkSink((id, mark) => marks.push([id, mark]));
-  presentation.setWindupSink((_x, _y, angle, strength) => windups.push({ angle, strength }));
-  return { render: (at: number) => { now = at; render(); }, set: (state: EnemyPounceState) => { pounce = state; }, marks, windups };
+  presentation.setAuraSink((_x, _y, _size, strength, _color, turn) => auras.push({ strength, turn }));
+  return { render: (at: number) => { now = at; render(); }, set: (state: EnemyPounceState) => { pounce = state; }, marks, auras };
 }
 
 const aim = { target: { kind: 'player' as const, id: 'p1' }, originX: 0, originY: 0, aimAt: 1000, lockAt: 1300 };
@@ -32,26 +32,28 @@ const takeoffAt = aim.lockAt + config.lockMs;
 const landing = { x: 180, y: 90, takeoffAt, landAt: takeoffAt + 400, recoverUntil: takeoffAt + 850, armed: true };
 
 describe('pounce presentation', () => {
-  it('marks nothing on the ground while aiming', () => {
+  it('marks nothing on the ground while aiming, only the charge aura around the body', () => {
     const f = fixture();
     f.set({ revision: 1, pounce: { ...aim, landing: null } });
     for (let at = 1000; at <= 1290; at += 16) f.render(at);
     expect(f.marks.filter(([, mark]) => mark !== null)).toHaveLength(0);
-    expect(f.windups).toHaveLength(0);
+    expect(f.auras.length).toBeGreaterThan(0);
+    expect(f.auras.at(-1)!.strength).toBeGreaterThan(f.auras[0]!.strength);
   });
 
-  it('announces the landing from the lock and streams windup haze along the jump direction', () => {
+  it('announces the landing from the lock while the aura grows, and ends the aura at the take-off', () => {
     const f = fixture();
     f.set({ revision: 2, pounce: { ...aim, landing } });
     f.render(aim.lockAt + 16);
     expect(f.marks.at(-1)).toEqual(['r', expect.objectContaining({ x: 180, y: 90, startedAt: aim.lockAt, hitAt: landing.landAt,
       radius: config.impact.radiusPx })]);
-    f.render(takeoffAt - 16);
-    expect(f.windups.at(-1)!.angle).toBeCloseTo(Math.atan2(90, 180));
-    expect(f.windups.at(-1)!.strength).toBeGreaterThan(f.windups[0]!.strength);
-    const streamed = f.windups.length;
+    const locked = f.auras.at(-1)!.strength;
+    f.render(takeoffAt - 200);
+    expect(f.auras.at(-1)!.strength).toBeGreaterThan(locked);
+    expect(new Set(f.auras.map(aura => aura.turn)).size).toBe(1);
+    const emitted = f.auras.length;
     f.render(takeoffAt + 100);
-    expect(f.windups).toHaveLength(streamed);
+    expect(f.auras).toHaveLength(emitted);
     expect(new Set(f.marks.map(([, mark]) => mark?.attackId).filter(Boolean)).size).toBe(1);
   });
 

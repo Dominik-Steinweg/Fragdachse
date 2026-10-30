@@ -16,10 +16,10 @@ Richtung wechselt, stoppt oder dasht, bleibt heil. Zwischen den Sprüngen läuft
 
 ## 2. Kern
 
-- **Primärangriff Sprung.** Der Hase bleibt stehen, leuchtet violett auf und zielt kurz; am Boden ist noch
-  nichts markiert. Beim Einrasten erscheint die rote Landezone (mäßiger Vorhalt auf den Laufweg) und füllt
-  sich bis zur Landung von innen; Void-Dunst strömt in Sprungrichtung. Er springt auf einer festen Linie und
-  trifft bei der Ankunft die angekündigte Fläche.
+- **Primärangriff Sprung.** Der Hase bleibt stehen, leuchtet violett auf und zielt kurz; ein Void-Schleier
+  wirbelt um ihn, am Boden ist noch nichts markiert. Beim Einrasten erscheint die rote Landezone (mäßiger
+  Vorhalt auf den Laufweg) und füllt sich bis zur Landung von innen, während Leuchten und Schleier zum
+  Höhepunkt anwachsen. Er springt auf einer festen Linie und trifft bei der Ankunft die angekündigte Fläche.
 - **Sekundär Biss.** Zwischen den Sprüngen läuft er normal und beißt im Nahkampf (wie bisher).
 - **Rudel.** Höchstens zwei Hasen zielen gleichzeitig auf denselben Spieler; ihre Sprünge starten
   gestaffelt. Weitere Hasen laufen und beißen.
@@ -29,8 +29,8 @@ Richtung wechselt, stoppt oder dasht, bleibt heil. Zwischen den Sprüngen läuft
 | Phase | Verhalten (Startwerte, alle in `src/config/coopDefenseEnemies.json`) |
 |---|---|
 | Start | Spieler 110–480 px entfernt, Sicht, freie Bahn, kein laufender Biss, Abklingzeit vorbei; erster Sprung frühestens 0,9 s nach dem Erscheinen |
-| Zielen (0,3 s) | steht, schaut zum Zielpunkt und leuchtet violett auf; noch keine Bodenmarke. Der Zielpunkt folgt einer geglätteten Laufrichtung, sein Vorhalt (höchstens 120 px) schwenkt höchstens 320 px/s um |
-| Einrasten (0,42 s) | Landezone erscheint fest und füllt sich bis zur Landung; Void-Dunst strömt in Sprungrichtung, der Hase duckt sich, sein Leuchten erreicht den Höhepunkt; der Flug startet dort, wo er jetzt steht; Fluchtfenster beginnt |
+| Zielen (0,3 s) | steht, schaut zum Zielpunkt und leuchtet violett auf, ein Void-Schleier beginnt um ihn zu wirbeln; noch keine Bodenmarke. Der Zielpunkt folgt einer geglätteten Laufrichtung, sein Vorhalt (höchstens 120 px) schwenkt höchstens 320 px/s um |
+| Einrasten (0,42 s) | Landezone erscheint fest und füllt sich bis zur Landung; der Hase duckt sich, Leuchten und Schleier erreichen den Höhepunkt; der Flug startet dort, wo er jetzt steht; Fluchtfenster beginnt |
 | Flug (0,35–0,62 s, längenabhängig) | fester Flug zur Zone, nicht wegstoßbar, Treffer-Stagger wirkungslos |
 | Landung | Flächenschaden r 64 px, 28 in der Mitte bis 14 am Rand, Rückstoß nur für Spieler; Köder nehmen Schaden, Bauwerke nicht |
 | Erholung (0,45 s) | steht, kein Biss |
@@ -55,12 +55,14 @@ Der Vertragstest prüft `lockMs + airMinMs ≥ Reaktion + (Radius + 16) / 280` f
 
 ## 5. Darstellung
 
-- Beim Zielen warnt nur der Körper: additive Void-Tönung und Halo in Augenfarbe (auch am Tag deutlich),
-  kleines Licht für die Nacht.
+- Ab dem Zielen bis zum Absprung leuchtet der Körper selbst: additive Void-Tönung, ein heller Kern und ein
+  weiter, atmender Halo in Augenfarbe (auch am Tag deutlich), kleines Licht für die Nacht, dazu ein
+  Void-Schleier (`PounceAuraGpuRenderer`), der ohne Richtung um den Hasen wirbelt und mit dem Leuchten
+  dichter wird. Nichts zeigt in Sprungrichtung: Die Ankündigung soll nicht wie ein bereits laufender
+  Angriff wirken.
 - Ab dem Einrasten eine Landemarke aus dem gemeinsamen Gegner-Gefahrenrenderer
   (`EnemyClawRenderer.syncLandingMark`): weiche Scheibe, die sich bis zur Landung von innen füllt; nichts
-  reicht über den Trefferradius hinaus. Dazu violetter Void-Dunst (`PounceWindupGpuRenderer`), der in einem
-  schmalen Kegel 65–160 px in Sprungrichtung strömt, und leichtes Ducken. Keine Bahn über den Boden.
+  reicht über den Trefferradius hinaus. Leichtes Ducken vor dem Absprung, keine Bahn über den Boden.
   Rot ist Telegraph, Void-Violett allgemeine Gefahr, kein Gelb.
 - Flug mit Anhebung zur Kamera; Clients setzen den Körper auf die replizierte Fluglinie; Absprung- und
   Landespuren über den Bewegungsmodus `airborne`.

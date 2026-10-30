@@ -126,7 +126,7 @@ export const GpuVfxEffectId = {
   PounceGrit: 112,
   PounceDust: 113,
   PounceGlint: 114,
-  PounceWindup: 115,
+  PounceAura: 115,
   GraveTitanHaze: 116,
 } as const;
 
@@ -783,8 +783,8 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.DeathDustMoteB, importance: 'standard', release: 'linger' },
   { id: GpuVfxEffectId.PounceGlint, label: 'enemy.pounce-glint', lane: GpuVfxLaneId.ExplosionLowGlow,
     frame: GpuVfxFrameId.DeathGlow, importance: 'decorative', release: 'linger' },
-  // Rabid Rabbit lock windup: void haze streaming from the body along the jump direction, above the light map.
-  { id: GpuVfxEffectId.PounceWindup, label: 'enemy.pounce-windup', lane: GpuVfxLaneId.ExplosionLowGlow,
+  // Rabid Rabbit charge aura: void haze swirling around the body while it aims and locks, above the light map.
+  { id: GpuVfxEffectId.PounceAura, label: 'enemy.pounce-aura', lane: GpuVfxLaneId.ExplosionLowGlow,
     frame: GpuVfxFrameId.ExplosionSmoke, importance: 'critical', release: 'linger' },
   // Grave Titan slam and stomp: the same void haze in grave-light green, pushed out as a pressure wave.
   { id: GpuVfxEffectId.GraveTitanHaze, label: 'boss.grave-titan-haze', lane: GpuVfxLaneId.ExplosionLowGlow,

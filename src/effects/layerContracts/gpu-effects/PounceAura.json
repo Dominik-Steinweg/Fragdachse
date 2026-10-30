@@ -1,9 +1,9 @@
 {
-  "name": "PounceWindup",
+  "name": "PounceAura",
   "contract": {
-    "id": "gpu:PounceWindup",
+    "id": "gpu:PounceAura",
     "owner": "effects/gpu/GpuVfxEffects.ts",
-    "component": "PounceWindup",
+    "component": "PounceAura",
     "height": "body",
     "lighting": "emissive",
     "camera": "world",

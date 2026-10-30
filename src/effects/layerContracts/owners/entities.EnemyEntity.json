@@ -14,6 +14,13 @@
         ]
       },
       {
+        "key": "syncPounceMenace/this.pounceCore/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.085",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
         "key": "module/this.sprite/setDepth/0",
         "expression": "DEPTH.PLAYERS - 0.05",
         "blends": [
@@ -69,6 +76,28 @@
       "source": {
         "selector": "syncPounceMenace/this.pounceHalo/setDepth/0",
         "expression": "DEPTH.PLAYERS - 0.09"
+      }
+    },
+    {
+      "id": "cpu:entities/EnemyEntity.ts:syncPounceMenace/this.pounceCore/setDepth/0",
+      "owner": "entities/EnemyEntity.ts",
+      "component": "syncPounceMenace/this.pounceCore/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.915
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncPounceMenace/this.pounceCore/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.085"
       }
     },
     {

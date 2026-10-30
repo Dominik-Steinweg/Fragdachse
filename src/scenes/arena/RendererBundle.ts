@@ -26,7 +26,7 @@ import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import { PounceImpactGpuRenderer } from '../../effects/PounceImpactGpuRenderer';
 import { GraveTitanImpactRenderer } from '../../effects/graveTitan/GraveTitanImpactRenderer';
 import { GraveTitanGlowPresentation } from '../../effects/graveTitan/GraveTitanGlowPresentation';
-import { PounceWindupGpuRenderer } from '../../effects/PounceWindupGpuRenderer';
+import { PounceAuraGpuRenderer } from '../../effects/PounceAuraGpuRenderer';
 import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
 import { BossPresenceRenderer } from '../../effects/BossPresenceRenderer';
 import { VoidMeteorIntroRenderer } from '../../effects/VoidMeteorIntroRenderer';
@@ -159,7 +159,7 @@ export interface RendererBundle {
   burrowGpu:           BurrowGpuRenderer;
   pounceImpact:        PounceImpactGpuRenderer;
   graveTitanImpact:    GraveTitanImpactRenderer;
-  pounceWindup:        PounceWindupGpuRenderer;
+  pounceAura:          PounceAuraGpuRenderer;
   bossIntro:           BossIntroGraveyardRenderer;
   bossPresence:        BossPresenceRenderer;
   voidHunterSparks:    VoidHunterSparksRenderer;
@@ -233,8 +233,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => pounceImpact.destroy());
   const graveTitanImpact = new GraveTitanImpactRenderer(gpuVfx);
   cleanup.push(() => graveTitanImpact.destroy());
-  const pounceWindup = new PounceWindupGpuRenderer(gpuVfx);
-  cleanup.push(() => pounceWindup.destroy());
+  const pounceAura = new PounceAuraGpuRenderer(gpuVfx);
+  cleanup.push(() => pounceAura.destroy());
   const earthbreakFissures = createEarthbreakFissureLayers(scene, burrowGpu.earthbreakFissures, () => gpuVfx.now());
   cleanup.push(() => earthbreakFissures.destroy());
   // Ein gemeinsamer Emissions-Tick fuer alle brennenden Entities. Die per-Entity-Renderer
@@ -565,7 +565,7 @@ export function* createRendererBundleSteps(
     burrowGpu,
     pounceImpact,
     graveTitanImpact,
-    pounceWindup,
+    pounceAura,
     bossIntro,
     bossPresence,
     voidHunterSparks,
@@ -660,7 +660,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
     (id, attack, now, visible) => effectSystem.syncEnemyLane(`kaboomtula-lane:${id}`, attack, now, visible, undefined, true),
     (id, attack, now, visible) => effectSystem.syncEnemyZone(`kaboomtula-ring:${id}`, attack, now, visible, undefined, true));
   bundle.enemyPounces.setMarkSink((id, mark, now, visible) => effectSystem.syncEnemyLandingMark(`pounce-mark:${id}`, mark, now, visible));
-  bundle.enemyPounces.setWindupSink((x, y, angle, strength, color) => bundle.pounceWindup.emit(x, y, angle, strength, color));
+  bundle.enemyPounces.setAuraSink((x, y, size, strength, color, turn) => bundle.pounceAura.emit(x, y, size, strength, color, turn));
   // The heat warning travels with its running body: a tracking zone in the shared danger family.
   bundle.enemyHeatBursts.setZoneSink((id, attack, now, visible) =>
     effectSystem.syncEnemyZone(`heat-zone:${id}`, attack, now, visible, undefined, true));
