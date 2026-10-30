@@ -214,6 +214,9 @@ def embedded(c, name, outline, thickness, material, edge, skin, details, seed, l
 
 
 def build(c, spec):
+    # While the emerge cut runs through the body a ray crosses many transparent layers (stones, hide,
+    # mane); at the Cycles default of 8 the path ends opaque black instead of reaching the background.
+    c.scene.cycles.transparent_max_bounces = 64
     fur = c.material('Dense black-olive hide and mane', (.052, .056, .045), 'organic')
     skin = c.material('Dead flesh grown over stone', (.050, .052, .042), 'organic')
     dark = c.material('Deep crypt joints', (.012, .014, .012), 'organic')
