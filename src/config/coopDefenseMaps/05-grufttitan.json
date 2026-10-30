@@ -164,7 +164,11 @@
     { "id": "titan-march-2", "gridX": 47, "gridY": 16, "radiusCells": 6 },
     { "id": "titan-march-3", "gridX": 54, "gridY": 17, "radiusCells": 6 },
     { "id": "titan-march-4", "gridX": 61, "gridY": 18, "radiusCells": 6 },
-    { "id": "titan-march-5", "gridX": 68, "gridY": 18, "radiusCells": 6 }
+    { "id": "titan-march-5", "gridX": 68, "gridY": 18, "radiusCells": 6 },
+    { "id": "titan-march-6", "gridX": 83, "gridY": 19, "radiusCells": 6 },
+    { "id": "titan-march-7", "gridX": 90, "gridY": 19, "radiusCells": 6 },
+    { "id": "titan-march-8", "gridX": 97, "gridY": 19, "radiusCells": 6 },
+    { "id": "titan-march-9", "gridX": 104, "gridY": 19, "radiusCells": 6 }
   ],
   "waterAreas": [
     { "gridX": 38, "gridY": 30, "widthCells": 22, "heightCells": 7 },

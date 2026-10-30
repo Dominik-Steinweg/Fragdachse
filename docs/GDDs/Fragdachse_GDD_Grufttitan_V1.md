@@ -78,8 +78,9 @@ sichtbar größer.
 - Die Karte ist nach Westen auf 131 × 37 Zellen erweitert. Der Titan erhebt sich auf einer
   felsfreien Grabinsel (`titan-grave`, Lichtung `grave-island`) mitten in einem See, der mit dem
   Südteich verschmilzt. Ein 8 Zellen breiter, ebenfalls felsfreier Damm (`grave-causeway`) führt nach
-  Osten zum Schlachtfeld; eine Kette von Lichtungen (`titan-march-1` bis `-5`) hält von dort bis zum
-  Vorposten auf jedem Seed einen Marschweg in Körperbreite frei.
+  Osten zum Schlachtfeld; eine Kette von Lichtungen (`titan-march-1` bis `-9`) hält von dort bis zum
+  Vorposten und weiter über die Gleise bis zur Hauptbasis auf jedem Seed einen Marschweg in
+  Körperbreite frei.
 - Der Boss erscheint immer: Wäre seine Zone doch einmal durch Fels von den Basen abgeschnitten,
   erhebt er sich trotzdem und bricht sich durch, statt die Mission ohne Boss hängen zu lassen.
 - Bis zum Vorposten sind es rund 56 Zellen statt 13; Vorposten, Gleise (Spalte 99) und Hauptbasis

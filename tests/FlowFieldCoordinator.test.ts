@@ -568,3 +568,19 @@ describe('FlowFieldCoordinator portal links', () => {
     world.destroy();
   });
 });
+
+describe('Base changes in exact geometry', () => {
+  it('recomputes body routes against the world without a fallen base', () => {
+    // An outpost wall splits the arena; its bodies leave the world before the active set changes.
+    const wall = { id: 'base:outpost', kind: 'base' as const, shape: 'rect' as const, left: 96, top: 0, right: 128, bottom: 256 };
+    const world = navigationTestWorld([wall], [{ id: 'outpost', cellCoords: new Int32Array(0), isGoalSource: false }]);
+    world.goal(224, 176); world.flush();
+    expect(world.field.queryNavigation(48, 48).status).toBe('unreachable');
+    world.snapshot.obstacles.splice(0);
+    world.coordinator.setActiveBaseIds(new Set());
+    // No further topology change follows: the base change alone must open the route.
+    world.coordinator.advance(100);
+    expect(world.field.queryNavigation(48, 48).status).toBe('ready');
+    world.destroy();
+  });
+});

@@ -672,6 +672,10 @@ export class FlowFieldCoordinator {
   /** Base-Aenderungen warten nicht auf den naechsten Tick; ein laufender Job wird ueberholt. */
   private dispatchNow(): void {
     if (!this.initialized) return;
+    // The priority job must carry the world of the change: a fallen base's bodies are already
+    // gone. Without the geometry patch the worker would reclassify against the old world, and its
+    // result would still count as current until some other topology change happened.
+    this.getGeometry();
     this.inFlightJobId = -1;
     this.inFlightFieldIds.clear();
     if (this.completedBatch) {

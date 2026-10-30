@@ -372,6 +372,7 @@ describe('Coop defense arena generation', () => {
 
   it('gives every base-attacking boss a free route for its body from its spawn zone on every seed', () => {
     // Walled in, a boss still rises and breaks through; the authored terrain must not depend on that.
+    // The route must also hold once the outposts ahead have fallen and only the main base stands.
     for (const entry of getCoopDefenseCampaignAudit()) {
       const map = getCoopDefenseMapConfig(entry.mapId);
       const boss = map.boss;
@@ -379,27 +380,32 @@ describe('Coop defense arena generation', () => {
       if (!boss || !zone || zone.medium === 'water' || getCoopDefenseEnemyConfig(boss.enemyKind).movementTarget !== 'bases') continue;
       const radius = enemyBodyRadius(getCoopDefenseEnemyConfig(boss.enemyKind));
       const metrics = resolveWorldMetrics(getArenaMetricsProfile('coop_defense', 'ARENA', map.arenaWidthCells, map.arenaHeightCells));
-      const bases = resolveCoopDefenseBases(map, metrics);
-      for (const seed of [1, 13, 99, 2_005, 12_345, 23_770, 47_527, 285_097]) {
+      const allBases = resolveCoopDefenseBases(map, metrics);
+      const mainId = map.persistentBase?.baseId;
+      const standings = [{ label: 'all bases', bases: allBases },
+        ...(mainId ? [{ label: 'main base alone', bases: allBases.filter((base) => base.faction === 'hostile' || base.id === mainId) }] : [])];
+      for (const seed of [1, 13, 99, 2_005, 12_345, 23_770, 47_527, 134_636, 285_097]) {
         const layout = ArenaGenerator.generate(seed, resolveArenaGenerationInput('coop_defense', metrics), map);
-        const inputs = resolveCoopMissionFlowFieldInputs({ worldMetrics: metrics, layout, baseSpecs: bases, exact: true });
-        const geometry = buildMissionStartNavigationGeometry({ metrics, layout, bases, constructionCells: [], barrierCells: [] });
-        const coordinator = new FlowFieldCoordinator({ metrics: inputs.metrics, tuning: createFlowFieldTuning(),
-          staticKind: inputs.staticKind, bases: inputs.bases, activeBaseIds: new Set(bases.map((base) => base.id)),
-          obstacleCellProvider: () => [], geometryProvider: () => geometry, runner: new InlineFlowFieldRunner(),
-          navTickIntervalMs: COOP_DEFENSE_NAV_TICK_INTERVAL_MS });
-        const field = EnemyFlowFieldService.fromView(coordinator.registerField('boss', { goalMode: 'bases', bodyRadius: radius }));
-        coordinator.invalidateGeometry();
-        coordinator.runSynchronously(true);
-        let routed = false;
-        for (let gridX = zone.gridX; gridX < zone.gridX + zone.widthCells && !routed; gridX++) {
-          for (let gridY = zone.gridY; gridY < zone.gridY + zone.heightCells && !routed; gridY++) {
-            const point = worldCellCenter(metrics, gridX, gridY);
-            routed = field.queryNavigation(point.x, point.y).status === 'ready';
+        for (const { label, bases } of standings) {
+          const inputs = resolveCoopMissionFlowFieldInputs({ worldMetrics: metrics, layout, baseSpecs: bases, exact: true });
+          const geometry = buildMissionStartNavigationGeometry({ metrics, layout, bases, constructionCells: [], barrierCells: [] });
+          const coordinator = new FlowFieldCoordinator({ metrics: inputs.metrics, tuning: createFlowFieldTuning(),
+            staticKind: inputs.staticKind, bases: inputs.bases, activeBaseIds: new Set(bases.map((base) => base.id)),
+            obstacleCellProvider: () => [], geometryProvider: () => geometry, runner: new InlineFlowFieldRunner(),
+            navTickIntervalMs: COOP_DEFENSE_NAV_TICK_INTERVAL_MS });
+          const field = EnemyFlowFieldService.fromView(coordinator.registerField('boss', { goalMode: 'bases', bodyRadius: radius }));
+          coordinator.invalidateGeometry();
+          coordinator.runSynchronously(true);
+          let routed = false;
+          for (let gridX = zone.gridX; gridX < zone.gridX + zone.widthCells && !routed; gridX++) {
+            for (let gridY = zone.gridY; gridY < zone.gridY + zone.heightCells && !routed; gridY++) {
+              const point = worldCellCenter(metrics, gridX, gridY);
+              routed = field.queryNavigation(point.x, point.y).status === 'ready';
+            }
           }
+          coordinator.destroy();
+          expect(routed, `Map ${entry.mapId} seed ${seed} (${label}): ${boss.enemyKind} walled in at ${zone.id}`).toBe(true);
         }
-        coordinator.destroy();
-        expect(routed, `Map ${entry.mapId} seed ${seed}: ${boss.enemyKind} walled in at ${zone.id}`).toBe(true);
       }
     }
   });
