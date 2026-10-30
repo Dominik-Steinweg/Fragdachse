@@ -38,7 +38,7 @@ sichtbar größer.
 | Angriff | Wann | Ausholen | Wirkung |
 |---|---|---|---|
 | Stampfer | Spieler im Umkreis 360 und Basen ab 210 Abstand (`structureReachPx`), Vorrang vor dem Schlag | 1,5 s | 360° bis 360, 200 Schaden auch an Basen, 6 s Cooldown |
-| Prankenschlag | Spieler nur, wenn sie schon im Kegel stehen (`turnsOnlyForStructures`); Bauwerke und Felsen ab 210 Abstand | 1,3 s | 110°-Kegel bis 280, 100 Schaden, bricht Felsen, 35 % an Basen |
+| Prankenschlag | Spieler nur, wenn sie schon im Kegel stehen (`turnsOnlyForStructures`); Bauwerke und Felsen ab 210 Abstand | 1,3 s | 110°-Kegel bis 280, 100 Schaden auch an Basen, bricht Felsen |
 
 - Beide dürfen auch während der Plasma-Pause zuschlagen. Ein Rundumschlag reagiert auch während der
   Belagerung auf jeden in seiner Reichweite.

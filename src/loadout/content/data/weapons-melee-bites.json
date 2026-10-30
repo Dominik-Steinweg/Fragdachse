@@ -186,8 +186,7 @@
       "spreadRecoveryRate": 5,
       "spreadRecoverySpeed": 100,
       "rockDamageMult": 1,
-      "trainDamageMult": 0.3,
-      "baseDamageMult": 0.35,
+      "trainDamageMult": 2.0,
       "shotAudio": {
         "successKey": "shot_bite",
         "failureKey": "shot_dry_trigger"
@@ -208,7 +207,7 @@
       "trainDamageMult": 0,
       "baseDamageMult": 1,
       "baseId": "GRAVE_TITAN_SLAM",
-      "_notes": "Toedliche Rundum-Druckwelle des Grufttitans (400 > HP + Ruestung) gegen Spieler und Basen im Umkreis, alle 3 s; hat Vorrang vor dem Schlag und trifft keine Felsen."
+      "_notes": "Rundum-Druckwelle des Grufttitans gegen Spieler und Basen im Umkreis, alle 6 s; hat Vorrang vor dem Schlag und trifft keine Felsen."
     },
     "INFERNO_COLOSSUS_BITE": {
       "id": "INFERNO_COLOSSUS_BITE",
