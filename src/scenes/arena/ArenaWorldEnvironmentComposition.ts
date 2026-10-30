@@ -109,7 +109,7 @@ export function composeWorldGeometry(
       if (targetType === 'enemy') {
         const enemy = (gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager)?.getEnemy(targetId);
         return enemy?.sprite.active
-          ? { x: enemy.sprite.x, y: enemy.sprite.y, hitRadius: enemy.getCollisionRadius() }
+          ? { x: enemy.sprite.x, y: enemy.sprite.y, hitRadius: enemy.getHitRadius() }
           : null;
       }
       return null;

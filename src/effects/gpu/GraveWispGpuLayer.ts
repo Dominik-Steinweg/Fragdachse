@@ -13,7 +13,7 @@ const CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
 /** Grave lights stay readable by day; the night lifts them to full strength. */
 const DAY_FLOOR = 0.7;
 
-export const GraveWispKind = { Light: 0, Puff: 1 } as const;
+export const GraveWispKind = { Light: 0, Puff: 1, Glow: 2 } as const;
 
 /** Segment tail -> head; a light without travel has tail = head. */
 export interface GraveWispItem {

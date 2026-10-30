@@ -41,6 +41,7 @@ const PAW_FRAMES = {
   compact: GpuVfxFrameId.MovementPawCompact,
   clawed: GpuVfxFrameId.MovementPawClawed,
   broad: GpuVfxFrameId.MovementPawBroad,
+  titan: GpuVfxFrameId.MovementPawTitan,
 };
 
 /** Existing atlas textures form one layered puff: soft body, rolling edge, then loose grains.
@@ -243,7 +244,7 @@ export class MovementEffectsRenderer {
     for (let paw = 0; paw < s.pawCount; paw++) {
       const left = paw === 0 || (s.pawCount === 4 && paw === 3);
       const front = s.pawCount === 4 && (paw === 0 || paw === 2);
-      const lateral = (left ? -1 : 1) * s.size * (s.pawLateralShare || 0.2);
+      const lateral = (left ? -1 : 1) * s.size * ((front ? 0 : s.pawRearLateralShare) || s.pawLateralShare || 0.2);
       const forward = s.pawCount === 4 ? (front ? 1 : -1) * s.size * (s.pawForwardShare || 0.18) : -s.size * 0.1;
       this.spawnFootprint(s, x + nx * forward - ny * lateral, y + ny * forward + nx * lateral, facing, age);
     }

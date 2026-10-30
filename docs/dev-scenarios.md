@@ -1108,13 +1108,19 @@ await dev.run({ action: 'clearEnemies' });
 await dev.run({ action: 'spawn', kind: 'grave-titan', pinned: false, gridX: 20, gridY: 13 });
 ```
 
-Erwartung: Intro mit großem Gräberfeld; der Titan gräbt sich Kopf und Vorderpranken voran aus, die
-Glühwürmchen tauchen in ihn ein, der Durchbruch brüllt grün. Im Kampf kreisen zehn Grablichter über dem
-Rücken. Vor jeder Salve ziehen sie sich 0,8 s zu einer Krone über dem Grab zusammen, der Kreuzriss glüht auf,
-dann fliegt jeder Schuss aus einem Grablicht; in der 10-s-Pause steigen sie einzeln wieder auf. Wer dicht
-am Körper steht, wird gestampft (Sternrisse rundum, 1,1 s Ausholen); auf Reichweite richtet er sich zum
-Prankenschlag auf (Fächerrisse, 1,3 s). Beide töten auch mit voller Rüstung; die glimmenden Haarrisse
-und das rote Feld kündigen die Trefferzone an.
+Erwartung: Intro mit großem Gräberfeld; der Titan gräbt sich Kopf und Vorderpranken voran aus (die
+Frames werden weich ineinander geblendet), die Glühwürmchen tauchen in ihn ein, der Durchbruch brüllt
+grün. Im Kampf umschwärmen ihn 30 normale Glühwürmchen, je drei sind Munition für einen Schuss. Vor
+jeder Salve ziehen sie sich 1,6 s zu einer Krone über dem Grab zusammen und beginnen zu glühen, dann
+fliegt jeder Schuss aus seiner Gruppe; in der 10-s-Pause steigen sie einzeln und wieder dunkel auf. Wer
+bis 300 px am Titan steht, wird gestampft (rotes Rundumfeld, 1,5 s, danach grüne Dunst-Druckwelle bis
+zum Rand). Bauwerke greift er mit dem Prankenschlag an, erst wenn er bis auf Kopflänge herangetreten
+ist (rotes Fächerfeld vor dem Kopf, 1,3 s, dann ein Dunstfächer in die Basis). Beide töten auch mit
+voller Rüstung. Er dreht sich träge (55°/s), und Treffer zählen auf dem ganzen Körper mitsamt Beinen.
+
+Für saubere Aufnahmen ohne tote Spielfigur: Spieler außerhalb der Plasma-Reichweite (900 px), Bots als
+Stampfer-Ziele und die Kamera auf den Titan, z. B. `bots: [{ name: 'A', player: { gridX: 15, gridY: 13 } }]`,
+`{ action: 'target', gridX: 12, gridY: 13 }` und `{ action: 'camera', zoom: 1.6, focusTarget: true }`.
 
 Headless-Nachweise: `tests/GraveTitanVoidPlasma.test.ts`, `tests/GraveTitanPresentation.test.ts`.
 

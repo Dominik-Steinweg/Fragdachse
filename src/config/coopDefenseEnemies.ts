@@ -79,6 +79,11 @@ export interface CoopDefenseEnemyWeaponConfig {
    * Gegner deren Cooldown ab, statt umzuschalten (z. B. ein Fernkaempfer, der nicht zubeissen soll).
    */
   readonly usableDuringPriorityPause?: boolean;
+  /**
+   * A swing that reaches far past a big body: bases, rocks and constructs are approached and engaged
+   * only this close (px from the centre), while the swing keeps its full range around them.
+   */
+  readonly structureReachPx?: number;
 }
 
 export interface CoopDefenseEnemyStinkAuraConfig {
@@ -741,10 +746,19 @@ export interface CoopDefenseEnemyConfig {
    * Where the feet of a large body land, as shares of its collision size (lateral from the centre
    * line, forward/back from the centre), and the footprint scale. Without it the small-body defaults apply.
    */
-  readonly pawSpan?: { readonly lateralShare: number; readonly forwardShare: number; readonly printScale: number };
+  readonly pawSpan?: {
+    readonly lateralShare: number; readonly forwardShare: number; readonly printScale: number;
+    /** Hind feet closer to the centre line than the front feet; absent = `lateralShare`. */
+    readonly rearLateralShare?: number;
+  };
   readonly maxHp: number;
   readonly xp: number;
   readonly size: number;
+  /**
+   * Hit circle as a multiple of the body radius, for a body whose limbs reach far beyond the
+   * circle it moves with (projectiles, hitscan, melee, explosions and auto-aim). Absent = 1.
+   */
+  readonly hitRadiusFactor?: number;
   readonly moveSpeed: number;
   /**
    * Faktor auf alle Wegstoss-Impulse (Raketen, Granaten, Laubblaeser, Dash-Aufprall, Schockwellen …).
@@ -883,6 +897,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         ),
         xp: Math.max(0, Math.floor(config.xp)),
         size: config.size,
+        hitRadiusFactor: config.hitRadiusFactor,
         moveSpeed: config.krakenEgg ? 0 : resolveCoopDefensePositiveNumber(
           config.moveSpeed,
           config.playerScaling?.moveSpeedFactorPerAdditionalPlayer,
@@ -1067,6 +1082,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     imageKey: enemy.imageKey,
     pawCount: requirePawCount(enemy.pawCount, enemy.id),
     pawSpan: normalizePawSpan(enemy.pawSpan, enemy.id),
+    hitRadiusFactor: normalizeHitRadiusFactor(enemy.hitRadiusFactor, enemy.id),
     spriteRotationOffsetDegrees: typeof enemy.spriteRotationOffsetDegrees === 'number'
       && Number.isFinite(enemy.spriteRotationOffsetDegrees)
       ? enemy.spriteRotationOffsetDegrees
@@ -1427,16 +1443,31 @@ function normalizeWeapons(
       salvo: normalizeWeaponSalvoConfig(weapon.salvo),
       muzzleForwardPx: weapon.muzzleForwardPx === undefined ? undefined : Math.max(0, weapon.muzzleForwardPx),
       usableDuringPriorityPause: weapon.usableDuringPriorityPause === true ? true : undefined,
+      structureReachPx: normalizeStructureReach(weapon.structureReachPx),
     };
   });
 }
 
 function normalizePawSpan(span: CoopDefenseEnemyConfig['pawSpan'], enemyId: string): CoopDefenseEnemyConfig['pawSpan'] {
   if (!span) return undefined;
-  if (![span.lateralShare, span.forwardShare, span.printScale].every(value => Number.isFinite(value) && value > 0 && value <= 4)) {
+  const rear = span.rearLateralShare ?? span.lateralShare;
+  if (![span.lateralShare, span.forwardShare, span.printScale, rear].every(value => Number.isFinite(value) && value > 0 && value <= 4)) {
     throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has an invalid paw span`);
   }
-  return { lateralShare: span.lateralShare, forwardShare: span.forwardShare, printScale: span.printScale };
+  return { lateralShare: span.lateralShare, forwardShare: span.forwardShare, printScale: span.printScale,
+    ...(span.rearLateralShare === undefined ? {} : { rearLateralShare: span.rearLateralShare }) };
+}
+
+function normalizeStructureReach(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value <= 0) throw new Error('[coopDefenseEnemies] Invalid structureReachPx');
+  return value;
+}
+
+function normalizeHitRadiusFactor(value: number | undefined, enemyId: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value < 1 || value > 4) throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has an invalid hitRadiusFactor`);
+  return value;
 }
 
 function normalizeMeleeTiming(timing: CoopDefenseEnemyWeaponConfig['meleeTiming']): CoopDefenseEnemyWeaponConfig['meleeTiming'] {

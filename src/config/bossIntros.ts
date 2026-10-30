@@ -161,7 +161,7 @@ export const GRAVEYARD_RISE_INTRO: GraveyardRiseIntroPreset = {
   fireflies: { count: 24, startMs: 1_000, orbitRadius: 300 },
   churn: { startMs: 3_000, radius: 150, rumbleAmplitudePx: 9 },
   shatter: { fragmentsPerStone: 4, fragmentLifetimeMs: 1_700, fragmentSpeed: 340, shockwaveRadius: 400 },
-  riser: { enemyKind: 'grave-titan', clip: 'emerge', startMs: 3_900, facing: 0 },
+  riser: { enemyKind: 'grave-titan', clip: 'emerge', startMs: 4_200, facing: 0 },
   camera: { panInMs: 1_400, holdAfterEmergeMs: 1_900, panOutMs: 1_400, zoom: 1.15 },
 };
 

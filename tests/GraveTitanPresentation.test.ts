@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { clawFrameIndex, meleeLiftProfile, type EnemyClawAttack } from '../src/systems/EnemyClawAttack';
-import { graveTitanImpactGeometry } from '../src/effects/graveTitan/graveTitanImpactGeometry';
-import { GRAVE_LIGHTS, graveGlowLevel, graveLightPose, launchedGraveLights, type GraveLightPose } from '../src/effects/graveTitan/graveLightModel';
-import { volleyCastFrameIndex, VOLLEY_CAST_SETTLE_MS } from '../src/animations/EnemyVolleyAnimation';
+import { GRAVE_TITAN_IMPACT, graveTitanImpact } from '../src/effects/graveTitan/graveTitanImpactGeometry';
+import { GRAVE_FIREFLIES, fireflyShot, graveFireflyPose, graveGlowLevel, launchedGraveLights, spentFireflies,
+  type GraveFireflyAmmoPose } from '../src/effects/graveTitan/graveLightModel';
+import { volleyCastFrameIndex, VOLLEY_CAST_RISE_MS, VOLLEY_CAST_SETTLE_MS } from '../src/animations/EnemyVolleyAnimation';
 import { EMPTY_ENEMY_VOLLEY_STATE, type EnemyVolleyState } from '../src/systems/EnemyVolleyState';
 
 const ATTACK: EnemyClawAttack = {
@@ -11,9 +12,12 @@ const ATTACK: EnemyClawAttack = {
 };
 const MARKERS = { strike: 12, impact: 15 };
 const SITE = { x: 500, y: 400, size: 112, crownX: 493, crownY: 400 };
+/** 30 fireflies feed 10 shots; each rests on its own orbit point. */
+const FIREFLIES = 30, SHOTS = 10;
+const orbitX = (index: number) => SITE.x + 150 * Math.cos(index), orbitY = (index: number) => SITE.y + 150 * Math.sin(index);
 
-function pose(index: number, state: EnemyVolleyState, seen: number, now: number): GraveLightPose {
-  return graveLightPose(index, 10, SITE, state, seen, now, { x: 0, y: 0, alpha: 0, size: 0, intensity: 0 });
+function pose(index: number, state: EnemyVolleyState, seen: number, now: number): GraveFireflyAmmoPose {
+  return graveFireflyPose(index, FIREFLIES, SHOTS, SITE, state, seen, orbitX(index), orbitY(index), now, { x: 0, y: 0, alpha: 0, glow: 0, gathered: 0 });
 }
 
 describe('Grave Titan presentation', () => {
@@ -32,45 +36,49 @@ describe('Grave Titan presentation', () => {
     expect(meleeLiftProfile(ATTACK, ATTACK.endsAt)).toBe(0);
   });
 
-  it('cracks the ground ahead of a slam and all around a stomp, deterministically', () => {
-    const slam = graveTitanImpactGeometry(0, 0, 0, 110, 230, 7);
-    expect(slam.x).toBeGreaterThan(0);
-    for (const crack of slam.cracks) for (const point of crack) {
-      expect(point.x).toBeGreaterThan(0);
-      expect(Math.hypot(point.x, point.y)).toBeLessThan(230 * 1.2);
-    }
-    expect(graveTitanImpactGeometry(0, 0, 0, 110, 230, 7)).toEqual(slam);
-
-    const stomp = graveTitanImpactGeometry(0, 0, 0, 360, 150, 3);
-    expect(stomp.x).toBe(0);
-    const quadrants = new Set(stomp.cracks.map(crack => {
-      const end = crack[crack.length - 1];
-      return `${Math.sign(end.x)}${Math.sign(end.y)}`;
-    }));
-    expect(quadrants.size).toBe(4);
+  it('strikes a stomp all around its body and lands a slam on its paws ahead', () => {
+    const stomp = graveTitanImpact(0, 0, 1, 360, 300);
+    expect(stomp).toEqual({ x: 0, y: 0, radius: 300, stomp: true });
+    const slam = graveTitanImpact(0, 0, 0, 110, 220);
+    expect(slam.stomp).toBe(false);
+    expect(slam.x).toBeCloseTo(GRAVE_TITAN_IMPACT.pawReachPx);
+    expect(slam.y).toBeCloseTo(0);
+    expect(slam.radius).toBeCloseTo(220 - GRAVE_TITAN_IMPACT.pawReachPx);
   });
 
-  it('gathers the grave lights into a crown, launches one per seen shot and refills them during the pause', () => {
-    const charging: EnemyVolleyState = { revision: 1, chargeStartAt: 1_000, fireAt: 1_800, endedAt: 0, rechargedAt: 0, shotsFired: 0 };
-    const ready = pose(0, EMPTY_ENEMY_VOLLEY_STATE, 0, 1_000);
-    expect(Math.hypot(ready.x - SITE.x, ready.y - SITE.y)).toBeGreaterThan(40);
-    const gathered = pose(0, charging, 0, 1_799);
-    expect(Math.hypot(gathered.x - SITE.crownX, gathered.y - SITE.crownY)).toBeLessThanOrEqual(GRAVE_LIGHTS.crownRadius + 1);
-    expect(gathered.intensity).toBeGreaterThan(ready.intensity);
+  it('feeds every shot from its own group of ordinary fireflies that glow up through the gather', () => {
+    expect(Array.from({ length: FIREFLIES }, (_, index) => fireflyShot(index, FIREFLIES, SHOTS)))
+      .toEqual(Array.from({ length: FIREFLIES }, (_, index) => Math.floor(index / 3)));
+    expect(spentFireflies(0, FIREFLIES, SHOTS)).toBe(0);
+    expect(spentFireflies(3, FIREFLIES, SHOTS)).toBe(9);
+    expect(spentFireflies(SHOTS, FIREFLIES, SHOTS)).toBe(FIREFLIES);
 
-    expect(pose(2, charging, 3, 1_900).alpha).toBe(0);
-    expect(pose(3, charging, 3, 1_900).alpha).toBe(1);
+    const charging: EnemyVolleyState = { revision: 1, chargeStartAt: 1_000, fireAt: 2_600, endedAt: 0, rechargedAt: 0, shotsFired: 0 };
+    const ready = pose(4, EMPTY_ENEMY_VOLLEY_STATE, 0, 1_000);
+    expect(ready).toEqual({ x: orbitX(4), y: orbitY(4), alpha: 1, glow: 0, gathered: 0 });
+    const early = pose(4, charging, 0, 1_100), gathered = pose(4, charging, 0, 2_599);
+    expect(Math.hypot(gathered.x - SITE.crownX, gathered.y - SITE.crownY)).toBeLessThanOrEqual(GRAVE_FIREFLIES.crownOuter * 1.1);
+    expect(early.glow).toBeLessThan(gathered.glow);
+    expect(gathered.glow).toBeGreaterThan(0.95);
+    expect(gathered.gathered).toBe(1);
 
-    const ended: EnemyVolleyState = { ...charging, revision: 2, endedAt: 2_700, rechargedAt: 12_700, shotsFired: 10 };
-    expect(launchedGraveLights(ended, 0, 10)).toBe(10);
-    // The first launched light returns first; the last one only near the end of the pause.
-    expect(pose(0, ended, 10, 2_800).alpha).toBe(0);
-    expect(pose(0, ended, 10, 2_700 + 10_000 / 11 + 300).alpha).toBeGreaterThan(0);
-    expect(pose(9, ended, 10, 2_700 + 10_000 / 11 + 300).alpha).toBe(0);
-    expect(pose(9, ended, 10, 12_700 + 800).alpha).toBe(1);
+    // Three shots seen: their nine fireflies are gone, the tenth still glows in the crown.
+    expect(pose(8, charging, 3, 2_800).alpha).toBe(0);
+    expect(pose(9, charging, 3, 2_800)).toMatchObject({ alpha: 1, glow: 1 });
 
+    const ended: EnemyVolleyState = { ...charging, revision: 2, endedAt: 3_400, rechargedAt: 13_400, shotsFired: SHOTS };
+    expect(launchedGraveLights(ended, 0, SHOTS)).toBe(SHOTS);
+    // Spent fireflies return dark, one by one: the first early in the pause, the last near its end.
+    const firstBack = 3_400 + 10_000 / (FIREFLIES + 1) + GRAVE_FIREFLIES.riseMs;
+    expect(pose(0, ended, SHOTS, 3_500).alpha).toBe(0);
+    expect(pose(0, ended, SHOTS, firstBack)).toMatchObject({ alpha: 1, glow: 0 });
+    expect(pose(FIREFLIES - 1, ended, SHOTS, firstBack).alpha).toBe(0);
+    expect(pose(FIREFLIES - 1, ended, SHOTS, 13_400 + GRAVE_FIREFLIES.riseMs)).toEqual({ x: orbitX(29), y: orbitY(29), alpha: 1, glow: 0, gathered: 0 });
+
+    // A cancelled gather never launched anything: everyone drifts back and cools down.
     const cancelled: EnemyVolleyState = { ...charging, revision: 2, endedAt: 1_500, rechargedAt: 11_500, shotsFired: 0 };
     expect(pose(4, cancelled, 0, 1_600).alpha).toBe(1);
+    expect(pose(4, cancelled, 0, 1_500 + GRAVE_FIREFLIES.returnMs).glow).toBe(0);
   });
 
   it('stokes the fissure glow through the gather, spends it with the salvo and flashes it on a hit', () => {
@@ -83,12 +91,13 @@ describe('Grave Titan presentation', () => {
     expect(graveGlowLevel(EMPTY_ENEMY_VOLLEY_STATE, ATTACK, ATTACK.hitAt + 20)).toBeGreaterThan(rest);
   });
 
-  it('plays the gather gesture up to its release marker and settles after the first shot', () => {
-    const state: EnemyVolleyState = { revision: 1, chargeStartAt: 1_000, fireAt: 1_800, endedAt: 0, rechargedAt: 0, shotsFired: 0 };
+  it('raises the gather gesture early, holds it until the first shot releases it and settles afterwards', () => {
+    const state: EnemyVolleyState = { revision: 1, chargeStartAt: 1_000, fireAt: 2_600, endedAt: 0, rechargedAt: 0, shotsFired: 0 };
     expect(volleyCastFrameIndex(state, 900, 12, 8)).toBeNull();
     expect(volleyCastFrameIndex(state, 1_000, 12, 8)).toBe(0);
-    expect(volleyCastFrameIndex(state, 1_799, 12, 8)).toBe(7);
-    expect(volleyCastFrameIndex(state, 1_800, 12, 8)).toBe(8);
-    expect(volleyCastFrameIndex(state, 1_800 + VOLLEY_CAST_SETTLE_MS, 12, 8)).toBeNull();
+    expect(volleyCastFrameIndex(state, 1_000 + VOLLEY_CAST_RISE_MS, 12, 8)).toBe(7);
+    expect(volleyCastFrameIndex(state, 2_599, 12, 8)).toBe(7);
+    expect(volleyCastFrameIndex(state, 2_600, 12, 8)).toBe(8);
+    expect(volleyCastFrameIndex(state, 2_600 + VOLLEY_CAST_SETTLE_MS, 12, 8)).toBeNull();
   });
 });

@@ -4,18 +4,21 @@ import type { EnemyVolleyState } from '../systems/EnemyVolleyState';
 
 /** After the first shot (or a cancelled gather) the cast settles back to rest over this time. */
 export const VOLLEY_CAST_SETTLE_MS = 320;
+/** The gesture rises at most this slowly and then holds its raised pose until the first shot. */
+export const VOLLEY_CAST_RISE_MS = 700;
 
 /**
- * Clip-local frame of the `cast` gesture: frames up to the `release` marker over the gather, the
- * rest while it settles after the first shot; `null` outside that window.
+ * Clip-local frame of the `cast` gesture: it rises towards the `release` marker early in the gather
+ * and holds there, releases with the first shot and settles back afterwards; `null` outside that window.
  */
 export function volleyCastFrameIndex(state: EnemyVolleyState, now: number, count: number, release: number): number | null {
   if (state.revision === 0 || now < state.chargeStartAt) return null;
   const cancelled = state.endedAt > 0 && state.endedAt < state.fireAt;
   const settleFrom = cancelled ? state.endedAt : state.fireAt;
   if (now < settleFrom) {
-    const progress = (now - state.chargeStartAt) / Math.max(1, state.fireAt - state.chargeStartAt);
-    return Math.min(release, Math.floor(release * progress));
+    const rise = Math.min(VOLLEY_CAST_RISE_MS, state.fireAt - state.chargeStartAt);
+    const progress = (now - state.chargeStartAt) / Math.max(1, rise);
+    return Math.min(release - 1, Math.floor(release * progress));
   }
   const t = (now - settleFrom) / VOLLEY_CAST_SETTLE_MS;
   if (t >= 1) return null;

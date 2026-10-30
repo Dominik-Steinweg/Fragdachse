@@ -662,7 +662,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         for (const contact of this.ctx.fireSystem.collectContacts(
           enemy.sprite.x,
           enemy.sprite.y,
-          enemy.getCollisionRadius(),
+          enemy.getHitRadius(),
           now,
         )) {
           if (contact.damageTarget === 'players') continue;
@@ -871,7 +871,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     this.effects?.syncZeusUpgrades(this.zeusBinding?.snapshot(now) ?? { balls: [], ground: [], stuns: [] }, now, (id, kind) => {
       if (kind === 'player') { const p = this.ctx.playerManager.getPlayer(id); return p?.active && !this.playerGameplayRuntime?.isControllingTurret(id) ? { x: p.x, y: p.y, radius: p.getCollisionRadius() } : null; }
       const e = this.enemyManager?.getEnemy(id);
-      return e?.sprite.active && e.getHp() > 0 && !e.isBurrowed() ? { x: e.sprite.x, y: e.sprite.y, radius: e.getCollisionRadius() } : null;
+      return e?.sprite.active && e.getHp() > 0 && !e.isBurrowed() ? { x: e.sprite.x, y: e.sprite.y, radius: e.getHitRadius() } : null;
     });
     this.ctx.smokeSystem.syncVisuals(this.smokeBinding?.runtime.getSnapshots(now) ?? [], now);
     this.ctx.smokeSystem.syncTargetVisuals(this.smokeBinding?.runtime.getTargetSnapshots(now) ?? [], now,

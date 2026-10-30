@@ -7,6 +7,7 @@ import { ProjectileClientReplica } from '../src/projectile/ProjectileClientRepli
 import { ProjectilePresentationRuntime } from '../src/projectile/ProjectilePresentationRuntime';
 import type { SyncedProjectile } from '../src/types';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { ProjectileVisualOverrides } from '../src/projectile/ProjectileVisualOverrides';
 
 function projectile(overrides: Partial<SyncedProjectile> = {}): SyncedProjectile {
   return {
@@ -43,6 +44,21 @@ function passiveRenderer(): Record<string, unknown> {
 }
 
 describe('ProjectilePresentationRuntime', () => {
+  it('removes the style visual a host spawn created once a feature-owned view claims the projectile', () => {
+    const runtime = new ProjectilePresentationRuntime({} as never), energyBall = passiveRenderer();
+    const overrides = new ProjectileVisualOverrides(), view = { update: vi.fn(), destroy: vi.fn() };
+    overrides.register(request => request.weaponSourceId === 'GRAVE_TITAN_VOID_PLASMA' ? view : null);
+    runtime.bindRenderers({ energyBall, visualOverrides: overrides } as never, null);
+    runtime.createSpawnRendererVisuals(7, { setVisible: vi.fn(), setAlpha: vi.fn() } as never, 100, 200,
+      { projectileStyle: 'energy_ball', size: 12, color: 0x7dff8a } as never, 'titan');
+    expect(energyBall.createVisual).toHaveBeenCalledOnce();
+    const destroyed = vi.mocked(energyBall.destroyVisual as () => void).mock.calls.length;
+    runtime.syncHostRenderers([projectile({ style: 'energy_ball', ownerId: 'titan', color: 0x7dff8a, weaponSourceId: 'GRAVE_TITAN_VOID_PLASMA' })], 1000);
+    // Left alone, the generic ball would stay frozen at the muzzle while the view flies.
+    expect(view.update).toHaveBeenCalledOnce();
+    expect(vi.mocked(energyBall.destroyVisual as (id: number) => void).mock.calls.slice(destroyed)).toEqual([[7]]);
+    runtime.releaseWorldPresentation();
+  });
   it('casts an orb once for a new live projectile, excluding baselines and replayed snapshots', () => {
     const runtime = new ProjectilePresentationRuntime({} as never), replica = new ProjectileClientReplica();
     const orb = { ...passiveRenderer(), onOrbShot: vi.fn() };

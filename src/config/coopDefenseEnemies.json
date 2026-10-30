@@ -209,14 +209,17 @@
       },
       "pawCount": 4,
       "pawSpan": {
-        "lateralShare": 0.86,
-        "forwardShare": 0.5,
-        "printScale": 2.6
+        "lateralShare": 0.87,
+        "rearLateralShare": 0.72,
+        "forwardShare": 0.54,
+        "printScale": 1.9
       },
       "maxHp": 2100,
       "xp": 300,
       "size": 112,
+      "hitRadiusFactor": 1.85,
       "moveSpeed": 48,
+      "turnRateDegPerSec": 55,
       "knockbackFactor": 0.15,
       "movementTarget": "bases",
       "weapons": [
@@ -230,7 +233,7 @@
             "intervalMs": 80,
             "cooldownMs": 10000,
             "targetDistribution": "round_robin",
-            "chargeMs": 800
+            "chargeMs": 1600
           }
         },
         {
@@ -238,7 +241,7 @@
           "targetMode": "players",
           "usableDuringPriorityPause": true,
           "meleeTiming": {
-            "hitDelayMs": 1100,
+            "hitDelayMs": 1500,
             "strikeMs": 160,
             "recoveryMs": 800,
             "clip": "stomp",
@@ -250,6 +253,7 @@
           "weaponId": "GRAVE_TITAN_SLAM",
           "targetMode": "all",
           "usableDuringPriorityPause": true,
+          "structureReachPx": 150,
           "meleeTiming": {
             "hitDelayMs": 1300,
             "strikeMs": 220,
@@ -274,7 +278,7 @@
         "lightIntensity": 0.3
       },
       "bossPresence": {
-        "fireflyCount": 12,
+        "fireflyCount": 30,
         "footprintGlowColor": 9305946
       },
       "trainAwareness": {

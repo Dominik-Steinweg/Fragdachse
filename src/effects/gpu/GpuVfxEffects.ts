@@ -127,6 +127,7 @@ export const GpuVfxEffectId = {
   PounceDust: 113,
   PounceGlint: 114,
   PounceWindup: 115,
+  GraveTitanHaze: 116,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -785,6 +786,9 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
   // Rabid Rabbit lock windup: void haze streaming from the body along the jump direction, above the light map.
   { id: GpuVfxEffectId.PounceWindup, label: 'enemy.pounce-windup', lane: GpuVfxLaneId.ExplosionLowGlow,
     frame: GpuVfxFrameId.ExplosionSmoke, importance: 'critical', release: 'linger' },
+  // Grave Titan slam and stomp: the same void haze in grave-light green, pushed out as a pressure wave.
+  { id: GpuVfxEffectId.GraveTitanHaze, label: 'boss.grave-titan-haze', lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'standard', release: 'linger' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

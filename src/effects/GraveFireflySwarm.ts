@@ -27,6 +27,8 @@ export interface GraveFireflyPose {
   readonly heading: number;
   /** 0..1 Sichtbarkeit (Ein-/Ausblenden). */
   readonly alpha: number;
+  /** Anteil des eigenen Bodenlichts (0..1, Standard 1), z. B. wenn ein gemeinsames Licht übernimmt. */
+  readonly light?: number;
 }
 
 export class GraveFireflySwarm {
@@ -71,6 +73,7 @@ export class GraveFireflySwarm {
       const animal = this.animals[index];
       const pose = poses[index];
       animal.opacity = pose ? Math.max(0, Math.min(1, pose.alpha)) : 0;
+      const lightShare = pose?.light === undefined ? 1 : Math.max(0, Math.min(1, pose.light));
       if (pose) {
         animal.x = pose.x;
         animal.y = pose.y;
@@ -83,7 +86,7 @@ export class GraveFireflySwarm {
       if (visible && this.lighting) {
         const pulse = fireflyGlowStrength(time, animal.variation, animal.phaseOffset, animal.speed);
         this.lighting.setLight(this.lightKeys[index], 'stagedFirefly', animal.x, animal.y, {
-          intensity: preset.intensity * animal.opacity * pulse,
+          intensity: preset.intensity * animal.opacity * pulse * lightShare,
         });
       } else if (this.lit[index]) {
         this.lighting?.releaseLight(this.lightKeys[index], { immediate: true });

@@ -10,6 +10,7 @@ import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { COLORS, VOID_PALETTE, ALLIED_PALETTE, ALLIED_COLOR, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import { DEMON_HEAT_SPARK_COLOR } from './enemyHeatGlowModel';
+import { GRAVE_TITAN_IMPACT } from './graveTitan/graveTitanImpactGeometry';
 import {
   TEX_BLOOD_EDGE_BOTTOM,
   TEX_BLOOD_EDGE_LEFT,
@@ -180,7 +181,6 @@ export class EffectSystem implements EnemyVisualSink {
     const preset = meleePresetOf(state.attack?.weaponId), tongue = preset === 'enemy_tongue';
     // Tongue, ink and slam announce only their red danger sector; their strike has its own visual, no rakes.
     this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor, tongue || preset === 'enemy_ink' || preset === 'enemy_slam');
-    if (preset === 'enemy_slam') this.graveTitanImpact?.syncWindup(id, state.attack, x, y, now, visible);
     if (tongue) this.withTongueLash(renderer => renderer.sync(id, state.attack, x, y, bodyRadius, now, visible));
     else this.tongueLash?.sync(id, null, x, y, bodyRadius, now, visible);
   }
@@ -340,10 +340,10 @@ export class EffectSystem implements EnemyVisualSink {
     this.pounceImpactRenderer = renderer;
   }
 
-  private graveTitanImpact: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play' | 'syncWindup'> | null = null;
+  private graveTitanImpact: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play'> | null = null;
 
   /** Torn ground of the Grave Titan's slam and stomp; driven only by the replicated melee swing. */
-  setGraveTitanImpactRenderer(renderer: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play' | 'syncWindup'> | null): void {
+  setGraveTitanImpactRenderer(renderer: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play'> | null): void {
     this.graveTitanImpact = renderer;
   }
 
@@ -1793,15 +1793,18 @@ export class EffectSystem implements EnemyVisualSink {
    * (der Host-Zustand wird mehrere Frames länger gesendet als die Animation dauert).
    */
   /**
-   * A Grave Titan slam or stomp breaks the ground where it lands: glowing cracks, terrain grit with a
-   * dust ring at the struck edge, a green light burst, a screen shockwave and heavy camera feedback.
+   * A Grave Titan stomp sends a pressure wave of green haze from its body out to its full reach (with
+   * a screen shockwave); a slam pushes a fan of haze from its landing paws. Fine grit and dust mark
+   * where the feet hit the ground, a soft green light burst and heavy camera feedback carry the weight.
    */
   private confirmGraveTitanSlam(swing: SyncedMeleeSwing): void {
-    const impact = this.graveTitanImpact?.play(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.clawAttackId);
-    const x = impact?.x ?? swing.x, y = impact?.y ?? swing.y, radius = impact?.radius ?? swing.range;
-    this.pounceImpactRenderer?.play(x, y, radius, GRAVE_TITAN_SLAM_GLINT);
-    this.lighting?.pulse('explosion', x, y, { radiusPx: radius * 1.8, color: GRAVE_TITAN_SLAM_GLINT, intensity: 1.5, durationMs: 650, occludes: false });
-    this.visualFeedback?.startExplosionShockwave({ x, y, radiusPx: radius * 1.5, style: 'default' });
+    const impact = this.graveTitanImpact?.play(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range);
+    const x = impact?.x ?? swing.x, y = impact?.y ?? swing.y, stomp = impact?.stomp ?? swing.arcDegrees >= 300;
+    const feet = stomp ? GRAVE_TITAN_IMPACT.bodyEdgePx * 1.15 : 64;
+    this.pounceImpactRenderer?.play(x, y, feet, GRAVE_TITAN_SLAM_GLINT);
+    this.lighting?.pulse('explosion', x, y, { radiusPx: stomp ? swing.range * 1.1 : 170, color: GRAVE_TITAN_SLAM_GLINT,
+      intensity: 0.9, durationMs: 600, occludes: false });
+    if (stomp) this.visualFeedback?.startExplosionShockwave({ x, y, radiusPx: swing.range, style: 'default' });
     this.cameraFeedback?.request(impactHeavy({ sourceX: x, sourceY: y }));
   }
 

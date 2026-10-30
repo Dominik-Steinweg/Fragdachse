@@ -303,6 +303,8 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       if (!attack) continue;
 
       if (this.shouldStartMeleeWindup(attack)) {
+        // Meanwhile the combat movement keeps turning the body towards this target.
+        if (!this.facesSwingTarget(enemy, attack)) continue;
         this.startMeleeWindup(enemy, attack, now);
         continue;
       }
@@ -429,6 +431,19 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
 
   private shouldStartMeleeWindup(attack: SelectedEnemyAttack): boolean {
     return attack.attackWeapon.weapon.config.fire.type === 'melee' && !!attack.attackWeapon.meleeTiming;
+  }
+
+  /**
+   * A slowly turning body starts a frontal swing only once it roughly faces its target; otherwise
+   * the windup would rear towards one side and strike towards another.
+   */
+  private facesSwingTarget(enemy: EnemyEntity, attack: SelectedEnemyAttack): boolean {
+    const config = attack.attackWeapon.weapon.config;
+    if (config.fire.type !== 'melee' || config.fire.hitArcDegrees >= 300 || !enemy.hasTurnRateLimit()) return true;
+    const dx = attack.target.targetX - enemy.sprite.x, dy = attack.target.targetY - enemy.sprite.y;
+    if (Math.hypot(dx, dy) < enemy.getCollisionRadius()) return true;
+    const off = Math.atan2(dy, dx) - enemy.getAimAngle();
+    return Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= config.fire.hitArcDegrees * Math.PI / 720;
   }
 
   private startMeleeWindup(enemy: EnemyEntity, attack: SelectedEnemyAttack, now: number): void {
@@ -605,6 +620,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     const weapon = attackWeapon.weapon;
     // A weapon that cannot damage rocks (e.g. a flame) never takes a rock or an obstacle as its target.
     const hitsRocks = (weapon.config.rockDamageMult ?? 1) > 0;
+    const reach = Math.min(weapon.config.range, attackWeapon.structureReachPx ?? Infinity);
     if (this.intents) {
       const intent = this.intents.get(enemy.id), ref = intent?.target;
       let target: EnemyAttackCandidate | null = null;
@@ -615,13 +631,13 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
           : this.findLivingTargetWithLock(enemy, weapon.config.range, now, updateLock);
       } else if (intent?.attackContext === 'breach' && attackWeapon.targetMode !== 'players') {
         const blocker = this.intents.getBreach(enemy.id)?.nextBlocker;
-        if (blocker?.startsWith('base:')) target = this.findNearestBaseTarget(enemy, weapon.config.range, blocker.slice(5));
-        else if (blocker?.startsWith('rock:') && hitsRocks) target = this.findNearestObstacleTarget(enemy, weapon.config.range, now, Number(blocker.slice(5)));
+        if (blocker?.startsWith('base:')) target = this.findNearestBaseTarget(enemy, reach, blocker.slice(5));
+        else if (blocker?.startsWith('rock:') && hitsRocks) target = this.findNearestObstacleTarget(enemy, reach, now, Number(blocker.slice(5)));
       } else if (ref && intent?.attackContext === 'primary') {
         if (ref.kind === 'base' && attackWeapon.targetMode !== 'players' && attackWeapon.targetMode !== 'rocks') {
-          target = this.findNearestBaseTarget(enemy, weapon.config.range, ref.id);
+          target = this.findNearestBaseTarget(enemy, reach, ref.id);
         } else if (ref.kind === 'armed-construct' && attackWeapon.targetMode !== 'players') {
-          target = this.findNearestArmedConstructTarget(enemy, weapon.config.range, Number(ref.id));
+          target = this.findNearestArmedConstructTarget(enemy, reach, Number(ref.id));
         } else if (ref.kind !== 'base' && ref.kind !== 'ally' && attackWeapon.targetMode !== 'structures' && attackWeapon.targetMode !== 'rocks') {
           target = this.buildPlayerLikeTargetCandidate(enemy, ref, weapon.config.range);
         }
@@ -647,10 +663,10 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       : attackWeapon.targetMode === 'players'
         ? this.findLivingTargetWithLock(enemy, weapon.config.range, now, updateLock)
       : attackWeapon.targetMode === 'rocks'
-        ? (hitsRocks ? this.findNearestObstacleTarget(enemy, weapon.config.range, now) : null)
+        ? (hitsRocks ? this.findNearestObstacleTarget(enemy, reach, now) : null)
         : attackWeapon.targetMode === 'structures'
-          ? this.selectStructureTarget(enemy, weapon.config.range, now, hitsRocks)
-          : this.selectTarget(enemy, weapon.config.range, now, updateLock, hitsRocks);
+          ? this.selectStructureTarget(enemy, reach, now, hitsRocks)
+          : this.selectTarget(enemy, weapon.config.range, now, updateLock, hitsRocks, reach);
     const trainTarget = (weapon.config.trainDamageMult ?? 1) > 0
       ? this.findTrainTarget(enemy, weapon.config.range)
       : null;
@@ -803,13 +819,14 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     return !this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, range);
   }
 
-  private selectTarget(enemy: EnemyEntity, range: number, now: number, updateLock = true, hitsRocks = true): EnemyAttackCandidate | null {
-    let best = this.findNearestBaseTarget(enemy, range);
+  private selectTarget(enemy: EnemyEntity, range: number, now: number, updateLock = true, hitsRocks = true,
+    structureReach = range): EnemyAttackCandidate | null {
+    let best = this.findNearestBaseTarget(enemy, structureReach);
 
-    const armedConstruct = this.findNearestArmedConstructTarget(enemy, range);
+    const armedConstruct = this.findNearestArmedConstructTarget(enemy, structureReach);
     if (this.isBetterCandidate(armedConstruct, best)) best = armedConstruct;
 
-    const obstacle = hitsRocks ? this.findNearestObstacleTarget(enemy, range, now) : null;
+    const obstacle = hitsRocks ? this.findNearestObstacleTarget(enemy, structureReach, now) : null;
     if (this.isBetterCandidate(obstacle, best)) {
       best = obstacle;
     }

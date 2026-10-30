@@ -5,6 +5,8 @@
  *         wispy haze trail behind the head along the segment).
  * Kind 1: the soul puff of a light that struck (a soft expanding ring, a fading flash and a few
  *         motes thrown outwards; `t` runs 0..1).
+ * Kind 2: the charge glow laid over an ordinary firefly (a soft halo and a small hot core, no wings
+ *         of its own: the firefly mesh below keeps its shape).
  * Shape: halfWidth, kind, t, seed. Aux: size (core scale in world px), intensity.
  */
 export const GRAVE_WISP_VERTEX = `
@@ -72,6 +74,12 @@ void main() {
     float trail = inside * exp(-off * off / (spread * spread)) * along * along * 0.55;
     color = (HALO * (halo + trail) + CORE * core + WING * wing) * flicker;
     cover = max(max(halo, trail), max(core, wing));
+  } else if (kind > 1.5) {
+    // A tight halo: thirty of them gather in the crown, and wide ones would add up to one white blob.
+    float halo = exp(-r * r / (size * size * 1.1)) * 0.4;
+    float core = smoothstep(size * 0.36, size * 0.06, r) * (0.86 + 0.14 * sin(uTime * 19.0 + seed * 23.0));
+    color = HALO * halo + CORE * core;
+    cover = max(halo, core);
   } else {
     float fade = (1.0 - t) * (1.0 - t);
     float radius = size * (0.6 + 2.8 * t);

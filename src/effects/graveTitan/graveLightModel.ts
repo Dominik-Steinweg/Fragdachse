@@ -2,36 +2,40 @@ import { enemyVolleyChargeAt, enemyVolleyPhaseAt, type EnemyVolleyState } from '
 import { meleeLiftProfile, type EnemyClawAttack } from '../../systems/EnemyClawAttack';
 
 /**
- * The Grave Titan's ammunition made visible: one grave light per salvo shot. Ready lights circle
- * slowly over its back; the gather pulls them into a fast crown over the grave; every shot launches
- * the next light (the plasma flies out of it); during the pause the launched lights rise again one
- * by one out of the lantern holes. Pure presentation of the replicated volley timeline plus the
- * number of shots this client has seen launch.
+ * The Grave Titan's ammunition made visible: its own ordinary fireflies, several per salvo shot.
+ * Ready, they swarm loosely around it like any boss presence. The gather pulls them into a crown
+ * over the grave where they visibly start to glow; every shot takes the next group with it (the
+ * plasma flies out of their place in the crown); during the pause the spent fireflies rise again
+ * one by one out of the lantern holes, dark as before. Pure presentation of the replicated volley
+ * timeline plus the number of shots this client has seen launch.
  */
-export const GRAVE_LIGHTS = {
-  /** Orbit radii over the back as a share of the body diameter. */
-  orbitMin: 0.55, orbitMax: 0.95,
-  orbitSpeedMin: 0.35, orbitSpeedMax: 0.6,
-  /** Crown radius over the grave (world px) and its spin while gathering (rad/s). */
-  crownRadius: 52, crownSpin: 3.6,
-  /** A refilled light rises out of a lantern hole at this share of the body radius and drifts to its orbit. */
-  holeShare: 0.6, riseMs: 700,
-  /** Lights that never launched (cancelled or cut salvo) drift back to their orbit. */
-  returnMs: 520,
-  size: 6.4, chargedSize: 7.2,
-  intensity: 1, chargedIntensity: 1.2,
+export const GRAVE_FIREFLIES = {
+  /** Crown over the grave: radii (world px) of the gathered swarm and its spin (rad/s). */
+  crownInner: 20, crownOuter: 66, crownSpin: 2.2,
+  /** The crown draws this much tighter by the first shot. */
+  crownTighten: 0.1,
+  /** Share of the gather spent flying in (staggered per firefly); afterwards the crown burns brighter. */
+  flyInShare: 0.6, flyInStagger: 0.35,
+  /** Glow (0..1) once a firefly has flown in; full glow at the first shot. */
+  flownInGlow: 0.45,
+  /** A refilled firefly rises out of a lantern hole at this share of the body radius and drifts to its orbit. */
+  holeShare: 0.6, riseMs: 900,
+  /** Fireflies that never launched (cancelled or cut salvo) drift back to their orbit and cool down. */
+  returnMs: 900,
 } as const;
 
-export interface GraveLightPose {
+export interface GraveFireflyAmmoPose {
   x: number;
   y: number;
   /** 0 = hidden (launched, not yet refilled). */
   alpha: number;
-  size: number;
-  intensity: number;
+  /** Charge glow 0..1 over the ordinary firefly. */
+  glow: number;
+  /** 0..1 how far it has left its swarm orbit for the crown. */
+  gathered: number;
 }
 
-export interface GraveLightSite {
+export interface GraveFireflySite {
   readonly x: number;
   readonly y: number;
   /** Body diameter (collision size). */
@@ -51,72 +55,90 @@ function ease(t: number): number {
   return c * c * (3 - 2 * c);
 }
 
-/** Lights already launched by the current cycle: seen shots, or the replicated count after its end. */
-export function launchedGraveLights(state: EnemyVolleyState, seenLaunches: number, count: number): number {
+/** Shots already launched by the current cycle: seen shots, or the replicated count after its end. */
+export function launchedGraveLights(state: EnemyVolleyState, seenLaunches: number, shots: number): number {
   const ended = state.revision > 0 && state.endedAt > 0 ? state.shotsFired : 0;
-  return Math.max(0, Math.min(count, Math.max(seenLaunches, ended)));
+  return Math.max(0, Math.min(shots, Math.max(seenLaunches, ended)));
 }
 
-function orbitPose(index: number, site: GraveLightSite, now: number, out: { x: number; y: number }): void {
-  const radius = site.size * (GRAVE_LIGHTS.orbitMin + hash(index, 1) * (GRAVE_LIGHTS.orbitMax - GRAVE_LIGHTS.orbitMin));
-  const omega = (GRAVE_LIGHTS.orbitSpeedMin + hash(index, 2) * (GRAVE_LIGHTS.orbitSpeedMax - GRAVE_LIGHTS.orbitSpeedMin)) * (index % 2 ? -1 : 1);
-  const angle = hash(index, 3) * Math.PI * 2 + now / 1000 * omega;
-  const bob = Math.sin(now / 1000 * (0.7 + hash(index, 4)) + index) * site.size * 0.05;
-  out.x = site.x + Math.cos(angle) * (radius + bob);
-  out.y = site.y + Math.sin(angle) * (radius + bob) * 0.85;
+/** Salvo shot fed by firefly `index` of `fireflies`; shots take their fireflies in index order. */
+export function fireflyShot(index: number, fireflies: number, shots: number): number {
+  return Math.min(shots - 1, Math.floor(index * shots / Math.max(1, fireflies)));
 }
 
-function crownPose(index: number, count: number, site: GraveLightSite, now: number, charge: number, out: { x: number; y: number }): void {
-  const angle = index / count * Math.PI * 2 + now / 1000 * GRAVE_LIGHTS.crownSpin;
-  const radius = GRAVE_LIGHTS.crownRadius * (1 - 0.3 * charge);
+/** Fireflies spent by the first `launchedShots` shots: indices below this count. */
+export function spentFireflies(launchedShots: number, fireflies: number, shots: number): number {
+  if (launchedShots <= 0) return 0;
+  return launchedShots >= shots ? fireflies : Math.ceil(launchedShots * fireflies / shots);
+}
+
+function crownPose(index: number, fireflies: number, site: GraveFireflySite, now: number, tighten: number,
+  out: { x: number; y: number }): void {
+  const fx = GRAVE_FIREFLIES;
+  const angle = index * 2.39996 + now / 1000 * fx.crownSpin * (index % 3 === 0 ? -1 : 1);
+  const radius = (fx.crownInner + (fx.crownOuter - fx.crownInner) * Math.sqrt((index + 0.5) / fireflies))
+    * (1 - fx.crownTighten * tighten) * (0.9 + 0.2 * hash(index, 7));
   out.x = site.crownX + Math.cos(angle) * radius;
   out.y = site.crownY + Math.sin(angle) * radius;
 }
 
-const orbit = { x: 0, y: 0 }, crown = { x: 0, y: 0 };
+const crown = { x: 0, y: 0 };
 
-/** Pose of grave light `index` of `count` at `now`; `out` is reused. */
-export function graveLightPose(index: number, count: number, site: GraveLightSite, state: EnemyVolleyState, seenLaunches: number,
-  now: number, out: GraveLightPose): GraveLightPose {
-  orbitPose(index, site, now, orbit);
-  out.x = orbit.x; out.y = orbit.y; out.alpha = 1; out.size = GRAVE_LIGHTS.size; out.intensity = GRAVE_LIGHTS.intensity;
+/**
+ * Pose of firefly `index` of `fireflies` feeding a salvo of `shots` at `now`, starting from its
+ * ordinary swarm position (`orbitX`, `orbitY`); `out` is reused.
+ */
+export function graveFireflyPose(index: number, fireflies: number, shots: number, site: GraveFireflySite,
+  state: EnemyVolleyState, seenLaunches: number, orbitX: number, orbitY: number, now: number,
+  out: GraveFireflyAmmoPose): GraveFireflyAmmoPose {
+  const fx = GRAVE_FIREFLIES;
+  out.x = orbitX; out.y = orbitY; out.alpha = 1; out.glow = 0; out.gathered = 0;
   if (state.revision === 0) return out;
   const phase = enemyVolleyPhaseAt(state, now);
-  const launched = launchedGraveLights(state, seenLaunches, count);
+  const spent = spentFireflies(launchedGraveLights(state, seenLaunches, shots), fireflies, shots);
   if (phase === 'charge' || phase === 'fire') {
-    if (index < launched) { out.alpha = 0; return out; }
-    const charge = enemyVolleyChargeAt(state, now), pull = ease(charge);
-    crownPose(index, count, site, now, charge, crown);
-    out.x = orbit.x + (crown.x - orbit.x) * pull;
-    out.y = orbit.y + (crown.y - orbit.y) * pull;
-    out.size = GRAVE_LIGHTS.size + (GRAVE_LIGHTS.chargedSize - GRAVE_LIGHTS.size) * pull;
-    out.intensity = GRAVE_LIGHTS.intensity + (GRAVE_LIGHTS.chargedIntensity - GRAVE_LIGHTS.intensity) * pull;
+    if (index < spent) { out.alpha = 0; return out; }
+    const charge = enemyVolleyChargeAt(state, now);
+    const flyStart = hash(index, 6) * fx.flyInStagger;
+    const pull = ease((charge / fx.flyInShare - flyStart) / (1 - fx.flyInStagger));
+    const burn = ease((charge - fx.flyInShare) / (1 - fx.flyInShare));
+    crownPose(index, fireflies, site, now, burn, crown);
+    out.x = orbitX + (crown.x - orbitX) * pull;
+    out.y = orbitY + (crown.y - orbitY) * pull;
+    out.glow = fx.flownInGlow * pull + (1 - fx.flownInGlow) * burn;
+    out.gathered = pull;
     return out;
   }
   if (state.endedAt <= 0 || now < state.endedAt) return out;
-  if (index >= launched) {
-    // Never launched: drift back from the crown to the orbit.
-    const back = ease((now - state.endedAt) / GRAVE_LIGHTS.returnMs);
+  if (index >= spent) {
+    // Never launched: drift back from the crown to the orbit and cool down.
+    const back = ease((now - state.endedAt) / fx.returnMs);
     if (back >= 1) return out;
-    crownPose(index, count, site, now, 1, crown);
-    out.x = crown.x + (orbit.x - crown.x) * back;
-    out.y = crown.y + (orbit.y - crown.y) * back;
-    out.size = GRAVE_LIGHTS.chargedSize + (GRAVE_LIGHTS.size - GRAVE_LIGHTS.chargedSize) * back;
+    crownPose(index, fireflies, site, now, 1, crown);
+    out.x = crown.x + (orbitX - crown.x) * back;
+    out.y = crown.y + (orbitY - crown.y) * back;
+    out.glow = 1 - back;
+    out.gathered = 1 - back;
     return out;
   }
   // Launched: hidden until its turn in the pause, then it rises out of a lantern hole.
   const pause = Math.max(1, state.rechargedAt - state.endedAt);
-  const refillAt = state.endedAt + pause * (index + 1) / (launched + 1);
+  const refillAt = state.endedAt + pause * (index + 1) / (spent + 1);
   if (now < refillAt) { out.alpha = 0; return out; }
-  const rise = ease((now - refillAt) / GRAVE_LIGHTS.riseMs);
+  const rise = ease((now - refillAt) / fx.riseMs);
   if (rise >= 1) return out;
-  const holeAngle = hash(index, 5) * Math.PI * 2, hole = site.size * 0.5 * GRAVE_LIGHTS.holeShare;
-  const hx = site.x + Math.cos(holeAngle) * hole, hy = site.y + Math.sin(holeAngle) * hole;
-  out.x = hx + (orbit.x - hx) * rise;
-  out.y = hy + (orbit.y - hy) * rise;
+  graveFireflyHole(index, site, crown);
+  out.x = crown.x + (orbitX - crown.x) * rise;
+  out.y = crown.y + (orbitY - crown.y) * rise;
   out.alpha = rise;
-  out.size = GRAVE_LIGHTS.size * (0.4 + 0.6 * rise);
   return out;
+}
+
+/** Lantern hole a firefly rises out of (refill, and the swarm's first appearance). */
+export function graveFireflyHole(index: number, site: Pick<GraveFireflySite, 'x' | 'y' | 'size'>, out: { x: number; y: number }): void {
+  const angle = hash(index, 5) * Math.PI * 2, hole = site.size * 0.5 * GRAVE_FIREFLIES.holeShare;
+  out.x = site.x + Math.cos(angle) * hole;
+  out.y = site.y + Math.sin(angle) * hole;
 }
 
 const HIT_FLASH_MS = 260;

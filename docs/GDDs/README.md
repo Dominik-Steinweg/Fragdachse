@@ -44,7 +44,7 @@ gesetzt.
 | [Alien-Kegelangriff V1](Fragdachse_GDD_Alien_Kegelangriff_V1.md) | umgesetzt (die Kopfzeile „keine Implementierung“ ist veraltet) |
 | [Brandstifter](Fragdachse_GDD_Brandstifter.md) | umgesetzt |
 | [Demon Badger V1](Fragdachse_GDD_Demon_Badger_V1.md) | umgesetzt (Hitzezyklus, rollende Kettenkaskade, Void-Explosion, Flammenstoß, Produktionsmodell `db-v2-r2`); Spieltest-Feedback 1 umgesetzt, weiterer Spieltest offen |
-| [Grufttitan V1](Fragdachse_GDD_Grufttitan_V1.md) | auf `main` (2026-10-30, HQ `gt-v2-r3` mit Schattenmesh; 85 % Kraken-Größe, tödlicher Schlag und Stampfer mit Rissvorwarnung, Grablichter als Plasma-Munition, neues Intro); Playtest offen |
+| [Grufttitan V1](Fragdachse_GDD_Grufttitan_V1.md) | auf `main` (2026-10-30, HQ `gt-v2-r3` mit Schattenmesh; 85 % Kraken-Größe, tödlicher Schlag und Stampfer mit roter Vorwarnung und Dunst-Druckwelle, Glühwürmchen als Plasma-Munition, neues Intro); Playtest-Feedback 1 eingearbeitet, nächster Playtest offen |
 | [Kabummtula V1](Fragdachse_GDD_Kabummtula_V1.md) | umgesetzt (ersetzt den Zeitbomben-Dachs); Optimierungsphase mit Testfeedback offen |
 | [Mörser-Dachs V1](Fragdachse_GDD_Moerser_Dachs_V1.md) | umgesetzt |
 | [Rabid Rabbit V1](Fragdachse_GDD_Rabid_Rabbit_V1.md) | umgesetzt (ersetzt den Rabid Badger); Feel-Abnahme und Balance-Tuning offen |

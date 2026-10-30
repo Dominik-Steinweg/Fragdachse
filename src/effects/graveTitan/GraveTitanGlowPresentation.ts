@@ -12,7 +12,7 @@ const EMISSION_DEPTH = DEPTH_LIGHTING + 0.08;
 const GRAVE_LIGHT_TINT = 0x52ff6e;
 /** The smoulder shows as authored; flares above it are compressed, or the additive cross and crown clip to white. */
 const SMOULDER = 0.45;
-const FLARE_GAIN = 0.35;
+const FLARE_GAIN = 0.25;
 /** Volley-carrying bosses with an emission sheet glow along their grave fissures. */
 export class GraveTitanGlowPresentation {
   private enemies: () => readonly EnemyVisualSource[] = () => [];

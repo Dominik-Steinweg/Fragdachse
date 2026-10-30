@@ -61,6 +61,13 @@
         "blends": [
           "NORMAL"
         ]
+      },
+      {
+        "key": "renderRiser/this.riserNext/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.049",
+        "blends": [
+          "NORMAL"
+        ]
       }
     ],
     "bindings": {}
@@ -240,6 +247,28 @@
       "source": {
         "selector": "renderRiser/this.riser/setDepth/0",
         "expression": "DEPTH.PLAYERS - 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/BossIntroGraveyardRenderer.ts:renderRiser/this.riserNext/setDepth/0",
+      "owner": "effects/BossIntroGraveyardRenderer.ts",
+      "component": "renderRiser/this.riserNext/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.951
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "actor",
+      "source": {
+        "selector": "renderRiser/this.riserNext/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.049"
       }
     }
   ]

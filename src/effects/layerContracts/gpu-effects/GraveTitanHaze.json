@@ -1,0 +1,24 @@
+{
+  "name": "GraveTitanHaze",
+  "contract": {
+    "id": "gpu:GraveTitanHaze",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "GraveTitanHaze",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowGlow"
+    ]
+  }
+}

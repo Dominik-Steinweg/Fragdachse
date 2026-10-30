@@ -224,7 +224,12 @@ export class ProjectilePresentationRuntime {
       visual = this.visualOverrides?.create({ id, weaponSourceId, x, y }) ?? undefined;
       if (!visual) return false;
       this.customVisuals.set(id, visual);
+      // The host already created the style visual at spawn; left alone it would stay frozen at the muzzle.
       this.bulletRenderer?.destroyVisual(id); this.grenadeRenderer?.destroyVisual(id); this.tracerRenderer?.destroyTracer(id);
+      this.energyBallRenderer?.destroyVisual(id); this.hydraRenderer?.destroyVisual(id); this.sporeRenderer?.destroyVisual(id);
+      this.firestarterOrbRenderer?.destroyVisual(id); this.holyGrenadeRenderer?.destroyVisual(id); this.rocketRenderer?.destroyVisual(id);
+      this.fireballRenderer?.destroyVisual(id); this.bfgRenderer?.destroyVisual(id); this.gaussRenderer?.destroyVisual(id);
+      this.translocatorPuckRenderer?.destroyVisual(id); this.teslaBoltRenderer?.destroyVisual(id);
       const fallback = this.clientVisuals.get(id);
       if (fallback) { fallback.destroy(); this.clientVisuals.delete(id); }
     }

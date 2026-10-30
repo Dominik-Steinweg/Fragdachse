@@ -75,7 +75,6 @@ export function resetRenderersForWorldPresentationTeardown(
   if (!preserveAuthoredPresentation) bundle.movement.setTerrainColorSnapshot(null);
   if (!preserveAuthoredPresentation) bundle.burrowGpu.setTerrainColorSnapshot(null);
   if (!preserveAuthoredPresentation) bundle.pounceImpact.setTerrainColorSnapshot(null);
-  if (!preserveAuthoredPresentation) bundle.graveTitanImpact.setTerrainColorSnapshot(null);
   if (!preserveAuthoredPresentation) bundle.portals.setTerrainColorSnapshot(null);
   bundle.beer.clear();
   if (preserveAuthoredPresentation) bundle.shadow.clearDynamicShadows();

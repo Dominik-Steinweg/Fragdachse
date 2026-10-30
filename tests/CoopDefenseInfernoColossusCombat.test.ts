@@ -113,6 +113,7 @@ function createColossus(x = 100, y = 100, targetModeOverride?: 'all' | 'players'
     getCollisionRadius: () => 34,
     getAimAngle() { return this.aimAngle; },
     faceAngle(angle: number) { this.aimAngle = angle; },
+    hasTurnRateLimit: () => false,
     stopMovement() { this.stopCalls += 1; },
     canScanForAttack(now: number) { return now >= this.nextScanAt; },
     scheduleNextAttackScan(now: number) { this.nextScanAt = now + SCAN_INTERVAL_MS; },

@@ -1,6 +1,6 @@
 /** Authored locomotion anatomy; independent of artwork and animation availability. */
 export type PawCount = 2 | 4;
-export type FootprintVariant = 'compact' | 'clawed' | 'broad';
+export type FootprintVariant = 'compact' | 'clawed' | 'broad' | 'titan';
 
 export const PLAYER_MOVEMENT_VISUAL = { pawCount: 2, footprint: 'compact' } as const;
 
@@ -12,9 +12,10 @@ export function requirePawCount(value: unknown, figureId: string): PawCount {
 }
 
 const CLAWED = new Set(['demon-badger', 'alien-badger', 'void-stalker', 'void-hunter']);
-const BROAD = new Set(['grave-titan', 'inferno-colossus', 'stink-broodmother']);
+const BROAD = new Set(['inferno-colossus', 'stink-broodmother']);
 
 export function getEnemyFootprintVariant(kind: string): FootprintVariant {
+  if (kind === 'grave-titan') return 'titan';
   return BROAD.has(kind) ? 'broad' : CLAWED.has(kind) ? 'clawed' : 'compact';
 }
 

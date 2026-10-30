@@ -1,158 +1,113 @@
-import type * as Phaser from 'phaser';
-import { EarthbreakFissureStore } from '../earthbreak/EarthbreakFissureStore';
-import { createEarthbreakFissureLayers, type EarthbreakFissureLayers, type FissurePalette } from '../earthbreak/EarthbreakFissureGpuLayer';
+import { GpuVfxFrameId } from '../gpu/GpuVfxAtlas';
+import { GpuVfxEffectId } from '../gpu/GpuVfxEffects';
+import { GpuVfxEase } from '../gpu/GpuVfxEase';
+import type { GpuVfxSpawnSpec } from '../gpu/GpuVfxSpawnSpec';
 import type { GpuVfxSystem } from '../gpu/GpuVfxSystem';
-import type { TerrainColorSnapshot } from '../../arena/TerrainColorSnapshot';
-import { GRAVE_TITAN_IMPACT, graveTitanImpactGeometry, type GraveTitanImpactGeometry } from './graveTitanImpactGeometry';
+import { GRAVE_TITAN_IMPACT, graveTitanImpact, type GraveTitanImpact } from './graveTitanImpactGeometry';
 
-/** Green grave light instead of embers: deep, glowing seam and a restrained (never white) core. */
-export const GRAVE_LIGHT_FISSURES: FissurePalette = {
-  name: 'GraveLight', ember: [0.08, 0.36, 0.13], glow: [0.30, 0.92, 0.40], hot: [0.62, 1.0, 0.62], preGlow: 0.45,
-};
+const TAU = Math.PI * 2;
+const MAX_EVENTS = 8;
 
-type Normal = readonly [number, number];
+interface Burst { x: number; y: number; angle: number; arc: number; inner: number; outer: number }
 
-function direction(a: { x: number; y: number }, b: { x: number; y: number }): Normal {
-  const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy) || 1;
-  return [dx / length, dy / length];
-}
-
-function bisector(a: Normal, b: Normal): Normal | null {
-  const x = a[0] + b[0], y = a[1] + b[1], length = Math.hypot(x, y);
-  return length > 0.1 ? [x / length, y / length] : null;
-}
-
-/** Host-fixed melee windup as the presentation sees it (synchronized host times). */
-export interface GraveTitanWindup {
-  readonly attackId: string;
-  readonly startedAt: number;
-  readonly strikeAt: number;
-  readonly hitAt: number;
-  readonly angle: number;
-  readonly range: number;
-  readonly arcDegrees: number;
-}
-
-interface WindupCracks {
-  readonly attackId: string;
-  readonly keys: readonly string[];
-  readonly geometry: GraveTitanImpactGeometry;
-  /** Hit time on the GPU clock. */
-  readonly hitAt: number;
-}
-
-function hashAttack(id: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < id.length; index += 1) hash = Math.imul(hash ^ id.charCodeAt(index), 16777619);
-  return hash >>> 0;
-}
+function between(min: number, max: number): number { return min + Math.random() * (max - min); }
 
 /**
- * Grave Titan slam and stomp ground. During the windup hairline cracks creep through the struck
- * area (a second warning beside the red danger sector); at the hit they ignite, tear open and
- * collapse into a glowing scar around a crater. A strike whose windup this client never saw tears
- * the ground at once. Reuses the Earthbreak fissure store and shader with the grave-light palette;
- * pure presentation of host-fixed windups and confirmed swings.
+ * Grave Titan slam and stomp as GPU haze; their windup is announced by the shared red danger zone
+ * alone. A stomp throws a pressure wave of haze from its body edge out to the full reach; a slam
+ * pushes a fan of haze from its landing paws through the struck sector. Pure presentation of
+ * confirmed swings; bursts are deferred to the GPU emission tick so every member of one is born
+ * on the same frame boundary.
  */
 export class GraveTitanImpactRenderer {
-  private readonly fissures = new EarthbreakFissureStore();
-  private readonly layers: EarthbreakFissureLayers;
+  private readonly haze: GpuVfxSpawnSpec;
+  private readonly source: number;
+  private readonly bursts = Array.from({ length: MAX_EVENTS }, (): Burst => ({ x: 0, y: 0, angle: 0, arc: 0, inner: 0, outer: 0 }));
+  private burstCount = 0;
   private readonly unregister: () => void;
-  private readonly windups = new Map<string, WindupCracks>();
-  private serial = 0;
   private destroyed = false;
 
-  private terrain: TerrainColorSnapshot | null = null;
-
-  constructor(scene: Phaser.Scene, private readonly gpu: GpuVfxSystem) {
-    this.layers = createEarthbreakFissureLayers(scene, this.fissures, () => gpu.now(), GRAVE_LIGHT_FISSURES);
-    this.unregister = gpu.registerEmission((_delta, now) => this.tick(now));
+  constructor(private readonly gpu: GpuVfxSystem) {
+    this.haze = gpu.createSpec(GpuVfxEffectId.GraveTitanHaze);
+    this.source = gpu.createSource(GpuVfxEffectId.GraveTitanHaze);
+    this.unregister = gpu.registerEmission(() => this.emitFrame());
   }
 
-  /** Trench and lip take the struck ground's colour. */
-  setTerrainColorSnapshot(snapshot: TerrainColorSnapshot | null): void { this.terrain = snapshot; }
-
-  /**
-   * Per frame for every slam-preset body: a new windup lays its cracks on the windup timeline; a
-   * windup that vanishes before its hit (interrupted, body gone) closes them again.
-   */
-  syncWindup(id: string, attack: GraveTitanWindup | null, x: number, y: number, now: number, visible: boolean): void {
-    if (this.destroyed) return;
-    const current = this.windups.get(id), gpuNow = this.gpu.now();
-    if (current && current.attackId === attack?.attackId) return;
-    if (current) {
-      if (gpuNow < current.hitAt) for (const key of current.keys) this.fissures.cancel(key, gpuNow);
-      this.windups.delete(id);
-    }
-    if (!attack || !visible || now >= attack.hitAt) return;
-    const offset = gpuNow - now, fx = GRAVE_TITAN_IMPACT;
-    const geometry = graveTitanImpactGeometry(x, y, attack.angle, attack.arcDegrees, attack.range, hashAttack(attack.attackId));
-    const start = attack.startedAt + offset, span = Math.max(1, attack.strikeAt - attack.startedAt), hitAt = attack.hitAt + offset;
-    const keys = this.writeCracks(`${++this.serial}`, geometry, k => start + span * (0.12 + 0.8 * k / fx.segments), hitAt, gpuNow);
-    this.windups.set(id, { attackId: attack.attackId, keys, geometry, hitAt });
-    this.fissures.commit();
-  }
-
-  /** Breaks the ground for one confirmed swing and returns its impact centre and struck radius. */
-  play(x: number, y: number, angle: number, arcDegrees: number, range: number, attackId?: string): GraveTitanImpactGeometry | null {
+  /** Throws the haze of one confirmed swing and returns where it struck. */
+  play(x: number, y: number, angle: number, arcDegrees: number, range: number): GraveTitanImpact | null {
     if (this.destroyed || !Number.isFinite(x + y + angle + range) || range <= 0) return null;
-    const fx = GRAVE_TITAN_IMPACT, now = this.gpu.now();
-    let geometry: GraveTitanImpactGeometry | null = null;
-    for (const [id, windup] of this.windups) {
-      if (windup.attackId !== attackId) continue;
-      geometry = windup.geometry;
-      this.windups.delete(id);
-      break;
+    const impact = graveTitanImpact(x, y, angle, arcDegrees, range);
+    if (this.burstCount < this.bursts.length) {
+      const fx = GRAVE_TITAN_IMPACT, burst = this.bursts[this.burstCount++];
+      burst.x = x; burst.y = y; burst.angle = angle; burst.arc = impact.stomp ? TAU : Math.min(TAU, arcDegrees * Math.PI / 180);
+      burst.inner = impact.stomp ? fx.bodyEdgePx : Math.min(fx.pawReachPx * 0.8, range * 0.6);
+      burst.outer = Math.max(burst.inner + 24, range);
     }
-    const id = ++this.serial;
-    if (!geometry) {
-      geometry = graveTitanImpactGeometry(x, y, angle, arcDegrees, range, id * 2654435761);
-      this.writeCracks(`${id}`, geometry, k => now + k * fx.segmentStaggerMs, now + fx.igniteAfterMs, now);
-    }
-    const color = this.terrain?.sample(geometry.x, geometry.y) ?? fx.earthFallback;
-    this.fissures.addCrater(`${id}:crater`, { x: geometry.x, y: geometry.y, radius: geometry.crater, seed: (id * 0.381966) % 1, color }, now, now);
-    this.fissures.commit();
-    return geometry;
+    return impact;
   }
 
-  clear(): void { this.fissures.clear(); this.windups.clear(); }
+  clear(): void {
+    this.burstCount = 0;
+    this.gpu.clearSource(this.source);
+  }
 
   destroy(): void {
     if (this.destroyed) return;
+    this.clear();
     this.destroyed = true;
     this.unregister();
-    this.clear();
-    this.layers.destroy();
+    this.gpu.releaseSource(this.source);
   }
 
-  /** Writes every crack segment; segment k opens at `bornAt(k)` and the whole crack ignites at `ignite`. */
-  private writeCracks(prefix: string, geometry: GraveTitanImpactGeometry, bornAt: (k: number) => number, ignite: number,
-    now: number): string[] {
-    const fx = GRAVE_TITAN_IMPACT, keys: string[] = [];
-    const color = this.terrain?.sample(geometry.x, geometry.y) ?? fx.earthFallback;
-    geometry.cracks.forEach((points, crack) => {
-      const seed = ((hashAttack(prefix) % 997 + crack * 31) * 0.6180339887) % 1;
-      let arc = 0;
-      for (let k = 0; k + 1 < points.length; k++) {
-        const a = points[k], b = points[k + 1], travel = direction(a, b);
-        const before = k > 0 ? bisector(direction(points[k - 1], a), travel) : null;
-        const after = k + 2 < points.length ? bisector(travel, direction(b, points[k + 2])) : null;
-        const key = `${prefix}:${crack}:${k}`;
-        if (this.fissures.addSegment(key, { ax: a.x, ay: a.y, bx: b.x, by: b.y, arcStart: arc, joinA: before, joinB: after,
-          bornAt: bornAt(k), seed, color }, now)) {
-          if (k + 2 < points.length) this.fissures.setNextBorn(key, bornAt(k + 1));
-          this.fissures.setCollapse(key, ignite, ignite + k * fx.collapseStepMs, ignite + (k + 1) * fx.collapseStepMs);
-          keys.push(key);
-        }
-        arc += Math.hypot(b.x - a.x, b.y - a.y);
-      }
-    });
-    return keys;
+  private emitFrame(): void {
+    if (this.destroyed || !this.burstCount) return;
+    const bursts = this.burstCount;
+    this.burstCount = 0;
+    if (this.gpu.isSuppressed()) return;
+    for (let i = 0; i < bursts; i++) this.spawnBurst(this.bursts[i]);
   }
 
-  private tick(now: number): void {
-    if (this.destroyed || this.fissures.size === 0) return;
-    this.fissures.retire(now);
-    this.fissures.commit();
+  private scaled(count: number): number {
+    const result = this.gpu.quality.scaleDiscreteBurst(GpuVfxEffectId.GraveTitanHaze, count);
+    if (result < count) this.gpu.recordQualityDrop(GpuVfxEffectId.GraveTitanHaze, count - result);
+    return result;
+  }
+
+  private spawnBurst(burst: Burst): void {
+    const fx = GRAVE_TITAN_IMPACT, spec = this.haze, now = this.gpu.now();
+    const full = burst.arc >= TAU - 1e-3, from = full ? between(0, TAU) : burst.angle - burst.arc / 2;
+    const frontCount = this.scaled(Math.ceil(fx.front.perRadian * burst.arc));
+    for (let i = 0; i < frontCount; i++) {
+      const direction = from + burst.arc * (i + (full ? 0.5 : between(0.15, 0.85))) / frontCount + between(-0.04, 0.04);
+      // A front stretched along the wave, not along its travel: it reads as one ring rushing outwards.
+      this.spawn(spec, now, burst.x, burst.y, direction, burst.inner, burst.outer * fx.front.overshoot - burst.inner,
+        between(fx.front.lifeMinMs, fx.front.lifeMaxMs), between(fx.front.diameterMin, fx.front.diameterMax), fx.front.growth,
+        fx.front.stretch, direction + Math.PI / 2, fx.front.alpha);
+    }
+    const trailCount = this.scaled(Math.ceil(fx.trail.perRadian * burst.arc));
+    for (let i = 0; i < trailCount; i++) {
+      const direction = from + burst.arc * Math.random();
+      const travel = (burst.outer - burst.inner) * between(fx.trail.travelMin, fx.trail.travelMax);
+      this.spawn(spec, now, burst.x, burst.y, direction, burst.inner * between(0.9, 1.05), travel,
+        between(fx.trail.lifeMinMs, fx.trail.lifeMaxMs), between(fx.trail.diameterMin, fx.trail.diameterMax), fx.trail.growth,
+        fx.trail.stretch, direction, fx.trail.alpha);
+    }
+  }
+
+  private spawn(spec: GpuVfxSpawnSpec, now: number, x: number, y: number, direction: number, start: number, travel: number,
+    lifeMs: number, diameter: number, growth: number, stretch: number, rotation: number, alpha: number): void {
+    const cos = Math.cos(direction), sin = Math.sin(direction);
+    spec.frame = GpuVfxFrameId.ExplosionSmoke;
+    spec.lifeMs = lifeMs;
+    spec.x = x + cos * start; spec.y = y + sin * start;
+    spec.vx = cos * travel * 1000 / lifeMs; spec.vy = sin * travel * 1000 / lifeMs;
+    spec.positionEase = GpuVfxEase.QuadOut;
+    spec.rotation = rotation; spec.angularVelocity = between(-0.4, 0.4); spec.rotationEase = GpuVfxEase.QuadOut;
+    // The smoke frame is 56 px.
+    spec.scaleStart = diameter / 56; spec.scaleEnd = spec.scaleStart * growth; spec.scaleEase = GpuVfxEase.QuadOut;
+    spec.stretchStart = stretch; spec.stretchEnd = 1 + (stretch - 1) * 0.4;
+    spec.alphaStart = alpha; spec.alphaEnd = 0; spec.alphaEase = GpuVfxEase.CubicIn;
+    spec.tint = GRAVE_TITAN_IMPACT.color;
+    this.gpu.spawn(spec, this.source, now);
   }
 }

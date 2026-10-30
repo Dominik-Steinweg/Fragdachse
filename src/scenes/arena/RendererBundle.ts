@@ -231,7 +231,7 @@ export function* createRendererBundleSteps(
   cleanup.push(() => burrowGpu.destroy());
   const pounceImpact = new PounceImpactGpuRenderer(gpuVfx);
   cleanup.push(() => pounceImpact.destroy());
-  const graveTitanImpact = new GraveTitanImpactRenderer(scene, gpuVfx);
+  const graveTitanImpact = new GraveTitanImpactRenderer(gpuVfx);
   cleanup.push(() => graveTitanImpact.destroy());
   const pounceWindup = new PounceWindupGpuRenderer(gpuVfx);
   cleanup.push(() => pounceWindup.destroy());

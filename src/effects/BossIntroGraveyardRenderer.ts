@@ -55,6 +55,8 @@ const MIST_COUNT = 7;
 const ONE_SHOT_STALE_MS = 450;
 /** The risen boss stays on screen this long after the spawn, until the replicated body has arrived. */
 const RISER_HANDOFF_MS = 320;
+/** The first emerge frame breaks out of the churned ground instead of popping in. */
+const RISER_FADE_IN_MS = 280;
 /** Fireflies dive into the boss from this long before its breakthrough. */
 const FIREFLY_DIVE_LEAD_MS = 600;
 const FIREFLY_DIVE_MS = 900;
@@ -142,6 +144,8 @@ export class BossIntroGraveyardRenderer {
   private postFx: ((event: 'graveTitanRoar') => void) | null = null;
   /** The boss digging itself out before it spawns (its own sheet, created with the first intro). */
   private riser: Phaser.GameObjects.Sprite | null = null;
+  /** The emerge's next frame, blended over `riser` so the slowed clip moves smoothly. */
+  private riserNext: Phaser.GameObjects.Sprite | null = null;
   private current: IntroScene | null = null;
   private lightsActive = false;
   private destroyed = false;
@@ -212,6 +216,7 @@ export class BossIntroGraveyardRenderer {
     this.crater.setVisible(false);
     this.moonbeam.setVisible(false);
     this.riser?.setVisible(false);
+    this.riserNext?.setVisible(false);
     this.releaseLights();
     this.cameraFeedback?.release(RUMBLE_ID, 120);
     clearCameraFocusOverride(this.scene);
@@ -229,7 +234,9 @@ export class BossIntroGraveyardRenderer {
     this.crater.destroy();
     this.moonbeam.destroy();
     this.riser?.destroy();
+    this.riserNext?.destroy();
     this.riser = null;
+    this.riserNext = null;
   }
 
   // ── Aufbau ────────────────────────────────────────────────────────────────
@@ -409,7 +416,8 @@ export class BossIntroGraveyardRenderer {
 
   /**
    * The boss's emerge clip over the crater: its skull and clawing front paws break the ground
-   * first, then the body levels out into the rest pose the spawned boss takes over.
+   * first, then the body levels out into the rest pose the spawned boss takes over. The clip runs
+   * slower than authored, so each frame is blended into the next instead of stepping.
    */
   private renderRiser(intro: IntroScene, elapsed: number): void {
     const { preset, state } = intro, riser = preset.riser;
@@ -419,18 +427,26 @@ export class BossIntroGraveyardRenderer {
     const visible = elapsed >= riser.startMs && elapsed < preset.emergeAtMs + RISER_HANDOFF_MS;
     if (!visible || !sheet || !clip?.frames.length || !this.scene.textures.exists(sheet.textureKey)) {
       this.riser?.setVisible(false);
+      this.riserNext?.setVisible(false);
       return;
     }
-    if (!this.riser) {
+    if (!this.riser || !this.riserNext) {
       this.riser = this.scene.add.sprite(0, 0, sheet.textureKey, clip.frames[0]).setDepth(DEPTH.PLAYERS - 0.05);
+      this.riserNext = this.scene.add.sprite(0, 0, sheet.textureKey, clip.frames[0]).setDepth(DEPTH.PLAYERS - 0.049);
       registerGraphicsObject(this.scene, 'bossIntro', this.riser);
+      registerGraphicsObject(this.scene, 'bossIntro', this.riserNext);
     }
     const progress = clamp01((elapsed - riser.startMs) / (preset.emergeAtMs - riser.startMs));
-    const frame = clip.frames[Math.min(clip.frames.length - 1, Math.floor(progress * clip.frames.length))];
+    const position = progress * (clip.frames.length - 1), index = Math.min(clip.frames.length - 1, Math.floor(position));
+    const blend = position - index, next = Math.min(clip.frames.length - 1, index + 1);
     const size = config.size * sheet.displayScale;
     const handoff = clamp01((elapsed - preset.emergeAtMs) / RISER_HANDOFF_MS);
-    this.riser.setTexture(sheet.textureKey, frame).setDisplaySize(size, size).setPosition(state.x, state.y)
-      .setRotation(riser.facing + Math.PI / 2).setTint(config.color ?? 0xffffff).setAlpha(1 - handoff * handoff).setVisible(true);
+    const alpha = (1 - handoff * handoff) * clamp01((elapsed - riser.startMs) / RISER_FADE_IN_MS);
+    for (const [sprite, frame, share] of [[this.riser, index, 1], [this.riserNext, next, blend]] as const) {
+      sprite.setTexture(sheet.textureKey, clip.frames[frame]).setDisplaySize(size, size).setPosition(state.x, state.y)
+        .setRotation(riser.facing + Math.PI / 2).setTint(config.color ?? 0xffffff).setAlpha(alpha * share)
+        .setVisible(share > 0.001 && alpha > 0);
+    }
   }
 
   private renderFragments(intro: IntroScene, elapsed: number): void {

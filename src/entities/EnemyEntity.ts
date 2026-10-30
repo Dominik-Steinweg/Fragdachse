@@ -119,6 +119,8 @@ export interface EnemyAttackWeapon {
   readonly muzzleForwardPx: number;
   /** May attack while a higher-priority weapon waits out its pause. */
   readonly usableDuringPriorityPause?: boolean;
+  /** Bases, rocks and constructs are engaged only this close; absent = the weapon's range. */
+  readonly structureReachPx?: number;
 }
 
 function ensureEnemyGlowTexture(scene: Phaser.Scene): void {
@@ -469,6 +471,9 @@ export class EnemyEntity {
 
   /** While set, external impulses (knockback, recoil, stagger scaling) do not move this enemy. */
   setKnockbackImmune(immune: boolean): void { this.knockbackImmune = immune; }
+
+  /** True when an authored turn rate limits how fast the body can face a new heading. */
+  hasTurnRateLimit(): boolean { return this.turnRateRadPerMs() !== null; }
 
   /** Authoritative turn rate in rad/ms, or null for ordinary instant facing. */
   private turnRateRadPerMs(): number | null {
@@ -833,7 +838,8 @@ export class EnemyEntity {
     out.revision = this.movementRevision;
     out.footprintGlow = this.faction === 'hostile' ? this.config.bossPresence?.footprintGlowColor ?? 0 : 0;
     const span = this.config.pawSpan;
-    out.pawLateralShare = span?.lateralShare ?? 0; out.pawForwardShare = span?.forwardShare ?? 0; out.printScale = span?.printScale ?? 0;
+    out.pawLateralShare = span?.lateralShare ?? 0; out.pawRearLateralShare = span?.rearLateralShare ?? 0;
+    out.pawForwardShare = span?.forwardShare ?? 0; out.printScale = span?.printScale ?? 0;
   }
 
   /** The trail this enemy lays in the fog (E12): only while it walks on the ground in view of the world. */
@@ -1019,6 +1025,11 @@ export class EnemyEntity {
       return this.body.halfWidth;
     }
     return this.config.size * 0.5;
+  }
+
+  /** Being hit: the body circle, widened for a body whose limbs reach beyond it (`hitRadiusFactor`). */
+  getHitRadius(): number {
+    return this.getCollisionRadius() * (this.config.hitRadiusFactor ?? 1);
   }
 
   /** Physischer Grunddurchmesser des Gegners vor der Ausweich-Skalierung. */
@@ -1543,6 +1554,7 @@ export class EnemyEntity {
         salvo: configuredWeapon.salvo,
         muzzleForwardPx: configuredWeapon.muzzleForwardPx ?? 0,
         usableDuringPriorityPause: configuredWeapon.usableDuringPriorityPause,
+        structureReachPx: configuredWeapon.structureReachPx,
       };
     });
   }

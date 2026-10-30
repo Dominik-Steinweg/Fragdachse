@@ -3,21 +3,22 @@ import type { CoopDefenseEnemyBossPresenceConfig } from '../config/coopDefenseEn
 import type { ProjectileCustomVisual, ProjectileCustomVisualFactory } from '../projectile/ProjectileVisualOverrides';
 import type { EnemyVolleyState } from '../systems/EnemyVolleyState';
 import { GraveFireflySwarm, type GraveFireflyPose } from './GraveFireflySwarm';
-import { GRAVE_LIGHTS, graveLightPose, type GraveLightPose } from './graveTitan/graveLightModel';
+import { fireflyShot, graveFireflyHole, graveFireflyPose, type GraveFireflyAmmoPose } from './graveTitan/graveLightModel';
 import { GraveWispGpuLayer, GraveWispKind } from './gpu/GraveWispGpuLayer';
 import type { LightingSystem } from './LightingSystem';
 
 /**
  * Lesbarkeit eines Bosses ohne HUD-Rahmen: normale Ambient-Glühwürmchen umschwärmen ihn.
  * Seine leuchtenden Fußspuren kommen aus der normalen Bewegungs-Pipeline
- * (`MovementEffectsRenderer`, `footprintGlow`). Ein Boss mit angekündigter Salve trägt zusätzlich
- * seine Munition als Grablichter (`graveLightModel`): Jeder Schuss seiner Salve fliegt sichtbar aus
- * einem dieser Lichter. Reine Präsentation replizierter Positionen und Zustände.
+ * (`MovementEffectsRenderer`, `footprintGlow`). Bei einem Boss mit angekündigter Salve sind genau
+ * diese Glühwürmchen seine Munition (`graveLightModel`): Beim Sammeln ziehen sie sich über dem Grab
+ * zusammen und beginnen zu glühen, und jeder Schuss fliegt sichtbar aus seiner Gruppe. Reine
+ * Präsentation replizierter Positionen und Zustände.
  */
 
 export interface BossVolleyPresence {
   readonly state: EnemyVolleyState;
-  /** Shots per salvo = grave lights. */
+  /** Shots per salvo; the swarm's fireflies feed them in equal groups. */
   readonly count: number;
   /** Weapon source of the salvo's projectiles; they are drawn as flying grave lights. */
   readonly weaponId: string;
@@ -59,8 +60,10 @@ interface BossTrack {
   /** Gather whose launches `seenLaunches` counts (its start time). */
   cycle: number;
   seenLaunches: number;
-  readonly lights: GraveLightPose[];
-  /** First sight: the grave lights rise out of the boss as it appears. */
+  /** Drawn firefly positions of the latest frame (a launch starts from its group's place). */
+  readonly ammo: GraveFireflyAmmoPose[];
+  readonly headings: number[];
+  /** First sight: the fireflies rise out of the boss as it appears. */
   readonly bornAt: number;
 }
 
@@ -68,6 +71,8 @@ interface BossTrack {
 interface GraveLightFlight {
   x: number; y: number; vx: number; vy: number;
   readonly offsetX: number; readonly offsetY: number;
+  /** Where it left the crown, over the boss's back. */
+  readonly startX: number; readonly startY: number;
   readonly bornAt: number;
   readonly seed: number;
   readonly key: string;
@@ -78,17 +83,31 @@ interface GraveLightPuff { readonly x: number; readonly y: number; readonly born
 
 const FLIGHT_GLIDE_MS = 140;
 const FLIGHT_SIZE = 6.2;
+/**
+ * A shot leaves the crown at a charged firefly's glow and burns up to full strength (and lights the
+ * ground) once it is under way: ten full-strength shots stacked over the pale grave lid bloom white.
+ */
+const FLIGHT_LAUNCH_INTENSITY = 0.8;
+const FLIGHT_INTENSITY = 1.9;
+const FLIGHT_CLEAR_PX = 40;
+const FLIGHT_BURN_PX = 80;
+/** Ground light of a flying shot, as a share of one grave light. */
+const FLIGHT_GROUND = 0.6;
 /** Haze trail length: seconds of travel, capped in world px. */
 const FLIGHT_TRAIL_S = 0.07;
 const FLIGHT_TRAIL_MAX = 34;
 const PUFF_MS = 380;
-/** Ground light of one grave light: green and weak. */
+/** Ground light of one flying grave light: green and weak. */
 const GRAVE_LIGHT_GROUND = 0.4;
-/** The whole crown lights the ground like this many separate grave lights. */
-const CROWN_GROUND_SHARE = 2.5;
 const GRAVE_LIGHT_COLOR = 0x7dff8a;
-/** A newly seen boss's grave lights rise out of it over this time. */
-const GRAVE_LIGHTS_APPEAR_MS = 900;
+/** Each firefly of a big ammunition swarm lights the ground less: thirty light it like an ordinary twelve. */
+const AMMO_SWARM_GROUND_SHARE = 0.4;
+/** Charge glow over one firefly: core scale (world px) and peak intensity. */
+const CHARGE_GLOW_SIZE = 3.8;
+const CHARGE_GLOW_INTENSITY = 0.75;
+/** A newly seen boss's fireflies rise out of it over this time (staggered per firefly). */
+const FIREFLIES_APPEAR_MS = 900;
+const FIREFLIES_APPEAR_STAGGER_MS = 600;
 const PUFF_SIZE = 7;
 const MAX_PUFFS = 24;
 
@@ -126,11 +145,17 @@ export class BossPresenceRenderer {
     }
     let startX = request.x, startY = request.y;
     if (track) {
-      const light = track.lights[track.seenLaunches];
-      if (light && light.alpha > 0) { startX = light.x; startY = light.y; }
+      // The shot leaves from the middle of the glowing group that feeds it.
+      const shots = track.volley?.count ?? 1, launch = track.seenLaunches, fireflies = track.ammo.length;
+      let sumX = 0, sumY = 0, members = 0;
+      track.ammo.forEach((pose, index) => {
+        if (pose.alpha <= 0 || fireflyShot(index, fireflies, shots) !== launch) return;
+        sumX += pose.x; sumY += pose.y; members++;
+      });
+      if (members > 0) { startX = sumX / members; startY = sumY / members; }
       track.seenLaunches++;
     }
-    const flight: GraveLightFlight = { x: request.x, y: request.y, vx: 0, vy: 0, offsetX: startX - request.x, offsetY: startY - request.y,
+    const flight: GraveLightFlight = { x: request.x, y: request.y, vx: 0, vy: 0, offsetX: startX - request.x, offsetY: startY - request.y, startX, startY,
       bornAt: this.nowMs, seed: (request.id * 0.6180339887) % 1, key: `graveLightFlight:${++this.flightSerial}`, live: true };
     this.flights.add(flight);
     const view: ProjectileCustomVisual = {
@@ -195,7 +220,7 @@ export class BossPresenceRenderer {
         centerY: source.y,
         lastNowMs: nowMs,
         seenAt: nowMs,
-        x: source.x, y: source.y, volley: null, cycle: Number.NaN, seenLaunches: 0, lights: [], bornAt: nowMs,
+        x: source.x, y: source.y, volley: null, cycle: Number.NaN, seenLaunches: 0, ammo: [], headings: [], bornAt: nowMs,
       };
       this.tracks.set(source.id, track);
     }
@@ -207,49 +232,52 @@ export class BossPresenceRenderer {
     track.centerX += (source.x - track.centerX) * follow;
     track.centerY += (source.y - track.centerY) * follow;
 
+    const volley = source.volley ?? null;
+    track.volley = volley;
+    if (volley) {
+      this.salvoWeapons.add(volley.weaponId);
+      if (volley.state.chargeStartAt !== track.cycle) { track.cycle = volley.state.chargeStartAt; track.seenLaunches = 0; }
+    }
+    const site = { x: source.x, y: source.y, size: source.size, crownX: volley?.crownX ?? source.x, crownY: volley?.crownY ?? source.y };
+    const salt = (hashId(source.id) % 997) / 997;
+    const count = track.orbits.length;
+    while (track.ammo.length < count) { track.ammo.push({ x: 0, y: 0, alpha: 0, glow: 0, gathered: 0 }); track.headings.push(0); }
     this.poses.length = 0;
     const seconds = nowMs / 1000;
-    for (const orbit of track.orbits) {
+    for (let index = 0; index < count; index++) {
+      const orbit = track.orbits[index];
       const angle = orbit.phase + seconds * orbit.omega;
       const bob = Math.sin(seconds * orbit.bobFrequency + orbit.bobPhase) * orbit.bobAmplitude;
       const radius = orbit.radius + bob;
-      const vx = -Math.sin(angle) * orbit.omega * radius;
-      const vy = Math.cos(angle) * orbit.omega * radius * 0.85;
-      this.poses.push({
-        x: track.centerX + Math.cos(angle) * radius,
-        y: track.centerY + Math.sin(angle) * radius * 0.85,
-        heading: Math.atan2(vy, vx),
-        alpha: source.visible ? 1 : 0,
-      });
+      const orbitX = track.centerX + Math.cos(angle) * radius;
+      const orbitY = track.centerY + Math.sin(angle) * radius * 0.85;
+      const pose = track.ammo[index], lastX = pose.x, lastY = pose.y, seen = pose.alpha > 0;
+      if (volley) graveFireflyPose(index, count, volley.count, site, volley.state, track.seenLaunches, orbitX, orbitY, nowMs, pose);
+      else { pose.x = orbitX; pose.y = orbitY; pose.alpha = 1; pose.glow = 0; pose.gathered = 0; }
+      // First sight: each firefly rises out of a lantern hole into the swarm.
+      const appear = ease((nowMs - track.bornAt - index / count * FIREFLIES_APPEAR_STAGGER_MS) / FIREFLIES_APPEAR_MS);
+      if (appear < 1) {
+        graveFireflyHole(index, site, hole);
+        pose.x = hole.x + (pose.x - hole.x) * appear;
+        pose.y = hole.y + (pose.y - hole.y) * appear;
+        pose.alpha *= appear;
+      }
+      if (!source.visible) pose.alpha = 0;
+      const vx = pose.x - lastX, vy = pose.y - lastY;
+      track.headings[index] = seen && vx * vx + vy * vy > 0.04 ? Math.atan2(vy, vx)
+        : Math.atan2(Math.cos(angle) * orbit.omega * 0.85, -Math.sin(angle) * orbit.omega);
+      const glow = pose.glow * pose.alpha;
+      // A firefly flying in to the crown hands its ground light over to its own glow: thirty ground
+      // lights stacked over the pale grave lid would light it up like a lamp.
+      const light = volley ? AMMO_SWARM_GROUND_SHARE * (1 - pose.gathered) : 1;
+      this.poses.push({ x: pose.x, y: pose.y, heading: track.headings[index], alpha: pose.alpha, light });
+      if (glow > 0.01) {
+        this.wisps.add({ tailX: pose.x, tailY: pose.y, headX: pose.x, headY: pose.y, halfWidth: CHARGE_GLOW_SIZE * 2.4,
+          kind: GraveWispKind.Glow, t: 0, seed: (index * 0.37 + salt) % 1, size: CHARGE_GLOW_SIZE * (0.7 + 0.3 * pose.glow),
+          intensity: CHARGE_GLOW_INTENSITY * glow });
+      }
     }
     track.swarm.sync(this.poses, nowMs);
-    this.syncGraveLights(track, source, nowMs);
-  }
-
-  /** The salvo's ammunition over the boss's back (none while it is hidden). */
-  private syncGraveLights(track: BossTrack, source: BossPresenceSource, nowMs: number): void {
-    const volley = source.volley ?? null;
-    track.volley = volley;
-    if (!volley) { track.lights.length = 0; return; }
-    this.salvoWeapons.add(volley.weaponId);
-    if (volley.state.chargeStartAt !== track.cycle) { track.cycle = volley.state.chargeStartAt; track.seenLaunches = 0; }
-    const site = { x: source.x, y: source.y, size: source.size, crownX: volley.crownX, crownY: volley.crownY };
-    while (track.lights.length < volley.count) track.lights.push({ x: 0, y: 0, alpha: 0, size: 0, intensity: 0 });
-    track.lights.length = volley.count;
-    const salt = (hashId(source.id) % 997) / 997;
-    const appear = Math.min(1, Math.max(0, (nowMs - track.bornAt) / GRAVE_LIGHTS_APPEAR_MS));
-    for (let index = 0; index < volley.count; index++) {
-      const light = graveLightPose(index, volley.count, site, volley.state, track.seenLaunches, nowMs, track.lights[index]);
-      const alpha = light.alpha * appear;
-      if (!source.visible || alpha <= 0.01) continue;
-      this.wisps.add({ tailX: light.x, tailY: light.y, headX: light.x, headY: light.y, halfWidth: light.size * 2.6,
-        kind: GraveWispKind.Light, t: 0, seed: (index * 0.37 + salt) % 1, size: light.size, intensity: light.intensity * alpha });
-      // Gathered into the crown the lights share one ground glow; ten stacked ground lights burn to white.
-      const crownDistance = Math.hypot(light.x - volley.crownX, light.y - volley.crownY);
-      const gathered = 1 - Math.min(1, Math.max(0, crownDistance / GRAVE_LIGHTS.crownRadius - 1));
-      const share = 1 - gathered * (1 - CROWN_GROUND_SHARE / volley.count);
-      this.light(`graveLight:${source.id}:${index}`, light.x, light.y, alpha * Math.min(1.6, light.intensity) * share);
-    }
   }
 
   private glide(flight: GraveLightFlight): number {
@@ -264,9 +292,11 @@ export class BossPresenceRenderer {
       const speed = Math.hypot(flight.vx, flight.vy);
       const trail = Math.min(FLIGHT_TRAIL_MAX, speed * FLIGHT_TRAIL_S);
       const tailX = speed > 1 ? x - flight.vx / speed * trail : x, tailY = speed > 1 ? y - flight.vy / speed * trail : y;
+      const travelled = Math.hypot(x - flight.startX, y - flight.startY);
+      const away = Math.max(0, Math.min(1, (travelled - FLIGHT_CLEAR_PX) / FLIGHT_BURN_PX));
       this.wisps.add({ tailX, tailY, headX: x, headY: y, halfWidth: FLIGHT_SIZE * 2.6, kind: GraveWispKind.Light, t: 0,
-        seed: flight.seed, size: FLIGHT_SIZE, intensity: 1.9 });
-      this.light(flight.key, x, y, 1.0);
+        seed: flight.seed, size: FLIGHT_SIZE, intensity: FLIGHT_LAUNCH_INTENSITY + (FLIGHT_INTENSITY - FLIGHT_LAUNCH_INTENSITY) * away });
+      this.light(flight.key, x, y, FLIGHT_GROUND * away);
     }
   }
 
@@ -309,6 +339,13 @@ function createOrbits(count: number, size: number, seed: number): FireflyOrbit[]
     bobFrequency: 0.5 + random() * 0.9,
     bobPhase: random() * Math.PI * 2,
   }));
+}
+
+const hole = { x: 0, y: 0 };
+
+function ease(t: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  return c * c * (3 - 2 * c);
 }
 
 function hashId(id: string): number {

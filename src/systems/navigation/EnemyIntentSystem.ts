@@ -343,7 +343,8 @@ export class EnemyIntentSystem {
       const eligible = target.kind === 'base' ? weapon.targetMode !== 'players' && weapon.targetMode !== 'rocks'
         : target.kind === 'armed-construct' || weapon.targetMode === 'players' || weapon.targetMode === 'all';
       if (!eligible) continue;
-      range = Math.max(range, weapon.weapon.config.range);
+      const structure = ['base', 'armed-base', 'armed-outpost', 'armed-construct'].includes(target.kind);
+      range = Math.max(range, structure ? Math.min(weapon.weapon.config.range, weapon.structureReachPx ?? Infinity) : weapon.weapon.config.range);
     }
     const positioning = getCoopDefenseEnemyConfig(enemy.kind).combatPositioning;
     return Math.max(enemy.getSize() / 2 + 1, Math.min(range || 32, positioning?.preferredDistancePx ?? Infinity));
@@ -495,7 +496,7 @@ export class EnemyIntentSystem {
           && (id.startsWith('base:') ? config.baseDamageMult ?? 1 : config.rockDamageMult ?? 1) > 0
           && !(config.fire.type === 'melee' && config.fire.damageTargets
             && !config.fire.damageTargets.includes(id.startsWith('base:') ? 'bases' : 'rocks'));
-      }).map(attack => attack.weapon.config.range)),
+      }).map(attack => Math.min(attack.weapon.config.range, attack.structureReachPx ?? Infinity))),
       destructionSeconds: id => {
         const hp = this.obstacleHp?.(enemy, id);
         if (hp == null || hp <= 0) return null;

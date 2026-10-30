@@ -83,6 +83,7 @@ function createStuckEnemy(
     rollWeaponSpreadOffset: () => 0,
     getAimAngle: () => 0,
     faceAngle: () => {},
+    hasTurnRateLimit: () => false,
     stopMovement: () => {},
     getCollisionRadius: () => 15,
     // Ab hier identisch zur echten EnemyEntity – Waffen-Cooldown, Scan-Takt und Angriffspause

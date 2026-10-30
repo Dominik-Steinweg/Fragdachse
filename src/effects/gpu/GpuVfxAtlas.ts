@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { FOOTPRINT_TEXTURE_KEYS, ensureMovementFootprintTextures } from '../MovementFootprintTextures';
+import { FOOTPRINT_TEXTURE_KEYS, TITAN_PAW_SIZE, ensureMovementFootprintTextures } from '../MovementFootprintTextures';
 import {
   ESSENCE_LIQUID_FRAME_SIZE, ESSENCE_LIQUID_FRAMES, ESSENCE_LIQUID_TAIL_FRAME,
   writeEssenceLiquidPixels, writeEssenceLiquidTailPixels,
@@ -219,6 +219,7 @@ export const GpuVfxFrameId = {
   // 220..603: three additional 128-frame death variants. Existing IDs remain stable.
   /** Torch flame from above, head at the torch, tip downwind along +x; colour baked. */
   TorchFlame:            604,
+  MovementPawTitan:      605,
 } as const;
 
 /** Nur die unten erzeugte, zusammenhaengende Morph-Folge darf diesen ID-Bereich belegen. */
@@ -524,6 +525,8 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
     id: GpuVfxFrameId.TorchFlame, frame: 'torch-flame',
     sourceTextureKey: TEX_TORCH_FLAME, width: 32, height: 16, ensure: ensureTorchFlameTexture,
   },
+  { id: GpuVfxFrameId.MovementPawTitan, frame: 'movement-paw-titan', sourceTextureKey: FOOTPRINT_TEXTURE_KEYS.titan,
+    width: TITAN_PAW_SIZE.width, height: TITAN_PAW_SIZE.height, ensure: ensureMovementFootprintTextures },
 ];
 
 /** Transparenter Rand um jeden Frame, in Pixeln. */
