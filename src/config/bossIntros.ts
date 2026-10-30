@@ -118,6 +118,17 @@ export interface GraveyardRiseIntroPreset {
     readonly fragmentSpeed: number;
     readonly shockwaveRadius: number;
   };
+  /**
+   * Der Boss gräbt sich vor dem Spawn sichtbar aus: sein `clip` (Kopf voran aus der Erde) läuft ab
+   * `startMs` bis `emergeAtMs` und endet in der Ruhepose, in der der gespawnte Boss übernimmt.
+   */
+  readonly riser: {
+    readonly enemyKind: import('./coopDefenseEnemies').CoopDefenseEnemyKind;
+    readonly clip: string;
+    readonly startMs: number;
+    /** Blickrichtung in Radiant (0 = Osten), wie der gespawnte Boss sie zuerst hat. */
+    readonly facing: number;
+  };
   readonly camera: {
     readonly panInMs: number;
     /** Wie lange nach dem Durchbruch die Kamera noch auf dem Boss bleibt. */
@@ -129,28 +140,29 @@ export interface GraveyardRiseIntroPreset {
 }
 
 export const GRAVEYARD_RISE_INTRO: GraveyardRiseIntroPreset = {
-  emergeAtMs: 5_600,
-  durationMs: 8_000,
-  spawnEdgeMarginCells: 5,
-  moonlight: { fadeInMs: 900, fadeOutMs: 1_600, radius: 360, intensity: 1.15, color: 0xa9c4ff },
+  emergeAtMs: 6_400,
+  durationMs: 9_600,
+  spawnEdgeMarginCells: 10,
+  moonlight: { fadeInMs: 900, fadeOutMs: 1_800, radius: 600, intensity: 0.9, color: 0xa9c4ff },
   tombstones: {
-    count: 18,
-    fieldRadiusX: 165,
-    fieldRadiusY: 135,
-    innerRadius: 60,
-    rowSpacingPx: 64,
-    columnSpacingPx: 36,
+    count: 30,
+    fieldRadiusX: 310,
+    fieldRadiusY: 250,
+    innerRadius: 160,
+    rowSpacingPx: 72,
+    columnSpacingPx: 44,
     riseStartMs: 600,
-    riseStaggerMs: 120,
-    riseDurationMs: 560,
-    sizePx: 24,
-    sizeJitter: 0.2,
-    plotWidthPx: 26,
+    riseStaggerMs: 95,
+    riseDurationMs: 600,
+    sizePx: 34,
+    sizeJitter: 0.25,
+    plotWidthPx: 34,
   },
-  fireflies: { count: 20, startMs: 1_000, orbitRadius: 175 },
-  churn: { startMs: 3_000, radius: 64, rumbleAmplitudePx: 6 },
-  shatter: { fragmentsPerStone: 4, fragmentLifetimeMs: 1_500, fragmentSpeed: 260, shockwaveRadius: 190 },
-  camera: { panInMs: 1_400, holdAfterEmergeMs: 1_100, panOutMs: 1_300, zoom: 1.45 },
+  fireflies: { count: 24, startMs: 1_000, orbitRadius: 300 },
+  churn: { startMs: 3_000, radius: 150, rumbleAmplitudePx: 9 },
+  shatter: { fragmentsPerStone: 4, fragmentLifetimeMs: 1_700, fragmentSpeed: 340, shockwaveRadius: 400 },
+  riser: { enemyKind: 'grave-titan', clip: 'emerge', startMs: 3_900, facing: 0 },
+  camera: { panInMs: 1_400, holdAfterEmergeMs: 1_900, panOutMs: 1_400, zoom: 1.15 },
 };
 
 export function getBossIntroPreset(id: 'graveyard-rise'): GraveyardRiseIntroPreset;

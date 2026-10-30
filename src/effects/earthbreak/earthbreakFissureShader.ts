@@ -79,6 +79,8 @@ uniform float uDetail;
 uniform vec3 uEmber;
 uniform vec3 uGlow;
 uniform vec3 uHot;
+// Glow of an open crack before it ignites (0 = a dark crack, as dug by the burrowing badger).
+uniform float uPreGlow;
 varying vec2 vWorld;
 varying vec2 vLocal;
 varying vec4 vShape;
@@ -237,6 +239,8 @@ vec4 shade(Site s, bool crater, out vec3 glowOut) {
     glow += EMBER * depth * (0.05 * pulse + 0.55 * heat) * taper;
     // Under the night lightmap a dark crack vanishes: the emissive copy keeps a faint ember.
     if (uPass > 0.5) glow += EMBER * depth * 0.14 * pulse * taper * (1.0 - collapsed);
+    // A warning crack smoulders while it waits for its ignition.
+    glow += GLOW * depth * uPreGlow * (0.6 + 0.4 * pulse) * taper * (1.0 - ignition) * (1.0 - collapsed);
     glow += GLOW * depth * tip * 0.5;
   }
 

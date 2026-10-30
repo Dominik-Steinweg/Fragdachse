@@ -243,8 +243,8 @@ export class MovementEffectsRenderer {
     for (let paw = 0; paw < s.pawCount; paw++) {
       const left = paw === 0 || (s.pawCount === 4 && paw === 3);
       const front = s.pawCount === 4 && (paw === 0 || paw === 2);
-      const lateral = (left ? -1 : 1) * s.size * 0.2;
-      const forward = s.pawCount === 4 ? (front ? 1 : -1) * s.size * 0.18 : -s.size * 0.1;
+      const lateral = (left ? -1 : 1) * s.size * (s.pawLateralShare || 0.2);
+      const forward = s.pawCount === 4 ? (front ? 1 : -1) * s.size * (s.pawForwardShare || 0.18) : -s.size * 0.1;
       this.spawnFootprint(s, x + nx * forward - ny * lateral, y + ny * forward + nx * lateral, facing, age);
     }
   }
@@ -253,7 +253,7 @@ export class MovementEffectsRenderer {
     if (!this.prints.canSpawn(s.player)) return;
     const spec = this.footprint;
     const tuning = MOVEMENT_FX.footprint;
-    const size = Math.max(0.85, Math.min(1.5, Math.sqrt(s.size / 32)));
+    const size = s.printScale || Math.max(0.85, Math.min(1.5, Math.sqrt(s.size / 32)));
     const glowScale = s.footprintGlow ? MOVEMENT_FX.footprintGlow.scale : 1;
     spec.frame = PAW_FRAMES[s.footprint];
     spec.x = x; spec.y = y;

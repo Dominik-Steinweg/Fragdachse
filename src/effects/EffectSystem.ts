@@ -180,6 +180,7 @@ export class EffectSystem implements EnemyVisualSink {
     const preset = meleePresetOf(state.attack?.weaponId), tongue = preset === 'enemy_tongue';
     // Tongue, ink and slam announce only their red danger sector; their strike has its own visual, no rakes.
     this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor, tongue || preset === 'enemy_ink' || preset === 'enemy_slam');
+    if (preset === 'enemy_slam') this.graveTitanImpact?.syncWindup(id, state.attack, x, y, now, visible);
     if (tongue) this.withTongueLash(renderer => renderer.sync(id, state.attack, x, y, bodyRadius, now, visible));
     else this.tongueLash?.sync(id, null, x, y, bodyRadius, now, visible);
   }
@@ -339,10 +340,10 @@ export class EffectSystem implements EnemyVisualSink {
     this.pounceImpactRenderer = renderer;
   }
 
-  private graveTitanImpact: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play'> | null = null;
+  private graveTitanImpact: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play' | 'syncWindup'> | null = null;
 
   /** Torn ground of the Grave Titan's slam and stomp; driven only by the replicated melee swing. */
-  setGraveTitanImpactRenderer(renderer: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play'> | null): void {
+  setGraveTitanImpactRenderer(renderer: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play' | 'syncWindup'> | null): void {
     this.graveTitanImpact = renderer;
   }
 
@@ -1796,7 +1797,7 @@ export class EffectSystem implements EnemyVisualSink {
    * dust ring at the struck edge, a green light burst, a screen shockwave and heavy camera feedback.
    */
   private confirmGraveTitanSlam(swing: SyncedMeleeSwing): void {
-    const impact = this.graveTitanImpact?.play(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range);
+    const impact = this.graveTitanImpact?.play(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.clawAttackId);
     const x = impact?.x ?? swing.x, y = impact?.y ?? swing.y, radius = impact?.radius ?? swing.range;
     this.pounceImpactRenderer?.play(x, y, radius, GRAVE_TITAN_SLAM_GLINT);
     this.lighting?.pulse('explosion', x, y, { radiusPx: radius * 1.8, color: GRAVE_TITAN_SLAM_GLINT, intensity: 1.5, durationMs: 650, occludes: false });

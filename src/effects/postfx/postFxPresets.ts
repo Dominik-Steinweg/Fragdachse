@@ -16,6 +16,7 @@ export const POST_FX_EVENTS = [
   'heavyLocalHit',
   'bossPhaseChange',
   'krakenRoar',
+  'graveTitanRoar',
   'nukeDetonation',
   'voidNukeDetonation',
   'holyDetonation',
@@ -67,6 +68,14 @@ const PRESETS: Readonly<Record<PostFxEvent, PostFxPulse>> = {
     durationMs: 900,
     ease: 'impulse',
     grade: { bloomAmount: 0.45, tint: VOID_PALETTE.primary, tintStrength: 0.18, contrast: 0.06, vignetteStrength: 0.08 },
+  },
+
+  /** Durchbruch des Grufttitans: grünes Grablicht mit schwerem Bloom und dunklem Rand, kein Weißblitz. */
+  graveTitanRoar: {
+    priority: POST_FX_PRIORITY.bossPhase,
+    durationMs: 1100,
+    ease: 'impulse',
+    grade: { bloomAmount: 0.5, tint: 0x6fe88a, tintStrength: 0.16, contrast: 0.08, vignetteStrength: 0.16 },
   },
 
   /** Normale Nuke: warmer Belichtungsstoß mit kurzer Bloom-Spitze. */

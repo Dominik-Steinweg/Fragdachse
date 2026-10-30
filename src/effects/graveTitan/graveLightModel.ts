@@ -12,13 +12,13 @@ export const GRAVE_LIGHTS = {
   orbitMin: 0.55, orbitMax: 0.95,
   orbitSpeedMin: 0.35, orbitSpeedMax: 0.6,
   /** Crown radius over the grave (world px) and its spin while gathering (rad/s). */
-  crownRadius: 30, crownSpin: 4.2,
+  crownRadius: 52, crownSpin: 3.6,
   /** A refilled light rises out of a lantern hole at this share of the body radius and drifts to its orbit. */
   holeShare: 0.6, riseMs: 700,
   /** Lights that never launched (cancelled or cut salvo) drift back to their orbit. */
   returnMs: 520,
-  size: 5.4, chargedSize: 7.2,
-  intensity: 1, chargedIntensity: 2.1,
+  size: 6.4, chargedSize: 7.2,
+  intensity: 1, chargedIntensity: 1.2,
 } as const;
 
 export interface GraveLightPose {

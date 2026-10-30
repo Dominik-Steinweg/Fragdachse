@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { clawFrameIndex, meleeLiftProfile, type EnemyClawAttack } from '../src/systems/EnemyClawAttack';
 import { graveTitanImpactGeometry } from '../src/effects/graveTitan/graveTitanImpactGeometry';
-import { graveLightPose, launchedGraveLights, type GraveLightPose } from '../src/effects/graveTitan/graveLightModel';
+import { GRAVE_LIGHTS, graveLightPose, launchedGraveLights, type GraveLightPose } from '../src/effects/graveTitan/graveLightModel';
 import { volleyCastFrameIndex, VOLLEY_CAST_SETTLE_MS } from '../src/animations/EnemyVolleyAnimation';
 import { EMPTY_ENEMY_VOLLEY_STATE, type EnemyVolleyState } from '../src/systems/EnemyVolleyState';
 
@@ -55,7 +55,7 @@ describe('Grave Titan presentation', () => {
     const ready = pose(0, EMPTY_ENEMY_VOLLEY_STATE, 0, 1_000);
     expect(Math.hypot(ready.x - SITE.x, ready.y - SITE.y)).toBeGreaterThan(40);
     const gathered = pose(0, charging, 0, 1_799);
-    expect(Math.hypot(gathered.x - SITE.crownX, gathered.y - SITE.crownY)).toBeLessThan(32);
+    expect(Math.hypot(gathered.x - SITE.crownX, gathered.y - SITE.crownY)).toBeLessThanOrEqual(GRAVE_LIGHTS.crownRadius + 1);
     expect(gathered.intensity).toBeGreaterThan(ready.intensity);
 
     expect(pose(2, charging, 3, 1_900).alpha).toBe(0);

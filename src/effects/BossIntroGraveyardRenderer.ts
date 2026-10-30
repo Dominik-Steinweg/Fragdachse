@@ -9,6 +9,9 @@ import { CAMERA_FEEDBACK_PRIORITY, impactExceptional, impactLight, sustainedRumb
 import { ensureCanvasTexture, registerGraphicsObject } from './EffectUtils';
 import { GraveFireflySwarm, type GraveFireflyPose } from './GraveFireflySwarm';
 import type { LightingSystem } from './LightingSystem';
+import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
+import { getPipelineAssetForTexture } from '../config/pipelineAssets';
+import { getWalkingSheetForStaticTexture } from '../animations/BadgerAnimations';
 
 /**
  * Inszenierung „Friedhof erhebt sich“ vor dem Grave-Titan.
@@ -50,6 +53,11 @@ const RUMBLE_ID = 'bossIntro:rumble';
 const MIST_COUNT = 7;
 /** Einmal-Effekte zünden nur, wenn ihr Zeitpunkt höchstens so lange zurückliegt. */
 const ONE_SHOT_STALE_MS = 450;
+/** The risen boss stays on screen this long after the spawn, until the replicated body has arrived. */
+const RISER_HANDOFF_MS = 320;
+/** Fireflies dive into the boss from this long before its breakthrough. */
+const FIREFLY_DIVE_LEAD_MS = 600;
+const FIREFLY_DIVE_MS = 900;
 
 interface StoneLayout {
   readonly x: number;
@@ -131,6 +139,9 @@ export class BossIntroGraveyardRenderer {
   private readonly moonbeam: Phaser.GameObjects.Image;
   private cameraFeedback: CameraFeedbackController | null = null;
   private audio: GameAudioSystem | null = null;
+  private postFx: ((event: 'graveTitanRoar') => void) | null = null;
+  /** The boss digging itself out before it spawns (its own sheet, created with the first intro). */
+  private riser: Phaser.GameObjects.Sprite | null = null;
   private current: IntroScene | null = null;
   private lightsActive = false;
   private destroyed = false;
@@ -147,6 +158,7 @@ export class BossIntroGraveyardRenderer {
 
   setCameraFeedback(controller: CameraFeedbackController | null): void { this.cameraFeedback = controller; }
   setAudioSystem(audio: GameAudioSystem | null): void { this.audio = audio; }
+  setPostFx(pulse: ((event: 'graveTitanRoar') => void) | null): void { this.postFx = pulse; }
 
   /** Ob ein Intro gerade das Erscheinen dieses Bosses inszeniert (unterdrückt den Spawnblitz). */
   ownsSpawnAt(state: BossIntroState | null, now: number): boolean {
@@ -179,6 +191,7 @@ export class BossIntroGraveyardRenderer {
     }
     const intro = this.current!;
     this.renderStones(intro, elapsed);
+    this.renderRiser(intro, elapsed);
     this.renderFragments(intro, elapsed);
     this.renderGround(intro, elapsed);
     this.renderAtmosphere(intro, elapsed, now);
@@ -198,6 +211,7 @@ export class BossIntroGraveyardRenderer {
     this.fireflySwarm = null;
     this.crater.setVisible(false);
     this.moonbeam.setVisible(false);
+    this.riser?.setVisible(false);
     this.releaseLights();
     this.cameraFeedback?.release(RUMBLE_ID, 120);
     clearCameraFocusOverride(this.scene);
@@ -214,6 +228,8 @@ export class BossIntroGraveyardRenderer {
 
     this.crater.destroy();
     this.moonbeam.destroy();
+    this.riser?.destroy();
+    this.riser = null;
   }
 
   // ── Aufbau ────────────────────────────────────────────────────────────────
@@ -391,6 +407,32 @@ export class BossIntroGraveyardRenderer {
     });
   }
 
+  /**
+   * The boss's emerge clip over the crater: its skull and clawing front paws break the ground
+   * first, then the body levels out into the rest pose the spawned boss takes over.
+   */
+  private renderRiser(intro: IntroScene, elapsed: number): void {
+    const { preset, state } = intro, riser = preset.riser;
+    const config = getCoopDefenseEnemyConfig(riser.enemyKind);
+    const sheet = getWalkingSheetForStaticTexture(config.imageKey);
+    const clip = getPipelineAssetForTexture(config.imageKey)?.clips.find(candidate => candidate.name === riser.clip);
+    const visible = elapsed >= riser.startMs && elapsed < preset.emergeAtMs + RISER_HANDOFF_MS;
+    if (!visible || !sheet || !clip?.frames.length || !this.scene.textures.exists(sheet.textureKey)) {
+      this.riser?.setVisible(false);
+      return;
+    }
+    if (!this.riser) {
+      this.riser = this.scene.add.sprite(0, 0, sheet.textureKey, clip.frames[0]).setDepth(DEPTH.PLAYERS - 0.05);
+      registerGraphicsObject(this.scene, 'bossIntro', this.riser);
+    }
+    const progress = clamp01((elapsed - riser.startMs) / (preset.emergeAtMs - riser.startMs));
+    const frame = clip.frames[Math.min(clip.frames.length - 1, Math.floor(progress * clip.frames.length))];
+    const size = config.size * sheet.displayScale;
+    const handoff = clamp01((elapsed - preset.emergeAtMs) / RISER_HANDOFF_MS);
+    this.riser.setTexture(sheet.textureKey, frame).setDisplaySize(size, size).setPosition(state.x, state.y)
+      .setRotation(riser.facing + Math.PI / 2).setTint(config.color ?? 0xffffff).setAlpha(1 - handoff * handoff).setVisible(true);
+  }
+
   private renderFragments(intro: IntroScene, elapsed: number): void {
     const since = elapsed - intro.preset.emergeAtMs;
     const lifetime = intro.preset.shatter.fragmentLifetimeMs;
@@ -450,7 +492,7 @@ export class BossIntroGraveyardRenderer {
     this.lighting.setLight(RIM_LIGHT_KEY, 'firefly', state.x, state.y, {
       radiusPx: preset.churn.radius * 2.6,
       color: 0x8fd16a,
-      intensity: 0.85 * smoothstep(churnProgress * 1.4) * fadeOut,
+      intensity: 0.55 * smoothstep(churnProgress * 1.4) * fadeOut,
     });
     this.lightsActive = true;
 
@@ -470,27 +512,29 @@ export class BossIntroGraveyardRenderer {
         .setScale((2.4 + (index % 3) * 0.5) * swell);
     }
 
-    // Glühwürmchen schweben ruhig über dem Friedhof und stieben beim Durchbruch davon.
+    // Glühwürmchen schweben ruhig über dem Friedhof und tauchen kurz vor dem Durchbruch in den
+    // Titan ein: Sie werden zu den Grablichtern, die danach über seinem Rücken kreisen.
     const seconds = elapsed / 1000;
-    const scatter = Math.max(0, elapsed - emerge) / 1000;
-    const scatterFade = 1 - smoothstep(scatter / 1.4);
     this.fireflyPoses.length = 0;
-    for (const firefly of intro.fireflies) {
+    intro.fireflies.forEach((firefly, index) => {
       const appear = smoothstep((elapsed - preset.fireflies.startMs - firefly.delayMs) / 900);
-      const spread = 1 + scatter * scatter * 2.2;
+      const dive = smoothstep((elapsed - (emerge - FIREFLY_DIVE_LEAD_MS) - (index % 6) * 45) / FIREFLY_DIVE_MS);
       const omegaX = firefly.frequencyX * Math.PI * 2;
       const omegaY = firefly.frequencyY * Math.PI * 2;
-      const x = state.x + firefly.anchorX * spread + Math.sin(seconds * omegaX + firefly.phaseX) * firefly.amplitudeX;
-      const y = state.y + firefly.anchorY * spread + Math.cos(seconds * omegaY + firefly.phaseY) * firefly.amplitudeY;
-      const vx = firefly.anchorX * scatter * 4.4 + Math.cos(seconds * omegaX + firefly.phaseX) * firefly.amplitudeX * omegaX;
-      const vy = firefly.anchorY * scatter * 4.4 - Math.sin(seconds * omegaY + firefly.phaseY) * firefly.amplitudeY * omegaY;
+      const hoverX = state.x + firefly.anchorX + Math.sin(seconds * omegaX + firefly.phaseX) * firefly.amplitudeX;
+      const hoverY = state.y + firefly.anchorY + Math.cos(seconds * omegaY + firefly.phaseY) * firefly.amplitudeY;
+      const swirl = dive * 1.6;
+      const x = hoverX + (state.x - hoverX) * dive + Math.cos(seconds * 6 + index) * 30 * swirl * (1 - dive);
+      const y = hoverY + (state.y - hoverY) * dive + Math.sin(seconds * 6 + index) * 24 * swirl * (1 - dive);
+      const vx = (state.x - hoverX) * dive + Math.cos(seconds * omegaX + firefly.phaseX) * firefly.amplitudeX * omegaX;
+      const vy = (state.y - hoverY) * dive - Math.sin(seconds * omegaY + firefly.phaseY) * firefly.amplitudeY * omegaY;
       this.fireflyPoses.push({
         x,
         y,
         heading: Math.atan2(vy, vx),
-        alpha: appear * scatterFade,
+        alpha: appear * (1 - smoothstep((dive - 0.75) / 0.25)),
       });
-    }
+    });
     this.fireflySwarm?.sync(this.fireflyPoses, now);
   }
 
@@ -534,7 +578,9 @@ export class BossIntroGraveyardRenderer {
       this.burrowGpu.playShockwave(state.x, state.y, preset.shatter.shockwaveRadius);
       this.burrowGpu.playExit(state.x, state.y);
       for (const stone of intro.stones) this.burrowGpu.playExit(stone.x, stone.y);
-      this.lighting.pulse('teleportFlash', state.x, state.y, { radiusPx: 320, intensity: 1.1, color: 0xd6ffc4, durationMs: 520 });
+      this.lighting.pulse('teleportFlash', state.x, state.y, { radiusPx: 520, intensity: 0.75, color: 0x8cf09a, durationMs: 620 });
+      // The breakthrough roars: a green grave-light bloom over the whole view.
+      this.postFx?.('graveTitanRoar');
     }
   }
 

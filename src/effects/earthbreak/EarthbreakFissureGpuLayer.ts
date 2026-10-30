@@ -18,10 +18,12 @@ export interface FissurePalette {
   readonly ember: readonly [number, number, number];
   readonly glow: readonly [number, number, number];
   readonly hot: readonly [number, number, number];
+  /** Glow of an open crack before it ignites; 0 keeps it dark. */
+  readonly preGlow: number;
 }
 
 export const EMBER_FISSURE_PALETTE: FissurePalette = {
-  name: '', ember: [1.0, 0.42, 0.08], glow: [1.0, 0.62, 0.2], hot: [1.0, 0.93, 0.72],
+  name: '', ember: [1.0, 0.42, 0.08], glow: [1.0, 0.62, 0.2], hot: [1.0, 0.93, 0.72], preGlow: 0,
 };
 
 /**
@@ -101,6 +103,7 @@ export function createEarthbreakFissureGpuLayer(scene: Phaser.Scene, store: Eart
         program.setUniform('uEmber', palette.ember);
         program.setUniform('uGlow', palette.glow);
         program.setUniform('uHot', palette.hot);
+        program.setUniform('uPreGlow', palette.preGlow);
         program.applyUniforms(suite.program);
         renderer!.drawElements(context, [image.frame.source.glTexture!], suite.program, suite.vao,
           Math.max(1, store.count) * FISSURE_VERTICES, 0, this.topology);

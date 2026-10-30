@@ -6,7 +6,7 @@
     { "id": "west-upper", "gridX": 0, "gridY": 0, "widthCells": 8, "heightCells": 8 },
     { "id": "west-lower", "gridX": 0, "gridY": 16, "widthCells": 8, "heightCells": 8 },
     { "id": "south-mid", "gridX": 35, "gridY": 31, "widthCells": 10, "heightCells": 6 },
-    { "id": "titan-grave", "gridX": 0, "gridY": 8, "widthCells": 8, "heightCells": 8 }
+    { "id": "titan-grave", "gridX": 16, "gridY": 9, "widthCells": 8, "heightCells": 8 }
   ],
   "timeOfDay": "22:30",
   "objective": "defeat-boss",

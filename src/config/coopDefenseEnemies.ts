@@ -737,6 +737,11 @@ export interface CoopDefenseEnemyConfig {
   readonly krakenBoss?: KrakenBossConfig;
   readonly krakenEgg?: KrakenEggConfig;
   readonly pawCount: PawCount;
+  /**
+   * Where the feet of a large body land, as shares of its collision size (lateral from the centre
+   * line, forward/back from the centre), and the footprint scale. Without it the small-body defaults apply.
+   */
+  readonly pawSpan?: { readonly lateralShare: number; readonly forwardShare: number; readonly printScale: number };
   readonly maxHp: number;
   readonly xp: number;
   readonly size: number;
@@ -892,6 +897,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         obstacleAttackDelayMs: config.obstacleAttackDelayMs,
         imageKey: config.imageKey,
         pawCount: config.pawCount,
+        pawSpan: config.pawSpan,
         spriteRotationOffsetDegrees: config.spriteRotationOffsetDegrees,
         isBoss: config.isBoss,
         color: config.color,
@@ -1060,6 +1066,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     obstacleAttackDelayMs: Math.max(0, Math.floor(enemy.obstacleAttackDelayMs)),
     imageKey: enemy.imageKey,
     pawCount: requirePawCount(enemy.pawCount, enemy.id),
+    pawSpan: normalizePawSpan(enemy.pawSpan, enemy.id),
     spriteRotationOffsetDegrees: typeof enemy.spriteRotationOffsetDegrees === 'number'
       && Number.isFinite(enemy.spriteRotationOffsetDegrees)
       ? enemy.spriteRotationOffsetDegrees
@@ -1422,6 +1429,14 @@ function normalizeWeapons(
       usableDuringPriorityPause: weapon.usableDuringPriorityPause === true ? true : undefined,
     };
   });
+}
+
+function normalizePawSpan(span: CoopDefenseEnemyConfig['pawSpan'], enemyId: string): CoopDefenseEnemyConfig['pawSpan'] {
+  if (!span) return undefined;
+  if (![span.lateralShare, span.forwardShare, span.printScale].every(value => Number.isFinite(value) && value > 0 && value <= 4)) {
+    throw new Error(`[coopDefenseEnemies] Enemy ${enemyId} has an invalid paw span`);
+  }
+  return { lateralShare: span.lateralShare, forwardShare: span.forwardShare, printScale: span.printScale };
 }
 
 function normalizeMeleeTiming(timing: CoopDefenseEnemyWeaponConfig['meleeTiming']): CoopDefenseEnemyWeaponConfig['meleeTiming'] {

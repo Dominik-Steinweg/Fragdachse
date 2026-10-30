@@ -832,6 +832,8 @@ export class EnemyEntity {
     out.isBurrowDash = false;
     out.revision = this.movementRevision;
     out.footprintGlow = this.faction === 'hostile' ? this.config.bossPresence?.footprintGlowColor ?? 0 : 0;
+    const span = this.config.pawSpan;
+    out.pawLateralShare = span?.lateralShare ?? 0; out.pawForwardShare = span?.forwardShare ?? 0; out.printScale = span?.printScale ?? 0;
   }
 
   /** The trail this enemy lays in the fog (E12): only while it walks on the ground in view of the world. */

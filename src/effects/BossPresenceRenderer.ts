@@ -60,6 +60,8 @@ interface BossTrack {
   cycle: number;
   seenLaunches: number;
   readonly lights: GraveLightPose[];
+  /** First sight: the grave lights rise out of the boss as it appears. */
+  readonly bornAt: number;
 }
 
 /** A flying salvo shot drawn as a grave light; it starts where its light was and glides into its path. */
@@ -80,6 +82,11 @@ const FLIGHT_SIZE = 6.2;
 const FLIGHT_TRAIL_S = 0.07;
 const FLIGHT_TRAIL_MAX = 34;
 const PUFF_MS = 380;
+/** Ground light of one grave light: green, and weak enough that ten in a crown never wash out the boss. */
+const GRAVE_LIGHT_GROUND = 0.4;
+const GRAVE_LIGHT_COLOR = 0x7dff8a;
+/** A newly seen boss's grave lights rise out of it over this time. */
+const GRAVE_LIGHTS_APPEAR_MS = 900;
 const PUFF_SIZE = 7;
 const MAX_PUFFS = 24;
 
@@ -183,7 +190,7 @@ export class BossPresenceRenderer {
         centerY: source.y,
         lastNowMs: nowMs,
         seenAt: nowMs,
-        x: source.x, y: source.y, volley: null, cycle: Number.NaN, seenLaunches: 0, lights: [],
+        x: source.x, y: source.y, volley: null, cycle: Number.NaN, seenLaunches: 0, lights: [], bornAt: nowMs,
       };
       this.tracks.set(source.id, track);
     }
@@ -225,12 +232,14 @@ export class BossPresenceRenderer {
     while (track.lights.length < volley.count) track.lights.push({ x: 0, y: 0, alpha: 0, size: 0, intensity: 0 });
     track.lights.length = volley.count;
     const salt = (hashId(source.id) % 997) / 997;
+    const appear = Math.min(1, Math.max(0, (nowMs - track.bornAt) / GRAVE_LIGHTS_APPEAR_MS));
     for (let index = 0; index < volley.count; index++) {
       const light = graveLightPose(index, volley.count, site, volley.state, track.seenLaunches, nowMs, track.lights[index]);
-      if (!source.visible || light.alpha <= 0.01) continue;
+      const alpha = light.alpha * appear;
+      if (!source.visible || alpha <= 0.01) continue;
       this.wisps.add({ tailX: light.x, tailY: light.y, headX: light.x, headY: light.y, halfWidth: light.size * 2.6,
-        kind: GraveWispKind.Light, t: 0, seed: (index * 0.37 + salt) % 1, size: light.size, intensity: light.intensity * light.alpha });
-      this.light(`graveLight:${source.id}:${index}`, light.x, light.y, light.alpha * Math.min(1.6, light.intensity));
+        kind: GraveWispKind.Light, t: 0, seed: (index * 0.37 + salt) % 1, size: light.size, intensity: light.intensity * alpha });
+      this.light(`graveLight:${source.id}:${index}`, light.x, light.y, alpha * Math.min(1.6, light.intensity));
     }
   }
 
@@ -267,7 +276,7 @@ export class BossPresenceRenderer {
   private light(key: string, x: number, y: number, strength: number): void {
     this.frameKeys.add(key);
     this.litKeys.add(key);
-    this.lighting.setLight(key, 'stagedFirefly', x, y, { intensity: 0.9 * strength });
+    this.lighting.setLight(key, 'stagedFirefly', x, y, { intensity: GRAVE_LIGHT_GROUND * strength, color: GRAVE_LIGHT_COLOR });
   }
 
   private releaseLight(key: string): void {

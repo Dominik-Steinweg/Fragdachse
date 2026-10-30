@@ -45,7 +45,7 @@ import type {
 export interface CoopMissionPresentationInfrastructureInput {
   readonly cameraFeedback?: CameraFeedbackController;
   /** Whitelisted global post-FX accents (the kraken's roar). */
-  readonly postFxPulse?: (event: 'krakenRoar') => void;
+  readonly postFxPulse?: (event: 'krakenRoar' | 'graveTitanRoar') => void;
   readonly krakenAssets?: KrakenPresentationAssets | null;
   readonly getWorldLayout?: () => ArenaLayout | null;
   readonly getWorldMetrics?: () => WorldMetrics | null;
@@ -214,6 +214,7 @@ export class CoopMissionPresentationInfrastructure {
     this.krakenIntro = new KrakenIntroRenderer(this.scene, assets?.water ?? null, waterAt, diagnostic, 0, input.renderers.shadow, assets?.spine,
       input.renderers.lighting ?? null);
     this.krakenIntro.setCameraFeedback(input.cameraFeedback ?? null, input.postFxPulse);
+    input.renderers.bossIntro.setPostFx(input.postFxPulse ?? null);
     this.krakenPondVoid = new KrakenPondVoid(this.scene, input.renderers.lighting ?? null,
       () => ({ layout: input.getWorldLayout?.() ?? null, metrics: input.getWorldMetrics?.() ?? null }));
 

@@ -20,6 +20,10 @@ export interface MovementVisualSample {
   revision: number;
   /** Authored Leuchtfarbe der Fußspuren; 0 = normale, unbeleuchtete Abdrücke. */
   footprintGlow: number;
+  /** Paw span of a large body (shares of `size`) and its print scale; 0 = small-body defaults. */
+  pawLateralShare: number;
+  pawForwardShare: number;
+  printScale: number;
 }
 
 export interface MovementVisualSource {
@@ -33,7 +37,7 @@ export type MovementContactSink = (
 
 export function createMovementVisualSample(): MovementVisualSample {
   return { id: '', x: 0, y: 0, facing: 0, size: 32, pawCount: 2, footprint: 'compact', player: false,
-    visible: false, mode: 'idle', isBurrowDash: false, revision: 0, footprintGlow: 0 };
+    visible: false, mode: 'idle', isBurrowDash: false, revision: 0, footprintGlow: 0, pawLateralShare: 0, pawForwardShare: 0, printScale: 0 };
 }
 
 /** Distance, not render frames or input, advances the gait. Dropped contacts still advance it. */
@@ -111,8 +115,8 @@ export class MovementStepSampler {
           const ny = Math.sin(facing);
           const left = this.paw === 0 || (s.pawCount === 4 && this.paw === 3);
           const front = s.pawCount === 4 && (this.paw === 0 || this.paw === 2);
-          const lateral = (left ? -1 : 1) * s.size * 0.16;
-          const forward = s.pawCount === 4 ? (front ? 1 : -1) * s.size * 0.16 : -s.size * 0.1;
+          const lateral = (left ? -1 : 1) * s.size * (s.pawLateralShare || 0.16);
+          const forward = s.pawCount === 4 ? (front ? 1 : -1) * s.size * (s.pawForwardShare || 0.16) : -s.size * 0.1;
           x += nx * forward - ny * lateral;
           y += ny * forward + nx * lateral;
           emit('step', x, y, this.heading, this.paw, deltaMs * (1 - t), facing);
