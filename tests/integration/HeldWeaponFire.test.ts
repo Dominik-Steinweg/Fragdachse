@@ -187,7 +187,8 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number, r
   const prediction = Object.create(ClientUpdateCoordinator.prototype) as ClientUpdateCoordinator;
   const aimModel = new AimSpreadModel(() => config);
   const aimSystem = Object.create(AimSystem.prototype) as AimSystem;
-  Object.assign(aimSystem, { spreadModel: aimModel });
+  // notifyShot also stamps the shot flash of the aim guide on the scene clock.
+  Object.assign(aimSystem, { spreadModel: aimModel, scene: { time: { now: 0 } } });
   const aim = vi.fn((slot: WeaponSlot) => aimSystem.notifyShot(slot));
   const hud = vi.fn();
   Object.assign(prediction, {
