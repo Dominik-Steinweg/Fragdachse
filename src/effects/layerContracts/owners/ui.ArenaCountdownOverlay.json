@@ -1,7 +1,9 @@
 {
   "owner": "ui/ArenaCountdownOverlay.ts",
   "source": {
-    "blends": [],
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
     "cameras": [
       "promoteToClarityCamera(scene, this.loadingBackdrop)",
       "promoteToClarityCamera(scene, this.loadingRoot)"

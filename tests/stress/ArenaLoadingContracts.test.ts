@@ -49,17 +49,15 @@ describe('arena loading contracts', () => {
     expect(hostLayout.rocks.length).toBeGreaterThan(10_000);
   }, 120_000);
 
-  it('maps chunk work to coarse stages and reaches ready without a lead delay', () => {
-    expect(resolveWorldLoadProgress(100, 0, false)).toEqual({
-      progress: 70,
-      stage: 'rendering',
-      ready: false,
-    });
-    expect(resolveWorldLoadProgress(30, 70, false)).toEqual({
-      progress: 88,
-      stage: 'rendering',
-      ready: false,
-    });
+  it('maps chunk work to the rendering stage and reaches ready without a lead delay', () => {
+    const start = resolveWorldLoadProgress(100, 0, false, [false]);
+    const middle = resolveWorldLoadProgress(30, 70, false, [false]);
+    const gated = resolveWorldLoadProgress(30, 70, false, [true]);
+    expect(start).toMatchObject({ stage: 'rendering', ready: false });
+    expect(middle.progress).toBeGreaterThan(start.progress);
+    expect(gated.progress).toBeGreaterThan(middle.progress);
+    // Ohne Bereitschaft bleibt Platz bis 100; erst die Endstufe schliesst ab.
+    expect(resolveWorldLoadProgress(0, 70, false, [true]).progress).toBeLessThan(100);
     // Die World meldet fertig, sobald sie lokal steht – unabhaengig davon, ob eine Runde
     // starten darf. Round Loading ist eine getrennte Bedingung.
     expect(resolveWorldLoadProgress(0, 10, true)).toEqual({

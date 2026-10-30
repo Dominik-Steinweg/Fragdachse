@@ -1,3 +1,4 @@
+import { WorldLoadProgressEstimator } from '../../src/world/WorldLoadProgressEstimator';
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -115,6 +116,7 @@ function fixture(host = false, visibleLobby = true) {
     updateLoadingScreen: vi.fn(),
   };
   const flow = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+  flow.worldLoadEstimator = new WorldLoadProgressEstimator();
   Object.assign(flow, {
     scene, arenaTransitionGeneration: 0, arenaEntry: null, arenaTransitionInProgress: false,
     matchTerminated: false, lastPhase: 'LOBBY', arenaBuilt: true, builtWorldRevision: 10,
@@ -363,6 +365,7 @@ describe('loading backdrop transition', () => {
   function overlay() {
     const value = Object.create(ArenaCountdownOverlay.prototype) as any;
     Object.assign(value, { mode: 'hidden', loadingCoveredCallbacks: [],
+      shownProgress: new Map(), readyFlashAt: new Map(),
       loadingBackdrop: new Surface(), loadingRoot: new Surface(), countdownView: { hide: vi.fn() }, focusFallback: new Surface(),
       scene: { tweens: { add: vi.fn(), killTweensOf: vi.fn() } } });
     return value;

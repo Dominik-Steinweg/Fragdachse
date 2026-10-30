@@ -2190,7 +2190,7 @@ export class NetworkBridge {
     this.lastLocalWorldLoadStateKey = null;
   }
 
-  /** Publishes only stage changes or meaningful progress steps for the current world. */
+  /** Publishes only stage changes or whole-percent progress steps for the current world. */
   setLocalWorldLoadProgress(
     worldRevision: number,
     progress: number,
@@ -2199,7 +2199,7 @@ export class NetworkBridge {
   ): void {
     const normalizedProgress = ready || stage === 'ready'
       ? 100
-      : Math.min(95, Math.floor(normalizeWorldLoadProgress(progress) / 5) * 5);
+      : Math.min(99, normalizeWorldLoadProgress(Math.floor(progress)));
     const normalizedReady = ready === true && normalizedProgress >= 100 && stage === 'ready';
     const stateKey = `${worldRevision}|${stage}|${normalizedProgress}|${normalizedReady}`;
     if (this.lastLocalWorldLoadStateKey === stateKey) return;

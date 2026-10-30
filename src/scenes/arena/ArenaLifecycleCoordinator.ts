@@ -115,7 +115,8 @@ import {
 import { resolveCoopMissionActivityConfiguration } from '../../activity/CoopMissionActivityConfig';
 import { CoopMissionComposition } from '../../activity/CoopMissionComposition';
 import type { LoadoutToolRef } from '../../types';
-import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
+import { resolveWorldLoadProgress, WORLD_LOAD_BUILD_PROGRESS, type WorldLoadStage } from '../../world/WorldLoadReady';
+import { WorldLoadProgressEstimator } from '../../world/WorldLoadProgressEstimator';
 import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 import {
@@ -341,6 +342,7 @@ export class ArenaLifecycleCoordinator {
   private roundStartPrepared = false;
   private preparedRoundLayout: { descriptor: WorldDescriptor; layout: ArenaLayout } | null = null;
   private combatPresentationPrepared = false;
+  private readonly worldLoadEstimator = new WorldLoadProgressEstimator();
   private finishKrakenShaderWarmup: ReturnType<typeof warmupKrakenShaders> | null = null;
   private pendingHostArenaGeneration: HostArenaGenerationRequest | null = null;
   private runtimeDiagnosticEventSink: RuntimeDiagnosticEventSink | null = null;
@@ -2067,9 +2069,14 @@ export class ArenaLifecycleCoordinator {
     // Publishing it here also keeps local/late-client countdown fades behind that release.
     const localRenderReady = work.renderReady && this.terrainSnapshotReady
       && this.renderers.gpuVfx.isShaderWarmupComplete() && this.combatPresentationPrepared;
-    const loadProgress = resolveWorldLoadProgress(work.pending, work.resident, localRenderReady);
-    bridge.setLocalWorldLoadProgress(
+    const loadProgress = resolveWorldLoadProgress(work.pending, work.resident, localRenderReady, [
+      this.terrainSnapshotReady,
+      this.renderers.gpuVfx.isShaderWarmupComplete(),
+      this.combatPresentationPrepared,
+    ]);
+    this.publishWorldLoadProgress(
       worldRevision,
+      loadedWorld?.definitionId ?? null,
       loadProgress.progress,
       loadProgress.stage,
       loadProgress.ready,
@@ -2080,6 +2087,18 @@ export class ArenaLifecycleCoordinator {
     if (loadProgress.ready) loadingTimeline.get('world')?.finish();
 
     if (bridge.isHost()) this.tryScheduleArenaStart();
+  }
+
+  /** Publishes the locally estimated progress; the estimator keeps it monotonic until ready. */
+  private publishWorldLoadProgress(
+    worldRevision: number,
+    definitionId: string | null,
+    measured: number,
+    stage: WorldLoadStage,
+    ready = false,
+  ): void {
+    const progress = this.worldLoadEstimator.sample(worldRevision, definitionId, measured, ready, performance.now());
+    bridge.setLocalWorldLoadProgress(worldRevision, progress, stage, ready);
   }
 
   private recordLoadingBarriers(renderReady: boolean): void {
@@ -3044,7 +3063,8 @@ export class ArenaLifecycleCoordinator {
       this.combatPresentationPrepared = false;
     }
     this.preparedRoundLayout = null;
-    bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 35, 'building');
+    this.publishWorldLoadProgress(worldDescriptor.worldRevision, worldDescriptor.definitionId,
+      WORLD_LOAD_BUILD_PROGRESS.building, 'building');
     const coopDefensePersistentSpawnConfigs = activityConfiguration
       ? resolveCoopDefenseMapPersistentSpawnConfigs(activityConfiguration.mapConfig, coopDefenseHumanPlayerCount)
       : [];
@@ -3130,7 +3150,8 @@ export class ArenaLifecycleCoordinator {
     if (coopMissionRuntime && baseManager && missionMapConfig && activityDescriptor) {
       this.attachCoopMissionBaseBinding(activityDescriptor, coopMissionRuntime);
     }
-    bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 60, 'building');
+    this.publishWorldLoadProgress(worldDescriptor.worldRevision, worldDescriptor.definitionId,
+      WORLD_LOAD_BUILD_PROGRESS.built, 'building');
     // Der Basiskern und sein committed Contribution-State gehoeren zur persistenten World. Nur
     // eine aktive Mission oeffnet zusaetzlich eine Working Copy; die LobbyWorld bearbeitet den
     // committed Stand dagegen unmittelbar.
@@ -3498,7 +3519,7 @@ export class ArenaLifecycleCoordinator {
       // phase/overlay was already committed in the preceding frame; this callback is the only
       // place that performs the host's layout work for the new round.
       this.pendingHostArenaGeneration = null;
-      bridge.setLocalWorldLoadProgress(request.roundRevision, 10, 'generating');
+      this.publishWorldLoadProgress(request.roundRevision, null, WORLD_LOAD_BUILD_PROGRESS.generating, 'generating');
       try {
         // Erst hinter dem gerenderten Ladeschirm die Lobby beenden; keine zweite World.
         this.synchronizeLocalWorldLifecycle(null);
@@ -3756,7 +3777,8 @@ export class ArenaLifecycleCoordinator {
       && bridge.getWorldDescriptor()?.worldRevision === worldRevision
     );
 
-    bridge.setLocalWorldLoadProgress(worldRevision, 70, 'rendering');
+    this.publishWorldLoadProgress(worldRevision, bridge.getWorldDescriptor()?.definitionId ?? null,
+      WORLD_LOAD_BUILD_PROGRESS.rendering, 'rendering');
     let build: Promise<import('../../arena/TerrainColorSnapshot').TerrainColorSnapshot>;
     try {
       build = new TerrainColorSnapshotBuilder({

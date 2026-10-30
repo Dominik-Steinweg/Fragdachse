@@ -56,7 +56,7 @@ export function normalizeWorldLoadProgress(progress: unknown): number {
   return Math.max(0, Math.min(100, Math.round(progress)));
 }
 
-/** Grob gerasterter, netzsparsamer Ladefortschritt einer World. */
+/** Ladefortschritt einer World in Prozent (0–100, ungerundet). */
 export interface WorldLoadProgressResult {
   readonly progress: number;
   readonly stage: WorldLoadStage;
@@ -64,25 +64,41 @@ export interface WorldLoadProgressResult {
 }
 
 /**
- * Uebersetzt die Chunk-Statistik des lokalen World-Aufbaus in den replizierten Fortschritt.
+ * Fortschrittsmarken des synchronen World-Aufbaus. Gemessen dauert er nur rund ein Zehntel der
+ * Ladezeit; den Rest tragen Render-Working-Set, Terrain-Snapshot und Kampf-Vorbereitung.
+ */
+export const WORLD_LOAD_BUILD_PROGRESS = {
+  generating: 2,
+  building: 5,
+  built: 9,
+  rendering: 12,
+} as const;
+const RENDER_SPAN = 98 - WORLD_LOAD_BUILD_PROGRESS.rendering;
+/** Anteil der Chunk-Arbeit an der Renderstufe; den Rest teilen sich die uebrigen Ladegates. */
+const RENDER_WORK_SHARE = 0.7;
+
+/**
+ * Uebersetzt die Chunk-Statistik des lokalen World-Aufbaus in den Fortschritt der Renderstufe.
  *
  * Sie beschreibt ausschliesslich die World: ist die lokale Welt gebaut und darstellbar? Ob eine
  * Runde starten darf, ist eine davon getrennte Frage – eine World ohne Activity ist fertig
- * geladen, ohne dass jemals eine Runde beginnt.
+ * geladen, ohne dass jemals eine Runde beginnt. `gates` sind weitere lokale Bedingungen derselben
+ * Barriere (Terrain-Snapshot, Shader, Kampf-Praesentation), die neben der Chunk-Arbeit laufen.
  */
 export function resolveWorldLoadProgress(
   pendingWork: number,
   residentWork: number,
   localWorldReady: boolean,
+  gates: readonly boolean[] = [],
 ): WorldLoadProgressResult {
   if (localWorldReady) return { progress: 100, stage: 'ready', ready: true };
   const pending = Math.max(0, pendingWork);
   const resident = Math.max(0, residentWork);
-  const renderProgress = pending <= 0
-    ? 100
-    : Math.max(0, Math.min(99, Math.round((resident / Math.max(1, resident + pending)) * 100)));
+  const workFraction = pending <= 0 ? 1 : resident / Math.max(1, resident + pending);
+  const gateFraction = gates.length === 0 ? 1 : gates.filter(Boolean).length / gates.length;
+  const fraction = RENDER_WORK_SHARE * workFraction + (1 - RENDER_WORK_SHARE) * gateFraction;
   return {
-    progress: 70 + Math.round(renderProgress * 0.25),
+    progress: WORLD_LOAD_BUILD_PROGRESS.rendering + RENDER_SPAN * fraction,
     stage: 'rendering',
     ready: false,
   };

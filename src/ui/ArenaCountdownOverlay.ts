@@ -1,6 +1,12 @@
-import { ensureLoadingPanel } from './loadingScreenTextures';
+import {
+  ensureLoadingBarTextures,
+  ensureLoadingPanel,
+  LOADING_BAR_HEIGHT,
+  LOADING_BAR_WIDTH,
+  type LoadingBarTextureKeys,
+} from './loadingScreenTextures';
 import { LOADING_FOREST } from './LoadingScreenAssets';
-import { FONT_MONO, FONT_DISPLAY } from './uiTheme';
+import { FONT_DISPLAY } from './uiTheme';
 import * as Phaser from 'phaser';
 import {
   GAME_WIDTH,
@@ -39,6 +45,31 @@ const FOCUS_FALLBACK_HEIGHT = Math.ceil(GAME_HEIGHT * FOCUS_FALLBACK_SCALE);
 const FOCUS_FALLBACK_TINT = '54,54,54';
 const FOCUS_FALLBACK_MID_ALPHA = 0.14;
 const FOCUS_FALLBACK_OUTER_ALPHA = 0.30;
+const LOADING_BAR_X = 510;
+const LOADING_ROW_Y = 200;
+const LOADING_ROW_PITCH = 54;
+const LOADING_BAR_OFFSET_Y = 22;
+/** Zeitkonstanten der angezeigten Prozentzahl: folgt dem Ziel weich, nie rueckwaerts. */
+const SHOWN_FOLLOW_MS = 240;
+const SHOWN_READY_FOLLOW_MS = 110;
+/** Haelt die Anzeige bei kurzem Stillstand lebendig, eilt dem Messwert aber kaum voraus. */
+const SHOWN_CREEP_PER_MS = 0.0011;
+const SHOWN_MAX_LEAD = 2.5;
+const SHEEN_PERIOD_MS = 1900;
+const READY_FLASH_MS = 650;
+
+interface LoadingRow {
+  readonly name: Phaser.GameObjects.Text;
+  readonly status: Phaser.GameObjects.Text;
+  readonly percent: Phaser.GameObjects.Text;
+  readonly unit: Phaser.GameObjects.Text;
+  readonly track: Phaser.GameObjects.Image;
+  readonly fill: Phaser.GameObjects.Image;
+  readonly sheen: Phaser.GameObjects.Image;
+  readonly glow: Phaser.GameObjects.Image;
+  player: ArenaLoadingPlayerView | null;
+  shownText: string;
+}
 
 type OverlayMode = 'hidden' | 'loading' | 'countdown' | 'death' | 'respawn-reveal';
 
@@ -67,12 +98,11 @@ export class ArenaCountdownOverlay {
   private readonly loadingPanel: Phaser.GameObjects.Image;
   private readonly loadingTitle: Phaser.GameObjects.Text;
   private readonly loadingSubtitle: Phaser.GameObjects.Text;
-  private readonly loadingBars: Phaser.GameObjects.Graphics;
-  private readonly loadingRows: Array<{
-    name: Phaser.GameObjects.Text;
-    status: Phaser.GameObjects.Text;
-    progress: Phaser.GameObjects.Text;
-  }> = [];
+  private readonly loadingBarTextures: LoadingBarTextureKeys;
+  private readonly loadingRows: LoadingRow[] = [];
+  /** Angezeigter Fortschritt je Spieler fuer die laufende Ladeanzeige. */
+  private readonly shownProgress = new Map<string, number>();
+  private readonly readyFlashAt = new Map<string, number>();
   private readonly getFocusSprite: () => Phaser.GameObjects.Image | undefined;
   private readonly postFx: CameraPostFxController | null;
   private mode: OverlayMode = 'hidden';
@@ -145,27 +175,43 @@ export class ArenaCountdownOverlay {
     const loadingStatus = scene.add.text(510, 154, t('ui.arena.loading.status'), {
       fontFamily: FONT_DISPLAY, fontSize: '17px', color: '#8e9a7e',
     }).setOrigin(0, 0.5);
-    this.loadingBars = scene.add.graphics();
-    this.loadingRoot.add([this.loadingTitle, this.loadingSubtitle, loadingStatus, this.loadingBars]);
+    this.loadingRoot.add([this.loadingTitle, this.loadingSubtitle, loadingStatus]);
+    this.loadingBarTextures = ensureLoadingBarTextures(scene);
+    const barRight = LOADING_BAR_X + LOADING_BAR_WIDTH;
     for (let index = 0; index < 12; index += 1) {
-      const y = 200 + index * 54;
-      const row = {
-        name: scene.add.text(510, y, '', {
+      const y = LOADING_ROW_Y + index * LOADING_ROW_PITCH;
+      const barY = y + LOADING_BAR_OFFSET_Y;
+      const row: LoadingRow = {
+        name: scene.add.text(LOADING_BAR_X, y, '', {
           fontFamily: FONT_DISPLAY, fontSize: '21px', color: toCssColor(COLORS.GREY_1),
         }).setOrigin(0, 0.5),
         status: scene.add.text(940, y, '', {
-          fontFamily: FONT_DISPLAY, fontSize: '18px', color: toCssColor(COLORS.GREY_4),
+          fontFamily: FONT_DISPLAY, fontSize: '17px', color: toCssColor(COLORS.GREY_4),
         }).setOrigin(0, 0.5),
-        progress: scene.add.text(1410, y, '', {
-          fontFamily: FONT_MONO, fontSize: '19px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+        percent: scene.add.text(barRight - 22, y - 1, '', {
+          fontFamily: FONT_DISPLAY, fontSize: '25px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
         }).setOrigin(1, 0.5),
+        unit: scene.add.text(barRight - 19, y + 2, '%', {
+          fontFamily: FONT_DISPLAY, fontSize: '15px', fontStyle: 'bold', color: '#8e9a7e',
+        }).setOrigin(0, 0.5),
+        track: scene.add.image(LOADING_BAR_X, barY, this.loadingBarTextures.track)
+          .setOrigin(0, 0.5).setDisplaySize(LOADING_BAR_WIDTH, LOADING_BAR_HEIGHT),
+        fill: scene.add.image(LOADING_BAR_X, barY, this.loadingBarTextures.fill)
+          .setOrigin(0, 0.5).setDisplaySize(LOADING_BAR_WIDTH, LOADING_BAR_HEIGHT),
+        sheen: scene.add.image(LOADING_BAR_X, barY, this.loadingBarTextures.sheen)
+          .setOrigin(0, 0.5).setScale(0.5).setBlendMode(Phaser.BlendModes.ADD),
+        glow: scene.add.image(LOADING_BAR_X, barY, this.loadingBarTextures.glow)
+          .setScale(0.5).setBlendMode(Phaser.BlendModes.ADD),
+        player: null,
+        shownText: '',
       };
       this.loadingRows.push(row);
-      this.loadingRoot.add([row.name, row.status, row.progress]);
+      this.loadingRoot.add([row.track, row.fill, row.sheen, row.glow, row.name, row.status, row.percent, row.unit]);
     }
 
     promoteToClarityCamera(scene, this.loadingBackdrop);
     promoteToClarityCamera(scene, this.loadingRoot);
+    scene.events.on(Phaser.Scenes.Events.UPDATE, this.animateLoadingRows);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
   }
 
@@ -206,6 +252,8 @@ export class ArenaCountdownOverlay {
     }
     this.resetOverlayState(CLOSED_VEIL_RADIUS_PX, VEIL_ALPHA);
     this.mode = 'loading';
+    this.shownProgress.clear();
+    this.readyFlashAt.clear();
     this.unlockAtMs = 0;
     this.postFx?.setRadialFocus(null);
     this.focusFallback.setVisible(false);
@@ -248,30 +296,84 @@ export class ArenaCountdownOverlay {
     const height = 210 + Math.max(1, Math.min(state.players.length, this.loadingRows.length)) * 54;
     this.loadingPanel.setTexture(ensureLoadingPanel(this.scene, 1080, height)).setDisplaySize(1080, height).setY(height / 2);
     this.loadingRoot.setY((GAME_HEIGHT - height) / 2);
-    this.loadingBars.clear();
     for (let index = 0; index < this.loadingRows.length; index += 1) {
       const row = this.loadingRows[index];
-      const player = state.players[index];
-      if (!player) {
-        row.name.setVisible(false);
-        row.status.setVisible(false);
-        row.progress.setVisible(false);
+      const player = state.players[index] ?? null;
+      row.player = player;
+      for (const part of [row.name, row.status, row.percent, row.unit, row.track, row.fill, row.sheen, row.glow]) {
+        part.setVisible(player !== null);
+      }
+      if (!player) continue;
+      row.name.setText(player.name).setColor(toCssColor(player.colorHex)).setScale(1);
+      if (row.name.width > 390) row.name.setScale(390 / row.name.width);
+      row.status.setText(t(`ui.arena.loading.${player.stage}`))
+        .setColor(toCssColor(player.ready ? COLORS.GREEN_1 : COLORS.GREY_4));
+      row.percent.setColor(toCssColor(player.ready ? COLORS.GREEN_1 : COLORS.GREY_1));
+      row.fill.setTexture(player.ready ? this.loadingBarTextures.fillReady : this.loadingBarTextures.fill);
+    }
+    this.animateLoadingRows(this.scene.time.now, 0);
+  }
+
+  /**
+   * Fuehrt die angezeigten Werte jedes Frames weich an den replizierten Fortschritt heran.
+   * Replizierte Werte kommen in ganzen Prozent und unregelmaessig; die Anzeige bleibt monoton.
+   */
+  private readonly animateLoadingRows = (now: number, deltaMs: number): void => {
+    if (this.mode !== 'loading' || this.destroyed) return;
+    const dt = Math.max(0, Math.min(100, deltaMs));
+    const fillFrameWidth = this.scene.textures.getFrame(this.loadingBarTextures.fill).width;
+    const sheenFrame = this.scene.textures.getFrame(this.loadingBarTextures.sheen);
+    const sheenWidth = sheenFrame.width * 0.5;
+    for (let index = 0; index < this.loadingRows.length; index += 1) {
+      const row = this.loadingRows[index];
+      const player = row.player;
+      if (!player) continue;
+      const target = player.ready ? 100 : Math.max(0, Math.min(99, player.progress));
+      let shown = this.shownProgress.get(player.id) ?? 0;
+      if (player.ready) {
+        shown += (100 - shown) * (1 - Math.exp(-dt / SHOWN_READY_FOLLOW_MS));
+        if (shown > 99.6) shown = 100;
+        if (!this.readyFlashAt.has(player.id)) this.readyFlashAt.set(player.id, now);
+      } else if (target > shown) {
+        this.readyFlashAt.delete(player.id);
+        shown += (target - shown) * (1 - Math.exp(-dt / SHOWN_FOLLOW_MS));
+      } else {
+        this.readyFlashAt.delete(player.id);
+        const lead = shown - target;
+        shown = Math.min(99, shown + dt * SHOWN_CREEP_PER_MS * Math.max(0, 1 - lead / SHOWN_MAX_LEAD));
+      }
+      this.shownProgress.set(player.id, shown);
+
+      const text = String(shown >= 100 ? 100 : Math.min(99, Math.floor(shown)));
+      if (text !== row.shownText) {
+        row.shownText = text;
+        row.percent.setText(text);
+      }
+      const fillWidth = LOADING_BAR_WIDTH * shown / 100;
+      row.fill.setCrop(0, 0, fillFrameWidth * shown / 100, row.fill.frame.height);
+      const tipX = LOADING_BAR_X + fillWidth;
+
+      const flashAt = this.readyFlashAt.get(player.id);
+      if (flashAt !== undefined) {
+        const flash = Math.min(1, (now - flashAt) / READY_FLASH_MS);
+        row.glow.setPosition(tipX - 6, row.track.y).setAlpha((1 - flash) * 0.95)
+          .setScale(0.5 + flash * 1.4, 0.5 + flash * 0.5);
+        row.sheen.setAlpha(0);
         continue;
       }
-      const progress = Math.max(0, Math.min(100, Math.round(player.progress)));
-      const y = 200 + index * 54;
-      const color = toCssColor(player.colorHex);
-      row.name.setVisible(true).setText(player.name).setColor(color).setScale(1);
-      if (row.name.width > 390) row.name.setScale(390 / row.name.width);
-      row.status.setVisible(true).setText(t(`ui.arena.loading.${player.stage}`));
-      row.progress.setVisible(true).setText(`${progress}%`).setColor(player.ready ? toCssColor(COLORS.GREEN_1) : color);
-      this.loadingBars.fillStyle(0x0e1711, 1).fillRoundedRect(510, y + 18, 900, 10, 5);
-      if (progress > 0) {
-        this.loadingBars.fillStyle(player.ready ? 0xb5c982 : 0x718c4c, 1)
-          .fillRoundedRect(510, y + 18, 900 * progress / 100, 10, 5);
-      }
+      const pulse = 0.5 + 0.5 * Math.sin(now / 280 + index * 0.9);
+      row.glow.setPosition(tipX - 2, row.track.y).setScale(0.5)
+        .setAlpha(shown <= 0.5 ? 0 : 0.4 + pulse * 0.3);
+      // Ein Lichtband laeuft durch den gefuellten Teil und endet sauber an dessen Spitze.
+      const phase = ((now / SHEEN_PERIOD_MS) + index * 0.17) % 1;
+      const sheenX = LOADING_BAR_X - sheenWidth + phase * (fillWidth + sheenWidth);
+      const left = Math.max(0, Math.min(sheenWidth, LOADING_BAR_X - sheenX));
+      const right = Math.max(left, Math.min(sheenWidth, tipX - sheenX));
+      const frameScale = sheenFrame.width / sheenWidth;
+      row.sheen.setX(sheenX).setCrop(left * frameScale, 0, (right - left) * frameScale, sheenFrame.height)
+        .setAlpha(fillWidth < 24 ? 0 : 0.85);
     }
-  }
+  };
 
   isLoading(): boolean {
     return this.mode === 'loading';
@@ -416,6 +518,7 @@ export class ArenaCountdownOverlay {
     this.postFx?.setRadialFocus(null);
     this.focusFallback.destroy();
     this.countdownView.destroy();
+    this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.animateLoadingRows);
     this.scene.load.off(`filecomplete-image-${LOADING_FOREST.key}`, this.refreshLoadingForest);
     this.loadingBackdrop.destroy(true);
     this.loadingRoot.destroy(true);

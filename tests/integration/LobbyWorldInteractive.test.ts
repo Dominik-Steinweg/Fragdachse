@@ -1,3 +1,4 @@
+import { WorldLoadProgressEstimator } from '../../src/world/WorldLoadProgressEstimator';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
@@ -499,6 +500,7 @@ describe('LobbyWorld – interaktives World-Gameplay ohne Activity', () => {
       coopDefenseClassId: null, coopDefenseProfile: null,
     };
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.worldLoadEstimator = new WorldLoadProgressEstimator();
     coordinator.committedLoadoutSelections = new WeakMap();
     coordinator.resolveConfiguredGameMode = () => mode;
     vi.spyOn(bridge, 'getActivityDescriptor').mockReturnValue({ kind: 'pvp-match' } as any);
@@ -923,6 +925,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     vi.spyOn(bridge, 'getWorldDescriptor').mockReturnValue(null); // optional diagnostic identity, no active room needed
     const { scene, fade } = bootFixture();
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.worldLoadEstimator = new WorldLoadProgressEstimator();
     coordinator.arenaBuilt = true;
     coordinator.combatPresentationPrepared = false;
     coordinator.worldRuntime = {
@@ -1031,6 +1034,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('local');
     vi.spyOn(bridge, 'isHost').mockReturnValue(host);
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.worldLoadEstimator = new WorldLoadProgressEstimator();
     Object.assign(coordinator, {
       scene, layoutRetryCount: 0, arenaTransitionGeneration: 0,
       worldLifecycle: { hasEndedRevision: () => false },
@@ -1133,6 +1137,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       frame.syncWorldLighting(false, false);
       frame.syncCanopyTransparency(true);
       const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+      coordinator.worldLoadEstimator = new WorldLoadProgressEstimator();
       Object.assign(coordinator, {
         arenaBuilt: true, builtWorldRevision: 7, terrainSnapshotReady: true,
         combatPresentationPrepared: true, worldRuntime: { update: vi.fn(), materialization: { arena },
@@ -1196,6 +1201,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     let warmupComplete = false;
     let presentationRequired = true;
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.worldLoadEstimator = new WorldLoadProgressEstimator();
     coordinator.arenaBuilt = true;
     coordinator.builtWorldRevision = 7;
     coordinator.terrainSnapshotReady = true;
@@ -1269,6 +1275,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
   it('reveals the Lobby while combat links finish without blocking, never a round', () => {
     let background = false;
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.worldLoadEstimator = new WorldLoadProgressEstimator();
     coordinator.arenaBuilt = true;
     coordinator.combatPresentationPrepared = false;
     coordinator.worldRuntime = {
@@ -1332,6 +1339,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       shadow: { getStaticSurfaceWorkingSet: () => null, isStaticReadyForView: () => true,
         updateStaticResidency: () => {} } } as never);
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.worldLoadEstimator = new WorldLoadProgressEstimator();
     coordinator.arenaBuilt = true;
     coordinator.terrainSnapshotReady = true;
     // Publish the unrelated lightmap/canopy work through the real frame ports.
@@ -1402,6 +1410,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
 
   it('laesst die Reveal-Abfrage nicht auf runden- oder netzseitige Bedingungen warten', () => {
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.worldLoadEstimator = new WorldLoadProgressEstimator();
     coordinator.arenaBuilt = true;
     coordinator.terrainSnapshotReady = false;
     coordinator.combatPresentationPrepared = true;
