@@ -399,6 +399,23 @@ describe('Enemy locomotion facing presentation', () => {
     for (const angle of angles) expect(angle).toBeCloseTo(angles[0], 8);
   });
 
+  it('keeps walking through a short stop such as a hit stagger, and stands after a longer one', () => {
+    const f = fixture();
+    const scene = f.unit.sprite.scene as unknown as { time: { now: number } };
+    const mode = () => { const sample = createMovementVisualSample(); f.unit.readMovementVisualSample(sample); return sample.mode; };
+    try {
+      scene.time.now = 1_000;
+      f.unit.setWalking(true);
+      scene.time.now = 1_030; f.unit.setWalking(false);
+      scene.time.now = 1_060; f.unit.setWalking(false);
+      expect(mode()).toBe('walk');
+      scene.time.now = 1_090; f.unit.setWalking(true);
+      scene.time.now = 1_100; f.unit.setWalking(false);
+      scene.time.now = 1_400; f.unit.setWalking(false);
+      expect(mode()).toBe('idle');
+    } finally { f.manager.destroy(); }
+  });
+
   it('lets explicit aim, attack pauses and exclusive movement take priority immediately', () => {
     const f = fixture();
     try {

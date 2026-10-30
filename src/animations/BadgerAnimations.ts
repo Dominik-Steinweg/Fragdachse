@@ -159,6 +159,9 @@ export function registerBadgerAnimations(anims: Phaser.Animations.AnimationManag
   }
 }
 
+/** Walk-cycle phase a figure stopped at; walking on continues from it. */
+const pausedWalkPhase = new WeakMap<Phaser.GameObjects.Sprite, number>();
+
 /**
  * Apply the requested locomotion state to one figure sprite.
  *
@@ -177,13 +180,16 @@ export function syncBadgerWalkingAnimation(
 
   const currentKey = sprite.anims.currentAnim?.key;
   const desiredKey = active ? (walking ? sheet.animationKey : sheet.idle?.animationKey) : undefined;
+  if (currentKey === sheet.animationKey && currentKey !== desiredKey) pausedWalkPhase.set(sprite, sprite.anims.getProgress());
 
   if (desiredKey) {
     if (currentKey !== desiredKey || !sprite.anims.isPlaying) {
       sprite.play(desiredKey);
-      // Ein Pulk gleichzeitig gestarteter Figuren liefe sonst im Gleichschritt. Die Phase ist
-      // rein visuell und muss zwischen Host und Clients nicht uebereinstimmen.
-      if (walking) sprite.anims.setProgress(Math.random());
+      // Ein Pulk gleichzeitig gestarteter Figuren liefe sonst im Gleichschritt: der erste Start
+      // waehlt eine zufaellige Phase. Danach setzt der Gang dort fort, wo die Beine stehen
+      // blieben, statt bei jedem Wiederanlaufen zu springen. Die Phase ist rein visuell und muss
+      // zwischen Host und Clients nicht uebereinstimmen.
+      if (walking) sprite.anims.setProgress(pausedWalkPhase.get(sprite) ?? Math.random());
     }
     return;
   }

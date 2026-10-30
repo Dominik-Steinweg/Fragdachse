@@ -67,7 +67,7 @@ describe('selected figure animations', () => {
   it('does not restart a moving sprite and returns to the dedicated idle frame on stop', () => {
     const sheet = getWalkingSheetForStaticTexture('enemy_zombie_badger')!;
     const view: any = { texture: { key: sheet.textureKey }, frame: { name: 0 },
-      anims: { currentAnim: null, isPlaying: false, setProgress: vi.fn(),
+      anims: { currentAnim: null, isPlaying: false, setProgress: vi.fn(), getProgress: () => 0,
         stop: vi.fn(() => { view.anims.isPlaying = false; }) },
       play: vi.fn((key) => { view.anims.currentAnim = { key }; view.anims.isPlaying = true; }),
       setFrame: vi.fn((frame) => { view.frame.name = String(frame); }) };
@@ -81,11 +81,30 @@ describe('selected figure animations', () => {
     syncBadgerWalkingAnimation(view, false);
     expect(view.anims.stop).toHaveBeenCalledTimes(1);
   });
+  it('walks on from the phase its legs stopped at instead of jumping to a new one', () => {
+    const sheet = getWalkingSheetForStaticTexture('badger')!;
+    let progress = 0;
+    const view: any = { texture: { key: sheet.textureKey }, frame: { name: '0' },
+      anims: { currentAnim: null, isPlaying: false, setProgress: vi.fn((value: number) => { progress = value; }),
+        getProgress: () => progress, stop: vi.fn(() => { view.anims.isPlaying = false; }) },
+      play: vi.fn((key) => { view.anims.currentAnim = { key }; view.anims.isPlaying = true; }),
+      setFrame: vi.fn((frame) => { view.frame.name = String(frame); }) };
+    syncBadgerWalkingAnimation(view, true);
+    expect(view.anims.setProgress).toHaveBeenCalledTimes(1);
+    progress = 0.4;
+    syncBadgerWalkingAnimation(view, false);
+    syncBadgerWalkingAnimation(view, true);
+    expect(view.anims.setProgress).toHaveBeenLastCalledWith(0.4);
+    progress = 0.7;
+    syncBadgerWalkingAnimation(view, false, false);
+    syncBadgerWalkingAnimation(view, true);
+    expect(view.anims.setProgress).toHaveBeenLastCalledWith(0.7);
+  });
   it('breathes while standing, resumes walking, and holds the rest pose while inactive', () => {
     const sheet = getWalkingSheetForStaticTexture('badger')!;
     expect(sheet.idle).toBeDefined();
     const view: any = { texture: { key: sheet.textureKey }, frame: { name: '0' },
-      anims: { currentAnim: null, isPlaying: false, setProgress: vi.fn(),
+      anims: { currentAnim: null, isPlaying: false, setProgress: vi.fn(), getProgress: () => 0,
         stop: vi.fn(() => { view.anims.isPlaying = false; }) },
       play: vi.fn((key) => { view.anims.currentAnim = { key }; view.anims.isPlaying = true; }),
       setFrame: vi.fn((frame) => { view.frame.name = String(frame); }) };

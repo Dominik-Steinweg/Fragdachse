@@ -85,6 +85,11 @@ const GLOW_BREATH_DIM = 0.28;
  * Groessenordnungen darueber, waehrend er im Stand gegen null faellt.
  */
 const WALKING_INTERPOLATION_EPSILON_PX = 0.5;
+/**
+ * A stop shorter than this keeps the walk cycle running: a hit stagger or a hesitation in the crowd
+ * would otherwise flick the legs into the idle pose and back several times a second under fire.
+ */
+const WALK_STOP_GRACE_MS = 160;
 /** Apex growth of a charger leap towards the camera. */
 const LEAP_LIFT_AMPLITUDE = 0.32;
 /** Apex growth of a toad hop: short, low hops read lighter than the brood's pounce. */
@@ -250,6 +255,8 @@ export class EnemyEntity {
   /** Walking-Sheet dieser Gegnerart, oder `null` fuer eine statische Darstellung. */
   private readonly walkingSheet: WalkingSheet | null;
   private walkingRequested = false;
+  /** Scene time the body stopped while its walk cycle still runs (see WALK_STOP_GRACE_MS). */
+  private walkStoppedAt: number | null = null;
   private clawState: EnemyClawState = EMPTY_ENEMY_CLAW_STATE;
   private clawAnimating = false;
   private shieldCharge: ShieldChargeState = EMPTY_SHIELD_CHARGE_STATE;
@@ -822,7 +829,15 @@ export class EnemyEntity {
    */
   setWalking(walking: boolean): void {
     // Hoppers never walk: flights are drawn from the hop timeline, knockback slides in the idle pose.
-    if (this.stationary || this.config.hop) walking = false;
+    const grounded = this.stationary || !!this.config.hop;
+    if (grounded) walking = false;
+    if (walking || grounded) this.walkStoppedAt = null;
+    else if (this.walkingRequested) {
+      const now = this.sprite.scene?.time.now ?? 0;
+      this.walkStoppedAt ??= now;
+      if (now - this.walkStoppedAt < WALK_STOP_GRACE_MS) return;
+      this.walkStoppedAt = null;
+    }
     if (this.walkingRequested === walking) return;
     this.walkingRequested = walking;
     this.syncWalkingAnimation();

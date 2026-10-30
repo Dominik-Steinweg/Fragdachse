@@ -22,7 +22,7 @@ export class HealthTestObject {
   writes = 0;
   texture = { key: 'test', source: [{ width: 32, height: 32 }] };
   frame = { name: '__BASE', width: 32, height: 32, realWidth: 32, realHeight: 32 };
-  anims = { isPlaying: false, currentAnim: null, stop() {} };
+  anims = { isPlaying: false, currentAnim: null, stop() {}, getProgress() { return 0; } };
   body: any = null;
   private destroyListeners: (() => void)[] = [];
   constructor(public scene: any, public x = 0, public y = 0, public width = 1, public height = 1) {}
