@@ -17,6 +17,16 @@ import { CoopDefenseMissionProgressSystem } from '../../src/systems/CoopDefenseM
 import { resolveActiveArenaWorldMetrics } from '../../src/world/WorldMetrics';
 import { CELL_SIZE } from '../../src/config';
 import { getCoopDefenseTutorialRockRegion } from '../../src/config/coopDefenseTutorial';
+import { ArenaGenerator, resolveArenaGenerationInput } from '../../src/arena/ArenaGenerator';
+import { COOP_DEFENSE_NAV_TICK_INTERVAL_MS, getArenaMetricsProfile } from '../../src/config';
+import { getCoopDefenseCampaignAudit } from '../../src/config/coopDefenseMaps';
+import { enemyBodyRadius, getCoopDefenseEnemyConfig } from '../../src/config/coopDefenseEnemies';
+import { EnemyFlowFieldService } from '../../src/systems/EnemyFlowFieldService';
+import { FlowFieldCoordinator } from '../../src/systems/flowfield/FlowFieldCoordinator';
+import { InlineFlowFieldRunner } from '../../src/systems/flowfield/FlowFieldRunner';
+import { createFlowFieldTuning, resolveCoopMissionFlowFieldInputs } from '../../src/systems/flowfield/FlowFieldSources';
+import { buildMissionStartNavigationGeometry } from '../../src/systems/navigation/MissionStartNavigationGeometry';
+import { resolveWorldMetrics, worldCellCenter } from '../../src/world/WorldMetrics';
 
 describe('Coop defense arena generation', () => {
   it('preserves tutorial banks and the checkpoint route across seeds', () => {
@@ -358,5 +368,39 @@ describe('Coop defense arena generation', () => {
     }
 
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
+  });
+
+  it('gives every base-attacking boss a free route for its body from its spawn zone on every seed', () => {
+    // Walled in, a boss still rises and breaks through; the authored terrain must not depend on that.
+    for (const entry of getCoopDefenseCampaignAudit()) {
+      const map = getCoopDefenseMapConfig(entry.mapId);
+      const boss = map.boss;
+      const zone = boss?.spawnZoneId ? map.spawnZones?.find((candidate) => candidate.id === boss.spawnZoneId) : undefined;
+      if (!boss || !zone || zone.medium === 'water' || getCoopDefenseEnemyConfig(boss.enemyKind).movementTarget !== 'bases') continue;
+      const radius = enemyBodyRadius(getCoopDefenseEnemyConfig(boss.enemyKind));
+      const metrics = resolveWorldMetrics(getArenaMetricsProfile('coop_defense', 'ARENA', map.arenaWidthCells, map.arenaHeightCells));
+      const bases = resolveCoopDefenseBases(map, metrics);
+      for (const seed of [1, 13, 99, 2_005, 12_345, 23_770, 47_527, 285_097]) {
+        const layout = ArenaGenerator.generate(seed, resolveArenaGenerationInput('coop_defense', metrics), map);
+        const inputs = resolveCoopMissionFlowFieldInputs({ worldMetrics: metrics, layout, baseSpecs: bases, exact: true });
+        const geometry = buildMissionStartNavigationGeometry({ metrics, layout, bases, constructionCells: [], barrierCells: [] });
+        const coordinator = new FlowFieldCoordinator({ metrics: inputs.metrics, tuning: createFlowFieldTuning(),
+          staticKind: inputs.staticKind, bases: inputs.bases, activeBaseIds: new Set(bases.map((base) => base.id)),
+          obstacleCellProvider: () => [], geometryProvider: () => geometry, runner: new InlineFlowFieldRunner(),
+          navTickIntervalMs: COOP_DEFENSE_NAV_TICK_INTERVAL_MS });
+        const field = EnemyFlowFieldService.fromView(coordinator.registerField('boss', { goalMode: 'bases', bodyRadius: radius }));
+        coordinator.invalidateGeometry();
+        coordinator.runSynchronously(true);
+        let routed = false;
+        for (let gridX = zone.gridX; gridX < zone.gridX + zone.widthCells && !routed; gridX++) {
+          for (let gridY = zone.gridY; gridY < zone.gridY + zone.heightCells && !routed; gridY++) {
+            const point = worldCellCenter(metrics, gridX, gridY);
+            routed = field.queryNavigation(point.x, point.y).status === 'ready';
+          }
+        }
+        coordinator.destroy();
+        expect(routed, `Map ${entry.mapId} seed ${seed}: ${boss.enemyKind} walled in at ${zone.id}`).toBe(true);
+      }
+    }
   });
 });

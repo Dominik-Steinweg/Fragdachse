@@ -151,7 +151,11 @@
   },
   "siteClearings": [
     { "id": "grave-island", "gridX": 19, "gridY": 18, "radiusCells": 11 },
-    { "id": "grave-causeway", "gridX": 33, "gridY": 13, "radiusCells": 5 }
+    { "id": "grave-causeway", "gridX": 31, "gridY": 13, "radiusCells": 6 },
+    { "id": "titan-march-1", "gridX": 40, "gridY": 14, "radiusCells": 6 },
+    { "id": "titan-march-2", "gridX": 47, "gridY": 16, "radiusCells": 6 },
+    { "id": "titan-march-3", "gridX": 54, "gridY": 17, "radiusCells": 6 },
+    { "id": "titan-march-4", "gridX": 61, "gridY": 18, "radiusCells": 6 }
   ],
   "waterAreas": [
     { "gridX": 38, "gridY": 30, "widthCells": 22, "heightCells": 7 },
@@ -169,9 +173,8 @@
     { "gridX": 0, "gridY": 7, "widthCells": 14, "heightCells": 1 },
     { "gridX": 24, "gridY": 7, "widthCells": 10, "heightCells": 1 },
     { "gridX": 0, "gridY": 8, "widthCells": 12, "heightCells": 1 },
-    { "gridX": 25, "gridY": 8, "widthCells": 9, "heightCells": 1 },
+    { "gridX": 25, "gridY": 8, "widthCells": 7, "heightCells": 1 },
     { "gridX": 0, "gridY": 9, "widthCells": 10, "heightCells": 1 },
-    { "gridX": 26, "gridY": 9, "widthCells": 7, "heightCells": 1 },
     { "gridX": 0, "gridY": 10, "widthCells": 9, "heightCells": 1 },
     { "gridX": 0, "gridY": 11, "widthCells": 9, "heightCells": 1 },
     { "gridX": 0, "gridY": 12, "widthCells": 8, "heightCells": 1 },

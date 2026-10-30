@@ -196,6 +196,22 @@ describe('Spawn coordinates across World and navigation grids', () => {
     expect(world.spawned[0]).toMatchObject({ x: 176, y: 176, options: { spawnBurrowed: true } });
     world.destroy();
   });
+  it('raises a boss whose zone rock walls off from every goal, so it can break through', () => {
+    const world = setup();
+    world.snapshot.obstacles.push({ id: 'rock:wall', kind: 'rock', shape: 'rect', left: 96, top: 0, right: 128, bottom: 256, destructible: true });
+    world.coordinator.invalidateGeometry(); world.flush();
+    world.goal(224, 176); world.flush();
+    const zone = { gridX: 1, gridY: 1, widthCells: 1, heightCells: 1 };
+    // Ordinary arrivals still need a free route.
+    expect(world.executor.hostSpawnEncounterGroup('zombie-badger', 1, 'walled', 'west', zone).enemyIds).toHaveLength(0);
+    const executor = new CoopDefenseSpawnExecutor(world.manager, world.field, world.metrics, world.field, world.field,
+      null, undefined, zone);
+    expect(executor.hostResolveBossSpawnPoint('zombie-badger')).toEqual({ x: 48, y: 48 });
+    expect(executor.hostSpawnBossAt('zombie-badger', 48, 48)).toBe(true);
+    expect(world.spawned.at(-1)).toMatchObject({ x: 48, y: 48 });
+    world.destroy();
+  });
+
   it('spawns the boss and zone-bound persistent sources inside their authored zone', () => {
     const world = setup();
     const zone = { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 };

@@ -170,13 +170,17 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     return true;
   }
 
+  /**
+   * The boss is the mission's goal and must appear. Where rock walls its zone off from every goal for
+   * its body, it rises anyway and breaks through; a free route is still preferred, and a pending
+   * graph or a crowded zone is only waited out.
+   */
   private collectBossCandidates(kind: CoopDefenseEnemyKind): SpawnCell[] {
-    const candidates = this.collectCandidates(
-      kind,
-      DEFAULT_SPAWN_FRONT,
-      this.bossFlowFieldService ?? this.flowFieldService,
-      this.bossSpawnArea ?? undefined,
-    );
+    const field = this.bossFlowFieldService ?? this.flowFieldService, area = this.bossSpawnArea ?? undefined;
+    let candidates = this.collectCandidates(kind, DEFAULT_SPAWN_FRONT, field, area);
+    if (candidates.length === 0 && !this.waitingForNavigation && !this.waitingForSpace) {
+      candidates = this.collectCandidates(kind, DEFAULT_SPAWN_FRONT, field, area, true);
+    }
     if (candidates.length === 0) this.warnExhausted();
     return candidates;
   }
@@ -238,6 +242,7 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     front: SpawnFront,
     flowFieldService: EnemyFlowFieldService,
     spawnArea?: CoopDefenseMapSpawnAreaConfig,
+    walledIn = false,
   ): SpawnCell[] {
     this.waitingForNavigation = false;
     this.waitingForSpace = false;
@@ -258,7 +263,8 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
         if (spawnArea && !isCellInSpawnArea(spawnArea, gridX, gridY)) continue;
         const world = worldCellCenter(this.metrics, gridX, gridY);
         if (!flowFieldService.isCircleGroundFreeAt(world.x, world.y, spawnRadius)) continue;
-        if (!this.isReachable(world.x, world.y, flowFieldService, allowPlayerTargetWithoutGoals)) continue;
+        if (walledIn ? !this.isWalledIn(world.x, world.y, flowFieldService)
+          : !this.isReachable(world.x, world.y, flowFieldService, allowPlayerTargetWithoutGoals)) continue;
         if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) {
           this.waitingForSpace = true;
           continue;
@@ -301,6 +307,11 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     const cell = field.worldToGrid(x, y);
     return !!cell && field.isTraversableAt(cell.gridX, cell.gridY)
       && field.getIntegrationValueAt(cell.gridX, cell.gridY) < EnemyFlowFieldService.INTEGRATION_INFINITY;
+  }
+
+  /** The body can move here, only obstacles separate its region from the goals. */
+  private isWalledIn(x: number, y: number, field: EnemyFlowFieldService): boolean {
+    return !!field.getNavigationGeometry() && field.queryNavigation(x, y).status === 'unreachable';
   }
 
   private resolveSpawnFlowField(kind: CoopDefenseEnemyKind): EnemyFlowFieldService {
