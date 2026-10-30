@@ -1682,6 +1682,24 @@
               "sfx_environment_hit"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/sfx_environment_hit.ogg",
+            "usages": [
+              {
+                "path": "src/effects/EffectSystem.ts",
+                "line": 1697,
+                "kind": "oneshot",
+                "excerpt": "this.audioSystem?.playSound('sfx_environment_hit', x, y);"
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "sfx_environment_hit"
+            ]
+          }
         }
       ],
       "repository": {
@@ -1703,7 +1721,7 @@
         "usages": [
           {
             "path": "src/effects/EffectSystem.ts",
-            "line": 1689,
+            "line": 1697,
             "kind": "oneshot",
             "excerpt": "this.audioSystem?.playSound('sfx_environment_hit', x, y);"
           }
@@ -10144,6 +10162,36 @@
               "shot_zeus"
             ]
           }
+        },
+        {
+          "kind": "repository_changed",
+          "facts": {
+            "target_path": "public/assets/sounds/zeus.ogg",
+            "usages": [
+              {
+                "path": "src/effects/EffectSystem.ts",
+                "line": 338,
+                "kind": "oneshot",
+                "excerpt": "this.audioSystem?.playSound('shot_zeus', ball.x, ball.y, ball.playerId);"
+              },
+              {
+                "path": "src/loadout/content/data/utilities-tactical.json",
+                "line": 259,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_zeus\","
+              },
+              {
+                "path": "src/loadout/content/data/weapons-melee-bites.json",
+                "line": 265,
+                "kind": "oneshot",
+                "excerpt": "\"successKey\": \"shot_zeus\","
+              }
+            ],
+            "playback": "oneshot",
+            "shared_keys": [
+              "shot_zeus"
+            ]
+          }
         }
       ],
       "repository": {
@@ -10165,7 +10213,7 @@
         "usages": [
           {
             "path": "src/effects/EffectSystem.ts",
-            "line": 335,
+            "line": 338,
             "kind": "oneshot",
             "excerpt": "this.audioSystem?.playSound('shot_zeus', ball.x, ball.y, ball.playerId);"
           },
@@ -17693,7 +17741,7 @@
         "volume": 0.22,
         "shipped": true,
         "exists": true,
-        "file_hash": "d1af38cc3f6347ef9299ed306547275b5888b13c462ea482945ebd62a7795bb1",
+        "file_hash": "f0cbdb3b8a1b814c868bfcc2a8b782a4223041b516544e213f34b82595cb1a44",
         "file_error": null,
         "shared_keys": [
           "sfx_demon_badger_fizzle"
@@ -17748,7 +17796,7 @@
         "volume": 0.32,
         "shipped": true,
         "exists": true,
-        "file_hash": "dd36209c9b8932d2d048b5923596747ece013ee4abcf7f23c558af0d27208f4d",
+        "file_hash": "47f2bfe5825c873f41dbd543dff367ba0902d54620d887102570fcb5fbeec813",
         "file_error": null,
         "shared_keys": [
           "sfx_demon_badger_heat_step"
@@ -17803,7 +17851,7 @@
         "volume": 0.55,
         "shipped": true,
         "exists": true,
-        "file_hash": "3977d8186d0812d66f05afe830c66bdb119c234856261528ef4bc1ba7019edf3",
+        "file_hash": "159dbc6a7118b79c64ce76ee922bba5f4fba6d5b19edc880adbaac84c7ff56d7",
         "file_error": null,
         "shared_keys": [
           "sfx_demon_badger_meltdown"
@@ -17828,13 +17876,13 @@
       "musical_identity": "",
       "playback": "oneshot",
       "prompt": {
-        "text": "TrackType: SFX, one short forceful burst of dark void flame spat from a beast's throat: a throaty retching roar ejecting a whooshing jet of fire, hot sizzling crackle, punchy immediate attack and a very short tail, close and dry, isolated game sound, no music, no human voice.",
-        "source": "claude",
+        "text": "TrackType: SFX, one short forceful burst of dark void flame spat from a beast's throat: a throaty steamy roar ejecting a whooshing jet of fire, hot sizzling crackle, cinematic sound, close and dry, isolated game sound, no music, no human voice.",
+        "source": "manual",
         "preserve_on_sync": true
       },
       "generation_defaults": {
         "model": "medium",
-        "duration_seconds": 1,
+        "duration_seconds": 2,
         "candidate_count": 4,
         "steps": 8,
         "cfg_scale": 1.0
@@ -17858,7 +17906,7 @@
         "volume": 0.2,
         "shipped": true,
         "exists": true,
-        "file_hash": "dd36209c9b8932d2d048b5923596747ece013ee4abcf7f23c558af0d27208f4d",
+        "file_hash": "7734f47db851ce59753bb76bec6d888c43f29c1aa3fa2ea840b05c2d8addc9ac",
         "file_error": null,
         "shared_keys": [
           "sfx_demon_badger_spit"
@@ -17913,7 +17961,7 @@
         "volume": 0.3,
         "shipped": true,
         "exists": true,
-        "file_hash": "d1af38cc3f6347ef9299ed306547275b5888b13c462ea482945ebd62a7795bb1",
+        "file_hash": "457fb44b7b786879c4c69a30b2988029e3c3d6055ee9b846caad5d07c051f706",
         "file_error": null,
         "shared_keys": [
           "sfx_demon_badger_warning"

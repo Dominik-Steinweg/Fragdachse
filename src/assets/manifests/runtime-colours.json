@@ -244,33 +244,6 @@
       "sourceSha256": "9f4cbeacd5252baea53de0d2bc4957a77c0c77eb1abbd01f09ae8916e76e03cc",
       "sha256": "9f4cbeacd5252baea53de0d2bc4957a77c0c77eb1abbd01f09ae8916e76e03cc"
     },
-    "assets/sounds/sfx_demon_badger_heat_step.ogg": {
-      "file": "assets/sounds/flame.ogg",
-      "source": "assets/sounds/sfx_demon_badger_heat_step.ogg",
-      "category": "alias",
-      "sourceBytes": 11238,
-      "downloadBytes": 11238,
-      "sourceSha256": "dd36209c9b8932d2d048b5923596747ece013ee4abcf7f23c558af0d27208f4d",
-      "sha256": "dd36209c9b8932d2d048b5923596747ece013ee4abcf7f23c558af0d27208f4d"
-    },
-    "assets/sounds/sfx_demon_badger_spit.ogg": {
-      "file": "assets/sounds/flame.ogg",
-      "source": "assets/sounds/sfx_demon_badger_spit.ogg",
-      "category": "alias",
-      "sourceBytes": 11238,
-      "downloadBytes": 11238,
-      "sourceSha256": "dd36209c9b8932d2d048b5923596747ece013ee4abcf7f23c558af0d27208f4d",
-      "sha256": "dd36209c9b8932d2d048b5923596747ece013ee4abcf7f23c558af0d27208f4d"
-    },
-    "assets/sounds/sfx_demon_badger_warning.ogg": {
-      "file": "assets/sounds/sfx_demon_badger_fizzle.ogg",
-      "source": "assets/sounds/sfx_demon_badger_warning.ogg",
-      "category": "alias",
-      "sourceBytes": 21444,
-      "downloadBytes": 21444,
-      "sourceSha256": "d1af38cc3f6347ef9299ed306547275b5888b13c462ea482945ebd62a7795bb1",
-      "sha256": "d1af38cc3f6347ef9299ed306547275b5888b13c462ea482945ebd62a7795bb1"
-    },
     "assets/sounds/sfx_explosion_alien_plasma.ogg": {
       "file": "assets/sounds/sfx_alien_cone_pulse.ogg",
       "source": "assets/sounds/sfx_explosion_alien_plasma.ogg",
@@ -405,15 +378,6 @@
       "downloadBytes": 36801,
       "sourceSha256": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
       "sha256": "6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e"
-    },
-    "assets/sounds/sfx_explosion_timebomb.ogg": {
-      "file": "assets/sounds/sfx_demon_badger_meltdown.ogg",
-      "source": "assets/sounds/sfx_explosion_timebomb.ogg",
-      "category": "alias",
-      "sourceBytes": 15155,
-      "downloadBytes": 15155,
-      "sourceSha256": "3977d8186d0812d66f05afe830c66bdb119c234856261528ef4bc1ba7019edf3",
-      "sha256": "3977d8186d0812d66f05afe830c66bdb119c234856261528ef4bc1ba7019edf3"
     },
     "assets/sounds/sfx_explosion_turret_fireball.ogg": {
       "file": "assets/sounds/sfx_alien_cone_pulse.ogg",

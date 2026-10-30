@@ -2,8 +2,8 @@
 
 - Version: 2.0
 - Datum: 2026-10-30
-- Status: umgesetzt auf Branch `demon-badger-v2` (Verhalten, Netz, Darstellung, Tonschlüssel); Töne als
-  Kandidaten im Tonstudio, Hörabnahme und Spieltest offen
+- Status: umgesetzt auf `main` (Verhalten, Netz, Darstellung, eigene Töne aus dem Tonstudio, vom User
+  abgehört und veröffentlicht); Spieltest offen
 - Ersetzt: [Demon Badger V1](Fragdachse_GDD_Demon_Badger_V1.md)
 - Gegner-ID: `demon-badger` (Wire-Kind-Index 1 unverändert)
 
@@ -70,14 +70,15 @@ unterschiedlichen Laufwege.
 
 | Key | Einsatz | Stand |
 |---|---|---|
-| `sfx_demon_badger_heat_step` | jeder Stufensprung, lauter mit der Hitze (0,55–1,0), keine Tonhöhenleiter | 4 Kandidaten, Platzhalter |
-| `sfx_demon_badger_warning` | Beginn der Warnung | 4 Kandidaten (auf 1,4 s schneiden), Platzhalter |
-| `sfx_demon_badger_meltdown` | Explosion (`enemy.demon-badger.heat_burst`) | 4 Kandidaten, Platzhalter |
-| `sfx_demon_badger_fizzle` | Verpuffen (`enemy.demon-badger.heat_fizzle`) | 4 Kandidaten, Platzhalter |
-| `sfx_demon_badger_spit` | jede Flamme der Salve (`shotAudio`) | 4 Kandidaten, Platzhalter |
+| `sfx_demon_badger_heat_step` | jeder Stufensprung, lauter mit der Hitze (0,55–1,0), keine Tonhöhenleiter | veröffentlicht |
+| `sfx_demon_badger_warning` | Beginn der Warnung (auf 1,4 s geschnitten) | veröffentlicht |
+| `sfx_demon_badger_meltdown` | Explosion (`enemy.demon-badger.heat_burst`) | veröffentlicht |
+| `sfx_demon_badger_fizzle` | Verpuffen (`enemy.demon-badger.heat_fizzle`) | veröffentlicht |
+| `sfx_demon_badger_spit` | jede Flamme der Salve (`shotAudio`) | veröffentlicht |
 
-Rezepte (Absicht, Prompt, Medium über ComfyUI) stehen im Studio-Katalog; die Kandidaten liegen im
-Arbeitsbereich des Haupt-Checkouts. Anhören und Veröffentlichen geschieht im Studio.
+Rezepte (Absicht, Prompt, Medium über ComfyUI) stehen im Studio-Katalog. Nach jeder Studio-Veröffentlichung
+`npm run assets:runtime` ausführen (der Build tut es selbst): Ein Platzhalter, der eine Byte-Kopie war, steht
+sonst noch als Alias im Laufzeit-Manifest. Der Dev-Server umgeht solche veralteten Einträge und warnt.
 
 ## 5. Messungen (2026-10-30, Map 04, Basis in der Messung unzerstörbar)
 
@@ -109,5 +110,5 @@ Kernschmelzen 7,8–8,1 gegen V1 8,0–8,2.
 
 ## 7. Offen
 
-- Töne anhören und veröffentlichen (Empfehlungen siehe Prüfpaket `build/demon-badger-v2/REVIEW.md`).
-- Spieltest: Lesbarkeit der Stufen im Getümmel, Druck auf die Basis, Wellenzahlen, Dawn-Kosten.
+- Spieltest: Lesbarkeit der Stufen im Getümmel, überlappende Warnzonen vieler Dachse vor der Basis, Druck
+  auf die Basis, Wellenzahlen, Dawn-Kosten.
