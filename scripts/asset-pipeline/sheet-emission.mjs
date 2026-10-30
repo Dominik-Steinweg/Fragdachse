@@ -9,6 +9,8 @@
 //     Publishes the staged sheet after import-runtime made its revision live; renders nothing.
 //   node scripts/asset-pipeline/sheet-emission.mjs <id> --preview <preview folder> --channel heat --neutral
 //     Authoring check: renders the poses of an assets:preview folder into it, nothing else.
+//   Add `--zones` to a neutral channel run: the catalog entry's `emissionZones` assign every channel surface
+//   to a stage (by part name), and the sheet carries the stage in red (encoding srgb-zone-alpha-coverage).
 //
 // The selected build (selection.json under <runs>/<revision>/<id>/) must still produce exactly the beauty sheet;
 // the pass renders the same frames of the same scene with every light hidden (sheet-emission-passes.py), is
@@ -21,7 +23,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import sharp from 'sharp';
-import { readPipelineRegistry } from './pipeline-registry.mjs';
+import { readDemandCatalog, readPipelineRegistry } from './pipeline-registry.mjs';
 import { resizeMaster } from './export.mjs';
 import { packSheet, verifySelectionV2 } from './export-v2.mjs';
 import { repoRoot, resolveBlender, renderProcess } from './preview-v2.mjs';
@@ -37,7 +39,7 @@ const { values, positionals } = parseArgs({ allowPositionals: true, options: {
   'run-root': { type: 'string' }, samples: { type: 'string', default: '32' }, range: { type: 'string' },
   device: { type: 'string', default: 'OPTIX' }, blender: { type: 'string' }, channel: { type: 'string' },
   neutral: { type: 'boolean', default: false }, revision: { type: 'string' }, publish: { type: 'boolean', default: false },
-  preview: { type: 'string' },
+  preview: { type: 'string' }, zones: { type: 'boolean', default: false },
 } });
 const [id] = positionals;
 const usage = 'Usage: sheet-emission.mjs <id> [--revision <rev> | --publish | --preview <folder>] [--channel <name> [--neutral]] [--run-root <abs>] [--samples 32] [--range 2]';
@@ -45,17 +47,34 @@ if (!/^[a-z0-9-]+$/.test(id ?? '')) throw Error(usage);
 const { channel, neutral } = values;
 if (channel !== undefined && !/^[a-z][a-z0-9-]*$/.test(channel)) throw Error('Invalid channel name');
 if (neutral && !channel) throw Error('--neutral needs --channel');
+if (values.zones && !neutral) throw Error('--zones needs --channel <name> --neutral');
 if ([values.revision, values.publish || undefined, values.preview].filter(v => v !== undefined).length > 1) throw Error(usage);
 const range = Number(values.range ?? (neutral ? 1 : 2));
 if (neutral && range !== 1) throw Error('A neutral mask uses range 1');
-const name = channel ? `emission-${channel}` : 'emission';
+const name = channel ? `emission-${channel}${values.zones ? '-zones' : ''}` : 'emission';
 const runs = values['run-root'] ? path.resolve(values['run-root']) : path.join(repoRoot, 'art/poc/pipeline-v2/runs');
+
+/** Authored stage zones of the channel (catalog `emissionZones`), or null without `--zones`. */
+async function emissionZones() {
+  if (!values.zones) return null;
+  const entry = (await readDemandCatalog(repoRoot)).assets.find(asset => asset.id === id);
+  const authored = entry?.emissionZones;
+  if (!authored || authored.channel !== channel || !Array.isArray(authored.zones) || !authored.zones.length)
+    throw Error(`Catalog entry ${id} has no emissionZones for channel ${channel}`);
+  const zones = authored.zones.map(({ stage, objects }) => ({ stage, objects }));
+  zones.forEach((zone, index) => {
+    if (zone.stage !== index + 1 || !Array.isArray(zone.objects) || !zone.objects.length || zone.objects.some(o => typeof o !== 'string' || !o))
+      throw Error(`Emission zone ${index + 1} of ${id} must be stage ${index + 1} with part names`);
+  });
+  return zones;
+}
+const zones = await emissionZones();
 
 async function renderPass(blend, output, frames) {
   await mkdir(output, { recursive: true });
   const job = path.join(output, 'job.json');
   await writeFile(job, JSON.stringify({ output, samples: Number(values.samples), range, device: values.device,
-    ...(channel ? { channel, neutral } : {}), frames }, null, 2));
+    ...(channel ? { channel, neutral } : {}), ...(zones ? { zones } : {}), frames }, null, 2));
   const blender = await resolveBlender(values.blender);
   const log = path.join(output, `blender-${Date.now()}.log`);
   await renderProcess(blender, ['--background', blend, '--python-exit-code', '1', '--python',
@@ -119,6 +138,7 @@ async function stage(assetFolder, selection) {
     sheetSha256: sha(buffer), beautySheetSha256, encoding: pass.encoding, range: pass.range,
     peak: Math.max(...pass.frames.map(frame => frame.peak)), layout,
     ...(channel ? { channel, hue: neutral ? 'neutral' : 'authored', channelMaterials: pass.channelMaterials } : {}),
+    ...(zones ? { zones: zones.length, zoneObjects: pass.zones } : {}),
     ...(neutral ? {} : { color: await glowColour(buffer) }), ...(eyes ? { eyeCheck: eyes } : {}) };
   await writeFile(path.join(output, 'record.json'), JSON.stringify(record, null, 2) + '\n');
   console.log(`staged ${name} ${id}@${selection.revision}: ${pass.frames.length} frames, peak ${record.peak.toFixed(2)}${eyes ? `, eyes max alpha ${eyes.maxAlpha}` : ''} -> ${path.join(output, `sheet-${size}.png`)}`);
@@ -140,7 +160,7 @@ async function publish(live, output) {
   // Turret entries keep their original shape; channel masks also carry their binding and layout.
   manifest.assets[id] = { revision: live.revision, sheet: `./${file}`, sha256: record.sheetSha256, beautySheetSha256: live.hashes.sheet,
     ...(channel ? { channel, hue: record.hue, variant: live.variant, sourceSize: live.sourceSize } : {}),
-    encoding: record.encoding, range: record.range, peak: record.peak,
+    encoding: record.encoding, range: record.range, peak: record.peak, ...(record.zones ? { zones: record.zones } : {}),
     ...(record.color ? { color: record.color } : {}), ...(channel ? { layout: record.layout } : {}),
     ...(record.eyeCheck ? { eyeCheck: record.eyeCheck } : {}) };
   manifest.assets = Object.fromEntries(Object.entries(manifest.assets).sort(([a], [b]) => a.localeCompare(b)));

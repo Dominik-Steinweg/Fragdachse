@@ -27,6 +27,7 @@ import { PounceImpactGpuRenderer } from '../../effects/PounceImpactGpuRenderer';
 import { GraveTitanImpactRenderer } from '../../effects/graveTitan/GraveTitanImpactRenderer';
 import { GraveTitanGlowPresentation } from '../../effects/graveTitan/GraveTitanGlowPresentation';
 import { PounceAuraGpuRenderer } from '../../effects/PounceAuraGpuRenderer';
+import { DemonHeatGpuRenderer } from '../../effects/demonHeat/DemonHeatGpuRenderer';
 import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
 import { BossPresenceRenderer } from '../../effects/BossPresenceRenderer';
 import { VoidMeteorIntroRenderer } from '../../effects/VoidMeteorIntroRenderer';
@@ -160,6 +161,7 @@ export interface RendererBundle {
   pounceImpact:        PounceImpactGpuRenderer;
   graveTitanImpact:    GraveTitanImpactRenderer;
   pounceAura:          PounceAuraGpuRenderer;
+  demonHeat:           DemonHeatGpuRenderer;
   bossIntro:           BossIntroGraveyardRenderer;
   bossPresence:        BossPresenceRenderer;
   voidHunterSparks:    VoidHunterSparksRenderer;
@@ -235,6 +237,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => graveTitanImpact.destroy());
   const pounceAura = new PounceAuraGpuRenderer(gpuVfx);
   cleanup.push(() => pounceAura.destroy());
+  const demonHeat = new DemonHeatGpuRenderer(gpuVfx);
+  cleanup.push(() => demonHeat.destroy());
   const earthbreakFissures = createEarthbreakFissureLayers(scene, burrowGpu.earthbreakFissures, () => gpuVfx.now());
   cleanup.push(() => earthbreakFissures.destroy());
   // Ein gemeinsamer Emissions-Tick fuer alle brennenden Entities. Die per-Entity-Renderer
@@ -566,6 +570,7 @@ export function* createRendererBundleSteps(
     pounceImpact,
     graveTitanImpact,
     pounceAura,
+    demonHeat,
     bossIntro,
     bossPresence,
     voidHunterSparks,
@@ -648,6 +653,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setBurrowGpuRenderer(bundle.burrowGpu);
   effectSystem.setPounceImpactRenderer(bundle.pounceImpact);
   effectSystem.setGraveTitanImpactRenderer(bundle.graveTitanImpact);
+  effectSystem.setDemonHeatRenderer(bundle.demonHeat);
   effectSystem.setCombatGoreGpuRenderer(bundle.combatGoreGpu);
   effectSystem.setBloodField(bundle.bloodField);
   bundle.mortarStrike.setImpactSystems(bundle.explosionGpu, bundle.lighting);
@@ -661,9 +667,10 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
     (id, attack, now, visible) => effectSystem.syncEnemyZone(`kaboomtula-ring:${id}`, attack, now, visible, undefined, true));
   bundle.enemyPounces.setMarkSink((id, mark, now, visible) => effectSystem.syncEnemyLandingMark(`pounce-mark:${id}`, mark, now, visible));
   bundle.enemyPounces.setAuraSink((x, y, size, strength, color, turn) => bundle.pounceAura.emit(x, y, size, strength, color, turn));
-  // The heat warning travels with its running body: a tracking zone in the shared danger family.
+  // The meltdown zone stays with its body (a knockback pushes it along): a tracking zone in the shared danger family.
   bundle.enemyHeatBursts.setZoneSink((id, attack, now, visible) =>
     effectSystem.syncEnemyZone(`heat-zone:${id}`, attack, now, visible, undefined, true));
+  bundle.enemyHeatBursts.setParticleSink(bundle.demonHeat);
 }
 
 /**

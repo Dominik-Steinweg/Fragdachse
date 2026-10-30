@@ -1,0 +1,46 @@
+{
+  "owner": "effects/demonHeat/HeatEmissionGpuLayer.ts",
+  "notes": [
+    "One draw call for the zone-lit heat emission of all heat-burst bodies on one sheet (Demon Badger): ADD just above the light map at the presentation's EMISSION_DEPTH (DEPTH_LIGHTING + 0.08), like turret emission."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createHeatEmissionGpuLayer/image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        19.58
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/demonHeat/HeatEmissionGpuLayer.ts:createHeatEmissionGpuLayer/image/setDepth/0",
+      "owner": "effects/demonHeat/HeatEmissionGpuLayer.ts",
+      "component": "createHeatEmissionGpuLayer/image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "createHeatEmissionGpuLayer/image/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

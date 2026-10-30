@@ -1,6 +1,6 @@
 {
   "name": "demon-badger",
-  "description": "Demon Badger heat cycle on map 04 (neutral grade): a pinned badger cold, half charged, tipping into void violet near full heat, its travelling red warning zone, the void burst with red sparks and burning chunks, the burning ground and the cool-down.",
+  "description": "Demon Badger V2 heat stages on map 04 (neutral grade): a pinned badger cold, every salvo-fed stage (its flare and settled glow, zones front to back), the last stage, the meltdown warning with fissures and red zone, the void burst in which it dies, sparks and burning chunks. Stages are fed through the host system's salvoSpent, as a spent salvo does; the player stands out of spit range.",
   "viewport": { "width": 1280, "height": 720 },
   "board": { "columns": 4, "tileWidth": 480 },
   "hud": false,
@@ -18,33 +18,44 @@
       "vars": { "player": { "gridX": 38, "gridY": 27 }, "badger": { "gridX": 54, "gridY": 28 } } }
   ],
   "setup": [
-    { "op": "camera", "at": "$badger", "zoom": 2.2 },
+    { "op": "camera", "at": "$badger", "zoom": 3.4 },
     { "op": "settle" },
     { "op": "spawn", "kind": "demon-badger", "at": "$badger", "pinned": true, "name": "d" },
+    { "op": "js", "code": "ck.heatStep = () => { const m = ck.dev.runtime.flow.getCoopMissionRuntime(); const e = m.enemyManager.getEnemy(ck.names.d); return m.coopDefenseEnemyHeatBurstSystem.salvoSpent(e, 4, ck.host().now); };" },
+    { "op": "step", "frames": 90 },
     { "op": "mark" }
   ],
   "shots": [
-    { "id": "cold", "label": "kalt", "do": [{ "op": "step", "frames": 2 }],
-      "crops": [{ "of": "d", "size": [110, 110], "scale": 4, "label": "Körper" }] },
-    { "id": "charge50", "label": "Hitze 50 %", "do": [
-      { "op": "until", "expr": "e.d.heatBurst && (host.now - e.d.heatBurst.chargeStartAt) / (e.d.heatBurst.fullAt - e.d.heatBurst.chargeStartAt) >= 0.5", "maxFrames": 900 }
-    ], "crops": [{ "of": "d", "size": [110, 110], "scale": 4, "label": "Körper" }] },
-    { "id": "charge92", "label": "Hitze 92 % (kippt ins Violett)", "do": [
-      { "op": "until", "expr": "e.d.heatBurst && (host.now - e.d.heatBurst.chargeStartAt) / (e.d.heatBurst.fullAt - e.d.heatBurst.chargeStartAt) >= 0.92", "maxFrames": 900 }
-    ], "crops": [{ "of": "d", "size": [110, 110], "scale": 4, "label": "Körper" }] },
-    { "id": "warning", "label": "Warnzone (+600 ms)", "do": [
+    { "id": "cold", "label": "Stufe 0 (kalt)", "do": [{ "op": "step", "frames": 2 }],
+      "crops": [{ "of": "d", "size": [84, 84], "scale": 5, "label": "Körper" }] },
+    { "id": "s1-flare", "label": "Stufe 1 Aufflammen (+60 ms)", "do": [{ "op": "js", "code": "ck.heatStep();" }, { "op": "step", "frames": 4 }],
+      "crops": [{ "of": "d", "size": [84, 84], "scale": 5, "label": "Körper" }] },
+    { "id": "s1", "label": "Stufe 1 Kopf", "do": [{ "op": "ms", "ms": 600 }],
+      "crops": [{ "of": "d", "size": [84, 84], "scale": 5, "label": "Körper" }] },
+    { "id": "s2", "label": "Stufe 2 Schultern", "do": [{ "op": "js", "code": "ck.heatStep();" }, { "op": "ms", "ms": 600 }],
+      "crops": [{ "of": "d", "size": [84, 84], "scale": 5, "label": "Körper" }] },
+    { "id": "s3", "label": "Stufe 3 Wirbel", "do": [{ "op": "js", "code": "ck.heatStep();" }, { "op": "ms", "ms": 600 }],
+      "crops": [{ "of": "d", "size": [84, 84], "scale": 5, "label": "Körper" }] },
+    { "id": "s4", "label": "Stufe 4 Flanken", "do": [{ "op": "js", "code": "ck.heatStep();" }, { "op": "ms", "ms": 600 }],
+      "crops": [{ "of": "d", "size": [84, 84], "scale": 5, "label": "Körper" }] },
+    { "id": "s5", "label": "Stufe 5 (+300 ms, steht)", "do": [{ "op": "js", "code": "ck.heatStep();" }, { "op": "ms", "ms": 300 }],
+      "crops": [{ "of": "d", "size": [84, 84], "scale": 5, "label": "Körper" }] },
+    { "id": "warning", "label": "Kernschmelze-Warnung (+700 ms)", "do": [
       { "op": "camera", "at": "$badger", "zoom": 1.4 },
-      { "op": "until", "expr": "e.d.heatBurst && e.d.heatBurst.telegraphAt > 0 && host.now >= e.d.heatBurst.telegraphAt + 600", "maxFrames": 900 }
-    ], "crops": [{ "of": "d", "size": [360, 300], "scale": 2, "label": "Zone" }] },
+      { "op": "until", "expr": "e.d.heatBurst && e.d.heatBurst.telegraphAt > 0 && host.now >= e.d.heatBurst.telegraphAt + 700", "maxFrames": 600 }
+    ], "crops": [{ "of": "d", "size": [84, 84], "scale": 5, "label": "Körper" }, { "of": "d", "size": [460, 380], "scale": 1, "label": "Zone" }] },
+    { "id": "late", "label": "Warnung kurz vor der Explosion", "do": [
+      { "op": "camera", "at": "$badger", "zoom": 3.4 },
+      { "op": "until", "expr": "e.d.heatBurst && host.now >= e.d.heatBurst.burstAt - 120", "maxFrames": 600 }
+    ], "crops": [{ "of": "d", "size": [84, 84], "scale": 5, "label": "Körper" }] },
     { "id": "burst", "label": "Explosion", "do": [
+      { "op": "camera", "at": "$badger", "zoom": 1.4 },
       { "op": "mark" },
       { "op": "until", "expr": "host.explosionsSinceMark.some(x => x.style === 'demon_burst')", "maxFrames": 300 },
       { "op": "step", "frames": 3 }
-    ], "crops": [{ "of": "d", "size": [360, 300], "scale": 2, "label": "Explosion" }] },
+    ], "crops": [{ "of": "$badger", "size": [520, 420], "scale": 1, "label": "Explosion" }] },
     { "id": "sparks", "label": "Funken und Brocken (+200 ms)", "do": [{ "op": "step", "frames": 9 }],
-      "crops": [{ "of": "d", "size": [400, 320], "scale": 2, "label": "Funken" }] },
-    { "id": "ground", "label": "Bodenfeuer (+800 ms)", "do": [{ "op": "ms", "ms": 600 }] },
-    { "id": "vent", "label": "Abklingen (+1,6 s)", "do": [{ "op": "ms", "ms": 800 }],
-      "crops": [{ "of": "d", "size": [110, 110], "scale": 4, "label": "Körper" }] }
+      "crops": [{ "of": "$badger", "size": [520, 420], "scale": 1, "label": "Funken" }] },
+    { "id": "ground", "label": "Bodenfeuer (+1 s)", "do": [{ "op": "ms", "ms": 800 }] }
   ]
 }

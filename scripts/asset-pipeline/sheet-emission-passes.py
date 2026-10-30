@@ -9,6 +9,10 @@ of the fort's emission layers.
 `channel` (optional) keeps only materials whose custom property FD_EmissionChannel equals it; every other
 material becomes a black occluder. `neutral` (requires a channel) replaces those emitters by white emission
 of strength 1: with range 1 the sheet is a tintable coverage mask that the runtime fades and colours.
+`zones` (requires `neutral`) assigns every channel surface to a stage by its object's name: the emitter of
+stage k of n is (linear(k / n), 0, 1), so the stored (sRGB) red of the normalized hue is k / n, evenly spaced
+codes for every stage, while alpha stays the coverage. The runtime lights the zones up to a stage
+(encoding `srgb-zone-alpha-coverage`).
 """
 import json
 import math
@@ -57,8 +61,11 @@ scene.render.image_settings.color_depth = '32'
 
 emission_range = float(job.get('range', 2.0))
 channel, neutral = job.get('channel'), bool(job.get('neutral'))
+zones = job.get('zones')
 if neutral and not channel:
     raise ValueError('A neutral emission mask needs a channel')
+if zones and not neutral:
+    raise ValueError('Emission zones need a neutral channel mask')
 
 
 def emitter(name, color, strength):
@@ -75,26 +82,53 @@ def emitter(name, color, strength):
     return material
 
 
+def linear(srgb_value):
+    """Linear value whose sRGB code is `srgb_value`."""
+    return srgb_value / 12.92 if srgb_value <= .04045 else ((srgb_value + .055) / 1.055) ** 2.4
+
+
+def zone_of(name):
+    """Stage of an object by its recipe part name (a prefix also matches Blender's .001 copies)."""
+    for zone in zones:
+        if any(name == prefix or name.startswith(prefix + '.') for prefix in zone['objects']):
+            return zone['stage']
+    return None
+
+
 channel_materials = set()
+zone_objects = {}
 if channel:
     occluder = emitter('Emission pass black occluder', (0, 0, 0, 1), 0)
     mask = emitter(f'Emission pass {channel} mask', (1, 1, 1, 1), 1) if neutral else None
+    stage_count = max(zone['stage'] for zone in zones) if zones else 0
+    zone_masks = {zone['stage']: emitter(f'Emission pass {channel} zone {zone["stage"]}', (linear(zone['stage'] / stage_count), 0, 1, 1), 1)
+                  for zone in zones} if zones else {}
+    generated = {occluder, mask, *zone_masks.values()}
     for ob in scene.objects:
         if ob.type != 'MESH' or ob.hide_render:
             continue
         for slot in ob.material_slots:
             material = slot.material
-            if material is None or material in (occluder, mask):
+            if material is None or material in generated:
                 continue
             if material.get('FD_EmissionChannel') == channel:
                 channel_materials.add(material.name)
                 # A coloured channel pass keeps the authored (possibly keyed) emission graph unchanged.
-                if neutral:
+                if zones:
+                    stage = zone_of(ob.name)
+                    if stage is None:
+                        raise ValueError(f'Channel surface on {ob.name} belongs to no emission zone')
+                    zone_objects.setdefault(stage, set()).add(ob.name)
+                    slot.material = zone_masks[stage]
+                elif neutral:
                     slot.material = mask
             else:
                 slot.material = occluder
     if not channel_materials:
         raise ValueError(f'No material carries FD_EmissionChannel = {channel}')
+    for zone in zones or []:
+        if zone['stage'] not in zone_objects:
+            raise ValueError(f'Emission zone {zone["stage"]} matches no channel surface')
 
 
 def srgb(linear):
@@ -129,8 +163,10 @@ for frame in job['frames']:
     exr.unlink()
     frames.append({'index': frame['index'], 'file': png.name, 'peak': float(peak.max())})
 
-report = {'range': emission_range, 'encoding': 'srgb-hue-alpha-intensity', 'frames': frames}
+report = {'range': emission_range, 'encoding': 'srgb-zone-alpha-coverage' if zones else 'srgb-hue-alpha-intensity', 'frames': frames}
 if channel:
     report.update(channel=channel, neutral=neutral, channelMaterials=sorted(channel_materials))
+if zones:
+    report.update(zones=[{'stage': stage, 'objects': sorted(names)} for stage, names in sorted(zone_objects.items())])
 (out / 'emission.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf8')
 print('EMISSION_PASS_OK', len(frames))

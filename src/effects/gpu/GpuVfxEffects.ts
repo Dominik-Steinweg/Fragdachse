@@ -128,6 +128,9 @@ export const GpuVfxEffectId = {
   PounceGlint: 114,
   PounceAura: 115,
   GraveTitanHaze: 116,
+  DemonHeatEmber: 117,
+  DemonHeatHaze: 118,
+  DemonHeatSmoke: 119,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -789,6 +792,14 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
   // Grave Titan slam and stomp: the same void haze in grave-light green, pushed out as a pressure wave.
   { id: GpuVfxEffectId.GraveTitanHaze, label: 'boss.grave-titan-haze', lane: GpuVfxLaneId.ExplosionLowGlow,
     frame: GpuVfxFrameId.ExplosionSmoke, importance: 'standard', release: 'linger' },
+  // Demon Badger heat: embers of the lit zones, void haze of the warning and the meltdown above the light
+  // map, dark smoke of the aftermath in the lit smoke band.
+  { id: GpuVfxEffectId.DemonHeatEmber, label: 'enemy.demon-heat-ember', lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.ExplosionSpark, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.DemonHeatHaze, label: 'enemy.demon-heat-haze', lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'standard', release: 'linger' },
+  { id: GpuVfxEffectId.DemonHeatSmoke, label: 'enemy.demon-heat-smoke', lane: GpuVfxLaneId.ExplosionLowSmoke,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'decorative', release: 'linger' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

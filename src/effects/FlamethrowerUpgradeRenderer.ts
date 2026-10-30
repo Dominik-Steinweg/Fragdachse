@@ -118,7 +118,8 @@ export class FlamethrowerUpgradeRenderer {
       const palette = tintedFirePalette(visualStyle);
       const isVoid = palette !== null;
       const lightOverrides = palette?.light !== undefined ? { color: palette.light } : undefined;
-      const colors = palette?.outer ?? FLAME_COLORS_OUTER;
+      // A tinted (void/allied) chunk skips the palest outer band: it would fly as a white bead.
+      const colors = palette ? palette.outer.slice(1) : FLAME_COLORS_OUTER;
       const chunk = this.scene.add.image(x, y, isVoid ? TEX_VOID_FLAME_EMBER : TEX_FLAME_EMBER)
         .setDepth(DEPTH.PROJECTILES + 0.4)
         .setBlendMode(Phaser.BlendModes.ADD)

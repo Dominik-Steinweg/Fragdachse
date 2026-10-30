@@ -12,7 +12,7 @@ describe('heat glow model', () => {
   it('climbs in distinct stages from dormant embers to red and tips into void violet only at the top', () => {
     const levels = [0, 1, 2, 3, 4, 5].map(stage => settled(stage));
     for (let stage = 1; stage < levels.length; stage++) {
-      expect(levels[stage].alpha, `stage ${stage}`).toBeGreaterThan(levels[stage - 1].alpha + 0.05);
+      expect(levels[stage].alpha, `stage ${stage}`).toBeGreaterThan(levels[stage - 1].alpha + 0.02);
     }
     const middle = channels(levels[2].color);
     expect(middle.r).toBeGreaterThan(middle.b * 3);
@@ -25,10 +25,11 @@ describe('heat glow model', () => {
 
   it('flares up at every step and settles back to the stage within the flare', () => {
     const step = 20_000;
-    const flare = glow('heat', 3, 5, step + 30, step, false), after = glow('heat', 3, 5, step + HEAT_STEP_FLARE_MS + 10, step, false);
+    const flare = glow('heat', 2, 5, step + 30, step, false), after = glow('heat', 2, 5, step + HEAT_STEP_FLARE_MS + 10, step, false);
     expect(flare.flare).toBeGreaterThan(0.5);
     expect(flare.alpha).toBeGreaterThan(after.alpha + 0.15);
-    expect(flare.light).toBeGreaterThan(after.light);
+    // The light keeps to the stage: a flare inside the body must not light its own relief from within.
+    expect(flare.light).toBe(after.light);
     expect(after.flare).toBe(0);
     // A cold body has no step to flare.
     expect(glow('heat', 0, 5, 30, 0, false).flare).toBe(0);

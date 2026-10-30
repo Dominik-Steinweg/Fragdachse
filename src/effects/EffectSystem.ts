@@ -9,7 +9,7 @@ import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
 import { COLORS, VOID_PALETTE, ALLIED_PALETTE, ALLIED_COLOR, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
-import { DEMON_HEAT_SPARK_COLOR } from './enemyHeatGlowModel';
+import { DEMON_HEAT_HAZE_COLOR, DEMON_HEAT_SPARK_COLOR } from './enemyHeatGlowModel';
 import { GRAVE_TITAN_IMPACT } from './graveTitan/graveTitanImpactGeometry';
 import {
   TEX_BLOOD_EDGE_BOTTOM,
@@ -349,6 +349,12 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   private graveTitanImpact: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play'> | null = null;
+  private demonHeat: Pick<import('./demonHeat/DemonHeatGpuRenderer').DemonHeatGpuRenderer, 'burst'> | null = null;
+
+  /** Void haze of the Demon Badger's meltdown and fizzle; driven only by the replicated explosion styles. */
+  setDemonHeatRenderer(renderer: Pick<import('./demonHeat/DemonHeatGpuRenderer').DemonHeatGpuRenderer, 'burst'> | null): void {
+    this.demonHeat = renderer;
+  }
 
   /** Torn ground of the Grave Titan's slam and stomp; driven only by the replicated melee swing. */
   setGraveTitanImpactRenderer(renderer: Pick<import('./graveTitan/GraveTitanImpactRenderer').GraveTitanImpactRenderer, 'play'> | null): void {
@@ -1057,11 +1063,17 @@ export class EffectSystem implements EnemyVisualSink {
     }
 
     if (visualStyle === 'demon_burst' || visualStyle === 'demon_fizzle') {
-      // Void burst in the faction palette (no white or yellow core) with a red spark spray; allies stay jade.
+      // Meltdown: a pressure wave of void haze to the rim, embers, a red spark spray and dark smoke after
+      // it, in the faction palette; deep haze never stacks into a white core. A fizzle only lets the embers
+      // die in a little smoke. Allies stay jade.
       const allied = color === ALLIED_COLOR, palette = allied ? ALLIED_PALETTE : VOID_PALETTE;
-      this.spawnCombatExplosionGpu(x, y, radius, visualStyle, palette.primary, palette.bright, palette.primary);
-      this.explosionGpuRenderer?.spawnHeatSparks(x, y, radius, allied ? ALLIED_PALETTE.bright : DEMON_HEAT_SPARK_COLOR,
-        visualStyle === 'demon_fizzle' ? 0.45 : 1.6);
+      const ember = allied ? ALLIED_PALETTE.bright : DEMON_HEAT_SPARK_COLOR, fizzle = visualStyle === 'demon_fizzle';
+      if (this.demonHeat) this.demonHeat.burst(x, y, radius, allied ? palette.deep : DEMON_HEAT_HAZE_COLOR, ember, fizzle);
+      else this.spawnCombatExplosionGpu(x, y, radius, visualStyle, palette.primary, palette.bright, palette.primary);
+      if (!fizzle) {
+        this.explosionGpuRenderer?.spawnHeatSparks(x, y, radius, ember, 1);
+        this.cameraFeedback?.request(impactMedium({ sourceX: x, sourceY: y }));
+      }
       return;
     }
 

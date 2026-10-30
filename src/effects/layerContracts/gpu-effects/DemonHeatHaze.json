@@ -1,0 +1,24 @@
+{
+  "name": "DemonHeatHaze",
+  "contract": {
+    "id": "gpu:DemonHeatHaze",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "DemonHeatHaze",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowGlow"
+    ]
+  }
+}

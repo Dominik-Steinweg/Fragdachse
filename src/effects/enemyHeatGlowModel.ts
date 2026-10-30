@@ -12,11 +12,17 @@ import type { EnemyHeatBurstPhase } from '../systems/EnemyHeatBurstState';
 
 /** Red sparks of the burst: the telegraph red family, never orange or yellow. */
 export const DEMON_HEAT_SPARK_COLOR = 0xf01f2c;
+/** Molten fissures that open over a melting body: hot red, their cores void violet. */
+export const DEMON_HEAT_FISSURE_COLOR = 0xff3a22;
+/** Void haze of the meltdown: deep blue-violet with little red, so stacked haze never turns pink or white. */
+export const DEMON_HEAT_HAZE_COLOR = 0x5214b4;
+/** The flare of a step: saturated hot red leaning to violet, never pale. */
+export const DEMON_HEAT_FLARE_COLOR = 0xff2d6a;
 
 const DORMANT_EMBER = 0x5a0c06;
-const EMBER_RED = 0xc4200e;
-const RED = 0xe62a16;
-const HOT_RED = 0xff3a22;
+const EMBER_RED = 0xdc2a14;
+const RED = 0xf2361a;
+const HOT_RED = 0xff4626;
 /** A step flares up for this long after its salvo. */
 export const HEAT_STEP_FLARE_MS = 320;
 /** Throb period without a known warning length. */
@@ -40,10 +46,10 @@ export interface EnemyHeatGlow {
 /** Colour, overlay strength and light of one heat share (stage / stages). */
 const STEP_LEVELS: readonly { share: number; color: number; violet: number; alpha: number; light: number }[] = [
   { share: 0, color: DORMANT_EMBER, violet: 0, alpha: 0.16, light: 0 },
-  { share: 0.2, color: EMBER_RED, violet: 0, alpha: 0.5, light: 0.12 },
-  { share: 0.4, color: RED, violet: 0, alpha: 0.64, light: 0.3 },
-  { share: 0.6, color: HOT_RED, violet: 0, alpha: 0.78, light: 0.45 },
-  { share: 0.8, color: HOT_RED, violet: 0.35, alpha: 0.9, light: 0.58 },
+  { share: 0.2, color: EMBER_RED, violet: 0, alpha: 0.62, light: 0.12 },
+  { share: 0.4, color: RED, violet: 0, alpha: 0.74, light: 0.3 },
+  { share: 0.6, color: HOT_RED, violet: 0, alpha: 0.85, light: 0.45 },
+  { share: 0.8, color: HOT_RED, violet: 0.35, alpha: 0.93, light: 0.58 },
   { share: 1, color: HOT_RED, violet: 1, alpha: 1, light: 0.75 },
 ];
 
@@ -78,9 +84,10 @@ export function enemyHeatGlowAt(out: EnemyHeatGlow, phase: EnemyHeatBurstPhase, 
       const flare = stage > 0 ? heatStepFlare(now - stageAt) : 0;
       const breath = 0.5 - 0.5 * Math.cos(2 * Math.PI * t / BREATH_MS);
       const color = mixColor(base, allied ? palette.bright : palette.primary, smooth(level.violet));
-      out.color = mixColor(color, palette.bright, 0.55 * flare);
-      out.alpha = Math.min(1, level.alpha + 0.06 * breath * share + 0.4 * flare);
-      out.light = Math.min(1, level.light + 0.55 * flare);
+      out.color = mixColor(color, allied ? palette.bright : DEMON_HEAT_FLARE_COLOR, 0.6 * flare);
+      out.alpha = Math.min(1, level.alpha + 0.06 * breath * share + 0.3 * flare);
+      // The light stays with the stage: a flare inside the body would light its own relief from within.
+      out.light = level.light;
       out.flare = flare;
       return out;
     }

@@ -24,7 +24,7 @@ export function installVisualTest(): void {
  * Only repair a colliding auto UUID; authored texture-key errors remain visible. */
 export function bindVisualTestTextureKeys(textures: import('phaser').Textures.TextureManager): () => void {
   if (!visualTest.enabled) return () => {};
-  const original = textures.addDynamicTexture, originalCanvas = textures.createCanvas;
+  const original = textures.addDynamicTexture, originalCanvas = textures.createCanvas, originalAddCanvas = textures.addCanvas;
   let serial = 0;
   const unique = (key: string) => {
     if (typeof key === 'string' && /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(key) && textures.exists(key)) {
@@ -37,11 +37,15 @@ export function bindVisualTestTextureKeys(textures: import('phaser').Textures.Te
   };
   // Quality switches also rebuild UUID-named canvas masks at a frozen frame.
   const canvas: typeof originalCanvas = (key, width, height) => originalCanvas.call(textures, unique(key), width, height);
+  // Text objects add their canvas under a fresh UUID (and destroy it through the texture, not the key).
+  const addCanvas: typeof originalAddCanvas = (key, source, skipCache) => originalAddCanvas.call(textures, unique(key), source, skipCache);
   textures.addDynamicTexture = wrapped;
   textures.createCanvas = canvas;
+  textures.addCanvas = addCanvas;
   return () => {
     if (textures.addDynamicTexture === wrapped) textures.addDynamicTexture = original;
     if (textures.createCanvas === canvas) textures.createCanvas = originalCanvas;
+    if (textures.addCanvas === addCanvas) textures.addCanvas = originalAddCanvas;
   };
 }
 

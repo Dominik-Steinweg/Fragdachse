@@ -46,6 +46,52 @@
       "formShadowStrength": 0
     }
   },
+  "emissionZones": {
+    "channel": "heat",
+    "note": "Heat stages of the runtime: every spat salvo lights the next zone, front to back. Objects are the recipe's part names (a name prefix matches Blender's .001 copies).",
+    "zones": [
+      {
+        "stage": 1,
+        "label": "Kopf",
+        "objects": [
+          "Forehead heat fissure",
+          "Hooked cranial horn",
+          "Throat heat seam"
+        ]
+      },
+      {
+        "stage": 2,
+        "label": "Schultern",
+        "objects": [
+          "Swept shoulder horn",
+          "Shoulder heat seam"
+        ]
+      },
+      {
+        "stage": 3,
+        "label": "Wirbel",
+        "objects": [
+          "Vertebra heat seam"
+        ]
+      },
+      {
+        "stage": 4,
+        "label": "Flanken",
+        "objects": [
+          "Scapular rim heat",
+          "Flank scale back seam"
+        ]
+      },
+      {
+        "stage": 5,
+        "label": "Schwanz (Kernschmelze)",
+        "objects": [
+          "Armored tapering tail",
+          "Barbed tail spade"
+        ]
+      }
+    ]
+  },
   "clips": [
     {
       "name": "move",

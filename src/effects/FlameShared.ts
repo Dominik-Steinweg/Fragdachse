@@ -138,10 +138,11 @@ export const VOID_FIRE_PALETTE: TintedFirePalette = {
   jetHot: VOID_JET_TINTS_HOT,
   jetMid: VOID_JET_TINTS_MID,
   jetCool: VOID_JET_TINTS_COOL,
-  groundHot: [0xf2d3ff, 0xe6b6ff, 0xd79bff, 0xc98cff],
-  groundMid: [0xc76cff, 0xb14ef2, 0x9c37e4, 0xd486ff],
+  // Void ground fire stays saturated violet even in its hottest band: no pale or white beads.
+  groundHot: [0xc77eff, 0xb968ff, 0xab52f7, 0xbf72ff],
+  groundMid: [0xa94cf0, 0x9a3be2, 0x8a2dd4, 0xb257f5],
   groundCool: [0x7620b8, 0x571590, 0x3c0f68, 0x6a1aa4],
-  groundEmber: [0xf7e2ff, 0xeac2ff, 0xdda4ff, 0xc887ff],
+  groundEmber: [0xcf88ff, 0xc276ff, 0xb460f8, 0xa84cf0],
 };
 
 /** Feuer verbuendeter Gegner: dieselben Helligkeitsstufen wie Void, im Verbuendeten-Jade. */
