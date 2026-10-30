@@ -1093,6 +1093,31 @@ mit Hitze verpufft er nur klein. Im Spiel: ab Karte 2 (Zweite Front).
 
 Headless-Nachweise: `tests/CoopDefenseEnemyHeatBurst.test.ts`.
 
+### Grufttitan: Intro, Schlag, Stampfer und Grablicht-Salve
+
+Map `5` (`05-grufttitan`). Das Intro startet, sobald die Eröffnungswelle besiegt ist; `clearEnemies` kurz
+nach dem Start (bei Bedarf zweimal) kürzt das ab. Für einen isolierten Kampf mit `suppressWaves: true`
+starten und den Titan neben den Spieler setzen:
+
+```js
+const dev = window.devScenario;
+dev.run({ action: 'start', scenario: { version: 1, mapId: '5', seed: 12345, classId: 'dachs_nukem',
+  suppressWaves: true, hideTutorial: true, refillHp: true, timeOfDay: 1350, player: { gridX: 26, gridY: 13 } } });
+await dev.whenReady();
+await dev.run({ action: 'clearEnemies' });
+await dev.run({ action: 'spawn', kind: 'grave-titan', pinned: false, gridX: 20, gridY: 13 });
+```
+
+Erwartung: Intro mit großem Gräberfeld; der Titan gräbt sich Kopf und Vorderpranken voran aus, die
+Glühwürmchen tauchen in ihn ein, der Durchbruch brüllt grün. Im Kampf kreisen zehn Grablichter über dem
+Rücken. Vor jeder Salve ziehen sie sich 0,8 s zu einer Krone über dem Grab zusammen, der Kreuzriss glüht auf,
+dann fliegt jeder Schuss aus einem Grablicht; in der 10-s-Pause steigen sie einzeln wieder auf. Wer dicht
+am Körper steht, wird gestampft (Sternrisse rundum, 1,1 s Ausholen); auf Reichweite richtet er sich zum
+Prankenschlag auf (Fächerrisse, 1,3 s). Beide töten auch mit voller Rüstung; die glimmenden Haarrisse
+und das rote Feld kündigen die Trefferzone an.
+
+Headless-Nachweise: `tests/GraveTitanVoidPlasma.test.ts`, `tests/GraveTitanPresentation.test.ts`.
+
 ### Alien-Energie-Fächer: Gate 1
 
 Map `0` (`00-test`) enthält den Encounter `alien-cone-gate-1` (ein Alien, Start nach 12 s).

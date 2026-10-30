@@ -31,6 +31,37 @@
         "meanAlpha": 0,
         "limit": 0.08
       }
+    },
+    "grave-titan": {
+      "revision": "gt-v2-r3",
+      "sheet": "./assets/sprites/pipeline-v2/grave-titan/emission-grave.png",
+      "sha256": "bb50b8fa7aca45d5c46267dcd30d5dc468272bab547083fe16f4b31aee737642",
+      "beautySheetSha256": "e5fb54ca4531f28974c657d86c818ba70726e538004dfb18bd36464214af3aa1",
+      "channel": "grave",
+      "hue": "neutral",
+      "variant": "standard",
+      "sourceSize": 336,
+      "encoding": "srgb-hue-alpha-intensity",
+      "range": 1,
+      "peak": 1,
+      "layout": {
+        "frameWidth": 336,
+        "frameHeight": 336,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 12,
+        "frameCount": 95,
+        "width": 2720,
+        "height": 4080
+      },
+      "eyeCheck": {
+        "frames": 95,
+        "samples": 40828,
+        "maxAlpha": 0,
+        "meanAlpha": 0,
+        "limit": 0.08
+      }
     }
   }
 }
