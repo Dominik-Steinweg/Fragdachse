@@ -77,6 +77,27 @@ describe('Shared enemy and ally locomotion', () => {
     expect(free.vx).toBeGreaterThan(crowded.vx);
   });
 
+  it('keeps a boss’s personal space when walking past it and still arrives', () => {
+    const world = geometry();
+    const pass = (personalSpace?: number) => {
+      const movement = new EnemyLocomotion();
+      let x = 20, y = 64, vx = 0, vy = 0, closest = Infinity;
+      for (let frame = 0; frame < 200 && x < 220; frame++) {
+        movement.begin([{ ...neighbor('a', x, y), vx, vy },
+          { ...neighbor('boss', 128, 134, 40), personalSpace }], world, 16);
+        const step = movement.solve({ ...body, x, y, waypoint: { x: 236, y: 64 }, previousVx: vx, previousVy: vy });
+        vx = step.vx; vy = step.vy; x += vx * 0.016; y += vy * 0.016;
+        closest = Math.min(closest, Math.hypot(x - 128, y - 134));
+      }
+      return { x, closest };
+    };
+    // Without personal space the straight line passes 70 px from the boss, beyond plain contact (57).
+    expect(pass().closest).toBeCloseTo(70, 0);
+    const yielded = pass(30);
+    expect(yielded.closest).toBeGreaterThan(57 + 30 * 0.8);
+    expect(yielded.x).toBeGreaterThanOrEqual(220);
+  });
+
   it('preserves steering across negative spatial boundaries and repeated snapshot resets', () => {
     const world = new NavigationGeometry({ left: -512, top: -512, right: 512, bottom: 512, obstacles: [] });
     const population = (x: number, y: number) => [

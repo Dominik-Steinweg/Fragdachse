@@ -1,7 +1,7 @@
 # Grufttitan V1 – erster Boss als echter Koloss
 
 Status: auf `main` (2026-10-30), HQ-Produktion `gt-v2-r3` mit Grab-Leuchtschicht (`emission-grave`) und
-Schattenmesh `enemy-mesh-gt-v2-r3`; Playtest-Feedback 1 und 2 eingearbeitet. Maßgeblich ist der Code; Werte sind
+Schattenmesh `enemy-mesh-gt-v2-r3`; Playtest-Feedback 1 bis 3 eingearbeitet. Maßgeblich ist der Code; Werte sind
 Ausgangswerte für den Playtest.
 
 ## Ziel
@@ -16,7 +16,8 @@ sichtbar größer.
 - `size` 112 (Kraken 64) bestimmt die Darstellung: Leinwand 336 px bei 1:1-Export (Kraken 384/432 px).
 - Der Körper umfasst die Beine: `bodyRadiusFactor` 1,75 ergibt einen Körperradius von 98. Felsen,
   Bäume und Basen halten ihn auf, die Wegfindung hält diesen Abstand, andere Gegner weichen ihm aus,
-  und Treffer zählen auf dem ganzen Körper. Spieler laufen wie bei allen Gegnern hindurch: Ihre
+  und Treffer zählen auf dem ganzen Körper. Andere Gegner halten zusätzlich einen persönlichen Abstand
+  von einem halben Körperradius, weichen ihm stärker aus und lassen ihm immer den Vortritt. Spieler laufen wie bei allen Gegnern hindurch: Ihre
   Bewegung wird lokal vorhergesagt, ein Wegschieben durch den Host würde sie ruckeln lassen. Die Regel
   gilt für jeden Boss, dessen Gliedmaßen über `size` hinausreichen.
 - Er dreht sich träge (`turnRateDegPerSec` 72) und beginnt den frontalen Schlag erst, wenn er sich bis
@@ -33,16 +34,17 @@ sichtbar größer.
 
 | Angriff | Wann | Ausholen | Wirkung |
 |---|---|---|---|
-| Stampfer | Spieler im Umkreis 400 und Basen ab 210 Abstand (`structureReachPx`), Vorrang vor dem Schlag | 1,5 s | 360° bis 400, 400 Schaden auch an Basen, 3 s Cooldown |
-| Prankenschlag | Spieler im Kegel, Bauwerke und Felsen ab 210 Abstand | 1,3 s | 110°-Kegel bis 280, 200 Schaden, bricht Felsen, 35 % an Basen |
+| Stampfer | Spieler im Umkreis 360 und Basen ab 210 Abstand (`structureReachPx`), Vorrang vor dem Schlag | 1,5 s | 360° bis 360, 200 Schaden auch an Basen, 3 s Cooldown |
+| Prankenschlag | Spieler im Kegel, Bauwerke und Felsen ab 210 Abstand | 1,3 s | 110°-Kegel bis 280, 100 Schaden, bricht Felsen, 35 % an Basen |
 
-- Der Stampfer tötet auch Spieler mit voller Rüstung; beide dürfen auch während der Plasma-Pause
-  zuschlagen. Ein Rundumschlag reagiert auch während der Belagerung auf jeden in seiner Reichweite.
+- Beide dürfen auch während der Plasma-Pause zuschlagen. Ein Rundumschlag reagiert auch während der
+  Belagerung auf jeden in seiner Reichweite.
 - Bauwerke: Die Navigation tritt 40 px näher heran als die Angriffe brauchen, soweit Mauern es zulassen.
 - Schlag: Aufrichten auf die Hinterbeine und Fallen mit Schwung wie ein Bär; Stampfer: Vorderkörper hoch und niederstampfen.
-- Warnung in der roten Gefahrenfamilie, deckungsgleich mit Trefferzone und Dunst: beim Schlag der
-  scharf umrandete Fächer (wie beim Alien-Kegel), beim Stampfer eine Rundzone, die sich bis zum Treffer
-  von innen bis zum Rand füllt.
+- Warnung in der roten Gefahrenfamilie, deckungsgleich mit Trefferzone und Dunst: eine Zone mit weichen
+  Rändern, die sich bis zum Treffer von innen bis zum Rand füllt, beim Stampfer rund, beim Schlag als
+  Kegel. Die weichen Flanken des Kegels liegen mittig auf der Trefferkante, so wirkt er so breit wie
+  der Dunstfächer.
 - Treffer: der Void-Dunst des Rabid Rabbit in Grablicht-Grün. Beim Stampfer läuft eine feine
   Dunst-Druckwelle vom Körperrand bis zum Rand der Zone. Beim Schlag quillt eine dichte Wolke an den
   Pranken auf, und ein Dunstfächer rollt bis zum Rand des Kegels, ohne über dessen Flanken zu reichen.
@@ -63,6 +65,18 @@ sichtbar größer.
   die Spalten glühen auf.
 - Jeder Schuss ist seine Kugel, die die Krone verlässt, und endet in einer Seelen-Verpuffung.
 - In der Pause steigen die Glühwürmchen einzeln und wieder dunkel aus den Laternenlöchern.
+
+## Map 5: die Grabinsel
+
+- Die Karte ist nach Westen auf 112 × 37 Zellen erweitert. Der Titan erhebt sich auf einer
+  felsfreien Grabinsel (`titan-grave`, Lichtung `grave-island`) mitten in einem See, der mit dem
+  Südteich verschmilzt. Ein 7 Zellen breiter, ebenfalls felsfreier Damm (`grave-causeway`) führt nach
+  Osten zum Schlachtfeld.
+- Bis zum Vorposten sind es rund 50 Zellen statt 13; die übrige Karte samt Basen, Gleisen und
+  Nebenspawns ist unverändert um 38 Zellen nach Osten gewandert.
+- Steht ein Gegner in der Gleiszone fest, weil Fels oder Basis seine Querung blockieren, gibt die
+  Zugwachsamkeit ihn nach 0,7 s wieder an seine Route und seine Angriffe frei. So kann sich auch der
+  Titan an den Gleisen durch Felsen schlagen.
 
 ## Intro „Friedhof erhebt sich“
 

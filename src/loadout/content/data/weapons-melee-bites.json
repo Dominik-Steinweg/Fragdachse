@@ -168,7 +168,7 @@
     "GRAVE_TITAN_SLAM": {
       "id": "GRAVE_TITAN_SLAM",
       "cooldown": 500,
-      "damage": 200,
+      "damage": 100,
       "range": 280,
       "fire": {
         "type": "melee",
@@ -197,8 +197,8 @@
     "GRAVE_TITAN_STOMP": {
       "id": "GRAVE_TITAN_STOMP",
       "cooldown": 3000,
-      "damage": 400,
-      "range": 400,
+      "damage": 200,
+      "range": 360,
       "fire": {
         "type": "melee",
         "hitArcDegrees": 360,

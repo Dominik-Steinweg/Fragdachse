@@ -57,6 +57,8 @@ let nextEnemyCombatOwnerGeneration = 1;
 const STEER_RESPONSIVENESS = 8;
 const SPAWN_LANE_JITTER_PX = CELL_SIZE * 0.3;
 const NO_SEPARATION = { x: 0, y: 0 } as const;
+/** Other bodies keep this share of a boss's radius as extra distance and clear its way. */
+const BOSS_PERSONAL_SPACE_SHARE = 0.5;
 
 function captureEnemyDeathVisual(enemy: EnemyEntity): Pick<
   EnemyDeathInfo,
@@ -672,6 +674,7 @@ export class EnemyManager {
       .map(enemy => ({
       id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y, radius: enemy.getSize() / 2,
       ...enemy.getAppliedVelocity(),
+      ...(enemy.isBoss() ? { personalSpace: enemy.getSize() / 2 * BOSS_PERSONAL_SPACE_SHARE } : {}),
       routeCost: this.intents?.get(enemy.id)?.navigation.status === 'ready'
         ? (this.intents.get(enemy.id)!.navigation as Extract<import('../systems/navigation/NavigationContracts').NavigationResult, { status: 'ready' }>).cost : undefined,
     })), geometry, deltaMs);

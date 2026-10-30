@@ -20,9 +20,18 @@ export interface TrainAwarenessSource {
 
 type TrainAwarenessMode = 'normal' | 'approaching' | 'waiting' | 'crossing' | 'escaping';
 
+/** A crossing or escape that has not moved the body sideways this long is pinned by geometry. */
+const PINNED_AFTER_MS = 700;
+/** Sideways progress that counts as moving across the track. */
+const PINNED_PROGRESS_PX = 6;
+
 interface EnemyTrainAwarenessState {
   mode: TrainAwarenessMode;
   crossingDirection?: -1 | 1;
+  /** Where and when the current crossing/escape last made sideways progress. */
+  progressX?: number;
+  progressAt?: number;
+  pinned?: boolean;
 }
 
 export interface EnemyTrainMovementDecision {
@@ -124,9 +133,7 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
     const intendedExitX = intendedDirection === 1 ? rightSafeX : leftSafeX;
     const remainingCrossingMs = Math.abs(intendedExitX - x) / effectiveSpeed * 1000;
     if (this.canClearBeforeHazard(config, remainingCrossingMs, hazard.startsAt, hazard.endsAt, now)) {
-      state.mode = 'crossing';
-      state.crossingDirection = intendedDirection;
-      return { vx: intendedDirection * movementSpeed, vy: intendedVy, override: true };
+      return this.steer(state, 'crossing', intendedDirection, x, now, movementSpeed, intendedVx, intendedVy);
     }
 
     // Bereits zwischen den Gleisen und zu langsam zum Räumen: abtauchen schlägt Zurückrennen.
@@ -138,14 +145,12 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
     const leftDistance = Math.abs(x - leftSafeX);
     const rightDistance = Math.abs(rightSafeX - x);
     const escapeDirection: -1 | 1 = leftDistance <= rightDistance ? -1 : 1;
-    state.mode = 'escaping';
-    state.crossingDirection = escapeDirection;
-    return { vx: escapeDirection * movementSpeed, vy: intendedVy, override: true };
+    return this.steer(state, 'escaping', escapeDirection, x, now, movementSpeed, intendedVx, intendedVy);
   }
 
   blocksRegularAttacks(enemyId: string): boolean {
-    const mode = this.states.get(enemyId)?.mode;
-    return mode === 'crossing' || mode === 'escaping';
+    const state = this.states.get(enemyId);
+    return (state?.mode === 'crossing' || state?.mode === 'escaping') && !state.pinned;
   }
 
   getTrainAttackTarget(enemy: EnemyEntity): { x: number; y: number; distance: number } | null {
@@ -186,9 +191,7 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
     const distanceToEntry = Math.abs(entryX - x);
 
     if (canCross && distanceToEntry <= 3) {
-      state.mode = 'crossing';
-      state.crossingDirection = direction;
-      return { vx: direction * movementSpeed, vy: intendedVy, override: true };
+      return this.steer(state, 'crossing', direction, x, now, movementSpeed, intendedVx, intendedVy);
     }
     if (canCross) {
       this.resetState(state);
@@ -232,8 +235,31 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
       || now + travelMs + margin < hazardStartsAt;
   }
 
+  /**
+   * Drives a crossing or escape sideways. Rocks or a base beside the track can hold the body in
+   * place; once it is pinned, it follows its own route again and may attack, so it can break
+   * through the obstacle instead of pushing against it with its weapons locked.
+   */
+  private steer(state: EnemyTrainAwarenessState, mode: 'crossing' | 'escaping', direction: -1 | 1, x: number,
+    now: number, movementSpeed: number, intendedVx: number, intendedVy: number): EnemyTrainMovementDecision {
+    if (state.mode !== mode || state.crossingDirection !== direction || state.progressX === undefined
+      || state.progressAt === undefined || Math.abs(x - state.progressX) >= PINNED_PROGRESS_PX) {
+      state.progressX = x;
+      state.progressAt = now;
+    }
+    state.mode = mode;
+    state.crossingDirection = direction;
+    state.pinned = now - state.progressAt >= PINNED_AFTER_MS;
+    return state.pinned
+      ? { vx: intendedVx, vy: intendedVy, override: false }
+      : { vx: direction * movementSpeed, vy: intendedVy, override: true };
+  }
+
   private resetState(state: EnemyTrainAwarenessState): void {
     state.mode = 'normal';
     state.crossingDirection = undefined;
+    state.progressX = undefined;
+    state.progressAt = undefined;
+    state.pinned = false;
   }
 }

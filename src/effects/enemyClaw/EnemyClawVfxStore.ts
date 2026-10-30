@@ -43,8 +43,11 @@ interface ClawVfxTiming {
 export type ClawVfxAttackSpec = ClawVfxTiming & (
   | { readonly shape?: 'sector'; readonly range: number; readonly halfArc: number; readonly telegraphOnly?: boolean }
   | { readonly shape: 'lane'; readonly length: number; readonly width: number }
-  /** Announced landing point from `startedAt` (the lock), filling up to `hitAt`. */
-  | { readonly shape: 'mark'; readonly radius: number }
+  /**
+   * Announced landing point from `startedAt` (the lock), filling up to `hitAt`. A `halfArc` above 0
+   * cuts it to a sector around `angle` with equally soft flanks; 0 or none keeps the full disk.
+   */
+  | { readonly shape: 'mark'; readonly radius: number; readonly halfArc?: number }
 );
 
 /**
@@ -91,9 +94,13 @@ export class EnemyClawVfxStore {
     }
     if (spec.shape === 'mark') {
       const extent = spec.radius * 1.05 + 4, e = this.epoch;
-      this.writeQuad(slot, spec.x, spec.y, 0, -extent, extent, -extent, extent,
+      const halfArc = spec.halfArc !== undefined && spec.halfArc > 0 && spec.halfArc < Math.PI ? spec.halfArc : 0;
+      // A sector's soft flanks reach a little beyond the hit edge (see the shader's `mark`).
+      const lateral = halfArc === 0 || halfArc >= Math.PI / 2 ? extent : extent * Math.sin(halfArc) + spec.radius * 0.1;
+      this.writeQuad(slot, spec.x, spec.y, halfArc === 0 ? 0 : spec.angle,
+        halfArc === 0 ? -extent : Math.min(0, extent * Math.cos(halfArc)) - spec.radius * 0.1, extent, -lateral, lateral,
         spec.startedAt - e, spec.strikeAt - e, spec.hitAt - e, spec.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS - e,
-        spec.radius, 0, ClawVfxKind.LandingMark, spec.color);
+        spec.radius, halfArc, ClawVfxKind.LandingMark, spec.color);
       this.expiresAt[slot] = spec.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS;
       return true;
     }

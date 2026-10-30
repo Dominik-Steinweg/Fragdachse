@@ -155,21 +155,34 @@ vec4 lane(float gain) {
 // Landing mark of an announced leap (pounce), shown from the lock on: a soft disk fades in and
 // fills from its centre, reaching the hit radius exactly at the landing. Nothing is drawn beyond
 // the hit radius, and there is no hub cut-out: the attacker is not standing in the zone.
+// A half arc in vShape.y cuts it to a frontal sector: its flanks soften like the rim, centred on
+// the hit edge so the zone reads exactly as wide as the strike.
 vec4 mark(float gain) {
   float radius = vShape.x;
+  float halfArc = vShape.y;
   float r = length(vLocal);
   float rn = r / radius;
   if (rn >= 1.05) return vec4(0.0);
+  float flank = 1.0, flankRim = 0.0;
+  if (halfArc > 0.001) {
+    float soft = radius * 0.09;
+    float side = (halfArc - abs(atan(vLocal.y, vLocal.x))) * r;   // px inside the nearer flank
+    if (side <= -0.4 * soft) return vec4(0.0);
+    flank = smoothstep(-0.4 * soft, soft, side);
+    float fd = (side - 0.4 * soft) / (0.45 * soft);
+    flankRim = exp(-fd * fd) * smoothstep(0.1, 0.3, rn);
+  }
   float progress = clamp((uTime - vTiming.x) / max(1.0, vTiming.z - vTiming.x), 0.0, 1.0);
   float vis = smoothstep(vTiming.x, vTiming.x + 140.0, uTime)
     * (1.0 - smoothstep(vTiming.z, vTiming.z + FADE_MS, uTime));
-  float disk = 1.0 - smoothstep(0.82, 1.0, rn);
+  float edge = 1.0 - smoothstep(0.82, 1.0, rn);
+  float disk = edge * flank;
   // The filled share grows with the remaining time and has a soft front.
   float front = radius * progress;
   float fillWidth = radius * 0.14;
   float filled = 1.0 - smoothstep(front - fillWidth, front + fillWidth, r);
   float rimD = (rn - 0.93) / 0.07;
-  float rim = exp(-rimD * rimD) * (0.08 + 0.08 * progress);
+  float rim = max(exp(-rimD * rimD) * flank, flankRim * edge) * (0.08 + 0.08 * progress);
   float a = (disk * (${MARK_BASE_ALPHA} + ${MARK_FILL_ALPHA} * filled) + rim) * gain * vis;
   if (a <= 0.0) return vec4(0.0);
   float warm = 0.25 * smoothstep(vTiming.z - 80.0, vTiming.z, uTime);

@@ -1,7 +1,12 @@
 import type { LocomotionRequest, MovementFeedback } from './NavigationContracts';
 import { NavigationGeometry, segmentObstacleDistanceSq, type NavigationObstacle } from './NavigationGeometry';
 
-interface Neighbor { readonly id: string; readonly x: number; readonly y: number; readonly radius: number; readonly vx: number; readonly vy: number; readonly routeCost?: number }
+/**
+ * `personalSpace`: extra gap every other body keeps from this one (a boss). Such a body also always
+ * goes first: others yield to it regardless of route order, and weigh its space more heavily.
+ */
+interface Neighbor { readonly id: string; readonly x: number; readonly y: number; readonly radius: number; readonly vx: number; readonly vy: number;
+  readonly routeCost?: number; readonly personalSpace?: number }
 const ANGLES = [0, Math.PI / 6, -Math.PI / 6, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2];
 const RECOVERY_ANGLES = [...ANGLES, Math.PI * 0.75, -Math.PI * 0.75, Math.PI];
 const SPEED_SCALES = [1, 0.45];
@@ -23,6 +28,8 @@ const FAR_ORDERED_AFTER_STALL_S = 1;
 const FAR_CROWD_RELEASE_S = 2;
 /** An arriving body this close to its attack position counts as there; it does not chase sub-pixel corrections. */
 const ARRIVAL_DEAD_ZONE_PX = 3;
+/** Intruding into a body's personal space costs this much more than brushing an ordinary body. */
+const PERSONAL_SPACE_WEIGHT = 3;
 interface Conflict { dx: number; dy: number; vx: number; vy: number; separation: number;
   separationSq: number; existingOverlap: number; weight: number }
 interface SteeringChoice { angle: number; scale: number; heading: number; vx: number; vy: number; frame: number;
@@ -76,7 +83,8 @@ export class EnemyLocomotion {
     this.elapsedMs += Math.max(0, deltaMs);
     this.neighborsById.clear();
     for (const neighbor of neighbors) {
-      this.neighborsById.set(neighbor.id, neighbor); this.maxRadius = Math.max(this.maxRadius, neighbor.radius);
+      this.neighborsById.set(neighbor.id, neighbor);
+      this.maxRadius = Math.max(this.maxRadius, neighbor.radius + (neighbor.personalSpace ?? 0));
       this.maxNeighborSpeed = Math.max(this.maxNeighborSpeed, Math.hypot(neighbor.vx, neighbor.vy));
       const col = Math.floor(neighbor.x / CELL), row = Math.floor(neighbor.y / CELL);
       let columns = this.buckets.get(row);
@@ -187,9 +195,9 @@ export class EnemyLocomotion {
     const radiusSq = radius ** 2;
     let lastOverlap = -1;
     for (let index = 0; index < neighbors.length; index++) {
-      const neighbor = neighbors[index];
-      const dx = x - neighbor.x, dy = y - neighbor.y, separation = radius + neighbor.radius + 2;
-      const precedes = request.routeCost !== undefined && neighbor.routeCost !== undefined
+      const neighbor = neighbors[index], space = neighbor.personalSpace ?? 0;
+      const dx = x - neighbor.x, dy = y - neighbor.y, separation = radius + neighbor.radius + 2 + space;
+      const precedes = !space && request.routeCost !== undefined && neighbor.routeCost !== undefined
         && (request.routeCost < neighbor.routeCost - 2 || (Math.abs(request.routeCost - neighbor.routeCost) <= 2 && request.id < neighbor.id));
       const conflict = conflicts[index] ?? (conflicts[index] = {} as Conflict);
       conflict.dx = dx; conflict.dy = dy; conflict.vx = neighbor.vx; conflict.vy = neighbor.vy;
@@ -197,7 +205,7 @@ export class EnemyLocomotion {
       conflict.existingOverlap = Math.max(0, separation - Math.sqrt(dx * dx + dy * dy));
       if (conflict.existingOverlap > 0) lastOverlap = index;
       const neighborRadiusSq = neighbor.radius ** 2;
-      conflict.weight = neighborRadiusSq / (radiusSq + neighborRadiusSq) * (precedes ? .06 : 1) / 5;
+      conflict.weight = neighborRadiusSq / (radiusSq + neighborRadiusSq) * (precedes ? .06 : space ? PERSONAL_SPACE_WEIGHT : 1) / 5;
     }
     const heading = Math.atan2(targetDy, targetDx);
     // Retain a decision only across uninterrupted ordinary movement. Re-score it against
@@ -411,7 +419,7 @@ function closesInAhead(x: number, y: number, vx: number, vy: number, radius: num
     const dx = body.x - x, dy = body.y - y;
     if (!isAhead(dx, dy, vx, vy, body)) continue;
     const queued = body.vx * body.vx + body.vy * body.vy < (speed / 3) ** 2;
-    const separation = radius + body.radius + 2 + (queued ? FAR_QUEUE_GAP_PX : 0);
+    const separation = radius + body.radius + 2 + (body.personalSpace ?? 0) + (queued ? FAR_QUEUE_GAP_PX : 0);
     const px = dx + (body.vx - vx) * horizon, py = dy + (body.vy - vy) * horizon;
     const predicted = px * px + py * py;
     if (predicted < separation * separation && predicted < dx * dx + dy * dy) return true;
@@ -425,7 +433,7 @@ function clearAhead(x: number, y: number, vx: number, vy: number, radius: number
   for (const body of crowd) {
     const dx = body.x - x, dy = body.y - y;
     if (!isAhead(dx, dy, vx, vy, body)) continue;
-    const reach = radius + body.radius + 2 + travel;
+    const reach = radius + body.radius + 2 + (body.personalSpace ?? 0) + travel;
     if (dx * dx + dy * dy < reach * reach) return false;
   }
   return true;

@@ -69,6 +69,22 @@ describe('Train awareness keeps the pathfinding intact along the track', () => {
     expect(decision.vx).toBe(MOVE_SPEED);
   });
 
+  it('releases a body pinned inside the track zone so it can break through', () => {
+    const system = createSystem(30_000, now);
+    const enemy = createEnemy(TRACK_X + 20);
+    // Rocks hold the body: the crossing drives it sideways, but it does not move.
+    const first = system.resolveMovement(enemy, MOVE_SPEED, 30, now);
+    expect(first.override).toBe(true);
+    expect(system.blocksRegularAttacks('e1')).toBe(true);
+    const pinned = system.resolveMovement(enemy, MOVE_SPEED, 30, now + 800);
+    expect(pinned).toEqual({ vx: MOVE_SPEED, vy: 30, override: false });
+    expect(system.blocksRegularAttacks('e1')).toBe(false);
+    // Once the obstacle gives way, the crossing takes over again.
+    enemy.sprite.x += 12;
+    expect(system.resolveMovement(enemy, MOVE_SPEED, 30, now + 900).override).toBe(true);
+    expect(system.blocksRegularAttacks('e1')).toBe(true);
+  });
+
   it('leaves enemies outside the danger zone completely alone', () => {
     const system = createSystem(30_000, now);
     // Weit rechts vom Gleis und weiter nach rechts unterwegs: kein Grund einzugreifen.

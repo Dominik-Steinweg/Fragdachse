@@ -93,6 +93,23 @@ describe('enemy claw presentation lifetime', () => {
     f.renderer.syncLandingMark('pounce', null, 1600, true);
     expect(f.store.count).toBe(0);
   });
+
+  it('cuts a frontal strike mark to its sector and keeps an all-round one a full disk', () => {
+    const f = fixture();
+    const mark = { attackId: 'titan:1', x: 300, y: 200, radius: 280, startedAt: 1000, hitAt: 2300 };
+    f.renderer.syncLandingMark('slam', { ...mark, angle: 0, arcDegrees: 110 }, 1000, true);
+    expect(f.store.data[10]).toBe(ClawVfxKind.LandingMark);
+    expect(f.store.data[9]).toBeCloseTo(110 * Math.PI / 360);
+    // The quad covers the whole sector out to its soft rim but nothing behind the attacker.
+    const xs = Array.from({ length: 6 }, (_, v) => f.store.data[v * CLAW_VFX_FLOATS_PER_VERTEX + 2]);
+    const ys = Array.from({ length: 6 }, (_, v) => f.store.data[v * CLAW_VFX_FLOATS_PER_VERTEX + 3]);
+    expect(Math.max(...xs)).toBeGreaterThanOrEqual(280);
+    expect(Math.max(...ys)).toBeGreaterThanOrEqual(280 * Math.sin(55 * Math.PI / 180));
+    expect(Math.min(...xs)).toBeLessThan(0);
+    expect(Math.min(...xs)).toBeGreaterThan(-0.2 * 280);
+    f.renderer.syncLandingMark('slam', { ...mark, attackId: 'titan:2', arcDegrees: 360 }, 1000, true);
+    expect(f.store.data[9]).toBe(0);
+  });
 });
 
 describe('enemy claw instance store', () => {

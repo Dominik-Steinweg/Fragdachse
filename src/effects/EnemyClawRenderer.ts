@@ -36,11 +36,15 @@ export interface EnemyZoneAttack {
   readonly startedAt: number; readonly strikeAt: number; readonly hitAt: number; readonly endsAt: number;
 }
 
-/** Announced landing of a leap (pounce): shown from `startedAt` (the lock), landing at `hitAt`. */
+/**
+ * Announced landing of a leap (pounce): shown from `startedAt` (the lock), landing at `hitAt`.
+ * With `arcDegrees` below 360 the same soft zone is a sector around `angle` (a frontal strike).
+ */
 export interface EnemyLandingMark {
   readonly attackId: string;
   readonly x: number; readonly y: number; readonly radius: number;
   readonly startedAt: number; readonly hitAt: number;
+  readonly angle?: number; readonly arcDegrees?: number;
 }
 
 /** Bounded warmup: a pass that never renders must not hold the world-load barrier. */
@@ -210,8 +214,9 @@ export class EnemyClawRenderer {
       return;
     }
     const offset = clock - now;
-    if (this.store.addAttack(mark.attackId, { shape: 'mark', x: mark.x, y: mark.y, angle: 0, radius: mark.radius,
-      startedAt: mark.startedAt + offset, strikeAt: mark.startedAt + offset, hitAt: mark.hitAt + offset, color }, clock)) {
+    const halfArc = mark.arcDegrees !== undefined && mark.arcDegrees < 360 ? mark.arcDegrees * Math.PI / 360 : 0;
+    if (this.store.addAttack(mark.attackId, { shape: 'mark', x: mark.x, y: mark.y, angle: mark.angle ?? 0, radius: mark.radius,
+      halfArc, startedAt: mark.startedAt + offset, strikeAt: mark.startedAt + offset, hitAt: mark.hitAt + offset, color }, clock)) {
       this.active.set(id, { attackId: mark.attackId, hitClock: mark.hitAt + offset });
     }
   }
