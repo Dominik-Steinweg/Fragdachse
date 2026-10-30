@@ -1,8 +1,7 @@
 # Grufttitan V1 – erster Boss als echter Koloss
 
-Status: umgesetzt im Branch `grave-titan` (2026-10-29/30), HQ-Produktion `gt-v2-r2` mit Grab-Leuchtschicht
-(`emission-grave`) und Schattenmesh `enemy-mesh-gt-v2-r2`. Maßgeblich ist der Code; Werte sind Ausgangswerte für
-den Playtest.
+Status: auf `main` (2026-10-30), HQ-Produktion `gt-v2-r3` mit Grab-Leuchtschicht (`emission-grave`) und
+Schattenmesh `enemy-mesh-gt-v2-r3`. Maßgeblich ist der Code; Werte sind Ausgangswerte für den Playtest.
 
 ## Ziel
 
